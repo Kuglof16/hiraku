@@ -8,9 +8,21 @@
 <link rel="stylesheet" href="tests.css">
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n05"></script>
+<script>
+  // ?door=slide: the leaves slide out sideways instead of swinging open.
+  // Read once, before any animation exists; the time t never depends on it.
+  if (new URLSearchParams(location.search).get("door") === "slide")
+    document.documentElement.classList.add("door-slide");
+</script>
 <style>
-  /* N05: the vehicle fills the screen, bursts open into a grid of the
-     preset tests, and the name settles above the grid.
+  /* N05: a closed double door fills the screen with warm light in its seam;
+     it swings open towards the viewer, the light spills out of the gap and
+     the vehicle behind it bursts open into a grid of the preset tests, and
+     the name settles above the grid.
+     The door is drawn in every layer (also ?layer=fg): it hides the app's
+     render below until it opens, then it is hidden (visibility) so the
+     ground is transparent again. Door values: layout.json n05.door and
+     n05.times.door_open_s (--door-*, --t-door-open).
      The hero and the tiles are stand-ins (.bg-only): the video uses the
      app's own renders there, with this page laid over them (?layer=fg).
      Placement and times: layout.json n05 (CSS variables from layout.js;
@@ -54,6 +66,9 @@
       rgba(246, 234, 208, 0.5) 65%, rgba(246, 234, 208, 0) 100%);
     animation: burst 0.6s cubic-bezier(.2, .8, .3, 1) both;
     animation-delay: calc(var(--t-burst) - 0.05s);
+    /* .safe ends at the subtitle band; fade out before it instead of a hard edge */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
   }
   @keyframes burst {
     0%   { transform: scaleX(0.01); opacity: 0; }
@@ -100,14 +115,210 @@
   .tile .v-line { stroke: var(--ink); }
   .tile .mark { stroke: var(--ink-soft); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .tile .solid { fill: #d9d4c7; stroke: var(--ink-soft); stroke-width: 2.5; }
+
+  /* --- the door --- */
+  .door {
+    position: absolute;
+    inset: 0;
+    perspective: var(--door-perspective-px);
+    perspective-origin: 50% 50%;
+    /* hidden once fully open (a step, so ?layer=fg is transparent again) */
+    animation: door-gone 0s linear both;
+    animation-delay: calc(var(--t-door-open) + var(--door-open-dur));
+  }
+  @keyframes door-gone {
+    from { visibility: visible; }
+    to   { visibility: hidden; }
+  }
+  .leaf {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 22%, transparent);
+    animation: swing-l var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--t-door-open);
+  }
+  /* hinged on the outer edges; the free edges come towards the viewer */
+  .leaf-l {
+    left: 0;
+    transform-origin: 0 50%;
+    border-right: 0;
+    background: linear-gradient(90deg, var(--night) 0%, var(--night-2) 85%, #24221e 100%);
+  }
+  .leaf-r {
+    right: 0;
+    transform-origin: 100% 50%;
+    border-left: 0;
+    background: linear-gradient(270deg, var(--night) 0%, var(--night-2) 85%, #24221e 100%);
+    animation-name: swing-r;
+  }
+  @keyframes swing-l {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(-1 * var(--door-angle))); }
+  }
+  @keyframes swing-r {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(var(--door-angle)); }
+  }
+  html.door-slide .leaf-l { animation-name: slide-l; }
+  html.door-slide .leaf-r { animation-name: slide-r; }
+  @keyframes slide-l {
+    from { transform: none; }
+    to   { transform: translateX(-100%); }
+  }
+  @keyframes slide-r {
+    from { transform: none; }
+    to   { transform: translateX(100%); }
+  }
+  /* a swinging leaf turns away from the light and darkens */
+  .leaf::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    animation: leaf-shade var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--t-door-open);
+  }
+  html.door-slide .leaf::after { animation-name: none; }
+  @keyframes leaf-shade {
+    from { opacity: 0; }
+    to   { opacity: 0.6; }
+  }
+  /* raised panels: an outline, a raised border, and an inner outline */
+  .pane {
+    position: absolute;
+    left: var(--door-panel-inset-px);
+    right: var(--door-panel-inset-px);
+    border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 45%, transparent);
+    background: color-mix(in srgb, var(--night) 60%, transparent);
+    box-shadow:
+      inset 0 0 0 var(--door-panel-bevel-px) var(--night-2),
+      inset 0 0 0 calc(var(--door-panel-bevel-px) + var(--door-panel-line-px))
+        color-mix(in srgb, var(--on-night-soft) 28%, transparent);
+  }
+  .pane.up {
+    top: var(--door-panel-inset-px);
+    height: var(--door-panel-upper-h-px);
+  }
+  .pane.dn {
+    top: calc(var(--door-panel-inset-px) + var(--door-panel-upper-h-px) + var(--door-panel-gap-px));
+    bottom: var(--door-panel-inset-px);
+  }
+  .handle {
+    position: absolute;
+    top: calc(50% - var(--door-handle-h-px) / 2);
+    width: var(--door-handle-w-px);
+    height: var(--door-handle-h-px);
+    border-radius: var(--door-handle-w-px);
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--on-night-soft) 35%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 80%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 35%, transparent));
+  }
+  .leaf-l .handle { right: var(--door-handle-seam-gap-px); }
+  .leaf-r .handle { left: var(--door-handle-seam-gap-px); }
+
+  /* --- the light in the seam, and the light that spills out of the gap --- */
+  .door-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .seam-wrap {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% - var(--door-seam-glow-w-px) / 2);
+    width: var(--door-seam-glow-w-px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+    /* the thin line stays on the parting edges, then hands over to the light behind */
+    animation: seam-out var(--door-open-dur) linear both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes seam-out {
+    0%, 40% { opacity: 1; }
+    100%    { opacity: 0; }
+  }
+  /* light behind the door (under the vehicle): only the opening gap shows it */
+  .door-back {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: var(--stage-h);
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.12) 22%, rgba(246, 234, 208, 0.5) 50%,
+      rgba(246, 234, 208, 0.12) 78%, rgba(246, 234, 208, 0) 100%);
+    /* fades soon after the leaves are out, so the vehicle (in ?layer=fg the
+       app's render below this page) is not washed out for long */
+    animation: back-fade var(--door-spill-dur) ease-out both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes back-fade {
+    0%, 35% { opacity: 1; }
+    100%    { opacity: 0; }
+  }
+  .seam-glow, .seam-core {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    /* grows a little stronger until the door opens */
+    animation: seam-build var(--t-door-open) ease-in both;
+  }
+  .seam-glow {
+    left: 0;
+    right: 0;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.10) 30%, rgba(246, 234, 208, 0.38) 50%,
+      rgba(246, 234, 208, 0.10) 70%, rgba(246, 234, 208, 0) 100%);
+  }
+  .seam-core {
+    left: calc(50% - var(--door-seam-w-px) / 2);
+    width: var(--door-seam-w-px);
+    background: var(--glow);
+  }
+  @keyframes seam-build {
+    from { opacity: 0.45; transform: scaleX(0.6); }
+    to   { opacity: 1; transform: scaleX(1); }
+  }
+  .spill {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg,
+        rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.08) 28%, rgba(246, 234, 208, 0.4) 50%,
+        rgba(246, 234, 208, 0.08) 72%, rgba(246, 234, 208, 0) 100%);
+    /* spills towards the viewer once the gap is wide (the leaves swing slowly first) */
+    animation: spill var(--door-spill-dur) linear both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes spill {
+    0%, 30% { transform: scaleX(0.05); opacity: 0; }
+    60%     { transform: scaleX(0.6); opacity: 1; }
+    100%    { transform: scaleX(1.3); opacity: 0; }
+  }
 </style>
 </head>
 <body data-duration="5">
 <div class="stage night">
   <div class="safe">
+    <div class="door-back"></div>
     <div class="hero bg-only" data-box="n05.hero"></div>
     <div class="grid bg-only"></div>
     <div class="burst"></div>
+  </div>
+  <div class="door" data-box="n05.door">
+    <div class="leaf leaf-l"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div>
+    <div class="leaf leaf-r"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div>
+  </div>
+  <div class="door-light">
+    <div class="spill"></div>
+    <div class="seam-wrap"><div class="seam-glow"></div><div class="seam-core"></div></div>
+  </div>
+  <div class="safe">
     <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
     <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
   </div>

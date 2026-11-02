@@ -100,6 +100,22 @@ class SharedShape(unittest.TestCase):
         for k in ("burst_s", "tiles_s", "tile_in_s", "tile_stagger_s", "name_s", "tag_s"):
             self.assertIn(k, n["times"])
 
+    def test_n05_door(self):
+        n = self.rules["n05"]
+        d = n["door"]
+        self.assertTrue({"open_dur_s", "angle_deg", "perspective_px", "ease", "seam_w_px",
+                         "seam_glow_w_px", "spill_dur_s", "panel", "handle"} <= set(d))
+        self.assertEqual(len(d["ease"]), 4)
+        self.assertTrue(0 < d["angle_deg"] <= 180)
+        # fully open (and hidden) before the vehicle bursts and the tiles fly out
+        self.assertLessEqual(n["times"]["door_open_s"] + d["open_dur_s"], n["times"]["burst_s"])
+        # the panels fit inside a leaf (half the stage wide)
+        p, stage = d["panel"], self.rules["stage"]
+        self.assertLess(2 * p["inset_px"], stage["w"] / 2)
+        self.assertLess(2 * p["inset_px"] + p["upper_h_px"] + p["gap_px"], stage["h"])
+        # the door covers the subtitle band, so the check lets it
+        self.assertIn(".door", [e["selector"] for e in self.rules["check"]["band_exempt"]])
+
     def test_units_in_names(self):
         def walk(obj, path):
             for k, v in obj.items():
@@ -307,6 +323,33 @@ class InBrowser(unittest.TestCase):
             self.assertFalse(lc.in_band(a, rules["subtitle_band"]["y"]))
             for b in cells[i + 1:]:
                 self.assertIsNone(lc.intersection(a, b))
+
+    def test_variable_forms(self):
+        # layout.js turns each kind of value into its CSS form
+        from promo import export
+
+        cap = export.Capture(lc.SCREENS / "n05.html", scale=0.25)
+        try:
+            got = cap.page.evaluate("""() => {
+              const L = window.promoLayout, css = getComputedStyle(document.documentElement);
+              const v = (k) => css.getPropertyValue(k).trim();
+              return { motion: L.motion(L.cutRules, "", {}), vars: L.vars("n05"),
+                       angle: v("--door-angle"), persp: v("--door-perspective-px"),
+                       open: v("--t-door-open") };
+            }""")
+        finally:
+            cap.close()
+        d = lc.load_layout()["n05"]["door"]
+        m = got["motion"]
+        self.assertEqual(m["door-angle"], f"{d['angle_deg']}deg")
+        self.assertEqual(m["door-open-dur"], f"{d['open_dur_s']}s")
+        self.assertEqual(m["door-ease"], "cubic-bezier(" + ", ".join(str(x) for x in d["ease"]) + ")")
+        self.assertEqual(m["hero-motion-push-scale"], "1.04")
+        self.assertNotIn("door-angle-deg", got["vars"])           # an angle is not a length
+        self.assertEqual(got["vars"]["door-perspective-px"], d["perspective_px"])
+        self.assertEqual(got["angle"], f"{d['angle_deg']}deg")
+        self.assertIn(str(d["perspective_px"]), got["persp"])
+        self.assertEqual(got["open"], f"{lc.load_layout()['n05']['times']['door_open_s']}s")
 
     def test_n08b_bars_to_scale_and_inside(self):
         from promo import export
