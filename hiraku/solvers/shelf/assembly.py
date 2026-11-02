@@ -33,7 +33,7 @@ class Assembly(BuiltinTool):
     domain = "assembly"
     base = "K4"
     tests = ["H1", "H3", "H5"]
-    formulas = ["geometry.free_steer_angle", "occupant.knee_room"]
+    formulas = ["geometry.free_steer_angle", "occupant.knee_room", "assembly.part_count"]
     load_case_params = (LOADING,)
     predicts = (
         Predicts("free_steer_angle", "geometry.free_steer_angle", "theta",
@@ -41,6 +41,7 @@ class Assembly(BuiltinTool):
         Predicts("knee_room", "occupant.knee_room", "room",
                  "L from hiraku.solvers.k4_geometry.knee_space(design) (the smallest), "
                  "L_bk = AIST J5 buttock-knee length, male 95th percentile (k4_geometry.AIST)"),
+        Predicts("assembly_steps", "assembly.part_count", "steps", "n = parts in the design, n_out = occupants and cargo"),
     )
 
     def known_answers(self) -> list[Record]:

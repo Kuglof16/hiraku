@@ -68,11 +68,13 @@ class DriveEnergy(BuiltinTool):
     domain = "powertrain"
     base = "K3"
     tests = ["P4"]
-    formulas = ["drive_energy.loop_energy", "drive_energy.steady_power"]
+    formulas = ["drive_energy.loop_energy", "drive_energy.soc_end", "drive_energy.steady_power"]
     load_case_params = LOOP_PARAMS
     predicts = (
         Predicts("energy_used", "drive_energy.loop_energy", "E", "H = total height climbed over the distance"),
         Predicts("soc_used", "drive_energy.loop_energy", "soc_used"),
+        Predicts("soc_end", "drive_energy.soc_end", "soc_end",
+                 "E = the predicted energy_used, E_batt = battery_voltage x battery_capacity"),
         Predicts("range", "drive_energy.loop_energy", "range"),
         Predicts("max_battery_power", "drive_energy.steady_power", "P",
                  "rough: steady climb at speed_high up grade_high, without acceleration or auxiliary loads"),
@@ -131,13 +133,17 @@ class Thermal(BuiltinTool):
     domain = "thermal"
     base = "K3"
     tests = ["T1", "T2", "T3"]
-    formulas = ["thermal.steady_temperature", "thermal.rc_step", "thermal.loss_from_efficiency"]
+    formulas = ["thermal.loop_steady_temperature", "thermal.steady_temperature", "thermal.rc_step",
+                "thermal.loss_from_efficiency"]
     load_case_params = LOOP_PARAMS + (
         Param("ambient_temperature", "degC", "air temperature (and the parts' starting temperature)", required=True),
         Param("charge_power", "kW", "charging power after the drive (with charge_time; without them: no charge)"),
         Param("charge_time", "h", "charging time after the drive (with charge_power)"),
     )
     predicts = (
+        Predicts("temp_<part>_max", "thermal.loop_steady_temperature", "T_<part>",
+                 "the loop params of the load case, the powertrain and thermal design variables"),
+        Predicts("drive_time", "thermal.loop_steady_temperature", "t"),
         Predicts("temp_<part>_max", "thermal.rc_step", "T",
                  "P = loss_<part>_mean, R and tau = R C of the part, t = drive_time"),
         Predicts("temp_<part>_max", "thermal.steady_temperature", "T",

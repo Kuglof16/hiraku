@@ -100,6 +100,15 @@ class DesignGenTest(unittest.TestCase):
         self.assertFalse(got["occupant_mass"]["revisable"])
         json.dumps(list(got.values()), allow_nan=False)
 
+    def test_motor_mass_follows_its_rating(self):
+        def motor(**ch):
+            return next(p for p in GEN.build(ch)["parts"] if p["id"] == "motor")["mass_kg"]
+        self.assertEqual(motor(), 25.0)
+        self.assertAlmostEqual(motor(motor_peak_power={"value": 12, "unit": "kW"}), 30.0)
+        self.assertAlmostEqual(motor(motor_peak_torque={"value": 75, "unit": "N*m"}), 37.5)
+        self.assertAlmostEqual(motor(motor_peak_power={"value": 12, "unit": "kW"}, motor_peak_torque={"value": 75, "unit": "N*m"}), 37.5)
+        self.assertEqual(motor(motor_peak_power={"value": 8, "unit": "kW"}), 25.0)  # the torque keeps it at 50 N*m
+
     def test_battery_follows_its_capacity(self):
         d = GEN.build({"battery_capacity": {"value": 150, "unit": "Ah"}})
         bat = next(p for p in d["parts"] if p["id"] == "battery")
