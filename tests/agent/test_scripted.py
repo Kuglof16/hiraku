@@ -166,6 +166,7 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         self.assertEqual(resolve(self.ctx, "summary.rail_section.z", lc), {"value": 350.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "design.support.FL.radius_mm", lc), {"value": 300.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "design.section.rt40x80x2.h", lc), {"value": 80.0, "unit": "mm"})
+        self.assertEqual(resolve(self.ctx, "design.var.track", lc), {"value": 1300.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "summary.member_length.rail_L0", lc), {"value": 900.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, {"value": 1, "unit": "N"}, lc), {"value": 1.0, "unit": "N"})
         # the rail joint behind the example's rear axle: rail ahead 900 mm, cross member 800 mm,

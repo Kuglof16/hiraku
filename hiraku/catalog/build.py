@@ -7,6 +7,7 @@ sets a limit or a tolerance.
 
 from __future__ import annotations
 
+import importlib
 import math
 from typing import Any, Callable
 
@@ -73,11 +74,16 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
         raise CatalogError("the design does not carry the requirements' load: " + "; ".join(problems))
 
 
-def _loading(req: Record, design: Record) -> tuple[str, list[str]]:
+def loading_for(req: Record, design: Record) -> tuple[str, list[str]]:
+    """The loading to check (Q30), after checking the design carries it; and the requirement keys it uses."""
     loading = loading_requirement(req)
     check_design_loading(req, design, loading)
     keys = ["Q30", "Q33"] if OCCUPANTS[loading] else ["Q30"]
     return loading, keys + (["Q40"] if CARGO[loading] else [])
+
+
+_loading = loading_for
+quantity = _q
 
 
 def min_frame_yield(design: Record) -> tuple[float, list[str], bool]:
@@ -142,7 +148,10 @@ def _r1_static(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
-BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
+Builder = Callable[[Record, Record, Record], Record]
+
+# Builders named by `build:` in data/catalog/tests.yaml (this module's own).
+BUILDERS: dict[str, Builder] = {
     "p1_step": _p1_step,
     "r1_static": _r1_static,
 }
@@ -150,17 +159,69 @@ BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
 # Which load case feeds which (P1's wheel force goes into the R1 frame load).
 FEEDS = {"P1": ["R1"]}
 
+BUILDERS_MODULE = "hiraku.catalog.builders"
+NO_BUILDER = "no load-case builder yet"
 
-def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str]) -> list[Record]:
+
+def _builders_module() -> Any:
+    try:
+        return importlib.import_module(BUILDERS_MODULE)
+    except ModuleNotFoundError as e:
+        if e.name == BUILDERS_MODULE:
+            return None
+        raise
+
+
+def external_builders() -> tuple[dict[str, Builder], dict[str, list[str]], dict[str, Record]]:
+    """(BUILDERS, FEEDS, PLANS) of hiraku.catalog.builders, keyed by test id; empty while it is absent.
+
+    BUILDERS: test id -> fn(spec, req, design) -> load case. FEEDS: test id ->
+    downstream test ids. PLANS: test id -> the scripted run's step for it
+    (as a step of data/catalog/scripted.yaml, without load_case).
+    """
+    mod = _builders_module()
+    if mod is None:
+        return {}, {}, {}
+    return dict(getattr(mod, "BUILDERS", {})), dict(getattr(mod, "FEEDS", {})), dict(getattr(mod, "PLANS", {}))
+
+
+def builder_for(catalog: Catalog, test_id: str) -> Builder | None:
+    """The catalog's own builder (`build:` in tests.yaml) first, then hiraku.catalog.builders."""
+    spec = catalog.test(test_id)
+    if "build" in spec:
+        return BUILDERS[spec["build"]]
+    return external_builders()[0].get(test_id)
+
+
+def feeds_map() -> dict[str, list[str]]:
+    out = {k: list(v) for k, v in FEEDS.items()}
+    for k, v in external_builders()[1].items():
+        out.setdefault(k, [])
+        out[k] += [t for t in v if t not in out[k]]
+    return out
+
+
+def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
+                     skipped: list[tuple[str, str]] | None = None) -> list[Record]:
+    """One load case per test. A test without a builder, or whose builder cannot
+    build from these requirements and this design (CatalogError, or the
+    builders' BuildError: both ValueError), raises; with `skipped` given it is
+    left out and (test id, reason) is appended there."""
     out = []
     for tid in test_ids:
-        spec = catalog.test(tid)
-        if "build" not in spec:
-            raise CatalogError(f"test {tid} has no load-case builder yet")
-        out.append(BUILDERS[spec["build"]](spec, req, design))
+        build = builder_for(catalog, tid)
+        try:
+            if build is None:
+                raise CatalogError(f"test {tid} has {NO_BUILDER}")
+            out.append(build(catalog.test(tid), req, design))
+        except ValueError as e:
+            if skipped is None:
+                raise
+            skipped.append((tid, str(e)))
     by_test = {lc["test_id"]: lc["load_case_id"] for lc in out}
+    feeds_of = feeds_map()
     for lc in out:
-        feeds = [by_test[t] for t in FEEDS.get(lc["test_id"], []) if t in by_test]
+        feeds = [by_test[t] for t in feeds_of.get(lc["test_id"], []) if t in by_test]
         if feeds:
             lc["feeds"] = feeds
     return out

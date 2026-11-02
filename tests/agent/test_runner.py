@@ -36,7 +36,8 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__analyze", o.allowed_tools)
         self.assertIn("Agent", o.allowed_tools)
         self.assertIn("Skill", o.allowed_tools)
-        self.assertEqual(len(o.allowed_tools), 9)
+        self.assertIn("mcp__hiraku__revise_design", o.allowed_tools)
+        self.assertEqual(len(o.allowed_tools), 10)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze"])
@@ -46,8 +47,10 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertEqual(o.model, "claude-opus-5-5")
         self.assertEqual(o.effort, "high")
         self.assertEqual(o.max_budget_usd, 2.0)  # cost_limit_usd of the requirements file
-        self.assertEqual(set(o.agents), {"cae-strength"})
+        self.assertEqual(set(o.agents), {"cae-strength", "designer"})
         self.assertIn("mcp__hiraku__record_prediction", o.agents["cae-strength"].tools)
+        self.assertNotIn("mcp__hiraku__revise_design", o.agents["cae-strength"].tools)
+        self.assertIn("mcp__hiraku__revise_design", o.agents["designer"].tools)
         self.assertIn("PreToolUse", o.hooks)
         self.assertIn("hiraku", o.mcp_servers)
         self.assertTrue(o.forward_subagent_text)
@@ -67,7 +70,8 @@ class MessageLogTest(RunCase, unittest.TestCase):
         log.handle(AssistantMessage(content=[TextBlock(text="  レールの応力を見積もります ")], model="m",
                                     parent_tool_use_id="tu1"))
         log.handle(AssistantMessage(content=[TextBlock(text="   ")], model="m"))
-        said = [(e["agent"], e["text"]) for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        said = [(e["agent"], e["text"]) for e in self.ctx.store.events()
+                if e["kind"] == "agent.said" and e["agent"] != "system"]  # not the start's tests-left-out line
         self.assertEqual(said, [("lead", "分野を選びます"), ("cae.strength", "レールの応力を見積もります")])
         log.handle(ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=False, num_turns=3,
                                  session_id="s", total_cost_usd=0.42))

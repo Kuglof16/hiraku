@@ -218,7 +218,7 @@ class RunStore:
             _write_json(layout.version_dir(self.path, v) / layout.DESIGN_FILE, design)
             self._project.setdefault("design_versions", []).append(v)
             self._save_project()
-            self.emit("design.created", agent=agent, design_version=v, data=design)
+            self.emit("design.created", agent=agent, design_version=v, data=design, text=design.get("change_reason"))
             return design
 
     def design(self, version: int | None = None) -> Record:

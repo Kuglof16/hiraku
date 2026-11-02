@@ -26,10 +26,30 @@ flags:
   continuous: true      # 続
   assembly: true        # 組
 requirements:
+  - key: Q12
+    name: 路面の粗さ (ISO 8608 のクラス)
+    value: C
+    source: default
+    trust: 3
+    basis: assumption (林道を ISO 8608 の class C とみる。ISO 8608 の本文は、このリポジトリでは確かめていない)
+  - key: Q13
+    name: 縦の坂
+    value: 12
+    unit: "%"
+    source: default
+    trust: 3
+    basis: assumption
   - key: Q15
     name: 段差
     value: 100
     unit: mm
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q19
+    name: 気温 (範囲の高い端)
+    value: 40
+    unit: degC
     source: default
     trust: 3
     basis: assumption
@@ -62,6 +82,13 @@ requirements:
     source: user
     trust: 1
     basis: request
+  - key: Q54
+    name: 航続
+    value: 20
+    unit: km
+    source: default
+    trust: 3
+    basis: assumption
   - key: Q61
     name: 安全率 (降伏に対して)
     value: 1.5
@@ -75,7 +102,18 @@ requirements:
     source: default
     trust: 3
     basis: assumption of this fixed file; Q70 is a required question and was not asked
-tests: [P1, R1]
+  - key: Q90
+    name: 悪路の走行距離 (疲労)
+    value: 5000
+    unit: km
+    source: default
+    trust: 3
+    basis: assumption
+# The tests whose scripted steps reach a verdict. Without this list the catalog
+# picks every test that applies to the flags and has a load-case builder (the
+# run names the others and why); C1, P4, R3, T1, T2 and H5 build, but their
+# scripted steps do not judge yet.
+tests: [P1, R1, N1, H1, H3]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 1
 cost_limit_usd: 2.0

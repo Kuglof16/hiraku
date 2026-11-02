@@ -12,6 +12,7 @@ from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
 from hiraku.agent.session import STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
+from hiraku.tools.functions import RUN_TOOLS
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
@@ -49,7 +50,7 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
         mcp_servers={contract.MCP_SERVER: server},
         strict_mcp_config=True,  # no MCP servers but hiraku (no connectors of a logged-in account)
         # Exact names, not a wildcard: under dontAsk anything not listed is denied.
-        allowed_tools=[contract.mcp_name(t) for t in contract.MCP_TOOLS_MVP] + [AGENT_TOOL, SKILL_TOOL],
+        allowed_tools=[contract.mcp_name(t) for t in RUN_TOOLS] + [AGENT_TOOL, SKILL_TOOL],
         permission_mode="dontAsk",
         hooks=hooks.matchers(),
         agents=subagents(ctx),

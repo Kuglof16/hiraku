@@ -10,6 +10,7 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(self.kinds(), ["run.started", "design.created", "tool.checked", "tool.checked", "judgement.updated"])
         self.assert_events_fit()
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
+        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1"])
 
     def test_get_context(self):
         c = get_context(self.ctx, {})

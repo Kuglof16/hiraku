@@ -37,6 +37,20 @@ def load_solvers(module: str = SOLVERS_MODULE) -> tuple[FormulaRegistry, dict[st
     return mod.formula_registry(), tools
 
 
+DESIGNGEN_MODULE = "hiraku.designgen"
+
+
+def load_designgen(module: str = DESIGNGEN_MODULE) -> Any:
+    """hiraku.designgen (variables(design), regenerate(design, changes)), or None while it is absent."""
+    try:
+        mod = importlib.import_module(module)
+    except ModuleNotFoundError as e:
+        if e.name == module:
+            return None
+        raise
+    return mod if hasattr(mod, "variables") and hasattr(mod, "regenerate") else None
+
+
 def check_tool(tool: AnalysisTool) -> Record:
     """Run a tool's known-answer cases and return its spec. Code decides `usable`:
     at least one case, and every case passes."""

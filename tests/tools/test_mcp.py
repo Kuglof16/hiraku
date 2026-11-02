@@ -5,7 +5,7 @@ import unittest
 from hiraku import contract
 from hiraku.tools import Attribution
 from hiraku.tools.mcp import INPUT_SCHEMAS, build_server, make_handler
-from hiraku.tools.functions import FUNCTIONS
+from hiraku.tools.functions import FUNCTIONS, RUN_TOOLS
 from tests.tools.helpers import RunCase
 
 
@@ -18,8 +18,9 @@ def has_ref(node):
 
 
 class SchemaTest(unittest.TestCase):
-    def test_every_mvp_tool_has_a_standalone_schema(self):
-        self.assertEqual(set(INPUT_SCHEMAS), set(contract.MCP_TOOLS_MVP))
+    def test_every_run_tool_has_a_standalone_schema(self):
+        self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design"})
+        self.assertEqual(set(INPUT_SCHEMAS), set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
             with self.subTest(name=name):
                 self.assertFalse(has_ref(schema))
@@ -51,6 +52,13 @@ class HandlerTest(RunCase, unittest.TestCase):
         out = self.call("analyze", {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": ["pred-0001"]})
         self.assertTrue(out["is_error"])
         self.assertIn("record_prediction", out["content"][0]["text"])
+
+    def test_revise_design_is_the_designers_only(self):
+        args = {"changes": {"track": {"value": 1150.0, "unit": "mm"}}, "reason": "x"}
+        self.attribution.push("mcp__hiraku__revise_design", json.loads(json.dumps(args)), "cae.strength")
+        out = self.call("revise_design", args)
+        self.assertTrue(out["is_error"])
+        self.assertIn("設計役", out["content"][0]["text"])
 
     def test_attribution_reaches_the_record(self):
         args = {"load_case_id": "P1-step100", "quantity": "front_wheel_force", "formula_id": "step_climb.wheel_force_rigid",

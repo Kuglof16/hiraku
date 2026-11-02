@@ -1,0 +1,214 @@
+"""Load cases from hiraku.catalog.builders, the scripted run reading their steps, and revise_design.
+
+hiraku.catalog.builders and hiraku.designgen are stand-ins here
+(tests.tools.fakes): an H1 assembly test whose stand-in tool finds the
+steered wheel hitting the rail when the track is over 1200 mm.
+"""
+
+import contextlib
+import json
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+
+from hiraku.agent.scripted import compose_plan, load_plan, run_scripted
+from hiraku.agent.session import start_run
+from hiraku.catalog import CatalogError, build_load_cases, load_catalog, read_data
+from hiraku.contract import layout
+from hiraku.tools import ToolError
+from hiraku.tools.functions import get_context, revise_design
+from tests.tools import fakes
+from tests.tools.helpers import REQUIREMENTS, requirements_with_tests
+
+TRACK_FIX = {"track": {"value": 1150.0, "unit": "mm"}}
+REVISE = [{"changes": TRACK_FIX, "reason": "H1: the steered front wheel hits the rail; a narrower track keeps it clear"}]
+
+
+@contextlib.contextmanager
+def builders(module):
+    """hiraku.catalog.builders as `module`. Only this key of sys.modules is set and removed:
+    patching sys.modules as a whole would also drop modules imported meanwhile (numpy
+    cannot be imported twice)."""
+    name = "hiraku.catalog.builders"
+    old = sys.modules.get(name)
+    sys.modules[name] = module
+    try:
+        yield
+    finally:
+        if old is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = old
+
+
+class BuildersCase:
+    """A run of P1, R1 and the stand-in H1, with the stand-in builders module and designgen."""
+
+    tests = ["P1", "R1", "H1"]
+    plans = True
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.enterContext(builders(fakes.builders_module(self.plans)))
+        design = self.root / "design.json"
+        design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+        self.designgen = fakes.FakeDesigngen()
+        self.ctx = start_run(requirements_with_tests(self.root, self.tests), design_path=design, root=self.root / "runs",
+                             formulas=fakes.FakeFormulas(), tools=fakes.shelf(assembly=True), designgen=self.designgen)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def events(self, kind):
+        return [e for e in self.ctx.store.events() if e["kind"] == kind]
+
+
+class CatalogBuildersTest(unittest.TestCase):
+    def test_builders_module_supplies_tests_without_build(self):
+        catalog = load_catalog()
+        req = read_data(REQUIREMENTS)
+        with builders(fakes.builders_module()):
+            (h1,) = build_load_cases(catalog, req, fakes.loaded_design(), ["H1"])
+            self.assertEqual((h1["load_case_id"], h1["domain"]), ("H1-steer30", "assembly"))
+            with self.assertRaisesRegex(CatalogError, "S1 has no load-case builder"):
+                build_load_cases(catalog, req, fakes.loaded_design(), ["H1", "S1"])
+            skipped = []
+            out = build_load_cases(catalog, req, fakes.loaded_design(), ["P1", "S1", "R1"], skipped)
+            self.assertEqual([lc["test_id"] for lc in out], ["P1", "R1"])
+            self.assertEqual(out[0]["feeds"], ["R1-step100"])
+            self.assertEqual([t for t, _ in skipped], ["S1"])
+        # a builders module with none: only the catalog's own builders
+        with builders(types.SimpleNamespace()), self.assertRaisesRegex(CatalogError, "H1 has no load-case builder"):
+            build_load_cases(catalog, req, fakes.loaded_design(), ["H1"])
+
+
+class AutoTestsTest(BuildersCase, unittest.TestCase):
+    tests = None  # the requirements file lists no tests: the catalog picks them from the flags
+
+    def test_every_buildable_test_is_run_and_the_rest_named(self):
+        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1", "H1"])
+        (said,) = [e for e in self.events("agent.said") if e["agent"] == "system"]
+        self.assertIn("荷重条件の作り方がまだ無い: S1 静的な転倒", said["text"])
+        self.assertNotIn("H1", said["text"])
+        self.assertIn("製品の性質", self.ctx.project["domain_picks"][0]["reason"])
+        self.assertEqual([p["domain"] for p in self.ctx.project["domain_picks"]], ["strength", "assembly"])
+        agents = {a["agent_id"]: a["role"] for a in self.ctx.project["agents"]}
+        self.assertEqual(agents, {"lead": "lead", "designer": "designer", "packager": "packager",
+                                  "cae.strength": "cae"})
+        self.assertEqual(self.ctx.owner("H1-steer30"), "packager")
+
+
+class ReviseDesignTest(BuildersCase, unittest.TestCase):
+    def test_designer_sees_the_revisable_variables(self):
+        (track,) = get_context(self.ctx)["design_variables"]
+        self.assertEqual(track, {"name": "track", "unit": "mm", "min": 1000.0, "max": 1600.0,
+                                 "meaning": "front and rear track", "value": {"value": 1300.0, "unit": "mm"}})
+
+    def test_designer_makes_the_next_version(self):
+        out = revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "narrower track"}, "designer")
+        self.assertEqual(self.designgen.calls, [TRACK_FIX])
+        self.assertEqual((out["design_version"], out["parent_version"], out["revisions_left"]), (2, 1, 0))
+        self.assertEqual(out["changes"], [{"variable": "track", "from": {"value": 1300.0, "unit": "mm"},
+                                           "to": TRACK_FIX["track"]}])
+        self.assertEqual(out["redo"], ["P1-step100", "R1-step100", "H1-steer30"])
+        d2 = self.ctx.store.design()
+        self.assertEqual((d2["design_version"], d2["parent_version"], d2["change_reason"]), (2, 1, "narrower track"))
+        self.assertEqual(d2["variables"]["track"], TRACK_FIX["track"])
+        created = self.events("design.created")[-1]
+        self.assertEqual((created["agent"], created["design_version"], created["text"]), ("designer", 2, "narrower track"))
+        self.assertEqual({j["state"] for j in self.ctx.store.judgements(2)}, {"pending"})
+        self.assertEqual(self.ctx.version, 2)
+
+    def test_refusals(self):
+        cases = [
+            ({"changes": TRACK_FIX, "reason": "x"}, "lead", "設計役"),
+            ({"changes": {"girth": {"value": 1.0, "unit": "mm"}}, "reason": "x"}, "designer", "'girth' はありません"),
+            ({"changes": {"wheelbase": {"value": 1.0, "unit": "mm"}}, "reason": "x"}, "designer", "直せない変数"),
+            ({"changes": {"track": {"value": 1.15, "unit": "m"}}, "reason": "x"}, "designer", "単位は mm"),
+            ({"changes": {"track": {"value": 900.0, "unit": "mm"}}, "reason": "x"}, "designer", "1000〜1600 mm の範囲"),
+            ({"changes": TRACK_FIX, "reason": "  "}, "designer", "reason"),
+            ({"changes": {}, "reason": "x"}, "designer", "入力の形"),
+            ({"changes": {"track": {"value": 1550.0, "unit": "mm"}}, "reason": "x"}, "designer", "rails cannot reach"),
+        ]
+        for args, agent, needle in cases:
+            with self.subTest(needle=needle):
+                with self.assertRaises(ToolError) as cm:
+                    revise_design(self.ctx, args, agent)
+                self.assertIn(needle, str(cm.exception))
+        self.assertEqual(self.ctx.version, 1)
+
+    def test_round_limit_and_missing_designgen(self):
+        revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "first"}, "designer")
+        with self.assertRaisesRegex(ToolError, "round_limit"):  # the requirements allow one revision
+            revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "second"}, "designer")
+        self.ctx.project["round_limit"] = 5
+        self.ctx.designgen = None
+        with self.assertRaisesRegex(ToolError, "hiraku.designgen"):
+            revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
+        self.assertIsNone(get_context(self.ctx)["design_variables"])
+
+
+class ScriptedReviseTest(BuildersCase, unittest.TestCase):
+    def plan(self, revise=True):
+        """The offroad steps, with this test's revision (the stand-in designgen has only track) or none."""
+        plan = dict(load_plan("offroad-4w"))
+        plan["revise"] = REVISE if revise else []
+        return plan
+
+    def test_compose_adds_builder_steps_upstream_first(self):
+        plan = compose_plan(self.ctx, {"steps": [load_plan("offroad-4w")["steps"][1]]})  # R1 alone
+        self.assertEqual([s["load_case"] for s in plan["steps"]], ["R1-step100", "H1-steer30"])
+        self.assertEqual(plan["missing"], ["P1-step100"])
+        plan = compose_plan(self.ctx, {"steps": list(reversed(load_plan("offroad-4w")["steps"]))})
+        self.assertEqual([s["load_case"] for s in plan["steps"]], ["P1-step100", "R1-step100", "H1-steer30"])
+
+    def test_red_assembly_is_fixed_by_the_designer_and_judged_again(self):
+        self.assertEqual(run_scripted(self.ctx, self.plan()), "done")
+        v1 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(1)}
+        v2 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(2)}
+        self.assertEqual(v1, {"strength": "green", "assembly": "red"})
+        self.assertEqual(v2, {"strength": "green", "assembly": "green"})
+        self.assertEqual(self.designgen.calls, [TRACK_FIX])
+        h1 = [p for p in self.ctx.store.records("prediction") if p["load_case_id"] == "H1-steer30"]
+        self.assertEqual([(p["design_version"], p["value"], p["agent"]) for p in h1],
+                         [(1, 100.0, "packager"), (2, 0.0, "packager")])
+        self.assertEqual({p["design_version"] for p in self.ctx.store.records("prediction")
+                          if p["load_case_id"] == "R1-step100"}, {1, 2})  # every load case is redone
+        created = self.events("design.created")
+        self.assertEqual([(e["agent"], e["design_version"]) for e in created], [("designer", 1), ("designer", 2)])
+        started = [e["agent"] for e in self.events("agent.started")]
+        self.assertEqual(started, ["lead", "cae.strength", "packager", "designer"])
+        self.assertIn("設計の版 2 で、全部の荷重条件をやり直します", [e["text"] for e in self.events("agent.said")])
+        events = self.ctx.store.events()
+        self.assertEqual([e["seq"] for e in events], list(range(len(events))))
+
+    def test_without_a_revision_the_red_tile_ends_the_run(self):
+        self.assertEqual(run_scripted(self.ctx, self.plan(revise=False)), "done")  # judged: red is an answer
+        self.assertEqual(self.ctx.version, 1)
+        self.assertEqual({j["domain"]: j["state"] for j in self.ctx.store.judgements()},
+                         {"strength": "green", "assembly": "red"})
+
+    def test_refused_revision_stops_the_run(self):
+        plan = self.plan()
+        plan["revise"] = [{"changes": {"track": {"value": 900.0, "unit": "mm"}}, "reason": "too narrow"}]
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        self.assertIn("範囲", self.ctx.project["stop_reason"])
+
+
+class MissingStepTest(BuildersCase, unittest.TestCase):
+    plans = False  # the builders module has H1's builder but no step for the scripted run
+
+    def test_load_case_without_a_step_is_named_and_left_pending(self):
+        self.assertEqual(run_scripted(self.ctx), "stopped")
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("台本の予測のしかたが無いので回せない荷重条件: H1-steer30", said)
+        self.assertIn("H1-steer30", self.ctx.project["stop_reason"])
+        project = json.loads((self.ctx.store.path / layout.PROJECT_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(project["status"], "stopped")
+
+
+if __name__ == "__main__":
+    unittest.main()
