@@ -203,6 +203,32 @@ class SavedRunsTest(unittest.TestCase):
         self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
 
 
+class LayoutTest(unittest.TestCase):
+    def test_layout_rules_are_served_or_missing_is_said(self):
+        tmp = Path(tempfile.mkdtemp())
+        servers = []
+        try:
+            for name, body in (("layout.json", {"stage": {"w": 1920, "h": 1080}}), ("absent.json", None)):
+                if body:
+                    (tmp / name).write_text(json.dumps(body), encoding="utf-8")
+                s = make_server("127.0.0.1", 0, tmp, tmp, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / name)
+                threading.Thread(target=s.serve_forever, daemon=True).start()
+                servers.append(s)
+                url = f"http://127.0.0.1:{s.server_address[1]}/layout.json"
+                if body:
+                    with urllib.request.urlopen(url, timeout=5) as r:
+                        self.assertEqual(json.loads(r.read()), body)
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(url, timeout=5)
+                    self.assertEqual(cm.exception.code, 404)
+        finally:
+            for s in servers:
+                s.shutdown()
+                s.server_close()
+            shutil.rmtree(tmp)
+
+
 class LaunchTest(unittest.TestCase):
     """Starting a run from the screen (the child is a stand-in for python -m hiraku run)."""
 

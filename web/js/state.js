@@ -30,6 +30,8 @@ export function initialState() {
     status: "empty", // empty | running | done | stopped | failed
     stopReason: null,
     stopCode: null, // run.finished stop_code (done, not_judged, round_limit, ...)
+    reports: {}, // design version -> report (report.written)
+    report: null, // the newest report
     t: 0,
     seq: -1,
     designs: {},
@@ -153,6 +155,24 @@ export function applyEvent(s, ev) {
       for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
       log(s, ev, "info", `実行を始めた: ${d.want ?? ""}`);
       setActivity(s, ev, "依頼を読んで分野と試験を決めた");
+      break;
+    }
+    case "project.updated": {
+      // A run whose designer makes version 1: once it exists, the load cases, the picked
+      // domains and the roles are sent again; this project replaces the one of run.started.
+      s.project = d;
+      for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
+      log(s, ev, "info", `試験と分野を決めた: 荷重条件 ${(d.load_cases ?? []).length}・分野 ${(d.domain_picks ?? []).length}`);
+      setActivity(s, ev, "版 1 から試験と分野を決めた");
+      break;
+    }
+    case "report.written": {
+      // The report of a design version (the A8 screen's source); the newest one is kept per version.
+      s.reports[d.design_version] = d;
+      s.report = d;
+      const reds = (d.domains ?? []).filter((x) => x.state === "red").length;
+      log(s, ev, "ok", `版 ${d.design_version} の報告を書いた (分野 ${(d.domains ?? []).length}・赤 ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
+      setActivity(s, ev, `報告: ${String(d.summary ?? "").split("\n")[0]}`);
       break;
     }
     case "run.finished": {
