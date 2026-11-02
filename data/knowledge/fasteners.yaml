@@ -1,0 +1,20 @@
+# Built-in rules: fasteners (締結). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the standard; the standard was not opened for this repository.
+doc_id: KN-FS
+title: 締結の決まり
+category: fastener
+rules:
+  - id: FS-01
+    text: ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上
+    kinds: [frame, body]
+    check: hole_edge_mm >= 1.2 * hole_diameter_mm
+    trust: 2
+    basis: >-
+      EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this
+      repository)
+  - id: FS-02
+    text: 鋼どうしのねじのかみ合い長さは呼び径以上
+    kinds: [frame, body]
+    check: thread_engagement_mm >= bolt_diameter_mm
+    trust: 3
+    basis: a rule of thumb for steel screwed into steel; no single primary source was read (assumption)
