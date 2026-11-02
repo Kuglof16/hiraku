@@ -79,8 +79,7 @@ class Crash(BuiltinTool):
         Predicts("stop_time", "crash.linear_spring", "t_stop"),
         Predicts("crash_energy", "crash.linear_spring", "E"),
         Predicts("crash_energy", "crash.mean_deceleration", "E"),
-        Predicts("mean_deceleration", "crash.mean_deceleration", "a_mean", "s = max_crush"),
-    )
+    )  # the result mean_deceleration is speed / stop time; crash.mean_deceleration's a_mean is over the crush distance
 
     def known_answers(self) -> list[Record]:
         out = []

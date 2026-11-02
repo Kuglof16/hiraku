@@ -45,22 +45,43 @@ def fit(design: dict) -> dict:
         out[f"hip_room.{seat['id']}"] = (seat["box"]["size_mm"][1] - AIST["hip_breadth_seated_f95"], seat["id"])
     for o in occ:
         lo, hi = _box(o)
-        seat = min(seats, key=lambda s: abs(s["box"]["center_mm"][1] - o["box"]["center_mm"][1])) if seats else None
+        seat = _seat_of(o, seats)
         seat_top = _box(seat)[1][2] if seat else lo[2]
-        seat_back = _box(seat)[0][0] if seat else lo[0]
         head = seat_top + AIST["sitting_height_m95"]
         above = [p for p in parts if p is not o and p["kind"] not in ("occupant",)
                  and _box(p)[0][2] >= seat_top and _overlaps_xy(p, o)]
         if above:
             roof = min(_box(p)[0][2] for p in above)
             out[f"head_clearance.{o['id']}"] = (roof - head, o["id"])
-        knee_x = seat_back + AIST["buttock_knee_m95"]
+    for oid, (length, obstacle) in knee_space(design).items():
+        out[f"knee_room.{oid}"] = (length - AIST["buttock_knee_m95"], obstacle)
+    return out
+
+
+KNEE_BAND_MM = 300.0  # parts this far above the seat top are at knee height (assumption)
+
+
+def _seat_of(o: dict, seats: list[dict]) -> dict | None:
+    return min(seats, key=lambda s: abs(s["box"]["center_mm"][1] - o["box"]["center_mm"][1])) if seats else None
+
+
+def knee_space(design: dict) -> dict[str, tuple[float, str]]:
+    """For each occupant: (length mm from the seat back to the nearest part ahead at knee
+    height, that part's id). Occupants with nothing ahead are left out."""
+    parts = design.get("parts", [])
+    seats = [p for p in parts if p["kind"] == "seat"]
+    out = {}
+    for o in (p for p in parts if p["kind"] == "occupant"):
+        lo, _ = _box(o)
+        seat = _seat_of(o, seats)
+        seat_top = _box(seat)[1][2] if seat else lo[2]
+        seat_back = _box(seat)[0][0] if seat else lo[0]
         ahead = [p for p in parts if p is not o and p is not seat and p["kind"] not in ("occupant", "seat")
-                 and _box(p)[0][0] > seat_back and _box(p)[0][2] < seat_top + 300.0 and _box(p)[1][2] > seat_top
+                 and _box(p)[0][0] > seat_back and _box(p)[0][2] < seat_top + KNEE_BAND_MM and _box(p)[1][2] > seat_top
                  and _overlaps_y(p, o)]
         if ahead:
-            front = min(_box(p)[0][0] for p in ahead)
-            out[f"knee_room.{o['id']}"] = (front - knee_x, min(ahead, key=lambda p: _box(p)[0][0])["id"])
+            first = min(ahead, key=lambda p: _box(p)[0][0])
+            out[o["id"]] = (float(_box(first)[0][0] - seat_back), first["id"])
     return out
 
 
