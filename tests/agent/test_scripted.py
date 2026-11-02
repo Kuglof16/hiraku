@@ -52,12 +52,12 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         kinds = self.kinds()
         self.assertEqual(kinds[0], "run.started")
         self.assertEqual(kinds[-1], "run.finished")
-        self.assertEqual(denied_rules(self.ctx), ["H1_prediction_first", "H3_cause_before_continue"])
+        self.assertEqual(denied_rules(self.ctx), ["HK1_prediction_first", "HK3_cause_before_continue"])
         self.assertLess(kinds.index("hook.denied"), kinds.index("prediction.recorded"))
         denied = next(e for e in self.ctx.store.events() if e["kind"] == "hook.denied")
         self.assertTrue(denied["data"]["scripted"])
 
-        # P1: the lever rule mismatches, H3 stops the next compare, the plan's cause is written,
+        # P1: the lever rule mismatches, HK3 stops the next compare, the plan's cause is written,
         # the pushed-wheel formula matches and resolves the cause
         p1 = comparisons(self.ctx, "P1-step100")
         self.assertEqual([(c["quantity"], c["status"]) for c in p1],
@@ -212,7 +212,7 @@ class ScriptedNoExpectedMismatchTest(RunCase, unittest.TestCase):
     def test_retry_only_when_the_mismatch_happens(self):
         run_scripted(self.ctx)
         self.assertEqual([c["status"] for c in comparisons(self.ctx, "P1-step100")], ["match", "match"])
-        self.assertEqual(denied_rules(self.ctx), ["H1_prediction_first"])
+        self.assertEqual(denied_rules(self.ctx), ["HK1_prediction_first"])
         formulas = {p["formula_id"] for p in self.ctx.store.records("prediction")}
         self.assertNotIn("step_climb.pushed_wheel_load", formulas)
         self.assertEqual([cause_of(self.ctx, c) for c in comparisons(self.ctx, "P1-step100")], [None, None])
@@ -239,9 +239,9 @@ class ScriptedUnexpectedMismatchTest(RunCase, unittest.TestCase):
 class ScriptedUnusableToolTest(RunCase, unittest.TestCase):
     frame_checks_pass = False
 
-    def test_h2_stops_the_script(self):
+    def test_hk2_stops_the_script(self):
         self.assertEqual(run_scripted(self.ctx), "stopped")
-        self.assertEqual(denied_rules(self.ctx), ["H1_prediction_first", "H3_cause_before_continue", "H2_tool_usable"])
+        self.assertEqual(denied_rules(self.ctx), ["HK1_prediction_first", "HK3_cause_before_continue", "HK2_tool_usable"])
         self.assert_events_fit()
 
 

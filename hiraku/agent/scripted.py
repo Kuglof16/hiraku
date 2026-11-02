@@ -4,9 +4,9 @@ The plan per product is data/catalog/scripted.yaml. Every value still comes
 from K0 (record_prediction) and the analysis tools; the plan only says which
 formula and which inputs to use. A script cannot investigate a cause: it
 writes one only for a mismatch its plan names (expected_mismatch, with the
-cause worked out beforehand and its source); any other mismatch stops the run.
-Likewise the safe-side judgement of a mismatch is the plan's (worked out
-beforehand); record_cause still checks the direction of the numbers.
+cause written in the plan and its source); any other mismatch stops the run.
+Likewise the safe-side judgement of a mismatch is the plan's; record_cause
+still checks the direction of the numbers.
 """
 
 from __future__ import annotations
@@ -137,7 +137,7 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     """Analyze, then compare every prediction the analysis has a result for.
 
     Returns the comparison of the expected mismatch when it happened (later
-    compares in the domain are then denied by H3, and recorded as such), else None.
+    compares in the domain are then denied by HK3, and recorded as such), else None.
     Raises Stop on anything the plan did not expect.
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
@@ -156,7 +156,7 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         cargs = {"prediction_id": pid, "analysis_id": ana["analysis_id"]}
         if _deny(ctx, agent, "compare", cargs):
             if hit is not None:
-                continue  # H3 after the expected mismatch: recorded, the cause comes next
+                continue  # HK3 after the expected mismatch: recorded, the cause comes next
             raise Stop(f"a hook rule stopped compare on {pid}")
         cmp = compare(ctx, cargs, agent)["comparison"]
         if cmp["status"] == "match":
@@ -204,8 +204,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 
     A mismatch stops the run unless the plan names it in expected_mismatch;
-    then the plan's cause (worked out beforehand, written in the plan with its
-    source) is recorded and the step predicts again with the plan's retry, or,
+    then the plan's cause (written in the plan with its source) is recorded and the step predicts again with the plan's retry, or,
     with no retry, the run stops there.
     """
     s = ctx.store
@@ -213,7 +212,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
     started: list[str] = []
-    showed_h1 = not plan.get("show_h1", False)
+    showed_hk1 = not plan.get("show_hk1", False)
     status, reason = "done", None
 
     for step in plan["steps"]:
@@ -223,9 +222,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.started", agent=agent, domain=lc["domain"] if agent.startswith("cae.") else None,
                    data={"agent_id": agent})
             started.append(agent)
-        if not showed_h1:
+        if not showed_hk1:
             _deny(ctx, agent, "analyze", {"tool": step["tool"], "load_case_id": lc["load_case_id"], "prediction_ids": []})
-            showed_h1 = True
+            showed_hk1 = True
         try:
             _run_step(ctx, lc, agent, step["tool"], step)
         except Stop as e:
