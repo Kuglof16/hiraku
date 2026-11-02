@@ -144,6 +144,23 @@ def _enclosing_def(lines: list[str], n: int) -> str | None:
     return None
 
 
+def _yaml_item(lines: list[str], n: int) -> str:
+    """The YAML list item that line n (1-based) is in, from its "- " line to the next line as
+    far left, so a source written anywhere in that item counts for its numbers ("" outside a list)."""
+    ind = _indent(lines[n - 1])
+    for k in range(n - 2, -1, -1):
+        s = lines[k]
+        if not s.strip() or s.lstrip().startswith("#") or _indent(s) >= ind:
+            continue
+        if s.lstrip().startswith("- "):
+            top = _indent(s)
+            end = next((j for j in range(k + 1, len(lines)) if lines[j].strip() and _indent(lines[j]) <= top),
+                       len(lines))
+            return "\n".join(lines[k:end])
+        ind = _indent(s)  # a key one level up: keep looking outward
+    return ""
+
+
 def _unchecked_list(readme: str) -> str:
     """The part of README that lists the values not checked: from the first line with
     確かめていない to the next heading ("" when there is none)."""
@@ -299,8 +316,11 @@ class Scan:
             bare = COUNT_RE.sub(r"\1", bare)  # SCENE_POINTS = 801, nperseg=4096: chosen by the code
             if _value_numbers(bare):
                 # code: the line and the comment lines above it; data: the surrounding object
+                # (in YAML also the whole list item it belongs to)
                 above, below = (4, 0) if suffix == ".py" else (6, 6)
                 near = "\n".join(lines[max(0, n - 1 - above):n + below])
+                if suffix in (".yaml", ".yml"):
+                    near += "\n" + _yaml_item(lines, n)
                 if not SOURCE_HINT.search(near):
                     self.add("review", "number.source", where, line.strip())
 
