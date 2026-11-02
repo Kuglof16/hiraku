@@ -6,12 +6,16 @@ rail. Under its weight each rail is a simply supported beam with a centre load:
 M = P L / 4, sigma = M c / I (qa.known_answers). The cross member sits where
 the rails have zero slope, so by symmetry it carries no moment.
 
-Assumptions about K1 that the test relies on (adjust here, not in K1, if K1
-models them differently and says so):
-- a wheel's frame_node is held in translation but free to rotate (the wheel
-  centre is straight below the node, so its reaction puts no torque on the rail);
-- a part's weight is split over its carried_by nodes;
-- the load case R1 with no params (no step) carries only the static weight.
+How K1 models the vehicle (as the analysis dept builds it) and why the closed
+form still holds here:
+- each support sits at its wheel centre, held vertically (fore-aft at one wheel,
+  sideways at two, rotations free) and joined to its frame_node by a rigid link;
+  the wheel centres are straight below the rail ends, so the vertical reactions
+  put no moment on the rails and the rail ends are free to rotate;
+- a part's weight is split over its carried_by nodes plus the moment of its
+  offset; each part sits straight above its node, so there is no offset moment;
+- the load case R1 with no step and loading "empty" (no occupant or cargo parts
+  in this design) carries only the static weight.
 Rail self-weight is made negligible with a tiny density.
 """
 
@@ -70,10 +74,10 @@ def ladder_design():
 
 
 def static_load_case():
-    """The contract's example load case without its params: the weight alone."""
+    """The contract's example load case with no step and nobody on board: the weight alone."""
     lc = json.loads((contract.EXAMPLES_DIR / "load_case.json").read_text(encoding="utf-8"))
     lc["load_case_id"] = "R1-static"
-    lc["params"] = {}
+    lc["params"] = {"loading": "empty"}  # the ladder has no occupant or cargo parts
     return lc
 
 

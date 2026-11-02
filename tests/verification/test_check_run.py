@@ -265,6 +265,58 @@ class CheckRun(unittest.TestCase):
         found = self.findings(ev)
         self.assertEqual([str(f) for f in found if f.level == "error"], [])
 
+    def resolved_flow(self):
+        """Mismatch -> cause -> comparison gets cause_id -> revised prediction -> match
+        -> cause resolved -> verdict from the match, on the sample's R1 case."""
+        ev = sample_events()
+        at = by_kind(ev, "comparison.recorded")
+        stamp = {"ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "agent": "cae.strength", "seq": 0}
+        first_pred = by_kind(ev, "prediction.recorded")["data"]
+        first_pred["value"] = 100.0  # the first hand calculation is 19 % low
+        cmp1 = at["data"]
+        cmp1.update(predicted={"value": 100.0, "unit": "MPa"}, diff_abs=cmp1["analyzed"]["value"] - 100.0,
+                    status="mismatch")
+        cmp1["diff_rel"] = cmp1["diff_abs"] / 100.0
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the step force couple was left out",
+                 "fix": "add the couple of the push at the axle", "resolved": False}
+        pred2 = dict(copy.deepcopy(first_pred), prediction_id="pred-0002", value=120.0)
+        cmp2 = dict(copy.deepcopy(cmp1), comparison_id="cmp-0002", prediction_id="pred-0002",
+                    predicted={"value": 120.0, "unit": "MPa"}, status="match")
+        cmp2["diff_abs"] = cmp2["analyzed"]["value"] - 120.0
+        cmp2["diff_rel"] = cmp2["diff_abs"] / 120.0
+        added = [
+            ("cause.recorded", cause),
+            ("comparison.recorded", dict(copy.deepcopy(cmp1), cause_id="cause-0001")),
+            ("prediction.recorded", pred2),
+            ("comparison.recorded", cmp2),
+            ("cause.recorded", dict(cause, resolved=True, resolved_by="cmp-0002")),
+        ]
+        i = ev.index(at) + 1
+        ev[i:i] = [dict(stamp, kind=k, data=copy.deepcopy(d)) for k, d in added]
+        by_kind(ev, "verdict.recorded")["data"]["comparison_id"] = "cmp-0002"
+        for e in ev[i:]:
+            e["t"], e["ts"] = max(e["t"], at["t"]), max(e["ts"], at["ts"])
+        return renumber(ev)
+
+    def test_mismatch_resolved_by_a_revised_prediction(self):
+        found = self.findings(self.resolved_flow())
+        self.assertEqual([str(f) for f in found if f.level == "error"], [])
+        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"H2_tool_usable"})
+
+    def test_revised_prediction_without_a_cause_is_flagged(self):
+        ev = [e for e in self.resolved_flow() if not (e["kind"] == "cause.recorded")]
+        for e in ev:
+            if e["kind"] == "comparison.recorded":
+                e["data"].pop("cause_id", None)
+        rules = self.rules(renumber(ev))
+        self.assertIn("H3_cause_before_continue", rules)
+
+    def test_resolved_by_must_be_a_later_match_of_the_same_quantity(self):
+        ev = self.resolved_flow()
+        last_cause = [e for e in ev if e["kind"] == "cause.recorded"][-1]
+        last_cause["data"]["resolved_by"] = "cmp-0001"  # the mismatch itself
+        self.assertFlags(ev, "cause.resolved")
+
     def test_update_may_not_change_a_recorded_number(self):
         ev = self._resent(sample_events(), "prediction.recorded", value=130.0)
         self.assertFlags(ev, "record.changed")

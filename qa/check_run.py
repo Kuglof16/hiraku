@@ -476,8 +476,10 @@ class RunChecker:
                 continue
             if a.get("status") != "ok":
                 self.error("comparison.link", w, f"{cid} compares a {a.get('status')} analysis")
-            if c.get("prediction_id") not in a.get("prediction_ids", []):
-                self.warn("comparison.link", w, f"{cid}: {a.get('analysis_id')} was not run for {c.get('prediction_id')}")
+            if (c.get("prediction_id") not in a.get("prediction_ids", [])
+                    and not self._revised_after_cause(c.get("prediction_id"), c.get("analysis_id"))):
+                self.warn("comparison.link", w, f"{cid}: {a.get('analysis_id')} was not run for {c.get('prediction_id')}, "
+                                                f"and no cause of a mismatch on it came before that prediction")
             for f in ("design_version", "load_case_id"):
                 if p.get(f) != a.get(f):
                     self.error("comparison.link", w, f"{cid}: prediction and analysis differ in {f}")
@@ -517,6 +519,22 @@ class RunChecker:
                 self.error("comparison.math", w, f"{cid} status {c.get('status')} but diff_rel {rel:.6g} "
                                                  f"vs tolerance {c.get('tolerance_rel')} gives {status}")
 
+    def _load_case_of(self, comparison: dict) -> str | None:
+        p = self.recs["prediction"].get(comparison.get("prediction_id"))
+        return p[1].get("load_case_id") if p else None
+
+    def _revised_after_cause(self, prediction_id: str, analysis_id: str) -> bool:
+        """A prediction made after a cause was written for a mismatch on this analysis
+        (the agreed way to fix a hand calculation: cause, new formula, compare again)."""
+        p = self.recs["prediction"].get(prediction_id)
+        if p is None:
+            return False
+        for i, k in self.recs["cause"].values():
+            c = self.recs["comparison"].get(k.get("comparison_id"))
+            if c and c[1].get("analysis_id") == analysis_id and c[1].get("status") == "mismatch" and i < p[0]:
+                return True
+        return False
+
     def check_causes(self) -> None:
         for kid, (i, k) in self.recs["cause"].items():
             w = self.where_of[i]
@@ -530,6 +548,13 @@ class RunChecker:
                     self.error("cause.resolved", w, f"{kid} resolved_by {rb}, which was never recorded")
                 elif r[1].get("status") != "match":
                     self.error("cause.resolved", w, f"{kid} resolved_by {rb}, which is a {r[1].get('status')}")
+                elif c is not None:
+                    first = self.recs["comparison"][k["comparison_id"]][0]
+                    if r[0] < first:
+                        self.error("cause.resolved", w, f"{kid} resolved_by {rb}, recorded before the mismatch")
+                    if r[1].get("quantity") != c.get("quantity") or self._load_case_of(r[1]) != self._load_case_of(c):
+                        self.error("cause.resolved", w, f"{kid} resolved_by {rb}, which compares another "
+                                                        f"quantity or load case than {k.get('comparison_id')}")
             elif k.get("resolved"):
                 self.warn("cause.resolved", w, f"{kid} says resolved but names no matching comparison")
 
