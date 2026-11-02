@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N00 HIRAKU</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* N00: the name, then the seven CAE agents light up one by one. */
+  :root {
+    --t-name: 0.25s;   /* first letter of the name */
+    --t-row: 1.1s;     /* agents and chips come in, unlit */
+    --t-light: 2.0s;   /* first chip lights */
+    --t-step: 0.42s;   /* gap between chips */
+  }
+
+  .name {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(172 * var(--u));
+    margin: 0;
+    text-align: center;
+    font: 400 calc(210 * var(--u)) / 1 var(--font-latin);
+    letter-spacing: 0.3em;
+    padding-left: 0.3em; /* balance the tracking after the last letter */
+    color: var(--ink);
+  }
+  .name span {
+    display: inline-block;
+    animation: letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: calc(var(--t-name) + var(--i) * 0.07s);
+  }
+  @keyframes letter-in {
+    from { opacity: 0; transform: translateY(calc(28 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .rule {
+    position: absolute;
+    left: calc(760 * var(--u));
+    width: calc(400 * var(--u));
+    top: calc(430 * var(--u));
+    height: calc(2 * var(--u));
+    background: var(--ink);
+    transform-origin: 50% 50%;
+    animation: rule-in 0.6s ease-out both;
+    animation-delay: calc(var(--t-name) + 0.55s);
+  }
+  @keyframes rule-in {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+  .row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(500 * var(--u));
+    display: flex;
+    justify-content: center;
+    gap: calc(34 * var(--u));
+  }
+  .agent {
+    width: calc(196 * var(--u));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: agent-in 0.5s ease-out both;
+    animation-delay: calc(var(--t-row) + var(--i) * 0.06s);
+  }
+  @keyframes agent-in {
+    from { opacity: 0; transform: translateY(calc(16 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .pet {
+    width: calc(184 * var(--u));
+    height: calc(184 * var(--u));
+    margin-left: calc(18 * var(--u)); /* body sits left of the box; centre it on the chip */
+    animation:
+      pet-wake 0.5s ease-out both,
+      pet-hop 0.45s cubic-bezier(.3, 0, .3, 1) both;
+    animation-delay:
+      calc(var(--t-light) + var(--i) * var(--t-step)),
+      calc(var(--t-light) + var(--i) * var(--t-step));
+  }
+  .pet-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  @keyframes pet-wake {
+    from { filter: grayscale(1) opacity(0.55); }
+    to   { filter: grayscale(0) opacity(1); }
+  }
+  @keyframes pet-hop {
+    0%   { transform: translateY(0); }
+    45%  { transform: translateY(calc(-18 * var(--u))); }
+    100% { transform: translateY(0); }
+  }
+  .pet .pr { stroke: var(--ink); stroke-width: 2.2; }
+  .pet .fill-ink { fill: var(--ink); }
+  .pet .fill-paper { fill: var(--paper); }
+
+  .chip {
+    margin-top: calc(14 * var(--u));
+    display: inline-flex;
+    align-items: center;
+    gap: calc(10 * var(--u));
+    height: calc(52 * var(--u));
+    padding: 0 calc(22 * var(--u)) 0 calc(18 * var(--u));
+    border-radius: calc(26 * var(--u));
+    border: calc(2.5 * var(--u)) solid var(--ink-faint);
+    background: var(--paper);
+    font: 700 calc(27 * var(--u)) / 1 var(--font-ja);
+    color: var(--ink-faint);
+    white-space: nowrap;
+    animation: chip-on 0.35s ease-out both;
+    animation-delay: calc(var(--t-light) + var(--i) * var(--t-step));
+  }
+  .chip i {
+    width: calc(16 * var(--u));
+    height: calc(16 * var(--u));
+    border-radius: 50%;
+    background: var(--ink-faint);
+    animation: dot-on 0.35s ease-out both;
+    animation-delay: inherit;
+  }
+  @keyframes chip-on {
+    from { border-color: var(--ink-faint); color: var(--ink-faint); }
+    to   { border-color: var(--pass); color: var(--ink); }
+  }
+  @keyframes dot-on {
+    0%   { background: var(--ink-faint); transform: scale(1); }
+    50%  { background: var(--pass); transform: scale(1.5); }
+    100% { background: var(--pass); transform: scale(1); }
+  }
+</style>
+</head>
+<body data-duration="7">
+<div class="stage paper-grid">
+  <div class="safe">
+    <h1 class="name" aria-label="HIRAKU"></h1>
+    <div class="rule"></div>
+    <div class="row"></div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script src="pets.js"></script>
+<script>
+  // The seven CAE agents, in the order the chips light.
+  const AGENTS = [
+    ["handling", "操安"],
+    ["powertrain", "動力"],
+    ["aero", "空力"],
+    ["crash", "衝突"],
+    ["strength", "強度信頼性"],
+    ["nvh", "音振"],
+    ["thermal", "熱"],
+  ];
+  document.querySelector(".name").innerHTML = [..."HIRAKU"]
+    .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
+  document.querySelector(".row").innerHTML = AGENTS
+    .map(([key, label], i) => `<div class="agent" style="--i:${i}">
+        <div class="pet" style="--i:${i}">${drawPet(key)}</div>
+        <div class="chip" style="--i:${i}"><i></i>${label}</div>
+      </div>`).join("");
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>

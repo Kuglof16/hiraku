@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N05 Title (opening)</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="title.css">
+<style>
+  /* N05: the vehicle fills the screen, bursts open into a grid of the
+     preset tests, and the name settles above the grid.
+     The hero and the tiles are stand-ins (.bg-only): the video uses the
+     app's own renders there, with this page laid over them (?layer=fg). */
+  :root {
+    --page-bg: var(--night);
+    --t-burst: 0.95s;   /* the vehicle bursts open */
+    --t-tiles: 1.05s;   /* first tile lands */
+    --t-name: 1.45s;
+    --t-tag: 2.0s;
+  }
+
+  .hero {
+    position: absolute;
+    left: calc(210 * var(--u));
+    top: calc(60 * var(--u));
+    width: calc(1500 * var(--u));
+    transform-origin: 50% 55%;
+    animation:
+      hero-push 0.95s linear both,
+      hero-burst 0.4s cubic-bezier(.5, 0, .9, .4) both;
+    animation-delay: 0s, var(--t-burst);
+  }
+  .hero .v-line { stroke: var(--on-night); }
+  @keyframes hero-push {
+    from { transform: scale(1); }
+    to   { transform: scale(1.04); }
+  }
+  @keyframes hero-burst {
+    from { transform: scale(1.04); opacity: 1; }
+    to   { transform: scale(1.7); opacity: 0; }
+  }
+
+  .burst {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.5) 35%, var(--glow) 50%,
+      rgba(246, 234, 208, 0.5) 65%, rgba(246, 234, 208, 0) 100%);
+    animation: burst 0.6s cubic-bezier(.2, .8, .3, 1) both;
+    animation-delay: calc(var(--t-burst) - 0.05s);
+  }
+  @keyframes burst {
+    0%   { transform: scaleX(0.01); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: scaleX(1.4); opacity: 0; }
+  }
+
+  .name { top: calc(62 * var(--u)); font-size: calc(124 * var(--u)); }
+  .tag  { top: calc(200 * var(--u)); font-size: calc(42 * var(--u)); }
+
+  .grid {
+    position: absolute;
+    left: calc(96 * var(--u));
+    top: calc(280 * var(--u));
+    width: calc(1728 * var(--u));
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: calc(180 * var(--u));
+    gap: calc(26 * var(--u)) calc(32 * var(--u));
+  }
+  .tile {
+    position: relative;
+    background: #f7f4ec;
+    border: calc(2 * var(--u)) solid #3b3934;
+    border-radius: calc(10 * var(--u));
+    overflow: hidden;
+    animation: tile-in 0.6s cubic-bezier(.2, .9, .3, 1.15) both;
+    animation-delay: calc(var(--t-tiles) + var(--d) * 0.05s);
+  }
+  @keyframes tile-in {
+    from {
+      transform: translate(calc(var(--dx) * var(--u)), calc(var(--dy) * var(--u))) scale(0.2);
+      opacity: 0;
+    }
+    to { transform: none; opacity: 1; }
+  }
+  .tile b {
+    position: absolute;
+    left: calc(16 * var(--u));
+    top: calc(12 * var(--u));
+    font: 700 calc(26 * var(--u)) / 1 var(--font-ja);
+    color: var(--ink);
+  }
+  .tile svg.art {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .tile .v-line { stroke: var(--ink); }
+  .tile .mark { stroke: var(--ink-soft); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .tile .solid { fill: #d9d4c7; stroke: var(--ink-soft); stroke-width: 2.5; }
+</style>
+</head>
+<body data-duration="5">
+<div class="stage night">
+  <div class="safe">
+    <div class="hero bg-only"></div>
+    <div class="grid bg-only"></div>
+    <div class="burst"></div>
+    <h1 class="name" aria-label="HIRAKU"></h1>
+    <p class="tag">CAE を、すべての作り手へ拓く。</p>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script src="vehicle.js"></script>
+<script>
+  // Preset tests in the grid, in reading order. The marks only say which
+  // test a tile is; they show no result.
+  const ARROW = (x1, y1, x2, y2) => {
+    const a = Math.atan2(y2 - y1, x2 - x1), h = 10;
+    const p = (s) => `${x2 - h * Math.cos(a + s)},${y2 - h * Math.sin(a + s)}`;
+    return `<path class="mark" d="M${x1} ${y1}L${x2} ${y2}M${p(0.5)}L${x2},${y2}L${p(-0.5)}"/>`;
+  };
+  const GROUND = `<path class="mark" d="M20 152H380"/>`;
+  const TESTS = [
+    ["段差越え", { rot: -5 }, `<path class="mark" d="M20 152H262V136H380"/>`],
+    ["傾斜台", { rot: -12 }, `<path class="solid" d="M60 160L340 100L340 160Z"/>`],
+    ["横風", {}, GROUND + ARROW(26, 78, 92, 78) + ARROW(26, 104, 92, 104) + ARROW(26, 130, 92, 130)],
+    ["オフロード走行", {}, `<path class="mark" d="M20 150Q60 138 100 150T180 150T260 146T340 152T380 148"/>`],
+    ["DLC", {}, GROUND + `<path class="solid" d="M44 152l8-22 8 22zM340 152l8-22 8 22z"/>`],
+    ["急ブレーキ", { rot: 3 }, GROUND + `<path class="mark" d="M60 158H112M60 164H96"/>`],
+    ["長時間", {}, GROUND + `<path class="mark" d="M352 46a20 20 0 1 1-14-14"/><path class="mark" d="M332 26l8 6-9 5"/>`],
+    ["発進", {}, GROUND + `<path class="mark" d="M28 96H76M40 116H86M28 136H70"/>`],
+    ["衝突", { dx: 14 }, GROUND + `<path class="solid" d="M352 52H376V152H352Z"/>`],
+    ["音振", {}, GROUND + `<path class="mark" d="M146 70q6-8 12 0t12 0t12 0M226 70q6-8 12 0t12 0t12 0"/>`],
+    ["疲労", {}, `<path class="mark" d="M20 152H380"/><path class="mark" d="M40 40V84H96M44 48Q60 74 92 78"/>`],
+    ["熱", {}, GROUND + `<path class="mark" d="M180 92q-6-10 0-20t0-20M200 92q-6-10 0-20t0-20M220 92q-6-10 0-20t0-20"/>`],
+  ];
+
+  function tileArt([, pose, marks]) {
+    // vehicle 250 wide in a 400x170 box, wheels resting on y = 152
+    const s = 250 / 600, x = 75 + (pose.dx || 0), y = 152 - 280 * s;
+    const rot = pose.rot ? `rotate(${pose.rot} 200 152)` : "";
+    return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">
+      ${marks}
+      <g transform="${rot} translate(${x} ${y}) scale(${s})" fill="none"
+         stroke-linecap="round" stroke-linejoin="round">${drawVehicle({ strokeScale: 1.6 })
+        .replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</g>
+    </svg>`;
+  }
+
+  // Each tile flies in from the middle of the screen; --d orders them by
+  // distance from the middle so the grid opens outward.
+  const grid = document.querySelector(".grid");
+  const W = 408, H = 180, GX = 32, GY = 26, X0 = 96, Y0 = 280;
+  const tiles = TESTS.map((test, n) => {
+    const c = n % 4, r = Math.floor(n / 4);
+    const cx = X0 + c * (W + GX) + W / 2, cy = Y0 + r * (H + GY) + H / 2;
+    return { test, dx: 960 - cx, dy: 470 - cy, dist: Math.hypot(960 - cx, 470 - cy) };
+  });
+  const order = [...tiles].sort((a, b) => a.dist - b.dist);
+  grid.innerHTML = tiles.map((t) =>
+    `<div class="tile" style="--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
+       ${tileArt(t.test)}<b>${t.test[0]}</b></div>`).join("");
+
+  document.querySelector(".hero").innerHTML = drawVehicle({ strokeScale: 0.7 });
+  document.querySelector(".name").innerHTML = [..."HIRAKU"]
+    .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>

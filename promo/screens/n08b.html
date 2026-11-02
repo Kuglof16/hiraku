@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N08b Numbers</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* N08b: two rounded figures on a dark ground, the bars behind the second
+     one, and the sources with the exact values. Figures come from DATA. */
+  :root {
+    --page-bg: var(--night);
+    --t-left: 0.3s;     /* 99 % */
+    --t-right: 4.1s;    /* 5 %, when the second sentence starts */
+    --t-bars: 5.4s;
+    --t-src: 6.4s;
+  }
+  .stage { background: var(--night); color: var(--on-night); }
+
+  .fig {
+    position: absolute;
+    top: calc(210 * var(--u));
+    width: calc(860 * var(--u));
+    text-align: center;
+  }
+  .fig.left  { left: calc(70 * var(--u)); }
+  .fig.right { left: calc(990 * var(--u)); }
+  .num {
+    font: 400 calc(200 * var(--u)) / 1 var(--font-latin);
+    letter-spacing: 0.01em;
+    animation: rise 0.8s cubic-bezier(.2, .7, .2, 1) both;
+  }
+  .num small { font-size: 0.62em; margin-left: 0.12em; }
+  .cap {
+    margin-top: calc(26 * var(--u));
+    font: 500 calc(44 * var(--u)) / 1.3 var(--font-ja);
+    animation: fade-up 0.6s ease-out both;
+  }
+  .left .num  { animation-delay: var(--t-left); }
+  .left .cap  { animation-delay: calc(var(--t-left) + 0.7s); }
+  .right .num { animation-delay: var(--t-right); }
+  .right .cap { animation-delay: calc(var(--t-right) + 0.7s); }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(calc(40 * var(--u))); clip-path: inset(100% 0 0 0); }
+    to   { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(calc(14 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .divider {
+    position: absolute;
+    left: calc(959 * var(--u));
+    top: calc(230 * var(--u));
+    width: calc(2 * var(--u));
+    height: calc(260 * var(--u));
+    background: rgba(241, 236, 224, 0.28);
+    animation: grow-y 0.6s ease-out both;
+    animation-delay: calc(var(--t-right) - 0.4s);
+  }
+  @keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+  .bars {
+    position: absolute;
+    left: calc(930 * var(--u));
+    top: calc(560 * var(--u));
+    width: calc(930 * var(--u));
+  }
+  .bar-row {
+    display: grid;
+    grid-template-columns: calc(290 * var(--u)) 1fr;
+    align-items: center;
+    column-gap: calc(22 * var(--u));
+    height: calc(64 * var(--u));
+    animation: fade-up 0.5s ease-out both;
+    animation-delay: calc(var(--t-bars) + var(--i) * 0.15s);
+  }
+  .bar-row span {
+    text-align: right;
+    font: 400 calc(30 * var(--u)) / 1 var(--font-ja);
+    color: var(--on-night-soft);
+  }
+  .bar-track { display: flex; align-items: center; gap: calc(16 * var(--u)); }
+  .bar {
+    height: calc(36 * var(--u));
+    border-radius: calc(4 * var(--u));
+    background: #6b6862;
+    transform-origin: 0 50%;
+    animation: grow-x 0.8s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: calc(var(--t-bars) + 0.2s + var(--i) * 0.15s);
+  }
+  .bar.hot { background: var(--warm); }
+  .bar-track b {
+    font: 700 calc(32 * var(--u)) / 1 var(--font-latin);
+    animation: fade-up 0.4s ease-out both;
+    animation-delay: calc(var(--t-bars) + 0.8s + var(--i) * 0.15s);
+  }
+  @keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+  .sources {
+    position: absolute;
+    left: calc(90 * var(--u));
+    right: calc(90 * var(--u));
+    top: calc(770 * var(--u));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font: 400 calc(21 * var(--u)) / 1.75 var(--font-ja);
+    color: var(--on-night-soft);
+    animation: fade-up 0.6s ease-out both;
+    animation-delay: var(--t-src);
+  }
+</style>
+</head>
+<body data-duration="9">
+<div class="stage">
+  <div class="safe">
+    <div class="fig left"><div class="num"></div><div class="cap">製造業の企業のうち、中小企業</div></div>
+    <div class="divider"></div>
+    <div class="fig right"><div class="num"></div><div class="cap">小さな会社の CAE の導入率</div></div>
+    <div class="bars"></div>
+    <ul class="sources"></ul>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Figures from outside sources. The shares on screen are computed here.
+  // Checked against the source table and figure on 2026-11-02: all four
+  // values match. The survey's question wording was not seen, so the screen
+  // uses the figure's own term (導入率, adoption rate).
+  const DATA = {
+    // 中小企業庁「2025 年版 中小企業白書」付属統計資料 1 表 (産業別規模別企業数),
+    // 2021 年 6 月時点. https://www.chusho.meti.go.jp/pamflet/hakusyo/2025/chusho/excel/f1.xlsx
+    // Enterprises = companies and sole proprietors; manufacturing row, 2021.
+    manufacturing: {
+      all: 337490,
+      sme: 335552,
+      source: "中小企業白書 2025 付属統計資料 1 表、2021 年 6 月",
+    },
+    // 『金融構造研究』第 43 号, 図表 11「製造業の従業員規模別システム導入率」(%),
+    // citing メイテック「機械系エンジニア 500 人調査」(2016). CAE row.
+    // https://www.chiginkyo.or.jp/pdf/kin_43_01.pdf
+    cae_adoption: {
+      small: { label: "従業員 1〜100 人", pct: 5.2 },
+      large: { label: "1 万人以上", pct: 54.7 },
+      source: "メイテック「機械系エンジニア 500 人調査」2016 年、『金融構造研究』第 43 号 図表 11",
+    },
+  };
+
+  const smePct = (100 * DATA.manufacturing.sme) / DATA.manufacturing.all;
+  const fmt1 = (x) => x.toFixed(1);
+  const count = (n) => n.toLocaleString("en-US");
+  const pctHtml = (x) => `${Math.round(x)}<small>%</small>`;
+
+  document.querySelector(".left .num").innerHTML = pctHtml(smePct);
+  document.querySelector(".right .num").innerHTML = pctHtml(DATA.cae_adoption.small.pct);
+
+  // Bars share one scale: 100 % = 800 design px.
+  const PX_PER_PCT = 8;
+  const rows = [DATA.cae_adoption.small, DATA.cae_adoption.large];
+  document.querySelector(".bars").innerHTML = rows.map((r, i) => `
+    <div class="bar-row" style="--i:${i}">
+      <span>${r.label}</span>
+      <div class="bar-track">
+        <div class="bar${i === 0 ? " hot" : ""}" style="--i:${i};width:calc(${r.pct * PX_PER_PCT} * var(--u))"></div>
+        <b style="--i:${i}">${fmt1(r.pct)} %</b>
+      </div>
+    </div>`).join("");
+
+  const m = DATA.manufacturing, c = DATA.cae_adoption;
+  document.querySelector(".sources").innerHTML = [
+    `製造業の企業 ${count(m.all)} のうち中小企業 ${count(m.sme)} (${fmt1(smePct)} %)。${m.source}`,
+    `製造業の従業員規模別の CAE の導入率: ${c.small.label} ${fmt1(c.small.pct)} %、` +
+      `${c.large.label} ${fmt1(c.large.pct)} %。${c.source}`,
+  ].map((s) => `<li>${s}</li>`).join("");
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>
