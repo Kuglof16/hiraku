@@ -645,6 +645,75 @@ class BrowserReplayTest(unittest.TestCase):
             server.server_close()
             shutil.rmtree(tmp)
 
+    def test_n05_without_the_hero_and_the_hero_alone(self):
+        """?hero=0: the tiles fly in as before with no big vehicle. ?only=hero: the big vehicle
+        alone on a clear page, and window.hiraku.png() gives its box as a PNG at the page's
+        scale (2 here) with clear corners."""
+        tmp = Path(tempfile.mkdtemp())
+        layout = n05_layout()
+        (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+
+        def open_cut(query, dpr=1):
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=dpr)
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            return page, errors
+
+        try:
+            page, errors = open_cut("hero=0&t=0")
+            got = page.evaluate(
+                """async () => {
+                  await window.hiraku.seek(4.9);
+                  const tiles = [...document.querySelectorAll(".tile")];
+                  return { hero: document.querySelectorAll('[data-box="n05.hero"]').length, png: window.hiraku.png(),
+                           tiles: tiles.length, shown: tiles.filter((el) => getComputedStyle(el).visibility === "visible").length };
+                }"""
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(got, {"hero": 0, "png": None, "tiles": 12, "shown": 12})
+            page.close()
+
+            page, errors = open_cut("only=hero&t=0", dpr=2)
+            got = page.evaluate(
+                """async () => {
+                  await window.hiraku.seek(0);
+                  const bg = (el) => getComputedStyle(el).backgroundColor;
+                  const img = new Image();
+                  img.src = window.hiraku.png();
+                  await img.decode();
+                  const c = document.createElement("canvas");
+                  c.width = img.width;
+                  c.height = img.height;
+                  const g = c.getContext("2d");
+                  g.drawImage(img, 0, 0);
+                  const px = g.getImageData(0, 0, c.width, c.height).data;
+                  let solid = 0;
+                  for (let i = 3; i < px.length; i += 4 * 7) if (px[i] > 200) solid += 1;
+                  const a = (x, y) => px[(y * c.width + x) * 4 + 3];
+                  return { size: [img.width, img.height], corners: [a(0, 0), a(c.width - 1, 0), a(0, c.height - 1), a(c.width - 1, c.height - 1)], solid,
+                           page: [bg(document.documentElement), bg(document.body), bg(document.getElementById("stage"))],
+                           boxes: [...document.querySelectorAll("[data-box]")].map((el) => el.dataset.box) };
+                }"""
+            )
+            self.assertEqual(errors, [])
+            hero = layout["n05"]["hero"]
+            self.assertEqual(got["size"], [hero["w"] * 2, hero["h"] * 2])
+            self.assertEqual(got["corners"], [0, 0, 0, 0])
+            self.assertGreater(got["solid"], 0)
+            self.assertEqual(got["page"], ["rgba(0, 0, 0, 0)"] * 3)
+            self.assertEqual(got["boxes"], ["n05.hero"])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
     def test_n01_cut_plays_the_step_and_the_case_past_the_limit(self):
         """cut.html?cut=n01 on the real tools' records (HIRAKU_WEB_DEV_RUNS): the main view, the
         red overlay of the higher step, one card per case filled from the records."""
