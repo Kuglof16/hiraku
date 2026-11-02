@@ -27,7 +27,20 @@ def _free_steer(v: dict) -> dict:
 def all_formulas() -> list[Formula]:
     s = {k: sp.Symbol(k, real=True) for k in ("L", "L_bk")}
     L, L_bk = s["L"], s["L_bk"]
+    c = {k: sp.Symbol(k, real=True) for k in ("n", "n_out")}
     return [
+        Formula(
+            formula_id="assembly.part_count",
+            title="組み立てる部品の数 (どれも入れられるなら、組み立ての手順の数)",
+            domain="assembly",
+            expression="steps = n - n_out",
+            inputs={"n": _in("1", "parts in the design", min=0),
+                    "n_out": _in("1", "parts that are not assembled (occupants, cargo)", min=0)},
+            outputs={"steps": ("1", "assembly steps if every part can go in", c["n"] - c["n_out"])},
+            assumptions=["one step per part", "every part can be put in along some direction"],
+            source="counting",
+            symbols=c,
+        ),
         Formula(
             formula_id="geometry.free_steer_angle",
             title="ハンドルを切ったとき、車輪の内側の角がフレームに当たるまでの角度",

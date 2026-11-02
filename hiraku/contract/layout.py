@@ -11,6 +11,7 @@ runs/<run_id>/
     v001/verdicts/ver-0001.json       VERDICT
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
     report.json                       REPORT (later)
+    stop.request                      present only while someone asks the run to stop
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Every record written to a file is also the `data` of one event, byte-for-byte
@@ -30,11 +31,13 @@ from datetime import datetime
 from pathlib import Path
 
 RUNS_DIR = Path("runs")
+SHOWCASE_DIR = Path("showcase")  # committed example runs, same layout as runs/<run_id>/
 PROJECT_FILE = "project.json"
 EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
 JUDGEMENTS_FILE = "judgements.json"
 REPORT_FILE = "report.json"
+STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
 
 RECORD_DIRS = {
     "prediction": "predictions",
@@ -83,6 +86,9 @@ def record_path(run_path: Path, design_version: int, kind: str, record_id: str) 
 OWNERS = {
     "lead": [
         "hiraku/contract/",
+        "hiraku/__init__.py",
+        "tests/__init__.py",
+        "LICENSE",
         "showcase/",  # saved runs committed as examples (the screen opens the newest)
         "tests/contract/",
         "docs/",

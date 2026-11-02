@@ -35,6 +35,17 @@ export const PROP_JA = {
   thermometer: "温度計",
 };
 
+// Why a run ended (run.finished stop_code), in words.
+export const STOP_CODE_JA = {
+  done: "完了",
+  not_judged: "まだ判定の無い分野がある",
+  round_limit: "繰り返しの上限に達した",
+  cost_limit: "費用の上限に達した",
+  turn_limit: "ターン数の上限に達した",
+  user_stop: "人が止めた",
+  error: "エラーで止まった",
+};
+
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },

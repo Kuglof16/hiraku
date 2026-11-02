@@ -21,20 +21,25 @@ UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
 HALF_UNSPRUNG_KINDS = {"suspension"}
 
 # Defaults used when the design does not say. They are modelling choices,
-# not values from a source; each one used is reported in Vehicle.assumptions.
+# not values from a source; each one used is reported in Vehicle.assumptions
+# (and the tools write those into the analysis record's effects). The keys
+# are the design variable names of hiraku.designgen where it has one.
 DEFAULTS = {
-    "tire_vertical_stiffness": (150e3, "N/m", "tyre vertical stiffness 150 N/mm (assumed)"),
+    "tyre_stiffness": (150e3, "N/m", "tyre vertical stiffness 150 N/mm (assumed; the design has no tyre_stiffness)"),
     "tire_vertical_damping_ratio": (0.05, "1", "tyre vertical damping ratio 0.05 (assumed)"),
-    "tire_cornering_coeff": (8.0, "1/rad", "cornering stiffness 8 x static wheel load per rad (assumed)"),
+    "tire_cornering_coeff": (8.0, "1/rad", "cornering stiffness 8 x static wheel load per rad (assumed; the design "
+                                           "has no front_cornering_stiffness / rear_cornering_stiffness)"),
     "tire_long_slip_coeff": (10.0, "1", "longitudinal slip stiffness 10 x static wheel load (assumed)"),
     "tire_relaxation_length": (None, "m", "relaxation length = wheel radius (assumed)"),
     "tire_mu": (0.8, "1", "friction coefficient 0.8 (assumed; the load case usually gives mu)"),
-    "tire_rolling_resistance": (0.015, "1", "rolling resistance coefficient 0.015 (assumed)"),
+    "rolling_resistance": (0.015, "1", "rolling resistance coefficient 0.015 (assumed; the design has no "
+                                       "rolling_resistance)"),
     "damping_ratio": (0.3, "1", "suspension damping ratio 0.3 of the corner (assumed)"),
     "travel": (0.10, "m", "suspension travel 100 mm, half bump half rebound (assumed)"),
     "bump_stop_factor": (10.0, "1", "bump and rebound stops 10 x wheel rate (assumed)"),
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
-    "max_steer": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed)"),
+    "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
+                                                   "max_steer_angle)"),
 }
 
 
@@ -171,12 +176,12 @@ def _projected(boxes: list[tuple[np.ndarray, np.ndarray]], discs: list[tuple[np.
     return n * cell * cell, np.array([uu[mask].mean(), vv[mask].mean()])
 
 
-# Other names of the same design variables, as the designs on the shelf write them.
+# Older names of the same design variables, read when the designgen name is absent.
 VARIABLE_ALIASES = {
-    "tire_vertical_stiffness": ("tyre_stiffness", "tire_stiffness"),
-    "tire_rolling_resistance": ("rolling_resistance",),
+    "tyre_stiffness": ("tire_vertical_stiffness", "tire_stiffness"),
+    "rolling_resistance": ("tire_rolling_resistance",),
     "tire_mu": ("tyre_mu",),
-    "max_steer": ("max_steer_angle",),
+    "max_steer_angle": ("max_steer",),
 }
 
 
@@ -237,18 +242,17 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
 
     k_z = overrides.get("tire_vertical_stiffness")
     if k_z is None:
-        k_z = _var(design, "tire_vertical_stiffness", "N/m", notes)
+        k_z = _var(design, "tyre_stiffness", "N/m", notes)
     zeta_z = _var(design, "tire_vertical_damping_ratio", "1", notes)
-    c_alpha = _var(design, "tire_cornering_coeff", "1", notes)
     c_kappa = _var(design, "tire_long_slip_coeff", "1", notes)
     mu = overrides.get("mu")
     if mu is None:
         mu = _var(design, "tire_mu", "1", notes)
     c_rr = overrides.get("c_rr")
     if c_rr is None:
-        c_rr = _var(design, "tire_rolling_resistance", "1", notes)
+        c_rr = _var(design, "rolling_resistance", "1", notes)
     zeta_s = _var(design, "damping_ratio", "1", [])
-    max_steer = _var(design, "max_steer", "rad", notes)
+    max_steer = _var(design, "max_steer_angle", "rad", notes)
 
     corners: list[Corner] = []
     for k, s in enumerate(sups):
@@ -350,6 +354,19 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     if np.any(np.linalg.eigvalsh(i_s) <= 0.0):
         raise DesignError("the body inertia is not positive; check the part boxes and masses")
 
+    # Cornering stiffness per axle (both tyres) from the design, shared by the wheels of
+    # the front-most and the rear-most axle; other wheels fall back on the coefficient.
+    axle_cornering: dict[int, float] = {}
+    var = design.get("variables") or {}
+    wheels = [i for i, c in enumerate(corners) if c.kind == "wheel"]
+    if wheels:
+        for name, x in (("front_cornering_stiffness", max(float(corners[i].pos[0]) for i in wheels)),
+                        ("rear_cornering_stiffness", min(float(corners[i].pos[0]) for i in wheels))):
+            if name in var:
+                on = [i for i in wheels if abs(float(corners[i].pos[0]) - x) < 1e-9]
+                for i in on:
+                    axle_cornering[i] = si(var[name], "N/rad") / len(on)
+
     # Static loads: rigid body on elastic supports (series spring + tyre).
     xs = np.array([c.pos[0] for c in corners])
     ys = np.array([c.pos[1] for c in corners])
@@ -393,7 +410,9 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
             c.c_long = c.c_lat = 0.0
         else:
             c.c_long = c_kappa * f
-            c.c_lat = c_alpha * f
+            c.c_lat = axle_cornering.get(i)
+            if c.c_lat is None:
+                c.c_lat = _var(design, "tire_cornering_coeff", "1", notes) * f
     if "tire_relaxation_length" not in (design.get("variables") or {}):
         notes.append(DEFAULTS["tire_relaxation_length"][2])
 

@@ -1273,6 +1273,13 @@
             "$ref": "#/$defs/scene_object"
           },
           "description": "What to draw around the vehicle for this test (from the load case and the solver, never hand-placed)."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values the tool had to assume because neither the load case nor the design gives them (e.g. a default side-force coefficient)."
         }
       }
     },
@@ -1457,8 +1464,11 @@
           "type": "boolean"
         },
         "margin_pct": {
-          "type": "number",
-          "description": "Positive when passing: how far the value is from the limit, as % of the limit."
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How far the value is from the limit, as % of the limit, positive when passing. null when the limit is 0 (use margin)."
         },
         "requirement_keys": {
           "type": "array",
@@ -1482,6 +1492,10 @@
         "cause_id": {
           "type": "string",
           "pattern": "^cause-[0-9]{4,}$"
+        },
+        "margin": {
+          "$ref": "#/$defs/quantity",
+          "description": "How far the value is from the limit in its own unit, positive when passing."
         }
       }
     },
@@ -2008,9 +2022,74 @@
                       "user_stop",
                       "error"
                     ],
-                    "description": "Why the run ended, for the screen to word."
+                    "description": "Why the run ended, for the screen to word. done goes with status done, error with failed, the others with stopped."
                   }
-                }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "done"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "done"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "error"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "failed"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "enum": [
+                            "not_judged",
+                            "round_limit",
+                            "cost_limit",
+                            "turn_limit",
+                            "user_stop"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "stopped"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -2323,13 +2402,16 @@
           "type": "string"
         },
         "position_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Centre of the box (size_mm). A cone is a point; a gate is a line through it."
         },
         "size_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Edge lengths of the box. A gate is [0, width, 0]."
         },
         "rpy_deg": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Roll, pitch, yaw about the centre (roll + = left side up, pitch - = front up)."
         },
         "profile": {
           "type": "object",

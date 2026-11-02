@@ -1,5 +1,9 @@
-// The surroundings of a test, drawn only from the load case's params and the
-// analysis record (never placed by hand). What each one is read from:
+// The surroundings of a test, drawn only from the record (never placed by hand).
+// When the tool writes the analysis' `scene` (contract scene_object: step,
+// road_profile, slope, tilt_table, cone, gate, wall, ramp, ground), that is
+// drawn: position_mm is taken as the centre of the object's box (size_mm), as
+// for a part's box, turned by rpy_deg. Without a `scene`, the surroundings are
+// read off the load case's params and the series:
 //   step         params.step_height; where its edge is: the reactions that push on
 //                the step's corner (a still) or the first time a wheel's contact
 //                point leaves the road (a motion)
@@ -147,20 +151,69 @@ export function liftIsLimit(lc) {
   return !lc?.params?.step_height;
 }
 
+const deg = (v) => (v ?? 0) * (Math.PI / 180);
+
+// A recorded road_profile as heights under the wheel tracks: one line per key
+// (a support id gives its track's y; left / right take the outermost wheels' y),
+// or one line for the whole width.
+function profileSurface(obj, design) {
+  const p = obj.profile;
+  const off = obj.position_mm ?? [0, 0, 0];
+  const xs = (p?.x_mm ?? []).map((x) => x + off[0]);
+  if (xs.length < 2) return null;
+  const supports = Object.fromEntries((design?.supports ?? []).map((s) => [s.id, s.position_mm[1]]));
+  const ysAll = Object.values(supports);
+  const yLeft = ysAll.length ? Math.max(...ysAll) : 550;
+  const yRight = ysAll.length ? Math.min(...ysAll) : -550;
+  const lines = Array.isArray(p.z_mm)
+    ? [[yLeft, p.z_mm], [yRight, p.z_mm]]
+    : Object.entries(p.z_mm ?? {}).map(([k, zs]) => [supports[k] ?? (/^(l|left)$/i.test(k) ? yLeft : /^(r|right)$/i.test(k) ? yRight : 0), zs]);
+  const left = lines.filter(([y]) => y >= 0);
+  const right = lines.filter(([y]) => y < 0);
+  if (!left.length || !right.length) return null;
+  const zAt = (zs, x) => {
+    if (x <= xs[0]) return zs[0] + off[2];
+    for (let i = 1; i < xs.length; i += 1) {
+      if (x <= xs[i]) return zs[i - 1] + ((zs[i] - zs[i - 1]) * (x - xs[i - 1])) / (xs[i] - xs[i - 1] || 1) + off[2];
+    }
+    return zs.at(-1) + off[2];
+  };
+  const mean = (ls, x) => ls.reduce((s, [, zs]) => s + zAt(zs, x), 0) / ls.length;
+  return { x0: xs[0], x1: xs.at(-1), yL: left[0][0], yR: right[0][0], zL: (x) => mean(left, x), zR: (x) => mean(right, x) };
+}
+
+function fromRecord(objects, design) {
+  const out = { objects: [], slope: null, table: false, surface: null };
+  for (const o of objects) {
+    if (o.kind === "slope") out.slope = deg(o.rpy_deg?.[0]);
+    else if (o.kind === "road_profile") out.surface = profileSurface(o, design);
+    else {
+      if (o.kind === "tilt_table") out.table = true;
+      if (Array.isArray(o.position_mm) && Array.isArray(o.size_mm)) out.objects.push(o);
+    }
+  }
+  return out;
+}
+
 // What surrounds this test (see the top of the file); every field may be null.
 export function sceneOf(lc, ana, motion, design) {
   const params = lc?.params ?? {};
+  const wind = motion?.channels.has("wind_speed") ? { from: String(params.wind_from ?? "left") === "right" ? "right" : "left", s: motion.channels.get("wind_speed") } : null;
+  const base = { wind, course: courseOf(motion), halfWidth: halfWidth(design), objects: [], step: null, wall: null };
+  if (Array.isArray(ana?.scene) && ana.scene.length) {
+    const r = fromRecord(ana.scene, design);
+    return { ...base, ...r, table: r.table || !!motion?.hasTable, recorded: true };
+  }
   const slope = angleParam(params.side_slope);
   const crash = ana?.tool === "crash" || lc?.domain === "crash";
   return {
+    ...base,
     step: stepOf(lc, ana, motion, design),
     table: !!motion?.hasTable,
     slope: slope === null ? null : String(params.slope_up ?? "left") === "right" ? -slope : slope,
     surface: params.step_height ? null : surfaceOf(motion),
-    wind: motion?.channels.has("wind_speed") ? { from: String(params.wind_from ?? "left") === "right" ? "right" : "left", s: motion.channels.get("wind_speed") } : null,
-    course: courseOf(motion),
     wall: crash ? { x: frontOf(design) } : null,
-    halfWidth: halfWidth(design),
+    recorded: false,
   };
 }
 
@@ -182,20 +235,59 @@ function edgesOf(geo, out, matrix = null, threshold = 25) {
   e.dispose();
 }
 
-// A solid block in ISO mm with the look's fill and (in the diagram look) ink edges.
+// A solid with the look's fill and (in the diagram look) ink edges.
+function solid(geos, look, ink, realSpec) {
+  const g = new THREE.Group();
+  const pts = [];
+  for (const geo of geos) {
+    const mat = look.real ? look.standard(realSpec) : new THREE.MeshLambertMaterial({ color: PAPER_DARK });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = mesh.receiveShadow = look.real;
+    g.add(mesh);
+    if (!look.real) edgesOf(geo, pts);
+  }
+  if (pts.length) g.add(inkLines(pts, ink));
+  return g;
+}
+
+// A solid block in ISO mm.
 function block(x0, x1, y0, y1, z0, z1, look, ink, realSpec) {
   const geo = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0);
   geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-  const g = new THREE.Group();
-  const mat = look.real ? look.standard(realSpec) : new THREE.MeshLambertMaterial({ color: PAPER_DARK });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = mesh.receiveShadow = look.real;
-  g.add(mesh);
-  if (!look.real) {
-    const pts = [];
-    edgesOf(geo, pts);
-    g.add(inkLines(pts, ink));
+  return solid([geo], look, ink, realSpec);
+}
+
+const REAL_OF = {
+  step: { color: "#9c9a92", roughness: 0.95, metalness: 0 },
+  wall: { color: "#a5a29a", roughness: 0.9, metalness: 0 },
+  ramp: { color: "#9c9a92", roughness: 0.95, metalness: 0 },
+  ground: { color: "#8a7a62", roughness: 1, metalness: 0 },
+  tilt_table: { color: "#9aa0a6", roughness: 0.45, metalness: 0.75, bump: "plate" },
+  cone: { color: "#e2682a", roughness: 0.6, metalness: 0 },
+  gate: { color: "#e2682a", roughness: 0.6, metalness: 0 },
+};
+
+// One object of the record's scene, in its own box (centre position_mm, size_mm, turned by rpy_deg).
+function recordedObject(o, look, ink) {
+  const [sx, sy, sz] = o.size_mm;
+  let geos;
+  if (o.kind === "cone") {
+    geos = [new THREE.ConeGeometry(Math.min(sx, sy) / 2, sz, 24).rotateX(Math.PI / 2)];
+  } else if (o.kind === "ramp") {
+    // a wedge rising toward +x
+    const shape = new THREE.Shape([new THREE.Vector2(-sx / 2, -sz / 2), new THREE.Vector2(sx / 2, -sz / 2), new THREE.Vector2(sx / 2, sz / 2)]);
+    geos = [new THREE.ExtrudeGeometry(shape, { depth: sy, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, sy / 2, 0)];
+  } else if (o.kind === "gate") {
+    // two posts at the gate's sides
+    const r = Math.max(20, Math.min(sx, 60) / 2);
+    geos = [-1, 1].map((s) => new THREE.CylinderGeometry(r, r, sz, 12).rotateX(Math.PI / 2).translate(0, (s * sy) / 2, 0));
+  } else {
+    geos = [new THREE.BoxGeometry(sx, sy, sz)];
   }
+  const g = solid(geos, look, ink, REAL_OF[o.kind] ?? REAL_OF.step);
+  g.position.set(...o.position_mm);
+  const r = o.rpy_deg ?? [0, 0, 0];
+  g.rotation.set(deg(r[0]), deg(r[1]), deg(r[2]), "ZYX");
   return g;
 }
 
@@ -233,11 +325,12 @@ export class SceneProps {
     this.desc = desc;
     if (!desc) return;
     const look = this.look;
+    for (const o of desc.objects ?? []) this.world.add(recordedObject(o, look, this.ink));
     if (desc.step) {
       const s = desc.step;
       this.world.add(block(s.x0, s.x1, s.y0, s.y1, 0, s.h, look, this.ink, { color: "#9c9a92", roughness: 0.95, metalness: 0 }));
     }
-    if (desc.table) {
+    if (desc.table && !desc.recorded) {
       const hw = desc.halfWidth + 700;
       const x0 = bbox.min.x - 700;
       const x1 = bbox.max.x + 700;

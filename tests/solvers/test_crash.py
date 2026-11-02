@@ -60,6 +60,11 @@ class CrashToolTest(unittest.TestCase):
         self.assertAlmostEqual(r["battery_inertia_force"]["value"], 50.0 * r["peak_deceleration"]["value"] * G, places=6)
         self.assertIn("occupant_space_margin", r)
         self.assertEqual({s["channel"] for s in rec["series"]}, {"deceleration", "crush", "wall_force"})
+        wall = rec["scene"][0]
+        front = max([n["xyz_mm"][0] for n in DESIGN["nodes"]] + [p["box"]["center_mm"][0] + p["box"]["size_mm"][0] / 2
+                                                                 for p in DESIGN["parts"]] + [s["position_mm"][0] + s["radius_mm"] for s in DESIGN["supports"]])
+        self.assertEqual(wall["kind"], "wall")
+        self.assertAlmostEqual(wall["position_mm"][0] - wall["size_mm"][0] / 2, front, places=9)  # the face touches the front
 
     def test_lighter_load_decelerates_harder(self):
         full = results(TOOL.run(DESIGN, lc(speed=q(40, "km/h")), PRED, {}))
