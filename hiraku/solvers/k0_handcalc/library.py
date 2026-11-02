@@ -355,7 +355,63 @@ def _frame_static() -> list[Formula]:
         requires=[_wall_ok(b, h, t)],
         symbols=s,
     ))
+    out.append(_rail_step_bending())
     return out
+
+
+def _rail_step_moments(v: dict) -> dict:
+    """Moment along one rail: uniform half weight between the axle supports, minus the
+    hogging end moments of the step push (front, at the wheel centre) and the
+    traction (rear, at the ground), both below the rail."""
+    W, L, F, z, r, b, h, t = (v[k] for k in ("W", "L", "F", "z", "r", "b", "h", "t"))
+    I = (b * h**3 - (b - 2 * t) * (h - 2 * t) ** 3) / 12.0
+    A = b * h - (b - 2 * t) * (h - 2 * t)
+    w = W / 2.0 / L
+    MA, MB = F * (z - r), F * z
+    M = lambda x: w * x * (L - x) / 2.0 - MA * (1 - x / L) - MB * x / L
+    xs = [0.0, L]
+    x_star = L / 2.0 + (MA - MB) / (w * L) if w > 0 else -1.0
+    if 0.0 < x_star < L:
+        xs.append(x_star)
+    x_max = max(xs, key=lambda x: abs(M(x)))
+    sig = lambda x: abs(M(x)) * (h / 2.0) / I + F / A
+    return {"sigma": sig(x_max), "sigma_rear": sig(L), "sigma_mid": sig(L / 2.0),
+            "M_rear": -M(L), "x_max": x_max}
+
+
+def _rail_step_bending() -> Formula:
+    return Formula(
+        formula_id="frame_static.rail_step_bending",
+        title="段差を押して登るときのレールの曲げ応力 (両端を車軸で支えた梁)",
+        domain="strength",
+        expression="M(x) = w x (L - x)/2 - M_A (1 - x/L) - M_B x/L; w = W/(2L); M_A = F (z - r); M_B = F z; "
+                   "sigma = max|M|/Z + F/A",
+        inputs={
+            "W": {"unit": "N", "description": "weight carried by the frame (the sprung weight; the whole weight is on the safe side)", "min": 0},
+            "L": {"unit": "mm", "description": "wheelbase (the rail's span between the axles)", "min": 0},
+            "F": {"unit": "N", "description": "push of the step on one front wheel (P1's front_wheel_force)", "min": 0},
+            "z": {"unit": "mm", "description": "height of the rail's centre line above the ground", "min": 0},
+            "r": {"unit": "mm", "description": "wheel radius (the push acts at the front wheel centre)", "min": 0},
+            **_RECT_TUBE_INPUTS,
+        },
+        outputs={
+            "sigma": ("MPa", "largest stress along the rail between the axles (bending and the push as compression)", None),
+            "sigma_rear": ("MPa", "stress at the rear axle", None),
+            "sigma_mid": ("MPa", "stress at mid-span", None),
+            "M_rear": ("N*mm", "hogging moment at the rear axle", None),
+            "x_max": ("mm", "where the largest stress is, measured back from the front axle", None),
+        },
+        assumptions=_BEAM_ASSUMPTIONS[:2] + [
+            "one rail as a beam simply supported at the two axles, carrying half the weight as a uniform load",
+            "both front wheels on the step, pushed by the two rear wheels with the same force F each",
+            "the push and the traction act below the rail and reach it as end moments F (z - r) and F z",
+            "loads behind the rear axle (overhang), sideways bending and torsion are not included",
+        ],
+        source="superposition of a simply supported beam under a uniform load and end moments (textbook beam tables)",
+        requires=[(lambda v: 2 * v["t"] < min(v["b"], v["h"]), "wall thickness t must be less than half of b and h"),
+                  (lambda v: v["L"] > 0 and v["z"] >= v["r"], "L must be positive and the rail at or above the wheel centre (z >= r)")],
+        fn=_rail_step_moments,
+    )
 
 
 def all_formulas() -> list[Formula]:

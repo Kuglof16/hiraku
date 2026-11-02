@@ -129,6 +129,22 @@ class FormulaLedgerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "wall thickness"):
             self.R.evaluate("frame_static.bending_stress", {"M": q(1, "N*mm"), "b": q(40, "mm"), "h": q(80, "mm"), "t": q(25, "mm")})
 
+    def test_rail_step_bending_limits(self):
+        sec = {"b": q(40, "mm"), "h": q(80, "mm"), "t": q(2.3, "mm")}
+        I = (40 * 80**3 - 35.4 * 75.4**3) / 12
+        A = 40 * 80 - 35.4 * 75.4
+        # no push: half the weight as a uniform load, largest at mid-span: (W/2) L / 8
+        o = self.R.evaluate("frame_static.rail_step_bending", {"W": q(4000, "N"), "L": q(1700, "mm"), "F": q(0, "N"),
+                                                                "z": q(380, "mm"), "r": q(300, "mm"), **sec})["outputs"]
+        self.assertAlmostEqual(o["sigma"]["value"], 2000 * 1700 / 8 * 40 / I, places=9)
+        self.assertAlmostEqual(o["x_max"]["value"], 850.0, places=6)
+        # no weight: the traction moment F z at the rear axle plus the push as compression
+        o = self.R.evaluate("frame_static.rail_step_bending", {"W": q(0, "N"), "L": q(1700, "mm"), "F": q(1000, "N"),
+                                                                "z": q(380, "mm"), "r": q(300, "mm"), **sec})["outputs"]
+        self.assertAlmostEqual(o["sigma"]["value"], 1000 * 380 * 40 / I + 1000 / A, places=9)
+        self.assertAlmostEqual(o["M_rear"]["value"], 380000.0, places=6)
+        self.assertEqual(o["x_max"]["value"], 1700.0)
+
 
 if __name__ == "__main__":
     unittest.main()
