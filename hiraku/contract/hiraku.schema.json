@@ -2402,13 +2402,16 @@
           "type": "string"
         },
         "position_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Centre of the box (size_mm). A cone is a point; a gate is a line through it."
         },
         "size_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Edge lengths of the box. A gate is [0, width, 0]."
         },
         "rpy_deg": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Roll, pitch, yaw about the centre (roll + = left side up, pitch - = front up)."
         },
         "profile": {
           "type": "object",
