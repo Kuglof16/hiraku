@@ -17,7 +17,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.judge import make_verdict, update_judgement
+from hiraku.tools.judge import OP_JA, make_verdict, prediction_is_unfavourable, unfavourable_side, update_judgement
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -330,8 +330,36 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     return out
 
 
+def _check_safe_side(cmp: Record, lc: Record | None) -> None:
+    """Refuse safe_side unless the load case has a criterion on this quantity and the
+    prediction is the unfavourable value (larger for <=, smaller for >=)."""
+    crit = (lc or {}).get("criterion")
+    if not crit or crit["quantity"] != cmp["quantity"] or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
+        what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
+        raise ToolError(
+            f"safe_side は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
+            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。safe_side を外して原因と直し方だけ書いてください"
+        )
+    if prediction_is_unfavourable(cmp, crit["op"]):
+        return
+    side = "大きい" if unfavourable_side(crit["op"]) == "larger" else "小さい"
+    p, a = cmp["predicted"], cmp["analyzed"]
+    raise ToolError(
+        f"安全側とはみなせません。基準は {crit['quantity']} {OP_JA[crit['op']]} {crit['limit']['value']:.4g} "
+        f"{crit['limit']['unit']} なので、{side}方が不利です。いまは解析 ({a['value']:.4g} {a['unit']}) の方が予測 "
+        f"({p['value']:.4g} {p['unit']}) より{side}く、予測は不利な側にありません。"
+        f"safe_side を外して原因と直し方を書き、直した式で予測し直してください (解析の側を不利とみるなら、解析と一致する予測が要ります)"
+    )
+
+
 def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
-    """Write the cause of a mismatch and how to fix it (this unblocks the domain)."""
+    """Write the cause of a mismatch and how to fix it (this unblocks the domain).
+
+    With safe_side true (and safe_side_reason), the CAE role says the cause explains
+    the gap and the prediction bounds the true value from the safe side. The numbers
+    are checked first; then a verdict is made from the prediction (the unfavourable
+    value), and the domain's judgement is updated.
+    """
     _check_input("record_cause", args)
     hit = ctx.store.find("comparison", args["comparison_id"])
     if hit is None:
@@ -345,6 +373,12 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     if not args["cause"].strip() or not args["fix"].strip():
         raise ToolError("cause と fix の両方に中身を書いてください")
     pred = ctx.prediction(cmp["prediction_id"])
+    lc = ctx.load_case(pred["load_case_id"]) if pred else None
+    safe = bool(args.get("safe_side"))
+    if safe:
+        if not (args.get("safe_side_reason") or "").strip():
+            raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
+        _check_safe_side(cmp, lc)
     domain = pred["domain"] if pred else None
     agent = agent or (ctx.owner(pred["load_case_id"]) if pred else "lead")
     cause = {
@@ -354,10 +388,19 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         "fix": args["fix"].strip(),
         "resolved": False,
     }
+    if safe:
+        cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)
-    return cause
+    out: Record = {"cause": cause, "verdict": None}
+    if safe:
+        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
+        ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
+        out["verdict"] = ver
+        if domain in ctx.picked:
+            update_judgement(ctx, domain, v)
+    return out
 
 
 FUNCTIONS = {
