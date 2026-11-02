@@ -20,6 +20,12 @@ predicts with the slope taken as a lateral acceleration, expects the mismatch
 that gave on the demo vehicle (the cause found by splitting the gap), and
 predicts again with the side-slope balance.
 
+Past the limit: a catalog spec with "variant": "beyond" makes BUILDERS build
+the case past the design's own limit (BEYOND: F1, S4, S5), whose verdict is
+expected to fail; PLANS_BEYOND holds the steps that differ (S5). S3 has none:
+on the demo vehicle the tyres slide before a wheel lifts (no lift up to
+80 km/h at friction 0.8), so a lift past the limit is not there to show.
+
 Importing this module computes nothing; the K2 model loads on the first call.
 """
 
@@ -49,6 +55,21 @@ SSF_MIN = 1.0
 # https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf).
 # Not checked in this repository.
 S5_SPEED_KMH = 20.0
+
+# Past the limit (the cases that should end in a fail, for showing it): a catalog spec with
+# variant "beyond" builds the case past the design's own limit, worked out by K0 here.
+# 10 % past: far enough that the outcome is plain, near enough to be a case the vehicle
+# could meet (HIRAKU's choice, an assumption).
+BEYOND_FACTOR = 1.1
+# S4: slippery gravel, friction 0.3 (an assumption; no source read in this repository).
+BEYOND_MU = 0.3
+# S5: the slope is turned slowly so that the wheels lift nearly as on a static slope
+# (HIRAKU's choice, an assumption).
+BEYOND_RAMP_S = 12.0
+# S5: the tyres are held (friction 2, as the tilt table does) so that the case shows the
+# uphill wheels lifting, not the vehicle sliding down first: on the demo vehicle the two
+# limits are within a degree at friction 0.8 (HIRAKU's choice, an assumption).
+BEYOND_HOLD_MU = 2.0
 
 # tolerance_rel per test: what the hand calculation leaves out of the tool.
 TOLERANCE = {
@@ -104,6 +125,18 @@ def _crit(quantity: str, op: str, limit: Record, basis: str, keys: list[str]) ->
     if keys:
         out["requirement_keys"] = keys
     return out
+
+
+def _k0(formula_id: str, output: str, inputs: Record) -> float:
+    from hiraku import solvers
+    return solvers.formula_registry().evaluate(formula_id, inputs)["outputs"][output]["value"]
+
+
+def _summary(design: Record, on: str) -> tuple[Record, Record]:
+    """The design summary and the loading's part of it (mass, CG)."""
+    from hiraku.tools.summary import design_summary
+    s = design_summary(design)
+    return s, s["loadings"][on]
 
 
 def _cg_y(design: Record, on: str) -> float:
@@ -207,9 +240,78 @@ def _p3_accel(spec: Record, req: Record, design: Record) -> Record:
                  _crit("time_to_speed", "<=", q(limit, "s"), f"Q51 {limit:g} s to Q50 {target:g} km/h", ["Q51"]))
 
 
+# ------------------------------------------------------------------ past the limit
+def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    speed = number(req, "Q50", "km/h")
+    s, load = _summary(design, on)
+    w = wind_inputs(design, {"params": {"loading": on}})
+    crit = _k0("crosswind.critical_wind_speed", "v_crit",
+               {"m": load["mass"], "t": s["track_front"], "C_y": w["C_y"], "A": w["A"], "h_cp": w["h_cp"], "rho": w["rho"]})
+    gust = BEYOND_FACTOR * crit
+    wind_from = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "F1", "aero", f"F1-beyond{gust:.0f}",
+                 f"限界の外: 転倒する風速 {crit:.1f} m/s (手計算) の {BEYOND_FACTOR:g} 倍、{gust:.1f} m/s の横風 "
+                 f"({LOADING_JA[on]})",
+                 {"loading": on, "wind_speed": q(gust, "m/s"), "speed": q(speed, "km/h"), "wind_from": wind_from},
+                 keys + ["Q50"],
+                 _crit("critical_wind_speed", ">=", q(gust, "m/s"),
+                       f"the gust of this case, {BEYOND_FACTOR:g} x the hand-calculated tipping wind speed", []))
+
+
+def _s4_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    stop = number(req, "Q52", "m")
+    return _case(spec, "S4", "handling", f"S4-beyond-mu{BEYOND_MU:g}",
+                 f"限界の外: 滑りやすい砂利 (μ {BEYOND_MU:g} は仮定) で {S4_SPEED_KMH:g} km/h から急制動、"
+                 f"{stop:g} m 以内に止まる ({LOADING_JA[on]})",
+                 {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(BEYOND_MU, "1"), "reaction_time": q(0.0, "s")},
+                 keys + ["Q52"],
+                 _crit("stopping_distance", "<=", q(stop, "m"),
+                       f"Q52 {stop:g} m from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)", ["Q52"]))
+
+
+def _s5_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    cls = text(req, "Q12", tuple("ABCDEFGH"))
+    s, load = _summary(design, on)
+    ti = tilt_inputs(design, {"params": {"loading": on}})
+    tip = _k0("tilt.spring_roll_angle", "theta", dict(ti, t=s["track_front"], m=load["mass"]))
+    beta = BEYOND_FACTOR * tip
+    slope_up = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "S5", "handling", f"S5-beyond{beta:.0f}",
+                 f"限界の外: 上の輪が浮く傾き {tip:.1f}° (手計算) の {BEYOND_FACTOR:g} 倍、横 {beta:.1f}° の斜面 "
+                 f"(タイヤは滑らないものとして μ {BEYOND_HOLD_MU:g}、{LOADING_JA[on]})",
+                 {"loading": on, "road_class": cls, "side_slope": q(beta, "deg"), "slope_up": slope_up,
+                  "speed": q(S5_SPEED_KMH, "km/h"), "length": q(20.0, "m"), "slope_ramp_time": q(BEYOND_RAMP_S, "s"),
+                  "mu": q(BEYOND_HOLD_MU, "1")},
+                 keys + ["Q12"],
+                 _crit("tip_slope_angle", ">", q(beta, "deg"),
+                       "the uphill wheels must stay down up to this slope: the slope at which they lift must be steeper",
+                       []))
+
+
+# variant "beyond" of the catalog spec; PLANS_BEYOND has the steps that differ from PLANS
+BEYOND: dict[str, Callable[[Record, Record, Record], Record]] = {"F1": _f1_beyond, "S4": _s4_beyond, "S5": _s5_beyond}
+
+
+def _variant(test_id: str, fn):
+    def build(spec: Record, req: Record, design: Record) -> Record:
+        if spec.get("variant") == "beyond":
+            if test_id not in BEYOND:
+                raise BuildError(f"test {test_id} has no case past the limit (variant beyond): only "
+                                 + ", ".join(BEYOND))
+            return BEYOND[test_id](spec, req, design)
+        return fn(spec, req, design)
+    build.__name__ = fn.__name__
+    build.__doc__ = fn.__doc__
+    return build
+
+
 BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
-    "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
-    "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel,
+    tid: _variant(tid, fn) for tid, fn in {
+        "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
+        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel}.items()
 }
 
 
@@ -382,4 +484,15 @@ PLANS: dict[str, Record] = {
                "quantity": "time_to_speed", "formula_id": "launch.time_to_speed", "output": "t",
                "assumptions": ["発進から全力、輪は滑らない", "トルクで決まり、その先は出力で決まる"],
                "inputs": dict(_LAUNCH_REFS, v="lc.target_speed"), "inputs_from": launch_inputs}]},
+}
+
+# The steps of the cases past the limit that differ from PLANS (F1 and S4 predict as PLANS).
+PLANS_BEYOND: dict[str, Record] = {
+    "S5": {"tool": "offroad_roll", "say": "上の輪が浮く横の傾きを、ばねで車体がロールする分を入れた式で先に見積もります",
+           "predictions": [{
+               "quantity": "tip_slope_angle", "formula_id": "tilt.spring_roll_angle", "output": "theta",
+               "assumptions": ["止まった斜面は傾斜台と同じ", "車体はばねの上でロールし、ロールの軸は地面にある"],
+               "inputs": {"t": "summary.track_front", "h": "from.h", "e": "from.e", "m": "load.mass", "m_s": "from.m_s",
+                          "h_s": "from.h_s", "k": "from.k", "n": "from.n"},
+               "inputs_from": tilt_inputs}]},
 }
