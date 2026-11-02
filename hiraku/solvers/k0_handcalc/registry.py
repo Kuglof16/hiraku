@@ -8,13 +8,17 @@ and preconditions, evaluates, and returns terms for contribution:
 - otherwise each input is returned with its elasticity d ln y / d ln x on the
   primary output (sympy derivative), which is the contribution of a factor in
   a product-type formula
+
+A formula that is a small numeric model (a few degrees of freedom solved in
+time, an integral) gives `fn` instead of sympy outputs; its elasticities come
+from central differences.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 import sympy as sp
 
@@ -30,19 +34,24 @@ class Formula:
     domain: str
     expression: str
     inputs: dict[str, dict]  # name -> {"unit", "description", "min"?, "max"?}
-    outputs: dict[str, tuple[str, str, sp.Expr]]  # name -> (unit, description, expr of input symbols)
+    outputs: dict[str, tuple[str, str, sp.Expr | None]]  # name -> (unit, description, expr of input symbols; None with fn)
     assumptions: list[str]
     source: str
     primary: str | None = None  # output used for terms; default: first output
-    terms: dict[str, sp.Expr] | None = None  # additive pieces of the primary output (same unit)
-    requires: list[tuple[sp.Basic, str]] = field(default_factory=list)  # (condition, message)
+    terms: dict[str, sp.Expr | None] | None = None  # additive pieces of the primary output (same unit); None values with fn
+    requires: list[tuple[Any, str]] = field(default_factory=list)  # (sympy condition, or callable(values dict) -> bool; message)
     symbols: dict[str, sp.Symbol] = field(default_factory=dict)
+    fn: Callable[[dict[str, float]], dict[str, float]] | None = None  # numeric model: input values -> output values
 
     def __post_init__(self) -> None:
         if not self.symbols:
             self.symbols = {name: sp.Symbol(name, real=True) for name in self.inputs}
         if self.primary is None:
             self.primary = next(iter(self.outputs))
+        if self.fn is not None:
+            names = list(self.inputs)
+            self._req_fns = [((lambda *v, c=cond: bool(c(dict(zip(names, v))))), msg) for cond, msg in self.requires]
+            return
         args = [self.symbols[n] for n in self.inputs]
         self._args = args
         self._out_fns = {n: sp.lambdify(args, expr, modules="math") for n, (_, _, expr) in self.outputs.items()}
@@ -86,34 +95,57 @@ class Formula:
                 raise ValueError(f"{self.formula_id}: {msg}")
         outputs = {}
         try:
+            raw = self._outputs(vals)
             for name, (unit, _, _) in self.outputs.items():
-                outputs[name] = units.quantity(self._out_fns[name](*vals), unit)
+                outputs[name] = units.quantity(raw[name], unit)
         except (ValueError, ZeroDivisionError, OverflowError) as e:
             raise ValueError(f"{self.formula_id}: cannot evaluate with these inputs ({e})") from None
         bad = [n for n, q in outputs.items() if not math.isfinite(q["value"])]
         if bad:
             raise ValueError(f"{self.formula_id}: output(s) {', '.join(bad)} are not finite for these inputs")
-        return {"outputs": outputs, "terms": self._terms(vals, outputs), "expression": self.expression}
+        return {"outputs": outputs, "terms": self._terms(vals, outputs, raw), "expression": self.expression}
 
-    def _terms(self, vals: list[float], outputs: dict[str, Record]) -> list[Record]:
+    def _outputs(self, vals: list[float]) -> dict[str, float]:
+        if self.fn is not None:
+            return self.fn(dict(zip(self.inputs, vals)))
+        return {name: self._out_fns[name](*vals) for name in self.outputs}
+
+    def _elasticity(self, i: int, vals: list[float], y: float) -> float | None:
+        name = list(self.inputs)[i]
+        if self.fn is None:
+            return float(self._dy_fns[name](*vals)) * vals[i] / y
+        x = vals[i]
+        if x == 0:
+            return None
+        h = 1e-4 * abs(x)
+        up, dn = list(vals), list(vals)
+        up[i], dn[i] = x + h, x - h
+        yp = self.fn(dict(zip(self.inputs, up)))[self.primary]
+        ym = self.fn(dict(zip(self.inputs, dn)))[self.primary]
+        return (yp - ym) / (2 * h) * x / y
+
+    def _terms(self, vals: list[float], outputs: dict[str, Record], raw: dict[str, float]) -> list[Record]:
+        """Additive terms (with fn: values returned by fn under the term names), else elasticities."""
         y = outputs[self.primary]["value"]
         if self.terms:
             unit = self.outputs[self.primary][0]
             out = []
-            for name, fn in self._term_fns.items():
-                v = float(fn(*vals))
+            for name in self.terms:
+                v = float(raw[name]) if self.fn is not None else float(self._term_fns[name](*vals))
                 t = {"name": name, "value": v, "unit": unit}
                 if y != 0:
                     t["share"] = v / y
                 out.append(t)
             return out
         out = []
-        for (name, spec), x in zip(self.inputs.items(), vals):
+        for i, ((name, spec), x) in enumerate(zip(self.inputs.items(), vals)):
             t = {"name": name, "value": x, "unit": spec["unit"]}
             if y != 0:
                 try:
-                    t["share"] = float(self._dy_fns[name](*vals)) * x / y
-                except (ValueError, ZeroDivisionError):
+                    e = self._elasticity(i, vals, y)
+                    if e is not None and math.isfinite(e):
+                        t["share"] = e
+                except (ValueError, ZeroDivisionError, OverflowError):
                     pass
             out.append(t)
         return out

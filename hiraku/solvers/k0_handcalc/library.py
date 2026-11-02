@@ -359,4 +359,6 @@ def _frame_static() -> list[Formula]:
 
 
 def all_formulas() -> list[Formula]:
-    return _step_climb() + _mass_props() + _frame_static()
+    from . import library_dynamics, library_energy
+
+    return _step_climb() + _mass_props() + _frame_static() + library_dynamics.all_formulas() + library_energy.all_formulas()
