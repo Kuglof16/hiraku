@@ -15,6 +15,8 @@ import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt,
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, judgementState, roundsUsed } from "./state.js";
+import { SeriesChart } from "./chart.js";
+import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
 import { Workbench3D } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,6 +24,7 @@ const params = new URLSearchParams(location.search);
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
+const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
@@ -29,8 +32,12 @@ const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" :
 const ui = {
   pinnedLc: null,
   pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false },
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
   frozen: params.has("t"),
+  // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
+  // until the replay playhead moves again.
+  anim: { key: null, local: false, playing: false, tau: 0 },
+  graphGroup: null,
 };
 
 if (params.get("video") === "1") document.body.classList.add("video");
@@ -266,11 +273,100 @@ function renderLegend(ct) {
     `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : "・上端 = 最大値"}</div>`;
 }
 
-function renderToggles() {
+function renderToggles(motion) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
-    btn("shape", "形状", !t.contour) + btn("contour", "コンター", t.contour) + btn("arrows", "力の矢印", t.arrows) + btn("cg", "重心", t.cg) + btn("parts", "部品", t.parts) + btn("names", "名前", t.names);
+    btn("shape", "形状", !t.contour) +
+    btn("contour", "コンター", t.contour) +
+    btn("arrows", "力の矢印", t.arrows) +
+    btn("cg", "重心", t.cg) +
+    btn("parts", "部品", t.parts) +
+    btn("names", "名前", t.names) +
+    (motion?.liftT != null ? btn("limit", "限界の重ね", t.limit) : "") +
+    (motion ? btn("graph", "グラフ", t.graph) : "");
+}
+
+// ---- the test's motion (series) -------------------------------------------
+let motionMemo = { ana: null, motion: null };
+function motionFor(ana) {
+  if (ana !== motionMemo.ana) motionMemo = { ana, motion: ana && ana.status === "ok" ? motionOf(ana) : null };
+  return motionMemo.motion;
+}
+
+const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
+
+// Animation time (the series' own seconds). By default it starts when the
+// analysis arrived in the replay and runs at animRate, so a frozen ?t= frame
+// always shows the same pose.
+function animTau(s, ana, motion) {
+  if (ui.anim.local && ui.anim.key === ana.analysis_id) return ui.anim.tau;
+  const tf = s.tOf[ana.analysis_id] ?? 0;
+  return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion)));
+}
+
+const chart = new SeriesChart($("graph"), (key) => {
+  ui.graphGroup = key;
+});
+let shownMotion = null; // { motion, ana, tau } of the last frame, for the bar's handlers
+
+function renderMotion(s, chain, motion) {
+  const bar = $("animbar");
+  viewport.classList.toggle("has-anim", !!motion);
+  if (!motion) {
+    bar.hidden = true;
+    $("graph").hidden = true;
+    $("limitnote").hidden = true;
+    shownMotion = null;
+    return;
+  }
+  const ana = chain.shown;
+  const tau = animTau(s, ana, motion);
+  if (bench.frame?.t !== tau) bench.setFrame(motion.frame(tau));
+  shownMotion = { motion, ana, tau };
+
+  bar.hidden = false;
+  const tool = s.tools[ana.tool]?.title ?? ana.tool;
+  $("ab-title").textContent = `${chain.loadCase?.test_id ?? ""} ${String(tool).replace(/\s*[（(].*$/, "")}`;
+  const f = motion.duration > 0 ? (tau - motion.t0) / motion.duration : 1;
+  $("ab-fill").style.width = `${f * 100}%`;
+  const lim = $("ab-lim");
+  lim.hidden = motion.liftT === null;
+  if (motion.liftT !== null) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
+  $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${animRate(motion) > 1 ? ` (×${fmt(animRate(motion), 2)})` : ""}`;
+  $("ab-play").textContent = ui.anim.local && ui.anim.playing ? "❚❚" : "▶";
+  const notes = [];
+  const table = motion.channels.get("table_angle");
+  if (table) notes.push(`台 ${fmt(nearestAt(table, tau), 3)} ${unitLabel(table.unit) === "deg" ? "°" : unitLabel(table.unit)}`);
+  const speed = motion.channels.get("speed");
+  if (speed) notes.push(`${fmt(nearestAt(speed, tau), 3)} ${unitLabel(speed.unit)}`);
+  $("ab-note").textContent = notes.join("・");
+
+  const note = $("limitnote");
+  note.hidden = motion.liftT === null || !ui.toggles.limit;
+  if (!note.hidden) {
+    const lifted = Object.entries(motion.liftAt)
+      .filter(([, t]) => t <= tau)
+      .sort((a, b) => a[1] - b[1]);
+    const now = lifted.length ? `<br><b>${lifted.map(([id]) => esc(wheelName(id))).join("・")} が浮いた</b> (t = ${fmt(lifted[0][1], 4)} s)` : "";
+    note.innerHTML = `半透明の赤 = 限界を超えたあとの姿勢 (輪が浮く)${now}`;
+  }
+
+  const graph = $("graph");
+  graph.hidden = !ui.toggles.graph;
+  if (!graph.hidden) {
+    const marks = motion.liftT !== null ? [{ t: motion.liftT, label: "浮いた" }] : [];
+    ui.graphGroup = chart.set(motion, ui.graphGroup, marks);
+    chart.cursor(tau);
+  }
+}
+
+function animSeekFromPointer(ev) {
+  if (!shownMotion) return;
+  const { motion, ana } = shownMotion;
+  const rect = $("ab-track").getBoundingClientRect();
+  const f = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+  ui.anim = { key: ana.analysis_id, local: true, playing: false, tau: motion.t0 + f * motion.duration };
 }
 
 function renderGrid(s) {
@@ -384,6 +480,7 @@ function draw() {
   const tab = currentTab(s);
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
+  const motion = motionFor(chain.shown);
   if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
     renderTop(s);
     renderChips(s, lcId);
@@ -392,7 +489,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles();
+    renderToggles(motion);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
@@ -401,14 +498,17 @@ function draw() {
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
+    bench.setMotion(motion);
     const ct = buildContour(chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
     renderLegend(contour);
-    bench.setVectors(chain.shown?.status === "ok" ? chain.shown.vectors ?? null : null);
+    // With a motion the arrows come from the series, frame by frame.
+    bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
   }
+  renderMotion(s, chain, motion);
   renderTransient(s, player.playhead, chain);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
@@ -416,10 +516,19 @@ function draw() {
 }
 
 let lastTs = null;
+let lastPlayhead = null;
 function loop(ts) {
   const dt = lastTs === null ? 0 : Math.min(0.25, (ts - lastTs) / 1000);
   lastTs = ts;
   if (!ui.frozen) player.tick(dt);
+  // Moving the replay hands the test's motion back to the replay clock.
+  if (lastPlayhead !== null && player.playhead !== lastPlayhead) ui.anim.local = false;
+  lastPlayhead = player.playhead;
+  if (ui.anim.local && ui.anim.playing && shownMotion) {
+    const { motion } = shownMotion;
+    ui.anim.tau = Math.min(motion.t1, ui.anim.tau + dt * animRate(motion));
+    if (ui.anim.tau >= motion.t1) ui.anim.playing = false;
+  }
   draw();
   requestAnimationFrame(loop);
 }
@@ -450,7 +559,7 @@ window.hiraku = {
   load: (events, t = 0) => {
     feed?.stop();
     resetPlayer();
-    player.append(events);
+    addEvents(events);
     return seekAndDraw(t);
   },
 };
@@ -472,6 +581,23 @@ $("pb-track").addEventListener("pointerdown", (ev) => {
   const move = (e) => seekFromPointer(e);
   track.addEventListener("pointermove", move);
   track.addEventListener("pointerup", () => track.removeEventListener("pointermove", move), { once: true });
+});
+$("ab-play").addEventListener("click", () => {
+  if (!shownMotion) return;
+  const { motion, ana, tau } = shownMotion;
+  if (ui.anim.local && ui.anim.key === ana.analysis_id) {
+    ui.anim.playing = !ui.anim.playing;
+    if (ui.anim.playing && ui.anim.tau >= motion.t1) ui.anim.tau = motion.t0;
+  } else {
+    ui.anim = { key: ana.analysis_id, local: true, playing: true, tau: tau >= motion.t1 ? motion.t0 : tau };
+  }
+});
+$("ab-track").addEventListener("pointerdown", (ev) => {
+  const track = ev.currentTarget;
+  track.setPointerCapture(ev.pointerId);
+  animSeekFromPointer(ev);
+  track.addEventListener("pointermove", animSeekFromPointer);
+  track.addEventListener("pointerup", () => track.removeEventListener("pointermove", animSeekFromPointer), { once: true });
 });
 $("tests").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-lc]");
@@ -526,6 +652,8 @@ function resetPlayer() {
   player.live = false;
   player.liveAttached = false;
   player.playhead = 0;
+  player.minEnd = 0;
+  ui.anim = { key: null, local: false, playing: false, tau: 0 };
   player.rebuild();
   drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
   $("runlist").hidden = true;
@@ -542,16 +670,26 @@ function startPlayback() {
   readyResolve(player.playhead);
 }
 
+// Add events to the player; a test's motion lengthens the replay so it can play to its end.
+function addEvents(events) {
+  player.append(events);
+  for (const ev of events) {
+    if (ev?.kind !== "analysis.finished" || !ev.data?.series) continue;
+    const span = motionSpan(ev.data);
+    if (span !== null) player.minEnd = Math.max(player.minEnd, ev.t + Math.min(span, ANIM_MAX_S));
+  }
+}
+
 function loadEvents(events, { live }) {
   resetPlayer();
-  player.append(events);
+  addEvents(events);
   player.live = live;
   startPlayback();
 }
 
 async function openRun(runId) {
   resetPlayer();
-  feed = new EventFeed(runId, (evs) => player.append(evs));
+  feed = new EventFeed(runId, addEvents);
   try {
     await feed.readAll();
   } catch (e) {

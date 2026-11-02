@@ -337,6 +337,79 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 }
 .running .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--blue); margin-right: 8px; }
 
+/* the test's motion: its own bar above the replay bar, the graph popup, the limit note */
+.viewport.has-anim .running { bottom: 120px; }
+.viewport.has-anim .legend { bottom: 120px; }
+.animbar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 72px;
+  height: 38px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: rgba(251, 249, 244, 0.95);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.ab-title { font-weight: 600; white-space: nowrap; }
+.ab-play { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--blue); color: var(--blue); font-size: 12px; display: grid; place-items: center; }
+.ab-track { position: relative; flex: 1; height: 24px; cursor: pointer; }
+.ab-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: var(--rule); border-radius: 2px; }
+.ab-fill { position: absolute; left: 0; top: 50%; height: 3px; margin-top: -1.5px; background: var(--blue); border-radius: 2px; }
+.ab-lim { position: absolute; top: 3px; width: 3px; height: 18px; margin-left: -1.5px; background: var(--red); border-radius: 1px; }
+.ab-time { font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 150px; text-align: right; }
+.ab-note { color: var(--muted); white-space: nowrap; min-width: 80px; }
+
+.graph {
+  position: absolute;
+  right: 12px;
+  bottom: 120px;
+  z-index: 6;
+  width: 404px;
+  background: rgba(251, 249, 244, 0.95);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px 8px;
+}
+.gr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; }
+.gr-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.gr-chips button { font-size: 12px; border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
+.gr-chips button.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.gr-unit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.graph svg { display: block; }
+.graph .g { stroke: var(--rule); stroke-width: 1; }
+.graph .ax { stroke: var(--ink); stroke-width: 1.2; }
+.graph .ln { fill: none; stroke-width: 1.8; }
+.graph .cur { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.graph .mk { stroke: var(--red); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.graph .mkl { fill: var(--red); font-size: 11px; }
+.graph .yl { fill: var(--muted); font-size: 11px; text-anchor: end; font-variant-numeric: tabular-nums; }
+.graph .xl { fill: var(--muted); font-size: 11px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.gr-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; margin-top: 2px; }
+.gr-legend i { display: inline-block; width: 12px; height: 3px; margin-right: 5px; vertical-align: middle; }
+.gr-legend b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.limitnote {
+  position: absolute;
+  right: 14px;
+  top: 48px;
+  z-index: 6;
+  max-width: 360px;
+  background: rgba(251, 235, 229, 0.94);
+  border: 1.5px solid var(--red);
+  color: var(--red);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.lbl-lift { color: var(--red); border: 1.5px solid var(--red); font-weight: 700; background: rgba(251, 235, 229, 0.92); }
+
 .playbar {
   position: absolute;
   left: 12px;

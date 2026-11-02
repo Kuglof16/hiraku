@@ -50,6 +50,7 @@ export function initialState() {
     unknown: 0,
     order: {},
     seqOf: {},
+    tOf: {}, // record id -> t of the event that brought it (the last one when sent again)
   };
   for (const r of RECORDS) {
     s[r] = {};
@@ -83,6 +84,7 @@ function put(s, kind, id, rec, ev) {
   if (!(id in s[kind])) s.order[kind].push(id);
   s[kind][id] = rec;
   s.seqOf[id] = ev.seq;
+  s.tOf[id] = ev.t;
 }
 
 function log(s, ev, level, text) {

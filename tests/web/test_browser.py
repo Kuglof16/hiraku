@@ -13,6 +13,7 @@ import unittest
 
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
+from tests.web.k2_fixture import tilt_events
 
 try:
     from playwright.sync_api import sync_playwright
@@ -229,6 +230,55 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["nearest"], "FL")
         self.assertTrue(got["frontLeftOfRear"])
         self.assertTrue(got["upIsUp"])
+        page.close()
+
+    def test_tilt_motion_from_series(self):
+        events, info = tilt_events()
+        for ev in events:
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&t=0")
+        finished_t = next(e["t"] for e in events if e["kind"] == "analysis.finished")
+        probe = """() => {
+          const b = window.hiraku.bench;
+          const lifted = Object.entries(b.wheelObjs).filter(([, o]) => o.ring.visible).map(([id]) => id).sort();
+          const arrows = Object.values(b.motionArrowObjs).filter((o) => o.reaction.visible).length;
+          return {
+            duration: window.hiraku.player.duration,
+            animbar: !document.getElementById("animbar").hidden,
+            table: b.world.rotation.x,
+            tau: b.frame && b.frame.t,
+            lifted, arrows,
+            lines: document.querySelectorAll("#graph polyline").length,
+            note: document.getElementById("limitnote").textContent,
+            cam: b.camera.position.toArray(),
+          };
+        }"""
+        page.evaluate("async (ev) => { await window.hiraku.load(ev, 0); }", events)
+
+        # the replay is lengthened so the motion can play to its end
+        before = page.evaluate("async (t) => { await window.hiraku.seek(t); return 0; }", finished_t + 3)
+        early = page.evaluate(probe)
+        self.assertEqual(before, 0)
+        self.assertAlmostEqual(early["duration"], finished_t + min(info["t_end"], 12), places=6)
+        self.assertTrue(early["animbar"])
+        self.assertEqual(early["lifted"], [])
+        self.assertEqual(early["arrows"], 4)
+        self.assertEqual(early["lines"], 4)
+
+        page.evaluate("async (t) => { await window.hiraku.seek(t); }", early["duration"])
+        end = page.evaluate(probe)
+        self.assertAlmostEqual(end["tau"], info["t_end"], places=6)
+        self.assertEqual(end["lifted"], sorted(info["upper"]))
+        self.assertEqual(end["arrows"], 2)
+        self.assertGreater(end["table"], 0)  # left side up
+        self.assertIn("左前", end["note"])
+
+        # the camera follows the vehicle the same way whatever order frames are drawn in
+        page.evaluate("async (t) => { await window.hiraku.seek(t); }", finished_t + 3)
+        again = page.evaluate(probe)
+        for a, b in zip(early["cam"], again["cam"]):
+            self.assertAlmostEqual(a, b, places=6)
+        self.assertEqual(errors, [])
         page.close()
 
     def test_video_layout_keeps_the_subtitle_band_empty(self):

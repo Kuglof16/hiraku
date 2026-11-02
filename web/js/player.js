@@ -18,11 +18,12 @@ export class Player {
     this.live = false; // following a run that is still being written
     this.liveAttached = false; // playhead glued to the live edge
     this.startWallMs = null;
+    this.minEnd = 0; // the replay lasts at least this long (a test's motion may play past the last event)
   }
 
   get duration() {
     const last = this.events.at(-1);
-    const end = last ? last.t : 0;
+    const end = Math.max(last ? last.t : 0, this.minEnd);
     return this.live && this.liveAttached ? Math.max(end, this.playhead) : end;
   }
 
