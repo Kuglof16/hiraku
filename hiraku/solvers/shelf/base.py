@@ -79,8 +79,8 @@ def on_board(design: Record, load_case: Record) -> Record:
         elif p["kind"] == "cargo" and not CARGO[loading]:
             continue
         parts.append(p)
-    if seated < OCCUPANTS[loading]:
-        raise LoadCaseError(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {seated}")
+    # a design with fewer occupant parts than the loading names carries the ones it has
+    # (products without seats); the catalog checks the loading against the requirements
     out = copy.copy(design)
     out["parts"] = parts
     return out
@@ -151,8 +151,23 @@ class BuiltinTool:
                 rec["status"] = "failed"
                 rec["error"] = str(e)
                 rec["results"] = []
+        sens = (params or {}).get("sensitivity")
+        if sens and rec["status"] == "ok":
+            rec.setdefault("effects", []).extend(self._sensitivity(design, load_case, params, sens))
         rec["wall_time_s"] = time.perf_counter() - t0
         return rec
+
+    def _sensitivity(self, design: Record, load_case: Record, params: dict, sens: dict) -> list[Record]:
+        """K5 on this tool: params["sensitivity"] = {"quantity", "paths", "rel_step"?}."""
+        from ..k5_sensitivity import sensitivity
+
+        q, paths = sens.get("quantity"), sens.get("paths") or []
+        if not q or not paths:
+            return [{"name": "sensitivity skipped: give quantity and paths"}]
+        try:
+            return sensitivity(self, design, load_case, q, list(paths), float(sens.get("rel_step", 0.02)), params)
+        except (KeyError, ValueError) as e:
+            return [{"name": f"sensitivity not computed: {e}"}]
 
     # -- for subclasses
 
