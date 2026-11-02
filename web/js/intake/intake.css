@@ -87,6 +87,7 @@
 .in-was { color: var(--i-muted); font-size: 13px; }
 .in-count { margin-left: auto; font-size: 13px; border: 1.5px solid var(--i-ink); border-radius: 999px; padding: 0 10px; white-space: nowrap; }
 .in-reason { margin: 0; font-size: 14px; }
+.in-card.off .in-reason { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .in-tests { display: flex; flex-wrap: wrap; gap: 4px; }
 .in-tests code, .in-foot code { background: var(--i-paper); border: 1px solid var(--i-rule); border-radius: 4px; padding: 0 5px; margin: 0 2px; }
 .in-card.lit { animation: in-light 0.5s ease-out; }

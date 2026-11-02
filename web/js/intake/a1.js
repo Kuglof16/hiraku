@@ -54,14 +54,16 @@ function card(c, api) {
       h("h3", {}, c.shownName),
       c.renamed ? h("small", { class: "in-was" }, `← ${c.ja}`) : null,
       lit && c.testCount !== null ? h("span", { class: "in-count", title: "当てはまる試験の数" }, `試験 ${c.testCount}`) : null),
-    c.reason ? h("p", { class: "in-reason" }, c.reason) : null,
+    c.reason ? h("p", { class: "in-reason", title: c.reason }, c.reason) : null,
     lit && c.testIds?.length ? h("div", { class: "in-tests" }, c.testIds.map((t) => h("code", {}, t))) : null,
     lit && api.exclude ? h("button", { class: "in-btn small", onclick: () => api.exclude(c.domain) }, "外す") : null,
     c.state === "wait" ? h("p", { class: "in-reason" }, "まだ決めていません") : null);
 }
 
+const ORDER = { lit: 0, off: 1, wait: 2 };
+
 export function renderA1(el, m, api, ui) {
-  const cards = domainCards(m);
+  const cards = domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]); // the ones that light first (stable: domain order inside)
   const lit = cards.filter((c) => c.state === "lit").length;
   const assembly = m.domains?.assembly_test_ids || [];
   const reasons = Object.entries(m.domains?.flag_reasons || {});
