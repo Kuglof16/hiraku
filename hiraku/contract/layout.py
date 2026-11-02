@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 RUNS_DIR = Path("runs")
+SHOWCASE_DIR = Path("showcase")  # committed example runs, same layout as runs/<run_id>/
 PROJECT_FILE = "project.json"
 EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
