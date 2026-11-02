@@ -11,6 +11,16 @@ from typing import Any, Protocol, runtime_checkable
 
 Record = dict[str, Any]
 
+# Entry points of hiraku.solvers (hiraku/solvers/__init__.py). Callers use only
+# these two names; importing hiraku.solvers must have no side effects.
+#   formula_registry() -> FormulaRegistry
+#   builtin_tools()    -> list[AnalysisTool]
+SOLVER_ENTRY_POINTS = ("formula_registry", "builtin_tools")
+
+# params["loading"] of a load case: who and what is on board (catalog Q30).
+LOADINGS = ("empty", "driver", "two", "two_cargo")
+DEFAULT_LOADING = "two_cargo"
+
 
 class FormulaRegistry(Protocol):
     """K0 hand-calculation formulas (hiraku.solvers.k0_handcalc)."""
@@ -41,6 +51,10 @@ class AnalysisTool(Protocol):
 
     def run(self, design: Record, load_case: Record, predictions: list[Record], params: dict[str, Any]) -> Record:
         """Run the analysis.
+
+        params["upstream_analyses"] = {load_case_id: analysis} carries the
+        matched analyses of the load cases that feed this one (e.g. the P1
+        wheel force into R1). The caller adds their ids to inputs_from.
 
         Returns an `analysis` record without analysis_id (the store assigns it).
         Must not raise for a physically bad design: return status "failed"
