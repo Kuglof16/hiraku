@@ -3,8 +3,8 @@
 A typo in an expected value would make every solver test wrong, so each formula
 is re-derived here: beams by solving E I w'''' = q symbolically, frames with the
 qa.frame2d stiffness solver, frequencies as eigenvalues, the step by moving the
-wheel numerically. Values quoted from the planning notes are recomputed, never
-copied as results.
+wheel numerically. The rounded values asserted below are what the closed forms
+give for these cases, recomputed here, never copied in as results.
 """
 
 import math
@@ -54,8 +54,8 @@ class StepClimb(unittest.TestCase):
                 dz = cz(phi0 - eps) - cz(phi0 + eps)
                 self.assertAlmostEqual(abs(dz / dx), ka.step_force_ratio(r, h), places=6)
 
-    def test_values_quoted_in_the_plan(self):
-        # The planning notes list 1.118, 1.732, 5.92 (r = 0.3 m) and 0.927 (r = 75 mm).
+    def test_rounded_force_ratios_of_the_step_cases(self):
+        # r = 300 mm at three heights, then r = 75 mm: the closed form rounded to 3 decimals
         got = [round(ka.step_force_ratio(c["r"], c["h"]), 3) for c in ka.STEP_CASES]
         self.assertEqual(got, [1.118, 1.732, 5.916, 0.927])
 
@@ -101,8 +101,7 @@ class Beams(unittest.TestCase):
         ])
         tip = float(abs(w.subs({x: L, P: 100.0, EI: E * I})))
         self.assertAlmostEqual(tip, ka.cantilever_tip_load(100.0, L, E, I)["deflection"], places=9)
-        # the plan quotes 4.831 mm for this case
-        self.assertEqual(round(tip, 3), 4.831)
+        self.assertEqual(round(tip, 3), 4.831)  # mm, the closed form P L^3 / (3 E I) rounded
 
     def test_simply_supported_centre_load_from_the_ode(self):
         P = sp.Symbol("P")
@@ -196,7 +195,7 @@ class Frequencies(unittest.TestCase):
         f_fd = math.sqrt(lam) / (2 * math.pi)
         f_cf = ka.simply_supported_first_frequency(L, E, I, ka.BEAM["rho_t_mm3"], ka.BEAM["A"])
         self.assertAlmostEqual(f_fd / f_cf, 1.0, places=4)
-        self.assertEqual(round(f_cf, 3), 125.555)  # value quoted in the plan
+        self.assertEqual(round(f_cf, 3), 125.555)  # Hz, the closed form rounded
 
     def test_tip_mass_uses_the_cantilever_stiffness(self):
         k = 1.0 / (ka.cantilever_tip_load(1.0, L, E, I)["deflection"])
