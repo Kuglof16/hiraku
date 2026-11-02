@@ -9,131 +9,184 @@
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n05"></script>
 <style>
-  /* N05: the vehicle stands in front, with warm light in a thin line down its
-     middle. It parts there into a left and a right half that swing open
-     towards the viewer like a pair of doors (kannon-biraki: each half hinged
-     on its own outer end), the light spills out of the widening gap, the
-     tiles of the preset tests fly out of it into a grid, and the name
-     settles above the grid.
-     The vehicle is a stand-in (.bg-only): the video lays this page
-     (?layer=fg) over the app's own render, which opens the same way; in
-     ?layer=fg only the light, the name and the tagline are drawn, and the
-     light is see-through so the render below stays visible.
+  /* N05: the vehicle stands in front of a closed double door that fills the
+     screen, with warm light in the door's seam. The door stays shut a while
+     (the light grows, the vehicle comes slowly closer), then its leaves part
+     a little, stop for a moment, and swing wide towards the viewer
+     (kannon-biraki: each leaf hinged on its outer edge). Light spills out
+     from behind the door; the vehicle does not open: it fades out as the
+     leaves swing wide. Then the tiles of the preset tests fly out into a
+     grid and the name settles above it.
+     Layers, back to front: light behind the door, the door, the light in the
+     seam and the spill, the vehicle, the tiles, the flash, the name.
+     ?layer=fg draws all of these but the tiles (.bg-only): the door hides
+     the app's render below until it opens, then it is hidden (visibility)
+     and the ground is transparent again.
+     The vehicle's picture comes from one place: ?hero=<png> in the URL, else
+     layout.json n05.hero.src, else the line drawing of vehicle.js.
      Placement and times: layout.json n05 (CSS variables from layout.js;
-     --t-burst, --t-tiles, --t-tile-in, --t-tile-stagger, --t-name, --t-tag,
-     --t-door-open from n05.times; --door-* from n05.door); the tiles are
-     placed on the cells of promoLayout.gridCells(n05.grid). */
+     --t-* from n05.times, --door-* from n05.door); the tiles are placed on
+     the cells of promoLayout.gridCells(n05.grid). */
   :root {
     --page-bg: var(--night);
+    /* the wide swing starts after the crack and the pause */
+    --swing-at: calc(var(--t-door-open) + var(--door-crack-dur) + var(--door-hold-dur));
   }
 
-  /* --- the vehicle, in two halves --- */
-  .hero {
+  /* --- light behind the door: only the opening shows it --- */
+  .door-back {
     position: absolute;
-    left: var(--hero-x);
-    top: var(--hero-y);
-    width: var(--hero-w);
-    height: var(--hero-h);
-    transform-origin: 50% 55%;
+    inset: 0;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.14) 22%, rgba(246, 234, 208, 0.6) 50%,
+      rgba(246, 234, 208, 0.14) 78%, rgba(246, 234, 208, 0) 100%);
+    /* fades soon after the leaves are out, so (in ?layer=fg) the app's
+       render below this page is not washed out for long */
+    animation: back-fade var(--door-spill-dur) ease-out both;
+    animation-delay: var(--swing-at);
+  }
+  @keyframes back-fade {
+    0%, 35% { opacity: 1; }
+    100%    { opacity: 0; }
+  }
+
+  /* --- the door --- */
+  .door {
+    position: absolute;
+    inset: 0;
     perspective: var(--door-perspective-px);
     perspective-origin: 50% 50%;
-    /* layout.json n05.hero_motion.push_scale: grows slowly until the burst */
-    animation: hero-push var(--t-burst) linear both;
+    /* hidden once fully open (a step, so ?layer=fg is transparent again) */
+    animation: door-gone 0s linear both;
+    animation-delay: calc(var(--swing-at) + var(--door-open-dur));
   }
-  .hero .v-line { stroke: var(--on-night); }
-  @keyframes hero-push {
-    from { transform: scale(1); }
-    to   { transform: scale(var(--hero-motion-push-scale)); }
-  }
-  .half {
-    position: absolute;
-    inset: 0;
-    /* front side only: a half is gone once it turns edge-on to the eye */
-    backface-visibility: hidden;
-    animation:
-      open-l var(--door-open-dur) var(--door-ease) both,
-      half-gone 0s linear both;
-    animation-delay: var(--t-door-open), calc(var(--t-door-open) + var(--door-open-dur));
-  }
-  .half svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-  /* parted at the middle (x 960); --hinge-l / --hinge-r: the vehicle's outer
-     ends, measured from the drawing below */
-  .half-l {
-    clip-path: inset(0 50% 0 0);
-    transform-origin: var(--hinge-l, 0%) 50%;
-  }
-  .half-r {
-    clip-path: inset(0 0 0 50%);
-    transform-origin: var(--hinge-r, 100%) 50%;
-    animation-name: open-r, half-gone;
-  }
-  /* the cut face of each half, lit by the light inside: a warm line on its
-     free edge (over the vehicle's height, 23-93 % of the box), so the edges
-     are seen coming towards the viewer */
-  .half::after {
-    content: "";
-    position: absolute;
-    top: 23%;
-    height: 70%;
-    width: var(--door-seam-w-px);
-    background: linear-gradient(to bottom, rgba(246, 234, 208, 0), var(--glow) 20%,
-      var(--glow) 80%, rgba(246, 234, 208, 0));
-  }
-  .half-l::after { left: calc(50% - var(--door-seam-w-px)); }
-  .half-r::after { left: 50%; }
-  /* the free (middle) edges come towards the viewer; a half turning away
-     from the light dims */
-  @keyframes open-l {
-    from { transform: rotateY(0deg); opacity: 1; }
-    to   { transform: rotateY(calc(-1 * var(--door-angle))); opacity: 0.45; }
-  }
-  @keyframes open-r {
-    from { transform: rotateY(0deg); opacity: 1; }
-    to   { transform: rotateY(var(--door-angle)); opacity: 0.45; }
-  }
-  @keyframes half-gone {
+  @keyframes door-gone {
     from { visibility: visible; }
     to   { visibility: hidden; }
   }
-
-  /* --- the light in the parting line and in the gap (every layer) --- */
-  .crack {
+  /* .leaf turns by the crack, .leaf-body inside it on to the full angle:
+     both hinged on the same outer edge, so the turns add up */
+  .leaf {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: var(--hero-y);
-    height: var(--hero-h);
-    pointer-events: none;
-    /* the vehicle fills about 23-93 % of the hero box; soft ends above and
-       below it (the bottom fades out at y 795, above the subtitle band) */
-    -webkit-mask-image: linear-gradient(to bottom, transparent 12%, #000 28%, #000 84%, transparent 98%);
-            mask-image: linear-gradient(to bottom, transparent 12%, #000 28%, #000 84%, transparent 98%);
+    top: 0;
+    width: 50%;
+    height: 100%;
+    transform-style: preserve-3d;
+    animation: crack-l var(--door-crack-dur) var(--door-crack-ease) both;
+    animation-delay: var(--t-door-open);
   }
-  .seam {
+  .leaf-l { left: 0; transform-origin: 0 50%; }
+  .leaf-r { right: 0; transform-origin: 100% 50%; animation-name: crack-r; }
+  .leaf-body {
+    position: absolute;
+    inset: 0;
+    transform-origin: inherit;
+    border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 22%, transparent);
+    animation: swing-l var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--swing-at);
+  }
+  .leaf-l .leaf-body {
+    border-right: 0;
+    background: linear-gradient(90deg, var(--night) 0%, var(--night-2) 85%, #24221e 100%);
+  }
+  .leaf-r .leaf-body {
+    border-left: 0;
+    background: linear-gradient(270deg, var(--night) 0%, var(--night-2) 85%, #24221e 100%);
+    animation-name: swing-r;
+  }
+  /* the free edges come towards the viewer */
+  @keyframes crack-l {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(-1 * var(--door-crack))); }
+  }
+  @keyframes crack-r {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(var(--door-crack)); }
+  }
+  @keyframes swing-l {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(var(--door-crack) - var(--door-angle))); }
+  }
+  @keyframes swing-r {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(var(--door-angle) - var(--door-crack))); }
+  }
+  /* a swinging leaf turns away from the light and darkens */
+  .leaf-body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    animation: leaf-shade var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--swing-at);
+  }
+  @keyframes leaf-shade {
+    from { opacity: 0; }
+    to   { opacity: 0.6; }
+  }
+  /* raised panels: an outline, a raised border, and an inner outline */
+  .pane {
+    position: absolute;
+    left: var(--door-panel-inset-px);
+    right: var(--door-panel-inset-px);
+    border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 45%, transparent);
+    background: color-mix(in srgb, var(--night) 60%, transparent);
+    box-shadow:
+      inset 0 0 0 var(--door-panel-bevel-px) var(--night-2),
+      inset 0 0 0 calc(var(--door-panel-bevel-px) + var(--door-panel-line-px))
+        color-mix(in srgb, var(--on-night-soft) 28%, transparent);
+  }
+  .pane.up {
+    top: var(--door-panel-inset-px);
+    height: var(--door-panel-upper-h-px);
+  }
+  .pane.dn {
+    top: calc(var(--door-panel-inset-px) + var(--door-panel-upper-h-px) + var(--door-panel-gap-px));
+    bottom: var(--door-panel-inset-px);
+  }
+  .handle {
+    position: absolute;
+    top: calc(50% - var(--door-handle-h-px) / 2);
+    width: var(--door-handle-w-px);
+    height: var(--door-handle-h-px);
+    border-radius: var(--door-handle-w-px);
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--on-night-soft) 35%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 80%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 35%, transparent));
+  }
+  .leaf-l .handle { right: var(--door-handle-seam-gap-px); }
+  .leaf-r .handle { left: var(--door-handle-seam-gap-px); }
+
+  /* --- the light in the seam, and the light that spills out --- */
+  .door-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .seam-wrap {
     position: absolute;
     top: 0;
     bottom: 0;
     left: calc(50% - var(--door-seam-glow-w-px) / 2);
     width: var(--door-seam-glow-w-px);
-    /* the thin line stays while the halves part, then hands over to the gap */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+    /* stays on the parting edges, then hands over to the light behind */
     animation: seam-out var(--door-open-dur) linear both;
-    animation-delay: var(--t-door-open);
+    animation-delay: var(--swing-at);
   }
   @keyframes seam-out {
-    0%, 40% { opacity: 1; }
+    0%, 30% { opacity: 1; }
     100%    { opacity: 0; }
   }
   .seam-glow, .seam-core {
     position: absolute;
     top: 0;
     bottom: 0;
-    /* grows a little stronger until the vehicle opens */
-    animation: seam-build var(--t-door-open) ease-in both;
+    /* grows slowly while the door is shut, and widens as it cracks */
+    animation: seam-build calc(var(--t-door-open) + var(--door-crack-dur)) ease-in both;
   }
   .seam-glow {
     left: 0;
@@ -146,56 +199,57 @@
     left: calc(50% - var(--door-seam-w-px) / 2);
     width: var(--door-seam-w-px);
     background: var(--glow);
-    opacity: 0.85;
   }
   @keyframes seam-build {
-    from { opacity: 0.45; transform: scaleX(0.6); }
-    to   { opacity: 1; transform: scaleX(1); }
+    from { opacity: 0.3; transform: scaleX(0.5); }
+    to   { opacity: 1; transform: scaleX(1.3); }
   }
-  /* light inside the vehicle, seen through the gap between the halves: it
-     widens with the swing (same duration and ease) and fades out over
-     spill_dur, so the render below is not washed out for long */
-  .gap {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg,
-      rgba(246, 234, 208, 0) 18%, rgba(246, 234, 208, 0.22) 38%, rgba(246, 234, 208, 0.55) 50%,
-      rgba(246, 234, 208, 0.22) 62%, rgba(246, 234, 208, 0) 82%);
-    animation:
-      gap-open var(--door-open-dur) var(--door-ease) both,
-      gap-fade var(--door-spill-dur) ease-out both;
-    animation-delay: var(--t-door-open), var(--t-door-open);
-  }
-  @keyframes gap-open {
-    from { transform: scaleX(0.02); }
-    to   { transform: scaleX(1.1); }
-  }
-  @keyframes gap-fade {
-    0%   { opacity: 0.6; }
-    40%  { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
-  /* light that spills out of the gap towards the viewer */
   .spill {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 100%;
+    inset: 0;
     background: linear-gradient(90deg,
       rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.08) 28%, rgba(246, 234, 208, 0.4) 50%,
       rgba(246, 234, 208, 0.08) 72%, rgba(246, 234, 208, 0) 100%);
     animation: spill var(--door-spill-dur) linear both;
-    animation-delay: var(--t-door-open);
-    /* .safe ends at the subtitle band; fade out before it (as .burst) */
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
-            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+    animation-delay: var(--swing-at);
   }
   @keyframes spill {
-    0%, 30% { transform: scaleX(0.05); opacity: 0; }
-    60%     { transform: scaleX(0.6); opacity: 1; }
+    0%, 15% { transform: scaleX(0.05); opacity: 0; }
+    45%     { transform: scaleX(0.6); opacity: 1; }
     100%    { transform: scaleX(1.3); opacity: 0; }
+  }
+
+  /* --- the vehicle, in front of the door --- */
+  .hero {
+    position: absolute;
+    left: var(--hero-x);
+    top: var(--hero-y);
+    width: var(--hero-w);
+    height: var(--hero-h);
+    transform-origin: 50% 55%;
+    /* layout.json n05.hero_motion.push_scale: comes slowly closer until the
+       wide swing, then grows a little more and fades out (door.hero_fade_*).
+       The fade fills forwards only, so before it starts hero-push holds. */
+    animation:
+      hero-push var(--swing-at) linear both,
+      hero-fade var(--door-hero-fade-dur) ease-in forwards;
+    animation-delay: 0s, var(--swing-at);
+  }
+  .hero > svg, .hero > .hero-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .hero > .hero-img { object-fit: contain; }
+  .hero .v-line { stroke: var(--on-night); }
+  @keyframes hero-push {
+    from { transform: scale(1); }
+    to   { transform: scale(var(--hero-motion-push-scale)); }
+  }
+  @keyframes hero-fade {
+    from { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
+    to   { transform: scale(var(--door-hero-fade-scale)); opacity: 0; }
   }
 
   .burst {
@@ -262,16 +316,17 @@
 </head>
 <body data-duration="5">
 <div class="stage night">
-  <div class="crack">
-    <div class="gap"></div>
-    <div class="seam"><div class="seam-glow"></div><div class="seam-core"></div></div>
+  <div class="door-back"></div>
+  <div class="door" data-box="n05.door">
+    <div class="leaf leaf-l"><div class="leaf-body"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div></div>
+    <div class="leaf leaf-r"><div class="leaf-body"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div></div>
+  </div>
+  <div class="door-light">
+    <div class="spill"></div>
+    <div class="seam-wrap"><div class="seam-glow"></div><div class="seam-core"></div></div>
   </div>
   <div class="safe">
-    <div class="hero bg-only" data-box="n05.hero">
-      <div class="half half-l"></div>
-      <div class="half half-r"></div>
-    </div>
-    <div class="spill"></div>
+    <div class="hero" data-box="n05.hero"></div>
     <div class="grid bg-only"></div>
     <div class="burst"></div>
   </div>
@@ -313,15 +368,21 @@
           style="${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
        ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label">${t.test[0]}</b></div>`).join("");
 
-  // The same drawing in both halves; each half shows its side of x 960.
-  // The hinges sit on the vehicle's outer ends: the drawing's extent in its
-  // 600 x 300 box, as a share of the hero's width (the box fills the hero).
+  // The vehicle's picture, from one place: ?hero=<path> (read once at load;
+  // the time t never depends on it), else layout.json n05.hero.src, else the
+  // line drawing. A picture is the vehicle alone on a transparent ground.
+  const heroSrc = new URLSearchParams(location.search).get("hero") || cutRules.hero.src;
   const hero = document.querySelector(".hero");
-  for (const half of hero.querySelectorAll(".half")) half.innerHTML = drawVehicle({ strokeScale: 0.7 });
-  const bb = hero.querySelector("svg").getBBox();
-  if (bb.width > 0) {
-    hero.style.setProperty("--hinge-l", `${(bb.x / 600) * 100}%`);
-    hero.style.setProperty("--hinge-r", `${((bb.x + bb.width) / 600) * 100}%`);
+  if (heroSrc) {
+    const img = document.createElement("img");
+    img.className = "hero-img";
+    img.alt = "";
+    img.src = heroSrc;
+    hero.append(img);
+  } else {
+    // halo: a dark stroke under each line, so the door's lines stop at the
+    // vehicle's and it reads as standing in front of the door
+    hero.innerHTML = drawVehicle({ strokeScale: 0.7, halo: true });
   }
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
