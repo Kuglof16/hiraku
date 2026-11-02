@@ -2,9 +2,9 @@
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
 H5 assembly.
 
-Next to each builder: its tolerance_rel and why, CALC (values the scripted run's
-predictions need that are not plain reads of the design, worked out here by
-code) and PLAN (the scripted way to predict).
+Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
+predict). A prediction's inputs_from works out by code the values its from.<name>
+refs need that are not plain reads of the design.
 """
 
 from __future__ import annotations
@@ -90,13 +90,13 @@ N1_PLAN = {
     "predictions": [
         {"quantity": "first_body_mode", "formula_id": "modal.spring_mass", "output": "f",
          "assumptions": ["車全体が 4 本のばねの上で上下に揺れるとみる", "タイヤは硬いとみる (フレームのモデルと同じ)"],
-         "inputs": {"k": "calc.spring_rate_total", "m": "load.mass"}},
+         "inputs": {"k": "from.spring_rate_total", "m": "load.mass"}, "inputs_from": n1_calc},
         {"quantity": "wheel_rotation_frequency", "formula_id": "modal.rotation_excitation", "output": "f_wheel",
          "assumptions": ["車輪は滑らずに回る"],
-         "inputs": {"v": "lc.speed", "r": "calc.driven_wheel_radius", "i": "design.var.gear_ratio"}},
+         "inputs": {"v": "lc.speed", "r": "from.driven_wheel_radius", "i": "design.var.gear_ratio"}, "inputs_from": n1_calc},
         {"quantity": "motor_rotation_frequency", "formula_id": "modal.rotation_excitation", "output": "f_motor",
          "assumptions": ["車輪は滑らずに回る"],
-         "inputs": {"v": "lc.speed", "r": "calc.driven_wheel_radius", "i": "design.var.gear_ratio"}},
+         "inputs": {"v": "lc.speed", "r": "from.driven_wheel_radius", "i": "design.var.gear_ratio"}, "inputs_from": n1_calc},
     ],
 }
 
@@ -137,21 +137,35 @@ P4_TOL = 0.10
 T_TOL = 0.15
 
 
-def _loop(req: Record, distance_key: str) -> tuple[Record, list[str]]:
-    """The forest loop from the requirements: the steep grades are Q13, the gentle ones
-    half of it; the flat parts are driven at Q50 and the steep grades at half of it
-    (the shape of the loop is an assumption of this load case)."""
+def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[str]]:
+    """The forest loop: the steep grades are Q13 and the flat parts are driven at Q50; the
+    gentle grades and the speed on the steep ones are the test's params grade_low and
+    speed_low in the catalog, else half of Q13 and of Q50 (an assumption of this load case)."""
+    from hiraku.solvers.k0_handcalc import units
+
     d = number(req, distance_key, "km")
     grade = number(req, "Q13", "%")
     v = number(req, "Q50", "km/h")
-    params = {"distance": q(d, "km"), "grade_low": q(grade / 2.0, "%"), "grade_high": q(grade, "%"),
-              "speed_low": q(v / 2.0, "km/h"), "speed_high": q(v, "km/h")}
+    given = spec.get("params", {})
+
+    def from_spec(name: str, unit: str, fallback: float) -> Record:
+        if name not in given:
+            return q(fallback, unit)
+        try:
+            return q(units.to_unit(given[name], unit, name), unit)
+        except ValueError as e:
+            raise BuildError(f"catalog params of {spec['id']}: {e}") from None
+
+    params = {"distance": q(d, "km"), "grade_low": from_spec("grade_low", "%", grade / 2.0), "grade_high": q(grade, "%"),
+              "speed_low": from_spec("speed_low", "km/h", v / 2.0), "speed_high": q(v, "km/h")}
+    if not (0 <= params["grade_low"]["value"] <= grade and 0 < params["speed_low"]["value"] <= v):
+        raise BuildError(f"{spec['id']}: grade_low must lie within 0..Q13 and speed_low within 0..Q50")
     return params, [distance_key, "Q13", "Q50"]
 
 
 def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
     load, keys = loading(req, design)
-    params, loop_keys = _loop(req, "Q54")
+    params, loop_keys = _loop(spec, req, "Q54")
     d = params["distance"]["value"]
     return {
         "load_case_id": f"P4-{d:g}km",
@@ -195,37 +209,45 @@ P4_PLAN = {
         {"quantity": quantity, "formula_id": "drive_energy.loop_energy", "output": output,
          "assumptions": ["一定の速さで走るとみる (加速・減速は入れない)", "補機の電力は入れない",
                          "空気抵抗は周回の速さの二乗平均で出す", "下りの位置エネルギーは regen_efficiency の分だけ戻る"],
-         "inputs": {"m": "load.mass", "d": "lc.distance", "v": "calc.loop_rms_speed", "C_rr": "design.var.rolling_resistance",
-                    "C_d": "design.var.drag_coefficient", "A": "design.var.frontal_area", "H": "calc.loop_climb",
-                    "eta": "calc.drive_efficiency", "eta_regen": "design.var.regen_efficiency", "E_batt": "calc.battery_energy",
-                    "rho": "design.var.air_density"}}
+         "inputs": {"m": "load.mass", "d": "lc.distance", "v": "from.loop_rms_speed", "C_rr": "design.var.rolling_resistance",
+                    "C_d": "design.var.drag_coefficient", "A": "design.var.frontal_area", "H": "from.loop_climb",
+                    "eta": "from.drive_efficiency", "eta_regen": "design.var.regen_efficiency", "E_batt": "from.battery_energy",
+                    "rho": "design.var.air_density"},
+         "inputs_from": p4_calc}
         for quantity, output in (("energy_used", "E"), ("soc_used", "soc_used"))
     ],
 }
 
 
-def _thermal(test_id: str, what: str):
+def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
+    """T1 / T2: the loop at the hot end of Q19; the limit is the part's own (a design variable
+    with its source in hiraku.designgen); without it, no criterion."""
     def build(spec: Record, req: Record, design: Record) -> Record:
         load, keys = loading(req, design)
-        params, loop_keys = _loop(req, "Q54")
+        params, loop_keys = _loop(spec, req, "Q54")
         t_amb = number(req, "Q19", "degC")  # the hot end of the range
         d = params["distance"]["value"]
-        return {
+        out = {
             "load_case_id": f"{test_id}-{t_amb:g}C",
             "test_id": test_id,
             "domain": spec["domain"],
             "title": f"気温 {t_amb:g} ℃ で林道の周回を {d:g} km 走ったときの{what}の温度 ({LOADING_JA[load]})",
             "params": {**params, "ambient_temperature": q(t_amb, "degC"), "loading": load},
             "requirement_keys": ["Q19", *loop_keys, *keys],
-            # no criterion: the requirements and the design give no temperature limit for the parts
             "tolerance_rel": tolerance(spec, T_TOL),
         }
+        limit = design_var(design, limit_var, "degC")
+        if limit is not None:
+            out["criterion"] = {"quantity": quantity, "op": op, "limit": q(limit, "degC"),
+                                "basis": f"{test_id}: the design variable {limit_var} (the part's limit; its source is "
+                                         f"in the design generator), against the lumped temperature of the part"}
+        return out
     build.__name__ = f"{test_id.lower()}_thermal"
     return build
 
 
-t1_thermal = _thermal("T1", "電池")
-t2_thermal = _thermal("T2", "モーターと制御器")
+t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=")
+t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<")
 
 # ---------------------------------------------------------------- H1, H3, H5 assembly
 
@@ -274,7 +296,7 @@ H1_PLAN = {
     "predictions": [
         {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle", "output": "theta",
          "assumptions": ["車輪は上から見て直径 x 幅の長方形", "車輪の中心を通る縦の軸で回る", "レールの面は前後に真っすぐ"],
-         "inputs": {"w": "calc.steer_w", "l": "calc.steer_l", "c": "calc.steer_c"}},
+         "inputs": {"w": "from.steer_w", "l": "from.steer_l", "c": "from.steer_c"}, "inputs_from": h1_calc},
     ],
 }
 
@@ -312,7 +334,7 @@ H3_PLAN = {
     "predictions": [
         {"quantity": "knee_room", "formula_id": "occupant.knee_room", "output": "room",
          "assumptions": ["背もたれに付けて座る", "膝の長さは AIST の若年男性 95 パーセンタイル (J5)"],
-         "inputs": {"L": "calc.knee_length", "L_bk": "calc.buttock_knee"}},
+         "inputs": {"L": "from.knee_length", "L_bk": "from.buttock_knee"}, "inputs_from": h3_calc},
     ],
 }
 
@@ -343,7 +365,7 @@ BUILDERS = {
     "H3": h3_people,
     "H5": h5_assembly,
 }
-CALC = {"N1": n1_calc, "P4": p4_calc, "H1": h1_calc, "H3": h3_calc}
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "P4": P4_PLAN, "H1": H1_PLAN, "H3": H3_PLAN}
+FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
 # R3, T1, T2 and H5 have no scripted plan: their hand calculations need a loss
 # or a stress history the scripted run cannot work out without the tool.

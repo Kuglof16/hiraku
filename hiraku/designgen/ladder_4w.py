@@ -106,6 +106,15 @@ VARIABLES: dict[str, Var] = {
     "motor_thermal_resistance": Var("K/W", 0.06, meaning="assumption"),
     "controller_heat_capacity": Var("J/K", 3600.0, meaning="assumption"),
     "controller_thermal_resistance": Var("K/W", 0.1, meaning="assumption"),
+    # temperature limits of the parts (not checked in this repository):
+    # source: EVE LF50K product specification, cells up to 55 degC,
+    # https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf
+    "battery_max_temperature": Var("degC", 55.0, meaning="cell limit, EVE LF50K product specification (not checked)"),
+    # source: Curtis 1236 manual, output cut back from 85 degC at the heatsink,
+    # https://www.bintelli.com/wp-content/uploads/2023/06/Curtis-Controller-1236-Manual.pdf
+    "controller_max_temperature": Var("degC", 85.0, meaning="cutback temperature, Curtis 1236 manual (not checked)"),
+    # source: thermal class F (155 degC) of IEC 60085 for the winding insulation
+    "motor_max_temperature": Var("degC", 155.0, meaning="insulation class F, IEC 60085 (not checked)"),
     # aerodynamics (assumptions; the drag coefficient is set high because the seats are open)
     "drag_coefficient": Var("1", 0.8, meaning="assumption"),
     "frontal_area": Var("m^2", 1.6, meaning="assumption"),
