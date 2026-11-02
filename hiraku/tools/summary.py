@@ -24,7 +24,7 @@ from hiraku.contract.protocols import LOADINGS
 
 Record = dict[str, Any]
 
-G = 9.80665  # standard gravity in m/s^2 (exact by definition, 3rd CGPM 1901)
+G = 9.80665  # standard gravity, m/s^2. Source: 3rd CGPM (1901), a defined value (exact)
 
 
 def _q(value: float, unit: str) -> Record:

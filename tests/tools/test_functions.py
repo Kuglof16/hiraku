@@ -71,14 +71,14 @@ class PredictionTest(RunCase, unittest.TestCase):
 
 
 class LoopTest(RunCase, unittest.TestCase):
-    def test_h1_analyze_needs_a_prediction_of_this_load_case(self):
+    def test_hk1_analyze_needs_a_prediction_of_this_load_case(self):
         with self.assertRaises(ToolError) as cm:
             analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": ["pred-0099"]})
         self.assertIn("record_prediction", str(cm.exception))
         r1 = self.predict_r1({"value": 100.0, "unit": "N"})
         d = rules.check_call(self.ctx, "analyze", {"tool": "step_climb", "load_case_id": "P1-step100",
                                                    "prediction_ids": [r1["prediction_id"]]})
-        self.assertEqual(d.rule, rules.H1)
+        self.assertEqual(d.rule, rules.HK1)
         self.assertNotIn("analysis.started", self.kinds())
 
     def test_upstream_must_match_before_r1(self):
@@ -134,19 +134,19 @@ class LeverRuleTest(RunCase, unittest.TestCase):
 class MismatchTest(RunCase, unittest.TestCase):
     step_factor = 1.5  # 50 % off: beyond P1's 10 %
 
-    def test_h3_until_a_cause_then_resolved(self):
+    def test_hk3_until_a_cause_then_resolved(self):
         load, force = self.predict_p1()
         ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
                                  "prediction_ids": [load["prediction_id"], force["prediction_id"]]})
         c1 = compare(self.ctx, {"prediction_id": load["prediction_id"], "analysis_id": ana["analysis_id"]})
         self.assertEqual(c1["comparison"]["status"], "mismatch")
         cmp_id = c1["comparison"]["comparison_id"]
-        with self.assertRaises(ToolError) as cm:  # H3 also stops compare in the same domain
+        with self.assertRaises(ToolError) as cm:  # HK3 also stops compare in the same domain
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
         self.assertIn(cmp_id, str(cm.exception))
         args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": [force["prediction_id"]]}
         d = rules.check_call(self.ctx, "analyze", args)
-        self.assertEqual(d.rule, rules.H3)
+        self.assertEqual(d.rule, rules.HK3)
         self.assertIn(f'record_cause(comparison_id="{cmp_id}"', d.reason)
         with self.assertRaises(ToolError):
             analyze(self.ctx, args)
@@ -211,8 +211,8 @@ class SafeSideTest(RunCase, unittest.TestCase):
         tile = self.ctx.store.judgements()[0]
         self.assertEqual((tile["state"], tile["verdict_ids"]), ("green", [ver["verdict_id"]]))
         self.assertIn("安全側の予測で", tile["summary"])
-        self.assertIsNone(rules.stop_reason(self.ctx))  # H4: judged
-        self.assertEqual(self.ctx.open_mismatches(), [])  # H3: the cause is written
+        self.assertIsNone(rules.stop_reason(self.ctx))  # HK4: judged
+        self.assertEqual(self.ctx.open_mismatches(), [])  # HK3: the cause is written
         self.assertFalse(self.ctx.store.get("cause", cause["cause_id"])["resolved"])  # no later match
         self.assert_events_fit()
 
@@ -252,12 +252,12 @@ class SafeSideTest(RunCase, unittest.TestCase):
 class UnusableToolTest(RunCase, unittest.TestCase):
     frame_checks_pass = False
 
-    def test_h2(self):
+    def test_hk2(self):
         self.assertFalse(self.ctx.specs["frame_static"]["usable"])
         r1 = self.predict_r1({"value": 100.0, "unit": "N"})
         d = rules.check_call(self.ctx, "analyze", {"tool": "frame_static", "load_case_id": "R1-step100",
                                                    "prediction_ids": [r1["prediction_id"]]})
-        self.assertEqual(d.rule, rules.H2)
+        self.assertEqual(d.rule, rules.HK2)
         self.assertIn("step_climb", d.reason)  # names the usable tools
 
     def test_unknown_tool(self):

@@ -1,8 +1,8 @@
-"""Stand-ins for the analysis department's K0 registry and tools, used only in tests.
+"""Stand-ins for the K0 registry and the analysis tools of hiraku.solvers, used only in tests.
 
 They follow hiraku.contract.protocols and do real closed-form arithmetic, so
-the plumbing (store, tools, rules, hooks) can be tested before hiraku.solvers
-is on main. Their numbers are not HIRAKU's results.
+the plumbing (store, tools, rules, hooks) can be tested apart from the
+solvers. Their numbers are not HIRAKU's results.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from hiraku import contract
 from hiraku.catalog import loading_of
 from hiraku.tools.summary import design_summary
 
-G = 9.80665  # standard gravity, m/s^2 (exact by definition)
+G = 9.80665  # standard gravity, m/s^2. Source: 3rd CGPM (1901), a defined value (exact)
 
 Record = dict[str, Any]
 

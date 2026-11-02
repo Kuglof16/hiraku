@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -9,6 +10,7 @@ from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
+from hiraku.agent.session import STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
 
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -127,6 +129,10 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
             await client.query(prompts.lead_task(ctx))
             async for msg in client.receive_response():
                 log.handle(msg)
+    except (KeyboardInterrupt, asyncio.CancelledError):  # Ctrl+C: asyncio.run cancels this task
+        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        raise
     except Exception as e:
         ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
         ctx.store.finish("failed", stop_reason=f"{type(e).__name__}: {e}")

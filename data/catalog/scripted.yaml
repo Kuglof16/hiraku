@@ -25,17 +25,17 @@
 #
 # After analyze, every prediction whose quantity is among the analysis results
 # is compared. A mismatch stops the run unless the step names it in
-# expected_mismatch: then its cause and fix (worked out beforehand; `source`
-# says by whom) are recorded with record_cause, compare in that domain is
-# denied by H3 until then, and the step predicts again with `retry`, which is
-# itself a step and may expect a mismatch of its own. With safe_side true (and
-# safe_side_reason, also worked out beforehand) the cause is recorded as seen
-# from the safe side: record_cause checks that the prediction is the
-# unfavourable value and makes the verdict from it, and the step ends. With
-# neither the run says `stop` and stops.
+# expected_mismatch: then its cause and fix (written in the plan; `source`
+# says which results were compared to find it) are recorded with
+# record_cause, compare in that domain is denied by HK3 until then, and the
+# step predicts again with `retry`, which is itself a step and may expect a
+# mismatch of its own. With safe_side true (and safe_side_reason, also written
+# in the plan) the cause is recorded as seen from the safe side: record_cause
+# checks that the prediction is the unfavourable value and makes the verdict
+# from it, and the step ends. With neither the run says `stop` and stops.
 
 offroad-4w:
-  show_h1: true   # call analyze once without a prediction, so the H1 denial is recorded
+  show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   steps:
     - load_case: P1-step100
       tool: step_climb
@@ -53,7 +53,7 @@ offroad-4w:
           inputs: {r: summary.front_wheel_radius, h: lc.step_height, W: pred.front_wheel_load}
       expected_mismatch:
         quantity: front_wheel_load
-        source: the analysis department's check of the demo vehicle (step_climb against the lever rule), 2026-11-02
+        source: step_climb against the lever rule (mass_props.front_wheel_load) on the demo vehicle
         cause: >-
           てこの比の式は止まっているときの前輪の荷重を出す。段を登るときは、後輪が地面の高さで押し、
           段の角が前輪の車軸の高さで押し返すので、その偶力で荷重が後輪へ移り、前輪の荷重は小さくなる
@@ -92,7 +92,7 @@ offroad-4w:
             t: summary.rail_section.t
       expected_mismatch:
         quantity: max_stress
-        source: the analysis department's check of the demo vehicle (rail_step_bending against frame_static, +52 %), 2026-11-02
+        source: frame_static against frame_static.rail_step_bending on the demo vehicle
         cause: >-
           梁の式は前後の車軸のあいだだけを見ている。後ろの車軸より後ろに張り出した荷とモーターの重さが、
           後ろの車軸のところでレールを曲げる (張り出しの曲げ) が、両端で支えた梁の式では支点の曲げは 0 になる。
@@ -128,9 +128,8 @@ offroad-4w:
           expected_mismatch:
             quantity: max_stress
             source: >-
-              the analysis department's check of the demo vehicle (rail_joint_stress 77.09 MPa against
-              frame_static 61.15 MPa, -20.7 %), 2026-11-03; the safe-side judgement is the project's decision on R1,
-              2026-11-03
+              frame_static against frame_static.rail_joint_stress on the demo vehicle, the vertical bending
+              and the sideways bending and twist each
             cause: >-
               今度は手計算が大きい。鉛直の曲げは 1 % で合い、横の曲げとねじりが倍に出る。
               式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため

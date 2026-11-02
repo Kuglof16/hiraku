@@ -27,7 +27,7 @@ def load_solvers(module: str = SOLVERS_MODULE) -> tuple[FormulaRegistry, dict[st
     try:
         mod = importlib.import_module(module)
     except ModuleNotFoundError as e:
-        raise SolversMissing(f"{module} is not here yet ({e}). The analysis department writes it.") from None
+        raise SolversMissing(f"{module} cannot be imported ({e})") from None
     missing = [n for n in SOLVER_ENTRY_POINTS if not hasattr(mod, n)]
     if missing:
         raise SolversMissing(f"{module} does not provide {', '.join(missing)}()")

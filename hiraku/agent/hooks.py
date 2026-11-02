@@ -1,10 +1,10 @@
-"""SDK hooks: the contract's H1-H4, agent start/stop events and next-step hints.
+"""SDK hooks: the contract's HK1-HK4, agent start/stop events and next-step hints.
 
-- PreToolUse: H1-H3 (hiraku.tools.rules.check_call). A denial is recorded as a
+- PreToolUse: HK1-HK3 (hiraku.tools.rules.check_call). A denial is recorded as a
   hook.denied event and its reason (what is missing, what to call next) goes to Claude.
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
-- Stop / SubagentStop: H4. While a picked domain is pending the stop is blocked
+- Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
   (hook.blocked_stop); blocks are counted and capped so a run always ends.
 - SubagentStart / SubagentStop: agent.started / agent.stopped.
 """
@@ -105,7 +105,7 @@ class Hooks:
             return {}
         return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": hint}}
 
-    # ------------------------------------------------------------------ Stop (H4)
+    # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         reason = rules.stop_reason(self.ctx)
@@ -113,7 +113,7 @@ class Hooks:
             return {}
         self.stop_blocks += 1
         self.ctx.store.emit("hook.blocked_stop", agent="lead", text=reason, data={
-            "hook": "Stop", "rule": rules.H4, "count": self.stop_blocks, "limit": self.max_stop_blocks,
+            "hook": "Stop", "rule": rules.HK4, "count": self.stop_blocks, "limit": self.max_stop_blocks,
         })
         return {"decision": "block", "reason": reason}
 
@@ -140,7 +140,7 @@ class Hooks:
                 self.subagent_stop_blocks[agent] = n + 1
                 reason = rules.stop_reason(self.ctx) or ""
                 self.ctx.store.emit("hook.blocked_stop", agent=agent, domain=domain, text=reason, data={
-                    "hook": "SubagentStop", "rule": rules.H4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
+                    "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })
                 return {"decision": "block", "reason": reason}
         self.running.pop(input_data.get("agent_id", ""), None)

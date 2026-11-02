@@ -16,12 +16,12 @@ from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
 from hiraku.tools.judge import latest_verdicts
 
-H1 = "HK1_prediction_first"
-H2 = "HK2_tool_usable"
-H3 = "HK3_cause_before_continue"
-H4 = "HK4_no_stop_before_judged"
+HK1 = "HK1_prediction_first"
+HK2 = "HK2_tool_usable"
+HK3 = "HK3_cause_before_continue"
+HK4 = "HK4_no_stop_before_judged"
 
-assert set(HOOK_RULES) == {H1, H2, H3, H4}
+assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4}
 
 
 @dataclass
@@ -43,7 +43,7 @@ def _h3(ctx: RunContext, domain: str | None, tool: str) -> Denial | None:
         return None
     ids = ", ".join(c["comparison_id"] for c in open_)
     first = open_[0]
-    return Denial(H3, (
+    return Denial(HK3, (
         f"{_ja(domain)}の分野に、原因の書かれていない食い違い ({ids}) があるので {tool} は止めました。"
         f"予測 {first['predicted']['value']:.4g} {first['predicted']['unit']} と解析 "
         f"{first['analyzed']['value']:.4g} {first['analyzed']['unit']} の差は {first['diff_rel'] * 100:.1f} % "
@@ -66,7 +66,7 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
         checks = spec["checks"] if spec else []
         failed = [c["case"] for c in checks if not c["pass"]] or ["(答えの分かっている例が無い、またはまだ確かめていない)"]
         usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
-        return Denial(H2, (
+        return Denial(HK2, (
             f"道具 {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
             f"list_tools で usable が true の道具 ({usable}) を選んでください"
         ), domain)
@@ -80,7 +80,7 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     if not ids or bad:
         what = f"予測 {', '.join(bad)} は版 {v} の {lc_id} の予測ではありません" if bad else "予測の ID がありません"
         hint = f"使える予測は {', '.join(good)} です。" if good else ""
-        return Denial(H1, (
+        return Denial(HK1, (
             f"予測が無いので解析は止めました ({what})。{hint}"
             f"record_prediction(load_case_id=\"{lc_id}\", ...) で手計算の予測を記録し、"
             f"返った prediction_id を prediction_ids に入れて analyze を呼び直してください"
@@ -97,7 +97,7 @@ CHECKS = {"analyze": check_analyze, "compare": check_compare}
 
 
 def check_call(ctx: RunContext, tool: str, args: dict[str, Any]) -> Denial | None:
-    """H1-H3 for one tool call. tool is the short name (analyze, compare, ...)."""
+    """HK1-HK3 for one tool call. tool is the short name (analyze, compare, ...)."""
     check = CHECKS.get(tool)
     return check(ctx, args) if check else None
 
@@ -116,7 +116,7 @@ def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list
 
 
 def stop_reason(ctx: RunContext) -> str | None:
-    """H4: why the run may not stop yet (None when every picked domain is judged)."""
+    """HK4: why the run may not stop yet (None when every picked domain is judged)."""
     left = pending(ctx)
     if not left:
         return None
