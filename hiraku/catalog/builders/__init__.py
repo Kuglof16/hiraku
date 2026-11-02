@@ -8,14 +8,15 @@ its key. tolerance_rel is the catalog's when the test gives one, else the
 builder's (each module says why).
 
 PLANS[test_id] is how the scripted run predicts for that test: one step in the
-shape of data/catalog/scripted.yaml (tool, say, predictions with formula_id,
-output, assumptions and input refs), without load_case (it is the built one).
-Input refs are those of scripted.yaml plus calc.<name>, the values
-calc(test_id, design, load_case) returns.
+shape of data/catalog/scripted.yaml (tool, say, predictions with quantity,
+formula_id, output, assumptions and input refs, optionally expected_mismatch),
+without load_case (it is the built one). Refs are those of scripted.yaml plus
+from.<name>: the value the prediction's inputs_from(design, load_case) returns
+under that name. FEEDS[test_id] lists the tests that take its results.
 
 The analysis department's tests are in analysis.py; the K2 team's in k2_*.py,
 which this package collects by name. Each module exports BUILDERS and may
-export PLANS and CALC; a test id belongs to one module only.
+export PLANS and FEEDS; a test id belongs to one module only.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from hiraku.catalog.builders.common import BuildError, Record
 
 BUILDERS: dict = {}
 PLANS: dict[str, Record] = {}
-CALC: dict = {}
+FEEDS: dict[str, list[str]] = {}
 
 
 def _collect() -> None:
@@ -41,16 +42,10 @@ def _collect() -> None:
             owner[test_id] = name
             BUILDERS[test_id] = fn
         PLANS.update(getattr(mod, "PLANS", {}))
-        CALC.update(getattr(mod, "CALC", {}))
+        for test_id, down in getattr(mod, "FEEDS", {}).items():
+            FEEDS.setdefault(test_id, []).extend(t for t in down if t not in FEEDS.get(test_id, []))
 
 
 _collect()
 
-
-def calc(test_id: str, design: Record, load_case: Record) -> Record:
-    """The calc.<name> values of a test's plan ({} when it needs none)."""
-    fn = CALC.get(test_id)
-    return fn(design, load_case) if fn else {}
-
-
-__all__ = ["BUILDERS", "CALC", "PLANS", "BuildError", "calc"]
+__all__ = ["BUILDERS", "FEEDS", "PLANS", "BuildError"]

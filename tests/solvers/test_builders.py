@@ -5,7 +5,7 @@ from pathlib import Path
 
 from hiraku import contract, solvers
 from hiraku.catalog import load_catalog, load_requirements
-from hiraku.catalog.builders import BUILDERS, PLANS, BuildError, calc
+from hiraku.catalog.builders import BUILDERS, PLANS, BuildError
 from hiraku.tools.summary import design_summary
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,7 +47,7 @@ def resolve(ref, design, lc, extra):
     head, _, rest = ref.partition(".")
     if head == "lc":
         return lc["params"][rest]
-    if head == "calc":
+    if head == "from":
         return extra[rest]
     if head == "design":
         kind, name = rest.split(".", 1)
@@ -60,12 +60,21 @@ def resolve(ref, design, lc, extra):
     raise AssertionError(f"unknown ref {ref}")
 
 
+LOOP = {"grade_low": {"value": 7, "unit": "%"}, "speed_low": {"value": 20, "unit": "km/h"}}  # the forest loop's other end
+
+
+def spec(tid):
+    """The catalog entry, with the loop params P4, T1 and T2 are to carry there."""
+    s = CATALOG.test(tid)
+    return dict(s, params={**s.get("params", {}), **LOOP}) if tid in ("P4", "T1", "T2") else s
+
+
 class BuildersTest(unittest.TestCase):
     runs: dict = {}
 
     @classmethod
     def setUpClass(cls):
-        cls.cases = {tid: BUILDERS[tid](CATALOG.test(tid), REQ, DESIGN) for tid in OURS}
+        cls.cases = {tid: BUILDERS[tid](spec(tid), REQ, DESIGN) for tid in OURS}
         cls.runs = {tid: tool_for(tid).run(DESIGN, lc, PRED, {}) for tid, lc in cls.cases.items()}
 
     def test_every_test_has_a_builder(self):
@@ -84,8 +93,12 @@ class BuildersTest(unittest.TestCase):
     def test_values_come_from_the_requirements(self):
         p = self.cases["P4"]["params"]
         self.assertEqual(p["distance"], {"value": 20.0, "unit": "km"})
-        self.assertEqual((p["grade_high"]["value"], p["grade_low"]["value"]), (12.0, 6.0))
+        self.assertEqual((p["grade_high"]["value"], p["grade_low"]["value"]), (12.0, 7.0))
         self.assertEqual((p["speed_high"]["value"], p["speed_low"]["value"]), (40.0, 20.0))
+        bare = BUILDERS["P4"](CATALOG.test("P4"), REQ, DESIGN)["params"]  # without catalog params: half of Q13
+        self.assertEqual(bare["grade_low"]["value"], 6.0)
+        self.assertEqual(self.cases["T1"]["criterion"]["limit"], {"value": 55.0, "unit": "degC"})
+        self.assertEqual(self.cases["T2"]["criterion"]["limit"], {"value": 85.0, "unit": "degC"})
         self.assertEqual(self.cases["R3"]["params"]["road_class"], "C")
         self.assertEqual(self.cases["T1"]["params"]["ambient_temperature"], {"value": 40.0, "unit": "degC"})
         self.assertEqual(self.cases["H1"]["criterion"]["limit"], DESIGN["variables"]["max_steer_angle"])
@@ -102,9 +115,10 @@ class BuildersTest(unittest.TestCase):
                 continue
             lc = self.cases[tid]
             self.assertEqual(plan["tool"], tool_for(tid).name)
-            extra = calc(tid, DESIGN, lc)
             got = {r["quantity"]: r for r in self.runs[tid]["results"]}
             for p in plan["predictions"]:
+                extra = p["inputs_from"](DESIGN, lc) if "inputs_from" in p else {}
+                self.assertEqual(any(ref.startswith("from.") for ref in p["inputs"].values()), "inputs_from" in p)
                 inputs = {k: resolve(ref, DESIGN, lc, extra) for k, ref in p["inputs"].items()}
                 out = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
                 ana = got[p["quantity"]]

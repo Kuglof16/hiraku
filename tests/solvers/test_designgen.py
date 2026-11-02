@@ -76,6 +76,30 @@ class DesignGenTest(unittest.TestCase):
         self.assertGreaterEqual(r["knee_room"], 0.0)
         self.assertEqual(r["interference_count"], 0.0)
 
+    def test_regenerate(self):
+        d = designgen.regenerate(V1, {"track": mm(1220)})
+        self.assertEqual(d["variables"]["track"]["value"], 1220.0)
+        self.assertEqual([s["position_mm"][1] for s in d["supports"]], [610.0, -610.0, 610.0, -610.0])
+        for k in ("design_version", "parent_version", "name", "change_reason"):
+            self.assertEqual(d[k], V1[k])
+        self.assertEqual({k: v for k, v in d["variables"].items() if k != "track"},
+                         {k: v for k, v in V1["variables"].items() if k != "track"})
+        with self.assertRaisesRegex(ValueError, "cannot be changed"):
+            designgen.regenerate(V1, {"occupant_mass": {"value": 60, "unit": "kg"}})
+        with self.assertRaisesRegex(ValueError, "outside 900 to 1400 mm"):
+            designgen.regenerate(V1, {"track": mm(2000)})
+        with self.assertRaisesRegex(ValueError, "unknown variable"):
+            designgen.regenerate(V1, {"trak": mm(1200)})
+        with self.assertRaisesRegex(ValueError, "match no design generator"):
+            designgen.regenerate({"variables": {}}, {})
+
+    def test_variables_listing(self):
+        got = {v["name"]: v for v in designgen.variables(V1)}
+        self.assertEqual(got["track"]["value"], 1100.0)
+        self.assertEqual((got["track"]["min"], got["track"]["max"]), (900.0, 1400.0))
+        self.assertFalse(got["occupant_mass"]["revisable"])
+        json.dumps(list(got.values()), allow_nan=False)
+
     def test_battery_follows_its_capacity(self):
         d = GEN.build({"battery_capacity": {"value": 150, "unit": "Ah"}})
         bat = next(p for p in d["parts"] if p["id"] == "battery")

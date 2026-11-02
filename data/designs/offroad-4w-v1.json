@@ -251,6 +251,18 @@
     "suspension_travel": {
       "value": 150.0,
       "unit": "mm"
+    },
+    "battery_max_temperature": {
+      "value": 55.0,
+      "unit": "degC"
+    },
+    "controller_max_temperature": {
+      "value": 85.0,
+      "unit": "degC"
+    },
+    "motor_max_temperature": {
+      "value": 155.0,
+      "unit": "degC"
     }
   },
   "supports": [
