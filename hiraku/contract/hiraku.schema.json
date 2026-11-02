@@ -1273,6 +1273,13 @@
             "$ref": "#/$defs/scene_object"
           },
           "description": "What to draw around the vehicle for this test (from the load case and the solver, never hand-placed)."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values the tool had to assume because neither the load case nor the design gives them (e.g. a default side-force coefficient)."
         }
       }
     },
@@ -1457,8 +1464,11 @@
           "type": "boolean"
         },
         "margin_pct": {
-          "type": "number",
-          "description": "Positive when passing: how far the value is from the limit, as % of the limit."
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How far the value is from the limit, as % of the limit, positive when passing. null when the limit is 0 (use margin)."
         },
         "requirement_keys": {
           "type": "array",
@@ -1482,6 +1492,10 @@
         "cause_id": {
           "type": "string",
           "pattern": "^cause-[0-9]{4,}$"
+        },
+        "margin": {
+          "$ref": "#/$defs/quantity",
+          "description": "How far the value is from the limit in its own unit, positive when passing."
         }
       }
     },
