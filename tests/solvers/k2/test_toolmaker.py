@@ -181,7 +181,8 @@ class Shelf(unittest.TestCase):
     def test_the_run_shelf_keeps_the_code_and_the_check_record(self):
         events = []
         with tempfile.TemporaryDirectory() as d:
-            shelf = toolmaker.RunShelf(d, emit=lambda kind, data: events.append((kind, data["name"])))
+            shelf = toolmaker.RunShelf(d, emit=lambda kind, data: events.append((kind, data["name"], data["usable"])))
+            shelf.make("import os\n")  # refused before it runs: no spec, no event
             bad = shelf.make(WRONG)
             good = shelf.make(GOOD)
             again = shelf.make(GOOD)  # the name is taken now
@@ -192,9 +193,11 @@ class Shelf(unittest.TestCase):
         self.assertFalse(again.usable)
         self.assertIn("棚にもうあります", " ".join(again.problems))
         self.assertEqual([t.name for t in shelf.tools()], ["cantilever_tip"])
-        self.assertEqual(events, [("tool.checked", "cantilever_tip")])
+        self.assertEqual(events, [("tool.checked", "cantilever_tip", False), ("tool.checked", "cantilever_tip", True),
+                                  ("tool.checked", "cantilever_tip", False)])
         self.assertEqual(files, ["cantilever_tip-1.check.json", "cantilever_tip-1.py", "cantilever_tip-2.check.json",
-                                 "cantilever_tip-2.py", "cantilever_tip-3.check.json", "cantilever_tip-3.py"])
+                                 "cantilever_tip-2.py", "cantilever_tip-3.check.json", "cantilever_tip-3.py",
+                                 "unnamed-1.check.json", "unnamed-1.py"])
         self.assertFalse(record["usable"])
         self.assertTrue(record["problems"])
 

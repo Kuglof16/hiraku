@@ -182,7 +182,9 @@ class RunShelf:
 
     def __init__(self, run_dir: Path | str | None = None, emit: Callable[[str, Record], Any] | None = None):
         self.dir = None if run_dir is None else Path(run_dir) / "tools"
-        self.emit = emit  # emit("tool.checked", spec) for each usable tool, when given
+        # emit("tool.checked", spec) for every attempt whose code ran far enough to give a spec,
+        # usable or not (the screen shows made -> failed its checks -> fixed -> passed)
+        self.emit = emit
         self._tools: dict[str, SandboxedTool] = {}
         self._attempts: dict[str, int] = {}
 
@@ -206,8 +208,8 @@ class RunShelf:
                 json.dumps(made.record(), ensure_ascii=False, indent=1), encoding="utf-8")
         if made.usable and made.tool is not None:
             self._tools[made.tool.name] = made.tool
-            if self.emit is not None:
-                self.emit("tool.checked", made.spec)
+        if self.emit is not None and made.spec is not None:
+            self.emit("tool.checked", made.spec)
         return path
 
     def tools(self) -> list[SandboxedTool]:
