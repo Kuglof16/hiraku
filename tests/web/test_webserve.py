@@ -151,6 +151,54 @@ class ListRunsTest(unittest.TestCase):
         runs = list_runs(Path(tempfile.gettempdir()) / "hiraku-no-such-runs-dir")
         self.assertEqual([r["run_id"] for r in runs], ["sample"])
         self.assertTrue(runs[0]["finished"])
+        self.assertFalse(runs[0]["default"])  # no saved run: the screen opens on the list
+
+
+class SavedRunsTest(unittest.TestCase):
+    """Runs kept in the repository (saved_dir) are listed first and the newest is the default."""
+
+    OLD = "20261105-100000-offroad-4w"
+    NEW = "20261106-100000-offroad-4w"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.saved = cls.tmp / "showcase"
+        cls.runs = cls.tmp / "runs"
+        for root, run_id, want in ((cls.saved, cls.OLD, "古い"), (cls.saved, cls.NEW, "保存した"), (cls.runs, RUN_ID, "手元"), (cls.runs, cls.OLD, "手元の同じ実行")):
+            (root / run_id).mkdir(parents=True)
+            (root / run_id / "events.jsonl").write_bytes(
+                (_line(0, "run.started", data={"want": want}) + _line(1, "run.finished", t=1.0, data={"status": "done"})).encode("utf-8"))
+        cls.server = make_server("127.0.0.1", 0, cls.runs, cls.tmp / "web", quiet=True, saved_dir=cls.saved)
+        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.tmp)
+
+    def test_saved_first_and_newest_saved_is_default(self):
+        runs = list_runs(self.runs, self.saved)
+        self.assertEqual([r["run_id"] for r in runs], [self.NEW, self.OLD, RUN_ID, "sample"])
+        self.assertEqual([r["run_id"] for r in runs if r["saved"]], [self.NEW])  # OLD is also in runs/: listed once, from there
+        self.assertEqual(runs[1]["want"], "手元の同じ実行")
+        self.assertEqual([r["run_id"] for r in runs if r["default"]], [self.NEW])
+
+    def test_default_run_can_be_named(self):
+        runs = list_runs(self.runs, self.saved, default_run=RUN_ID)
+        self.assertEqual([r["run_id"] for r in runs if r["default"]], [RUN_ID])
+        runs = list_runs(self.runs, self.saved, default_run="20991231-000000-nothing")
+        self.assertEqual([r["run_id"] for r in runs if r["default"]], [self.NEW])  # unknown name: back to the newest saved
+
+    def test_saved_run_events_are_served(self):
+        with urllib.request.urlopen(f"{self.base}/api/runs/{self.NEW}/events", timeout=5) as r:
+            out = json.loads(r.read())
+        self.assertEqual(out["events"][0]["data"]["want"], "保存した")
+        with urllib.request.urlopen(f"{self.base}/api/runs", timeout=5) as r:
+            runs = json.loads(r.read())
+        self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
 
 
 if __name__ == "__main__":

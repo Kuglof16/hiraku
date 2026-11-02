@@ -83,7 +83,24 @@ class MessageLogTest(RunCase, unittest.TestCase):
         ok = SimpleNamespace(subtype="success", is_error=False)
         self.assertEqual(final_status(self.ctx, ok)[0], "stopped")  # R1 still pending
         self.assertEqual(final_status(self.ctx, SimpleNamespace(subtype="error_max_budget_usd", is_error=True))[0], "stopped")
-        self.assertEqual(final_status(self.ctx, None)[0], "failed")
+        self.assertEqual(final_status(self.ctx, None), ("failed", "no result message from Claude"))
+
+    def test_failure_reason_is_the_error_text(self):
+        # an invalid key: is_error with subtype "success"; the reason is only in the result text
+        bad_key = ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=True, num_turns=1,
+                                session_id="s", result="Invalid API key · Fix external API key")
+        self.assertEqual(final_status(self.ctx, bad_key), ("failed", "Invalid API key · Fix external API key"))
+        with_status = ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=True, num_turns=1,
+                                    session_id="s", result="Invalid API key", api_error_status=401)
+        self.assertEqual(final_status(self.ctx, with_status)[1], "Invalid API key (API status 401)")
+        errs = ResultMessage(subtype="error_during_execution", duration_ms=1, duration_api_ms=1, is_error=True,
+                             num_turns=1, session_id="s", errors=["tool crashed", "gave up"])
+        self.assertEqual(final_status(self.ctx, errs)[1], "tool crashed; gave up")
+        # nothing in the message: the last thing an agent said
+        bare = ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=True, num_turns=1,
+                             session_id="s")
+        self.ctx.store.emit("agent.said", agent="lead", text="Invalid API key · Fix external API key")
+        self.assertEqual(final_status(self.ctx, bare)[1], "Invalid API key · Fix external API key")
 
 
 def interrupted_client(exc):

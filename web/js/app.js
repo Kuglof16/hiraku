@@ -18,6 +18,8 @@ import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from ".
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
+import { lookFromParams } from "./look.js";
+import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
 
@@ -43,6 +45,9 @@ const ui = {
   fieldKind: null, // contour field picked in the legend (null: the first one)
 };
 
+// ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
+for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
 
@@ -59,7 +64,9 @@ function fitStage() {
 
 // ---- 3D -------------------------------------------------------------------
 const viewport = $("viewport");
-const bench = new Workbench3D(viewport);
+const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
+document.body.classList.add(`look-${look}`);
+const bench = new Workbench3D(viewport, look);
 function resize3d() {
   const w = viewport.clientWidth;
   const h = viewport.clientHeight;
@@ -141,7 +148,7 @@ function renderTop(s) {
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    `<span class="runid">${esc(s.runId ?? "")}</span>`;
+    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>`;
 }
 
 function renderChips(s, lcId) {
@@ -155,6 +162,7 @@ function renderChips(s, lcId) {
 
 function renderAgents(s) {
   const order = [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
+  $("agents").classList.toggle("many", order.length > 6);
   $("agents").innerHTML = order
     .map((id) => {
       const a = s.agents[id];
@@ -175,7 +183,9 @@ function logItem(e) {
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
-  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
+  // What an agent said can run long: the line shows its first lines, the record keeps all of it.
+  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${esc(e.text)}</span>` : esc(e.text);
+  return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s) {
@@ -262,13 +272,14 @@ function renderChain(s, chain) {
       const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
-        `<br><span class="sub">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
-    const safeWhy = cause?.safe_side ? `<div class="safe-why"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
+    // Long words are cut to a few lines here; the log keeps them whole.
+    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(cause.safe_side_reason ?? "")}"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
     const cz = cause
-      ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}${safeWhy}</div>`
+      ? `<div class="cause"><div class="clamp" title="${esc(cause.cause)}">原因: ${esc(cause.cause)}</div><div class="clamp c2" title="${esc(cause.fix)}">直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
@@ -327,7 +338,10 @@ function renderLegend(ct) {
     `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
 }
 
-function renderToggles(motion) {
+// A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
+const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
+
+function renderToggles(motion, lc) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
@@ -337,7 +351,7 @@ function renderToggles(motion) {
     btn("cg", "重心", t.cg) +
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
-    (motion?.liftT != null ? btn("limit", "限界の重ね", t.limit) : "") +
+    (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion ? btn("graph", "グラフ", t.graph) : "");
 }
 
@@ -385,8 +399,9 @@ function renderMotion(s, chain, motion) {
   const f = motion.duration > 0 ? (tau - motion.t0) / motion.duration : 1;
   $("ab-fill").style.width = `${f * 100}%`;
   const lim = $("ab-lim");
-  lim.hidden = motion.liftT === null;
-  if (motion.liftT !== null) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
+  const limit = liftLimit(motion, chain.loadCase);
+  lim.hidden = !limit;
+  if (limit) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
   $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${animRate(motion) > 1 ? ` (×${fmt(animRate(motion), 2)})` : ""}`;
   $("ab-play").textContent = ui.anim.local && ui.anim.playing ? "❚❚" : "▶";
   const notes = [];
@@ -397,7 +412,7 @@ function renderMotion(s, chain, motion) {
   $("ab-note").textContent = notes.join("・");
 
   const note = $("limitnote");
-  note.hidden = motion.liftT === null || !ui.toggles.limit;
+  note.hidden = !limit || !ui.toggles.limit;
   if (!note.hidden) {
     const lifted = Object.entries(motion.liftAt)
       .filter(([, t]) => t <= tau)
@@ -432,7 +447,9 @@ function renderGrid(s) {
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
     const known = { round_limit: `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した`, cost_limit: "費用の上限に達した" };
-    const why = s.stopReason ? known[s.stopReason] ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
+    // The Claude runner writes these in English (hiraku/agent/runner.py final_status).
+    const said = /^cost limit\b/.test(s.stopReason ?? "") ? "費用の上限に達した" : /^turn limit\b/.test(s.stopReason ?? "") ? "ターン数の上限に達した" : null;
+    const why = s.stopReason ? known[s.stopReason] ?? said ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
     banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>続けるか・上限を変えるか・ここで報告を書くかは、実行を操作する入口ができてから選べる</span>`;
   }
 }
@@ -470,7 +487,7 @@ function renderTransient(s, playhead, chain) {
   b.style.opacity = sa;
   if (said && b.dataset.seq !== String(said.seq)) {
     b.dataset.seq = String(said.seq);
-    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div>${esc(said.text)}`;
+    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div><div class="tx">${esc(said.text)}</div>`;
   }
   const den = s.denied;
   const h = $("hookflash");
@@ -537,7 +554,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion);
+    renderToggles(motion, chain.loadCase);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
@@ -548,6 +565,7 @@ function draw() {
     bench.setDesign(design);
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
+    bench.setScene(chain.loadCase, chain.shown);
     const ct = buildContour(chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
@@ -761,27 +779,49 @@ async function openRun(runId) {
   startPlayback();
 }
 
-async function showRunList(message = "") {
+async function fetchRuns() {
+  return (await fetch("/api/runs", { cache: "no-store" })).json();
+}
+
+async function showRunList(message = "", runs = null) {
   const box = $("runlist");
   box.hidden = false;
-  let runs = [];
-  try {
-    runs = await (await fetch("/api/runs", { cache: "no-store" })).json();
-  } catch (e) {
-    message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
+  if (!runs) {
+    try {
+      runs = await fetchRuns();
+    } catch (e) {
+      runs = [];
+      message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
+    }
   }
-  const rows = runs
-    .map((r) => {
-      const st = r.sample ? "見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
-      const open = `<a href="?run=${encodeURIComponent(r.run_id)}">再生</a>`;
-      const live = !r.finished ? `<a href="?run=${encodeURIComponent(r.run_id)}">追いかける</a>` : `<a href="?run=${encodeURIComponent(r.run_id)}&video=1">動画の配置で</a>`;
-      return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}</td><td>${r.finished ? open : live}</td></tr>`;
-    })
-    .join("");
+  const row = (r) => {
+    const st = r.sample ? "形の見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
+    const href = `?run=${encodeURIComponent(r.run_id)}`;
+    const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
+    const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
+    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+  };
+  const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
     `<h2>実行の一覧</h2>${message ? `<p class="err">${esc(message)}</p>` : ""}` +
-    `<table><tr><th>依頼</th><th>状態</th><th></th></tr>${rows}</table>` +
+    table("保存した実行", runs.filter((r) => r.saved)) +
+    table("この PC の実行 (runs/)", runs.filter((r) => !r.saved && !r.sample)) +
+    table("契約の形の見本", runs.filter((r) => r.sample)) +
     `<p class="note">events.jsonl をこの画面に落としても再生できます。</p>`;
+}
+
+// No run in the URL: open the server's default run (a saved run), else the run list.
+async function openDefault() {
+  let runs;
+  try {
+    runs = await fetchRuns();
+  } catch (e) {
+    showRunList();
+    return;
+  }
+  const def = runs.find((r) => r.default);
+  if (def) openRun(def.run_id);
+  else showRunList("", runs);
 }
 
 fitStage();
@@ -792,4 +832,5 @@ else if (params.get("src")) {
     .then((r) => r.text())
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
-} else showRunList();
+} else if (params.get("list")) showRunList();
+else openDefault();
