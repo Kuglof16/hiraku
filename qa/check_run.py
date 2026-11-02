@@ -10,21 +10,23 @@ there is an error (or a warning with --strict). What it looks at:
 - files and events: each record file has exactly one event whose data is the
   same object, and each record event has its file (layout.py)
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
-- H1: every analysis names predictions of the same version and load case that
+- HK1: every analysis names predictions of the same version and load case that
   were recorded before it
-- H2: a tool is used only after a tool.checked that says usable (warning when
+- HK2: a tool is used only after a tool.checked that says usable (warning when
   the run has no tool.checked for it at all)
-- H3: after a mismatch, no analysis or comparison in that domain until a cause
+- HK3: after a mismatch, no analysis or comparison in that domain until a cause
 - assembly and interferences in an analysis: steps numbered 1..n, each part
   once, dependencies go in earlier, blocked_by only when no_interference is false;
   no part interferes with itself; the tool's interference counts and deepest
   overlap agree with its list
 - comparisons: values copied from the prediction and the analysis, signed diffs
   (analyzed - predicted) and status recomputed, tolerance taken from the load case
-- verdicts: only from a matching comparison; pass and margin recomputed; limit
-  and op from the load case criterion
+- verdicts: from a matching comparison with the analysis value, or (basis
+  explained_safe_side) from a mismatch whose own earlier cause says safe_side with a
+  reason, the prediction on the unfavourable side of the criterion and taken as the
+  value; pass and margin recomputed; limit and op from the load case criterion
 - judgements: red_count and state follow the listed verdicts
-- H4: a run that finished as done has no picked domain still pending
+- HK4: a run that finished as done has no picked domain still pending
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
 """
@@ -426,7 +428,7 @@ class RunChecker:
         for i, e in enumerate(self.events):
             if e.get("kind") == "analysis.started" and isinstance(e.get("data"), dict):
                 for pid in e["data"].get("prediction_ids", []):
-                    self._before("prediction", pid, i, self.where_of[i], "H1_prediction_first", "prediction")
+                    self._before("prediction", pid, i, self.where_of[i], "HK1_prediction_first", "prediction")
         for aid, (i, a) in self.recs["analysis"].items():
             w = self.where_of[i]
             if aid not in self.started:
@@ -434,14 +436,14 @@ class RunChecker:
             elif self.started[aid] > i:
                 self.error("analysis.started", w, f"{aid} started after it finished")
             if not a.get("prediction_ids"):
-                self.error("H1_prediction_first", w, f"{aid} has no prediction")
+                self.error("HK1_prediction_first", w, f"{aid} has no prediction")
             for pid in a.get("prediction_ids", []):
-                p = self._before("prediction", pid, self.started.get(aid, i), w, "H1_prediction_first", "prediction")
+                p = self._before("prediction", pid, self.started.get(aid, i), w, "HK1_prediction_first", "prediction")
                 if p is None:
                     continue
                 for f in ("design_version", "load_case_id"):
                     if p.get(f) != a.get(f):
-                        self.error("H1_prediction_first", w, f"{aid} {f} {a.get(f)} but {pid} has {p.get(f)}")
+                        self.error("HK1_prediction_first", w, f"{aid} {f} {a.get(f)} but {pid} has {p.get(f)}")
             self._check_tool_usable(a, self.started.get(aid, i), w)
             if a.get("status") == "failed" and not str(a.get("error", "")).strip():
                 self.error("analysis.error", w, f"{aid} failed without saying why")
@@ -451,12 +453,12 @@ class RunChecker:
         checks = [(j, s) for j, s in self.tool_checks.get(name, []) if j < i]
         if not checks:
             if name in self.tool_checks:
-                self.error("H2_tool_usable", w, f"tool {name} was used before its tool.checked")
+                self.error("HK2_tool_usable", w, f"tool {name} was used before its tool.checked")
             else:
-                self.warn("H2_tool_usable", w, f"no tool.checked for {name} in this run")
+                self.warn("HK2_tool_usable", w, f"no tool.checked for {name} in this run")
             return
         if not checks[-1][1].get("usable"):
-            self.error("H2_tool_usable", w, f"tool {name} used while its last check says usable=false")
+            self.error("HK2_tool_usable", w, f"tool {name} used while its last check says usable=false")
 
     def _design_ids(self, version: int) -> set[str] | None:
         d = self.designs.get(version)
@@ -647,16 +649,22 @@ class RunChecker:
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
                 continue
-            if c.get("status") != "match":
-                self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
-            if v.get("value") != c.get("analyzed"):
-                self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
+            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
+            if v.get("basis", "match") == "explained_safe_side":
+                self._check_safe_side_verdict(vid, v, c, crit, i, w)
+            else:
+                if c.get("status") != "match":
+                    self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
+                if v.get("value_from", "analysis") != "analysis":
+                    self.error("verdict.values", w, f"{vid} from a match has value_from {v.get('value_from')!r}, "
+                                                    f"not 'analysis'")
+                if v.get("value") != c.get("analyzed"):
+                    self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
             p = self.recs["prediction"].get(c.get("prediction_id"))
             if p:
                 for f in ("load_case_id", "test_id", "domain"):
                     if v.get(f) != p[1].get(f):
                         self.error("verdict.values", w, f"{vid} {f} {v.get(f)} but the prediction says {p[1].get(f)}")
-            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
             if crit is None:
                 self.error("verdict.criterion", w, f"{vid}: load case {v.get('load_case_id')} has no criterion")
             else:
@@ -664,6 +672,39 @@ class RunChecker:
                     if v.get(f) != crit.get(f):
                         self.error("verdict.criterion", w, f"{vid} {f} {v.get(f)} but the criterion says {crit.get(f)}")
             self._check_verdict_math(vid, v, w)
+
+    def _check_safe_side_verdict(self, vid: str, v: dict, c: dict, crit: dict | None, i: int, w: str) -> None:
+        """basis explained_safe_side (contract, record_cause): a mismatch whose own cause,
+        recorded before the verdict, says safe_side with a reason; the prediction is the
+        unfavourable value under the criterion and the verdict takes it."""
+        cid = v.get("comparison_id")
+        if c.get("status") != "mismatch":
+            self.error("verdict.safe_side", w, f"{vid} is explained_safe_side but {cid} is a {c.get('status')}")
+        if not v.get("cause_id"):
+            self.error("verdict.safe_side", w, f"{vid} is explained_safe_side but names no cause")
+        else:
+            k = self._before("cause", v["cause_id"], i, w, "verdict.safe_side", "cause")
+            if k is not None:
+                if k.get("comparison_id") != cid:
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} explains {k.get('comparison_id')}, not {cid}")
+                if k.get("safe_side") is not True:
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} does not say safe_side true")
+                elif not str(k.get("safe_side_reason") or "").strip():
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} gives no safe_side_reason")
+        if v.get("value_from") != "prediction":
+            self.error("verdict.values", w, f"{vid} is explained_safe_side but value_from is {v.get('value_from')!r}, "
+                                            f"not 'prediction'")
+        if v.get("value") != c.get("predicted"):
+            self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared prediction value")
+        try:
+            pv, av = float(c["predicted"]["value"]), float(c["analyzed"]["value"])
+        except (KeyError, TypeError, ValueError):
+            return
+        op = (crit or {}).get("op", v.get("op"))
+        # an upper limit (<=, <) needs prediction >= analysis; a lower limit (>=, >) needs prediction <= analysis
+        if (op in ("<=", "<") and pv < av) or (op in (">=", ">") and pv > av):
+            self.error("verdict.safe_side", w, f"{vid}: criterion {op} but the prediction {pv} is on the favourable "
+                                               f"side of the analysis {av}")
 
     def _check_verdict_math(self, vid: str, v: dict, w: str) -> None:
         try:
@@ -708,7 +749,7 @@ class RunChecker:
             if kind == "analysis.started" or (kind == "analysis.finished" and data.get("analysis_id") not in self.started):
                 dom = self.domain_of_analysis(data)
                 if open_mismatch.get(dom):
-                    self.error("H3_cause_before_continue", w,
+                    self.error("HK3_cause_before_continue", w,
                                f"analysis in {dom} while {sorted(open_mismatch[dom])} have no cause")
             elif kind == "comparison.recorded":
                 if self.recs["comparison"].get(data.get("comparison_id"), (i,))[0] != i:
@@ -716,7 +757,7 @@ class RunChecker:
                 p = self.recs["prediction"].get(data.get("prediction_id"))
                 dom = p[1].get("domain") if p else None
                 if open_mismatch.get(dom):
-                    self.error("H3_cause_before_continue", w,
+                    self.error("HK3_cause_before_continue", w,
                                f"comparison in {dom} while {sorted(open_mismatch[dom])} have no cause")
                 if data.get("status") == "mismatch":
                     open_mismatch.setdefault(dom, set()).add(data.get("comparison_id"))
@@ -751,7 +792,7 @@ class RunChecker:
         if fstatus != "done" or not self.project:
             return
         if not self.designs:
-            self.error("H4_no_stop_before_judged", w, "done without any design version")
+            self.error("HK4_no_stop_before_judged", w, "done without any design version")
             return
         last = max(self.designs)
         latest = self.latest_judgements(last)
@@ -759,9 +800,9 @@ class RunChecker:
             dom = pick.get("domain")
             j = latest.get(dom)
             if j is None or j.get("state") == "pending":
-                self.error("H4_no_stop_before_judged", w, f"done while {dom} is not judged for version {last}")
+                self.error("HK4_no_stop_before_judged", w, f"done while {dom} is not judged for version {last}")
             elif j.get("state") == "red":
-                self.warn("H4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
+                self.warn("HK4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
 
     def check_recompute(self) -> None:
         try:
