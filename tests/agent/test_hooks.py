@@ -101,7 +101,8 @@ class HooksTest(RunCase, unittest.TestCase):
         run(self.hooks.subagent_stop({"agent_id": "a1", "agent_type": "cae-strength", "stop_hook_active": True}, None, None))
         out = run(self.hooks.subagent_stop({"agent_id": "a1", "agent_type": "cae-strength", "stop_hook_active": True}, None, None))
         self.assertEqual(out, {})
-        kinds = [(e["kind"], e.get("agent")) for e in self.ctx.store.events() if e["kind"].startswith("agent.")]
+        kinds = [(e["kind"], e.get("agent")) for e in self.ctx.store.events()
+                 if e["kind"] in ("agent.started", "agent.stopped")]
         self.assertEqual(kinds, [("agent.started", "cae.strength"), ("agent.stopped", "cae.strength")])
         self.assert_events_fit()
 

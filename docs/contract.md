@@ -63,7 +63,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`
 
-MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。入力の形は schema の `tool_input.*`。結果は記録そのものを JSON の文字列で返す。
+MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は記録そのものを JSON の文字列で返す。
 
 ## runs/&lt;run_id&gt;/
 

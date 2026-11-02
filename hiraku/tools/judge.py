@@ -75,8 +75,14 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
 
 def verdict_line(v: Record) -> str:
     safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
-    return (f"{v['test_id']} {v['quantity']} {v['value']['value']:.4g} {v['value']['unit']} "
-            f"{OP_JA[v['op']]} {v['limit']['value']:.4g} {v['limit']['unit']} (余裕 {v['margin_pct']:.0f} %{safe})")
+    value, limit = v["value"]["value"], v["limit"]["value"]
+    if limit == 0:  # a % of zero says nothing: the margin in the quantity's own unit
+        side = (limit - value) if v["op"] in ("<=", "<") else (value - limit)
+        margin = f"{side:.4g} {v['limit']['unit']}"
+    else:
+        margin = f"{v['margin_pct']:.0f} %"
+    return (f"{v['test_id']} {v['quantity']} {value:.4g} {v['value']['unit']} "
+            f"{OP_JA[v['op']]} {limit:.4g} {v['limit']['unit']} (余裕 {margin}{safe})")
 
 
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:

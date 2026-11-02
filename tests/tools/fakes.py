@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import types
 from typing import Any
 
 from hiraku import contract
@@ -96,6 +97,8 @@ class FakeFormulas:
             _f("frame_static.rail_joint_stress", "後ろの車軸の継ぎ手のレールの応力", "strength",
                "sigma = F/A + (M_oh + F z)(h/2)/I_v + F e (b/2)/I_l; tau = W e/(2 A_m t); sqrt(sigma^2 + 3 tau^2)",
                _JOINT_INPUTS, {"sigma": "MPa"}, ["the rail takes the offset moments alone"]),
+            _f("assembly.wheel_reach", "切った前輪がどこまで出るか", "assembly", "interference = max(0, track - free)",
+               {"track": "mm", "free": "mm"}, {"interference": "mm"}, ["stand-in geometry"]),
         ]
 
     def evaluate(self, formula_id, inputs):
@@ -134,6 +137,9 @@ class FakeFormulas:
         if formula_id == "frame_static.rail_joint_stress":
             sigma = rail_joint_sigma(*(x[k] for k in ("M_oh", "F", "W", "z", "e", "b", "h", "t")))
             return {"outputs": {"sigma": {"value": sigma, "unit": "MPa"}}, "terms": [], "expression": spec["expression"]}
+        if formula_id == "assembly.wheel_reach":
+            return {"outputs": {"interference": {"value": max(0.0, x["track"] - x["free"]), "unit": "mm"}}, "terms": [],
+                    "expression": spec["expression"]}
         raise KeyError(formula_id)
 
 
@@ -216,6 +222,76 @@ class FakeFrameStatic(FakeTool):
                 "inputs_from": [up["analysis_id"]]}
 
 
+FREE_TRACK_MM = 1200.0  # the stand-in assembly tool: a wider track than this hits the rail
+
+
+class FakeAssembly(FakeTool):
+    """Interference of the steered front wheel with the rail: max(0, track - 1200 mm)."""
+
+    base = "K4"
+
+    def __init__(self, **kw):
+        super().__init__("assembly", "assembly", ["H1"], **kw)
+
+    def run(self, design, load_case, predictions, params):
+        self.runs.append((design, load_case, predictions, params))
+        over = max(0.0, design["variables"]["track"]["value"] - FREE_TRACK_MM) * self.current_factor()
+        return {"status": "ok", "base": self.base,
+                "results": [{"quantity": "interference", "value": over, "unit": "mm", "where": "FL"}]}
+
+
+def _h1_builder(spec, req, design):
+    return {
+        "load_case_id": "H1-steer30", "test_id": "H1", "domain": "assembly", "title": "前輪を 30° 切ったときの干渉",
+        "params": {"steer_angle": {"value": 30.0, "unit": "deg"}},
+        "criterion": {"quantity": "interference", "op": "<=", "limit": {"value": 0.0, "unit": "mm"},
+                      "basis": "no part may overlap another (test stand-in)"},
+        "tolerance_rel": 0.05,
+    }
+
+
+H1_PLAN = {
+    "tool": "assembly",
+    "say": "前輪を切ったときに、輪がレールに当たるかを見積もります",
+    "predictions": [{
+        "quantity": "interference", "formula_id": "assembly.wheel_reach", "output": "interference",
+        "assumptions": ["test stand-in"],
+        "inputs": {"track": "design.var.track", "free": "from.free"},
+        "inputs_from": lambda design, lc: {"free": {"value": FREE_TRACK_MM, "unit": "mm"}},
+    }],
+}
+
+
+def builders_module(plans=True):
+    """A stand-in for hiraku.catalog.builders: H1 (assembly) only."""
+    return types.SimpleNamespace(BUILDERS={"H1": _h1_builder}, FEEDS={}, PLANS={"H1": H1_PLAN} if plans else {})
+
+
+class FakeDesigngen:
+    """A stand-in for hiraku.designgen: track (revisable, 1000..1600 mm; the rails cannot reach
+    the wheels beyond 1500 mm) and wheelbase (not revisable)."""
+
+    SPEC = [
+        {"name": "track", "unit": "mm", "default": 1300.0, "revisable": True, "min": 1000.0, "max": 1600.0,
+         "meaning": "front and rear track"},
+        {"name": "wheelbase", "unit": "mm", "default": 1800.0, "revisable": False, "meaning": "axle to axle"},
+    ]
+
+    def __init__(self):
+        self.calls = []
+
+    def variables(self, design):
+        return [dict(s, value=design["variables"][s["name"]]["value"]) for s in self.SPEC]
+
+    def regenerate(self, design, changes):
+        self.calls.append(changes)
+        if changes.get("track", {}).get("value", 0.0) > 1500.0:
+            raise ValueError("the rails cannot reach the wheels beyond 1500 mm")
+        out = json.loads(json.dumps(design))
+        out["variables"].update({k: dict(v) for k, v in changes.items()})
+        return out
+
+
 def example_design() -> Record:
     with (contract.EXAMPLES_DIR / "design.json").open(encoding="utf-8") as f:
         return json.load(f)
@@ -237,8 +313,11 @@ def loaded_design(person_kg=76.6, cargo_kg=150.0) -> Record:
     return d
 
 
-def shelf(step_factor=1.03, frame_factor=1.03, frame_checks_pass=True):
-    return {
+def shelf(step_factor=1.03, frame_factor=1.03, frame_checks_pass=True, assembly=False):
+    out = {
         "step_climb": FakeStepClimb(factor=step_factor),
         "frame_static": FakeFrameStatic(factor=frame_factor, checks_pass=frame_checks_pass),
     }
+    if assembly:
+        out["assembly"] = FakeAssembly(factor=1.0)
+    return out

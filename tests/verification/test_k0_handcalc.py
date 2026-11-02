@@ -150,6 +150,25 @@ class WheelLoads(K0Case):
         self.assertEqual(out["outputs"]["wheel_load_FL"]["value"], out["outputs"]["wheel_load_FR"]["value"])
 
 
+class FatigueCycles(K0Case):
+    """n = f d / v: one load cycle per period over the driving time d / v."""
+    FID = "fatigue.cycles_over_distance"
+
+    def test_cycles_over_the_driving_time(self):
+        self.formula_or_skip(self.FID)
+        d, v, f = 100.0, 20.0, 1.5  # km, km/h, Hz: 5 h of driving
+        out = self.reg.evaluate(self.FID, {"d": q(d, "km"), "v": q(v, "km/h"), "f": q(f, "Hz")})
+        seconds = ka.convert(d, "km", "m") / ka.convert(v, "km/h", "m/s")
+        self.assertRel(self.value(out, "n", "1"), f * seconds)
+        self.assertRel(f * seconds, 27000.0)
+
+    def test_inputs_in_other_units_give_the_same_answer(self):
+        self.formula_or_skip(self.FID)
+        a = self.reg.evaluate(self.FID, {"d": q(100.0, "km"), "v": q(20.0, "km/h"), "f": q(1.5, "Hz")})
+        b = self.reg.evaluate(self.FID, {"d": q(100000.0, "m"), "v": q(20.0 / 3.6, "m/s"), "f": q(1.5, "Hz")})
+        self.assertRel(self.value(b, "n", "1"), self.value(a, "n", "1"))
+
+
 class Beams(K0Case):
     P, L = 1000.0, 900.0
 

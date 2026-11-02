@@ -21,7 +21,13 @@
 #   design.var.<name>              design variable
 #   pred.<quantity>                newest prediction of that quantity in this run and version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
+#                                  (the load case may be named by its test id: ana.P1.front_wheel_force)
+#   from.<name>                    what the prediction's inputs_from(design, load case) reads off the design
+#                                  (a builder's step in Python can carry that function)
 #   {ref} inside a ref             replaced by the name it points at, e.g. wheel_load_{load.rail_joint.support}
+#
+# Load cases this file has no step for take the step of their test's builder
+# (hiraku.catalog.builders.PLANS), in the same shape.
 #
 # After analyze, every prediction whose quantity is among the analysis results
 # is compared. A mismatch stops the run unless the step names it in
@@ -36,6 +42,17 @@
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
+  # The designer's revisions, one per round, used when a tile comes out red
+  # (revise_design: the variables of hiraku.designgen, absolute values).
+  revise:
+    - say: 組み立てが赤なので、トレッドを広げ、ステアリングを前へ出します
+      changes:
+        track: {value: 1220, unit: mm}
+        steering_x: {value: -200, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す
+      source: the assembly tool's H1 and H3 on the demo vehicle, before and after this change
   steps:
     - load_case: P1-step100
       tool: step_climb

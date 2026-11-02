@@ -1,9 +1,12 @@
 """Check one run folder (runs/<run_id>/) against the contract and the hook rules.
 
-    python -m qa.check_run runs/<run_id> [runs/<other> ...] [--all] [--strict] [--recompute]
+    python -m qa.check_run runs/<run_id> [runs/<other> ...] [--all] [--strict] [--recompute] [--effects]
 
 Reads only. Lists every finding as `LEVEL rule where: message` and exits 1 when
-there is an error (or a warning with --strict). What it looks at:
+there is an error (or a warning with --strict). --effects also lists where the
+hooks acted (each denial or blocked stop, live or staged by the script, and the
+record that followed), the mismatches with their causes and the verdicts with
+their basis. What it looks at:
 
 - shape: project.json, every line of events.jsonl and every record file fit
   hiraku.schema.json; seq runs 0, 1, 2, ... without gaps; t and ts never go back
@@ -67,6 +70,8 @@ OPS = {"<=": operator.le, ">=": operator.ge, "<": operator.lt, ">": operator.gt}
 # dept's quantity names): count and deepest overlap per state. Checked when reported.
 INTERFERENCE_COUNTS = {"interference_count": "rest", "motion_interference_count": "motion"}
 INTERFERENCE_WORST = {"worst_interference": "rest", "worst_motion_interference": "motion"}
+# the record a denied call should be followed by when the agent does what the hook asks
+FOLLOW_UP = {"HK1_prediction_first": "prediction.recorded", "HK3_cause_before_continue": "cause.recorded"}
 VERSION_DIR_RE = re.compile(r"^v([0-9]{3})$")
 REL = 1e-9
 
@@ -84,6 +89,16 @@ class Finding:
 
 def _close(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=REL, abs_tol=1e-12)
+
+
+def _num(x: Any, scale: float = 1.0, spec: str = ".1f") -> str:
+    return format(x * scale, spec) if isinstance(x, (int, float)) else "?"
+
+
+def _fmt(q: Any) -> str:
+    """A {value, unit} quantity for reading: 4 significant digits."""
+    q = q if isinstance(q, dict) else {}
+    return f"{_num(q.get('value'), spec='.4g')} {q.get('unit', '?')}"
 
 
 class RunChecker:
@@ -826,6 +841,73 @@ class RunChecker:
                 self.error("recompute", w, f"{pid} value {p.get('value')} {p.get('unit')} is not an output of "
                                            f"{p.get('formula_id')} for the recorded inputs ({out.get('outputs')})")
 
+    # --- what the hooks did (a reading aid, not a check) -----------------------------
+    def _next_record(self, i: int, agent: str | None) -> tuple[int, dict] | None:
+        """The first record event after event i, by `agent` (any agent when None)."""
+        for j in range(i + 1, len(self.events)):
+            e = self.events[j]
+            if e.get("kind") in RECORD_EVENTS and (agent is None or e.get("agent") == agent):
+                return j, e
+        return None
+
+    def effects(self) -> list[str]:
+        """Where the hooks acted and what came of it: each denial or blocked stop with the
+        record that followed, each mismatch with its cause, each verdict with its basis,
+        the last judgement per domain and how the run ended. Call after run()."""
+        out = []
+        hooks = [(i, e) for i, e in enumerate(self.events) if e.get("kind") in ("hook.denied", "hook.blocked_stop")]
+        out.append(f"hooks: {len(hooks)} denial(s) or blocked stop(s)")
+        for i, e in hooks:
+            d = e.get("data") or {}
+            rule = d.get("rule")
+            tool = str(d.get("tool") or d.get("hook") or "").removeprefix(f"mcp__{contract.MCP_SERVER}__")
+            how = "staged by the script" if d.get("scripted") else "live"
+            line = f"  seq={e.get('seq')} {rule} {e.get('agent')} {e.get('domain') or '-'} {tool} ({how})"
+            nxt = self._next_record(i, None if e["kind"] == "hook.blocked_stop" else e.get("agent"))
+            if nxt is None:
+                line += "; nothing recorded after it"
+            else:
+                kind, rkind = nxt[1]["kind"], RECORD_EVENTS[nxt[1]["kind"]]
+                line += f"; then {kind} {(nxt[1].get('data') or {}).get(rkind[1])} (seq={nxt[1].get('seq')})"
+                want = FOLLOW_UP.get(rule)
+                if want and kind != want:
+                    line += f", not the {want} the rule asks for"
+            out.append(line)
+        unusable = sorted({n for n, checks in self.tool_checks.items() if not checks[-1][1].get("usable")})
+        if unusable:
+            out.append(f"  tools left unusable by their checks (HK2): {', '.join(unusable)}")
+        mism = [(cid, c) for cid, (_, c) in self.recs["comparison"].items() if c.get("status") == "mismatch"]
+        out.append(f"mismatches: {len(mism)}")
+        for cid, c in mism:
+            p = (self.recs["prediction"].get(c.get("prediction_id")) or (0, {}))[1]
+            out.append(f"  {cid} {p.get('test_id')} {c.get('quantity')}: predicted {_fmt(c.get('predicted'))}, "
+                       f"analyzed {_fmt(c.get('analyzed'))}, diff {_num(c.get('diff_rel'), 100, '+.1f')} % "
+                       f"(tolerance {_num(c.get('tolerance_rel'), 100, '.0f')} %), formula {p.get('formula_id')}")
+            causes = [(kid, k) for kid, (_, k) in self.recs["cause"].items() if k.get("comparison_id") == cid]
+            if not causes:
+                out.append("    no cause")
+            for kid, k in causes:
+                out.append(f"    {kid}: {k.get('cause', '')[:80]}")
+                if k.get("safe_side"):
+                    out.append(f"    safe side: {k.get('safe_side_reason', '')[:80]}")
+                if k.get("resolved_by"):
+                    out.append(f"    resolved by {k['resolved_by']}")
+        out.append(f"verdicts: {len(self.recs['verdict'])}")
+        for vid, (_, v) in self.recs["verdict"].items():
+            src = f"value from the {v.get('value_from', 'analysis')}" + (f", {v['cause_id']}" if v.get("cause_id") else "")
+            out.append(f"  {vid} {v.get('test_id')} {v.get('quantity')} {_fmt(v.get('value'))} {v.get('op')} "
+                       f"{_fmt(v.get('limit'))}: {'pass' if v.get('pass') else 'fail'}, margin {_num(v.get('margin_pct'))} %; "
+                       f"{v.get('basis', 'match')} ({src}, {v.get('comparison_id')})")
+        if self.designs:
+            last = max(self.designs)
+            for dom, j in sorted(self.latest_judgements(last).items(), key=lambda x: str(x[0])):
+                out.append(f"judgement v{last} {dom}: {j.get('state')} ({j.get('summary', '')[:80]})")
+        fin = [e for e in self.events if e.get("kind") == "run.finished"]
+        status = (fin[-1].get("data") or {}).get("status") if fin else "not finished"
+        reason = (self.project or {}).get("stop_reason")
+        out.append(f"finished: {status}" + (f" ({reason})" if reason else ""))
+        return out
+
     # --- all ---------------------------------------------------------------------
     def run(self) -> list[Finding]:
         if not self.path.is_dir():
@@ -858,13 +940,24 @@ def check_run(run_path: Path | str, recompute: bool = False) -> list[Finding]:
     return RunChecker(Path(run_path), recompute=recompute).run()
 
 
+def run_effects(run_path: Path | str) -> list[str]:
+    """RunChecker.effects() for one run folder."""
+    checker = RunChecker(Path(run_path))
+    checker.run()
+    return checker.effects()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m qa.check_run", description=__doc__.split("\n\n")[0])
     ap.add_argument("runs", nargs="*", type=Path, help="run folders (runs/<run_id>)")
     ap.add_argument("--all", action="store_true", help="check every folder under runs/")
     ap.add_argument("--strict", action="store_true", help="fail on warnings too")
     ap.add_argument("--recompute", action="store_true", help="recompute predictions with K0")
+    ap.add_argument("--effects", action="store_true",
+                    help="also list where the hooks acted, the mismatches and causes, and the verdicts")
     args = ap.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # causes and summaries are Japanese
     paths = list(args.runs)
     if args.all:
         paths += sorted(p for p in layout.RUNS_DIR.iterdir() if p.is_dir()) if layout.RUNS_DIR.is_dir() else []
@@ -872,12 +965,16 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("give a run folder or --all")
     failed = False
     for p in paths:
-        findings = check_run(p, recompute=args.recompute)
+        checker = RunChecker(p, recompute=args.recompute)
+        findings = checker.run()
         errors = sum(f.level == "error" for f in findings)
         warns = len(findings) - errors
         print(f"{p}: {errors} error(s), {warns} warning(s)")
         for f in findings:
             print(f"  {f}")
+        if args.effects:
+            for line in checker.effects():
+                print(f"  {line}")
         failed |= errors > 0 or (args.strict and warns > 0)
     return 1 if failed else 0
 
