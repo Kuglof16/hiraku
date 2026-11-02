@@ -12,7 +12,7 @@ from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
-from .base import BuiltinTool, Record, check_record, on_board, result
+from .base import LOADING, BuiltinTool, Predicts, Record, check_record, on_board, result
 
 
 def _part(pid, kind, center, size, carried_by=None):
@@ -33,7 +33,15 @@ class Assembly(BuiltinTool):
     domain = "assembly"
     base = "K4"
     tests = ["H1", "H3", "H5"]
-    formulas = []
+    formulas = ["geometry.free_steer_angle", "occupant.knee_room"]
+    load_case_params = (LOADING,)
+    predicts = (
+        Predicts("free_steer_angle", "geometry.free_steer_angle", "theta",
+                 "w, l, c of the steered wheel from hiraku.solvers.k4_geometry.steer_room(design)"),
+        Predicts("knee_room", "occupant.knee_room", "room",
+                 "L from hiraku.solvers.k4_geometry.knee_space(design) (the smallest), "
+                 "L_bk = AIST J5 buttock-knee length, male 95th percentile (k4_geometry.AIST)"),
+    )
 
     def known_answers(self) -> list[Record]:
         out = []
@@ -94,7 +102,7 @@ class Assembly(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: loading (default two_cargo). Design variable max_steer_angle (deg) turns on the steering sweep."""
+        """Load case params: load_case_params. Design variable max_steer_angle (deg) turns on the steering sweep."""
         design = on_board(design, load_case)
         bs = bodies(design)
         static = interferences(design, bs)

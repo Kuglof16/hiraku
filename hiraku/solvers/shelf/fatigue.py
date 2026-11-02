@@ -10,8 +10,10 @@ rainflow counting, an IIW-type S-N curve and Miner's rule give the damage,
 scaled from the sampled length to the target distance.
 
 Road classes: G_d(0.1 cycle/m) = 16e-6 m^3 for class A, times 4 per class
-(C = 256e-6), waviness 2, as given in the requirements catalog (secondary
-source; the standard text has not been read here).
+(C = 256e-6), waviness 2: the road classes of ISO 8608:2016, Mechanical
+vibration - Road surface profiles - Reporting of measured data; not checked
+in this repository (the standard text has not been read here). The S-N curve
+and Miner's rule are those of formula fatigue.constant_amplitude_damage.
 
 Design variables: fatigue_fat_class (MPa at 2e6 cycles), fatigue_slope,
 fatigue_knee_cycles, fatigue_slope_after_knee, tyre_stiffness (N/mm).
@@ -28,11 +30,14 @@ from ..k0_handcalc import units
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, support_loads
 from ..k1_frame.fatigue import equivalent_range, influence, miner, rainflow, sn_cycles
-from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_value, result
+from .base import (LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_text,
+                   param_value, result)
 
-ROAD_CLASSES = {c: 16e-6 * 4**i for i, c in enumerate("ABCDEFGH")}
+ROAD_CLASSES = {c: 16e-6 * 4**i for i, c in enumerate("ABCDEFGH")}  # ISO 8608 (see above)
 N0 = 0.1  # cycle/m
 WAVINESS = 2.0
+# Band of the road model (wavelengths 0.35 m to 91 m): a modelling choice, not
+# checked against the bands ISO 8608 reports.
 N_BAND = (0.011, 2.83)  # cycle/m
 SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1", "fatigue_slope_after_knee": "1"}
 SERIES_POINTS = 600
@@ -158,6 +163,24 @@ class Fatigue(BuiltinTool):
     base = "K1"
     tests = ["R3"]
     formulas = ["fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance", "modal.quarter_car"]
+    load_case_params = (
+        Param("distance", "km", "life to check: the distance the damage is scaled to (e.g. requirement key Q90)",
+              required=True),
+        Param("road_class", None, "ISO 8608 road class; needed without an upstream wheel-force history",
+              choices=tuple(ROAD_CLASSES)),
+        Param("speed", "km/h", "speed over the road; needed without an upstream wheel-force history"),
+        Param("sample_length", "m", "length of road simulated (the damage is scaled from it to distance)", default=400.0),
+        Param("seed", "1", "seed of the random road phases", default=0.0),
+        LOADING,
+    )
+    predicts = (
+        Predicts("fatigue_damage", "fatigue.constant_amplitude_damage", "D",
+                 "dS = equivalent_stress_range, n = cycles_counted, S-N data from the design variables"),
+        Predicts("cycles_counted", "fatigue.cycles_over_distance", "n",
+                 "rough: f = the body bounce frequency (modal.quarter_car f)"),
+    )
+    upstream = ("an analysis with series reaction_z.<support> (and reaction_x/y, grip_x/y/z) for every support and "
+                "a speed series (K2): its wheel forces replace the road model")
 
     def known_answers(self) -> list[Record]:
         out = []
@@ -165,7 +188,8 @@ class Fatigue(BuiltinTool):
         counts: dict[float, float] = {}
         for r, _, c in cyc:
             counts[r] = counts.get(r, 0.0) + c
-        src = "ASTM E1049-85 rainflow example [-2, 1, -3, 5, -1, 3, -4, 4, -2]: ranges 3 (0.5), 4 (1.5), 6 (0.5), 8 (1.0), 9 (0.5)"
+        src = ("ASTM E1049-85 rainflow example [-2, 1, -3, 5, -1, 3, -4, 4, -2]: ranges 3 (0.5), 4 (1.5), 6 (0.5), 8 (1.0), "
+               "9 (0.5); not checked against the standard text in this repository")
         for rng, n in ((3.0, 0.5), (4.0, 1.5), (6.0, 0.5), (8.0, 1.0), (9.0, 0.5)):
             out.append(check_record("ASTM E1049 rainflow example", f"count_of_range_{rng:g}", n, counts.get(rng, 0.0),
                                     "1", 1e-12, src))
@@ -181,7 +205,7 @@ class Fatigue(BuiltinTool):
                                 sum(r * c for r, _, c in rainflow(series)), "1", 1e-9,
                                 "every reversal is counted once: sum over cycles of range * count = half the total travel"))
         x = np.arange(0.0, 2000.0, ROAD_DX)
-        z = road_profile(x, 256e-6, 0)
+        z = road_profile(x, ROAD_CLASSES["C"], 0)
         f, p = signal.welch(z, fs=1.0 / ROAD_DX, nperseg=4096)
         band = (f > 0.05) & (f < 1.0)
         g_fit = float(np.mean(p[band] * (f[band] / N0) ** WAVINESS))
@@ -191,9 +215,7 @@ class Fatigue(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: distance (km, the life target, e.g. Q90), loading (default two_cargo);
-        without an upstream wheel-force history also road_class (string A..H), speed (km/h),
-        sample_length (m, default 400), seed (1, default 0)."""
+        """Load case params: load_case_params."""
         design = on_board(design, load_case)
         target = param_value(load_case, "distance", "m")
         if target is None or target <= 0:
@@ -208,14 +230,14 @@ class Fatigue(BuiltinTool):
             Fm = np.vstack([F[c] for c in cols])
             source = f"wheel forces from {src}"
         else:
-            cls = load_case.get("params", {}).get("road_class")
+            cls = param_text(load_case, "road_class")
             if cls not in ROAD_CLASSES:
                 raise LoadCaseError(f"give road_class (one of {', '.join(ROAD_CLASSES)}) or an upstream wheel-force history")
             v = param_value(load_case, "speed", "m/s")
             if v is None or v <= 0:
                 raise LoadCaseError("the road model needs the load case parameter speed (km/h)")
-            sample = param_value(load_case, "sample_length", "m", 400.0)
-            seed = int(param_value(load_case, "seed", "1", 0.0))
+            sample = param_value(load_case, "sample_length", "m")
+            seed = int(param_value(load_case, "seed", "1"))
             t, F = road_wheel_forces(design, v, sample, ROAD_CLASSES[cls], seed)
             S, cols, pts = influence(design, "z")
             Fm = np.vstack([F[sid] for sid, _ in cols])

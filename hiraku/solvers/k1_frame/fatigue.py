@@ -23,16 +23,15 @@ from .model import COMBO, build
 
 def reversals(series) -> list[float]:
     """Peaks and valleys of a series (first and last points kept)."""
-    x = [float(v) for v in series]
-    out: list[float] = []
-    for v in x:
-        if out and v == out[-1]:
-            continue
-        if len(out) >= 2 and (out[-1] - out[-2]) * (v - out[-1]) > 0:
-            out[-1] = v  # still going the same way
-        else:
-            out.append(v)
-    return out
+    x = np.asarray(series, float).ravel()
+    if x.size == 0:
+        return []
+    x = x[np.concatenate([[True], x[1:] != x[:-1]])]  # repeated values are one point
+    if x.size < 3:
+        return x.tolist()
+    d = np.diff(x)
+    turn = d[:-1] * d[1:] < 0  # the direction changes at x[1:-1]
+    return x[np.concatenate([[True], turn, [True]])].tolist()
 
 
 def rainflow(series) -> list[tuple[float, float, float]]:

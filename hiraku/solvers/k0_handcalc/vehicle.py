@@ -74,7 +74,7 @@ CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
 
 
 def parts_on_board(design: dict, loading: str) -> dict:
-    """A copy of the design with only the occupants and cargo of a loading (catalog Q30).
+    """A copy of the design with only the occupants and cargo of a loading (requirement key Q30).
 
     Occupants board in the order they are listed (the first is the driver);
     cargo parts ride only with two_cargo. A design with fewer occupant parts

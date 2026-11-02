@@ -54,6 +54,19 @@ class TiltTest(unittest.TestCase):
     def test_slide(self):
         self.assertAlmostEqual(out("tilt.slide_angle", mu=q(1, "1"))["theta"], 45.0, places=12)
 
+    def test_side_slope_uphill_load(self):
+        args = dict(m=q(600, "kg"), t=q(1100, "mm"), h=q(500, "mm"), e=q(0, "mm"))
+        flat = out("tilt.side_slope_uphill_load", **args, beta=q(0, "deg"))["W_up"]
+        self.assertAlmostEqual(flat, 600 * G / 2, places=9)
+        # at the rigid tip angle the uphill wheels carry nothing
+        tip = out("tilt.rigid_angle", t=q(1100, "mm"), h=q(500, "mm"), e=q(0, "mm"))["theta"]
+        self.assertAlmostEqual(out("tilt.side_slope_uphill_load", **args, beta=q(tip, "deg"))["W_up"], 0.0, delta=1e-9)
+        # lateral acceleration tan(beta) on level ground carries the slope's normal load too: 1/cos(beta) more
+        up = out("tilt.side_slope_uphill_load", **args, beta=q(15, "deg"))["W_up"]
+        inner = out("lane_change.inner_wheel_load", m=q(600, "kg"), a_y=q(math.tan(math.radians(15)), "g"), h=q(500, "mm"),
+                    t=q(1100, "mm"))["W_inner"]
+        self.assertAlmostEqual(inner / up, 1 / math.cos(math.radians(15)), places=9)
+
 
 class CrosswindTest(unittest.TestCase):
     def test_side_force(self):
@@ -112,6 +125,22 @@ class BrakingTest(unittest.TestCase):
         self.assertAlmostEqual(o["a_x_tip"], 1014 / 593, places=12)
         o = out("braking.load_transfer", m=q(591, "kg"), a=q(1014, "mm"), L=q(1700, "mm"), h=q(593, "mm"), a_x=q(1014 / 593, "g"))
         self.assertAlmostEqual(o["W_rear"], 0.0, delta=1e-6)
+
+    def test_parking_friction(self):
+        a, L, h, grade = 900.0, 1700.0, 500.0, 20.0
+        o = out("braking.parking_friction", a=q(a, "mm"), L=q(L, "mm"), h=q(h, "mm"), grade=q(grade, "%"))
+        self.assertAlmostEqual(o["mu_all"], 0.2, places=12)
+        # independent check: axle loads from the moments about each contact, per unit weight
+        th = math.atan(grade / 100)
+        n_rear = (a * math.cos(th) + h * math.sin(th)) / L
+        n_front = math.cos(th) - n_rear
+        self.assertAlmostEqual(o["mu_rear"], math.sin(th) / n_rear, places=12)
+        self.assertAlmostEqual(o["mu_front"], math.sin(th) / n_front, places=12)
+        self.assertGreater(o["mu_front"], o["mu_rear"])  # facing uphill the load moves to the rear
+        flat = out("braking.parking_friction", a=q(a, "mm"), L=q(L, "mm"), h=q(h, "mm"), grade=q(0, "%"))
+        self.assertEqual((flat["mu_all"], flat["mu_rear"], flat["mu_front"]), (0.0, 0.0, 0.0))
+        with self.assertRaisesRegex(ValueError, "tips backward"):
+            ev("braking.parking_friction", a=q(1600, "mm"), L=q(L, "mm"), h=q(h, "mm"), grade=q(100, "%"))
 
 
 class LaunchTest(unittest.TestCase):

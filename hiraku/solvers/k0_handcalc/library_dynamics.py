@@ -15,7 +15,8 @@ from .units import STANDARD_GRAVITY
 G = sp.Float(STANDARD_GRAVITY)
 G_NOTE = "g = 9.80665 m/s^2"
 RHO_INPUT = {"unit": "kg/m^3", "min": 0,
-             "description": "air density (1.225 at sea level and 15 degC in the ICAO standard atmosphere; not checked here)"}
+             "description": "air density (1.225 at sea level and 15 degC in the Manual of the ICAO Standard Atmosphere, "
+                            "ICAO Doc 7488; not checked in this repository)"}
 
 
 def _sym(*names: str) -> dict[str, sp.Symbol]:
@@ -107,6 +108,28 @@ def _tilt() -> list[Formula]:
                   (lambda v: _roll_stiffness(v["k"], v["t"], v["n"]) > v["m_s"] * STANDARD_GRAVITY * v["h_s"],
                    "the springs are too soft to hold the body up (n k t^2/2 must exceed m_s g h_s)")],
         fn=_tilt_with_roll,
+    ))
+    s = _sym("m", "t", "h", "e", "beta")
+    m, t, h, e, beta = (s[x] for x in ("m", "t", "h", "e", "beta"))
+    br = beta * sp.pi / 180
+    out.append(Formula(
+        formula_id="tilt.side_slope_uphill_load",
+        title="横の斜面に止まっているときの、上の側の輪の荷重の和",
+        domain="handling",
+        expression="W_up = m g (cos(beta) (t/2 - e) - sin(beta) h) / t",
+        inputs={"m": _in("kg", "total mass", min=0),
+                "t": _in("mm", "track (same front and rear)", min=0),
+                "h": _in("mm", "height of the centre of gravity above the slope", min=0),
+                "e": _in("mm", "sideways offset of the centre of gravity toward the low side (0 when centred)"),
+                "beta": _in("deg", "side slope angle", min=0)},
+        outputs={"W_up": ("N", "load on the uphill wheels together (they lift at 0)",
+                          m * G * (sp.cos(br) * (t / 2 - e) - sp.sin(br) * h) / t)},
+        assumptions=["rigid suspension and tyres", "standing still on a plane side slope",
+                     "moment balance about the line through the downhill tyre contacts", "same track front and rear",
+                     G_NOTE],
+        source="moment balance about the downhill contact line (textbook statics)",
+        requires=[(sp.And(t > 0, e < t / 2), "the track must be positive and the centre of gravity inside it")],
+        symbols=s,
     ))
     s = _sym("mu")
     out.append(Formula(
@@ -313,6 +336,30 @@ def _braking() -> list[Formula]:
         assumptions=["rigid body, level road", "pitch from the springs ignored", G_NOTE],
         source="moment balance about the front contact line (textbook vehicle dynamics)",
         requires=[(sp.And(a >= 0, a <= L, h > 0), "0 <= a <= L and h > 0")],
+        symbols=s,
+    ))
+    s = _sym("a", "L", "h", "grade")
+    a, L, h, gr = (s[x] for x in ("a", "L", "h", "grade"))
+    th = sp.atan(gr / 100)
+    rear = a * sp.cos(th) + h * sp.sin(th)  # rear axle load / (m g) * L, facing uphill
+    front = (L - a) * sp.cos(th) - h * sp.sin(th)
+    out.append(Formula(
+        formula_id="braking.parking_friction",
+        title="坂に上り向きで止まっているのに要る摩擦係数 (全輪・後輪だけ・前輪だけのブレーキ)",
+        domain="handling",
+        expression=("theta = atan(grade); mu_all = tan(theta); mu_rear = sin(theta) L / (a cos(theta) + h sin(theta)); "
+                    "mu_front = sin(theta) L / ((L - a) cos(theta) - h sin(theta))"),
+        inputs={"a": _in("mm", "distance from the front axle back to the centre of gravity", min=0),
+                "L": _in("mm", "wheelbase", min=0), "h": _in("mm", "height of the centre of gravity", min=0),
+                "grade": _in("%", "grade (rise over run)", min=0)},
+        outputs={"mu_all": ("1", "friction needed with all wheels braked", sp.tan(th)),
+                 "mu_rear": ("1", "friction needed with the rear wheels braked only", sp.sin(th) * L / rear),
+                 "mu_front": ("1", "friction needed with the front wheels braked only", sp.sin(th) * L / front)},
+        assumptions=["rigid body standing still, facing uphill", "the braked wheels hold the whole slope force",
+                     "the mass cancels out"],
+        source="force and moment balance on a slope (textbook statics)",
+        requires=[(sp.And(a >= 0, a <= L, h > 0), "0 <= a <= L and h > 0"),
+                  (front > 0, "the vehicle tips backward on this grade (the front wheels lift)")],
         symbols=s,
     ))
     return out

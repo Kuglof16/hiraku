@@ -31,7 +31,7 @@ _CURRENT = (0, 0, 0, 1, 0, 0)
 _TEMP = (0, 0, 0, 0, 1, 0)
 _THERMAL_R = (-2, -1, 3, 0, 1, 0)
 
-STANDARD_GRAVITY = 9.80665  # m/s^2, the defined value of 1 g (CGPM 1901)
+STANDARD_GRAVITY = 9.80665  # m/s^2, the defined value of 1 g (3rd CGPM, 1901; not checked in this repository)
 
 # unit -> (factor to SI, offset to SI, dimension)
 UNIT_TABLE: dict[str, tuple[float, float, tuple[int, ...]]] = {
@@ -68,7 +68,7 @@ UNIT_TABLE: dict[str, tuple[float, float, tuple[int, ...]]] = {
     "kWh": (3.6e6, 0.0, _MOMENT),
     "V": (1.0, 0.0, _VOLT),
     "A": (1.0, 0.0, _CURRENT),
-    "degC": (1.0, 273.15, _TEMP),
+    "degC": (1.0, 273.15, _TEMP),  # SI definition of the Celsius scale: t/degC = T/K - 273.15
     "K": (1.0, 0.0, _TEMP),
     "K/W": (1.0, 0.0, _THERMAL_R),
     "m^2": (1.0, 0.0, (2, 0, 0, 0, 0, 0)),

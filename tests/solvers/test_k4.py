@@ -67,7 +67,7 @@ class DemoGeometryTest(unittest.TestCase):
 
     def test_people(self):
         f = fit(DESIGN)
-        self.assertAlmostEqual(f["shoulder_room"][0], 1300 - 2 * 495, places=6)
+        self.assertAlmostEqual(f["shoulder_room"][0], 1300 - 2 * 495.3, places=6)
         self.assertAlmostEqual(f["hip_room.seat_R"][0], 500 - 391, places=6)
         self.assertEqual(f["knee_room.occupant_R"][1], "steering")
 
