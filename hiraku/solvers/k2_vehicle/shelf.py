@@ -660,7 +660,14 @@ class BrakingTool(K2Tool):
              Pair("mean_decel_g", "braking.stopping_distance", "a_x", (("v", "speed"), ("mu", "mu"))),
              Pair("min_rear_axle_load", "braking.load_transfer", "W_rear",
                   note="a_x from braking.stopping_distance; K2 is the minimum while braking, so the pitch "
-                       "overshoot on the springs can take it below the steady value"))
+                       "overshoot on the springs can take it below the steady value"),
+             Pair("parking_friction_demand", "braking.parking_friction", "mu_all", (("grade", "parking_slope"),),
+                  "every wheel braked; K2 shares the hold by the tyres' stiffness and reports the largest "
+                  "wheel's demand"),
+             Pair("parking_friction_demand", "braking.parking_friction", "mu_rear", (("grade", "parking_slope"),),
+                  "only the rear wheels braked"),
+             Pair("parking_friction_demand", "braking.parking_friction", "mu_front", (("grade", "parking_slope"),),
+                  "only the front wheels braked"))
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="braking check",
@@ -1035,10 +1042,12 @@ class OffroadRollTool(K2Tool):
               P("length", "m", 100.0, "distance driven"),
               P("seed", "1", 1.0, "random phases of the road (an integer)"),
               MU)
-    pairs = (Pair("mean_uphill_load", "lane_change.inner_wheel_load", "W_inner",
+    pairs = (Pair("mean_uphill_load", "tilt.side_slope_uphill_load", "W_up", (("beta", "side_slope"),),
+                  "rigid balance on the slope; K2's body also rolls downhill on its springs, and min_uphill_load "
+                  "has no hand calculation (the road roughness)"),
+             Pair("mean_uphill_load", "lane_change.inner_wheel_load", "W_inner",
                   note="a_y = tan(side_slope) in g, the slope taken as a lateral acceleration: that is high by "
-                       "1 / cos(side_slope) (3.5 % at 15 deg); min_uphill_load has no hand calculation (the road "
-                       "roughness)"),)
+                       "1 / cos(side_slope) (3.5 % at 15 deg)"))
 
     def own_checks(self) -> list[dict]:
         from scipy.signal import welch

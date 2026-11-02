@@ -1,11 +1,12 @@
 """Load cases and scripted steps for the tests the K2 vehicle tools answer.
 
 BUILDERS[test_id](spec, req, design) -> load_case, the shape of the builders in
-hiraku.catalog.build: every condition and criterion limit is a requirement
-(Q key) or read off the design, or computed here; values from elsewhere are
-constants below with their source. tolerance_rel is chosen from what the
-hand calculation leaves out of the tool (the reason is next to each value);
-a `tolerance_rel` in the catalog spec replaces it.
+this package: every condition and criterion limit is a requirement (Q key) or
+read off the design, or computed here; values from elsewhere are constants
+below with their source. tolerance_rel is chosen from what the hand
+calculation leaves out of the tool (the reason is next to each value); a
+`tolerance_rel` in the catalog spec replaces it. A missing requirement raises
+BuildError naming its key.
 
 PLANS[test_id]: one step of the scripted run, the shape of the steps in
 data/catalog/scripted.yaml without load_case: the tool, a sentence, and the
@@ -13,11 +14,11 @@ predictions (K0 formula id, output, inputs as refs). A `from.<name>` ref is
 read from the prediction's inputs_from(design, load_case): the K2 model's
 masses, heights, rates and areas for the load case's loading (no simulation).
 
-S4b has no step yet: no K0 formula predicts the friction a parked vehicle
-needs. S5 has no criterion: no K0 formula predicts the lowest uphill wheel
-load on the rough road, only the mean (the static load on the slope); its
-step expects the mismatch it had on the demo vehicle, with the cause found by
-splitting the gap, and stops there until K0 has a side-slope formula.
+S5 has no criterion: no K0 formula predicts the lowest uphill wheel load on
+the rough road, only the mean (the static load on the slope). Its step first
+predicts with the slope taken as a lateral acceleration, expects the mismatch
+that gave on the demo vehicle (the cause found by splitting the gap), and
+predicts again with the side-slope balance.
 
 Importing this module computes nothing; the K2 model loads on the first call.
 """
@@ -27,8 +28,9 @@ from __future__ import annotations
 import math
 from typing import Any, Callable
 
-from hiraku.catalog.build import CatalogError, check_design_loading, loading_requirement, requirement
-from hiraku.catalog.loading import CARGO, LOADING_JA, OCCUPANTS
+from hiraku.catalog.build import CatalogError, check_design_loading
+from hiraku.catalog.builders.common import BuildError, loading, number, q, text, tolerance
+from hiraku.catalog.loading import LOADING_JA
 
 Record = dict[str, Any]
 
@@ -77,32 +79,21 @@ TOLERANCE = {
 }
 
 
-def _q(value: float, unit: str) -> Record:
-    return {"value": float(value), "unit": unit}
-
-
-def _text_requirement(req: Record, key: str) -> Record:
-    for r in req["requirements"]:
-        if r["key"] == key:
-            if not isinstance(r.get("value"), str):
-                raise CatalogError(f"requirement {key} needs a text value, got {r.get('value')!r}")
-            return r
-    raise CatalogError(f"requirement {key} is missing from the requirements file")
-
-
 def _loading(req: Record, design: Record, fixed: str | None = None) -> tuple[str, list[str]]:
     """The loading (Q30, or the one the test fixes) and the requirement keys it uses."""
-    loading = fixed or loading_requirement(req)
-    check_design_loading(req, design, loading)
-    keys = ([] if fixed else ["Q30"]) + (["Q33"] if OCCUPANTS[loading] else []) + (["Q40"] if CARGO[loading] else [])
-    return loading, keys
+    if fixed is None:
+        return loading(req, design)
+    try:
+        check_design_loading(req, design, fixed)
+    except CatalogError as e:
+        raise BuildError(str(e)) from None
+    return fixed, []
 
 
 def _case(spec: Record, test_id: str, domain: str, lc_id: str, title: str, params: Record, keys: list[str],
           criterion: Record | None) -> Record:
     out = {"load_case_id": lc_id, "test_id": test_id, "domain": spec.get("domain", domain), "title": title,
-           "params": params, "requirement_keys": keys,
-           "tolerance_rel": float(spec.get("tolerance_rel", TOLERANCE[test_id]))}
+           "params": params, "requirement_keys": keys, "tolerance_rel": tolerance(spec, TOLERANCE[test_id])}
     if criterion is not None:
         out["criterion"] = criterion
     return out
@@ -115,105 +106,105 @@ def _crit(quantity: str, op: str, limit: Record, basis: str, keys: list[str]) ->
     return out
 
 
-def _cg_y(design: Record, loading: str) -> float:
+def _cg_y(design: Record, on: str) -> float:
     from hiraku.solvers.k2_vehicle.drive import on_board
     from hiraku.solvers.k2_vehicle.model import build_vehicle
-    return float(build_vehicle(on_board(design, loading)).cg_total[1])
+    return float(build_vehicle(on_board(design, on)).cg_total[1])
 
 
 # ------------------------------------------------------------------ builders
 def _s1_tilt(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    lim = requirement(req, "Q60", "deg")["value"]
-    return _case(spec, "S1", "handling", f"S1-tilt-{loading}", f"傾斜台で倒れない ({LOADING_JA[loading]})",
-                 {"loading": loading, "direction": "both"}, keys + ["Q60"],
-                 _crit("tilt_angle", ">=", _q(lim, "deg"), f"Q60 {lim:g} deg (for the loading of Q30)", ["Q60"]))
+    on, keys = _loading(req, design)
+    lim = number(req, "Q60", "deg")
+    return _case(spec, "S1", "handling", f"S1-tilt-{on}", f"傾斜台で倒れない ({LOADING_JA[on]})",
+                 {"loading": on, "direction": "both"}, keys + ["Q60"],
+                 _crit("tilt_angle", ">=", q(lim, "deg"), f"Q60 {lim:g} deg (for the loading of Q30)", ["Q60"]))
 
 
 def _s1p_ssf(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design, fixed="empty")
+    on, keys = _loading(req, design, fixed="empty")
     return _case(spec, "S1'", "handling", "S1'-ssf-empty", "静的安定係数 T/2h (空車)",
-                 {"loading": loading, "direction": "right"}, keys,
-                 _crit("static_stability_factor", ">=", _q(SSF_MIN, "1"),
+                 {"loading": on, "direction": "right"}, keys,
+                 _crit("static_stability_factor", ">=", q(SSF_MIN, "1"),
                        "T/2h >= 1.0 (ROHVA 1-2011, ANSI B71.9-2012 as summarized in 79 FR 68964; not checked)", []))
 
 
 def _f1_wind(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    gust = requirement(req, "Q18", "m/s")["value"]
-    speed = requirement(req, "Q50", "km/h")["value"]
+    on, keys = _loading(req, design)
+    gust = number(req, "Q18", "m/s")
+    speed = number(req, "Q50", "km/h")
     # the wind pushes the CG further over when it is off the centre line on the downwind side
-    wind_from = "left" if _cg_y(design, loading) <= 0.0 else "right"
-    return _case(spec, "F1", "aero", f"F1-wind{gust:g}", f"瞬間 {gust:g} m/s の横風で風上の輪が浮かない ({LOADING_JA[loading]})",
-                 {"loading": loading, "wind_speed": _q(gust, "m/s"), "speed": _q(speed, "km/h"), "wind_from": wind_from},
+    wind_from = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "F1", "aero", f"F1-wind{gust:g}", f"瞬間 {gust:g} m/s の横風で風上の輪が浮かない ({LOADING_JA[on]})",
+                 {"loading": on, "wind_speed": q(gust, "m/s"), "speed": q(speed, "km/h"), "wind_from": wind_from},
                  keys + ["Q18", "Q50"],
-                 _crit("critical_wind_speed", ">=", _q(gust, "m/s"), f"Q18 gust {gust:g} m/s", ["Q18"]))
+                 _crit("critical_wind_speed", ">=", q(gust, "m/s"), f"Q18 gust {gust:g} m/s", ["Q18"]))
 
 
 def _s3_dlc(spec: Record, req: Record, design: Record) -> Record:
     from hiraku.solvers.k2_vehicle.shelf import DLC_OFFSET  # the ISO 3888-1 layout, as cited there
-    loading, keys = _loading(req, design)
-    speed = requirement(req, "Q50", "km/h")["value"]
+    on, keys = _loading(req, design)
+    speed = number(req, "Q50", "km/h")
     return _case(spec, "S3", "handling", f"S3-dlc{speed:g}",
-                 f"ダブルレーンチェンジを {speed:g} km/h で、片側の 2 輪が浮かない ({LOADING_JA[loading]}、ISO の速さではない)",
-                 {"loading": loading, "speed": _q(speed, "km/h"), "offset": _q(DLC_OFFSET, "m"), "find_limit": False},
+                 f"ダブルレーンチェンジを {speed:g} km/h で、片側の 2 輪が浮かない ({LOADING_JA[on]}、ISO の速さではない)",
+                 {"loading": on, "speed": q(speed, "km/h"), "offset": q(DLC_OFFSET, "m"), "find_limit": False},
                  keys + ["Q50"],
-                 _crit("min_side_load", ">", _q(0.0, "N"),
+                 _crit("min_side_load", ">", q(0.0, "N"),
                        "both wheels of one side lift when their loads together reach 0", []))
 
 
 def _s4_brake(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    mu = requirement(req, "Q11", "1")["value"]
-    stop = requirement(req, "Q52", "m")["value"]
+    on, keys = _loading(req, design)
+    mu = number(req, "Q11", "1")
+    stop = number(req, "Q52", "m")
     return _case(spec, "S4", "handling", f"S4-brake{S4_SPEED_KMH:g}",
-                 f"{S4_SPEED_KMH:g} km/h から急制動、μ {mu:g} で {stop:g} m 以内に止まる ({LOADING_JA[loading]})",
-                 {"loading": loading, "speed": _q(S4_SPEED_KMH, "km/h"), "mu": _q(mu, "1"),
-                  "reaction_time": _q(0.0, "s")}, keys + ["Q11", "Q52"],
-                 _crit("stopping_distance", "<=", _q(stop, "m"),
+                 f"{S4_SPEED_KMH:g} km/h から急制動、μ {mu:g} で {stop:g} m 以内に止まる ({LOADING_JA[on]})",
+                 {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(mu, "1"), "reaction_time": q(0.0, "s")},
+                 keys + ["Q11", "Q52"],
+                 _crit("stopping_distance", "<=", q(stop, "m"),
                        f"Q52 {stop:g} m from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)", ["Q52"]))
 
 
 def _s4b_park(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design, fixed="empty")
-    mu = requirement(req, "Q11", "1")["value"]
-    grade = requirement(req, "Q53", "%")["value"]
+    on, keys = _loading(req, design, fixed="empty")
+    mu = number(req, "Q11", "1")
+    grade = number(req, "Q53", "%")
     return _case(spec, "S4b", "handling", f"S4b-park{grade:g}", f"{grade:g} % の坂にブレーキで止まっていられる (空車)",
-                 {"loading": loading, "parking_slope": _q(grade, "%"), "mu": _q(mu, "1")}, keys + ["Q11", "Q53"],
-                 _crit("parking_friction_demand", "<=", _q(mu, "1"),
+                 {"loading": on, "parking_slope": q(grade, "%"), "mu": q(mu, "1")}, keys + ["Q11", "Q53"],
+                 _crit("parking_friction_demand", "<=", q(mu, "1"),
                        f"the braked wheels need at most the road friction Q11 {mu:g}", ["Q11"]))
 
 
 def _s5_slope(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    cls = _text_requirement(req, "Q12")["value"]
-    beta = requirement(req, "Q14", "deg")["value"]
+    on, keys = _loading(req, design)
+    cls = text(req, "Q12", tuple("ABCDEFGH"))
+    beta = number(req, "Q14", "deg")
     # the uphill side: the one the CG is off toward is the less stable one downhill
-    slope_up = "left" if _cg_y(design, loading) <= 0.0 else "right"
+    slope_up = "left" if _cg_y(design, on) <= 0.0 else "right"
     return _case(spec, "S5", "handling", f"S5-slope{beta:g}",
-                 f"ISO 8608 クラス {cls} の路面、横 {beta:g}° の斜面を {S5_SPEED_KMH:g} km/h で ({LOADING_JA[loading]})",
-                 {"loading": loading, "road_class": cls, "side_slope": _q(beta, "deg"), "slope_up": slope_up,
-                  "speed": _q(S5_SPEED_KMH, "km/h")}, keys + ["Q12", "Q14"], None)
+                 f"ISO 8608 クラス {cls} の路面、横 {beta:g}° の斜面を {S5_SPEED_KMH:g} km/h で ({LOADING_JA[on]})",
+                 {"loading": on, "road_class": cls, "side_slope": q(beta, "deg"), "slope_up": slope_up,
+                  "speed": q(S5_SPEED_KMH, "km/h")}, keys + ["Q12", "Q14"], None)
 
 
 def _p2_grade(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    grade = requirement(req, "Q13", "%")["value"]
-    return _case(spec, "P2", "powertrain", f"P2-grade{grade:g}", f"{grade:g} % の坂を発進して登る ({LOADING_JA[loading]})",
-                 {"loading": loading, "grade": _q(grade, "%"), "until": "top_speed", "max_time": _q(120.0, "s")},
+    on, keys = _loading(req, design)
+    grade = number(req, "Q13", "%")
+    return _case(spec, "P2", "powertrain", f"P2-grade{grade:g}", f"{grade:g} % の坂を発進して登る ({LOADING_JA[on]})",
+                 {"loading": on, "grade": q(grade, "%"), "until": "top_speed", "max_time": q(120.0, "s")},
                  keys + ["Q13"],
-                 _crit("top_speed", ">", _q(0.0, "km/h"), f"climbs Q13 {grade:g} %: a speed above 0 from a standstill",
+                 _crit("top_speed", ">", q(0.0, "km/h"), f"climbs Q13 {grade:g} %: a speed above 0 from a standstill",
                        ["Q13"]))
 
 
 def _p3_accel(spec: Record, req: Record, design: Record) -> Record:
-    loading, keys = _loading(req, design)
-    target = requirement(req, "Q50", "km/h")["value"]
-    limit = requirement(req, "Q51", "s")["value"]
+    on, keys = _loading(req, design)
+    target = number(req, "Q50", "km/h")
+    limit = number(req, "Q51", "s")
     return _case(spec, "P3", "powertrain", f"P3-accel{target:g}",
-                 f"止まった所から {target:g} km/h まで {limit:g} s 以内 ({LOADING_JA[loading]})",
-                 {"loading": loading, "target_speed": _q(target, "km/h"), "grade": _q(0.0, "%")}, keys + ["Q50", "Q51"],
-                 _crit("time_to_speed", "<=", _q(limit, "s"), f"Q51 {limit:g} s to Q50 {target:g} km/h", ["Q51"]))
+                 f"止まった所から {target:g} km/h まで {limit:g} s 以内 ({LOADING_JA[on]})",
+                 {"loading": on, "target_speed": q(target, "km/h"), "grade": q(0.0, "%")}, keys + ["Q50", "Q51"],
+                 _crit("time_to_speed", "<=", q(limit, "s"), f"Q51 {limit:g} s to Q50 {target:g} km/h", ["Q51"]))
 
 
 BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
@@ -231,15 +222,20 @@ def _vehicle(design: Record, load_case: Record):
     return veh, ground
 
 
+def _height(veh, ground: float) -> Record:
+    return q((float(veh.cg_total[2]) - ground) * 1000.0, "mm")
+
+
 def tilt_inputs(design: Record, load_case: Record) -> Record:
-    """h, e of the whole vehicle; m_s, h_s (above the ground: the roll axis of vertical
-    supports) of the sprung part; k, the mean wheel rate; n, the number of axles."""
+    """h, e (toward the side it tips to first) of the whole vehicle; m_s, h_s (above the
+    ground: the roll axis of vertical supports) of the sprung part; k, the mean wheel rate;
+    n, the number of axles."""
     veh, ground = _vehicle(design, load_case)
     sprung = [c for c in veh.corners if c.dof]
-    return {"h": _q((float(veh.cg_total[2]) - ground) * 1000.0, "mm"), "e": _q(abs(float(veh.cg_total[1])) * 1000.0, "mm"),
-            "m_s": _q(veh.m_s, "kg"), "h_s": _q((float(veh.cg_s[2]) - ground) * 1000.0, "mm"),
-            "k": _q(sum(c.k_w for c in sprung) / max(len(sprung), 1) / 1000.0, "N/mm"),
-            "n": _q(len({round(float(c.pos[0]), 6) for c in veh.corners}), "1")}
+    return {"h": _height(veh, ground), "e": q(abs(float(veh.cg_total[1])) * 1000.0, "mm"),
+            "m_s": q(veh.m_s, "kg"), "h_s": q((float(veh.cg_s[2]) - ground) * 1000.0, "mm"),
+            "k": q(sum(c.k_w for c in sprung) / max(len(sprung), 1) / 1000.0, "N/mm"),
+            "n": q(len({round(float(c.pos[0]), 6) for c in veh.corners}), "1")}
 
 
 def wind_inputs(design: Record, load_case: Record) -> Record:
@@ -249,27 +245,37 @@ def wind_inputs(design: Record, load_case: Record) -> Record:
     veh, ground = _vehicle(design, load_case)
     tool = CrosswindTool()
     tool._vars = design.get("variables") or {}
-    lp = load_case.get("params", {})
-    aero = tool.aero(veh, lp)
-    return {"C_y": _q(aero.cy, "1"), "A": _q(aero.side_area, "m^2"), "rho": _q(aero.rho, "kg/m^3"),
-            "h_cp": _q((aero.side_cp[2] + float(veh.cg_s[2]) - ground) * 1000.0, "mm"),
-            "h": _q((float(veh.cg_total[2]) - ground) * 1000.0, "mm")}
+    aero = tool.aero(veh, load_case.get("params", {}))
+    return {"C_y": q(aero.cy, "1"), "A": q(aero.side_area, "m^2"), "rho": q(aero.rho, "kg/m^3"),
+            "h_cp": q((aero.side_cp[2] + float(veh.cg_s[2]) - ground) * 1000.0, "mm"), "h": _height(veh, ground)}
 
 
 def dlc_inputs(design: Record, load_case: Record) -> Record:
     """X, the shorter lane change of the K2 course; h, the CG height."""
     from hiraku.solvers.k2_vehicle.shelf import DLC_SECTIONS
     veh, ground = _vehicle(design, load_case)
-    return {"X": _q(min(DLC_SECTIONS[1], DLC_SECTIONS[3]) * 1000.0, "mm"),
-            "h": _q((float(veh.cg_total[2]) - ground) * 1000.0, "mm")}
+    return {"X": q(min(DLC_SECTIONS[1], DLC_SECTIONS[3]) * 1000.0, "mm"), "h": _height(veh, ground)}
+
+
+def park_inputs(design: Record, load_case: Record) -> Record:
+    """h, the CG height; braking.parking_friction's mu_all needs every wheel braked."""
+    veh, ground = _vehicle(design, load_case)
+    if not all(c.brake for c in veh.corners):
+        raise BuildError("S4b predicts with mu_all, which takes every wheel braked; this design brakes only "
+                         + ", ".join(c.id for c in veh.corners if c.brake) + " (use mu_front or mu_rear)")
+    return {"h": _height(veh, ground)}
 
 
 def slope_inputs(design: Record, load_case: Record) -> Record:
-    """a_y = tan(side_slope) in g (the slope taken as a lateral acceleration); h."""
+    """a_y = tan(side_slope) in g (the slope taken as a lateral acceleration); h; e, the CG's
+    offset toward the downhill side."""
     from hiraku.solvers.k2_vehicle.units import si
     veh, ground = _vehicle(design, load_case)
-    beta = si(load_case["params"]["side_slope"], "rad")
-    return {"a_y": _q(math.tan(beta), "g"), "h": _q((float(veh.cg_total[2]) - ground) * 1000.0, "mm")}
+    lp = load_case["params"]
+    beta = si(lp["side_slope"], "rad")
+    y = float(veh.cg_total[1]) * 1000.0
+    return {"a_y": q(math.tan(beta), "g"), "h": _height(veh, ground),
+            "e": q(-y if lp.get("slope_up", "left") == "left" else y, "mm")}
 
 
 def launch_inputs(design: Record, load_case: Record) -> Record:
@@ -285,9 +291,9 @@ def launch_inputs(design: Record, load_case: Record) -> Record:
     driven = [c for c in veh.corners if c.drive]
     r = sum(c.radius for c in driven) / len(driven)
     lam = 1.0 + sum(c.j_w / c.radius ** 2 for c in veh.corners) / veh.m_total
-    return {"F_max": _q(motor.torque * motor.gear * motor.efficiency / r, "N"), "P": _q(motor.power / 1000.0, "kW"),
-            "eta": _q(motor.efficiency, "1"), "C_rr": _q(veh.corners[0].c_rr, "1"), "C_d": _q(aero.cd, "1"),
-            "A": _q(aero.front_area, "m^2"), "rho": _q(aero.rho, "kg/m^3"), "lambda": _q(lam, "1")}
+    return {"F_max": q(motor.torque * motor.gear * motor.efficiency / r, "N"), "P": q(motor.power / 1000.0, "kW"),
+            "eta": q(motor.efficiency, "1"), "C_rr": q(veh.corners[0].c_rr, "1"), "C_d": q(aero.cd, "1"),
+            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3"), "lambda": q(lam, "1")}
 
 
 # ------------------------------------------------------------------ scripted steps
@@ -329,11 +335,16 @@ PLANS: dict[str, Record] = {
                "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",
                "assumptions": ["全輪が摩擦の限りで減速する", "空走の時間は荷重条件の reaction_time"],
                "inputs": {"v": "lc.speed", "mu": "lc.mu", "t_r": "lc.reaction_time"}}]},
+    "S4b": {"tool": "braking", "say": "坂に止めておくのに要る摩擦を、坂の力と輪の荷重の釣り合いで先に見積もります",
+            "predictions": [{
+                "quantity": "parking_friction_demand", "formula_id": "braking.parking_friction", "output": "mu_all",
+                "assumptions": ["全輪にブレーキ、どの輪も同じ割合で摩擦を使う", "坂の上り向きに止める"],
+                "inputs": {"a": "load.cg_from_front_axle", "L": "summary.wheelbase", "h": "from.h", "grade": "lc.parking_slope"},
+                "inputs_from": park_inputs}]},
     "S5": {"tool": "offroad_roll", "say": "横の斜面に止まっているときの、上の側の輪の荷重を先に見積もります",
            "predictions": [{
                "quantity": "mean_uphill_load", "formula_id": "lane_change.inner_wheel_load", "output": "W_inner",
-               "assumptions": ["斜面を横の加速度 tan β とみる (法線の荷重は 1/cos β だけ大きく出る)",
-                               "凸凹の路面の上下の揺れは平均では消える"],
+               "assumptions": ["斜面を横の加速度 tan β とみる", "凸凹の路面の上下の揺れは平均では消える"],
                "inputs": {"m": "load.mass", "a_y": "from.a_y", "h": "from.h", "t": "summary.track_front"},
                "inputs_from": slope_inputs}],
            # Run on the demo vehicle (two_cargo, 15 deg): K0 2061.6 N, K2 1835.7 N (-11.0 %). Split by K2
@@ -347,8 +358,17 @@ PLANS: dict[str, Record] = {
                "cause": "式は斜面を横の加速度 tan β とみて、重さ全部を法線の荷重にしている (15° で 3.5 % 大きい)。"
                         "重心が下の側へ 4 mm ずれている分 (1 %) も入っていない。さらに、車体がばねの上で下の側へ"
                         "ロールして重心が下の側へ動く分 (7.4 %) が入っていない。路面の凸凹は平均を 0.7 % しか変えない",
-               "fix": "cos β と重心の横のずれと、ばねのロールを入れた斜面の式で予測し直す (解析部に頼んでいる)",
-               "stop": "斜面の式がまだ K0 にないので、ここで止めます"}},
+               "fix": "cos β と重心の横のずれを入れた斜面の釣り合い tilt.side_slope_uphill_load で予測し直す "
+                      "(ばねのロールの分は式に無いので、その分は残る)",
+               "retry": {
+                   "say": "斜面の釣り合いの式で、上の側の輪の荷重を予測し直します",
+                   "predictions": [{
+                       "quantity": "mean_uphill_load", "formula_id": "tilt.side_slope_uphill_load", "output": "W_up",
+                       "assumptions": ["剛体として斜面の上で釣り合う (ばねのロールは入れない)",
+                                       "凸凹の路面の上下の揺れは平均では消える"],
+                       "inputs": {"m": "load.mass", "t": "summary.track_front", "h": "from.h", "e": "from.e",
+                                  "beta": "lc.side_slope"},
+                       "inputs_from": slope_inputs}]}}},
     "P2": {"tool": "launch", "say": "坂の上で、出力と走る抵抗が釣り合う速さを先に見積もります",
            "predictions": [{
                "quantity": "top_speed", "formula_id": "launch.top_speed", "output": "v_top",

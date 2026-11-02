@@ -55,7 +55,7 @@ def frame_mass():
 CASES = {
     "tilt": {"loading": "two_cargo"},
     "crosswind": {"loading": "empty", "wind_speed": q(30.0, "m/s"), "speed": q(40.0, "km/h")},
-    "braking": {"loading": "two_cargo", "speed": q(35.0, "km/h"), "mu": q(0.6, "1")},
+    "braking": {"loading": "two_cargo", "speed": q(35.0, "km/h"), "mu": q(0.6, "1"), "parking_slope": q(20.0, "%")},
     "launch": {"loading": "two_cargo", "target_speed": q(40.0, "km/h")},
     "lane_change": {"loading": "two", "speed": q(40.0, "km/h"), "mu": q(0.8, "1"), "find_limit": False},
     "offroad_roll": {"loading": "two_cargo", "speed": q(20.0, "km/h"), "side_slope": q(15.0, "deg"), "length": q(40.0, "m")},

@@ -10,7 +10,9 @@ import math
 import unittest
 
 from hiraku import contract, solvers
-from hiraku.catalog import CatalogError, REPO_ROOT, load_requirements
+from hiraku.catalog import REPO_ROOT, load_requirements
+from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
+from hiraku.catalog.builders.common import BuildError
 from hiraku.catalog.builders.k2_tests import BUILDERS, PLANS
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
@@ -24,6 +26,13 @@ EXTRA = {"Q11": ("1", 0.6), "Q12": (None, "C"), "Q13": ("%", 14.0), "Q14": ("deg
          "Q51": ("s", 6.0), "Q52": ("m", 14.0), "Q53": ("%", 20.0), "Q60": ("deg", 24.0)}
 TOOL_OF = {"S1": "tilt", "S1'": "tilt", "F1": "crosswind", "S3": "lane_change", "S4": "braking", "S4b": "braking",
            "S5": "offroad_roll", "P2": "launch", "P3": "launch"}
+
+
+def predictions(step):
+    """The step's predictions, then those of its retries."""
+    while step:
+        yield from step["predictions"]
+        step = (step.get("expected_mismatch") or {}).get("retry")
 
 
 def demo():
@@ -48,7 +57,9 @@ class Builders(unittest.TestCase):
 
     def test_the_nine_tests(self):
         self.assertEqual(sorted(BUILDERS), sorted(TOOL_OF))
-        self.assertEqual(set(PLANS) - set(BUILDERS), set())
+        self.assertEqual(set(PLANS), set(BUILDERS))
+        for tid, fn in BUILDERS.items():  # the package collects this module
+            self.assertIs(ALL_BUILDERS[tid], fn)
 
     def test_load_cases_fit_the_contract(self):
         for tid, lc in self.cases.items():
@@ -79,7 +90,7 @@ class Builders(unittest.TestCase):
     def test_a_missing_requirement_is_named(self):
         req = copy.deepcopy(self.req)
         req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q52"]
-        with self.assertRaises(CatalogError) as e:
+        with self.assertRaises(BuildError) as e:
             BUILDERS["S4"]({"id": "S4"}, req, self.design)
         self.assertIn("Q52", str(e.exception))
 
@@ -122,7 +133,7 @@ class Plans(unittest.TestCase):
                 for key in ("source", "cause", "fix"):
                     self.assertTrue(expected[key].strip(), key)
                 self.assertTrue(expected.get("retry") or expected.get("stop"))
-            for p in step["predictions"]:
+            for p in predictions(step):
                 with self.subTest(test=tid, quantity=p["quantity"]):
                     self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
                     self.assertEqual(set(p["inputs"]), set(self.formulas[p["formula_id"]]["inputs"]))
@@ -132,8 +143,9 @@ class Plans(unittest.TestCase):
         for tid, step in PLANS.items():
             lc = BUILDERS[tid]({"id": tid}, self.req, self.design)
             preds = {}
-            for p in step["predictions"]:
-                with self.subTest(test=tid, quantity=p["quantity"]):
+            for p in predictions(step):
+                with self.subTest(test=tid, quantity=p["quantity"], formula=p["formula_id"]):
+                    self.assertEqual(any(ref.startswith("from.") for ref in p["inputs"].values()), "inputs_from" in p)
                     frm = p["inputs_from"](self.design, lc) if "inputs_from" in p else {}
                     inputs = {k: self.resolve(ref, lc, preds, frm) for k, ref in p["inputs"].items()}
                     spec = self.formulas[p["formula_id"]]["inputs"]
