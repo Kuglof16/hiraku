@@ -17,6 +17,7 @@ from hiraku.tools.judge import init_judgements
 Record = dict[str, Any]
 
 STOPPED_BY_USER = "stopped by the user (Ctrl+C)"
+STOPPED_BY_BUTTON = "stopped by the user (stop button: stop.request)"
 
 
 def resolve_design_path(req: Record, design_path: Path | str | None) -> Path:
@@ -89,6 +90,6 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
         check_shelf(ctx)
         init_judgements(ctx)
     except KeyboardInterrupt:  # the tool checks take a while; do not leave the folder "running"
-        store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        store.finish("stopped", stop_reason=STOPPED_BY_USER, stop_code="user_stop")
         raise
     return ctx
