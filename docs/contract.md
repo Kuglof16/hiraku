@@ -90,7 +90,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 
 - `domain_pick` には任意で `test_ids` (その分野で製品のフラグに当てはまる試験) が付く。画面はその数を「当てはまる試験の数」に出す
 - ヒアリングで決まった要件は `project.requirements` にも入る。実行の途中で要件が変わったときは `project.updated` で出し直す
-- 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。式を誰が書いたかは `check_by`: `file` (規則のファイルに式ごと書いてあった。最初から入っている規則と式つきの表)、`code` (文の型からコードが作った)、`claude` (Claude が書き、コードが検査した)。出典は `basis`、確かめていないものは `not checked`
+- 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。文から式を作ったのが誰かは `check_by`: `code` (文の型からコードが作った)・`claude` (Claude が書き、コードが検査した)。式が規則と一緒に書いてあったもの (最初から入っている規則、式つきの表) には付けない。出典は `basis`、確かめていないものは `not checked`
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い
 - 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)

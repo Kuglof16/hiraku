@@ -1972,11 +1972,10 @@
         },
         "check_by": {
           "enum": [
-            "file",
             "code",
             "claude"
           ],
-          "description": "Who wrote check: given with the rule in a file (builtin rules, tables with expressions), a code pattern from the text, or Claude."
+          "description": "Who turned a sentence into check: a code pattern or Claude. Left out when the check came written with the rule (builtin rules, tables with expressions)."
         },
         "trust": {
           "$ref": "#/$defs/trust"
