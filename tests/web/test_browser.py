@@ -540,6 +540,60 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(len(got["lines"]), 2)
         page.close()
 
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_events_are_kept(self):
+        """domains.picked, hearing.*, knowledge.imported and rule_check.recorded (the
+        contract's examples) land in state.intake; a rule check sent again replaces its line."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported", "rule_check")}
+        passed = {**copy.deepcopy(ex["rule_check"]), "hits": [], "pass": True}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        checks = [
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": ex["rule_check"]},
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": passed},
+        ]
+        t0 = events[0]["t"]
+        intake = [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)]
+        t1 = events[-1]["t"]
+        checks = [{**base, "t": t1 - 0.2 + 0.1 * i, **ev} for i, ev in enumerate(checks)]
+        events = events[:1] + intake + events[1:-1] + checks + [events[-1]]
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+            self.assertEqual(contract.errors("event", ev), [], ev["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const k = window.hiraku.state().intake;
+              return { picks: k.picked.picks.map((p) => p.domain), questions: k.questions.map((q) => q.req_key),
+                       answers: k.answers.map((a) => a.key), note: k.note, docs: k.docs.map((x) => x.doc.doc_id),
+                       rules: Object.keys(k.rules), checks: Object.values(k.ruleChecks).map((c) => [c.rule_check_id, c.pass]),
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent)
+                         .filter((x) => ["分野を選んだ", "要件を", "答えがそろった", "規則の束", "規則 SM-01"].some((w) => x.includes(w))) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["picks"], ["strength"])
+        self.assertEqual(got["questions"], ["Q15"])
+        self.assertEqual(got["answers"], ["Q15"])
+        self.assertEqual(got["note"], ex["hearing_answered"]["note"])
+        self.assertEqual(got["docs"], ["builtin-sheet-metal"])
+        self.assertEqual(got["rules"], ["SM-01"])
+        self.assertEqual(got["checks"], [["rchk-0001", True]])
+        self.assertEqual(len(got["lines"]), 5, got["lines"])
+        self.assertIn("当てはまる試験 2", got["lines"][0])
+        self.assertIn("値が無くて当てられない部品 1", got["lines"][4])
+        self.assertNotIn("守れていない", got["lines"][4])
+        page.close()
+
     def test_n05_cut_is_laid_out_from_the_layout_rules(self):
         """cut.html?cut=n05: tiles where layout.json puts them, the hero before the burst and
         the grid after, nothing in the subtitle band. With HIRAKU_WEB_DEV_RUNS the tiles play
