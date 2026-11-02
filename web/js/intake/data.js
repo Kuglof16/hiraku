@@ -4,96 +4,115 @@ export const FLAGS = [
   {
     "name": "ride",
     "symbol": "乗",
+    "label": "人が乗る",
     "question": "人が乗って一緒に動くか"
   },
   {
     "name": "lean",
     "symbol": "預",
+    "label": "体を預ける",
     "question": "人が体を預けるか (寝る・座る・もたれる・手をつく)"
   },
   {
     "name": "self_propelled",
     "symbol": "走",
+    "label": "自分で動く",
     "question": "自分の動力で移動するか"
   },
   {
     "name": "outdoor",
     "symbol": "外",
+    "label": "屋外",
     "question": "屋外で使うか"
   },
   {
     "name": "rough",
     "symbol": "悪",
+    "label": "悪路",
     "question": "未舗装・凹凸の路面を走るか"
   },
   {
     "name": "public_road",
     "symbol": "公",
+    "label": "公道",
     "question": "公道を走るか (法令の区分に入るか)"
   },
   {
     "name": "battery",
     "symbol": "池",
+    "label": "電池",
     "question": "電池を積むか"
   },
   {
     "name": "electric",
     "symbol": "電",
+    "label": "電動",
     "question": "電動で動く部分があるか (モーター・アクチュエータ)"
   },
   {
     "name": "pinch",
     "symbol": "挟",
+    "label": "挟まれる隙間",
     "question": "動く部分に体が入る隙間があるか"
   },
   {
     "name": "cargo",
     "symbol": "荷",
+    "label": "荷を載せる",
     "question": "物を載せるか"
   },
   {
     "name": "standing",
     "symbol": "置",
+    "label": "床に自立",
     "question": "床・地面に自立して置くか (倒れうるか)"
   },
   {
     "name": "near_people",
     "symbol": "近",
+    "label": "人のそばを動く",
     "question": "人のすぐ近くを動くか"
   },
   {
     "name": "liquid",
     "symbol": "液",
+    "label": "液体を運ぶ",
     "question": "液体を運ぶか"
   },
   {
     "name": "vibration",
     "symbol": "振",
+    "label": "振動源",
     "question": "振動源があるか (回転・弦)"
   },
   {
     "name": "continuous",
     "symbol": "続",
+    "label": "連続で動く",
     "question": "発熱が問題になるほど連続で動くか"
   },
   {
     "name": "assembly",
     "symbol": "組",
+    "label": "組み立て・整備",
     "question": "組み立て・分解・整備があるか"
   },
   {
     "name": "preload",
     "symbol": "張",
+    "label": "常に張力",
     "question": "常にかかる内力があるか (弦・ばね)"
   },
   {
     "name": "sound",
     "symbol": "音",
+    "label": "音が機能",
     "question": "音が機能か"
   },
   {
     "name": "handheld",
     "symbol": "持",
+    "label": "手で持つ",
     "question": "手で持つ・身に着けるか"
   }
 ];

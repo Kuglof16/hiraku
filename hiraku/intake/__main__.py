@@ -18,7 +18,7 @@ from pathlib import Path
 
 from hiraku.catalog import REPO_ROOT, load_requirements, read_data
 from hiraku.intake import (IntakeError, flags_text, load_product, pick_domains, product_files, rulecheck, summary_line)
-from hiraku.intake import hearing, knowledge, webdata
+from hiraku.intake import demo, hearing, knowledge, webdata
 from hiraku.intake.products import answers_file
 
 
@@ -127,6 +127,7 @@ def cmd_rules(a: argparse.Namespace) -> int:
 
 def cmd_gen_js(a: argparse.Namespace) -> int:
     print(webdata.write())
+    print(demo.write())
     return 0
 
 

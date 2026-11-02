@@ -43,7 +43,16 @@ SPEED_CLASSES: dict[str, tuple[str, str]] = {
     "vehicle": ("車", "車の速さ (40 km/h 以下)"),
 }
 
+# flag -> a short name for a chip
+FLAG_LABELS: dict[str, str] = {
+    "ride": "人が乗る", "lean": "体を預ける", "self_propelled": "自分で動く", "outdoor": "屋外", "rough": "悪路",
+    "public_road": "公道", "battery": "電池", "electric": "電動", "pinch": "挟まれる隙間", "cargo": "荷を載せる",
+    "standing": "床に自立", "near_people": "人のそばを動く", "liquid": "液体を運ぶ", "vibration": "振動源",
+    "continuous": "連続で動く", "assembly": "組み立て・整備", "preload": "常に張力", "sound": "音が機能", "handheld": "手で持つ",
+}
+
 assert tuple(FLAGS) == tuple(contract.schema()["$defs"]["flags"]["propertyNames"]["enum"]), "flags differ from the contract"
+assert tuple(FLAG_LABELS) == tuple(FLAGS)
 assert tuple(SPEED_CLASSES) == tuple(contract.schema()["$defs"]["speed_class"]["enum"])
 
 _NAME = re.compile(r"[a-z_]+")
