@@ -263,7 +263,7 @@ body.video .hint { display: none; }
 .legend {
   position: absolute;
   right: 14px;
-  top: 52px;
+  bottom: 76px;
   z-index: 5;
   background: rgba(251, 249, 244, 0.93);
   border: 1.5px solid var(--line);

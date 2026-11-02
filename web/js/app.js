@@ -8,7 +8,8 @@
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?tab=grid       open on the all-domains grid instead of the workbench
-// window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn.
+// window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
+// window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
 import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
@@ -303,8 +304,8 @@ function renderHooks(s, playhead) {
     if (playhead - d.t < SHOW_S) recent[d.rule] = true;
   }
   for (const b of s.hooks.blockedStops) {
-    counts.H4 = (counts.H4 ?? 0) + 1;
-    if (playhead - b.t < SHOW_S) recent.H4 = true;
+    counts[b.rule] = (counts[b.rule] ?? 0) + 1;
+    if (playhead - b.t < SHOW_S) recent[b.rule] = true;
   }
   const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}">${r.id} ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
@@ -436,7 +437,20 @@ async function seekAndDraw(t) {
 
 let readyResolve;
 const ready = new Promise((r) => (readyResolve = r));
-window.hiraku = { player, ready, seek: seekAndDraw, state: () => player.state, bench };
+window.hiraku = {
+  player,
+  ready,
+  seek: seekAndDraw,
+  state: () => player.state,
+  bench,
+  // Replace what is shown with these events (parsed objects) and stop at t.
+  load: (events, t = 0) => {
+    feed?.stop();
+    resetPlayer();
+    player.append(events);
+    return seekAndDraw(t);
+  },
+};
 
 // ---- input ------------------------------------------------------------------
 $("pb-play").addEventListener("click", () => {

@@ -26,6 +26,7 @@ export function initialState() {
     project: null,
     startTs: null,
     status: "empty", // empty | running | done | stopped | failed
+    stopReason: null,
     t: 0,
     seq: -1,
     designs: {},
@@ -126,7 +127,9 @@ export function applyEvent(s, ev) {
     case "run.finished": {
       s.status = d.status ?? "done";
       for (const a of Object.values(s.agents)) a.active = false;
-      log(s, ev, d.status === "failed" ? "bad" : "info", `実行が終わった (${d.status ?? ""})${ev.text ? ": " + ev.text : ""}`);
+      s.stopReason = d.stop_reason ?? null;
+      const why = d.stop_reason ? `・${d.stop_reason}` : "";
+      log(s, ev, d.status === "failed" ? "bad" : "info", `実行が終わった (${d.status ?? ""}${why})${ev.text ? ": " + ev.text : ""}`);
       setActivity(s, ev, ev.text || "実行が終わった");
       break;
     }
@@ -198,7 +201,13 @@ export function applyEvent(s, ev) {
       break;
     }
     case "comparison.recorded": {
+      // A record sent again with the same id replaces the earlier one (the last is right).
+      const before = s.comparisons[d.comparison_id];
       put(s, "comparisons", d.comparison_id, d, ev);
+      if (before) {
+        log(s, ev, "muted", `照合 ${d.comparison_id} を更新した${d.cause_id && d.cause_id !== before.cause_id ? ` (原因 ${d.cause_id} が付いた)` : ""}`);
+        break;
+      }
       const ok = d.status === "match";
       if (agent) agent.status = ok ? "照合した" : "食い違い";
       const txt = ok
@@ -209,7 +218,13 @@ export function applyEvent(s, ev) {
       break;
     }
     case "cause.recorded": {
+      const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
+      if (before) {
+        const fixed = d.resolved && !before.resolved;
+        log(s, ev, fixed ? "ok" : "muted", fixed ? `原因 ${d.cause_id} は直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : `原因 ${d.cause_id} を更新した`);
+        break;
+      }
       log(s, ev, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」`);
       setActivity(s, ev, `食い違いの原因を書いた: ${d.cause}`);
       break;
@@ -227,7 +242,7 @@ export function applyEvent(s, ev) {
       const a = s.agents[`cae.${d.domain}`];
       if (a && d.state === "green") a.status = "✓";
       if (a && d.state === "red") a.status = "赤";
-      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "info", `${DOMAIN_JA[d.domain] ?? d.domain}: 版 ${d.design_version} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
+      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: 版 ${d.design_version} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
       break;
     }
     case "tool.checked": {
@@ -246,10 +261,13 @@ export function applyEvent(s, ev) {
       break;
     }
     case "hook.blocked_stop": {
-      const item = { text: ev.text ?? "", t: ev.t, seq: ev.seq };
+      const r = ruleOf(d.rule ?? "H4");
+      const text = ev.text || "判定がそろっていないので終われない";
+      const count = typeof d.count === "number" && typeof d.limit === "number" ? ` (${d.count} / ${d.limit} 回)` : "";
+      const item = { rule: r.id, text, t: ev.t, seq: ev.seq, count: d.count ?? null, limit: d.limit ?? null };
       s.hooks.blockedStops.push(item);
-      s.denied = { rule: "H4", ruleJa: ruleOf("H4").ja, text: ev.text ?? "判定がそろっていないので終われない", t: ev.t, seq: ev.seq };
-      log(s, ev, "hook", `hooks (H4): ${ev.text || "判定がそろっていないので終われない"}`);
+      s.denied = { rule: r.id, ruleJa: r.ja, text: text + count, t: ev.t, seq: ev.seq };
+      log(s, ev, "hook", `hooks (${r.id} ${r.ja}): ${text}${count}`);
       break;
     }
     case "screen.focus": {
