@@ -86,8 +86,13 @@ function chartSvg(s, w, h) {
   return { svg: `<polyline points="${pts}" fill="none" stroke="#2b59c3" stroke-width="2.2"/><line class="cur" x1="0" x2="0" y1="0" y2="${h}" stroke="#c8402a" stroke-width="1.5"/>`, X };
 }
 
+// Every value the N05 cut reads from the layout rules; a missing one is named, not guessed.
+const N05_KEYS = ["duration_s", "grid", "tile", "hero", "hero_motion", "times", "ease", "fly_from", "tests"];
+
 class Cut {
   constructor(layout, s) {
+    const missing = N05_KEYS.filter((k) => layout.n05?.[k] === undefined);
+    if (missing.length) throw new Error(`layout.json の n05 に無い: ${missing.join(", ")}`);
     this.layout = layout;
     this.s = s;
     this.spec = layout.n05;
@@ -121,7 +126,7 @@ class Cut {
     // tiles: the grid from the rules, opening outward from fly_from
     const rects = gridRects(sp.grid);
     const order = outwardOrder(rects, sp.fly_from);
-    const ease = cubicBezier(...(sp.ease?.tile ?? [0.2, 0.9, 0.3, 1.15]));
+    const ease = cubicBezier(...sp.ease.tile);
     const T = sp.times;
     this.tiles = sp.tests.map((key, i) => {
       const r = rects[i];
@@ -208,7 +213,7 @@ class Cut {
   draw(t) {
     const sp = this.spec;
     const T = sp.times;
-    const H = sp.hero_motion ?? { push_scale: 1.04, burst_scale: 1.7, burst_dur_s: 0.4, ease: [0.5, 0, 0.9, 0.4] };
+    const H = sp.hero_motion;
     // hero: a slow push until the burst, then it swells and fades
     const he = this.hero.el;
     const burst = Math.max(0, Math.min(1, (t - T.burst_s) / H.burst_dur_s));
