@@ -13,7 +13,8 @@ from hiraku import contract, solvers
 from hiraku.catalog import REPO_ROOT, load_requirements
 from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
 from hiraku.catalog.builders.common import BuildError
-from hiraku.catalog.builders.k2_tests import BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND
+from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND,
+                                              PREDICTION_ONLY_PARAMS)
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
 from hiraku.tools.summary import design_summary
@@ -71,6 +72,8 @@ class Builders(unittest.TestCase):
         for tid, lc in self.cases.items():
             declared = {p["name"]: p for p in TOOLS[TOOL_OF[tid]].describe()["params"]}
             for name, value in lc["params"].items():
+                if name in PREDICTION_ONLY_PARAMS:  # read by the step's inputs_from, not the tool
+                    continue
                 with self.subTest(test=tid, param=name):
                     self.assertIn(name, declared)
                     p = declared[name]

@@ -71,6 +71,10 @@ BEYOND_RAMP_S = 12.0
 # limits are within a degree at friction 0.8 (HIRAKU's choice, an assumption).
 BEYOND_HOLD_MU = 2.0
 
+# Load-case params that only the predictions read (inputs_from), not the tool: the tool's
+# record names them in its effects as params it does not read.
+PREDICTION_ONLY_PARAMS = ("cargo_cg_above_deck",)  # S1: the requirement's cargo height (Q41)
+
 # tolerance_rel per test: what the hand calculation leaves out of the tool.
 TOLERANCE = {
     # tilt.spring_roll_angle has the body roll on linear springs about a roll axis on
