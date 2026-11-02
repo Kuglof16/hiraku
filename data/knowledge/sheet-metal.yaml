@@ -1,0 +1,25 @@
+# Built-in rules: sheet metal (板金). One file per category; the rules apply to the parts of a design
+# (hiraku.intake.rulecheck). `check` is a yes/no question about facts (hiraku.intake.facts); `kinds` limits
+# which parts, frames or supports the rule is applied to (no `kinds`: every part).
+# trust: 1 primary source, 2 secondary source, 3 assumption. "not checked in this repository" = the
+# value is taken from the cited source and that source has not been read again for this repository.
+doc_id: KN-SM
+title: 板金の決まり
+category: sheet_metal
+rules:
+  - id: SM-01
+    text: 曲げの内側の半径は板厚以上
+    kinds: [body]
+    check: bend_radius_mm >= thickness_mm
+    trust: 3
+    basis: >-
+      a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet
+      thickness); no single primary source was read (assumption)
+  - id: SM-02
+    text: 穴の中心から板の縁までの距離は板厚の 2 倍以上
+    kinds: [body]
+    check: hole_edge_mm >= 2 * thickness_mm
+    trust: 3
+    basis: >-
+      a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness);
+      no single primary source was read (assumption)

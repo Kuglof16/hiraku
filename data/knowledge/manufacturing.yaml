@@ -1,0 +1,14 @@
+# Built-in rules: manufacturing (製造). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the product tables; they were not opened for this repository.
+doc_id: KN-MF
+title: 製造の決まり
+category: manufacturing
+rules:
+  - id: MF-01
+    text: 角形鋼管の肉厚は、規格品の下限 1.6 mm 以上
+    kinds: [frame]
+    check: wall_mm >= 1.6
+    trust: 2
+    basis: >-
+      JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables;
+      not checked in this repository)

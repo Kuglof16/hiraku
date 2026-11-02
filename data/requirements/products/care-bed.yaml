@@ -1,0 +1,130 @@
+# Home-use electric care bed (JIS T 9254). N09 shows five domains: handling (tipping), powertrain
+# (actuators), strength (by count of uses), nvh (noise) and thermal (duty).
+# Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
+# "not checked in this repository" = the value is taken from the cited page and that page has not
+# been read again for this repository. The required answers (Q30, Q40) are in care-bed.answers.yaml.
+# JIS T 9254 here means the copy at https://kikakurui.com/t9/T9254-2009-01.html (the page title says 2009,
+# the body is the 2015 edition); a copy is a secondary source.
+
+want: 在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)
+product: care-bed
+speed_class: static
+flags:
+  lean: true       # 預: a person lies and sits on it
+  electric: true   # 電: actuators
+  pinch: true      # 挟: rails, moving frames
+  cargo: true      # 荷: mattress and accessories
+  standing: true   # 置: stands on the floor
+  assembly: true   # 組
+requirements:
+  - key: Q11
+    name: 路面・床と摩擦係数
+    value: 床
+    source: default
+    trust: 3
+    basis: assumption (an indoor floor; no friction coefficient looked up)
+  - key: Q19
+    name: 気温 (範囲の高い端)
+    value: 40
+    unit: degC
+    source: default
+    trust: 1
+    basis: >-
+      LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う),
+      https://media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)
+    note: 低い端は +5 degC
+  - key: Q20
+    name: 水・ほこり
+    value: IPX4
+    source: default
+    trust: 2
+    basis: JIS T 9254 (copy), https://kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)
+  - key: Q31
+    name: 体格の範囲
+    value: 高齢女性 5 % 〜 若年男性 95 %
+    source: default
+    trust: 1
+    basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+  - key: Q33
+    name: 体重 (強さの不利側)
+    value: 1350
+    unit: N
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy): 利用者の荷重 1350 N (約 138 kg), https://kikakurui.com/t9/T9254-2009-01.html
+      (not checked in this repository)
+  - key: Q34
+    name: 弱い人がいるか
+    value: 高齢者
+    source: default
+    trust: 3
+    basis: assumption (a home care bed is used by older people)
+  - key: Q56
+    name: アクチュエータの動く範囲 (背上げ)
+    value: 70
+    unit: deg
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https://kikakurui.com/t9/T9254-2009-01.html
+      (not checked in this repository)
+  - key: Q60
+    name: 静的に倒れない限界 (側端にかける力)
+    value: 1350
+    unit: N
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, https://kikakurui.com/t9/T9254-2009-01.html
+      (not checked in this repository)
+  - key: Q61
+    name: 安全率 (摩耗・疲労する部品)
+    value: 4
+    unit: "1"
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https://kikakurui.com/t9/T9254-2009-01.html
+      (not checked in this repository)
+  - key: Q63
+    name: 挟み込みの隙間
+    value: JIS T 9254 の型と FDA の区分 (Zone 1-4)
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006),
+      https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf
+      (not checked in this repository)
+  - key: Q72
+    name: なぞる規格
+    value: JIS T 9254・FDA
+    source: default
+    trust: 2
+    basis: catalog research (not checked in this repository)
+  - key: Q80
+    name: 材料と接合
+    value: 鋼
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q81
+    name: 組む人と工具
+    value: 2 人
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q82
+    name: 出荷の形
+    value: 分割
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q92
+    name: 繰り返し回数
+    value: 着座 10000 回・昇降 3000 回・背上げと膝上げ 1000 回・柵の上げ下げ 30000 回
+    source: default
+    trust: 2
+    basis: >-
+      JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された),
+      https://kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)

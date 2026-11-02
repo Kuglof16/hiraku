@@ -1,0 +1,19 @@
+# Built-in rules: assembly (組み立て). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the source; the source was not opened for this repository.
+doc_id: KN-AS
+title: 組み立ての決まり
+category: assembly
+rules:
+  - id: AS-01
+    text: 1 人で持ち上げる部品は 23 kg 以下
+    kinds: [battery, motor, controller, electrical, body, steering, seat, suspension, wheel]
+    check: mass_kg <= 23
+    trust: 2
+    basis: >-
+      NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993)
+      (recalled; not checked in this repository). A hit means two people or a lifting aid are needed
+  - id: AS-02
+    text: 部品の箱は地面より下に出ない
+    check: bottom_z_mm >= 0
+    trust: 3
+    basis: a check of the geometry (the origin is on the ground), not taken from a source (assumption)
