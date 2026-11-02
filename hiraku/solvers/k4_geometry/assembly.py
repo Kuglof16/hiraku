@@ -63,30 +63,43 @@ def blocker(part: Body, others: list[Body], direction, travel: float) -> str | N
 
 
 def disassemble(design: dict, bs: dict[str, Body] | None = None) -> dict:
+    """{"order": [(body id, direction going in)], "routes": {body id: moves out}, "blocked": {body id: [blockers]}}.
+    A part leaves straight along one of the six directions when it can; when no part can, the
+    next one leaves by two moves (route.two_moves)."""
+    from .route import straight, two_moves
+
     bs = bs or bodies(design)
     members = [b for b in bs.values() if b.kind == "member"]
     remaining = {k: b for k, b in bs.items() if b.kind not in NOT_ASSEMBLED and b.kind != "member"}
     pts = np.vstack([b.obb.corners() for b in bs.values()])
     travel = float(np.max(np.ptp(pts, axis=0))) * 1.5
-    removed: list[tuple[str, str]] = []
+    removed: list[tuple[str, list[tuple[str, float]]]] = []
     while remaining:
         best = None
         for k, b in sorted(remaining.items()):
             others = members + [o for kk, o in remaining.items() if kk != k]
-            free = [name for name, dv in DIRECTIONS.items() if blocker(b, others, dv, travel) is None]
+            free = straight(b, others, travel)
             if free and (best is None or len(free) > len(best[1])):
                 best = (k, free)
-        if best is None:
-            break
-        k, free = best
-        removed.append((k, _preferred(free)))
+        if best is None:  # nothing comes out straight: the shortest two-move route
+            for k, b in sorted(remaining.items()):
+                others = members + [o for kk, o in remaining.items() if kk != k]
+                moves = two_moves(b, others, travel)
+                if moves and (best is None or moves[0][1] < best[1][0][1]):
+                    best = (k, moves)
+            if best is None:
+                break
+            k, moves = best
+        else:
+            k, moves = best[0], [(best[1][0], travel)]
+        removed.append((k, moves))
         del remaining[k]
     blocked = {}
     for k, b in remaining.items():
         others = members + [o for kk, o in remaining.items() if kk != k]
         blocked[k] = sorted({blocker(b, others, dv, travel) for dv in DIRECTIONS.values()} - {None})
-    order = [(k, _reverse(d)) for k, d in reversed(removed)]
-    return {"order": order, "blocked": blocked}
+    order = [(k, _reverse(moves[0][0])) for k, moves in reversed(removed)]
+    return {"order": order, "routes": dict(removed), "blocked": blocked}
 
 
 def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
@@ -95,19 +108,31 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
     TOOL_DEPTH_MM deep, in front of the part on the side it comes from), hand_reach (that face
     within REACH_MM of the outside of what is already built), depends_on (parts already in
     place it touches)."""
+    from .fastening import part_fastenings, text_of
+    from .route import path_in, text_in
+
     bs = bs or bodies(design)
     asm = disassemble(design, bs)
     members = [b for b in bs.values() if b.kind == "member"]
+    names = {p["id"]: p.get("name", p["id"]) for p in design.get("parts", [])}
+    extent = np.vstack([b.obb.corners() for b in bs.values()])
+    allowed = _step_fields()
     placed: list[Body] = []
     out = []
     for i, (k, d_in) in enumerate(asm["order"]):
         part = bs[k]
+        pid = k.split(":", 1)[1]
         d_from = -np.asarray(DIRECTIONS[d_in], float)  # the hands work from where the part comes from
         tool_ok, reach_ok, reach = _access(part, members + placed, d_from)
         touching = sorted(o.id.split(":", 1)[1] for o in placed if overlap(part.obb, o.obb) > -TOUCH_MM)
-        step = {"order": i + 1, "part": k.split(":", 1)[1], "direction": d_in, "depends_on": touching,
+        step = {"order": i + 1, "part": pid, "direction": d_in, "depends_on": touching,
                 "no_interference": True, "tool_clearance": tool_ok, "hand_reach": reach_ok,
                 "note": f"face {reach:.0f} mm in from the outside of what is built"}
+        moves = _clear_of(part, asm["routes"][k], extent)
+        fast = part_fastenings(design, pid, bs)
+        extra = {"fastenings": fast, "path_mm": path_in(part.obb.center, moves),
+                 "text": f"{names.get(pid, pid)}を{text_in(moves)}、{text_of(fast, names)}"}
+        step.update({key: v for key, v in extra.items() if key in allowed})
         out.append(step)
         placed.append(part)
     n = len(out)
@@ -115,8 +140,29 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
         out.append({"order": n + j + 1, "part": k.split(":", 1)[1], "direction": "none", "no_interference": False,
                     "tool_clearance": False, "hand_reach": False,
                     "blocked_by": [b.split(":", 1)[1] for b in blockers],
-                    "note": "cannot go in along any of the six directions"})
+                    "note": "cannot go in along any of the six directions, nor by sliding first and then one of them"})
     return out
+
+
+PATH_MARGIN_MM = 100.0  # the path starts this far outside everything (display)
+
+
+def _clear_of(part: Body, moves: list[tuple[str, float]], extent: np.ndarray) -> list[tuple[str, float]]:
+    """The route with its last move only as long as it takes the part this margin clear of everything."""
+    pos = part.obb
+    for d, dist in moves[:-1]:
+        pos = pos.moved(np.asarray(DIRECTIONS[d], float) * dist)
+    d, _ = moves[-1]
+    v = np.asarray(DIRECTIONS[d], float)
+    gap = float(np.max(extent @ v) - np.min(pos.corners() @ v)) + PATH_MARGIN_MM
+    return list(moves[:-1]) + [(d, gap)]
+
+
+def _step_fields() -> set[str]:
+    """The assembly_step fields the contract has (new ones appear when the contract gets them)."""
+    from hiraku import contract
+
+    return set(contract.schema()["$defs"]["assembly_step"]["properties"])
 
 
 def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, bool, float]:
@@ -135,14 +181,6 @@ def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, b
     else:
         depth = 0.0
     return tool_ok, depth <= REACH_MM, depth
-
-
-def _preferred(free: list[str]) -> str:
-    """Out upward if possible (assembly from above), then sideways, then the rest."""
-    for d in ("+z", "+y", "-y", "+x", "-x", "-z"):
-        if d in free:
-            return d
-    return free[0]
 
 
 def _reverse(direction: str) -> str:
