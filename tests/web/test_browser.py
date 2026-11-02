@@ -99,6 +99,7 @@ def n05_layout():
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": 910, "h": 170},
+        "min_text_px": 18,
         "colors": {"night": "#131311", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
         "n05": {
             "duration_s": 5.0,
@@ -112,7 +113,7 @@ def n05_layout():
             "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"],
         },
         "n01": {
-            "duration_s": 6.0,
+            "duration_s": 4.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
             "pane": {"x": 1328, "y": 96, "w": 496, "h": 790},
             "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2},
@@ -614,11 +615,16 @@ class BrowserReplayTest(unittest.TestCase):
                            cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
                            ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
                            contour: window.hiraku.cut.contour?.kind ?? null,
-                           view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom })"""
+                           view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
+                           // the smallest text in the pane (every element that holds text of its own)
+                           minText: Math.min(...[...document.querySelectorAll('[data-box="n01.pane"] *')]
+                             .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
+                             .map((el) => parseFloat(getComputedStyle(el).fontSize))) })"""
             )
+            self.assertGreaterEqual(got["minText"], 18)
             self.assertEqual(errors, [])
             self.assertIsNone(got["err"])
-            self.assertEqual(got["duration"], 6.0)
+            self.assertEqual(got["duration"], 4.0)
             self.assertEqual([c[0] for c in got["cards"]], ["n01.card.ok", "n01.card.over"])
             self.assertIn("100 mm", got["cards"][0][1])
             self.assertIn("限界の外の条件", got["cards"][1][1])

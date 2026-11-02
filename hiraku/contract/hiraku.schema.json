@@ -259,6 +259,13 @@
           "type": "number",
           "minimum": 0,
           "default": 2.0
+        },
+        "beyond": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
         }
       }
     },
@@ -1681,6 +1688,13 @@
           "items": {
             "type": "integer"
           }
+        },
+        "beyond": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
         }
       }
     },
