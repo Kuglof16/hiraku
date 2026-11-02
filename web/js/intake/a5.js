@@ -7,7 +7,7 @@ import { allRules, ruleState, ruleTree } from "./model.js";
 const MODES = [["category", "分類から"], ["source", "出どころから"]];
 const FILTERS = [["all", "すべて"], ["builtin", "基本"], ["dropped", "取り込んだ"], ["hit", "当たった"]];
 const ORIGIN_JA = { builtin: "基本の制約", dropped: "取り込んだ" };
-const BY_JA = { file: "データのファイル", code: "文の型からコード", claude: "Claude" };
+const BY_JA = { code: "文の型からコード", claude: "Claude" }; // no check_by: the formula came with the data
 const TRUST_JA = ["", "一次の資料", "二次の資料", "仮定 (確かめていない)"];
 
 function status(state, off) {
@@ -59,7 +59,7 @@ function detail(m, rule, ui) {
     h("dl", {},
       h("dt", {}, "分類"), h("dd", {}, cat),
       h("dt", {}, "出どころ"), h("dd", {}, rule.origin === "builtin" ? "基本の制約" : `取り込んだファイル ${rule.docName}`),
-      h("dt", {}, "式"), h("dd", {}, h("code", { class: "in-formula" }, rule.check), h("small", {}, ` 作った人: ${BY_JA[rule.check_by] || rule.check_by}`)),
+      h("dt", {}, "式"), h("dd", {}, h("code", { class: "in-formula" }, rule.check), h("small", {}, ` 式の出どころ: ${BY_JA[rule.check_by] || "データに書いてあった式"}`)),
       h("dt", {}, "対象"), h("dd", {}, rule.applies_to?.kinds?.join("・") || "すべての部品"),
       h("dt", {}, "根拠"), h("dd", {}, h("span", { class: `in-dot t${rule.trust}`, title: TRUST_JA[rule.trust] }, rule.trust), " ", rule.basis)),
     h("h4", {}, "設計に当てた結果", st.checked ? h("small", {}, ` 版 ${st.designVersion}`) : null),

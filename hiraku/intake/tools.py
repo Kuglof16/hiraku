@@ -229,7 +229,7 @@ def import_knowledge_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             problems.append(p)
     out: Record = {
         "doc_id": doc_id,
-        "rules": [{k: r[k] for k in ("rule_id", "category", "text", "check", "check_by")} for r in got.record["rules"]],
+        "rules": [{k: r[k] for k in ("rule_id", "category", "text", "check", "check_by") if k in r} for r in got.record["rules"]],
         "needs_formula": got.needs_formula,
         "recorded": not problems,
     }
@@ -272,7 +272,11 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
     if persist:
         for c in checks:
-            store.add_record("rule_check", c, design_version=version, agent="packager")
+            if ev.store_records(store, "rule_check"):  # the store writes the file and emits the event
+                store.add_record("rule_check", c, design_version=version, agent="packager")
+            elif (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
+                problems.append(p)  # the store does not know the kind yet: the event alone (no file)
+                break
     else:
         problems.append(f"event kind {ev.RULE_CHECK_RECORDED} is not in the contract yet")
     summary = rulecheck.summarize(checks)

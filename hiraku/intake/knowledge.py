@@ -39,13 +39,15 @@ CATEGORIES: dict[str, str] = {
     "suspension": "サス",
     "manufacturing": "製造",
 }
-CHECK_BY = ("file", "code", "claude")  # where the formula came from: a data file, the code's patterns, Claude
+# Who turned a sentence into the formula (the contract's check_by): the code's patterns or Claude. None when
+# nobody did: the formula came with the data (a built-in file, or a table with a formula column).
+CHECK_BY = (None, "code", "claude")
 
 
 # --------------------------------------------------------------------------------------- rules
 
 
-def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *, origin: str, check_by: str,
+def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *, origin: str, check_by: str | None,
               trust: int, basis: str, kinds: list[str] | None = None) -> Record:
     """A validated rule record. Raises IntakeError when the category, the formula or its names are wrong."""
     if category not in CATEGORIES:
@@ -64,7 +66,9 @@ def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *
     if check_by not in CHECK_BY or origin not in ("builtin", "dropped"):
         raise ValueError(f"{rule_id}: bad origin or check_by")
     rule: Record = {"rule_id": rule_id, "doc_id": doc_id, "category": category, "text": text.strip(), "check": check.strip(),
-                    "origin": origin, "check_by": check_by, "trust": trust, "basis": basis.strip()}
+                    "origin": origin, "trust": trust, "basis": basis.strip()}
+    if check_by:
+        rule["check_by"] = check_by
     if kinds:
         rule["applies_to"] = {"kinds": list(kinds)}
     return rule
@@ -80,7 +84,7 @@ def load_builtin(folder: Path = KNOWLEDGE_DIR) -> list[Record]:
     docs.sort(key=lambda d: order.index(d["category"]))
     out: list[Record] = []
     for d in docs:
-        rules = [make_rule(r["id"], d["doc_id"], d["category"], r["text"], r["check"], origin="builtin", check_by="file",
+        rules = [make_rule(r["id"], d["doc_id"], d["category"], r["text"], r["check"], origin="builtin", check_by=None,
                            trust=r["trust"], basis=r["basis"], kinds=r.get("kinds")) for r in d["rules"]]
         out.append({"doc": {"doc_id": d["doc_id"], "filename": d["title"], "origin": "builtin"}, "rules": rules})
     ids = [r["rule_id"] for rec in out for r in rec["rules"]]
@@ -349,7 +353,7 @@ def import_text(
             continue
         category = c.category or guess_category(c.text) or "manufacturing"
         kinds = c.kinds
-        check, by = c.check, "file"
+        check, by = c.check, None  # a formula that came with the file has no maker to name
         given = formulas.get(c.cand_id)
         if given:
             check, by = given.get("check"), "claude"

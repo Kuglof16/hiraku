@@ -30,6 +30,13 @@ def known(kind: str) -> bool:
     return kind != RULE_CHECK_RECORDED or "rule_check" in contract.kinds()
 
 
+def store_records(store: Any, kind: str) -> bool:
+    """Does this RunStore write records of this kind (a file and its event) through add_record?"""
+    from hiraku.store import run_store
+
+    return kind in getattr(run_store, "RECORD_EVENT", {})
+
+
 def picked_event(record: Record) -> Record:
     return {"kind": DOMAINS_PICKED, "agent": "lead", "text": domains_line(record), "data": record}
 

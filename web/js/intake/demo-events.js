@@ -36,6 +36,15 @@ export const DEMOS = {
     "cost_usd": 0.0,
     "requirements": [
      {
+      "key": "Q11",
+      "name": "路面の摩擦係数 (砂利)",
+      "value": 0.6,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (gravel; no public value found)"
+     },
+     {
       "key": "Q12",
       "name": "路面の粗さ (ISO 8608 のクラス)",
       "value": "C",
@@ -45,12 +54,21 @@ export const DEMOS = {
      },
      {
       "key": "Q13",
-      "name": "縦の坂",
-      "value": 12,
+      "name": "縦の坂 (止まって発進できる一番急な坂)",
+      "value": 14,
       "unit": "%",
       "source": "default",
       "trust": 1,
-      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository)"
+      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+     },
+     {
+      "key": "Q14",
+      "name": "横の傾き",
+      "value": 15,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (no basis found)"
      },
      {
       "key": "Q15",
@@ -60,6 +78,15 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption"
+     },
+     {
+      "key": "Q18",
+      "name": "横風 (瞬間)",
+      "value": 30,
+      "unit": "m/s",
+      "source": "default",
+      "trust": 1,
+      "basis": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
      },
      {
       "key": "Q19",
@@ -107,6 +134,15 @@ export const DEMOS = {
       "note": "乗員とは別の荷として扱う (聞いていない)"
      },
      {
+      "key": "Q41",
+      "name": "荷の重心の高さ (荷台の床から)",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
+     },
+     {
       "key": "Q50",
       "name": "最高速度",
       "value": 40,
@@ -116,6 +152,33 @@ export const DEMOS = {
       "basis": "request"
      },
      {
+      "key": "Q51",
+      "name": "0 → 最高速度 (Q50) の時間",
+      "value": 6,
+      "unit": "s",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q52",
+      "name": "停止距離",
+      "value": 14,
+      "unit": "m",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+     },
+     {
+      "key": "Q53",
+      "name": "止まっていられる坂",
+      "value": 20,
+      "unit": "%",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+     },
+     {
       "key": "Q54",
       "name": "航続",
       "value": 20,
@@ -123,6 +186,15 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption"
+     },
+     {
+      "key": "Q60",
+      "name": "倒れない角度 (Q30 の組で)",
+      "value": 24,
+      "unit": "deg",
+      "source": "default",
+      "trust": 1,
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
      },
      {
       "key": "Q61",
@@ -298,7 +370,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 10 件あります。まとめて聞きます",
+   "text": "足りない要件が 7 件あります。まとめて聞きます",
    "data": {
     "questions": [
      {
@@ -307,55 +379,6 @@ export const DEMOS = {
       "text": "どのくらいの頻度で、何年くらい使いますか。",
       "ask": "confirm",
       "allow_other": true
-     },
-     {
-      "req_key": "Q11",
-      "name": "路面・床と摩擦係数",
-      "text": "走る(置く)面は何ですか。摩擦係数が分かれば添えてください。",
-      "ask": "confirm",
-      "allow_other": true,
-      "choices": [
-       {
-        "label": "砂利",
-        "value": "砂利"
-       },
-       {
-        "label": "舗装路",
-        "value": "舗装路"
-       },
-       {
-        "label": "土",
-        "value": "土"
-       },
-       {
-        "label": "屋内の床",
-        "value": "床"
-       }
-      ]
-     },
-     {
-      "req_key": "Q14",
-      "name": "走りながらの横の傾き",
-      "text": "走りながら、どのくらい横に傾いた斜面を通りますか。",
-      "ask": "confirm",
-      "allow_other": true,
-      "choices": [
-       {
-        "label": "10°",
-        "value": 10,
-        "unit": "deg"
-       },
-       {
-        "label": "15°",
-        "value": 15,
-        "unit": "deg"
-       },
-       {
-        "label": "20°",
-        "value": 20,
-        "unit": "deg"
-       }
-      ]
      },
      {
       "req_key": "Q20",
@@ -406,13 +429,6 @@ export const DEMOS = {
         "value": "高齢者と子ども"
        }
       ]
-     },
-     {
-      "req_key": "Q51",
-      "name": "加速",
-      "text": "目標の加速 (たとえば 0 から最高速度まで何秒) はありますか。",
-      "ask": "confirm",
-      "allow_other": true
      },
      {
       "req_key": "Q64",
@@ -480,18 +496,9 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 10 件、答え 7 件、既定値 3 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
    "data": {
     "answers": [
-     {
-      "key": "Q18",
-      "name": "風",
-      "source": "default",
-      "trust": 1,
-      "basis": "気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https:\/\/www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf (not checked in this repository)",
-      "value": 20,
-      "unit": "m/s"
-     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -510,39 +517,12 @@ export const DEMOS = {
       "value": "ISO 13854 (指 25 mm)"
      },
      {
-      "key": "Q11",
-      "name": "路面・床と摩擦係数",
-      "value": "砂利",
-      "source": "hearing",
-      "trust": 1,
-      "basis": "林道規程 (林野庁): 林道の支線・分線は砂利が基本, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository)",
-      "note": "摩擦係数は公開の値が見つからず、不利な側を置く (仮定)"
-     },
-     {
-      "key": "Q14",
-      "name": "走りながらの横の傾き",
-      "value": 15,
-      "source": "hearing",
-      "trust": 3,
-      "basis": "assumption (no source)",
-      "unit": "deg"
-     },
-     {
       "key": "Q34",
       "name": "弱い人がいるか",
       "value": "いない",
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (a sample answer)"
-     },
-     {
-      "key": "Q51",
-      "name": "加速",
-      "value": 6,
-      "source": "hearing",
-      "trust": 3,
-      "basis": "assumption (0 to 40 km/h in 6 s; no source)",
-      "unit": "s"
      },
      {
       "key": "Q64",
@@ -595,7 +575,6 @@ export const DEMOS = {
       "text": "曲げの内側の半径は板厚以上",
       "check": "bend_radius_mm >= thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -611,7 +590,6 @@ export const DEMOS = {
       "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
       "check": "hole_edge_mm >= 2 * thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -645,7 +623,6 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
       "applies_to": {
@@ -662,7 +639,6 @@ export const DEMOS = {
       "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
       "check": "thread_engagement_mm >= bolt_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
       "applies_to": {
@@ -697,7 +673,6 @@ export const DEMOS = {
       "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
       "check": "section_ratio_max <= 35",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
       "applies_to": {
@@ -713,7 +688,6 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
       "applies_to": {
@@ -747,7 +721,6 @@ export const DEMOS = {
       "text": "組み合う部品の隙間は、公差の積み上げより大きい",
       "check": "clearance_mm > tolerance_stack_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
       "applies_to": {
@@ -764,7 +737,6 @@ export const DEMOS = {
       "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
       "applies_to": {
@@ -799,7 +771,6 @@ export const DEMOS = {
       "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
       "check": "size_y_mm >= 391",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
       "applies_to": {
@@ -815,7 +786,6 @@ export const DEMOS = {
       "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
       "check": "size_x_mm <= 406",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
@@ -831,7 +801,6 @@ export const DEMOS = {
       "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
       "applies_to": {
@@ -866,7 +835,6 @@ export const DEMOS = {
       "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
       "check": "req_Q19 <= 55",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
@@ -882,7 +850,6 @@ export const DEMOS = {
       "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
       "applies_to": {
@@ -916,7 +883,6 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
       "applies_to": {
@@ -940,7 +906,6 @@ export const DEMOS = {
       "text": "部品の箱は地面より下に出ない",
       "check": "bottom_z_mm >= 0",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
      }
@@ -969,7 +934,6 @@ export const DEMOS = {
       "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
       "check": "travel_mm >= req_Q15",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
       "applies_to": {
@@ -985,7 +949,6 @@ export const DEMOS = {
       "text": "荷を載せた静的なたわみは、サスのストローク以内",
       "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
       "applies_to": {
@@ -1019,7 +982,6 @@ export const DEMOS = {
       "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
       "applies_to": {
@@ -1053,9 +1015,9 @@ export const DEMOS = {
       "text": "曲げの内側の半径は板厚以上",
       "check": "bend_radius_mm >= thickness_mm",
       "origin": "dropped",
-      "check_by": "code",
       "trust": 3,
-      "basis": "dropped file ノウハウメモ (見本).md, line 4; the person's own know-how, not checked against a source"
+      "basis": "dropped file ノウハウメモ (見本).md, line 4; the person's own know-how, not checked against a source",
+      "check_by": "code"
      },
      {
       "rule_id": "U1-03",
@@ -1064,9 +1026,9 @@ export const DEMOS = {
       "text": "電池の質量は 30 kg 以下",
       "check": "mass_kg <= 30",
       "origin": "dropped",
-      "check_by": "code",
       "trust": 3,
       "basis": "dropped file ノウハウメモ (見本).md, line 8; the person's own know-how, not checked against a source",
+      "check_by": "code",
       "applies_to": {
        "kinds": [
         "battery"
@@ -1336,6 +1298,10 @@ export const DEMOS = {
      },
      "suspension_travel": {
       "value": 150.0,
+      "unit": "mm"
+     },
+     "cargo_height": {
+      "value": 300.0,
       "unit": "mm"
      },
      "battery_max_temperature": {
@@ -3609,7 +3575,6 @@ export const DEMOS = {
       "text": "曲げの内側の半径は板厚以上",
       "check": "bend_radius_mm >= thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -3625,7 +3590,6 @@ export const DEMOS = {
       "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
       "check": "hole_edge_mm >= 2 * thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -3659,7 +3623,6 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
       "applies_to": {
@@ -3676,7 +3639,6 @@ export const DEMOS = {
       "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
       "check": "thread_engagement_mm >= bolt_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
       "applies_to": {
@@ -3711,7 +3673,6 @@ export const DEMOS = {
       "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
       "check": "section_ratio_max <= 35",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
       "applies_to": {
@@ -3727,7 +3688,6 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
       "applies_to": {
@@ -3761,7 +3721,6 @@ export const DEMOS = {
       "text": "組み合う部品の隙間は、公差の積み上げより大きい",
       "check": "clearance_mm > tolerance_stack_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
       "applies_to": {
@@ -3778,7 +3737,6 @@ export const DEMOS = {
       "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
       "applies_to": {
@@ -3813,7 +3771,6 @@ export const DEMOS = {
       "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
       "check": "size_y_mm >= 391",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
       "applies_to": {
@@ -3829,7 +3786,6 @@ export const DEMOS = {
       "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
       "check": "size_x_mm <= 406",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
@@ -3845,7 +3801,6 @@ export const DEMOS = {
       "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
       "applies_to": {
@@ -3880,7 +3835,6 @@ export const DEMOS = {
       "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
       "check": "req_Q19 <= 55",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
@@ -3896,7 +3850,6 @@ export const DEMOS = {
       "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
       "applies_to": {
@@ -3930,7 +3883,6 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
       "applies_to": {
@@ -3954,7 +3906,6 @@ export const DEMOS = {
       "text": "部品の箱は地面より下に出ない",
       "check": "bottom_z_mm >= 0",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
      }
@@ -3983,7 +3934,6 @@ export const DEMOS = {
       "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
       "check": "travel_mm >= req_Q15",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
       "applies_to": {
@@ -3999,7 +3949,6 @@ export const DEMOS = {
       "text": "荷を載せた静的なたわみは、サスのストローク以内",
       "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
       "applies_to": {
@@ -4033,7 +3982,6 @@ export const DEMOS = {
       "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
       "applies_to": {
@@ -4305,7 +4253,6 @@ export const DEMOS = {
       "text": "曲げの内側の半径は板厚以上",
       "check": "bend_radius_mm >= thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -4321,7 +4268,6 @@ export const DEMOS = {
       "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
       "check": "hole_edge_mm >= 2 * thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -4355,7 +4301,6 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
       "applies_to": {
@@ -4372,7 +4317,6 @@ export const DEMOS = {
       "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
       "check": "thread_engagement_mm >= bolt_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
       "applies_to": {
@@ -4407,7 +4351,6 @@ export const DEMOS = {
       "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
       "check": "section_ratio_max <= 35",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
       "applies_to": {
@@ -4423,7 +4366,6 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
       "applies_to": {
@@ -4457,7 +4399,6 @@ export const DEMOS = {
       "text": "組み合う部品の隙間は、公差の積み上げより大きい",
       "check": "clearance_mm > tolerance_stack_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
       "applies_to": {
@@ -4474,7 +4415,6 @@ export const DEMOS = {
       "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
       "applies_to": {
@@ -4509,7 +4449,6 @@ export const DEMOS = {
       "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
       "check": "size_y_mm >= 391",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
       "applies_to": {
@@ -4525,7 +4464,6 @@ export const DEMOS = {
       "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
       "check": "size_x_mm <= 406",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
@@ -4541,7 +4479,6 @@ export const DEMOS = {
       "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
       "applies_to": {
@@ -4576,7 +4513,6 @@ export const DEMOS = {
       "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
       "check": "req_Q19 <= 55",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
@@ -4592,7 +4528,6 @@ export const DEMOS = {
       "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
       "applies_to": {
@@ -4626,7 +4561,6 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
       "applies_to": {
@@ -4650,7 +4584,6 @@ export const DEMOS = {
       "text": "部品の箱は地面より下に出ない",
       "check": "bottom_z_mm >= 0",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
      }
@@ -4679,7 +4612,6 @@ export const DEMOS = {
       "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
       "check": "travel_mm >= req_Q15",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
       "applies_to": {
@@ -4695,7 +4627,6 @@ export const DEMOS = {
       "text": "荷を載せた静的なたわみは、サスのストローク以内",
       "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
       "applies_to": {
@@ -4729,7 +4660,6 @@ export const DEMOS = {
       "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
       "applies_to": {
@@ -5366,7 +5296,6 @@ export const DEMOS = {
       "text": "曲げの内側の半径は板厚以上",
       "check": "bend_radius_mm >= thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -5382,7 +5311,6 @@ export const DEMOS = {
       "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
       "check": "hole_edge_mm >= 2 * thickness_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
       "applies_to": {
@@ -5416,7 +5344,6 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
       "applies_to": {
@@ -5433,7 +5360,6 @@ export const DEMOS = {
       "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
       "check": "thread_engagement_mm >= bolt_diameter_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
       "applies_to": {
@@ -5468,7 +5394,6 @@ export const DEMOS = {
       "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
       "check": "section_ratio_max <= 35",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
       "applies_to": {
@@ -5484,7 +5409,6 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
       "applies_to": {
@@ -5518,7 +5442,6 @@ export const DEMOS = {
       "text": "組み合う部品の隙間は、公差の積み上げより大きい",
       "check": "clearance_mm > tolerance_stack_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
       "applies_to": {
@@ -5535,7 +5458,6 @@ export const DEMOS = {
       "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
       "applies_to": {
@@ -5570,7 +5492,6 @@ export const DEMOS = {
       "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
       "check": "size_y_mm >= 391",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
       "applies_to": {
@@ -5586,7 +5507,6 @@ export const DEMOS = {
       "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
       "check": "size_x_mm <= 406",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
@@ -5602,7 +5522,6 @@ export const DEMOS = {
       "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
       "applies_to": {
@@ -5637,7 +5556,6 @@ export const DEMOS = {
       "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
       "check": "req_Q19 <= 55",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 1,
       "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
@@ -5653,7 +5571,6 @@ export const DEMOS = {
       "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
       "applies_to": {
@@ -5687,7 +5604,6 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
       "applies_to": {
@@ -5711,7 +5627,6 @@ export const DEMOS = {
       "text": "部品の箱は地面より下に出ない",
       "check": "bottom_z_mm >= 0",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
      }
@@ -5740,7 +5655,6 @@ export const DEMOS = {
       "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
       "check": "travel_mm >= req_Q15",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
       "applies_to": {
@@ -5756,7 +5670,6 @@ export const DEMOS = {
       "text": "荷を載せた静的なたわみは、サスのストローク以内",
       "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 3,
       "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
       "applies_to": {
@@ -5790,7 +5703,6 @@ export const DEMOS = {
       "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
-      "check_by": "file",
       "trust": 2,
       "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
       "applies_to": {

@@ -139,9 +139,8 @@ class StaticTest(unittest.TestCase):
         demos = json.loads(text[text.index("{"):text.rindex("}") + 1])
         for slug, events in demos.items():
             self.assertEqual([e["seq"] for e in events], list(range(len(events))), slug)
-            known = set(contract.EVENT_KINDS) | {"domains.picked", "hearing.asked", "hearing.answered", "knowledge.imported", "rule_check.recorded"}
-            self.assertTrue({e["kind"] for e in events} <= known, slug)
-            self.assertEqual(contract.errors("project", events[0]["data"]), [], slug)
+            for e in events:
+                self.assertEqual(contract.errors("event", e), [], f"{slug} #{e['seq']} {e['kind']}")
 
 
 if __name__ == "__main__":
