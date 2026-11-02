@@ -17,7 +17,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 | 部署 | 書くところ |
 |---|---|
-| 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`README.md`、`CLAUDE.md`、`requirements.txt`、`.gitignore` |
+| 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`showcase/` (見本の実行)、`README.md`、`CLAUDE.md`、`LICENSE`、`requirements.txt`、`.gitignore`、`hiraku/__init__.py`、`tests/__init__.py` |
 | 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP の道具)、`hiraku/store/` (runs の読み書き)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
 | 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`tests/solvers/` |
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
@@ -29,7 +29,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 ## 座標と単位
 
 - 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面。だから前の車軸より後ろは x が負で、後ろの車軸は x = −ホイールベース。前後は x の大小で決め (大きいほど前)、「x が最小 = 前」としない
-- design の数値は欄の名前に単位を付ける (`position_mm`、`mass_kg`、`E_MPa`)
+- design の数値は欄の名前に単位を付ける (`position_mm`、`mass_kg`、`E_MPa`)。ただし `design.variables` (設計の変数) は `{"value": 数, "unit": "単位"}` の形
 - それ以外の数値は `{"value": 数, "unit": "単位"}`。単位は schema の `unit` の一覧だけ。照合は同じ単位の文字どうしでしかしない (変換は K0 の道具でしてから)
 
 ## 1 つの数字を信用して合否を出すまで
@@ -66,15 +66,15 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`・`error`)。`stop_reason` は人向けの文
 - 見本として残す実行は `showcase/<run_id>/` (統括部の持ち場。runs/ はコミットしない)。画面は URL に `?run=` が無いとき、ここのいちばん新しい実行を再生する
 
-MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は記録そのものを JSON の文字列で返す。
+MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
 ## runs/&lt;run_id&gt;/
 
 `hiraku/contract/layout.py` の冒頭に木がある。要点:
 
-- `project.json` — 実行の初めに書く。`status` と要件だけはあとで書き換える
+- `project.json` — 実行の初めに書く。あとで書き換えるのは `status`・`stop_reason`・要件・`cost_usd`・`design_versions` だけ
 - `events.jsonl` — 1 行 1 event、足すだけ。画面は実行中も再生もこれだけで描く
-- `v001/` — 版ごとのフォルダ。`design.json` と、記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。前の版は書き換えない
+- `v001/` — 版ごとのフォルダ。`design.json` と、その版の記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。設計を直すと次の版のフォルダ (`v002/`) ができ、前の版の `design.json` は書き換えない。前の版の記録は、下の「記録を後から直すとき」の場合だけ書き換わる
 - 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる
 - 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
 - ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`)
