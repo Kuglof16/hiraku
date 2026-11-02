@@ -1087,7 +1087,8 @@
                 "$ref": "#/$defs/vec3"
               }
             ]
-          }
+          },
+          "description": "Per node value; for mode_shape a vec3 displacement relative to the largest (unitless shape, scaled by the screen)."
         },
         "per_part": {
           "type": "object",
@@ -1125,7 +1126,8 @@
           "description": "Node, support or part id."
         },
         "origin_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Point where the force acts (application point), in design coordinates."
         },
         "vector_N": {
           "$ref": "#/$defs/vec3"
@@ -1264,6 +1266,13 @@
           "items": {
             "$ref": "#/$defs/interference"
           }
+        },
+        "scene": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scene_object"
+          },
+          "description": "What to draw around the vehicle for this test (from the load case and the solver, never hand-placed)."
         }
       }
     },
@@ -1975,7 +1984,33 @@
                 "type": "object",
                 "required": [
                   "status"
-                ]
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "running",
+                      "stopped",
+                      "done",
+                      "failed"
+                    ]
+                  },
+                  "stop_reason": {
+                    "type": "string",
+                    "description": "Free text for people (may be English); the screen shows stop_code."
+                  },
+                  "stop_code": {
+                    "enum": [
+                      "done",
+                      "not_judged",
+                      "round_limit",
+                      "cost_limit",
+                      "turn_limit",
+                      "user_stop",
+                      "error"
+                    ],
+                    "description": "Why the run ended, for the screen to word."
+                  }
+                }
               }
             }
           }
@@ -2260,6 +2295,81 @@
         "reason": {
           "type": "string",
           "description": "which test failed and what the change does about it"
+        }
+      }
+    },
+    "scene_object": {
+      "description": "Something in the test scene that is not the vehicle: a step, a road profile, a slope, the tilt table, a cone, a gate, a wall. Positions in mm in the road frame of the test (x along the road, z up), the vehicle starting at its design origin.",
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "step",
+            "road_profile",
+            "slope",
+            "tilt_table",
+            "cone",
+            "gate",
+            "wall",
+            "ramp",
+            "ground"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "position_mm": {
+          "$ref": "#/$defs/vec3"
+        },
+        "size_mm": {
+          "$ref": "#/$defs/vec3"
+        },
+        "rpy_deg": {
+          "$ref": "#/$defs/vec3"
+        },
+        "profile": {
+          "type": "object",
+          "description": "Road height along x (road_profile), one line per wheel track when given.",
+          "additionalProperties": false,
+          "required": [
+            "x_mm",
+            "z_mm"
+          ],
+          "properties": {
+            "x_mm": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "z_mm": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "angle_channel": {
+          "type": "string",
+          "description": "Series channel that moves this object in time (e.g. table_angle for the tilt table)."
         }
       }
     }
