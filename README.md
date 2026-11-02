@@ -8,11 +8,13 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 ## いま動くもの
 
-- デモの車両 (林道を走る 2 人乗りの 4 輪) で、段差越え (P1) とフレームの強度 (R1) を「手計算で予測 → 解析 → 照合 → 合否」まで回す流れ。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない
-- 解析の道具 15 個 (梁の有限要素・3D の車両の物理・電力と熱・幾何と干渉・感度) と手計算の式 40 個。どれも答えの分かっている例と照合してから使う
-- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面
+- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた試験 (段差越え P1・強度 R1・振動 N1・ハンドルの切れ角 H1・乗員の体格 H3) を「手計算で予測 → 解析 → 照合」で回す流れ。基準のある試験は合否まで出す (P1 は基準が無く照合まで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で合否を出す
+- 設計役が設計の変数を変えて次の版を作る (`revise_design`)。デモの車両では、v1 で不合格の H1・H3 を直して v2 で合格する
+- 解析の道具 15 個 (梁の有限要素・3D の車両の物理・電力と熱・幾何と干渉)。どれも答えの分かっている例と照合してから使う。手計算の式 40 個は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は梁・電力と熱・幾何の 8 つの道具に `params.sensitivity` で付く
+- 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
+- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 
-まだのもの: 段差越えと強度のほかの試験をエージェントの流れにつなぐこと、設計を直して次の版を作ること、ほかの画面。
+まだのもの: 20 試験ぶんを全部まとめて回すこと、新しい設計・報告・組み立てなどの画面、画面から実行を始める口。
 
 ## 動かし方
 
@@ -36,19 +38,24 @@ API キー無しで、Claude の代わりに決まった順に道具を呼ぶ「
 .venv\Scripts\python -m hiraku check runs/<run_id>
 ```
 
-Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて `--scripted` を外します。
+Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて `--scripted` を外します。費用の上限は要件のファイルの `cost_limit_usd` です。
 
-記録を画面で再生する (ブラウザで http://127.0.0.1:8765/ を開き、一覧から選ぶ。`?run=sample` は形の見本):
+記録を画面で再生する (ブラウザで http://127.0.0.1:8765/ を開き、一覧から選ぶ。`?run=sample` は形の見本、`?look=real` は実物の見た目):
 
 ```
 .venv\Scripts\python -m hiraku.webserve
 ```
 
+- 画面は three.js 0.170.0 (MIT) を jsDelivr から読み込むので、ネットにつながっている必要があります。字は PC にある BIZ UDPGothic を使い、同梱していません
+- ブラウザの試験は Playwright を使い、`HIRAKU_WEB_BROWSER=1` のときだけ回ります (Playwright は requirements.txt に入れていません)
+- 動画の書き出しの道具は `promo/` にあり、要るものは `promo/requirements-video.txt` です
+
 ## 中身
 
-- `hiraku/agent/` エージェントのループ・hooks・役 (サブエージェント)、`plugins/hiraku/` skills
+- `hiraku/agent/` エージェントのループ・hooks・役 (まとめ役・設計役・パッケージ役・分野ごとの CAE 役)、`plugins/hiraku/` skills
 - `hiraku/tools/` エージェントが呼ぶ道具 (MCP)。数値は道具が計算し、モデルには書かせない
 - `hiraku/solvers/` 手計算の式 (K0) と CAE の土台 (K1 梁の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度)
+- `hiraku/catalog/` 要件から試験の荷重条件を作る、`hiraku/designgen/` 設計の変数から設計を組む
 - `hiraku/store/` 実行の記録、`hiraku/contract/` 記録の形 (JSON Schema)、`web/` 画面、`data/` 要件・試験・デモの車両
 - `tests/`、`qa/` 照合の試験と記録の点検、`promo/` 動画だけの画面と書き出し
 
@@ -60,7 +67,24 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 
 ## 前から持っていた知識と、外から持ってきたデータ
 
-外から持ってきた値 (規格・統計・材料・人体の寸法など) は、使った所 (データのファイルとコードの中) に出典を書いています。出典の本文をこのリポジトリで読み直していない値には "not checked" と書いています。まとめの表は提出までにここに書きます。
+外から持ってきた値 (規格・統計・材料・人体の寸法など) は、使った所 (データのファイルとコードの中) に出典を書いています。出典の本文をこのリポジトリで読み直していない値には "not checked" と書いています。
+
+### 確かめていない値
+
+次の値は、出典の本文をこのリポジトリではまだ確かめていません (確かめていない)。どれも使った所に出典を書いています。
+
+| 値 | 出典として書いたもの | 使った所 |
+|---|---|---|
+| 材料の降伏点・ヤング率・密度 (STKR400・STKM13A・SS400・6061-T6) | JIS G 3466・G 3445・G 3101 の最小の降伏点、一般の設計値、ハンドブックの値 | `data/materials/materials.json` |
+| 電池の電圧 51.2 V (LiFePO4 16 直列 × 3.2 V) | セルの公称電圧 | `hiraku/designgen/ladder_4w.py` |
+| 部品の温度の上限 (電池 55 ℃・制御器 85 ℃・モーター 155 ℃) | EVE LF50K の仕様書、Curtis 1236 のマニュアル、IEC 60085 の F 種 | `hiraku/designgen/ladder_4w.py` |
+| 空気の密度 1.225 kg/m³ | ICAO Doc 7488 / ISO 2533 の海面の値 | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_dynamics.py`、`hiraku/solvers/k2_vehicle/` |
+| 疲労の強さ (FAT 71・傾き 3・折れ点 1e7 回) | IIW の疲労設計の推奨 (2016) | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_fatigue.py` |
+| 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³) | ISO 8608 の表 | `hiraku/solvers/k2_vehicle/road.py`・`shelf.py`、`hiraku/solvers/shelf/fatigue.py` |
+| ダブルレーンチェンジのコース (15・30・25・25・15・15 m、横 3.5 m) | ISO 3888-1 | `hiraku/solvers/k2_vehicle/shelf.py` |
+| 静的な安定の基準 T/2h ≥ 1.0 | ROHVA 1-2011・ANSI B71.9-2012 を要約した 79 FR 68964 | `hiraku/catalog/builders/k2_tests.py` |
+| 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の要約・仮定) | `data/requirements/offroad-4w.yaml` |
+| 人体の寸法 (座高・肩幅・腰幅・膝) と工具の開口 | AIST 人体寸法データベース 1991-92、MIL-STD-1472H | `hiraku/solvers/k4_geometry/people.py`・`assembly.py` |
 
 - 動画のナレーション: AivisSpeech (音声合成モデル「阿井田 茂」、制作 古山キリヲ、Aivis Common Model License (ACML) 1.0)
 

@@ -20,6 +20,16 @@ DEFAULT_MAX_TURNS = 200
 AGENT_TOOL = "Agent"
 SKILL_TOOL = "Skill"
 
+# The bundled CLI launches subagents in the background by default; with this set, the Agent
+# tool has no run_in_background and every subagent is synchronous (checked in CLI 2.1.309).
+FOREGROUND_ROLES_ENV = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
+# How long to wait after the last role stops, while the lead's turn has ended, before the lead
+# is woken with WAKE_TEXT (the CLI may start a turn by itself first). Only for roles that ran in
+# the background anyway.
+WAKE_GRACE_S = 5.0
+MAX_WAKES = 5
+WAKE_TEXT = "担当の役の仕事が終わりました。get_context で judgements を確かめて、続きを進めてください。"
+
 
 class MissingApiKey(RuntimeError):
     pass
@@ -61,6 +71,9 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
         max_turns=max_turns,
         forward_subagent_text=True,
         cwd=str(ctx.store.path.resolve()),
+        # Roles run in the foreground: the lead's turn waits for their results (several Agent
+        # calls in one message run side by side) instead of ending while they work.
+        env=dict(FOREGROUND_ROLES_ENV),
     )
 
 
@@ -129,6 +142,44 @@ def final_status(ctx: RunContext, result: Any) -> tuple[str, str | None]:
     return "done", None
 
 
+async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) -> None:
+    """Give the lead its task and read messages until its turn ends with no role at work.
+
+    Roles run in the foreground (FOREGROUND_ROLES_ENV), so the lead's turn normally outlasts
+    them. Should a role still be at work when the lead's turn ends, the reading goes on (the
+    roles are not cut off), and when the last role stops while the lead is idle, the lead is
+    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
+    """
+    from claude_agent_sdk import AssistantMessage, ResultMessage
+
+    state = {"idle": False, "wakes": 0}
+    loop = asyncio.get_running_loop()
+
+    async def wake() -> None:
+        await asyncio.sleep(WAKE_GRACE_S)
+        if state["idle"] and not hooks.running and state["wakes"] < MAX_WAKES:
+            state["wakes"] += 1
+            state["idle"] = False
+            await client.query(WAKE_TEXT)
+
+    def roles_done() -> None:
+        if state["idle"]:
+            loop.create_task(wake())
+
+    hooks.on_roles_done = roles_done
+    await client.query(prompts.lead_task(ctx))
+    async for msg in client.receive_messages():
+        log.handle(msg)
+        if isinstance(msg, ResultMessage):
+            state["idle"] = True
+            if not hooks.running:
+                return
+            ctx.store.emit("agent.said", agent="system", text="まとめ役の番が終わりましたが、役がまだ動いているので待ちます: "
+                           + "、".join(sorted(set(hooks.running.values()))))
+        elif isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is None:
+            state["idle"] = False
+
+
 async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT,
                           max_budget_usd: float | None = None, max_turns: int = DEFAULT_MAX_TURNS) -> str:
     """Run the lead agent (and its role subagents) until the run is judged or a limit stops it."""
@@ -145,9 +196,7 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
     ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
     try:
         async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompts.lead_task(ctx))
-            async for msg in client.receive_response():
-                log.handle(msg)
+            await converse(client, ctx, hooks, log)
     except (KeyboardInterrupt, asyncio.CancelledError):  # Ctrl+C: asyncio.run cancels this task
         ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
         ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)

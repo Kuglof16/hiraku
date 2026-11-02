@@ -127,6 +127,25 @@ def road_wheel_forces(design: Record, speed: float, length: float, gd0: float, s
     return t, forces
 
 
+SCENE_POINTS = 801  # road points drawn per track (the road is sampled more finely for the forces)
+
+
+def road_scene(design: Record, length: float, gd0: float, seed: int, cls: str) -> Record:
+    """The road of road_wheel_forces as a scene road_profile: each track's height (mm) along x
+    from behind the rear wheels to the end of the sample, at up to SCENE_POINTS points."""
+    xs = [s["position_mm"][0] / 1000.0 for s in design["supports"]]
+    reach = (max(xs) - min(xs)) + 1.0
+    x = np.linspace(-reach, length, min(SCENE_POINTS, int((length + reach) / ROAD_DX) + 1))
+    tracks: list[float] = []
+    for s in design["supports"]:
+        y = round(s["position_mm"][1], 3)
+        if y not in tracks:
+            tracks.append(y)
+    z = {f"y {y:g} mm": [float(v) for v in road_profile(x, gd0, seed + i) * 1000.0] for i, y in enumerate(tracks)}
+    return {"kind": "road_profile", "label": f"ISO 8608 class {cls}",
+            "profile": {"x_mm": [float(v) for v in x * 1000.0], "z_mm": z}}
+
+
 def upstream_series(upstream: dict | None, design: Record) -> tuple[str, np.ndarray, dict, float] | None:
     """(load case id, t, {(support, axis): force series}, distance m) from an upstream analysis that
     has ground-force series for every support."""
@@ -229,6 +248,7 @@ class Fatigue(BuiltinTool):
             S, cols, pts = influence(design, "xyz")
             Fm = np.vstack([F[c] for c in cols])
             source = f"wheel forces from {src}"
+            road = None  # the upstream analysis draws its own road
         else:
             cls = param_text(load_case, "road_class")
             if cls not in ROAD_CLASSES:
@@ -242,6 +262,7 @@ class Fatigue(BuiltinTool):
             S, cols, pts = influence(design, "z")
             Fm = np.vstack([F[sid] for sid, _ in cols])
             source = f"quarter cars on an ISO 8608 class {cls} road at {v * 3.6:.0f} km/h"
+            road = road_scene(design, sample, ROAD_CLASSES[cls], seed, cls)
         sigma = S @ Fm  # points x time, MPa
         scale = target / sample
         damage = np.empty(len(pts))
@@ -285,7 +306,10 @@ class Fatigue(BuiltinTool):
                            "values": [float(x) for x in F[key][::step]]})
         fields = [{"kind": "damage", "label": f"Miner damage over {target / 1000:g} km (largest weld point)", "unit": "1",
                    "per_member": per_member}]
-        return {"results": results, "fields": fields, "series": series, "effects": effects}
+        out = {"results": results, "fields": fields, "series": series, "effects": effects}
+        if road is not None:
+            out["scene"] = [road]
+        return out
 
 
 def _rev(series):

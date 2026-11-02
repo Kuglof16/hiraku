@@ -86,8 +86,9 @@ VARIABLES: dict[str, Var] = {
     # voltage of a LiFePO4 cell, not checked against a cell data sheet in this repository),
     # a 10 kW peak motor driving the rear axle through a reduction
     "motor_peak_power": Var("kW", 10.0, 5.0, 20.0, "motor peak power"),
-    "motor_peak_torque": Var("N*m", 50.0, meaning="assumption"),
-    "motor_max_speed": Var("rpm", 6000.0, meaning="assumption"),
+    "motor_peak_torque": Var("N*m", 50.0, 30.0, 120.0, "motor peak torque (the motor's mass is kept)"),
+    "motor_max_speed": Var("rpm", 6000.0, 3000.0, 10000.0, "motor speed limit (with gear_ratio and the wheel radius it "
+                           "sets the top speed)"),
     "gear_ratio": Var("1", 10.0, 6.0, 14.0, "reduction from motor to wheel"),
     "drivetrain_efficiency": Var("1", 0.95, meaning="assumption"),
     "motor_efficiency": Var("1", 0.88, meaning="assumption"),

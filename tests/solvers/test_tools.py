@@ -95,7 +95,7 @@ class DeclarationsTest(unittest.TestCase):
             for p in t.predicts:
                 self.assertIn(p.formula_id, t.formulas, f"{t.name}: {p.formula_id}")
                 outs = registry[p.formula_id]["outputs"]
-                if "<support>" in p.output:
+                if "<" in p.output:
                     self.assertTrue(any(o.startswith(p.output.split("<")[0]) for o in outs), p.output)
                 else:
                     self.assertIn(p.output, outs, f"{t.name}: {p.formula_id}")
@@ -168,6 +168,18 @@ class StepClimbTest(unittest.TestCase):
             self.assertIn(name, r)
         self.assertTrue(any(v["kind"] == "grip" for v in rec["vectors"]))
         self.assertEqual({f["kind"] for f in rec["fields"]}, {"stress", "displacement"})
+
+    def test_scene_steps_meet_the_wheels(self):
+        rec = self.run_case(step_height=q(100, "mm"))
+        r = results(rec)
+        for st in rec["scene"]:
+            self.assertEqual(st["kind"], "step")
+            sid = st["label"].split("(")[1].rstrip(")")
+            s = next(x for x in DESIGN["supports"] if x["id"] == sid)
+            face = st["position_mm"][0] - st["size_mm"][0] / 2
+            self.assertAlmostEqual(face - s["position_mm"][0], r["corner_distance"]["value"], places=9)
+            self.assertEqual(st["size_mm"][2], 100.0)
+        self.assertEqual(len(rec["scene"]), 2)
 
     def test_pushing_unloads_the_front(self):
         r = results(self.run_case(step_height=q(100, "mm")))

@@ -15,8 +15,6 @@ import time
 from datetime import datetime
 from typing import Any
 
-import jsonschema
-
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
@@ -56,54 +54,86 @@ def _compact_analysis(a: Record) -> Record:
     return {k: a[k] for k in keys if k in a}
 
 
+# get_context answers with the small parts unless asked for more: every call goes into the
+# caller's context, so the design (large) and the designer's variables come only on request.
+CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
+                    "design_variables")
+DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
-    """Everything an agent needs to choose formulas and inputs: requirements,
-    load cases (with the role that owns each), the current design, records so far."""
+    """The run so far: always the run, design version, picked domains and open mismatches;
+    `sections` adds parts (default: requirements, load_cases with the role that owns each,
+    judgements, records). design_summary (inputs for hand calculations), design (the whole
+    record) and design_variables (what the designer may change) come only when asked."""
     p = ctx.project
     s = ctx.store
-    load_cases = [dict(lc, owner=ctx.owner(lc["load_case_id"])) for lc in ctx.load_cases]
-    return {
+    wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
+    out: Record = {
         "run_id": p["run_id"],
         "want": p["want"],
         "product": p["product"],
         "design_version": ctx.version,
         "round_limit": p["round_limit"],
-        "requirements": p["requirements"],
         "domain_picks": p["domain_picks"],
-        "load_cases": load_cases,
-        "design": s.design() if ctx.version else None,
-        "design_summary": design_summary(s.design()) if ctx.version else None,
-        "design_variables": design_variables(ctx),
-        "judgements": s.judgements() if ctx.version else [],
-        "records": {
+        "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
+        "sections": list(wanted),
+    }
+    parts = {
+        "requirements": lambda: p["requirements"],
+        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"])) for lc in ctx.load_cases],
+        "judgements": lambda: s.judgements() if ctx.version else [],
+        "records": lambda: {
             "predictions": [_compact_prediction(x) for x in s.records("prediction")],
             "analyses": [_compact_analysis(x) for x in s.records("analysis")],
             "comparisons": s.records("comparison"),
             "causes": s.records("cause"),
             "verdicts": s.records("verdict"),
         },
-        "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
+        "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
+        "design": lambda: s.design() if ctx.version else None,
+        "design_variables": lambda: design_variables(ctx),
     }
+    for name in wanted:
+        out[name] = parts[name]()
+    return out
 
 
 def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
-    """K0 formulas, optionally only those of one tool (formula_id prefix) or one domain."""
+    """K0 formulas, optionally only those a tool lists for its predictions (else those whose
+    id starts with the tool's name) or those of one domain."""
     args = args or {}
     out = ctx.formulas.list_formulas()
-    if args.get("tool"):
-        out = [f for f in out if f["formula_id"].split(".", 1)[0] == args["tool"]]
+    tool = args.get("tool")
+    if tool:
+        named = (ctx.specs.get(tool) or {}).get("formulas") or []
+        out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
     return out
 
 
+def _tool_line(spec: Record) -> Record:
+    checks = spec.get("checks") or []
+    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable") if k in spec},
+            "checks_passed": f"{sum(1 for c in checks if c.get('pass'))}/{len(checks)}"}
+
+
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
-    """The checked tool shelf (tool_spec records; usable=false tools cannot be run)."""
+    """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
+    `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
+    if args.get("tool"):
+        spec = ctx.specs.get(args["tool"])
+        if spec is None:
+            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join(ctx.specs)})")
+        return [spec]
     out = list(ctx.specs.values())
     if args.get("domain"):
         out = [s for s in out if s["domain"] == args["domain"]]
-    return out
+    if args.get("test_id"):
+        out = [s for s in out if args["test_id"] in s.get("tests", [])]
+    return [_tool_line(s) for s in out]
 
 
 # ---------------------------------------------------------------------------- prediction
@@ -410,31 +440,6 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
 
 # ---------------------------------------------------------------------------- design revision
 
-# Input of revise_design (not in the contract's tool_input yet).
-REVISE_DESIGN_INPUT: Record = {
-    "type": "object",
-    "required": ["changes", "reason"],
-    "additionalProperties": False,
-    "properties": {
-        "changes": {
-            "type": "object",
-            "minProperties": 1,
-            "description": "design variable name -> new value {value, unit}; the unit is the variable's own",
-            "additionalProperties": {
-                "type": "object", "required": ["value", "unit"], "additionalProperties": False,
-                "properties": {"value": {"type": "number"}, "unit": {"type": "string"}},
-            },
-        },
-        "reason": {"type": "string", "description": "why: which test failed, what the change does about it"},
-    },
-}
-
-
-def _check_revise_input(args: dict[str, Any]) -> None:
-    errs = [e.message for e in jsonschema.Draft202012Validator(REVISE_DESIGN_INPUT).iter_errors(args)]
-    if errs:
-        raise ToolError("revise_design の入力の形が合いません: " + "; ".join(errs))
-
 
 def _variables(ctx: RunContext, design: Record) -> list[Record] | None:
     """hiraku.designgen.variables(design), or None when there is no designgen or it did not build this design."""
@@ -467,7 +472,7 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     design; then design.created (parent_version, change_reason) and pending
     tiles for the new version, whose load cases are all redone.
     """
-    _check_revise_input(args)
+    _check_input("revise_design", args)
     agent = agent or "designer"
     if agent != "designer":
         raise ToolError("設計を直せるのは設計役 (designer) だけです。まとめ役から設計役に、どの試験をなぜ直すかを伝えてください")
@@ -531,5 +536,5 @@ FUNCTIONS = {
     "revise_design": revise_design,
 }
 
-# The MCP tools of a run: the contract's MVP set and revise_design (the designer's only).
-RUN_TOOLS = (*contract.MCP_TOOLS_MVP, "revise_design")
+# The MCP tools of a run: the contract's MVP set and the designer's (revise_design).
+RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER)

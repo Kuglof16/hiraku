@@ -53,6 +53,16 @@ class HandlerTest(RunCase, unittest.TestCase):
         self.assertTrue(out["is_error"])
         self.assertIn("record_prediction", out["content"][0]["text"])
 
+    def test_analyze_answers_the_agent_with_the_results_only(self):
+        load, force = self.predict_p1()
+        out = self.call("analyze", {"tool": "step_climb", "load_case_id": "P1-step100",
+                                    "prediction_ids": [load["prediction_id"], force["prediction_id"]]})
+        got = json.loads(out["content"][0]["text"])
+        self.assertEqual({r["quantity"] for r in got["results"]} >= {"front_wheel_load", "front_wheel_force"}, True)
+        self.assertNotIn("vectors", got)
+        stored = self.ctx.store.get("analysis", got["analysis_id"])
+        self.assertIn("vectors", stored)  # the run keeps the whole record for the screen
+
     def test_revise_design_is_the_designers_only(self):
         args = {"changes": {"track": {"value": 1150.0, "unit": "mm"}}, "reason": "x"}
         self.attribution.push("mcp__hiraku__revise_design", json.loads(json.dumps(args)), "cae.strength")
