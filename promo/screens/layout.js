@@ -14,6 +14,7 @@
 //            n05.hero_motion.push_scale -> --hero-motion-push-scale: 1.04 (no unit)
 //            n05.hero_motion.burst_dur_s -> --hero-motion-burst-dur: 0.4s
 //            n05.ease.tile [a, b, c, d] -> --ease-tile: cubic-bezier(a, b, c, d)
+//            n05.door.crack_ease [a, b, c, d] -> --door-crack-ease (keys "ease" or "*_ease")
 //            n05.door.angle_deg -> --door-angle: 105deg
 // Values the rules only imply (a centred box's left
 // edge, ...) come from DERIVED below. Every page also gets --u, --stage-w,
@@ -64,7 +65,8 @@
 
   const isScale = (k) => k.endsWith("_scale");
   const isAngle = (k) => k.endsWith("_deg");
-  const isEase = (k, v, prefix) => Array.isArray(v) && v.length === 4 && (k === "ease" || prefix.endsWith("ease-"));
+  const isEase = (k, v, prefix) => Array.isArray(v) && v.length === 4 &&
+    (k === "ease" || k.endsWith("_ease") || prefix.endsWith("ease-"));
 
   function flatten(obj, prefix, out) {
     for (const [k, v] of Object.entries(obj)) {
