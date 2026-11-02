@@ -9,7 +9,7 @@ import { DOMAINS, DOMAIN_JA, esc, fmt, fmtVU, unitLabel } from "./labels.js";
 import { colorOf } from "./colormap.js";
 import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
 import { channelsOf, chartGroups, wheelName } from "./series.js";
-import { judgementState, roundsUsed } from "./state.js";
+import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 
 const W = 300;
 const H = 150;
@@ -214,7 +214,8 @@ export class TileBoard {
       const info = design ? domainAnalysis(s, d, v) : { ana: null, loadCase: null };
       let drawing = "";
       let caption = "";
-      if (design && j.state !== "off") {
+      // A domain not picked is still drawn when a test of it was analysed (it fed another one).
+      if (design && (j.state !== "off" || info.ana)) {
         const { body, ct } = tileSvg(s, d, design, info);
         drawing = body;
         if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}`;
@@ -226,11 +227,14 @@ export class TileBoard {
       const summary = j.judgement?.summary ?? picks[d]?.reason ?? "";
       const nv = j.judgement?.verdict_ids?.length ?? 0;
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
+      // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
+      const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
+      const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
       return (
         `<div class="tile ${j.state}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
         `<div class="draw">${drawing}</div>${spark}` +
         `<div class="cap">${esc(caption)}</div>` +
-        `<div class="tf"><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${badge}<span class="pet" style="--pet:#4cbf7a"></span></div></div>`
+        `<div class="tf"><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}<span class="pet" style="--pet:#4cbf7a"></span></div></div>`
       );
     }).join("");
     this.tiles.innerHTML = html;

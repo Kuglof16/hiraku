@@ -50,6 +50,7 @@ export function initialState() {
     unknown: 0,
     order: {},
     seqOf: {},
+    firstSeqOf: {}, // record id -> seq of the event that first brought it
     tOf: {}, // record id -> t of the event that brought it (the last one when sent again)
   };
   for (const r of RECORDS) {
@@ -81,7 +82,10 @@ function ensureAgent(s, id, extra = {}) {
 }
 
 function put(s, kind, id, rec, ev) {
-  if (!(id in s[kind])) s.order[kind].push(id);
+  if (!(id in s[kind])) {
+    s.order[kind].push(id);
+    s.firstSeqOf[id] = ev.seq;
+  }
   s[kind][id] = rec;
   s.seqOf[id] = ev.seq;
   s.tOf[id] = ev.t;
@@ -243,14 +247,16 @@ export function applyEvent(s, ev) {
       const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
       const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : "";
-      logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}`);
-      if (!before) setActivity(s, ev, `食い違いの原因を書いた: ${d.cause}`);
+      const safe = d.safe_side ? ` — 安全側で見られている: ${d.safe_side_reason ?? ""}` : "";
+      logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}${safe}`);
+      if (!before) setActivity(s, ev, d.safe_side ? `食い違いの原因を書いた。安全側で見られている` : `食い違いの原因を書いた: ${d.cause}`);
       else if (d.resolved && !before.resolved) setActivity(s, ev, `原因 ${d.cause_id} は直った`);
       break;
     }
     case "verdict.recorded": {
       put(s, "verdicts", d.verdict_id, d, ev);
-      const txt = `判定: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmt(d.margin_pct, 3)} %)`;
+      const how = isSafeSide(d) ? ` (安全側で判定: ${valueFromJa(d)}の値・${d.cause_id ?? ""})` : "";
+      const txt = `判定${how}: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmt(d.margin_pct, 3)} %)`;
       logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -321,12 +327,18 @@ function list(s, kind) {
 }
 
 // What the right pane and the 3D show for one load case of one design version:
-// the latest prediction, the analyses that used it, their comparison, verdict and cause.
+// one prediction, the analyses that used it, their comparison, verdict and cause.
+// A load case may have several predictions (one per quantity); the one followed
+// is the one of the newest comparison, unless predictions came after that
+// comparison: then the first of those, which waits for its analysis.
 export function chainFor(s, loadCaseId, version) {
   const loadCase = (s.project?.load_cases ?? []).find((c) => c.load_case_id === loadCaseId) ?? null;
   const sameCase = (r) => r.load_case_id === loadCaseId && (version == null || r.design_version === version);
   const preds = list(s, "predictions").filter(sameCase);
-  const pred = preds.at(-1) ?? null;
+  const predIds = new Set(preds.map((p) => p.prediction_id));
+  const lastCmp = list(s, "comparisons").filter((c) => predIds.has(c.prediction_id)).at(-1) ?? null;
+  const waiting = lastCmp ? preds.filter((p) => s.firstSeqOf[p.prediction_id] > s.firstSeqOf[lastCmp.comparison_id]) : preds;
+  const pred = waiting[0] ?? (lastCmp ? s.predictions[lastCmp.prediction_id] : null) ?? null;
   const anas = list(s, "analyses").filter(sameCase);
   const usedPred = (a) => pred && (a.prediction_ids ?? []).includes(pred.prediction_id);
   const ana = anas.filter(usedPred).at(-1) ?? null;
@@ -337,6 +349,28 @@ export function chainFor(s, loadCaseId, version) {
   // The 3D keeps the last finished analysis of this case even when a newer prediction waits for its own.
   const shown = ana ?? anas.at(-1) ?? null;
   return { loadCase, preds, pred, ana, shown, running, cmp, verdict, cause };
+}
+
+// A verdict made from an explained safe-side mismatch, not from a match (basis absent = match).
+export function isSafeSide(verdict) {
+  return verdict?.basis === "explained_safe_side";
+}
+
+// Which value a verdict was made from: the analysis (a match) or the prediction (safe side).
+export function valueFromJa(verdict) {
+  return (verdict?.value_from ?? (isSafeSide(verdict) ? "prediction" : "analysis")) === "prediction" ? "予測" : "解析";
+}
+
+// The verdicts behind a domain's judgement of one version: the judgement's verdict_ids
+// when it has them, else the domain's verdicts whose prediction belongs to that version.
+export function domainVerdicts(s, domain, version) {
+  const j = s.judgements[`${version}|${domain}`];
+  if (j?.verdict_ids) return j.verdict_ids.map((id) => s.verdicts[id]).filter(Boolean);
+  return list(s, "verdicts").filter((v) => {
+    if (v.domain !== domain) return false;
+    const pred = s.predictions[s.comparisons[v.comparison_id]?.prediction_id];
+    return pred?.design_version === version;
+  });
 }
 
 export function judgementState(s, domain) {

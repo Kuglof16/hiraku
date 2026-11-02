@@ -14,7 +14,7 @@
 import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
-import { chainFor, judgementState, roundsUsed } from "./state.js";
+import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
@@ -254,25 +254,35 @@ function renderChain(s, chain) {
   const c = $("card-cmp");
   if (cmp) {
     const ok = cmp.status === "match";
+    const safe = isSafeSide(verdict);
     c.className = `card ${ok ? "ok" : "bad"}`;
     let v = "";
     if (verdict) {
-      v = `<div class="verdict ${verdict.pass ? "ok" : "bad"}">判定: ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}<br><span class="sub">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+      // A verdict from a safe-side mismatch carries its own mark and says which value it used.
+      const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      v =
+        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
+        `<br><span class="sub">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
+    const safeWhy = cause?.safe_side ? `<div class="safe-why"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
     const cz = cause
-      ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>`
+      ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (H3)</div>`;
+    // The row whose value the verdict used.
+    const used = verdict ? (valueFromJa(verdict) === "予測" ? "pred" : "ana") : null;
+    const tag = `<small class="used">判定の値</small>`;
     c.innerHTML =
       `<h3>3. 照合</h3>` +
-      `<table><tr><td>予測</td><td>${esc(fmtQ(cmp.predicted))}</td></tr><tr><td>解析</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
+      `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
+      `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
       `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
-      v +
-      cz;
+      cz +
+      v;
   } else {
     c.className = "card wait";
     const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
@@ -304,7 +314,7 @@ function renderLegend(ct) {
     rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
   rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
-  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた</div>` : "";
+  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>` : "";
   const chips = ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
