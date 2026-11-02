@@ -1,4 +1,6 @@
-"""Verdicts and judgements, made by code from matching comparisons."""
+"""Verdicts and judgements, made by code: from a matching comparison (value =
+analysis), or from a mismatch whose cause is judged safe side and whose numbers
+confirm it (value = the prediction, the unfavourable one)."""
 
 from __future__ import annotations
 
@@ -26,10 +28,26 @@ def margin_pct(value: float, op: str, limit: float) -> float:
     return side / abs(limit) * 100.0
 
 
-def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case: Record) -> Record:
+def unfavourable_side(op: str) -> str:
+    """Which side of the limit fails: "larger" for <= and <, "smaller" for >= and >."""
+    return "larger" if op in ("<=", "<") else "smaller"
+
+
+def prediction_is_unfavourable(comparison: Record, op: str) -> bool:
+    """True when the prediction is at least as unfavourable as the analysis under op."""
+    p, a = comparison["predicted"]["value"], comparison["analyzed"]["value"]
+    return p >= a if unfavourable_side(op) == "larger" else p <= a
+
+
+def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case: Record,
+                 cause_id: str | None = None) -> Record:
+    """From a match: the analysis value. With cause_id (an explained safe-side mismatch):
+    the prediction, which the caller has checked is the unfavourable value."""
     crit = load_case["criterion"]
-    value = comparison["analyzed"]
+    value = comparison["predicted"] if cause_id else comparison["analyzed"]
     limit = crit["limit"]
+    extra = ({"basis": "explained_safe_side", "value_from": "prediction", "cause_id": cause_id} if cause_id
+             else {"basis": "match", "value_from": "analysis"})
     return {
         "verdict_id": verdict_id,
         "comparison_id": comparison["comparison_id"],
@@ -43,6 +61,7 @@ def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case
         "pass": OPS[crit["op"]](value["value"], limit["value"]),
         "margin_pct": margin_pct(value["value"], crit["op"], limit["value"]),
         "requirement_keys": list(crit.get("requirement_keys", [])),
+        **extra,
     }
 
 
@@ -54,9 +73,10 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     return out
 
 
-def _line(v: Record) -> str:
+def verdict_line(v: Record) -> str:
+    safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
     return (f"{v['test_id']} {v['quantity']} {v['value']['value']:.4g} {v['value']['unit']} "
-            f"{OP_JA[v['op']]} {v['limit']['value']:.4g} {v['limit']['unit']} (余裕 {v['margin_pct']:.0f} %)")
+            f"{OP_JA[v['op']]} {v['limit']['value']:.4g} {v['limit']['unit']} (余裕 {v['margin_pct']:.0f} %{safe})")
 
 
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
@@ -67,9 +87,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     missing = [lc["load_case_id"] for lc in cases if lc["load_case_id"] not in verdicts]
     reds = [x for x in got if not x["pass"]]
     if reds:
-        state, summary = "red", f"不合格 {len(reds)} 件: " + "、".join(_line(x) for x in reds)
+        state, summary = "red", f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)
     elif got and not missing:
-        state, summary = "green", "合格: " + "、".join(_line(x) for x in got)
+        state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
     else:
         state, summary = "pending", "まだ判定していない試験: " + ("、".join(missing) or "なし")
     return {

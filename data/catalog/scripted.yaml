@@ -9,8 +9,10 @@
 # Input refs:
 #   lc.<param>                     param of this load case
 #   req.<Q key>                    requirement value and unit
-#   load.<name>                    mass, cg_x/y/z, cg_from_front_axle of the frame and the parts on board
-#                                  under this load case's loading
+#   load.<name>                    mass, weight, cg_x/y/z, cg_from_front_axle of the frame and the parts on
+#                                  board under this load case's loading
+#   load.rail_joint.<input>        inputs of frame_static.rail_joint_stress but F and W under this loading;
+#                                  load.rail_joint.support is the wheel whose load is W
 #   summary.<name>                 wheelbase, front_axle_x, front_wheels, front_wheel_radius, track_front, ...
 #   summary.rail_section.<dim>     dims of the section most used by members along x
 #   summary.member_length.<id>     length of a member
@@ -19,15 +21,21 @@
 #   design.var.<name>              design variable
 #   pred.<quantity>                newest prediction of that quantity in this run and version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
+#   {ref} inside a ref             replaced by the name it points at, e.g. wheel_load_{load.rail_joint.support}
 #
 # After analyze, every prediction whose quantity is among the analysis results
 # is compared. A mismatch stops the run unless the step names it in
-# expected_mismatch: then its cause and fix (worked out beforehand; `source`
-# says by whom) are recorded with record_cause, compare in that domain is
-# denied by H3 until then, and the step predicts again with `retry`.
+# expected_mismatch: then its cause and fix (written in the plan; `source`
+# says which results were compared to find it) are recorded with
+# record_cause, compare in that domain is denied by HK3 until then, and the
+# step predicts again with `retry`, which is itself a step and may expect a
+# mismatch of its own. With safe_side true (and safe_side_reason, also written
+# in the plan) the cause is recorded as seen from the safe side: record_cause
+# checks that the prediction is the unfavourable value and makes the verdict
+# from it, and the step ends. With neither the run says `stop` and stops.
 
 offroad-4w:
-  show_h1: true   # call analyze once without a prediction, so the H1 denial is recorded
+  show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   steps:
     - load_case: P1-step100
       tool: step_climb
@@ -45,7 +53,7 @@ offroad-4w:
           inputs: {r: summary.front_wheel_radius, h: lc.step_height, W: pred.front_wheel_load}
       expected_mismatch:
         quantity: front_wheel_load
-        source: the analysis department's check of the demo vehicle (step_climb against the lever rule), 2026-11-02
+        source: step_climb against the lever rule (mass_props.front_wheel_load) on the demo vehicle
         cause: >-
           てこの比の式は止まっているときの前輪の荷重を出す。段を登るときは、後輪が地面の高さで押し、
           段の角が前輪の車軸の高さで押し返すので、その偶力で荷重が後輪へ移り、前輪の荷重は小さくなる
@@ -84,10 +92,51 @@ offroad-4w:
             t: summary.rail_section.t
       expected_mismatch:
         quantity: max_stress
-        source: the analysis department's check of the demo vehicle (rail_step_bending against frame_static, +52 %), 2026-11-02
+        source: frame_static against frame_static.rail_step_bending on the demo vehicle
         cause: >-
           梁の式は前後の車軸のあいだだけを見ている。後ろの車軸より後ろに張り出した荷とモーターの重さが、
           後ろの車軸のところでレールを曲げる (張り出しの曲げ) が、両端で支えた梁の式では支点の曲げは 0 になる。
           また、車輪はレールの外側にあるので、車輪の力はレールに横の曲げとねじりも加えるが、梁の式には入っていない
-        fix: 張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式で予測し直す
-        # retry: the analysis department is writing that formula; add it here when its id is known.
+        fix: >-
+          張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式 frame_static.rail_joint_stress で、
+          後ろの車軸の継ぎ手のレールの応力を予測し直す
+        retry:
+          say: 後ろの車軸の継ぎ手で、張り出しと押す力による縦の曲げに、車輪のずれから来る横の曲げとねじりを足して予測し直します
+          predictions:
+            - quantity: max_stress
+              formula_id: frame_static.rail_joint_stress
+              output: sigma
+              assumptions:
+                - 左右は同じように押される
+                - 継ぎ手の前のレールの先の端は動かないとみる
+              inputs:   # load.rail_joint: read off the design for this loading (hiraku.tools.summary)
+                M_oh: load.rail_joint.M_oh
+                F: ana.P1-step100.front_wheel_force
+                W: ana.P1-step100.wheel_load_{load.rail_joint.support}
+                z: load.rail_joint.z
+                e: load.rail_joint.e
+                L1: load.rail_joint.L1
+                L_c: load.rail_joint.L_c
+                E: load.rail_joint.E
+                nu: load.rail_joint.nu
+                b: load.rail_joint.b
+                h: load.rail_joint.h
+                t: load.rail_joint.t
+                b_c: load.rail_joint.b_c
+                h_c: load.rail_joint.h_c
+                t_c: load.rail_joint.t_c
+          expected_mismatch:
+            quantity: max_stress
+            source: >-
+              frame_static against frame_static.rail_joint_stress on the demo vehicle, the vertical bending
+              and the sideways bending and twist each
+            cause: >-
+              今度は手計算が大きい。鉛直の曲げは 1 % で合い、横の曲げとねじりが倍に出る。
+              式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
+            fix: >-
+              合否は安全側の手計算の値で出す。もっと近い値が要るときは、隣の継ぎ手も回るとみた式で予測し直す
+            safe_side: true
+            safe_side_reason: >-
+              鉛直の曲げは解析と 1 % で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
+              継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
+              大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている

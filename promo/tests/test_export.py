@@ -49,6 +49,10 @@ class ScreenUrl(unittest.TestCase):
         self.assertEqual(q["video"], ["1"])
         self.assertEqual(float(q["t"][0]), 0.5)  # the export time replaces the one in the URL
 
+    def test_app_url_keeps_pace_off(self):
+        q = parse_qs(urlparse(export.screen_url("http://127.0.0.1:8765/?run=sample&pace=0", t=1.0)).query)
+        self.assertEqual(q["pace"], ["0"])
+
     def test_screen_name(self):
         self.assertEqual(export.screen_name(Path("promo/screens/n18.html")), "n18")
         self.assertEqual(export.screen_name("http://127.0.0.1:8765/?run=sample"), "app")

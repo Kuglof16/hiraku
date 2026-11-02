@@ -1,8 +1,8 @@
-"""Stand-ins for the analysis department's K0 registry and tools, used only in tests.
+"""Stand-ins for the K0 registry and the analysis tools of hiraku.solvers, used only in tests.
 
 They follow hiraku.contract.protocols and do real closed-form arithmetic, so
-the plumbing (store, tools, rules, hooks) can be tested before hiraku.solvers
-is on main. Their numbers are not HIRAKU's results.
+the plumbing (store, tools, rules, hooks) can be tested apart from the
+solvers. Their numbers are not HIRAKU's results.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from hiraku import contract
 from hiraku.catalog import loading_of
 from hiraku.tools.summary import design_summary
 
-G = 9.80665  # standard gravity, m/s^2 (exact by definition)
+G = 9.80665  # standard gravity, m/s^2. Source: 3rd CGPM (1901), a defined value (exact)
 
 Record = dict[str, Any]
 
@@ -55,6 +55,22 @@ def rail_step_sigma(W, L, F, z, r, b, h, t, steps=2000):
     return m_max / _rect_tube_Z(b, h, t) + F / area
 
 
+def rail_joint_sigma(M_oh, F, W, z, e, b, h, t):
+    """The rail at the rear axle joint taking the wheel's offset moments alone (no share to the
+    cross member): F/A + (M_oh + F z)(h/2)/I_v + F e (b/2)/I_l, twist W e as thin-wall shear, von Mises."""
+    bi, hi = b - 2 * t, h - 2 * t
+    area = b * h - bi * hi
+    i_v = (b * h ** 3 - bi * hi ** 3) / 12.0
+    i_l = (h * b ** 3 - hi * bi ** 3) / 12.0
+    sigma = F / area + (M_oh + F * z) * (h / 2) / i_v + F * e * (b / 2) / i_l
+    tau = W * e / (2 * (b - t) * (h - t) * t)
+    return math.sqrt(sigma ** 2 + 3 * tau ** 2)
+
+
+_JOINT_INPUTS = {"M_oh": "N*mm", "F": "N", "W": "N", "z": "mm", "e": "mm", "L1": "mm", "L_c": "mm", "E": "MPa",
+                 "nu": "1", "b": "mm", "h": "mm", "t": "mm", "b_c": "mm", "h_c": "mm", "t_c": "mm"}
+
+
 class FakeFormulas:
     def __init__(self):
         self.calls = []
@@ -77,6 +93,9 @@ class FakeFormulas:
                "w = W/(2L); M(x) = w x (L - x)/2 - F (z - r)(1 - x/L) - F z x/L; sigma = max|M|/Z + F/A",
                {"W": "N", "L": "mm", "F": "N", "z": "mm", "r": "mm", "b": "mm", "h": "mm", "t": "mm"},
                {"sigma": "MPa"}, ["no overhang, no sideways bending or torsion"]),
+            _f("frame_static.rail_joint_stress", "後ろの車軸の継ぎ手のレールの応力", "strength",
+               "sigma = F/A + (M_oh + F z)(h/2)/I_v + F e (b/2)/I_l; tau = W e/(2 A_m t); sqrt(sigma^2 + 3 tau^2)",
+               _JOINT_INPUTS, {"sigma": "MPa"}, ["the rail takes the offset moments alone"]),
         ]
 
     def evaluate(self, formula_id, inputs):
@@ -111,6 +130,9 @@ class FakeFormulas:
                     "terms": [{"name": "M", "value": m, "unit": "N*mm", "share": 1.0}], "expression": spec["expression"]}
         if formula_id == "frame_static.rail_step_bending":
             sigma = rail_step_sigma(x["W"], x["L"], x["F"], x["z"], x["r"], x["b"], x["h"], x["t"])
+            return {"outputs": {"sigma": {"value": sigma, "unit": "MPa"}}, "terms": [], "expression": spec["expression"]}
+        if formula_id == "frame_static.rail_joint_stress":
+            sigma = rail_joint_sigma(*(x[k] for k in ("M_oh", "F", "W", "z", "e", "b", "h", "t")))
             return {"outputs": {"sigma": {"value": sigma, "unit": "MPa"}}, "terms": [], "expression": spec["expression"]}
         raise KeyError(formula_id)
 
@@ -164,10 +186,15 @@ class FakeStepClimb(FakeTool):
         w, f = pushed(load["mass"]["value"], load["cg_from_front_axle"]["value"], s["wheelbase"]["value"],
                       s["front_wheels"]["value"], r, h)
         w, f = w * self.current_factor(), f * self.current_factor()
+        # every wheel's load: the front ones w, the rear ones share the rest of the weight
+        front_x = s["front_axle_x"]["value"]
+        rear = (load["weight"]["value"] - s["front_wheels"]["value"] * w) / s["rear_wheels"]["value"]
+        per_wheel = [{"quantity": f"wheel_load_{sp['id']}", "value": w if sp["position_mm"][0] == front_x else rear,
+                      "unit": "N", "where": sp["id"]} for sp in design["supports"]]
         return {"status": "ok", "base": self.base, "results": [
             {"quantity": "front_wheel_load", "value": w, "unit": "N", "where": "FL"},
             {"quantity": "front_wheel_force", "value": f, "unit": "N", "where": "FL"},
-        ], "vectors": [{"kind": "reaction", "at": "FL", "origin_mm": [0.0, 0.0, 0.0], "vector_N": [-f, 0.0, w]}]}
+        ] + per_wheel, "vectors": [{"kind": "reaction", "at": "FL", "origin_mm": [0.0, 0.0, 0.0], "vector_N": [-f, 0.0, w]}]}
 
 
 class FakeFrameStatic(FakeTool):

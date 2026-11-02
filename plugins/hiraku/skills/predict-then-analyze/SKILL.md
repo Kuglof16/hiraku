@@ -17,6 +17,7 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 - 上流 (自分を `feeds` で指している荷重条件) があれば、そちらを先に照合で一致させる。一致していない上流があると `analyze` は止まる
 - `design` と `design_summary`: 入力はここから写す
   - `design_summary.loadings.<loading>`: その組で載っている部品の質量の和 (`mass`) と重心 (`cg_x`・`cg_y`・`cg_z`)。荷重条件の `loading` と同じ組を使う
+  - `design_summary.loadings.<loading>.rail_joint`: 式 `frame_static.rail_joint_stress` の入力のうち F と W 以外 (設計から読んだもの)。`support` は W にどの車輪の荷重を使うか (上流の解析の `wheel_load_<support>`)
   - ホイールベース・前輪の数・トレッド・部材の長さ (`member_length`)。断面の寸法は `design.sections`
 
 ## 2. 道具と式を選ぶ
@@ -41,8 +42,8 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 ## 5. 照合する
 
 - `compare(prediction_id, analysis_id)`。結果の名前が予測と違うときだけ `result_quantity` を付ける
-- 一致して `criterion` があれば、合否 (`verdict`) と分野の判定が付く
-- 食い違ったら、その分野は `record_cause` を書くまで止まる。手順は skill `hiraku:find-the-cause`
+- 一致して `criterion` があれば、合否 (`verdict`、値は解析) と分野の判定が付く
+- 食い違ったら、その分野は `record_cause` を書くまで止まる。手順は skill `hiraku:find-the-cause`。原因で差が説明でき、予測が安全側から押さえていると判断できるときだけ、`safe_side` を付けて予測の値で合否を出せる (同じ skill の 5)
 
 ## 6. 報告する
 

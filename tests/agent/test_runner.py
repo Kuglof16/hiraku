@@ -1,3 +1,4 @@
+import asyncio
 import os
 import unittest
 from pathlib import Path
@@ -8,7 +9,8 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUse
 
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
-from hiraku.agent.runner import MessageLog, MissingApiKey, build_options, final_status, require_api_key
+from hiraku.agent.runner import MessageLog, MissingApiKey, build_options, final_status, require_api_key, run_with_claude
+from hiraku.agent.session import STOPPED_BY_USER
 from hiraku.tools import Attribution
 from hiraku.tools.mcp import build_server
 from tests.tools.helpers import RunCase
@@ -78,6 +80,46 @@ class MessageLogTest(RunCase, unittest.TestCase):
         self.assertEqual(final_status(self.ctx, ok)[0], "stopped")  # R1 still pending
         self.assertEqual(final_status(self.ctx, SimpleNamespace(subtype="error_max_budget_usd", is_error=True))[0], "stopped")
         self.assertEqual(final_status(self.ctx, None)[0], "failed")
+
+
+def interrupted_client(exc):
+    """A stand-in ClaudeSDKClient whose message stream is cut by exc (Ctrl+C)."""
+
+    class Client:
+        def __init__(self, options):
+            self.options = options
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            yield AssistantMessage(content=[TextBlock(text="分野を選びます")], model="m")
+            raise exc
+
+    return Client
+
+
+class InterruptTest(RunCase, unittest.TestCase):
+    def assert_stopped_by_ctrl_c(self, exc):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), \
+                mock.patch("claude_agent_sdk.ClaudeSDKClient", interrupted_client(exc())):
+            with self.assertRaises(exc):
+                asyncio.run(run_with_claude(self.ctx))
+        self.assertEqual((self.ctx.project["status"], self.ctx.project["stop_reason"]), ("stopped", STOPPED_BY_USER))
+        self.assertEqual(self.kinds()[-2:], ["agent.stopped", "run.finished"])
+        self.assert_events_fit()
+
+    def test_cancelled(self):  # asyncio.run cancels the task on Ctrl+C
+        self.assert_stopped_by_ctrl_c(asyncio.CancelledError)
+
+    def test_keyboard_interrupt(self):
+        self.assert_stopped_by_ctrl_c(KeyboardInterrupt)
 
 
 if __name__ == "__main__":

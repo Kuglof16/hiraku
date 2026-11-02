@@ -15,6 +15,7 @@ from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.domains_fixture import domain_events
 from tests.web.k2_fixture import tilt_events
+from tests.web.safe_side_fixture import safe_side_events
 
 try:
     from playwright.sync_api import sync_playwright
@@ -46,11 +47,11 @@ def mismatch_events():
     more = [
         {"kind": "comparison.recorded", "agent": "cae.strength", "domain": "strength", "design_version": 1, "data": cmp},
         {"kind": "hook.denied", "agent": "cae.strength", "domain": "strength", "text": "cause first (shape example)",
-         "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "H3_cause_before_continue"}},
+         "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "HK3_cause_before_continue"}},
         {"kind": "cause.recorded", "agent": "cae.strength", "domain": "strength", "design_version": 1, "data": cause},
         {"kind": "comparison.recorded", "agent": "cae.strength", "domain": "strength", "design_version": 1, "data": {**cmp, "cause_id": "cause-0001"}},
         {"kind": "hook.blocked_stop", "agent": "lead", "text": "not judged yet (shape example)",
-         "data": {"hook": "Stop", "rule": "H4_no_stop_before_judged", "count": 1, "limit": 3}},
+         "data": {"hook": "Stop", "rule": "HK4_no_stop_before_judged", "count": 1, "limit": 3}},
         {"kind": "run.finished", "agent": "system", "data": {"status": "stopped", "stop_reason": "round_limit"}},
     ]
     t = out[-1]["t"]
@@ -168,8 +169,66 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
-        self.assertIn("H3", got["hooksRow"])
+        self.assertIn("HK3 食い違いは原因が先", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
+        page.close()
+
+    def test_safe_side_verdict(self):
+        events = safe_side_events()
+        for ev in events:
+            self.assertEqual(contract.errors("event", ev), [])
+        t_of = {(ev["kind"], ev["data"].get("comparison_id")): ev["t"] for ev in events}
+        page, errors = self.open("run=sample&pace=0&t=0")
+        first = page.evaluate(
+            """async ([events, t]) => {
+              await window.hiraku.load(events, t);
+              return { pred: document.getElementById("card-pred").textContent,
+                       cmp: document.getElementById("card-cmp").textContent,
+                       cmpCard: document.getElementById("card-cmp").className };
+            }""",
+            [events, t_of[("comparison.recorded", "cmp-0001")]],
+        )
+        # two predictions went into the analysis; the card follows the one that was compared
+        self.assertIn("最大応力", first["pred"])
+        self.assertNotIn("最大変位", first["pred"])
+        self.assertIn("bad", first["cmpCard"])
+        self.assertIn("90", first["cmp"])
+        end = page.evaluate(
+            """async () => {
+              await window.hiraku.seek(1e6);
+              const card = document.getElementById("card-cmp");
+              return {
+                cmpCard: card.className,
+                badge: card.querySelector(".badge").textContent,
+                mark: card.querySelector(".safe-mark")?.textContent ?? "",
+                why: card.querySelector(".safe-why")?.textContent ?? "",
+                used: [...card.querySelectorAll("tr.used td")].map((td) => td.textContent),
+                verdict: card.querySelector(".verdict").textContent,
+                logLine: [...document.querySelectorAll("#log li")].map((li) => li.textContent).find((x) => x.includes("判定 (")) ?? "",
+              };
+            }"""
+        )
+        self.assertIn("bad", end["cmpCard"])  # the comparison stays a mismatch
+        self.assertIn("食い違い", end["badge"])
+        self.assertEqual(end["mark"], "安全側で判定")
+        self.assertIn("one rail, so it stays above", end["why"])
+        self.assertIn("予測", end["used"][0])
+        self.assertIn("150", end["used"][1])
+        self.assertIn("予測の値", end["verdict"])
+        self.assertIn("合格", end["verdict"])
+        self.assertIn("安全側で判定", end["logLine"])
+        page.click("button[data-tab=grid]")
+        tile = page.evaluate(
+            """async () => {
+              await window.hiraku.seek(window.hiraku.player.playhead);
+              const t = document.querySelector('#tiles .tile[data-domain="strength"]');
+              return { cls: t.className, safe: t.querySelector(".tb.safe")?.textContent ?? "", sum: t.querySelector(".sum").textContent };
+            }"""
+        )
+        self.assertEqual(errors, [])
+        self.assertIn("green", tile["cls"])
+        self.assertEqual(tile["safe"], "安全側 1")
+        self.assertIn("うち安全側 1 件", tile["sum"])
         page.close()
 
     def test_loading_picks_who_is_on_board(self):

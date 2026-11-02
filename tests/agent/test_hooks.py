@@ -33,7 +33,7 @@ class HooksTest(RunCase, unittest.TestCase):
             data.update(agent_type=agent_type, agent_id="a1")
         return run(self.hooks.pre_tool_use(data, "tu1", None))
 
-    def test_h1_denial_is_recorded_and_explained(self):
+    def test_hk1_denial_is_recorded_and_explained(self):
         args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": []}
         out = self.pre("analyze", args, agent_type="cae-strength")
         hso = out["hookSpecificOutput"]
@@ -42,7 +42,7 @@ class HooksTest(RunCase, unittest.TestCase):
         ev = self.ctx.store.events()[-1]
         self.assertEqual(ev["kind"], "hook.denied")
         self.assertEqual(ev["agent"], "cae.strength")
-        self.assertEqual(ev["data"]["rule"], rules.H1)
+        self.assertEqual(ev["data"]["rule"], rules.HK1)
         self.assertEqual(ev["data"]["tool"], "mcp__hiraku__analyze")
         self.assertEqual(ev["text"], hso["permissionDecisionReason"])
         self.assertIsNone(self.attribution.take("mcp__hiraku__analyze", args))
@@ -81,7 +81,7 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})  # cap reached
         blocked = [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"]
         self.assertEqual([e["data"]["count"] for e in blocked], [1, 2])
-        self.assertEqual(blocked[0]["data"]["rule"], rules.H4)
+        self.assertEqual(blocked[0]["data"]["rule"], rules.HK4)
         self.assert_events_fit()
 
     def test_stop_passes_when_judged(self):

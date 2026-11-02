@@ -131,6 +131,24 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
+    def test_rail_joint_in_summary(self):
+        d = loaded_design()
+        joint = design_summary(d)["loadings"]["two_cargo"]["rail_joint"]
+        self.assertEqual(joint["support"], "RL")  # left and right alike: the first rear wheel
+        self.assertEqual((joint["L1"]["value"], joint["L_c"]["value"], joint["t_c"]["value"]), (900.0, 800.0, 2.0))
+        self.assertEqual(joint["nu"], {"value": 0.3, "unit": "1"})
+        # cargo carried at a node behind the rear axle bends the rail there, and only when on board
+        d["nodes"].append({"id": "L3", "xyz_mm": [-2200.0, 400.0, 350.0]})
+        d["members"].append(dict(next(m for m in d["members"] if m["id"] == "rail_L1"), id="tail_L", node_a="L2", node_b="L3"))
+        next(p for p in d["parts"] if p["id"] == "cargo")["carried_by"] = ["L3"]
+        s = design_summary(d)["loadings"]
+        self.assertGreater(s["two_cargo"]["rail_joint"]["M_oh"]["value"], s["two"]["rail_joint"]["M_oh"]["value"])
+        self.assertEqual(s["two_cargo"]["rail_joint"]["support"], "RL")
+        # no frame node under the rear wheels: the formula does not fit, so no entry
+        for sup in d["supports"]:
+            sup.pop("frame_node", None)
+        self.assertNotIn("rail_joint", design_summary(d)["loadings"]["two_cargo"])
+
     def test_project_fields(self):
         lcs = build_load_cases(self.catalog, self.req, design(), ["P1", "R1"])
         f = project_fields(self.catalog, self.req, lcs)
