@@ -51,6 +51,118 @@
     "cargo_mass": {
       "value": 150.0,
       "unit": "kg"
+    },
+    "motor_peak_power": {
+      "value": 10.0,
+      "unit": "kW"
+    },
+    "motor_peak_torque": {
+      "value": 50.0,
+      "unit": "N*m"
+    },
+    "motor_max_speed": {
+      "value": 6000.0,
+      "unit": "rpm"
+    },
+    "gear_ratio": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "drivetrain_efficiency": {
+      "value": 0.95,
+      "unit": "1"
+    },
+    "motor_efficiency": {
+      "value": 0.88,
+      "unit": "1"
+    },
+    "controller_efficiency": {
+      "value": 0.96,
+      "unit": "1"
+    },
+    "regen_efficiency": {
+      "value": 0.5,
+      "unit": "1"
+    },
+    "aux_power": {
+      "value": 150.0,
+      "unit": "W"
+    },
+    "battery_voltage": {
+      "value": 51.2,
+      "unit": "V"
+    },
+    "battery_capacity": {
+      "value": 100.0,
+      "unit": "Ah"
+    },
+    "battery_resistance": {
+      "value": 0.02,
+      "unit": "ohm"
+    },
+    "mass_factor": {
+      "value": 1.05,
+      "unit": "1"
+    },
+    "rolling_resistance": {
+      "value": 0.03,
+      "unit": "1"
+    },
+    "battery_heat_capacity": {
+      "value": 50000.0,
+      "unit": "J/K"
+    },
+    "battery_thermal_resistance": {
+      "value": 0.25,
+      "unit": "K/W"
+    },
+    "motor_heat_capacity": {
+      "value": 11000.0,
+      "unit": "J/K"
+    },
+    "motor_thermal_resistance": {
+      "value": 0.06,
+      "unit": "K/W"
+    },
+    "controller_heat_capacity": {
+      "value": 3600.0,
+      "unit": "J/K"
+    },
+    "controller_thermal_resistance": {
+      "value": 0.1,
+      "unit": "K/W"
+    },
+    "drag_coefficient": {
+      "value": 0.8,
+      "unit": "1"
+    },
+    "frontal_area": {
+      "value": 1.6,
+      "unit": "m^2"
+    },
+    "side_force_coefficient": {
+      "value": 1.0,
+      "unit": "1"
+    },
+    "side_area": {
+      "value": 2.4,
+      "unit": "m^2"
+    },
+    "centre_of_pressure_height": {
+      "value": 800.0,
+      "unit": "mm"
+    },
+    "air_density": {
+      "value": 1.225,
+      "unit": "kg/m^3"
+    },
+    "front_cornering_stiffness": {
+      "value": 25000.0,
+      "unit": "N/rad"
+    },
+    "rear_cornering_stiffness": {
+      "value": 30000.0,
+      "unit": "N/rad"
     }
   },
   "supports": [

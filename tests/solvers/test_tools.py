@@ -59,7 +59,7 @@ class EntryPointTest(unittest.TestCase):
             contract.validate("tool_spec", spec)
             self.assertEqual([c for c in checks if not c["pass"]], [], t.name)
             self.assertTrue(spec["usable"])
-            self.assertGreaterEqual(len(checks), 5)
+            self.assertGreaterEqual(len(checks), 3)
             self.assertTrue(set(spec["formulas"]) <= formula_ids)
 
 

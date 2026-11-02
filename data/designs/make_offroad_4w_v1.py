@@ -44,6 +44,52 @@ def q(v, unit):
     return {"value": v, "unit": unit}
 
 
+# Powertrain and battery (design assumptions): a 51.2 V 100 Ah LiFePO4 pack and
+# a 10 kW peak motor driving the rear axle through a 10:1 reduction.
+POWERTRAIN = {
+    "motor_peak_power": q(10.0, "kW"),
+    "motor_peak_torque": q(50.0, "N*m"),
+    "motor_max_speed": q(6000.0, "rpm"),
+    "gear_ratio": q(10.0, "1"),
+    "drivetrain_efficiency": q(0.95, "1"),
+    "motor_efficiency": q(0.88, "1"),
+    "controller_efficiency": q(0.96, "1"),
+    "regen_efficiency": q(0.5, "1"),
+    "aux_power": q(150.0, "W"),
+    "battery_voltage": q(51.2, "V"),
+    "battery_capacity": q(100.0, "Ah"),
+    "battery_resistance": q(0.02, "ohm"),
+    "mass_factor": q(1.05, "1"),
+    "rolling_resistance": q(0.03, "1"),
+}
+# Lumped heat capacity and thermal resistance to the air of the parts the
+# thermal tests watch (design assumptions, no cooling fan or liquid loop).
+THERMAL = {
+    "battery_heat_capacity": q(50000.0, "J/K"),
+    "battery_thermal_resistance": q(0.25, "K/W"),
+    "motor_heat_capacity": q(11000.0, "J/K"),
+    "motor_thermal_resistance": q(0.06, "K/W"),
+    "controller_heat_capacity": q(3600.0, "J/K"),
+    "controller_thermal_resistance": q(0.1, "K/W"),
+}
+# Aerodynamics (design assumptions; the drag coefficient is set above the 0.512
+# reported for a golf cart because the occupants sit in the open). Air density
+# is the ICAO standard atmosphere at sea level, not checked in this repository.
+AERO = {
+    "drag_coefficient": q(0.8, "1"),
+    "frontal_area": q(1.6, "m^2"),
+    "side_force_coefficient": q(1.0, "1"),
+    "side_area": q(2.4, "m^2"),
+    "centre_of_pressure_height": q(800.0, "mm"),
+    "air_density": q(1.225, "kg/m^3"),
+}
+# Tyre cornering stiffness per axle (both tyres; design assumption).
+HANDLING = {
+    "front_cornering_stiffness": q(25000.0, "N/rad"),
+    "rear_cornering_stiffness": q(30000.0, "N/rad"),
+}
+
+
 def node(side, st):
     return f"{side}{st}"
 
@@ -130,6 +176,10 @@ def build() -> dict:
             "occupants": q(2.0, "1"),
             "occupant_mass": q(OCCUPANT_KG, "kg"),
             "cargo_mass": q(CARGO_KG, "kg"),
+            **POWERTRAIN,
+            **THERMAL,
+            **AERO,
+            **HANDLING,
         },
         "supports": supports,
         "parts": parts,
