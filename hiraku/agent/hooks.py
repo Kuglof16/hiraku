@@ -5,13 +5,15 @@
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
-  (hook.blocked_stop); blocks are counted and capped so a run always ends.
+  (hook.blocked_stop); blocks are counted and capped so a run always ends. The
+  lead's stop while a role is still running is neither blocked nor counted: the
+  run waits for the role (hiraku.agent.runner.converse).
 - SubagentStart / SubagentStop: agent.started / agent.stopped.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from hiraku import contract
 from hiraku.agent.roles import agent_id_from_sdk
@@ -32,6 +34,7 @@ class Hooks:
         self.stop_blocks = 0
         self.subagent_stop_blocks: dict[str, int] = {}
         self.running: dict[str, str] = {}  # SDK agent_id -> contract agent id
+        self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
 
     # ------------------------------------------------------------------ helpers
 
@@ -111,6 +114,8 @@ class Hooks:
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
+            return {}
         reason = rules.stop_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
             return {}
@@ -146,8 +151,11 @@ class Hooks:
                     "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })
                 return {"decision": "block", "reason": reason}
+        was_running = bool(self.running)
         self.running.pop(input_data.get("agent_id", ""), None)
         self.ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+        if was_running and not self.running and self.on_roles_done is not None:
+            self.on_roles_done()
         return {}
 
     # ------------------------------------------------------------------ wiring

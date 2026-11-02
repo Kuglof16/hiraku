@@ -18,7 +18,7 @@ description: 予測と解析が食い違った (compare が mismatch) ときに�
 
 ## 2. 予測の側を見直す
 
-- `get_context` の `records.predictions` で、その予測の `inputs` と `assumptions` を読む
+- その予測を記録したとき `record_prediction` が返した記録 (`inputs`・`assumptions`) を読み直す
 - 入力の値と単位が、写したもとの値 (要件・設計・前の記録) と同じか
 - 式の前提 (`list_formulas` の `assumptions`) が、この荷重条件に合っているか
 

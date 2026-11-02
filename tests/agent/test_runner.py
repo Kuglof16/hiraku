@@ -119,7 +119,7 @@ def interrupted_client(exc):
         async def query(self, prompt):
             pass
 
-        async def receive_response(self):
+        async def receive_messages(self):
             yield AssistantMessage(content=[TextBlock(text="分野を選びます")], model="m")
             raise exc
 

@@ -31,14 +31,20 @@ requirements:
     value: C
     source: default
     trust: 3
-    basis: assumption (林道を ISO 8608 の class C とみる。ISO 8608 の本文は、このリポジトリでは確かめていない)
+    basis: >-
+      assumption: the forest road taken as ISO 8608 class C. ISO 8608 covers unpaved roads too
+      (https://www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the
+      table in https://link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)
   - key: Q13
     name: 縦の坂
     value: 12
     unit: "%"
     source: default
-    trust: 3
-    basis: assumption
+    trust: 1
+    basis: >-
+      林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで,
+      https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf
+      (not checked in this repository)
   - key: Q15
     name: 段差
     value: 100
@@ -52,7 +58,7 @@ requirements:
     unit: degC
     source: default
     trust: 3
-    basis: assumption
+    basis: assumption (the hot end of a -10 to 40 degC range of use)
   - key: Q30
     name: 人数と荷重の組 (見る組)
     value: two_cargo
@@ -60,13 +66,21 @@ requirements:
     trust: 1
     basis: request (2 人乗り、積載 150 kg)
     note: MVP は two_cargo (2 人 + 荷) だけを見る。empty・driver・two はまだ見ない。乗員と荷は設計の部品 (kind occupant / cargo)
+  - key: Q31
+    name: 体格の範囲
+    value: 若年女性 5 % 〜 若年男性 95 %
+    source: default
+    trust: 1
+    basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
   - key: Q33
     name: 体重 (強さの不利側)
     value: 76.6
     unit: kg
     source: default
     trust: 1
-    basis: AIST 人体寸法データベース 1991-92, 若年男性 95 パーセンタイル, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+    basis: >-
+      AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル,
+      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)
   - key: Q40
     name: 積載
     value: 150
@@ -96,19 +110,32 @@ requirements:
     source: default
     trust: 3
     basis: assumption
+  - key: Q65
+    name: 衝突の速さ
+    value: 40
+    unit: km/h
+    source: default
+    trust: 3
+    basis: assumption (the top speed, Q50)
   - key: Q70
     name: 公道を走るか
     value: 私有地 (林道) だけ
     source: default
     trust: 3
     basis: assumption of this fixed file; Q70 is a required question and was not asked
+  - key: Q82
+    name: 出荷の形
+    value: 完成車
+    source: default
+    trust: 3
+    basis: assumption
   - key: Q90
     name: 悪路の走行距離 (疲労)
     value: 5000
     unit: km
     source: default
     trust: 3
-    basis: assumption
+    basis: assumption (no public basis found)
 # The tests whose scripted steps reach a verdict. Without this list the catalog
 # picks every test that applies to the flags and has a load-case builder (the
 # run names the others and why); C1, P4, R3, T1, T2 and H5 build, but their

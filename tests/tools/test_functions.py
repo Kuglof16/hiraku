@@ -17,14 +17,37 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(c["design_version"], 1)
         self.assertEqual([lc["load_case_id"] for lc in c["load_cases"]], ["P1-step100", "R1-step100"])
         self.assertEqual({lc["owner"] for lc in c["load_cases"]}, {"cae.strength"})
+        # the large parts only on request
+        self.assertEqual(c["sections"], ["requirements", "load_cases", "judgements", "records"])
+        for big in ("design", "design_summary", "design_variables"):
+            self.assertNotIn(big, c)
+        c = get_context(self.ctx, {"sections": ["design_summary"]})
         self.assertEqual(c["design_summary"]["wheelbase"], {"value": 1800.0, "unit": "mm"})
         self.assertEqual(c["design_summary"]["member_length"]["rail_L0"]["value"], 900.0)
+        self.assertNotIn("load_cases", c)
+        self.assertEqual(get_context(self.ctx, {"sections": ["design"]})["design"]["design_version"], 1)
 
     def test_list_filters(self):
         self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})],
                          ["step_climb.pushed_wheel_load", "step_climb.wheel_force_rigid"])
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"domain": "strength"})], ["frame_static"])
         self.assertTrue(all(t["usable"] for t in list_tools(self.ctx)))
+
+    def test_list_tools_is_one_line_per_tool(self):
+        lines = list_tools(self.ctx)
+        self.assertEqual(lines[0], {"name": "step_climb", "title": "fake step_climb", "domain": "powertrain",
+                                    "base": "K2", "tests": ["P1"], "usable": True, "checks_passed": "1/1"})
+        self.assertEqual([t["name"] for t in list_tools(self.ctx, {"test_id": "R1"})], ["frame_static"])
+        (full,) = list_tools(self.ctx, {"tool": "frame_static"})
+        self.assertEqual(full["checks"][0]["case"], "known answer")
+        with self.assertRaises(ToolError):
+            list_tools(self.ctx, {"tool": "nope"})
+
+    def test_list_formulas_follows_the_tools_list(self):
+        self.ctx.specs["frame_static"]["formulas"] = ["frame_static.rail_bending", "mass_props.front_wheel_load"]
+        got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})]
+        self.assertIn("mass_props.front_wheel_load", got)  # named by the tool, though not its prefix
+        self.assertIn("frame_static.rail_step_bending", got)  # its prefix
 
 
 class PredictionTest(RunCase, unittest.TestCase):

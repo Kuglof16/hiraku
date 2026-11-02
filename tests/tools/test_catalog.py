@@ -2,8 +2,8 @@ import copy
 import unittest
 
 from hiraku import contract
-from hiraku.catalog import (CatalogError, applies, build_load_cases, load_catalog, load_requirements, min_frame_yield,
-                            owner_agent, parts_on_board, project_fields)
+from hiraku.catalog import (CatalogError, applies, build_load_cases, builder_for, load_catalog, load_requirements,
+                            min_frame_yield, owner_agent, parts_on_board, project_fields)
 from hiraku.tools.summary import design_summary
 from tests.tools.fakes import example_design, loaded_design
 from tests.tools.helpers import REQUIREMENTS
@@ -85,8 +85,15 @@ class CatalogTest(unittest.TestCase):
         with self.assertRaises(CatalogError) as cm:
             build_load_cases(self.catalog, req, design(), ["P1"])
         self.assertIn("Q15", str(cm.exception))
-        with self.assertRaises(CatalogError):
-            build_load_cases(self.catalog, self.req, design(), ["S1"])  # no builder yet
+
+    def test_test_without_a_builder_is_reported(self):
+        # whichever catalog test has no builder yet (builders keep coming, so none is named here)
+        missing = [t["id"] for t in self.catalog.tests if builder_for(self.catalog, t["id"]) is None]
+        if not missing:
+            self.skipTest("every catalog test has a builder")
+        with self.assertRaises(CatalogError) as cm:
+            build_load_cases(self.catalog, self.req, design(), [missing[0]])
+        self.assertIn(f"test {missing[0]} has no load-case builder", str(cm.exception))
 
     def test_design_must_carry_the_requirements_load(self):
         cases = [

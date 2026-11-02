@@ -103,7 +103,7 @@ class AutoTestsTest(BuildersCase, unittest.TestCase):
 
 class ReviseDesignTest(BuildersCase, unittest.TestCase):
     def test_designer_sees_the_revisable_variables(self):
-        (track,) = get_context(self.ctx)["design_variables"]
+        (track,) = get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"]
         self.assertEqual(track, {"name": "track", "unit": "mm", "min": 1000.0, "max": 1600.0,
                                  "meaning": "front and rear track", "value": {"value": 1300.0, "unit": "mm"}})
 
@@ -148,7 +148,7 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
         self.ctx.designgen = None
         with self.assertRaisesRegex(ToolError, "hiraku.designgen"):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
-        self.assertIsNone(get_context(self.ctx)["design_variables"])
+        self.assertIsNone(get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"])
 
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
