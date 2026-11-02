@@ -93,12 +93,33 @@ class DesignGenTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "match no design generator"):
             designgen.regenerate({"variables": {}}, {})
 
+    def test_older_design_without_newer_variables(self):
+        """A design saved before some variables existed can still be listed and revised."""
+        old = json.loads(json.dumps(V1))
+        for k in ("tyre_damping_ratio", "seat_x", "wheel_inertia"):
+            del old["variables"][k]
+        got = {v["name"]: v for v in designgen.variables(old)}
+        self.assertEqual(got["seat_x"]["value"], -725.0)  # the default
+        self.assertNotIn("wheel_inertia", got)
+        d = designgen.regenerate(old, {"track": mm(1220)})
+        self.assertEqual(d["variables"]["seat_x"]["value"], -725.0)
+        self.assertEqual(d["variables"]["track"]["value"], 1220.0)
+
     def test_variables_listing(self):
         got = {v["name"]: v for v in designgen.variables(V1)}
         self.assertEqual(got["track"]["value"], 1100.0)
         self.assertEqual((got["track"]["min"], got["track"]["max"]), (900.0, 1400.0))
         self.assertFalse(got["occupant_mass"]["revisable"])
         json.dumps(list(got.values()), allow_nan=False)
+
+    def test_derived_variables_follow_the_wheel(self):
+        d = designgen.regenerate(V1, {"wheel_radius": mm(340)})
+        self.assertEqual(d["variables"]["tyre_relaxation_length"], {"value": 340.0, "unit": "mm"})
+        wheel = next(p for p in d["parts"] if p["kind"] == "wheel")
+        self.assertAlmostEqual(d["variables"]["wheel_inertia"]["value"], wheel["mass_kg"] * 0.34**2 / 2, places=12)
+        self.assertNotIn("wheel_inertia", GEN.values_of(d))  # not an input: rebuilt every time
+        with self.assertRaisesRegex(ValueError, "unknown variable"):
+            designgen.regenerate(V1, {"wheel_inertia": {"value": 1.0, "unit": "kg*m^2"}})
 
     def test_motor_mass_follows_its_rating(self):
         def motor(**ch):

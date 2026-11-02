@@ -11,7 +11,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -148,7 +148,8 @@ function renderTop(s) {
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>`;
+    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
+    `<a class="launch-link" href="?list=1" title="台本か Claude で、新しく走らせる">▶ その場で走らせる</a>`;
 }
 
 function renderChips(s, lcId) {
@@ -446,11 +447,12 @@ function renderGrid(s) {
   const banner = $("grid-banner");
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
-    const known = { round_limit: `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した`, cost_limit: "費用の上限に達した" };
-    // The Claude runner writes these in English (hiraku/agent/runner.py final_status).
-    const said = /^cost limit\b/.test(s.stopReason ?? "") ? "費用の上限に達した" : /^turn limit\b/.test(s.stopReason ?? "") ? "ターン数の上限に達した" : null;
-    const why = s.stopReason ? known[s.stopReason] ?? said ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
-    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>続けるか・上限を変えるか・ここで報告を書くかは、実行を操作する入口ができてから選べる</span>`;
+    // stop_code says why in words; a record from before stop_code only has stop_reason
+    // (round_limit / cost_limit, or the Claude runner's English "cost limit ..." / "turn limit ...").
+    const code = s.stopCode ?? (/^cost limit\b/.test(s.stopReason ?? "") ? "cost_limit" : /^turn limit\b/.test(s.stopReason ?? "") ? "turn_limit" : s.stopReason);
+    const words = code === "round_limit" ? `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した` : STOP_CODE_JA[code];
+    const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
+    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
   }
 }
 
@@ -804,11 +806,82 @@ async function showRunList(message = "", runs = null) {
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
     `<h2>実行の一覧</h2>${message ? `<p class="err">${esc(message)}</p>` : ""}` +
+    `<div id="launch"></div>` +
     table("保存した実行", runs.filter((r) => r.saved)) +
     table("この PC の実行 (runs/)", runs.filter((r) => !r.saved && !r.sample)) +
     table("契約の形の見本", runs.filter((r) => r.sample)) +
     `<p class="note">events.jsonl をこの画面に落としても再生できます。</p>`;
+  renderLaunch();
 }
+
+// ---- starting a run (the second way in, next to the saved run) -------------
+// A scripted run can always start; a Claude run only when the server's window
+// has the API key (the screen never asks for it), and only after its cost limit
+// was shown and confirmed.
+let launchConfirm = null; // the requirements file waiting for the Claude confirmation
+
+async function renderLaunch(message = "") {
+  const box = $("launch");
+  if (!box) return;
+  let info;
+  try {
+    info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+  } catch (e) {
+    box.innerHTML = "";
+    return;
+  }
+  if (info.available === false) {
+    box.innerHTML = "";
+    return;
+  }
+  const busy = !!info.running;
+  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+  const rows = (info.requirements ?? [])
+    .map((r) => {
+      if (r.error) return `<div class="lreq"><div>${esc(r.file)}<div class="err">読めなかった: ${esc(r.error)}</div></div></div>`;
+      const file = esc(r.file);
+      let claude;
+      if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>`;
+      else if (launchConfirm === r.file)
+        claude =
+          `<span class="confirm">Claude を呼びます。費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。走らせますか?</span>` +
+          `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
+      else claude = `<button data-launch-ask="${file}" ${busy ? "disabled" : ""}>Claude で走らせる (費用の上限 ${usd(r.cost_limit_usd)})</button>`;
+      return (
+        `<div class="lreq"><div>${esc(r.want)}<div class="rid">${file}</div></div>` +
+        `<div class="lbtns"><button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>${claude}</div></div>`
+      );
+    })
+    .join("");
+  const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(info.running.run_id ?? "")}">${esc(info.running.run_id ?? "")} を追いかける</a></p>` : "";
+  box.innerHTML = `<h3>その場で走らせる</h3>${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+}
+
+async function launch(file, mode) {
+  launchConfirm = null;
+  for (const b of $("launch").querySelectorAll("button")) b.disabled = true;
+  try {
+    const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error ?? String(res.status));
+    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+  } catch (e) {
+    renderLaunch(`走らせられなかった: ${e.message ?? e}`);
+  }
+}
+
+$("runlist").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.launch) launch(b.dataset.req, b.dataset.launch);
+  else if (b.dataset.launchAsk) {
+    launchConfirm = b.dataset.launchAsk;
+    renderLaunch();
+  } else if (b.dataset.launchCancel) {
+    launchConfirm = null;
+    renderLaunch();
+  }
+});
 
 // No run in the URL: open the server's default run (a saved run), else the run list.
 async function openDefault() {

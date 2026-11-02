@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from hiraku.webserve.launch import KEY_NAME
 from hiraku.webserve.server import DEFAULT_HOST, DEFAULT_PORT, SAVED_DIR, WEB_DIR, list_runs, make_server
 
 
@@ -30,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     elif args.default_run:
         print(f"  default run {args.default_run} not found; the screen opens on the run list", flush=True)
     print(f"  sample replay: http://{host}:{port}/?run=sample", flush=True)
+    launcher = server.RequestHandlerClass.launcher
+    if launcher:
+        claude = "and with Claude" if launcher.claude_ready() else f"(with Claude only when {KEY_NAME} is set in this window)"
+        print(f"  start a run from the screen: scripted {claude}: http://{host}:{port}/?list=1", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

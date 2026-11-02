@@ -7,7 +7,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from hiraku.webserve.launch import Launcher
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
+from tests.web.fake_launch import fake_command, fake_reader
 
 RUN_ID = "20261102-203000-offroad-4w"
 LF = chr(10)
@@ -199,6 +201,88 @@ class SavedRunsTest(unittest.TestCase):
         with urllib.request.urlopen(f"{self.base}/api/runs", timeout=5) as r:
             runs = json.loads(r.read())
         self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
+
+
+class LaunchTest(unittest.TestCase):
+    """Starting a run from the screen (the child is a stand-in for python -m hiraku run)."""
+
+    RUN = "20261103-120000-offroad-4w-fake"
+    SECRET = "test-value-not-a-real-key"
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.runs = self.tmp / "runs"
+        req = self.tmp / "requirements"
+        req.mkdir()
+        (req / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        self.servers = []
+
+    def tearDown(self):
+        for s in self.servers:
+            s.shutdown()
+            s.server_close()
+        for lau in getattr(self, "launchers", []):
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+        shutil.rmtree(self.tmp)
+
+    def serve(self, env, hold_s=3.0):
+        lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
+                       reader=fake_reader, wait_s=20)
+        self.launchers = [*getattr(self, "launchers", []), lau]
+        server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.servers.append(server)
+        return f"http://127.0.0.1:{server.server_address[1]}"
+
+    def post(self, base, body, headers=None):
+        req = urllib.request.Request(base + "/api/launch", data=json.dumps(body).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json", **(headers or {})})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_status_lists_requirements_and_never_the_key(self):
+        base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
+        with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+            raw = r.read().decode("utf-8")
+        info = json.loads(raw)
+        self.assertEqual([x["file"] for x in info["requirements"]], ["offroad-4w.yaml"])
+        self.assertEqual(info["requirements"][0]["cost_limit_usd"], 2.0)
+        self.assertTrue(info["claude_ready"])
+        self.assertNotIn(self.SECRET, raw)
+
+    def test_scripted_run_starts_and_only_one_at_a_time(self):
+        base = self.serve({})
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN))
+        self.assertTrue((self.runs / self.RUN / "events.jsonl").exists())
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual(status, 409)  # the first one is still going
+
+    def test_claude_needs_the_key_where_the_server_runs(self):
+        base = self.serve({})
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
+        self.assertEqual(status, 403)
+        self.assertIn("ANTHROPIC_API_KEY", out["error"])
+        base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN + "-claude"))
+
+    def test_refuses_other_files_and_other_pages(self):
+        base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
+        port = base.rsplit(":", 1)[1]
+        self.assertEqual(self.post(base, {"requirements": "../secret.yaml", "mode": "scripted"})[0], 400)
+        self.assertEqual(self.post(base, {"requirements": "none.yaml", "mode": "scripted"})[0], 404)
+        self.assertEqual(self.post(base, {"requirements": "offroad-4w.yaml", "mode": "other"})[0], 400)
+        body = {"requirements": "offroad-4w.yaml", "mode": "claude"}
+        self.assertEqual(self.post(base, body, {"Origin": "http://evil.example"})[0], 403)
+        self.assertEqual(self.post(base, body, {"Sec-Fetch-Site": "cross-site"})[0], 403)
+        self.assertEqual(self.post(base, body, {"Host": f"evil.example:{port}", "Origin": f"http://evil.example:{port}"})[0], 403)
+        self.assertFalse(self.runs.exists() and any(self.runs.iterdir()))  # nothing was started
 
 
 if __name__ == "__main__":

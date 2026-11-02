@@ -263,6 +263,26 @@
     "motor_max_temperature": {
       "value": 155.0,
       "unit": "degC"
+    },
+    "tyre_damping_ratio": {
+      "value": 0.05,
+      "unit": "1"
+    },
+    "tyre_slip_stiffness_coeff": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "bump_stop_factor": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "tyre_relaxation_length": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "wheel_inertia": {
+      "value": 0.63,
+      "unit": "kg*m^2"
     }
   },
   "supports": [

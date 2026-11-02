@@ -140,7 +140,18 @@ VARIABLES: dict[str, Var] = {
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
     "fatigue_slope_after_knee": Var("1", 22.0, meaning="assumption"),
     "tyre_stiffness": Var("N/mm", 150.0, meaning="assumption"),
+    # tyre and suspension details of the 3D vehicle model (K2), assumptions with no source
+    "tyre_damping_ratio": Var("1", 0.05, meaning="assumption: vertical damping ratio of the tyre"),
+    "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
+                                     "as a multiple of the wheel's static load"),
+    "bump_stop_factor": Var("1", 10.0, meaning="assumption: bump and rebound stop stiffness, as a multiple of the spring"),
 }
+# Written into design.variables by build() from the other variables (not inputs).
+DERIVED = {
+    "tyre_relaxation_length": ("mm", "assumption: the tyre's relaxation length, taken as the wheel radius"),
+    "wheel_inertia": ("kg*m^2", "rotary inertia of one wheel part, as a solid disc: m r^2 / 2"),
+}
+WHEEL_MASS_KG = 14.0  # tyre, rim, hub and brake of one wheel (assumption)
 # Order of design.variables as in the first v1 file (the variables added later come after them).
 _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing", "rail_height", "front_overhang",
              "rear_overhang", "max_speed", "occupants", "occupant_mass", "cargo_mass", "motor_peak_power",
@@ -152,6 +163,10 @@ _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing"
              "centre_of_pressure_height", "air_density", "front_cornering_stiffness", "rear_cornering_stiffness",
              "max_steer_angle", "bumper_stiffness", "bumper_stroke", "crush_stiffness", "fatigue_fat_class", "fatigue_slope",
              "fatigue_knee_cycles", "fatigue_slope_after_knee", "tyre_stiffness"]
+# A design built here carries these from the first version on; variables added since
+# take their defaults (which build v1) when an older design lacks them.
+SIGNATURE = ("wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing", "rail_height", "front_overhang",
+             "rear_overhang")
 SEAT_HALF_MM = 275.0  # seat cross members ahead and behind the seat centre (assumption)
 BATTERY_V1 = {"length": 500.0, "width": 600.0, "height": 200.0, "mass": 50.0, "capacity": 100.0}  # the v1 pack (assumption)
 # The v1 motor and reducer (assumption): a bigger motor weighs more, in proportion to
@@ -167,6 +182,8 @@ def spec() -> list[Record]:
         if v.revisable:
             r.update(min=v.lo, max=v.hi)
         out.append(r)
+    for name, (unit, meaning) in DERIVED.items():
+        out.append({"name": name, "unit": unit, "revisable": False, "derived": True, "meaning": meaning})
     return out
 
 
@@ -302,12 +319,14 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         side = "左" if y > 0 else "右"
         end = "前" if x > -wb / 2 else "後"
         parts.append(part(f"wheel_{s['id']}", f"{end}{side}の車輪 (タイヤ・ホイール・ハブ・ブレーキ)", "wheel",
-                          [x, y, z], [2 * r, ww, 2 * r], 14.0))
+                          [x, y, z], [2 * r, ww, 2 * r], WHEEL_MASS_KG))
         parts.append(part(f"susp_{s['id']}", f"{end}{side}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
                           [x, (rail_y + 60.0) * (1 if y > 0 else -1), 330.0], [250.0, 120.0, 200.0], 8.0))
 
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
     variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items() if k not in variables})
+    variables["tyre_relaxation_length"] = _q(r, "mm")
+    variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
     return {
         "design_version": version,
         "parent_version": parent,
