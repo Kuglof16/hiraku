@@ -199,6 +199,58 @@
     "tyre_stiffness": {
       "value": 150.0,
       "unit": "N/mm"
+    },
+    "rail_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "rail_h": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "rail_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
+    "cross_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "cross_h": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "cross_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
+    "seat_x": {
+      "value": -725.0,
+      "unit": "mm"
+    },
+    "seat_y": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "steering_x": {
+      "value": -250.0,
+      "unit": "mm"
+    },
+    "battery_x": {
+      "value": -725.0,
+      "unit": "mm"
+    },
+    "front_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+    },
+    "rear_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+    },
+    "suspension_travel": {
+      "value": 150.0,
+      "unit": "mm"
     }
   },
   "supports": [
