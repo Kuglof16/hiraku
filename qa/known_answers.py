@@ -240,6 +240,13 @@ UNIT_TO_SI: dict[str, tuple[str, float, float]] = {
     "degC": ("temperature", 1.0, sc.zero_Celsius),
     "K": ("temperature", 1.0, 0.0),
     "K/W": ("thermal_resistance", 1.0, 0.0),
+    "m^2": ("area", 1.0, 0.0),
+    "kg/m^3": ("density", 1.0, 0.0),
+    "kg*m^2": ("inertia", 1.0, 0.0),
+    "N/rad": ("force_per_angle", 1.0, 0.0),  # cornering stiffness
+    "ohm": ("resistance", 1.0, 0.0),
+    "Ah": ("charge", sc.hour, 0.0),  # ampere-hour = 3600 C
+    "J/K": ("heat_capacity", 1.0, 0.0),
 }
 
 
