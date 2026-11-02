@@ -447,8 +447,9 @@ class RunChecker:
                 checks = s.get("checks", [])
                 for c in checks:
                     got = c.get("got")
+                    scale = abs(c["expected"]) if c["expected"] != 0 else 1.0  # absolute when expecting 0
                     ok = (isinstance(got, (int, float)) and math.isfinite(got)
-                          and abs(got - c["expected"]) <= c["tolerance_rel"] * abs(c["expected"]))
+                          and abs(got - c["expected"]) <= c["tolerance_rel"] * scale)
                     if c.get("pass") != ok:
                         self.error("tool.check", w, f"{name} case {c.get('case')!r}: pass={c.get('pass')} "
                                                      f"but expected {c.get('expected')} got {got} tol {c.get('tolerance_rel')}")
@@ -649,6 +650,8 @@ class RunChecker:
             self.warn("recompute", "-", "hiraku.solvers.k0_handcalc not available; predictions not recomputed")
             return
         reg = k0_handcalc
+        if not callable(getattr(reg, "evaluate", None)) and callable(getattr(reg, "registry", None)):
+            reg = reg.registry()
         if not callable(getattr(reg, "evaluate", None)):
             reg = next((o for o in vars(k0_handcalc).values() if callable(getattr(o, "evaluate", None))), None)
         if reg is None:

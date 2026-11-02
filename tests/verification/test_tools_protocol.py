@@ -47,7 +47,9 @@ class ToolProtocol(unittest.TestCase):
                     if c["got"] is None or not math.isfinite(c["got"]):
                         self.assertFalse(c["pass"], "pass without a value")
                         continue
-                    within = abs(c["got"] - c["expected"]) <= c["tolerance_rel"] * abs(c["expected"])
+                    # relative tolerance; absolute when the expected value is 0 (nothing to scale by)
+                    scale = abs(c["expected"]) if c["expected"] != 0 else 1.0
+                    within = abs(c["got"] - c["expected"]) <= c["tolerance_rel"] * scale
                     self.assertEqual(c["pass"], within, "pass flag does not follow from expected/got/tolerance")
 
     def test_usable_means_every_check_passes(self):

@@ -8,9 +8,10 @@ the rails have zero slope, so by symmetry it carries no moment.
 
 Assumptions about K1 that the test relies on (adjust here, not in K1, if K1
 models them differently and says so):
-- a wheel's frame_node is held in translation but free to rotate;
+- a wheel's frame_node is held in translation but free to rotate (the wheel
+  centre is straight below the node, so its reaction puts no torque on the rail);
 - a part's weight is split over its carried_by nodes;
-- the load case R1 with a step of 0 mm adds no force beyond the static weight.
+- the load case R1 with no params (no step) carries only the static weight.
 Rail self-weight is made negligible with a tiny density.
 """
 
@@ -36,8 +37,9 @@ def ladder_design():
         "L0": [0.0, TRACK / 2, 300.0], "L1": [-L_RAIL / 2, TRACK / 2, 300.0], "L2": [-L_RAIL, TRACK / 2, 300.0],
         "R0": [0.0, -TRACK / 2, 300.0], "R1": [-L_RAIL / 2, -TRACK / 2, 300.0], "R2": [-L_RAIL, -TRACK / 2, 300.0],
     }
+    # wheel centre straight below its frame node: a sideways offset would twist the rail
     wheel = lambda wid, node, x, y: {
-        "id": wid, "kind": "wheel", "position_mm": [x, y, 300.0], "radius_mm": 300.0,
+        "id": wid, "kind": "wheel", "position_mm": [x, y, 250.0], "radius_mm": 250.0,
         "suspension": {"type": "rigid"}, "actuation": {"drive": False, "brake": False, "steer": False},
         "frame_node": node,
     }
@@ -68,9 +70,10 @@ def ladder_design():
 
 
 def static_load_case():
+    """The contract's example load case without its params: the weight alone."""
     lc = json.loads((contract.EXAMPLES_DIR / "load_case.json").read_text(encoding="utf-8"))
-    lc["load_case_id"] = "R1-step0"
-    lc["params"]["step_height"] = {"value": 0.0, "unit": "mm"}
+    lc["load_case_id"] = "R1-static"
+    lc["params"] = {}
     return lc
 
 
@@ -107,8 +110,9 @@ class FrameStatic(unittest.TestCase):
         got = {r["quantity"]: r for r in out["results"]}
         self.assertIn("max_stress", got)
         self.assertEqual(got["max_stress"]["unit"], "MPa")
-        # von Mises at the corner may add the mean shear V/A; that is under 0.1 % here
-        self.assertAlmostEqual(got["max_stress"]["value"] / sigma, 1.0, delta=0.01)
+        # pure bending at the corners; if K1 also counted the mean shear V/A in von Mises,
+        # it would add sqrt(1 + 3 (V/A)^2 / sigma^2) - 1 = 0.08 % here
+        self.assertAlmostEqual(got["max_stress"]["value"] / sigma, 1.0, delta=1e-3)
 
     def test_reactions_balance_the_weight_and_are_symmetric(self):
         out = self.run_tool(ladder_design())

@@ -40,19 +40,37 @@ def _instances(module) -> list[Any]:
     return out
 
 
+def _is_registry(obj) -> bool:
+    return callable(getattr(obj, "list_formulas", None)) and callable(getattr(obj, "evaluate", None))
+
+
 def formula_registry(module):
-    """The FormulaRegistry in a module: the module itself or one object in it."""
-    if callable(getattr(module, "list_formulas", None)) and callable(getattr(module, "evaluate", None)):
+    """The FormulaRegistry in a module: the module itself, what its registry() returns, or an object in it."""
+    if _is_registry(module):
         return module
+    make = getattr(module, "registry", None)
+    if callable(make) and _is_registry(reg := make()):
+        return reg
     for obj in _instances(module):
-        if callable(getattr(obj, "list_formulas", None)) and callable(getattr(obj, "evaluate", None)):
+        if _is_registry(obj):
             return obj
     raise AssertionError(f"{module.__name__} has no list_formulas()/evaluate() (FormulaRegistry in protocols.py)")
 
 
 def analysis_tools() -> dict[str, Any]:
-    """Every AnalysisTool found in hiraku.solvers and its submodules, by name."""
+    """Every AnalysisTool in hiraku.solvers, by name.
+
+    Uses the shelf from hiraku.solvers.registry() when there is one (the entry
+    point the agent side calls); otherwise looks through every submodule.
+    """
     pkg = import_or_skip("hiraku.solvers", "the solver package with AnalysisTool objects")
+    make = getattr(pkg, "registry", None)
+    shelf_tools = getattr(make(), "tools", None) if callable(make) else None
+    if isinstance(shelf_tools, dict):
+        for name, tool in shelf_tools.items():
+            assert isinstance(tool, AnalysisTool), f"shelf tool {name!r} does not have name/spec/check/run"
+            assert tool.name == name, f"shelf key {name!r} but tool.name {tool.name!r}"
+        return dict(shelf_tools)
     modules = [pkg]
     for info in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
         try:
@@ -64,7 +82,7 @@ def analysis_tools() -> dict[str, Any]:
         for obj in _instances(m):
             if not inspect.isclass(obj) and not inspect.ismodule(obj) and isinstance(obj, AnalysisTool):
                 name = getattr(obj, "name", None)
-                if isinstance(name, str) and name not in tools:
+                if isinstance(name, str) and name and name not in tools:
                     tools[name] = obj
     return tools
 
