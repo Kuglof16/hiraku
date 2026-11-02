@@ -60,6 +60,8 @@ py promo/export.py encode <作業>/frames/n18 <作業>/clips/n18_2160p.mp4 --hei
 py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" <作業>/frames/app --gpu
 ```
 
+書き出す長さは、画面が持つ長さ (`window.promo.duration`、アプリでは `window.hiraku.player.duration`) です。アプリの再生は、ふつうは間合いを整えた時間の軸で進みます (event どうしの短い間を延ばし、長すぎる間は切る)。記録の時刻のまま撮りたいときは、URL に `&pace=0` を足します。見本の記録では、間合いを整えると 19.73 秒、`pace=0` では 9.00 秒でした。`frames` は、はじめに読んだ長さを表示します。
+
 この PC で測った 4K の 1 コマの時間:
 
 | 画面 | 時間 |
