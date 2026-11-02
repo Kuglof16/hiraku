@@ -252,6 +252,14 @@ class Units(unittest.TestCase):
         self.assertAlmostEqual(ka.convert(1.0, "N*m", "N*mm"), 1000.0, places=9)
         self.assertAlmostEqual(ka.convert(600.0, "rpm", "Hz"), 10.0, places=12)
         self.assertAlmostEqual(ka.convert(180.0, "deg", "rad"), math.pi, places=12)
+        self.assertAlmostEqual(ka.convert(90.0, "deg/s", "rad/s"), math.pi / 2, places=12)
+
+    def test_angular_rate_is_not_a_frequency(self):
+        # 1 Hz is 2 pi rad/s; a shared dimension would silently drop the 2 pi
+        with self.assertRaises(ValueError):
+            ka.convert(1.0, "Hz", "rad/s")
+        with self.assertRaises(ValueError):
+            ka.convert(60.0, "rpm", "deg/s")
 
     def test_round_trip_and_wrong_dimension(self):
         for u, (dim, _, _) in ka.UNIT_TO_SI.items():

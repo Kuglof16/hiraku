@@ -15,8 +15,12 @@ there is an error (or a warning with --strict). What it looks at:
 - H2: a tool is used only after a tool.checked that says usable (warning when
   the run has no tool.checked for it at all)
 - H3: after a mismatch, no analysis or comparison in that domain until a cause
-- comparisons: values copied from the prediction and the analysis, diff and
-  status recomputed, tolerance taken from the load case
+- assembly and interferences in an analysis: steps numbered 1..n, each part
+  once, dependencies go in earlier, blocked_by agrees with the three checks;
+  no part interferes with itself; the tool's interference counts and deepest
+  overlap agree with its list
+- comparisons: values copied from the prediction and the analysis, signed diffs
+  (analyzed - predicted) and status recomputed, tolerance taken from the load case
 - verdicts: only from a matching comparison; pass and margin recomputed; limit
   and op from the load case criterion
 - judgements: red_count and state follow the listed verdicts
@@ -57,6 +61,10 @@ UPDATABLE_FIELDS = {"comparison": {"cause_id"}, "cause": {"resolved", "resolved_
 # project.json fields the contract lets change after run.started.
 PROJECT_MUTABLE = {"status", "stop_reason", "requirements", "cost_usd", "design_versions"}
 OPS = {"<=": operator.le, ">=": operator.ge, "<": operator.lt, ">": operator.gt}
+# results the assembly tool reports about its own interference list (the analysis
+# dept's quantity names): count and deepest overlap per state. Checked when reported.
+INTERFERENCE_COUNTS = {"interference_count": "rest", "motion_interference_count": "motion"}
+INTERFERENCE_WORST = {"worst_interference": "rest", "worst_motion_interference": "motion"}
 VERSION_DIR_RE = re.compile(r"^v([0-9]{3})$")
 REL = 1e-9
 
@@ -450,6 +458,75 @@ class RunChecker:
         if not checks[-1][1].get("usable"):
             self.error("H2_tool_usable", w, f"tool {name} used while its last check says usable=false")
 
+    def _design_ids(self, version: int) -> set[str] | None:
+        d = self.designs.get(version)
+        if d is None:
+            return None
+        return {x.get("id") for g in ("parts", "members", "supports", "nodes") for x in d[1].get(g, [])}
+
+    @staticmethod
+    def _names_a_thing(name: str, ids: set[str] | None) -> bool:
+        """An id of the design, bare or as kind:id (K4 names bodies part:<id>, member:<id>)."""
+        return ids is None or (isinstance(name, str) and (name in ids or name.split(":", 1)[-1] in ids))
+
+    def check_assembly(self) -> None:
+        for aid, (i, a) in self.recs["analysis"].items():
+            w = self.where_of[i]
+            ids = self._design_ids(a.get("design_version"))
+            # a step without an integer order is already a schema error
+            steps = [s for s in a.get("assembly") or [] if isinstance(s, dict) and isinstance(s.get("order"), int)]
+            orders = sorted(s["order"] for s in steps)
+            if orders != list(range(1, len(steps) + 1)):
+                self.error("analysis.assembly", w, f"{aid} assembly orders {orders} are not 1..{len(steps)} once each")
+            step_of: dict[str, int] = {}
+            for s in steps:
+                part = s.get("part")
+                if part in step_of:
+                    self.error("analysis.assembly", w, f"{aid} puts {part} in twice (steps {step_of[part]} and {s.get('order')})")
+                step_of.setdefault(part, s.get("order"))
+            for s in steps:
+                n, part = s.get("order"), s.get("part")
+                if not self._names_a_thing(part, ids):
+                    self.warn("analysis.assembly", w, f"{aid} step {n}: {part} is not in design v{a.get('design_version')}")
+                for dep in s.get("depends_on", []):
+                    if dep in step_of and step_of[dep] >= n:
+                        self.error("analysis.assembly", w, f"{aid} step {n}: {part} depends on {dep}, which goes in at step {step_of[dep]}")
+                    elif dep not in step_of and not self._names_a_thing(dep, ids):
+                        self.warn("analysis.assembly", w, f"{aid} step {n}: depends on {dep}, which is neither a step nor in the design")
+                clear = all(s.get(f) for f in ("no_interference", "tool_clearance", "hand_reach"))
+                if clear and s.get("blocked_by"):
+                    self.error("analysis.assembly", w, f"{aid} step {n}: {part} is clear on every check but blocked by {s['blocked_by']}")
+                elif not clear and not s.get("blocked_by"):
+                    self.warn("analysis.assembly", w, f"{aid} step {n}: {part} fails a check but names nothing in blocked_by")
+            inters = [f for f in a.get("interferences") or [] if isinstance(f, dict)]
+            seen = set()
+            for f in inters:
+                pair = (frozenset((str(f.get("a")), str(f.get("b")))), str(f.get("state")), str(f.get("condition")))
+                if f.get("a") == f.get("b"):
+                    self.error("analysis.interference", w, f"{aid} lists {f.get('a')} as interfering with itself")
+                elif pair in seen:
+                    self.warn("analysis.interference", w, f"{aid} lists {f.get('a')} x {f.get('b')} ({f.get('state')}) twice")
+                seen.add(pair)
+                for n in (f.get("a"), f.get("b")):
+                    if not self._names_a_thing(n, ids):
+                        self.warn("analysis.interference", w, f"{aid}: {n} is not in design v{a.get('design_version')}")
+            results = {r.get("quantity"): r.get("value") for r in a.get("results", [])}
+            for q, state in INTERFERENCE_COUNTS.items():
+                if not isinstance(results.get(q), (int, float)):
+                    continue
+                n = sum(1 for f in inters if f.get("state") == state)
+                if "interferences" not in a:
+                    if results[q] > 0:
+                        self.warn("analysis.interference", w, f"{aid} reports {q} {results[q]} but no interferences list")
+                elif not _close(results[q], n):
+                    self.error("analysis.interference", w, f"{aid} reports {q} {results[q]} but lists {n} ({state})")
+            for q, state in INTERFERENCE_WORST.items():
+                depths = [f.get("depth_mm", 0.0) for f in inters if f.get("state") == state]
+                if "interferences" in a and isinstance(results.get(q), (int, float)):
+                    worst = max(depths, default=0.0)
+                    if not _close(results[q], worst):
+                        self.error("analysis.interference", w, f"{aid} reports {q} {results[q]} but the deepest listed is {worst}")
+
     def check_tool_specs(self) -> None:
         for name, specs in self.tool_checks.items():
             for i, s in specs:
@@ -507,14 +584,15 @@ class RunChecker:
             pv, av = float(c["predicted"]["value"]), float(c["analyzed"]["value"])
         except (KeyError, TypeError, ValueError):
             return
-        diff = abs(av - pv)
+        # contract: both diffs are signed, analyzed - predicted; a match is |diff_rel| <= tolerance_rel
+        diff = av - pv
         if not _close(c.get("diff_abs", math.nan), diff):
-            self.error("comparison.math", w, f"{cid} diff_abs {c.get('diff_abs')} but |{av} - {pv}| = {diff}")
+            self.error("comparison.math", w, f"{cid} diff_abs {c.get('diff_abs')} but {av} - {pv} = {diff}")
         if pv != 0:
             rel = diff / abs(pv)
             if not _close(c.get("diff_rel", math.nan), rel):
-                self.error("comparison.math", w, f"{cid} diff_rel {c.get('diff_rel')} but {rel}")
-            status = "match" if rel <= c.get("tolerance_rel", -1) else "mismatch"
+                self.error("comparison.math", w, f"{cid} diff_rel {c.get('diff_rel')} but ({av} - {pv}) / |{pv}| = {rel}")
+            status = "match" if abs(rel) <= c.get("tolerance_rel", -1) else "mismatch"
             if c.get("status") != status:
                 self.error("comparison.math", w, f"{cid} status {c.get('status')} but diff_rel {rel:.6g} "
                                                  f"vs tolerance {c.get('tolerance_rel')} gives {status}")
@@ -717,6 +795,7 @@ class RunChecker:
         self.check_predictions()
         self.check_analyses()
         self.check_tool_specs()
+        self.check_assembly()
         self.check_comparisons()
         self.check_causes()
         self.check_verdicts()

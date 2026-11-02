@@ -205,6 +205,71 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "hook.denied")["data"]["rule"] = "H9_made_up"
         self.assertFlags(ev, "hook.rule")
 
+    # --- assembly and interferences ---------------------------------------------------
+    @staticmethod
+    def _assembly(ev):
+        """Put a clean assembly order and interference list (with the tool's own counts) on the analysis."""
+        a = by_kind(ev, "analysis.finished")["data"]
+        step = lambda n, part, deps=(): {"order": n, "part": part, "direction": "-z", "depends_on": list(deps),
+                                         "no_interference": True, "tool_clearance": True, "hand_reach": True}
+        a["assembly"] = [step(1, "part:battery"), step(2, "part:seat", ["part:battery", "member:cross1"])]
+        a["interferences"] = [{"a": "part:seat", "b": "member:cross1", "depth_mm": 4.0, "state": "rest"},
+                              {"a": "FL", "b": "rail_L0", "depth_mm": 12.5, "state": "motion",
+                               "condition": "steer 30 deg, bump 80 mm"}]
+        a["results"] += [{"quantity": "interference_count", "value": 1.0, "unit": "1"},
+                         {"quantity": "worst_interference", "value": 4.0, "unit": "mm"},
+                         {"quantity": "motion_interference_count", "value": 1.0, "unit": "1"},
+                         {"quantity": "worst_motion_interference", "value": 12.5, "unit": "mm"}]
+        return a
+
+    def test_clean_assembly_and_interferences(self):
+        ev = sample_events()
+        self._assembly(ev)
+        found = self.findings(ev)
+        self.assertEqual([str(f) for f in found if f.rule.startswith("analysis.")], [])
+        self.assertEqual({f.rule for f in found if f.level == "error"}, set())
+
+    def test_assembly_order_with_a_gap(self):
+        ev = sample_events()
+        self._assembly(ev)["assembly"][1]["order"] = 3
+        self.assertFlags(ev, "analysis.assembly")
+
+    def test_dependency_that_goes_in_later(self):
+        ev = sample_events()
+        steps = self._assembly(ev)["assembly"]
+        steps[0]["depends_on"] = ["part:seat"]
+        self.assertFlags(ev, "analysis.assembly")
+
+    def test_blocked_step_that_passes_every_check(self):
+        ev = sample_events()
+        self._assembly(ev)["assembly"][1]["blocked_by"] = ["member:cross1"]
+        self.assertFlags(ev, "analysis.assembly")
+
+    def test_failed_step_without_blocked_by_is_a_warning(self):
+        ev = sample_events()
+        self._assembly(ev)["assembly"][1]["hand_reach"] = False
+        self.assertIn("analysis.assembly", self.rules(ev, "warn"))
+
+    def test_part_interfering_with_itself(self):
+        ev = sample_events()
+        self._assembly(ev)["interferences"][0]["b"] = "part:seat"
+        self.assertFlags(ev, "analysis.interference")
+
+    def test_interference_count_disagrees_with_the_list(self):
+        ev = sample_events()
+        self._assembly(ev)["interferences"].pop(0)  # the rest count still says 1
+        self.assertFlags(ev, "analysis.interference")
+
+    def test_worst_interference_disagrees_with_the_list(self):
+        ev = sample_events()
+        self._assembly(ev)["interferences"][1]["depth_mm"] = 20.0
+        self.assertFlags(ev, "analysis.interference")
+
+    def test_unknown_name_in_an_interference_is_a_warning(self):
+        ev = sample_events()
+        self._assembly(ev)["interferences"][0]["a"] = "part:steering_rack"
+        self.assertIn("analysis.interference", self.rules(ev, "warn"))
+
     # --- numbers ---------------------------------------------------------------------
     def test_verdict_from_a_mismatch(self):
         ev = sample_events()
@@ -215,6 +280,37 @@ class CheckRun(unittest.TestCase):
         ev = sample_events()
         c = by_kind(ev, "comparison.recorded")["data"]
         c["diff_rel"] = 0.5
+        self.assertFlags(ev, "comparison.math")
+
+    @staticmethod
+    def _predict(ev, value):
+        """Set the sample's prediction to `value` and refill the comparison with signed diffs."""
+        by_kind(ev, "prediction.recorded")["data"]["value"] = value
+        c = by_kind(ev, "comparison.recorded")["data"]
+        c["predicted"]["value"] = value
+        c["diff_abs"] = c["analyzed"]["value"] - value
+        c["diff_rel"] = c["diff_abs"] / abs(value)
+        c["status"] = "match" if abs(c["diff_rel"]) <= c["tolerance_rel"] else "mismatch"
+        return c
+
+    def test_analysis_below_the_prediction_gives_negative_diffs(self):
+        ev = sample_events()
+        c = self._predict(ev, 130.0)
+        self.assertLess(c["diff_abs"], 0)
+        self.assertEqual(c["status"], "match")
+        self.assertEqual(self.rules(ev), set())
+
+    def test_unsigned_diffs_are_flagged(self):
+        ev = sample_events()
+        c = self._predict(ev, 130.0)
+        c["diff_abs"], c["diff_rel"] = abs(c["diff_abs"]), abs(c["diff_rel"])
+        self.assertFlags(ev, "comparison.math")
+
+    def test_a_large_negative_diff_is_a_mismatch(self):
+        ev = sample_events()
+        c = self._predict(ev, 200.0)  # diff_rel = -0.38, tolerance 0.15
+        self.assertEqual(c["status"], "mismatch")
+        c["status"] = "match"
         self.assertFlags(ev, "comparison.math")
 
     def test_comparison_tolerance_comes_from_the_load_case(self):

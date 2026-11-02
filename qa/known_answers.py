@@ -247,6 +247,10 @@ UNIT_TO_SI: dict[str, tuple[str, float, float]] = {
     "ohm": ("resistance", 1.0, 0.0),
     "Ah": ("charge", sc.hour, 0.0),  # ampere-hour = 3600 C
     "J/K": ("heat_capacity", 1.0, 0.0),
+    # kept apart from Hz and rpm (cycles per second): one cycle is 2 pi rad, so a shared
+    # dimension would convert 1 Hz to 1 rad/s
+    "rad/s": ("angular_rate", 1.0, 0.0),
+    "deg/s": ("angular_rate", sc.degree, 0.0),
 }
 
 
