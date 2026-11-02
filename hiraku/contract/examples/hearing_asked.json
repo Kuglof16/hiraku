@@ -1,0 +1,29 @@
+{
+  "questions": [
+    {
+      "req_key": "Q15",
+      "name": "段差",
+      "text": "越えたい段差の高さはどれくらいですか？",
+      "ask": "confirm",
+      "choices": [
+        {
+          "label": "50 mm",
+          "value": 50,
+          "unit": "mm"
+        },
+        {
+          "label": "100 mm",
+          "value": 100,
+          "unit": "mm"
+        }
+      ],
+      "allow_other": true,
+      "default": {
+        "value": 100,
+        "unit": "mm",
+        "trust": 3,
+        "basis": "assumption"
+      }
+    }
+  ]
+}

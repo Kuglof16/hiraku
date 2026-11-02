@@ -75,6 +75,26 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 
 MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
+## 分野を選ぶ・ヒアリング・ナレッジ (受付部)
+
+event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.started`) に出る。実行の前に済ませた分 (要件のファイルと答えのファイルで済む形) も、実行の初めにこの順で出し直し、`project.json` にはもう結果が入っている。
+
+| kind | いつ | data | agent |
+|---|---|---|---|
+| `domains.picked` | まとめ役が分野を選んだ (A1) | `domains_picked`: `want`・`flags`・`picks` (`domain_pick` の配列)・`off` (選ばなかった分野と理由。`assembly` は入れない)。任意で `speed_class`・`flag_reasons` (フラグごとの理由)・`assembly_test_ids` (組み立てと人の試験 H・G。分野には数えない) | `lead` |
+| `hearing.asked` | 足りない要件をまとめて 1 回聞いた (A2) | `hearing_asked`: `questions` (`question` の配列。`ask` は `must` (値がまだ無い) か `confirm` (既定値を確かめる)、答えが無いときの `default` は値と `trust`・`basis` つき) | `lead` |
+| `hearing.answered` | 答え (か既定値) がそろった | `hearing_answered`: `answers` (`requirement` と同じ形で、`source` は `hearing` か `default`)、任意で `note` | `lead` |
+| `knowledge.imported` | 規則の束が入った (最初から入っている束、渡されたファイル) | `knowledge_imported`: `doc` (`doc_id`・`filename`・`origin`、規則にしなかった行は `skipped` に理由つき) と `rules` (`rule` の配列) | `lead` |
+| `rule_check.recorded` | 規則を 1 つ、版の部品に当てた (A5) | `rule_check` の記録そのもの (`v<NNN>/rule_checks/rchk-NNNN.json`) | `packager` |
+
+- `domain_pick` には任意で `test_ids` (その分野で製品のフラグに当てはまる試験) が付く。画面はその数を「当てはまる試験の数」に出す
+- ヒアリングで決まった要件は `project.requirements` にも入る。実行の途中で要件が変わったときは `project.updated` で出し直す
+- 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。式を作ったのが文の型 (コード) か Claude かは `check_by`。出典は `basis`、確かめていないものは `not checked`
+- `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い
+- 規則の束は event にだけ持ち、ファイルにはしない。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
+- 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
+- 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は、決まったら schema の `tool_input.*` に入れる (統括部に送る)
+
 ## runs/&lt;run_id&gt;/
 
 `hiraku/contract/layout.py` の冒頭に木がある。要点:
@@ -84,7 +104,7 @@ MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hira
 - `v001/` — 版ごとのフォルダ。`design.json` と、その版の記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。設計を直すと次の版のフォルダ (`v002/`) ができ、前の版の `design.json` は書き換えない。前の版の記録は、下の「記録を後から直すとき」の場合だけ書き換わる
 - 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる
 - 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
-- ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`)
+- ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`)
 - `runs/` はコミットしない
 
 ## events.jsonl の 1 行
@@ -97,5 +117,5 @@ MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hira
 ```
 
 - `seq` は 0 から抜けなし。`t` は `run.started` からの秒で、再生の間合いはこれで取る
-- `kind` は schema の `event_kind` の一覧だけ。`*.recorded`・`design.created`・`analysis.finished`・`judgement.updated`・`tool.checked`・`run.started` の `data` は記録そのもの
+- `kind` は schema の `event_kind` の一覧だけ。`*.recorded`・`design.created`・`analysis.finished`・`judgement.updated`・`tool.checked`・`run.started` の `data` は記録そのもの (`domains.picked`・`hearing.*`・`knowledge.imported` の data は上の表の形)
 - `agent` は `lead` (まとめ役)・`designer` (設計役)・`packager` (パッケージ役)・`cae.<分野>`・`system`・`user`。ペットは `agent` 1 つに 1 匹

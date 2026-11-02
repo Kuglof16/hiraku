@@ -9,38 +9,193 @@
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n05"></script>
 <style>
-  /* N05: the vehicle fills the screen, bursts open into a grid of the
-     preset tests, and the name settles above the grid.
-     The hero and the tiles are stand-ins (.bg-only): the video uses the
-     app's own renders there, with this page laid over them (?layer=fg).
+  /* N05: the vehicle stands in front, with warm light in a thin line down its
+     middle. It parts there into a left and a right half that swing open
+     towards the viewer like a pair of doors (kannon-biraki: each half hinged
+     on its own outer end), the light spills out of the widening gap, the
+     tiles of the preset tests fly out of it into a grid, and the name
+     settles above the grid.
+     The vehicle is a stand-in (.bg-only): the video lays this page
+     (?layer=fg) over the app's own render, which opens the same way; in
+     ?layer=fg only the light, the name and the tagline are drawn, and the
+     light is see-through so the render below stays visible.
      Placement and times: layout.json n05 (CSS variables from layout.js;
-     --t-burst, --t-tiles, --t-tile-in, --t-tile-stagger, --t-name, --t-tag
-     from n05.times); the tiles are placed on the cells of
-     promoLayout.gridCells(n05.grid). */
+     --t-burst, --t-tiles, --t-tile-in, --t-tile-stagger, --t-name, --t-tag,
+     --t-door-open from n05.times; --door-* from n05.door); the tiles are
+     placed on the cells of promoLayout.gridCells(n05.grid). */
   :root {
     --page-bg: var(--night);
   }
 
+  /* --- the vehicle, in two halves --- */
   .hero {
     position: absolute;
     left: var(--hero-x);
     top: var(--hero-y);
     width: var(--hero-w);
+    height: var(--hero-h);
     transform-origin: 50% 55%;
-    /* layout.json n05.hero_motion: grows until the burst, then bursts and fades */
-    animation:
-      hero-push var(--t-burst) linear both,
-      hero-burst var(--hero-motion-burst-dur) var(--hero-motion-ease) both;
-    animation-delay: 0s, var(--t-burst);
+    perspective: var(--door-perspective-px);
+    perspective-origin: 50% 50%;
+    /* layout.json n05.hero_motion.push_scale: grows slowly until the burst */
+    animation: hero-push var(--t-burst) linear both;
   }
   .hero .v-line { stroke: var(--on-night); }
   @keyframes hero-push {
     from { transform: scale(1); }
     to   { transform: scale(var(--hero-motion-push-scale)); }
   }
-  @keyframes hero-burst {
-    from { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
-    to   { transform: scale(var(--hero-motion-burst-scale)); opacity: 0; }
+  .half {
+    position: absolute;
+    inset: 0;
+    /* front side only: a half is gone once it turns edge-on to the eye */
+    backface-visibility: hidden;
+    animation:
+      open-l var(--door-open-dur) var(--door-ease) both,
+      half-gone 0s linear both;
+    animation-delay: var(--t-door-open), calc(var(--t-door-open) + var(--door-open-dur));
+  }
+  .half svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  /* parted at the middle (x 960); --hinge-l / --hinge-r: the vehicle's outer
+     ends, measured from the drawing below */
+  .half-l {
+    clip-path: inset(0 50% 0 0);
+    transform-origin: var(--hinge-l, 0%) 50%;
+  }
+  .half-r {
+    clip-path: inset(0 0 0 50%);
+    transform-origin: var(--hinge-r, 100%) 50%;
+    animation-name: open-r, half-gone;
+  }
+  /* the cut face of each half, lit by the light inside: a warm line on its
+     free edge (over the vehicle's height, 23-93 % of the box), so the edges
+     are seen coming towards the viewer */
+  .half::after {
+    content: "";
+    position: absolute;
+    top: 23%;
+    height: 70%;
+    width: var(--door-seam-w-px);
+    background: linear-gradient(to bottom, rgba(246, 234, 208, 0), var(--glow) 20%,
+      var(--glow) 80%, rgba(246, 234, 208, 0));
+  }
+  .half-l::after { left: calc(50% - var(--door-seam-w-px)); }
+  .half-r::after { left: 50%; }
+  /* the free (middle) edges come towards the viewer; a half turning away
+     from the light dims */
+  @keyframes open-l {
+    from { transform: rotateY(0deg); opacity: 1; }
+    to   { transform: rotateY(calc(-1 * var(--door-angle))); opacity: 0.45; }
+  }
+  @keyframes open-r {
+    from { transform: rotateY(0deg); opacity: 1; }
+    to   { transform: rotateY(var(--door-angle)); opacity: 0.45; }
+  }
+  @keyframes half-gone {
+    from { visibility: visible; }
+    to   { visibility: hidden; }
+  }
+
+  /* --- the light in the parting line and in the gap (every layer) --- */
+  .crack {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--hero-y);
+    height: var(--hero-h);
+    pointer-events: none;
+    /* the vehicle fills about 23-93 % of the hero box; soft ends above and
+       below it (the bottom fades out at y 795, above the subtitle band) */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 12%, #000 28%, #000 84%, transparent 98%);
+            mask-image: linear-gradient(to bottom, transparent 12%, #000 28%, #000 84%, transparent 98%);
+  }
+  .seam {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% - var(--door-seam-glow-w-px) / 2);
+    width: var(--door-seam-glow-w-px);
+    /* the thin line stays while the halves part, then hands over to the gap */
+    animation: seam-out var(--door-open-dur) linear both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes seam-out {
+    0%, 40% { opacity: 1; }
+    100%    { opacity: 0; }
+  }
+  .seam-glow, .seam-core {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    /* grows a little stronger until the vehicle opens */
+    animation: seam-build var(--t-door-open) ease-in both;
+  }
+  .seam-glow {
+    left: 0;
+    right: 0;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.10) 30%, rgba(246, 234, 208, 0.38) 50%,
+      rgba(246, 234, 208, 0.10) 70%, rgba(246, 234, 208, 0) 100%);
+  }
+  .seam-core {
+    left: calc(50% - var(--door-seam-w-px) / 2);
+    width: var(--door-seam-w-px);
+    background: var(--glow);
+    opacity: 0.85;
+  }
+  @keyframes seam-build {
+    from { opacity: 0.45; transform: scaleX(0.6); }
+    to   { opacity: 1; transform: scaleX(1); }
+  }
+  /* light inside the vehicle, seen through the gap between the halves: it
+     widens with the swing (same duration and ease) and fades out over
+     spill_dur, so the render below is not washed out for long */
+  .gap {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 18%, rgba(246, 234, 208, 0.22) 38%, rgba(246, 234, 208, 0.55) 50%,
+      rgba(246, 234, 208, 0.22) 62%, rgba(246, 234, 208, 0) 82%);
+    animation:
+      gap-open var(--door-open-dur) var(--door-ease) both,
+      gap-fade var(--door-spill-dur) ease-out both;
+    animation-delay: var(--t-door-open), var(--t-door-open);
+  }
+  @keyframes gap-open {
+    from { transform: scaleX(0.02); }
+    to   { transform: scaleX(1.1); }
+  }
+  @keyframes gap-fade {
+    0%   { opacity: 0.6; }
+    40%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* light that spills out of the gap towards the viewer */
+  .spill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.08) 28%, rgba(246, 234, 208, 0.4) 50%,
+      rgba(246, 234, 208, 0.08) 72%, rgba(246, 234, 208, 0) 100%);
+    animation: spill var(--door-spill-dur) linear both;
+    animation-delay: var(--t-door-open);
+    /* .safe ends at the subtitle band; fade out before it (as .burst) */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+  }
+  @keyframes spill {
+    0%, 30% { transform: scaleX(0.05); opacity: 0; }
+    60%     { transform: scaleX(0.6); opacity: 1; }
+    100%    { transform: scaleX(1.3); opacity: 0; }
   }
 
   .burst {
@@ -54,6 +209,9 @@
       rgba(246, 234, 208, 0.5) 65%, rgba(246, 234, 208, 0) 100%);
     animation: burst 0.6s cubic-bezier(.2, .8, .3, 1) both;
     animation-delay: calc(var(--t-burst) - 0.05s);
+    /* .safe ends at the subtitle band; fade out before it instead of a hard edge */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
   }
   @keyframes burst {
     0%   { transform: scaleX(0.01); opacity: 0; }
@@ -104,10 +262,20 @@
 </head>
 <body data-duration="5">
 <div class="stage night">
+  <div class="crack">
+    <div class="gap"></div>
+    <div class="seam"><div class="seam-glow"></div><div class="seam-core"></div></div>
+  </div>
   <div class="safe">
-    <div class="hero bg-only" data-box="n05.hero"></div>
+    <div class="hero bg-only" data-box="n05.hero">
+      <div class="half half-l"></div>
+      <div class="half half-r"></div>
+    </div>
+    <div class="spill"></div>
     <div class="grid bg-only"></div>
     <div class="burst"></div>
+  </div>
+  <div class="safe">
     <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
     <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
   </div>
@@ -145,7 +313,16 @@
           style="${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
        ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label">${t.test[0]}</b></div>`).join("");
 
-  document.querySelector(".hero").innerHTML = drawVehicle({ strokeScale: 0.7 });
+  // The same drawing in both halves; each half shows its side of x 960.
+  // The hinges sit on the vehicle's outer ends: the drawing's extent in its
+  // 600 x 300 box, as a share of the hero's width (the box fills the hero).
+  const hero = document.querySelector(".hero");
+  for (const half of hero.querySelectorAll(".half")) half.innerHTML = drawVehicle({ strokeScale: 0.7 });
+  const bb = hero.querySelector("svg").getBBox();
+  if (bb.width > 0) {
+    hero.style.setProperty("--hinge-l", `${(bb.x / 600) * 100}%`);
+    hero.style.setProperty("--hinge-r", `${((bb.x + bb.width) / 600) * 100}%`);
+  }
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
 </script>

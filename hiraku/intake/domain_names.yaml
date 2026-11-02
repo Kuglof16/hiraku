@@ -1,0 +1,22 @@
+# How a domain is named on screen for a product (N09).
+# The default name is the contract's (hiraku.contract.DOMAIN_NAMES_JA). A rename applies to
+# a product when its rule holds; the first rule that holds wins.
+#   when:       an applies_if expression over the product flags (hiraku.catalog.expr)
+#   only_tests: holds when every test of the domain that applies to the product is in this list
+# Claude may give another name for a domain when it calls pick_domains (shown_names);
+# these are what the code proposes when it gives none.
+renames:
+  handling:
+    - {when: not self_propelled, name: 安定 (転倒)}
+  powertrain:
+    - {only_tests: [P5], name: 動力 (アクチュエータ)}
+  aero:
+    - {only_tests: [F3], name: 液体のこぼれ}
+  crash:
+    - {only_tests: [C2], name: 人との接触}
+  strength:
+    - {when: preload, name: 強度 (弦の張力)}
+  nvh:
+    - {only_tests: [N3], name: 騒音}
+  thermal:
+    - {only_tests: [T3], name: 熱 (デューティ)}

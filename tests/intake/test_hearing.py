@@ -1,0 +1,182 @@
+import copy
+import unittest
+
+from hiraku import contract
+from hiraku.intake import IntakeError, load_product, product_files
+from hiraku.intake.hearing import (applicable_items, hearing_text, item, load_answers, load_items, plan_hearing,
+                                   prepare)
+from hiraku.intake.products import answers_file
+
+
+def bare(slug):
+    """The request as a person would first give it: the sentence and the flags, no requirements yet."""
+    req = copy.deepcopy(load_product(slug))
+    own = {r["key"]: r for r in req["requirements"]}
+    req["requirements"] = []
+    return req, own
+
+
+class ItemsTest(unittest.TestCase):
+    def test_every_item_is_well_formed(self):
+        keys = [it["key"] for it in load_items()]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(keys), len(set(keys)))
+        for it in load_items():
+            self.assertTrue(contract.errors("req_key", it["key"]) == [], it["key"])
+            for c in it.get("choices", []):
+                self.assertIn("label", c)
+                self.assertIn("value", c)
+            d = it.get("default")
+            if d:
+                self.assertIn(d["trust"], (1, 2, 3))
+                self.assertTrue(d["basis"], it["key"])
+                if d["trust"] in (1, 2):
+                    self.assertIn("not checked", d["basis"], it["key"])
+
+    def test_catalog_asks_must_for_these(self):
+        must = {it["key"] for it in load_items() if it["ask"] == "must"}
+        self.assertEqual(must, {"Q30", "Q40", "Q50", "Q70"})
+
+    def test_items_follow_the_flags(self):
+        keys = lambda flags, sc=None: {it["key"] for it in applicable_items(flags, sc)}  # noqa: E731
+        self.assertNotIn("Q90", keys({"self_propelled": True}))  # no rough road, no kilometres
+        self.assertIn("Q90", keys({"self_propelled": True, "rough": True}))
+        self.assertIn("Q42", keys({"liquid": True}))
+        self.assertNotIn("Q42", keys({}))
+        self.assertIn("Q92", keys({"lean": True}))
+        self.assertNotIn("Q92", keys({"lean": True, "self_propelled": True}))  # lifetime in km, not in count
+
+    def test_unknown_item(self):
+        with self.assertRaises(IntakeError):
+            item("Q98")
+
+
+class PlanTest(unittest.TestCase):
+    def test_a_bare_care_bed_asks_the_required_ones_and_defaults_the_rest(self):
+        req, own = bare("care-bed")
+        plan = plan_hearing(req, product_defaults=own)
+        asked = {q["req_key"]: q for q in plan.questions}
+        self.assertEqual(list(asked), ["Q03", "Q11", "Q19", "Q20", "Q30", "Q34", "Q40", "Q56", "Q61", "Q80"])
+        self.assertEqual({k for k, q in asked.items() if q["ask"] == "must"}, {"Q30", "Q40"})
+        self.assertNotIn("default", asked["Q30"])  # a required answer has no default to fall back on
+        self.assertNotIn("default", asked["Q03"])  # nobody has a value for it
+        self.assertEqual(asked["Q19"]["default"]["value"], 40)  # the bed file's own value comes before the item's
+        self.assertEqual(asked["Q19"]["default"]["trust"], 1)
+        self.assertTrue(all(q["allow_other"] for q in plan.questions))
+        defaulted = {r["key"]: r for r in plan.defaulted}
+        self.assertEqual(defaulted["Q60"]["value"], 1350)
+        self.assertEqual(defaulted["Q60"]["source"], "default")
+        self.assertIn("not checked", defaulted["Q60"]["basis"])
+
+    def test_a_confirm_question_carries_its_default_with_the_source(self):
+        req, own = bare("electric-guitar")
+        plan = plan_hearing(req, product_defaults=own)
+        q61 = next(q for q in plan.questions if q["req_key"] == "Q61")
+        self.assertEqual(q61["ask"], "confirm")
+        self.assertEqual(q61["default"], {"value": 1.5, "unit": "1", "trust": 3, "basis": "assumption"})
+
+    def test_what_the_file_has_is_not_asked(self):
+        req = load_product("care-bed")
+        plan = plan_hearing(req)
+        self.assertNotIn("Q34", [q["req_key"] for q in plan.questions])
+        self.assertIn("Q34", plan.present)
+
+    def test_claude_can_reword_a_question_and_offer_choices(self):
+        req, own = bare("care-bed")
+        plan = plan_hearing(req, product_defaults=own, wording={"Q40": "ベッドの安全動作荷重 (SWL) は何 N にしますか。"},
+                            choices={"Q40": [{"label": "1700 N", "value": 1700, "unit": "N"}]})
+        q = next(q for q in plan.questions if q["req_key"] == "Q40")
+        self.assertEqual(q["text"], "ベッドの安全動作荷重 (SWL) は何 N にしますか。")
+        self.assertEqual(q["choices"], [{"label": "1700 N", "value": 1700, "unit": "N"}])
+
+
+class PrepareTest(unittest.TestCase):
+    def test_answers_become_hearing_requirements_and_the_file_in_is_untouched(self):
+        req, own = bare("care-bed")
+        before = copy.deepcopy(req)
+        p = prepare(req, {"Q30": "利用者 1 人 + 介助者 1 人", "Q40": {"value": 1700, "unit": "N", "trust": 2, "basis": "JIS"}},
+                    "ありがとう", product_defaults=own)
+        self.assertEqual(req, before)
+        self.assertTrue(p.ready)
+        by = {r["key"]: r for r in p.requirements_file["requirements"]}
+        self.assertEqual((by["Q40"]["source"], by["Q40"]["value"], by["Q40"]["trust"]), ("hearing", 1700, 2))
+        self.assertEqual((by["Q30"]["trust"], by["Q30"]["basis"]), (1, "answered in the hearing"))
+        self.assertEqual(by["Q60"]["source"], "default")
+        self.assertEqual(p.answered["note"], "ありがとう")
+        self.assertEqual(contract.errors("requirements_file", p.requirements_file), [])
+        self.assertEqual([r["key"] for r in p.requirements_file["requirements"]], sorted(by))
+
+    def test_a_required_question_without_an_answer_stops_the_run(self):
+        req, own = bare("care-bed")
+        p = prepare(req, {"Q40": 1700}, product_defaults=own)
+        self.assertFalse(p.ready)
+        self.assertIn("Q30", p.unresolved)
+        self.assertNotIn("Q30", {r["key"] for r in p.requirements_file["requirements"]})
+
+    def test_an_unanswered_confirm_question_uses_its_default(self):
+        req, own = bare("electric-guitar")
+        p = prepare(req, {}, product_defaults=own)
+        by = {r["key"]: r for r in p.requirements_file["requirements"]}
+        self.assertEqual((by["Q61"]["source"], by["Q61"]["value"], by["Q61"]["trust"]), ("default", 1.5, 3))
+        self.assertEqual(p.unresolved, ["Q03", "Q34", "Q80"])  # asked, no answer, no default: reported, not guessed
+        self.assertTrue(p.ready)
+
+    def test_an_answer_overrides_the_default_of_a_default_item(self):
+        req, own = bare("care-bed")
+        p = prepare(req, {"Q30": "x", "Q40": 1700, "Q60": 1500}, product_defaults=own)
+        by = {r["key"]: r for r in p.requirements_file["requirements"]}
+        self.assertEqual((by["Q60"]["source"], by["Q60"]["value"]), ("hearing", 1500))
+        self.assertEqual(sum(1 for r in p.answered["answers"] if r["key"] == "Q60"), 1)
+
+    def test_bad_answers(self):
+        req, own = bare("care-bed")
+        for answers, word in [({"Q98": 1}, "Q98"), ({"Q40": {"unit": "N"}}, "value"), ({"Q40": {"value": 1, "unit": "lbf"}}, "unit")]:
+            with self.subTest(answers=answers):
+                with self.assertRaises(IntakeError) as cm:
+                    prepare(req, answers, product_defaults=own)
+                self.assertIn(word, str(cm.exception))
+        full = load_product("care-bed")
+        with self.assertRaises(IntakeError):
+            prepare(full, {"Q34": "子ども"})  # already in the file: fix the file, do not overwrite it silently
+
+    def test_hearing_text(self):
+        req, own = bare("care-bed")
+        p = prepare(req, {"Q30": "x", "Q40": 1}, product_defaults=own)
+        self.assertEqual(hearing_text(p).split("、")[0], "質問 10 件")
+        self.assertIn("答えが無いまま 1 件", hearing_text(p))  # Q03
+
+
+class SampleAnswersTest(unittest.TestCase):
+    def test_each_product_with_its_sample_answers_is_ready_and_valid(self):
+        for slug in product_files():
+            with self.subTest(slug=slug):
+                req = load_product(slug)
+                path = answers_file(slug)
+                answers, note = load_answers(path) if path else ({}, None)
+                p = prepare(req, answers, note)
+                self.assertTrue(p.ready)
+                self.assertEqual(contract.errors("requirements_file", p.requirements_file), [])
+                for r in p.answered["answers"]:
+                    self.assertIn(r["source"], ("hearing", "default"))
+                    self.assertEqual(contract.errors("requirement", r), [])
+
+    def test_the_demo_vehicle_keeps_some_questions_open_on_purpose(self):
+        req = load_product("offroad-4w")
+        answers, note = load_answers(answers_file("offroad-4w"))
+        p = prepare(req, answers, note)
+        self.assertEqual(p.unresolved, ["Q03", "Q20", "Q91"])
+        self.assertEqual(p.answered["note"], note)
+
+    def test_answers_file_with_a_stray_key_is_refused(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "a.yaml"
+            path.write_text("answers: {}\nstuff: 1\n", encoding="utf-8")
+            with self.assertRaises(IntakeError):
+                load_answers(path)
+
+
+if __name__ == "__main__":
+    unittest.main()

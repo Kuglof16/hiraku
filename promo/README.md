@@ -8,7 +8,7 @@
 | ファイル | カット | 長さ |
 |---|---|---|
 | `n00.html` | はじめの一言: HIRAKU の名前と、7 つの分野のエージェントの札が順に灯る | 7 s |
-| `n05.html` | 題字 (冒頭): 車両が開いて試験の格子になり、題字が乗る。12 枚のタイルは着地したあと、それぞれの試験のやり方を線画でくり返す (`tests.js`・`tests.css`) | 5 s |
+| `n05.html` | 題字 (冒頭): 手前の車両の真ん中に暖かい光の筋が入り、車両がそこから左右に割れて観音開きで手前へ開く。割れ目から光があふれ、試験のタイルが飛び出して格子になり、題字が乗る。12 枚のタイルは着地したあと、それぞれの試験のやり方を線画でくり返す (`tests.js`・`tests.css`) | 5 s |
 | `n08b.html` | 数字: 99 % と 16 %、棒、出典 | 10.0 s |
 | `n18.html` | 題字 (締め): 縦の光、車両の線画、題字、リポジトリ | 9 s |
 
@@ -16,6 +16,7 @@
 - 下の 170 px は字幕の帯なので、何も置きません (`?guides=1` で帯が見えます)
 - 絵はすべて CSS と SVG で、このリポジトリの中で描いたものです。外の画像・素材は使っていません
 - N05 の大きな車両は仮の絵です。動画ではアプリの描画を下に敷き、この画面を `?layer=fg` (地を透明にする) で重ねます (`?layer=fg` では大きな車両もタイルも消えます)
+- N05 の観音開き: 扉はありません。仮の車両 (`.hero`) は同じ線画を 2 枚重ね、clip-path で画面の真ん中 (x 960) の左と右を 1 枚ずつ見せます。左の半分は車両の左の端、右の半分は右の端 (線画の外形から計算) を軸に、`n05.times.door_open_s` から `n05.door.open_dur_s` かけて、CSS の 3D (`perspective_px`、`rotateY` で `angle_deg`、緩急 `ease`) で手前に回って開きます。半分は表の面だけを描くので、目に対して真横を向いたところ (この perspective で約 77°) で消え、開ききる時刻 (`burst_s` より前) で見えなくなります。開き始めまでは今までどおり `hero_motion.push_scale` でゆっくり寄ります。割れ目の光 (細い筋 `seam_w_px` と暈 `seam_glow_w_px`)、開いていく隙間の光、手前へあふれる光 (`spill_dur_s` で消える) は `?layer=fg` でも描き、半透明なので下に敷いたアプリの車両は見えたままです。光は車両の高さの外でぼかし、字幕の帯の手前で消えます。動画ではアプリの 3D の車両も同じ形で割れて開きます (画面部の絵)
 - N05 のタイルは、試験ごとの線画のループ (1 周 1.6〜2.4 秒) です。段差越え・傾斜台・横風・オフロード走行・DLC (上から見た絵)・急ブレーキ・長時間・発進・衝突・音振・疲労・熱の、試験のやり方だけを見せ、数字・目盛り・合否は出しません。色は黒インクと応力の色 (`--s1`〜`--s5`) だけです。ループはタイルが着地してから始まり (`--t0`)、すべて CSS のアニメーションなので時刻で止まります
 - 字体は Windows に入っている Bahnschrift (英字と数字) と Noto Sans JP (日本語) を使い、無ければ順に代わりの字体になります
 
@@ -48,10 +49,10 @@ CSS のアニメーションは Web Animations API で止めて `currentTime` �
 
 | ファイル | 中身 |
 |---|---|
-| `screens/layout.json` | 決まりの元。最上位のキーは `stage` (1920×1080)、`subtitle_band` (字幕の帯 y 910・高さ 170)、`safe` (余白の内側 x 96・y 60・1728×850)、`min_text_px` (文字の最小 18 px、日本語・英数字とも)、`colors` (`night`・`ink`・`tile_bg`・`tile_border`)、カットごとの `n00`・`n05`・`n08b`・`n18` (要素の位置と大きさ、長さ `duration_s`、時刻 `times`)、`check` (点検する時刻と、点検で許すもの。理由つき)。単位は名前で示す: `x`・`y`・`w`・`h` は設計の px、ほかの長さは `_px`、秒は `_s` |
+| `screens/layout.json` | 決まりの元。最上位のキーは `stage` (1920×1080)、`subtitle_band` (字幕の帯 y 910・高さ 170)、`safe` (余白の内側 x 96・y 60・1728×850)、`min_text_px` (文字の最小 18 px、日本語・英数字とも)、`colors` (`night`・`ink`・`tile_bg`・`tile_border`)、カットごとの `n00`・`n05`・`n08b`・`n18` (要素の位置と大きさ、長さ `duration_s`、時刻 `times`)、`check` (点検する時刻と、点検で許すもの。理由つき)。単位は名前で示す: `x`・`y`・`w`・`h` は設計の px、ほかの長さは `_px`、秒は `_s`、角度 (度) は `_deg` |
 | `layout_build.py` | `layout.json` から `screens/layout.data.js` (`window.PROMO_LAYOUT`) を書く。画面は `file://` で開くので JSON を読み込めず、スクリプトにして渡す |
 | `screens/layout.data.js` | 生成物。手で直さない。`layout.json` と違うと試験が落ちる |
-| `screens/layout.js` | 決まりから座標を計算する。`<script src="layout.js" data-cut="n05">` で、そのカットの値を CSS 変数にして入れる (長さ `n05.title.name.y` → `--title-name-y: calc(62 * var(--u))`、`n05.tile.label.size_px` → `--tile-label-size-px`、時刻 `n05.times.burst_s` → `--t-burst: 0.95s`、色 `colors.tile_bg` → `--tile-bg`、動きの値は倍率 `n05.hero_motion.push_scale` → `--hero-motion-push-scale: 1.04` (単位なし)・長さ `burst_dur_s` → `--hero-motion-burst-dur: 0.4s`・緩急 `n05.ease.tile` → `--ease-tile: cubic-bezier(0.2, 0.9, 0.3, 1.15)`)。`gridCells(n05.grid)` は格子の各マス (`x + 列 × (tile_w + gap_x)`、`y + 行 × (tile_h + gap_y)`) を返し、N05 の 12 枚のタイルは `n05.tests` の順にこれで置く |
+| `screens/layout.js` | 決まりから座標を計算する。`<script src="layout.js" data-cut="n05">` で、そのカットの値を CSS 変数にして入れる (長さ `n05.title.name.y` → `--title-name-y: calc(62 * var(--u))`、`n05.tile.label.size_px` → `--tile-label-size-px`、時刻 `n05.times.burst_s` → `--t-burst: 0.95s`、色 `colors.tile_bg` → `--tile-bg`、動きの値は倍率 `n05.hero_motion.push_scale` → `--hero-motion-push-scale: 1.04` (単位なし)・長さ `burst_dur_s` → `--hero-motion-burst-dur: 0.4s`・緩急 `n05.ease.tile` → `--ease-tile: cubic-bezier(0.2, 0.9, 0.3, 1.15)`・角度 `n05.door.angle_deg` → `--door-angle: 105deg`。`n05.door` は名前は door のままで、車両の観音開きの値)。`gridCells(n05.grid)` は格子の各マス (`x + 列 × (tile_w + gap_x)`、`y + 行 × (tile_h + gap_y)`) を返し、N05 の 12 枚のタイルは `n05.tests` の順にこれで置く |
 
 ```
 py promo/layout_build.py
