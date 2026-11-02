@@ -131,6 +131,9 @@ class Mix(unittest.TestCase):
         self.assertLessEqual(rep["true_peak"], -3.0 + 0.15)
         louder, _ = bgm.ebur128(out * bgm.db(6.0), rate)
         self.assertAlmostEqual(louder, rep["lufs"] + 6.0, delta=0.15)
+        # by default the music stays 15 LU under the voice, at one level
+        _, level = bgm.mix(music, speech, rate)
+        self.assertAlmostEqual(level["music_lufs"], level["voice_lufs"] - 15.0, delta=0.2)
 
 
 if __name__ == "__main__":

@@ -120,7 +120,7 @@ python promo/bgm.py mix <作業>/bgm/bgm.wav <作業>/subs/all/narration.wav <�
 py promo/subs.py burn <映像> <作業>/subs/all/subs.ass <出力>.mp4 --audio <作業>/bgm/mix.wav
 ```
 
-`mix` は、声が出ている間の音楽を声より 15 LU 下 (`--under-voice-lu`) にし、声の切れ目では 9 dB (`--duck-db`) 上げます。下げ始めは声の 0.3 秒前で、声が止んでも 0.6 秒は下げたままにします (声の切れ目が 0.9 秒までなら上げ戻さない)。`--duck-db 0` にすると、音楽はずっと声より 15 LU 下の一定の大きさになります。足したものは全体で -16 LUFS (`--lufs`) にし、真のピークを -3 dBFS (`--true-peak`) に抑えます (先読みの短いリミッター)。大きさと真のピークは ffmpeg の ebur128 (ITU-R BS.1770) で測ります。numpy と scipy (HIRAKU の `requirements.txt` にあるもの) と ffmpeg で動きます。
+`mix` は、音楽をはじめから終わりまで声より 15 LU 下 (`--under-voice-lu`) の一定の大きさにします (声の下で下げない)。`--duck-db 9` のように 0 より大きくすると、声の切れ目で音楽をその分だけ上げる作りになります (下げ始めは声の 0.3 秒前、声が止んでも 0.6 秒は下げたまま)。足したものは全体で -16 LUFS (`--lufs`) にし、真のピークを -3 dBFS (`--true-peak`) に抑えます (先読みの短いリミッター)。大きさと真のピークは ffmpeg の ebur128 (ITU-R BS.1770) で測ります。numpy と scipy (HIRAKU の `requirements.txt` にあるもの) と ffmpeg で動きます。
 
 ## 試験
 

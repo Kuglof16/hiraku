@@ -19,12 +19,12 @@ screens, at the times written in their pages: the agents lighting in N00, the
 vehicle bursting open in N05 and the light opening in N18.
 
     py promo/bgm.py render SCRIPT OUT.wav [--seed 1] [--start S] [--end E]
-    py promo/bgm.py mix BGM.wav NARRATION.wav OUT.wav [--under-voice-lu -15] [--duck-db 9]
+    py promo/bgm.py mix BGM.wav NARRATION.wav OUT.wav [--under-voice-lu -15] [--duck-db 0]
                                                       [--lufs -16] [--true-peak -3]
 
-``mix`` sets the music ``--under-voice-lu`` below the voice while the voice
-speaks; between sentences the music comes up by ``--duck-db`` (0 keeps it at
-one level). The sum is scaled to ``--lufs`` and its true peak is held at
+``mix`` keeps the music ``--under-voice-lu`` below the voice at one level all
+through; ``--duck-db`` above 0 lets it come up by that much between sentences
+instead. The sum is scaled to ``--lufs`` and its true peak is held at
 ``--true-peak`` by a short look-ahead limiter. Loudness and true peak are
 measured with ffmpeg's ebur128 filter (ITU-R BS.1770).
 """
@@ -351,7 +351,7 @@ def db(x: float) -> float:
     return 10 ** (x / 20)
 
 
-def mix(music: np.ndarray, voice: np.ndarray, rate: int, under_voice_lu: float = -15.0, duck_db: float = 9.0,
+def mix(music: np.ndarray, voice: np.ndarray, rate: int, under_voice_lu: float = -15.0, duck_db: float = 0.0,
         lufs: float = -16.0, true_peak: float = -3.0, measure=ebur128) -> tuple[np.ndarray, dict]:
     n = len(voice)
     music = np.concatenate([music[:n], np.zeros((max(0, n - len(music)), 2))])
@@ -412,7 +412,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("voice", type=Path)
     p.add_argument("out", type=Path)
     p.add_argument("--under-voice-lu", type=float, default=-15.0, help="music under the voice, against the voice")
-    p.add_argument("--duck-db", type=float, default=9.0, help="how far the music comes up between sentences")
+    p.add_argument("--duck-db", type=float, default=0.0,
+                   help="how far the music comes up between sentences (0: one level all through)")
     p.add_argument("--lufs", type=float, default=-16.0)
     p.add_argument("--true-peak", type=float, default=-3.0)
     a = ap.parse_args(argv)
