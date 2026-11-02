@@ -11,7 +11,7 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
 from . import fixtures
-from .base import BuiltinTool, Record, check_record, param_list, param_value, result, without_parts
+from .base import BuiltinTool, Record, check_record, on_board, param_list, param_value, result
 
 CLOSED_FORM_TOL = 1e-3
 
@@ -151,19 +151,38 @@ class FrameStatic(BuiltinTool):
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
         """Load case params (all optional):
+        loading (empty / driver / two / two_cargo, default two_cargo): who and what is on board
         g_factor (unit 1 or g, default 1): vertical load factor on every weight
         step_height (length): add the forces of the step_supports climbing a step
         step_supports (string, e.g. "FL,FR"; default: the front-most supports)
-        exclude_parts (string): parts left out, e.g. "occupant_L,occupant_R,cargo"
+        Run params: upstream_analyses {load case id: analysis}; when one of them
+        carries a ground force (reaction vector) for every support, those forces
+        load the frame instead of being worked out here.
         """
-        design = without_parts(design, param_list(load_case, "exclude_parts"))
+        design = on_board(design, load_case)
         g = g_factor(load_case)
+        up = upstream_ground_forces(params.get("upstream_analyses"), design)
         step = param_value(load_case, "step_height", "mm")
         sup = None
-        if step is not None:
+        if up is None and step is not None:
             sup = param_list(load_case, "step_supports") or front_supports(design)
-        res = analyze(design, g_factor=g, step_mm=step, step_supports=sup)
+        res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
+                      ground_forces=up[1] if up else None)
         return frame_outputs(res)
+
+
+def upstream_ground_forces(upstream: dict | None, design: Record) -> tuple[str, dict] | None:
+    """(load case id, {support id: {point_mm, force_N}}) from the first upstream
+    analysis that has a reaction vector at every support of the design."""
+    ids = [s["id"] for s in design.get("supports", [])]
+    for lc_id, ana in (upstream or {}).items():
+        if not isinstance(ana, dict) or ana.get("status") != "ok":
+            continue
+        got = {v["at"]: {"point_mm": v["origin_mm"], "force_N": v["vector_N"]}
+               for v in ana.get("vectors", []) if v.get("kind") == "reaction" and v.get("at") in ids}
+        if len(got) == len(ids):
+            return lc_id, got
+    return None
 
 
 def g_factor(load_case: Record) -> float:

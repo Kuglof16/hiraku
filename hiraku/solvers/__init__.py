@@ -1,43 +1,46 @@
 """Solvers (解析部): K0 hand calculation and the CAE tools K1..K5.
 
-Entry point for the agent side (設計部):
+The two entry points (hiraku.contract.protocols.SOLVER_ENTRY_POINTS):
 
     from hiraku import solvers
-    shelf = solvers.registry()
-    shelf.formulas.list_formulas()            # FormulaRegistry
-    shelf.formulas.evaluate(formula_id, inputs)
-    shelf.tools["frame_static"].spec()        # AnalysisTool
-    shelf.tools["step_climb"].run(design, load_case, predictions, params)
+    formulas = solvers.formula_registry()   # FormulaRegistry
+    tools = solvers.builtin_tools()         # list of AnalysisTool
 
-Tools from hiraku.solvers.k2_vehicle are picked up when that package exposes
-`tools()` returning AnalysisTool objects; a K2 tool replaces a built-in tool
-of the same name (step_climb moves to K2 that way).
+Importing this package does nothing else; the solvers load on the first call.
+Tools from hiraku.solvers.k2_vehicle are included when that package exposes
+`tools()` returning AnalysisTool objects; a K2 tool replaces a built-in tool of
+the same name (step_climb moves to K2 that way).
 """
 
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass, field
 from functools import lru_cache
 
-from .k0_handcalc import Registry
-from .k0_handcalc import registry as formula_registry
+
+def formula_registry():
+    """The K0 formula registry (hiraku.contract.protocols.FormulaRegistry)."""
+    from .k0_handcalc import registry
+
+    return registry()
 
 
-@dataclass
-class Shelf:
-    formulas: Registry
-    tools: dict = field(default_factory=dict)
+@lru_cache(maxsize=1)
+def _tools() -> tuple:
+    from .shelf import BUILTIN_TOOLS
 
-    def tool(self, name: str):
-        try:
-            return self.tools[name]
-        except KeyError:
-            raise ValueError(f"unknown tool {name!r}; on the shelf: {', '.join(sorted(self.tools))}") from None
+    tools = {}
+    for cls in BUILTIN_TOOLS:
+        t = cls()
+        tools[t.name] = t
+    for t in _k2_tools():
+        tools[t.name] = t
+    return tuple(tools.values())
 
-    def list_tools(self) -> list[dict]:
-        """Every tool's `tool_spec` record (runs the known-answer checks once)."""
-        return [t.spec() for t in self.tools.values()]
+
+def builtin_tools() -> list:
+    """Every analysis tool on the shelf (hiraku.contract.protocols.AnalysisTool)."""
+    return list(_tools())
 
 
 def _k2_tools() -> list:
@@ -51,17 +54,4 @@ def _k2_tools() -> list:
     return list(make()) if callable(make) else []
 
 
-@lru_cache(maxsize=1)
-def registry() -> Shelf:
-    from .shelf import BUILTIN_TOOLS
-
-    tools = {}
-    for cls in BUILTIN_TOOLS:
-        t = cls()
-        tools[t.name] = t
-    for t in _k2_tools():
-        tools[t.name] = t
-    return Shelf(formula_registry(), tools)
-
-
-__all__ = ["Shelf", "registry"]
+__all__ = ["builtin_tools", "formula_registry"]

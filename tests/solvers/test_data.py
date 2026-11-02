@@ -40,6 +40,7 @@ class DemoDesignTest(unittest.TestCase):
         self.assertEqual(len(self.design["supports"]), 4)
         curb = mass_summary(self.design)["mass_kg"] - sum(p["mass_kg"] for p in parts.values() if p["kind"] in ("occupant", "cargo"))
         self.assertLessEqual(curb, 500.0)
+        self.assertEqual([p["id"] for p in parts.values() if p["kind"] == "occupant"][0], "occupant_R")  # driver first, right-hand drive
         front = [s for s in self.design["supports"] if s["actuation"]["steer"]]
         self.assertTrue(all(s["position_mm"][0] == 0.0 for s in front))
         rear = [s for s in self.design["supports"] if not s["actuation"]["steer"]]

@@ -1,9 +1,8 @@
 """The formulas on the K0 shelf.
 
-Output names are chosen to match the `results[].quantity` names of the CAE
-tool that checks them (step_climb: wheel_force, force_ratio, ...;
-frame_static: max_stress, max_displacement, wheel_load_FL, ...), so a
-prediction's `quantity` can be the output name.
+A prediction picks one output of a formula and names its own `quantity`
+(e.g. output F of step_climb.wheel_force_rigid as front_wheel_force); the
+CAE tools report results under those quantity names.
 """
 
 from __future__ import annotations
@@ -27,35 +26,88 @@ def _step_climb() -> list[Formula]:
     r, h, W = s["r"], s["h"], s["W"]
     d = sp.sqrt(2 * r * h - h**2)
     ratio = d / (r - h)
+    inputs = {
+        "r": {"unit": "mm", "description": "wheel radius", "min": 0},
+        "h": {"unit": "mm", "description": "step height", "min": 0},
+        "W": {"unit": "N", "description": "vertical load carried by this wheel at the moment it climbs", "min": 0},
+    }
+    assumptions = [
+        "rigid wheel and rigid step corner",
+        "quasi-static: no speed or impact effect",
+        "at lift-off the whole wheel load rests on the corner",
+        "h < r",
+    ]
+    source = "static equilibrium of a rigid wheel on a step corner (textbook statics)"
+    below = (sp.StrictLessThan(h, r), "step height h must be below the wheel radius r: a rigid wheel cannot climb a step as high as its axle (raise r or lower the step)")
     return [
         Formula(
             formula_id="step_climb.wheel_force_rigid",
             title="剛い輪が段の角に当たったときに要る押す力",
             domain="powertrain",
-            expression="d = sqrt(2*r*h - h^2); force_ratio = d/(r - h); wheel_force = W*d/(r - h); self_climb_torque = W*d",
-            inputs={
-                "r": {"unit": "mm", "description": "wheel radius", "min": 0},
-                "h": {"unit": "mm", "description": "step height", "min": 0},
-                "W": {"unit": "N", "description": "vertical load carried by this wheel at the moment it climbs", "min": 0},
-            },
+            expression="d = sqrt(2*r*h - h^2); F = W*d/(r - h)",
+            inputs=inputs,
             outputs={
-                "wheel_force": ("N", "horizontal push at the axle that lifts the wheel onto the corner", W * ratio),
-                "force_ratio": ("1", "wheel_force / W, also the friction coefficient a self-driven wheel needs at the corner", ratio),
-                "corner_distance": ("mm", "horizontal distance from the wheel centre to the step corner", d),
-                "self_climb_torque": ("N*m", "axle torque for the wheel to climb by itself without a push (W*d)", W * d / 1000),
+                "F": ("N", "horizontal push at the axle that lifts the wheel onto the corner", W * ratio),
+                "d": ("mm", "horizontal distance from the wheel centre to the step corner", d),
             },
-            assumptions=[
-                "rigid wheel and rigid step corner",
-                "quasi-static: no speed or impact effect",
-                "at lift-off the whole wheel load rests on the corner",
-                "the push acts at the axle, so the corner reaction points at the wheel centre",
-                "h < r",
-            ],
-            source="static equilibrium of a rigid wheel on a step corner (textbook statics)",
-            requires=[(sp.StrictLessThan(h, r), "step height h must be below the wheel radius r: a rigid wheel cannot climb a step as high as its axle (raise r or lower the step)")],
+            assumptions=assumptions + ["the push acts at the axle, so the corner reaction points at the wheel centre"],
+            source=source,
+            requires=[below],
+            symbols=s,
+        ),
+        _pushed_wheel_load(),
+        Formula(
+            formula_id="step_climb.self_climb",
+            title="押されずに輪が自分のトルクで段を登るのに要るトルクと摩擦",
+            domain="powertrain",
+            expression="d = sqrt(2*r*h - h^2); tau = W*d; mu = d/(r - h)",
+            inputs=inputs,
+            outputs={
+                "tau": ("N*m", "axle torque for the wheel to climb by itself", W * d / 1000),
+                "mu": ("1", "friction coefficient the wheel needs at the step corner", ratio),
+            },
+            assumptions=assumptions + ["the body does not push: the corner reaction is vertical and the wheel torque turns it about the corner"],
+            source=source,
+            requires=[below],
             symbols=s,
         ),
     ]
+
+
+def _pushed_wheel_load() -> Formula:
+    s = _sym("m", "a", "L", "n", "r", "h")
+    m, a, L, n, r, h = (s[k] for k in ("m", "a", "L", "n", "r", "h"))
+    k = sp.sqrt(2 * r * h - h**2) / (r - h)
+    W = m * G * (L - a) / (L * n) / (1 + k * r / L)
+    return Formula(
+        formula_id="step_climb.pushed_wheel_load",
+        title="後輪に押されて前輪が段を登るときの前輪 1 本の荷重と押す力",
+        domain="powertrain",
+        expression="k = sqrt(2*r*h - h^2)/(r - h); W = m*g*(L - a)/(L*n) / (1 + k*r/L); F = k*W",
+        inputs={
+            "m": {"unit": "kg", "description": "total mass on board", "min": 0},
+            "a": {"unit": "mm", "description": "distance from the front axle back to the centre of gravity (positive rearward)", "min": 0},
+            "L": {"unit": "mm", "description": "wheelbase", "min": 0},
+            "n": {"unit": "1", "description": "number of front wheels on the step", "min": 1},
+            "r": {"unit": "mm", "description": "front wheel radius", "min": 0},
+            "h": {"unit": "mm", "description": "step height", "min": 0},
+        },
+        outputs={
+            "W": ("N", "vertical load on one front wheel at the moment it lifts off", W),
+            "F": ("N", "push on one front wheel (k W)", k * W),
+        },
+        assumptions=[
+            "rigid wheels; quasi-static at the moment the front wheels lift off",
+            "the rear wheels push with traction at the ground; the step pushes back at the front axle height r",
+            "that couple (k W r) moves load from the front to the rear axle",
+            "centre of gravity on the centre line; all front wheels on the step",
+            "g = 9.80665 m/s^2",
+        ],
+        source="moment balance of the whole vehicle about the rear contact line (textbook statics)",
+        requires=[(sp.StrictLessThan(h, r), "step height h must be below the wheel radius r"),
+                  (sp.And(a >= 0, a <= L), "the centre of gravity must lie between the axles (0 <= a <= L); a is measured rearward from the front axle")],
+        symbols=s,
+    )
 
 
 # ---------------------------------------------------------------- mass_props
@@ -101,7 +153,36 @@ def _mass_props() -> list[Formula]:
             ],
             symbols=s,
         ),
+        _front_wheel_load(),
     ]
+
+
+def _front_wheel_load() -> Formula:
+    s = _sym("m", "a", "L", "n")
+    m, a, L, n = (s[k] for k in ("m", "a", "L", "n"))
+    return Formula(
+        formula_id="mass_props.front_wheel_load",
+        title="止まっているときの前輪 1 本の荷重 (てこの比)",
+        domain="powertrain",
+        expression="W = m*g*(L - a)/(L*n)",
+        inputs={
+            "m": {"unit": "kg", "description": "total mass on board", "min": 0},
+            "a": {"unit": "mm", "description": "distance from the front axle back to the centre of gravity (positive rearward)", "min": 0},
+            "L": {"unit": "mm", "description": "wheelbase", "min": 0},
+            "n": {"unit": "1", "description": "number of front wheels", "min": 1},
+        },
+        outputs={"W": ("N", "load on one front wheel", m * G * (L - a) / (L * n))},
+        assumptions=[
+            "rigid body at rest on level ground",
+            "front/rear split by the lever rule",
+            "the front axle load shared equally by the front wheels (centre of gravity on the centre line)",
+            "g = 9.80665 m/s^2",
+        ],
+        source="static equilibrium (textbook statics)",
+        requires=[(sp.And(a >= 0, a <= L), "the centre of gravity must lie between the axles (0 <= a <= L); a is measured rearward from the front axle"),
+                  (L > 0, "wheelbase L must be positive")],
+        symbols=s,
+    )
 
 
 # ---------------------------------------------------------------- frame_static
@@ -129,6 +210,33 @@ def _wall_ok(b, h, t):
 
 def _frame_static() -> list[Formula]:
     out = []
+
+    s = _sym("F", "L", "b", "h", "t")
+    F, L, b, h, t = (s[k] for k in ("F", "L", "b", "h", "t"))
+    I = _rect_tube_I(b, h, t)
+    out.append(Formula(
+        formula_id="frame_static.rail_bending",
+        title="レールを両端で支えた梁とみて、真ん中に力をかけたときの曲げ応力",
+        domain="strength",
+        expression="M = F*L/4; Z = I/(h/2); sigma = M/Z; I = (b*h^3 - (b-2t)*(h-2t)^3)/12",
+        inputs={
+            "F": {"unit": "N", "description": "force on the rail, across it (e.g. the wheel force brought in by the suspension)", "min": 0},
+            "L": {"unit": "mm", "description": "span of the rail between its supports", "min": 0},
+            **_RECT_TUBE_INPUTS,
+        },
+        outputs={
+            "sigma": ("MPa", "bending stress at mid-span, outer face", F * L / 4 * (h / 2) / I),
+            "M": ("N*mm", "bending moment at mid-span", F * L / 4),
+            "Z": ("mm^3", "section modulus I/(h/2)", I / (h / 2)),
+        },
+        assumptions=_BEAM_ASSUMPTIONS + [
+            "one rail as a simply supported beam, the force at mid-span",
+            "the force bends the rail about the axis across its width",
+        ],
+        source="simply supported beam with a centre load, M = F L / 4, sigma = M / Z (textbook beam tables)",
+        requires=[_wall_ok(b, h, t)],
+        symbols=s,
+    ))
 
     s = _sym("P", "L", "a", "E", "b", "h", "t")
     P, L, a, E, b, h, t = (s[k] for k in ("P", "L", "a", "E", "b", "h", "t"))

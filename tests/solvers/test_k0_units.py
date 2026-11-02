@@ -23,6 +23,9 @@ class UnitsTest(unittest.TestCase):
             (1.0, "MPa", "Pa", 1e6),
             (180.0, "deg", "rad", 3.141592653589793),
             (2.0, "kN", "N", 2000.0),
+            (1.0, "mm^4", "mm^4", 1.0),
+            (1.0, "mm^3", "mm", None),
+            (1.0, "mm^2", "mm^3", None),
             (1.0, "N/mm", "N", None),
         ]
         for v, a, b, want in cases:

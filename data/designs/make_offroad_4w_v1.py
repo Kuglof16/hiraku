@@ -8,6 +8,8 @@ Dimensions and masses here are design choices (assumptions), not catalogue
 values. Occupant mass uses the strength-side value from the requirements
 (Q33: 76.6 kg, AIST anthropometric database 1991-92, young male 95th
 percentile, not checked in this repository); cargo is Q40 (150 kg).
+Right-hand drive: the driver sits on the right and is the first occupant in
+the parts list (a load case's params.loading boards occupants in list order).
 Part boxes are mass-equivalent boxes centred at each part's estimated centre
 of gravity. Parts without carried_by rest on the nearest wheel (unsprung).
 """
@@ -94,11 +96,11 @@ def build() -> dict:
         part("floor", "座席の下の床", "body", [-725.0, 0.0, 440.0], [550.0, 1100.0, 20.0], 8.0, mid4),
         part("deck", "荷台の床", "body", [-1625.0, 0.0, 440.0], [950.0, 1100.0, 20.0], 18.0, bed),
         part("front_body", "前の外板とバンパー", "body", [220.0, 0.0, 560.0], [360.0, 880.0, 280.0], 15.0, ["LF", "RF", "LA", "RA"]),
-        part("steering", "ハンドルとペダル", "steering", [-250.0, 300.0, 750.0], [300.0, 400.0, 500.0], 12.0, ["LA", "LS1"]),
-        part("seat_L", "運転席", "seat", [-725.0, 300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["LS1", "LS2"]),
-        part("seat_R", "助手席", "seat", [-725.0, -300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["RS1", "RS2"]),
-        part("occupant_L", "運転者 (体重は強さの不利側)", "occupant", [-780.0, 300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["LS1", "LS2"]),
-        part("occupant_R", "同乗者 (体重は強さの不利側)", "occupant", [-780.0, -300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["RS1", "RS2"]),
+        part("steering", "ハンドルとペダル", "steering", [-250.0, -300.0, 750.0], [300.0, 400.0, 500.0], 12.0, ["RA", "RS1"]),
+        part("seat_R", "運転席", "seat", [-725.0, -300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["RS1", "RS2"]),
+        part("seat_L", "助手席", "seat", [-725.0, 300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["LS1", "LS2"]),
+        part("occupant_R", "運転者 (体重は強さの不利側)", "occupant", [-780.0, -300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["RS1", "RS2"]),
+        part("occupant_L", "同乗者 (体重は強さの不利側)", "occupant", [-780.0, 300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["LS1", "LS2"]),
         part("cargo", "荷", "cargo", [-1625.0, 0.0, 600.0], [900.0, 1000.0, 300.0], CARGO_KG, bed),
     ]
     for s in supports:
@@ -113,7 +115,7 @@ def build() -> dict:
     return {
         "design_version": 1,
         "parent_version": None,
-        "name": "offroad-4w v1: 2-seat electric off-road vehicle, ladder frame, rear drive",
+        "name": "offroad-4w v1: 2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive",
         "change_reason": "first version (fixed demo design)",
         "variables": {
             "wheelbase": q(WHEELBASE, "mm"),

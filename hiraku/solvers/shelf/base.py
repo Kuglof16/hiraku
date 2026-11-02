@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from ... import contract
+from ...contract.protocols import DEFAULT_LOADING, LOADINGS
 from ..k0_handcalc import units
 from ..k0_handcalc.vehicle import DesignError
 
@@ -55,16 +56,33 @@ def param_list(load_case: Record, name: str) -> list[str] | None:
     return [s.strip() for s in v.split(",") if s.strip()]
 
 
-def without_parts(design: Record, exclude: list[str] | None) -> Record:
-    """A copy of the design without the named parts (e.g. empty vehicle cases)."""
-    if not exclude:
-        return design
-    ids = {p["id"] for p in design.get("parts", [])}
-    unknown = [p for p in exclude if p not in ids]
-    if unknown:
-        raise LoadCaseError(f"exclude_parts names part(s) {', '.join(unknown)} that are not in the design")
-    out = copy.deepcopy(design)
-    out["parts"] = [p for p in out["parts"] if p["id"] not in exclude]
+OCCUPANTS = {"empty": 0, "driver": 1, "two": 2, "two_cargo": 2}
+CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
+assert set(OCCUPANTS) == set(CARGO) == set(LOADINGS)
+
+
+def on_board(design: Record, load_case: Record) -> Record:
+    """A copy of the design with only the occupants and cargo of params.loading.
+
+    Occupants board in the order they are listed (the first is the driver);
+    cargo parts ride only with two_cargo. Without params.loading: two_cargo.
+    """
+    loading = load_case.get("params", {}).get("loading", DEFAULT_LOADING)
+    if loading not in LOADINGS:
+        raise LoadCaseError(f"unknown loading {loading!r}; use one of {', '.join(LOADINGS)}")
+    parts, seated = [], 0
+    for p in design.get("parts", []):
+        if p["kind"] == "occupant":
+            if seated >= OCCUPANTS[loading]:
+                continue
+            seated += 1
+        elif p["kind"] == "cargo" and not CARGO[loading]:
+            continue
+        parts.append(p)
+    if seated < OCCUPANTS[loading]:
+        raise LoadCaseError(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {seated}")
+    out = copy.copy(design)
+    out["parts"] = parts
     return out
 
 

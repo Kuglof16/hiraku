@@ -1,7 +1,7 @@
 {
   "design_version": 1,
   "parent_version": null,
-  "name": "offroad-4w v1: 2-seat electric off-road vehicle, ladder frame, rear drive",
+  "name": "offroad-4w v1: 2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive",
   "change_reason": "first version (fixed demo design)",
   "variables": {
     "wheelbase": {
@@ -345,7 +345,7 @@
       "box": {
         "center_mm": [
           -250.0,
-          300.0,
+          -300.0,
           750.0
         ],
         "size_mm": [
@@ -356,35 +356,13 @@
       },
       "mass_kg": 12.0,
       "carried_by": [
-        "LA",
-        "LS1"
-      ]
-    },
-    {
-      "id": "seat_L",
-      "name": "運転席",
-      "kind": "seat",
-      "box": {
-        "center_mm": [
-          -725.0,
-          300.0,
-          580.0
-        ],
-        "size_mm": [
-          500.0,
-          500.0,
-          260.0
-        ]
-      },
-      "mass_kg": 12.0,
-      "carried_by": [
-        "LS1",
-        "LS2"
+        "RA",
+        "RS1"
       ]
     },
     {
       "id": "seat_R",
-      "name": "助手席",
+      "name": "運転席",
       "kind": "seat",
       "box": {
         "center_mm": [
@@ -405,22 +383,22 @@
       ]
     },
     {
-      "id": "occupant_L",
-      "name": "運転者 (体重は強さの不利側)",
-      "kind": "occupant",
+      "id": "seat_L",
+      "name": "助手席",
+      "kind": "seat",
       "box": {
         "center_mm": [
-          -780.0,
+          -725.0,
           300.0,
-          970.0
+          580.0
         ],
         "size_mm": [
-          450.0,
-          450.0,
-          520.0
+          500.0,
+          500.0,
+          260.0
         ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 12.0,
       "carried_by": [
         "LS1",
         "LS2"
@@ -428,7 +406,7 @@
     },
     {
       "id": "occupant_R",
-      "name": "同乗者 (体重は強さの不利側)",
+      "name": "運転者 (体重は強さの不利側)",
       "kind": "occupant",
       "box": {
         "center_mm": [
@@ -446,6 +424,28 @@
       "carried_by": [
         "RS1",
         "RS2"
+      ]
+    },
+    {
+      "id": "occupant_L",
+      "name": "同乗者 (体重は強さの不利側)",
+      "kind": "occupant",
+      "box": {
+        "center_mm": [
+          -780.0,
+          300.0,
+          970.0
+        ],
+        "size_mm": [
+          450.0,
+          450.0,
+          520.0
+        ]
+      },
+      "mass_kg": 76.6,
+      "carried_by": [
+        "LS1",
+        "LS2"
       ]
     },
     {

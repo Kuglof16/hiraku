@@ -9,14 +9,13 @@ the wheel forces will come from driving over the step instead.
 
 from __future__ import annotations
 
-
 import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import mass_summary, resultant, step_geometry, support_loads
 from ..k1_frame import analyze
 from . import fixtures
-from .base import BuiltinTool, LoadCaseError, Record, check_record, param_list, param_value, result, without_parts
+from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_list, param_value, result
 from .frame_static import frame_known_answers, frame_outputs, front_supports, g_factor
 
 
@@ -28,7 +27,11 @@ class StepClimb(BuiltinTool):
     tests = ["P1", "R1"]
     formulas = [
         "step_climb.wheel_force_rigid",
+        "step_climb.pushed_wheel_load",
+        "step_climb.self_climb",
+        "mass_props.front_wheel_load",
         "mass_props.static_wheel_loads",
+        "frame_static.rail_bending",
         "frame_static.simple_beam_point_load",
         "frame_static.cantilever_tip_load",
         "frame_static.bending_stress",
@@ -73,16 +76,25 @@ class StepClimb(BuiltinTool):
         """Load case params:
         step_height (length, required)
         step_supports (string, default: the front-most supports, e.g. "FL,FR")
-        g_factor (unit 1 or g, default 1), exclude_parts (string)
+        loading (empty / driver / two / two_cargo, default two_cargo), g_factor (unit 1 or g, default 1)
+
+        Results for the stepping wheel that takes the largest push (named
+        front_* when the stepping wheels are the front ones, step_* otherwise):
+        *_wheel_load is its vertical load at the moment it lifts off (the push
+        at axle height and the traction at the ground move load rearward),
+        *_wheel_load_static the same wheel at rest, *_wheel_force the push.
         """
-        design = without_parts(design, param_list(load_case, "exclude_parts"))
+        design = on_board(design, load_case)
         h = param_value(load_case, "step_height", "mm")
         if h is None:
             raise LoadCaseError("step_climb needs the load case parameter step_height (a length)")
         if h <= 0:
             raise LoadCaseError(f"step_height must be positive, got {h:g} mm")
-        sup_ids = param_list(load_case, "step_supports") or front_supports(design)
-        res = analyze(design, g_factor=g_factor(load_case), step_mm=h, step_supports=sup_ids)
+        front = front_supports(design)
+        sup_ids = param_list(load_case, "step_supports") or front
+        gf = g_factor(load_case)
+        res = analyze(design, g_factor=gf, step_mm=h, step_supports=sup_ids)
+        rest = support_loads(design, gf, summary=res["mass"])
         out = frame_outputs(res)
 
         by_id = {s["id"]: s for s in design["supports"]}
@@ -91,8 +103,11 @@ class StepClimb(BuiltinTool):
         f = st["supports"][lead]["force_N"]
         d, k = step_geometry(by_id[lead]["radius_mm"], h)
         r = float(by_id[lead]["radius_mm"])
+        tag = "front" if set(sup_ids) <= set(front) else "step"
         climb = [
-            result("wheel_force", abs(f[0]), "N", lead),
+            result(f"{tag}_wheel_force", abs(f[0]), "N", lead),
+            result(f"{tag}_wheel_load", f[2], "N", lead),
+            result(f"{tag}_wheel_load_static", rest["supports"][lead]["force_N"][2], "N", lead),
             result("force_ratio", k, "1", lead),
             result("corner_distance", d, "mm", lead),
             result("self_climb_torque", f[2] * d / 1000.0, "N*m", lead),
