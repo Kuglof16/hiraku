@@ -10,7 +10,7 @@ from ..k0_handcalc import units
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
-from . import fixtures
+from . import fixtures, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_list, param_value,
                    result)
 
@@ -190,7 +190,10 @@ class FrameStatic(BuiltinTool):
             sup = param_list(load_case, "step_supports") or front_supports(design)
         res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
                       ground_forces=up[1] if up else None, inertia_N=up[2] if up else None)
-        return frame_outputs(res)
+        out = frame_outputs(res)
+        if up is None and step is not None:
+            out["scene"] = scene.steps(design, sup, step)
+        return out
 
 
 def upstream_ground_forces(upstream: dict | None, design: Record):

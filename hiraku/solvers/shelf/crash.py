@@ -21,7 +21,7 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, support_loads
 from ..k1_frame import analyze
 from ..k1_frame.impact import Front, impact
-from . import fixtures
+from . import fixtures, scene
 from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 from .frame_static import frame_outputs
 
@@ -149,6 +149,7 @@ class Crash(BuiltinTool):
             {"name": "energy taken by the crush zone", "value": imp["E_absorbed"] - e_b, "unit": "J",
              "share": (imp["E_absorbed"] - e_b) / imp["E_kinetic"]},
         ] + out["effects"]
+        out["scene"] = [scene.wall(design)]
         return out
 
 

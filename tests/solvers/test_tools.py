@@ -169,6 +169,18 @@ class StepClimbTest(unittest.TestCase):
         self.assertTrue(any(v["kind"] == "grip" for v in rec["vectors"]))
         self.assertEqual({f["kind"] for f in rec["fields"]}, {"stress", "displacement"})
 
+    def test_scene_steps_meet_the_wheels(self):
+        rec = self.run_case(step_height=q(100, "mm"))
+        r = results(rec)
+        for st in rec["scene"]:
+            self.assertEqual(st["kind"], "step")
+            sid = st["label"].split("(")[1].rstrip(")")
+            s = next(x for x in DESIGN["supports"] if x["id"] == sid)
+            face = st["position_mm"][0] - st["size_mm"][0] / 2
+            self.assertAlmostEqual(face - s["position_mm"][0], r["corner_distance"]["value"], places=9)
+            self.assertEqual(st["size_mm"][2], 100.0)
+        self.assertEqual(len(rec["scene"]), 2)
+
     def test_pushing_unloads_the_front(self):
         r = results(self.run_case(step_height=q(100, "mm")))
         self.assertLess(r["front_wheel_load"]["value"], r["front_wheel_load_static"]["value"])
