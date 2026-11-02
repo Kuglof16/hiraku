@@ -43,14 +43,29 @@ def c1_crash(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
+def c1_calc(design: Record, load_case: Record) -> Record:
+    from hiraku.solvers.k0_handcalc.vehicle import parts_on_board
+    from hiraku.solvers.shelf.crash import occupant_space
+
+    space = occupant_space(parts_on_board(design, load_case["params"].get("loading", "two_cargo")))
+    if space is None:
+        raise BuildError("no occupant on board, so there is no occupant space to keep")
+    return {"space": q(space, "mm")}
+
+
+_C1_ASSUME = ["前はつぶれる所のばね 1 本とみる (バンパーのゴムは入れない)", "壁は動かない"]
 C1_PLAN = {
     "tool": "crash",
-    "say": "前をつぶれる所のばね 1 本とみて、壁に当たったときの減速度とつぶれを先に見積もります",
+    "say": "前をつぶれる所のばね 1 本とみて、壁に当たったときの減速度とつぶれ、乗員の前に残る長さを先に見積もります",
     "predictions": [
-        {"quantity": quantity, "formula_id": "crash.linear_spring", "output": output,
-         "assumptions": ["前はつぶれる所のばね 1 本とみる (バンパーのゴムは入れない)", "壁は動かない"],
+        {"quantity": quantity, "formula_id": "crash.linear_spring", "output": output, "assumptions": _C1_ASSUME,
          "inputs": {"m": "load.mass", "v": "lc.speed", "k": "design.var.crush_stiffness"}}
         for quantity, output in (("peak_deceleration", "a_max"), ("max_crush", "x_max"), ("crash_energy", "E"))
+    ] + [
+        {"quantity": "occupant_space_margin", "formula_id": "crash.occupant_space_margin", "output": "margin",
+         "assumptions": _C1_ASSUME + ["つぶれは車の前の端から後ろへ進む"],
+         "inputs": {"m": "load.mass", "v": "lc.speed", "k": "design.var.crush_stiffness", "s": "from.space"},
+         "inputs_from": c1_calc},
     ],
 }
 
@@ -172,7 +187,7 @@ def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
         "test_id": "P4",
         "domain": spec["domain"],
         "title": f"林道の周回を {d:g} km 走って電池が残るか ({LOADING_JA[load]})",
-        "params": {**params, "loading": load},
+        "params": {**params, "soc_start": q(100.0, "%"), "loading": load},  # starting with a full battery
         "requirement_keys": [*loop_keys, *keys],
         "criterion": {"quantity": "soc_end", "op": ">", "limit": q(0.0, "%"),
                       "basis": f"P4: charge is left at the end of Q54 {d:g} km", "requirement_keys": ["Q54"]},
@@ -215,6 +230,11 @@ P4_PLAN = {
                     "rho": "design.var.air_density"},
          "inputs_from": p4_calc}
         for quantity, output in (("energy_used", "E"), ("soc_used", "soc_used"))
+    ] + [
+        {"quantity": "soc_end", "formula_id": "drive_energy.soc_end", "output": "soc_end",
+         "assumptions": ["使える電力量は電圧 x 容量"],
+         "inputs": {"E": "pred.energy_used", "E_batt": "from.battery_energy", "soc_start": "lc.soc_start"},
+         "inputs_from": p4_calc},
     ],
 }
 
@@ -248,6 +268,36 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
 
 t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=")
 t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<")
+
+_LOOP_INPUTS = {
+    "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",
+    "A": "design.var.frontal_area", "rho": "design.var.air_density", "eta_d": "design.var.drivetrain_efficiency",
+    "eta_m": "design.var.motor_efficiency", "eta_c": "design.var.controller_efficiency",
+    "eta_regen": "design.var.regen_efficiency", "P_aux": "design.var.aux_power", "V": "design.var.battery_voltage",
+    "R_b": "design.var.battery_resistance", "d": "lc.distance", "grade_low": "lc.grade_low", "grade_high": "lc.grade_high",
+    "v_low": "lc.speed_low", "v_high": "lc.speed_high", "T_amb": "lc.ambient_temperature",
+    **{f"{k}_{part}": f"design.var.{part}_{name}" for part in ("battery", "motor", "controller")
+       for k, name in (("R", "thermal_resistance"), ("C", "heat_capacity"))},
+}
+_T_ASSUME = ["周回の区間ごとに目標の速さで一定に走るとみる (加速・減速は入れない)", "損失は走る時間の平均",
+             "部品は温度 1 つの熱容量と、空気への熱抵抗"]
+
+
+def _t_plan(what: str, quantity: str, output: str) -> Record:
+    return {
+        "tool": "thermal",
+        "say": f"周回を区間ごとの一定の速さで走るとみて損失を出し、{what}の温度の上がり方を先に見積もります",
+        "predictions": [
+            {"quantity": quantity, "formula_id": "thermal.loop_steady_temperature", "output": output,
+             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
+            {"quantity": "drive_time", "formula_id": "thermal.loop_steady_temperature", "output": "t",
+             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
+        ],
+    }
+
+
+T1_PLAN = _t_plan("電池", "temp_battery_max", "T_battery")
+T2_PLAN = _t_plan("制御器", "temp_controller_max", "T_controller")
 
 # ---------------------------------------------------------------- H1, H3, H5 assembly
 
@@ -339,8 +389,16 @@ H3_PLAN = {
 }
 
 
+NOT_ASSEMBLED = ("occupant", "cargo")  # people and load ride in, they are not assembled (as in k4_geometry)
+
+
+def _assembled(design: Record) -> int:
+    return sum(1 for p in design.get("parts", []) if p["kind"] not in NOT_ASSEMBLED)
+
+
 def h5_assembly(spec: Record, req: Record, design: Record) -> Record:
     load, keys = loading(req, design)
+    n = _assembled(design)
     return {
         "load_case_id": "H5-order",
         "test_id": "H5",
@@ -348,10 +406,26 @@ def h5_assembly(spec: Record, req: Record, design: Record) -> Record:
         "title": "部品を付ける順番があるか (先に付けないと入らない部品)",
         "params": {"loading": load},
         "requirement_keys": (["Q82"] if entry(req, "Q82") else []) + keys,
-        "criterion": {"quantity": "blocked_parts", "op": "<=", "limit": q(0.0, "1"),
-                      "basis": "H5: every part can go in along some direction in some order"},
+        "criterion": {"quantity": "assembly_steps", "op": ">=", "limit": q(float(n), "1"),
+                      "basis": f"H5: all {n} parts of the design go in, each along some direction in some order"},
         "tolerance_rel": tolerance(spec, H_TOL),
     }
+
+
+def h5_calc(design: Record, load_case: Record) -> Record:
+    n_all = len(design.get("parts", []))
+    return {"parts": q(float(n_all), "1"), "not_assembled": q(float(n_all - _assembled(design)), "1")}
+
+
+H5_PLAN = {
+    "tool": "assembly",
+    "say": "どの部品もどこかの向きから入れられるとみて、組み立ての手順の数を先に数えます",
+    "predictions": [
+        {"quantity": "assembly_steps", "formula_id": "assembly.part_count", "output": "steps",
+         "assumptions": ["部品 1 つに手順 1 つ", "どの部品もどこかの向きから入れられる", "乗員と荷は組み立てない"],
+         "inputs": {"n": "from.parts", "n_out": "from.not_assembled"}, "inputs_from": h5_calc},
+    ],
+}
 
 
 BUILDERS = {
@@ -365,7 +439,10 @@ BUILDERS = {
     "H3": h3_people,
     "H5": h5_assembly,
 }
-PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "P4": P4_PLAN, "H1": H1_PLAN, "H3": H3_PLAN}
+PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN, "H3": H3_PLAN,
+         "H5": H5_PLAN}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
-# R3, T1, T2 and H5 have no scripted plan: their hand calculations need a loss
-# or a stress history the scripted run cannot work out without the tool.
+# R3 has no scripted plan. Its worst weld on the demo vehicle is the rear-end cross
+# member, loaded by the heave and pitch of the body and cargo behind the rear axle;
+# one quarter car's tyre force scaled by the static stress at the rail joint gives a
+# damage some 270 times below the fatigue tool, so no hand calculation here predicts it.

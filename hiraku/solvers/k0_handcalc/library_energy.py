@@ -7,6 +7,7 @@ import sympy as sp
 
 from .library_dynamics import G, G_NOTE, RHO_INPUT
 from .registry import Formula
+from .units import STANDARD_GRAVITY
 
 
 def _sym(*names: str) -> dict[str, sp.Symbol]:
@@ -140,5 +141,109 @@ def _thermal() -> list[Formula]:
     return out
 
 
+def _soc_end() -> list[Formula]:
+    s = _sym("E", "E_batt", "soc_start")
+    E, Eb, s0 = s["E"], s["E_batt"], s["soc_start"]
+    return [Formula(
+        formula_id="drive_energy.soc_end",
+        title="走ったあとの電池の残量",
+        domain="powertrain",
+        expression="soc_end = soc_start - E / E_batt",
+        inputs={"E": _in("Wh", "energy taken from the battery", min=0),
+                "E_batt": _in("kWh", "usable battery energy", min=0),
+                "soc_start": _in("%", "state of charge at the start", min=0, max=100)},
+        outputs={"soc_end": ("%", "state of charge at the end (below 0: the battery runs out first)",
+                             s0 - E / (Eb * 1000) * 100)},
+        assumptions=["the usable energy is the nominal voltage times the capacity"],
+        source="energy balance (arithmetic)",
+        requires=[(Eb > 0, "E_batt must be positive")],
+        symbols=s,
+    )]
+
+
+LOOP_PARTS = ("battery", "motor", "controller")
+
+
+def _loop_temperature(v: dict) -> dict:
+    """Quasi-steady drive round the forest loop: the road load at each section's target speed
+    through the efficiency chain, the battery current from (V - R I) I = P, losses averaged
+    over the time; each part then warms as a first-order RC from the air temperature."""
+    import math
+
+    from ..k3_power_thermal.cycle import forest_loop, repeat
+
+    segs = repeat(forest_loop(v["grade_low"] / 100, v["grade_high"] / 100, v["v_low"] / 3.6, v["v_high"] / 3.6),
+                  v["d"] * 1000)
+    t = loss_b = loss_m = loss_c = 0.0
+    for s in segs:
+        th = math.atan(s.grade)
+        F = v["m"] * STANDARD_GRAVITY * (v["C_rr"] * math.cos(th) + math.sin(th)) + 0.5 * v["rho"] * v["C_d"] * v["A"] * s.speed**2
+        P = F * s.speed
+        if P >= 0:
+            shaft = P / v["eta_d"]
+            elec = shaft / v["eta_m"]
+            p_in = elec / v["eta_c"]
+            P_b, l_m, l_c = p_in + v["P_aux"], elec - shaft, p_in - elec
+        else:  # regenerating, the losses shared as in driving
+            P_b = P * v["eta_regen"] + v["P_aux"]
+            l_m, l_c = -P * v["eta_d"] * (1 - v["eta_m"]), -P * v["eta_d"] * v["eta_m"] * (1 - v["eta_c"])
+        disc = v["V"] ** 2 - 4 * v["R_b"] * P_b
+        if disc < 0:
+            raise ValueError(f"the battery cannot deliver {P_b / 1000:.1f} kW on a {s.grade * 100:g} % section")
+        current = (v["V"] - math.sqrt(disc)) / (2 * v["R_b"]) if v["R_b"] > 0 else P_b / v["V"]
+        dt = s.length / s.speed
+        t += dt
+        loss_b += current**2 * v["R_b"] * dt
+        loss_m += l_m * dt
+        loss_c += l_c * dt
+    out = {"t": t}
+    for part, loss in zip(LOOP_PARTS, (loss_b / t, loss_m / t, loss_c / t)):
+        R, C = v[f"R_{part}"], v[f"C_{part}"]
+        out[f"P_{part}"] = loss
+        out[f"T_{part}"] = v["T_amb"] + loss * R * (1 - math.exp(-t / (R * C)))
+    return out
+
+
+def _loop_thermal() -> list[Formula]:
+    inputs = {
+        "m": _in("kg", "total mass", min=0), "C_rr": _in("1", "rolling resistance coefficient", min=0),
+        "C_d": _in("1", "drag coefficient", min=0), "A": _in("m^2", "frontal area", min=0), "rho": RHO_INPUT,
+        "eta_d": _in("1", "drivetrain efficiency", min=0, max=1), "eta_m": _in("1", "motor efficiency", min=0, max=1),
+        "eta_c": _in("1", "controller efficiency", min=0, max=1),
+        "eta_regen": _in("1", "share of the braking power at the wheels returned to the battery", min=0, max=1),
+        "P_aux": _in("W", "auxiliary load", min=0), "V": _in("V", "battery voltage (open circuit)", min=0),
+        "R_b": _in("ohm", "battery internal resistance", min=0),
+        "d": _in("km", "distance driven round the 2 km forest loop", min=0),
+        "grade_low": _in("%", "grade of the gentle climb and descent", min=0),
+        "grade_high": _in("%", "grade of the steep climb and descent", min=0),
+        "v_low": _in("km/h", "speed on the steep grades", min=0), "v_high": _in("km/h", "speed on the flat parts", min=0),
+        "T_amb": _in("degC", "air temperature (and the parts' starting temperature)"),
+    }
+    for part in LOOP_PARTS:
+        inputs[f"R_{part}"] = _in("K/W", f"thermal resistance from the {part} to the air", min=0)
+        inputs[f"C_{part}"] = _in("J/K", f"heat capacity of the {part}", min=0)
+    outputs = {"t": ("s", "time round the loop at the target speeds", None)}
+    for part in LOOP_PARTS:
+        outputs[f"P_{part}"] = ("W", f"mean heat loss in the {part}", None)
+        outputs[f"T_{part}"] = ("degC", f"temperature of the {part} at the end of the drive", None)
+    return [Formula(
+        formula_id="thermal.loop_steady_temperature",
+        title="林道の周回を一定の速さで走るとみたときの、電池・モーター・制御器の損失と温度",
+        domain="thermal",
+        expression=("per section: F = m g (C_rr cos(th) + sin(th)) + rho C_d A v^2 / 2, P = F v through the efficiency chain, "
+                    "(V - R_b I) I = P_batt; losses averaged over the time t; T = T_amb + P_loss R (1 - exp(-t / (R C)))"),
+        inputs=inputs,
+        outputs=outputs,
+        assumptions=["each section is driven at its target speed (no accelerating or braking)",
+                     "the loop of the K3 drive (2 km laps: flat, gentle and steep climbs and descents)",
+                     "each part is one lumped temperature with a constant mean loss, so the end is its warmest",
+                     G_NOTE],
+        source="road load times speed (textbook vehicle performance) and a first-order RC thermal network (textbook heat transfer)",
+        requires=[(lambda v: v["d"] > 0 and v["v_low"] > 0 and v["v_high"] > 0 and v["V"] > 0,
+                   "distance, speeds and voltage must be positive")],
+        fn=_loop_temperature,
+    )]
+
+
 def all_formulas() -> list[Formula]:
-    return _drive_energy() + _thermal()
+    return _drive_energy() + _thermal() + _soc_end() + _loop_thermal()

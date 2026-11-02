@@ -16,7 +16,7 @@ import numpy as np
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import mass_summary, resultant, step_geometry, support_loads
 from ..k1_frame import analyze
-from . import fixtures
+from . import fixtures, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Predicts, Record, check_record, on_board, param_list,
                    param_value, result)
 from .frame_static import (JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, frame_known_answers, frame_outputs,
@@ -134,4 +134,5 @@ class StepClimb(BuiltinTool):
             result("required_mu_push", st["required_mu_push"], "1"),
         ]
         out["results"] = climb + out["results"]
+        out["scene"] = scene.steps(design, sup_ids, h)
         return out

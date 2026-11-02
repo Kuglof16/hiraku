@@ -39,6 +39,24 @@ def all_formulas() -> list[Formula]:
         requires=[(sp.And(m > 0, k > 0), "m and k must be positive")],
         symbols=s,
     ))
+    s = _sym("m", "v", "k", "s")
+    m, v, k, sd = s["m"], s["v"], s["k"], s["s"]
+    out.append(Formula(
+        formula_id="crash.occupant_space_margin",
+        title="壁に当たってつぶれたあと、乗員の前に残る長さ",
+        domain="crash",
+        expression="margin = s - x_max; x_max = v sqrt(m/k)",
+        inputs={"m": _in("kg", "mass of the vehicle with its load", min=0),
+                "v": _in("km/h", "impact speed", min=0),
+                "k": _in("N/mm", "stiffness of the front against the wall", min=0),
+                "s": _in("mm", "length from the front of the vehicle back to the occupants' front", min=0)},
+        outputs={"margin": ("mm", "length left in front of the occupants (negative: the crush reaches them)",
+                            sd - v / 3.6 * sp.sqrt(m / (k * 1000)) * 1000)},
+        assumptions=["one mass on one linear spring", "rigid wall", "the crush takes the length from the front back"],
+        source="undamped mass-spring impact (textbook dynamics) and a difference of lengths",
+        requires=[(sp.And(m > 0, k > 0), "m and k must be positive")],
+        symbols=s,
+    ))
     s = _sym("m", "v", "s")
     m, v, sd = s["m"], s["v"], s["s"]
     vm = v / 3.6
