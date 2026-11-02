@@ -144,7 +144,8 @@ class BrowserReplayTest(unittest.TestCase):
                 cmpCard: document.getElementById("card-cmp").className,
                 causeBox: document.querySelector("#card-cmp .cause")?.textContent ?? "",
                 hookLines: document.querySelectorAll("#log li.hook").length,
-                updateLines: [...document.querySelectorAll("#log li.muted")].filter((li) => li.textContent.includes("cmp-0001")).length,
+                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("照合:")).map((li) => li.textContent),
+                logLen: s.log.length,
                 status: s.status,
                 stopReason: s.stopReason,
                 hooksRow: document.getElementById("hooks").textContent,
@@ -158,11 +159,76 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn("bad", got["cmpCard"])
         self.assertIn("unit mix-up", got["causeBox"])
         self.assertEqual(got["hookLines"], 2)
-        self.assertEqual(got["updateLines"], 1)
+        # the comparison sent again with its cause_id rewrites its own line
+        self.assertEqual(len(got["cmpLines"]), 1)
+        self.assertIn("cause-0001", got["cmpLines"][0])
+        self.assertIn("更新", got["cmpLines"][0])
+        self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
         self.assertIn("H3", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
+        page.close()
+
+    def test_loading_picks_who_is_on_board(self):
+        src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        run, design_ev = copy.deepcopy(src[0]), copy.deepcopy(src[1])
+        run["data"]["load_cases"][0]["params"]["loading"] = "driver"
+        box = lambda x, y, z: {"center_mm": [x, y, z], "size_mm": [400.0, 400.0, 500.0]}
+        design_ev["data"]["parts"] += [
+            {"id": "occ_1", "name": "driver (shape example)", "kind": "occupant", "box": box(-900.0, -250.0, 900.0), "mass_kg": 70.0},
+            {"id": "occ_2", "name": "passenger (shape example)", "kind": "occupant", "box": box(-900.0, 250.0, 900.0), "mass_kg": 70.0},
+            {"id": "load", "name": "cargo (shape example)", "kind": "cargo", "box": box(-1500.0, 0.0, 600.0), "mass_kg": 100.0},
+        ]
+        for ev in (run, design_ev):
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1);
+              const objs = window.hiraku.bench.partObjs;
+              return Object.fromEntries(Object.entries(objs).map(([id, o]) => [id, o.onBoard]));
+            }""",
+            [run, design_ev],
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got, {"battery": True, "seat": True, "occ_1": True, "occ_2": False, "load": False})
+        page.close()
+
+    def test_front_is_larger_x(self):
+        # ISO 8855: x forward, y left, z up; the rear axle is at x = -wheelbase.
+        # The default camera looks from the front left, so the front-left wheel is
+        # nearest, the front is on the left of the picture and up is up.
+        page, errors = self.open("run=sample&t=9")
+        got = page.evaluate(
+            """() => {
+              const b = window.hiraku.bench;
+              const V = b.camera.position.constructor;
+              const d = window.hiraku.state().designs[1];
+              const at = (id) => d.supports.find((s) => s.id === id).position_mm;
+              const world = (p) => new V(p[0], p[1], p[2]).applyMatrix4(b.iso.matrix);
+              const screen = (p) => world(p).project(b.camera);
+              const dist = (p) => world(p).distanceTo(b.camera.position);
+              const cam = b.camera.position;
+              const camIso = [cam.x * 1000, -cam.z * 1000, cam.y * 1000];
+              const c = b.bboxIso.getCenter(new V());
+              const fl = at("FL"), fr = at("FR"), rl = at("RL"), rr = at("RR");
+              return {
+                rearX: [rl[0], rr[0]], frontX: [fl[0], fr[0]],
+                camRel: [camIso[0] - c.x, camIso[1] - c.y, camIso[2] - c.z],
+                nearest: ["FL", "FR", "RL", "RR"].sort((a, z) => dist(at(a)) - dist(at(z)))[0],
+                frontLeftOfRear: screen(fl).x < screen(rl).x && screen(fr).x < screen(rr).x,
+                upIsUp: screen([fl[0], fl[1], fl[2] + 500]).y > screen(fl).y,
+              };
+            }"""
+        )
+        self.assertEqual(errors, [])
+        self.assertTrue(all(x < 0 for x in got["rearX"]), got)
+        self.assertEqual(got["frontX"], [0, 0])
+        self.assertTrue(got["camRel"][0] > 0 and got["camRel"][1] > 0 and got["camRel"][2] > 0, got)
+        self.assertEqual(got["nearest"], "FL")
+        self.assertTrue(got["frontLeftOfRear"])
+        self.assertTrue(got["upIsUp"])
         page.close()
 
     def test_video_layout_keeps_the_subtitle_band_empty(self):
