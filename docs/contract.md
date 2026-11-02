@@ -34,7 +34,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 1. `record_prediction` — Claude は式 (`formula_id`) と入力と前提を選ぶだけ。値は K0 が計算して `prediction` にする
 2. `analyze` — 道具の名前・荷重条件・予測の ID を渡す。全部の解析の道具をこの 1 つの入口から呼ぶ (実行の途中で Claude が作った道具も、MCP の道具を足し直さずに呼べるように)
-3. `compare` — 予測と解析の結果から `comparison`。許す幅 `tolerance_rel` は荷重条件に入っていて、モデルは決めない。一致して基準があれば、同じ道具の中で `verdict` も作る
+3. `compare` — 予測と解析の結果から `comparison`。差は符号つき: `diff_abs` = 解析 − 予測、`diff_rel` = (解析 − 予測) / |予測|。|`diff_rel`| ≤ `tolerance_rel` なら一致。許す幅 `tolerance_rel` は荷重条件に入っていて、モデルは決めない。一致して基準があれば、同じ道具の中で `verdict` も作る
 4. `record_cause` — 食い違いの原因と直し方。書くまでその分野は先に進めない
 5. 判定 `judgement` — 分野 (7 分野 + 組み立て) ごとに合否をまとめたもの。A6 のタイル
 
@@ -55,6 +55,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - `FormulaRegistry` — `list_formulas()` と `evaluate(formula_id, inputs)`。K0 の式の台帳
 - `AnalysisTool` — `spec()`・`check()`・`run(design, load_case, predictions, params)`。`run` は `analysis_id` の無い `analysis` を返し、ID は store が付ける。設計が悪くても例外にせず `status: "failed"` と、何が悪く何を変えればよいかを `error` に書く
 - 上流の荷重条件の結果 (P1 の輪の力 → R1 など) は `params["upstream_analyses"] = {荷重条件の ID: 照合で一致した analysis}` で `run` に渡る。上流の `analysis_id` を `inputs_from` に足すのは呼ぶ側 (設計部)
+- 組み立ての順番と干渉は `analysis` の `assembly` (手順ごとの `assembly_step`) と `interferences` に入れる (`effects` に混ぜない)
+- 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`
 
 MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。入力の形は schema の `tool_input.*`。結果は記録そのものを JSON の文字列で返す。
