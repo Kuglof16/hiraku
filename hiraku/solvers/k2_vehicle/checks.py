@@ -3,9 +3,10 @@
 1. static wheel loads: moment balance W (x_cg - x_rear) / L / 2, left = right bit for bit
 2. mirror: straight driving keeps yaw at 0; a left manoeuvre and its mirror give opposite yaw (< 1e-9 rad)
 3. free fall: the body follows the semi-implicit Euler sum z_N = z_0 - g h^2 N (N + 1) / 2
-4. quarter car: 1.891 Hz = (1/2 pi) sqrt(k_ride / m_s), k_s 20 kN/m, k_t 150 kN/m, m_s 125 kg;
-   and the exact two-mass frequency with a 25 kg wheel
-5. rigid tilt table: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m, the same to the left and right
+4. quarter car, closed form: 1.891 Hz = (1/2 pi) sqrt(k_ride / m_s), k_s 20 kN/m, k_t 150 kN/m, m_s 125 kg
+   (check-vehicle values); and the exact two-mass frequency with a 25 kg wheel
+5. rigid tilt table, closed form: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m (check-vehicle values),
+   the same to the left and right
 6. parked on a 20 % slope with the brakes on: moves < 1 mm in 60 s
 """
 

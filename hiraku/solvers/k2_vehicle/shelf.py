@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -131,7 +132,9 @@ MOTOR = (P("motor_torque", "N*m", None, "peak torque at the motor", var=("motor_
          P("motor_max_speed", "rpm", None, "motor speed limit (default: none)", var=("motor_max_speed",)))
 
 
-class K2Tool:
+class K2Tool(ABC):
+    """Base of the K2 tools: each scenario gives _run() and its own known answers."""
+
     name = "k2"
     title = "K2"
     domain = "handling"
@@ -199,8 +202,10 @@ class K2Tool:
         self.last_assumptions = out.get("assumptions", [])
         return rec
 
-    def _run(self, design: dict, lp: dict) -> dict:  # pragma: no cover
-        raise NotImplementedError
+    @abstractmethod
+    def _run(self, design: dict, lp: dict) -> dict:
+        """The scenario on the design with the occupants and cargo on board: results, series,
+        vectors, assumptions (or error)."""
 
     # -- the declared load-case params
     def _declared(self, name: str) -> P:

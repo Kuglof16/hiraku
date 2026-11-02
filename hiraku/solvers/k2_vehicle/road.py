@@ -13,16 +13,19 @@ geometry). Slopes and tilt tables are made by turning gravity, not the road.
 from __future__ import annotations
 
 import math
+from abc import ABC, abstractmethod
 
 import numpy as np
 
 
-class Road:
+class Road(ABC):
+    """Base of the road surfaces (BlockRoad, RandomRoad): each gives contact() and height()."""
+
     name = "road"
 
+    @abstractmethod
     def contact(self, c: np.ndarray, r: np.ndarray):
         """c (n,3) wheel centres, r (n,) radii -> P (n,K,3), N (n,K,3), depth (n,K)."""
-        raise NotImplementedError
 
     def contacts(self, centres: list, radii: list) -> list:
         """Per wheel, a list of (px, py, pz, nx, ny, nz, depth) (plain floats)."""
@@ -33,8 +36,9 @@ class Road:
                         for k in range(dep.shape[1])])
         return out
 
+    @abstractmethod
     def height(self, x: float, y: float) -> float:
-        raise NotImplementedError
+        """Road height (m) at (x, y)."""
 
     def describe(self) -> dict:
         return {"kind": self.name}
