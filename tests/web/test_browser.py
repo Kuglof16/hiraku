@@ -482,6 +482,40 @@ class BrowserReplayTest(unittest.TestCase):
                 lau.proc.wait()
             shutil.rmtree(tmp)
 
+    def test_project_updated_and_report_written(self):
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        project = copy.deepcopy(events[0]["data"])
+        extra = {**copy.deepcopy(project["load_cases"][0]), "load_case_id": "R1-step150", "title": "段差 150 mm (形の見本)"}
+        extra["params"] = {**extra["params"], "step_height": {"value": 150.0, "unit": "mm"}}
+        project["load_cases"].append(extra)
+        report = {"design_version": 1, "domains": [{"domain": "strength", "state": "green", "line": "段差で降伏しない (形の見本)"}],
+                  "unchecked": [{"item": "yield 235 MPa", "source": "materials (形の見本)"}],
+                  "next": [{"domain": "strength", "change": "段差 150 mm も確かめる", "reason": "形の見本"}], "summary": "強度は合格 (形の見本)"}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00"}
+        updated = {**base, "seq": 0, "t": 0.7, "kind": "project.updated", "agent": "designer", "data": project}
+        written = {**base, "seq": 0, "t": events[-1]["t"] - 0.1, "kind": "report.written", "agent": "lead", "data": report}
+        events = events[:2] + [updated] + events[2:-1] + [written, events[-1]]
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+            self.assertEqual(contract.errors("event", ev), [], ev["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const s = window.hiraku.state();
+              return { cases: s.project.load_cases.map((c) => c.load_case_id), tests: document.querySelectorAll("#tests button.test").length,
+                       report: s.reports[1]?.summary ?? null,
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent).filter((x) => x.includes("試験と分野を決めた") || x.includes("報告を書いた")) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["cases"], ["R1-step100", "R1-step150"])
+        self.assertEqual(got["tests"], 2)
+        self.assertEqual(got["report"], "強度は合格 (形の見本)")
+        self.assertEqual(len(got["lines"]), 2)
+        page.close()
+
     def test_n05_cut_is_laid_out_from_the_layout_rules(self):
         """cut.html?cut=n05: tiles where layout.json puts them, the hero before the burst and
         the grid after, nothing in the subtitle band. With HIRAKU_WEB_DEV_RUNS the tiles play
