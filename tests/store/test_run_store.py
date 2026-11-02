@@ -55,6 +55,9 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(len(ev), 1)
         self.assertEqual(ev[0]["kind"], "run.started")
         self.assertEqual(ev[0]["seq"], 0)
+        self.assertEqual(ev[0]["t"], 0.0)  # the clock moved while project.json was written
+        nxt = self.store.emit("agent.said", agent="lead", text="次")
+        self.assertGreater(nxt["t"], 0.0)
         self.assertEqual(ev[0]["data"]["status"], "running")
         self.assertEqual(contract.errors("event", ev[0]), [])
 

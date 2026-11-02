@@ -134,10 +134,16 @@ class RunStore:
              design_version: int | None = None, text: str | None = None, data: Record | None = None) -> Record:
         """Append one event to events.jsonl (validated) and return it."""
         with self._lock:
+            if kind == "run.started":
+                # t counts from run.started, so its own t is exactly 0
+                self._t0_mono, self._t_offset = self._mono(), 0.0
+                t = 0.0
+            else:
+                t = self._t()
             event: Record = {
                 "seq": self._seq,
                 "ts": _iso(self._wall()),
-                "t": self._t(),
+                "t": t,
                 "run_id": self.run_id,
                 "kind": kind,
             }
