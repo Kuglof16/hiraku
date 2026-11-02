@@ -6,19 +6,18 @@
  * or a 3840x2160 window without changing its layout.
  *
  * The bottom 170 design px are the subtitle band. Nothing is placed there;
- * content goes inside .safe (above --band-top).
+ * content goes inside .safe (above --band-y).
  *
- * --u, the stage size, the band and the placement of each cut's parts are
- * CSS variables set by layout.js from layout.json (the layout rules).
+ * --u, the stage size, the band, the placement and times of each cut's parts
+ * and the colours --night, --ink, --tile-bg, --tile-border are CSS variables
+ * set by layout.js from layout.json (the layout rules).
  */
 
 :root {
   --paper: #f4f1ea;      /* unbleached paper ground */
-  --ink: #1b1a17;        /* black ink */
   --ink-soft: #5c5a54;
   --ink-faint: #a8a49a;
   --grid: rgba(27, 26, 23, 0.055);
-  --night: #131311;      /* ground of the title screens */
   --night-2: #1d1c19;
   --glow: #f6ead0;       /* warm vertical light */
   --on-night: #f1ece0;
@@ -79,7 +78,7 @@ body {
   left: 0;
   top: 0;
   width: 100%;
-  height: var(--band-top);
+  height: var(--band-y);
 }
 
 /* Paper with a faint 40 px grid, drawn with gradients (no image files). */

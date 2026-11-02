@@ -56,9 +56,21 @@ class Story(unittest.TestCase):
             self.assertTrue({2, 9} <= {m % 12 for m in pitches})  # the drone's D and A
 
     def test_screen_times(self):
-        self.assertEqual(bgm.css_time(bgm.SCREENS / "n05.html", "--t-burst"), 0.95)
+        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), 0.95)
+        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n00", "step"), 0.42)
         with self.assertRaises(ValueError):
-            bgm.css_time(bgm.SCREENS / "n05.html", "--t-nothing")
+            bgm.screen_time(bgm.SCREENS, "n05", "nothing")
+        with self.assertRaises(ValueError):
+            bgm.screen_time(bgm.SCREENS, "n99", "burst")
+
+    def test_screen_times_follow_layout_json(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "layout.json").write_text(json.dumps({"n18": {"times": {"open_s": 1.25}}}), encoding="utf-8")
+            self.assertEqual(bgm.screen_time(Path(d), "n18", "open"), 1.25)
 
 
 class Render(unittest.TestCase):

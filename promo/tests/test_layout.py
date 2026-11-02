@@ -1,11 +1,12 @@
 import copy
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from promo import layout_build, layout_check as lc
+from promo import bgm, layout_build, layout_check as lc
 
 HAS_PLAYWRIGHT = importlib.util.find_spec("playwright") is not None
 
@@ -27,19 +28,83 @@ class GeneratedData(unittest.TestCase):
         self.assertIn("Generated file: do not edit", head)
 
     def test_render_parse_round_trip(self):
-        rules = {"design": {"w": 1920, "h": 1080}, "note": "日本語"}
+        rules = {"stage": {"w": 1920, "h": 1080}, "note": "日本語"}
         self.assertEqual(layout_build.parse(layout_build.render(rules)), rules)
 
     def test_check_times_name_every_cut(self):
         rules = layout_build.load()
         for cut in lc.CUTS:
-            self.assertIn(cut, rules["cuts"])
+            self.assertIn(cut, rules)
             self.assertTrue(rules["check"]["times"][cut])
 
     def test_every_allowance_gives_a_reason(self):
         chk = layout_build.load()["check"]
-        for rule in chk["band_exempt"] + chk["allow_overlap"] + chk["allow_overflow"]:
+        for rule in chk["band_exempt"] + chk["allow_overlap"] + chk["allow_overflow"] + chk["allow_escape"]:
             self.assertTrue(rule.get("why"), rule)
+
+
+class SharedShape(unittest.TestCase):
+    """The names the screen department reads from layout.json."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+
+    def test_top_level(self):
+        keys = {k for k in self.rules if not k.startswith("_")}
+        self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
+                                "n00", "n05", "n08b", "n18", "check"})
+        r = self.rules
+        self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
+        self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
+        self.assertEqual(r["safe"]["x"] * 2 + r["safe"]["w"], r["stage"]["w"])
+        self.assertEqual(r["safe"]["y"] + r["safe"]["h"], r["subtitle_band"]["y"])
+        self.assertEqual(r["min_text_px"], 18)
+        for k in ("night", "ink", "tile_bg", "tile_border"):
+            self.assertRegex(r["colors"][k], r"^#[0-9a-f]{6}$")
+
+    def test_n05(self):
+        n = self.rules["n05"]
+        self.assertEqual(set(n["grid"]) - {"_note"},
+                         {"x", "y", "cols", "rows", "tile_w", "tile_h", "gap_x", "gap_y"})
+        self.assertEqual(set(n["tile"]), {"border_px", "radius_px", "label", "rate"})
+        self.assertEqual(set(n["tile"]["label"]), {"x", "y", "size_px"})
+        self.assertEqual(n["hero"]["x"], (self.rules["stage"]["w"] - n["hero"]["w"]) / 2)
+        self.assertEqual(set(n["title"]), {"name", "tag"})
+        self.assertEqual(len(n["tests"]), n["grid"]["cols"] * n["grid"]["rows"])
+        self.assertEqual(set(n["fly_from"]), {"x", "y"})
+        for k in ("burst_s", "tiles_s", "tile_in_s", "tile_stagger_s", "name_s", "tag_s"):
+            self.assertIn(k, n["times"])
+
+    def test_units_in_names(self):
+        def walk(obj, path):
+            for k, v in obj.items():
+                if k.startswith("_"):
+                    continue
+                if isinstance(v, dict):
+                    walk(v, f"{path}.{k}")
+                elif path.endswith(".times"):
+                    self.assertTrue(k.endswith("_s"), f"{path}.{k}")
+        for cut in lc.CUTS:
+            walk(self.rules[cut], cut)
+            self.assertIn("duration_s", self.rules[cut])
+
+    def test_duration_matches_the_page(self):
+        for cut in lc.CUTS:
+            html = (lc.SCREENS / f"{cut}.html").read_text(encoding="utf-8")
+            m = re.search(r'data-duration="([0-9.]+)"', html)
+            self.assertEqual(float(m.group(1)), self.rules[cut]["duration_s"], cut)
+
+    def test_pages_hold_no_times_or_old_names(self):
+        for cut in lc.CUTS:
+            html = (lc.SCREENS / f"{cut}.html").read_text(encoding="utf-8")
+            self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", html), f"{cut}: a time set in the page")
+            self.assertNotIn("data-check", html)
+            for name in re.findall(r'data-box="([^"$]+)"', html):
+                self.assertTrue(name.startswith(cut + "."), name)
+
+    def test_bgm_reads_the_same_times(self):
+        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), self.rules["n05"]["times"]["burst_s"])
+        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n18", "open"), self.rules["n18"]["times"]["open_s"])
 
 
 class Judging(unittest.TestCase):
@@ -77,12 +142,22 @@ class Judging(unittest.TestCase):
         self.assertEqual(lc.overflows({"sw": 140, "cw": 100, "sh": 30, "ch": 30}, 30, allow), {"x": 40})
 
     def test_small(self):
-        mins = {"ja": 20, "latin": 16}
-        self.assertTrue(lc.too_small(19.5, "ja", mins))
-        self.assertFalse(lc.too_small(20, "ja", mins))
-        self.assertFalse(lc.too_small(17, "latin", mins))
-        self.assertTrue(lc.too_small(15, "latin", mins))
-        self.assertFalse(lc.too_small(None, None, mins))
+        self.assertTrue(lc.too_small(17.5, 18))
+        self.assertFalse(lc.too_small(18, 18))
+        self.assertFalse(lc.too_small(None, 18))
+
+    def test_escapes(self):
+        outer = box(100, 100, 200, 100)
+        self.assertEqual(lc.escapes(box(110, 110, 50, 50), outer), {})
+        self.assertEqual(lc.escapes(box(280, 110, 50, 50), outer), {"right": 30})
+        self.assertEqual(lc.escapes(box(90, 180, 50, 30), outer), {"left": 10, "bottom": 10})
+        self.assertEqual(lc.escapes(box(100.3, 100, 200, 100), outer), {})  # rounding
+
+    def test_escape_room(self):
+        allow = [{"cut": "n08b", "box": "n08b.fig.*.cap", "max_px": 14}]
+        self.assertEqual(lc.escape_room("n08b", "n08b.fig.left.cap", allow), 14)
+        self.assertEqual(lc.escape_room("n08b", "n08b.bars.large.value", allow), 0)
+        self.assertEqual(lc.escape_room("n05", "n08b.fig.left.cap", allow), 0)
 
     def test_overlap_allowed(self):
         allow = [{"cut": "n18", "a": "light", "b": "vehicle"}, {"cut": "*", "a": "tile:*", "b": "hero"}]
@@ -91,9 +166,10 @@ class Judging(unittest.TestCase):
         self.assertTrue(lc.overlap_allowed("n05", "hero", "tile:dlc", allow))
 
     def _layout(self):
-        return {"design": {"w": 1920, "h": 1080}, "band": {"top": 910},
-                "min_text": {"ja": 20, "latin": 16},
-                "check": {"allow_overlap": [{"cut": "x", "a": "p", "b": "q"}]}}
+        return {"stage": {"w": 1920, "h": 1080}, "subtitle_band": {"y": 910, "h": 170},
+                "min_text_px": 18,
+                "check": {"allow_overlap": [{"cut": "x", "a": "p", "b": "q"}],
+                          "allow_escape": [{"cut": "x", "box": "p.*", "max_px": 5}]}}
 
     def item(self, name, b, **kw):
         return {"name": name, "label": name or "div", "text": kw.pop("text", ""), "box": b,
@@ -106,16 +182,18 @@ class Judging(unittest.TestCase):
             self.item("p", box(1000, 100, 100, 100)),
             self.item("q", box(1050, 100, 100, 100)),                            # allowed with p
             self.item("in", box(120, 120, 20, 20), inside=["a"]),                # inside a: not an overlap
-            self.item(None, box(10, 950, 100, 30), text="字幕の帯", font=30, script="ja"),
-            self.item(None, box(10, 950, 100, 30), text="guide", font=30, script="latin", band_exempt=True),
-            self.item(None, box(1900, 10, 100, 30), text="edge", font=30, script="latin"),
-            self.item(None, box(10, 10, 50, 30), text="long", font=30, script="latin",
+            self.item("out", box(280, 105, 40, 20), inside=["a"]),               # sticks out of a (right +20)
+            self.item("p.k", box(995, 150, 10, 10), inside=["p"]),               # 5 px out of p: allowed
+            self.item(None, box(10, 950, 100, 30), text="字幕の帯", font=30),
+            self.item(None, box(10, 950, 100, 30), text="guide", font=30, band_exempt=True),
+            self.item(None, box(1900, 10, 100, 30), text="edge", font=30),
+            self.item(None, box(10, 10, 50, 30), text="long", font=30,
                       scroll={"sw": 90, "cw": 50, "sh": 30, "ch": 30}),
-            self.item(None, box(10, 300, 50, 12), text="小さい", font=12, script="ja"),
+            self.item(None, box(10, 300, 50, 12), text="小さい", font=12),
         ]
         probs = lc.judge(items, self._layout(), "x")
         kinds = sorted((p["kind"], p["element"]) for p in probs)
-        self.assertEqual(kinds, [("band", "div"), ("outside", "div"), ("overflow", "div"),
+        self.assertEqual(kinds, [("band", "div"), ("escape", "out"), ("outside", "div"), ("overflow", "div"),
                                  ("overlap", "a × b"), ("small", "div")])
         overlap = next(p for p in probs if p["kind"] == "overlap")
         self.assertEqual(overlap["box"], box(250, 150, 50, 50))
@@ -135,9 +213,9 @@ class Judging(unittest.TestCase):
 FIXTURE = """<!doctype html><html><head><meta charset="utf-8"><style>
 html, body { margin: 0; overflow: hidden; } .f { position: absolute; font: 30px/2 sans-serif; margin: 0; }
 </style></head><body>
-<div class="f" data-check="a" style="left:100px;top:100px;width:200px;height:100px;background:#000;color:#fff">a</div>
-<div class="f" data-check="b" style="left:250px;top:150px;width:200px;height:100px;background:#888"></div>
-<div class="f" data-check="empty" style="left:250px;top:150px;width:200px;height:100px"></div>
+<div class="f" data-box="a" style="left:100px;top:100px;width:200px;height:100px;background:#000;color:#fff">a</div>
+<div class="f" data-box="b" style="left:250px;top:150px;width:200px;height:100px;background:#888"></div>
+<div class="f" data-box="empty" style="left:250px;top:150px;width:200px;height:100px"></div>
 <div class="f" style="left:100px;top:950px">字幕の帯</div>
 <div class="f guide-band" style="left:300px;top:950px">guide</div>
 <div class="f" style="left:100px;top:960px;opacity:0.02">ghost</div>
@@ -182,24 +260,51 @@ class InBrowser(unittest.TestCase):
                 const r = el.getBoundingClientRect();
                 return { x: r.left, y: r.top, w: r.width, h: r.height };
               });
-              return { cells, tiles };
+              const keys = [...document.querySelectorAll('.tile')].map((el) => el.dataset.box.split('.')[2]);
+              return { cells, tiles, keys };
             }""")
         finally:
             cap.close()
         rules = lc.load_layout()
-        grid = rules["cuts"]["n05"]["grid"]
+        grid = rules["n05"]["grid"]
         cells = got["cells"]
         self.assertEqual(len(cells), grid["cols"] * grid["rows"])
         self.assertEqual(len(got["tiles"]), len(cells))
         for cell, tile in zip(cells, got["tiles"]):
             for k in "xywh":
                 self.assertAlmostEqual(cell[k], tile[k], places=3)
-        self.assertEqual((cells[0]["x"], cells[0]["y"]), (grid["origin"]["x"], grid["origin"]["y"]))
-        self.assertEqual(cells[-1]["x"] + cells[-1]["w"], rules["design"]["w"] - rules["margin"]["side"])
+        for c in cells:
+            self.assertEqual(c["x"], grid["x"] + c["col"] * (grid["tile_w"] + grid["gap_x"]))
+            self.assertEqual(c["y"], grid["y"] + c["row"] * (grid["tile_h"] + grid["gap_y"]))
+        self.assertEqual(cells[-1]["x"] + cells[-1]["w"], rules["stage"]["w"] - rules["safe"]["x"])
+        self.assertEqual(got["keys"], rules["n05"]["tests"])
         for i, a in enumerate(cells):
-            self.assertFalse(lc.in_band(a, rules["band"]["top"]))
+            self.assertFalse(lc.in_band(a, rules["subtitle_band"]["y"]))
             for b in cells[i + 1:]:
                 self.assertIsNone(lc.intersection(a, b))
+
+    def test_n08b_bars_to_scale_and_inside(self):
+        from promo import export
+
+        cap = export.Capture(lc.SCREENS / "n08b.html", scale=1.0)
+        try:
+            cap.page.evaluate("t => window.__export.seek(t)", 9.8)
+            got = cap.page.evaluate("""() => {
+              const r = (s) => { const b = document.querySelector(`[data-box="${s}"]`).getBoundingClientRect();
+                                 return { x: b.left, w: b.width, right: b.right, h: b.height }; };
+              return { small: r("n08b.bars.small.bar"), large: r("n08b.bars.large.bar"),
+                       value: r("n08b.bars.large.value"), bars: r("n08b.bars"),
+                       times: window.promoLayout.times("n08b") };
+            }""")
+        finally:
+            cap.close()
+        rules = lc.load_layout()["n08b"]
+        k = rules["bars"]["px_per_pct"]
+        self.assertAlmostEqual(got["small"]["w"], 16.0 * k, places=2)
+        self.assertAlmostEqual(got["large"]["w"], 67.9 * k, places=2)
+        self.assertLessEqual(got["value"]["right"], got["bars"]["right"])
+        self.assertLess(got["value"]["h"], 1.5 * rules["bars"]["value_size_px"])  # one line
+        self.assertEqual(got["times"]["t-right"], 4.8)
 
     def test_cuts_have_no_problems(self):
         layout = lc.load_layout()
