@@ -70,7 +70,7 @@ class ScriptedRunCommand(unittest.TestCase):
                 self.assertEqual(_errors(run), [], run.name)
 
     def test_mvp_scripted_run_goes_through(self):
-        # the MVP of 11/2: fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement
+        # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done
         for name, (run, proc) in self.runs.items():
             with self.subTest(requirements=name):
                 self.assertMadeRun(run, proc)
