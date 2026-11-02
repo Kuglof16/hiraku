@@ -28,8 +28,8 @@ NUDGE_MM = 20.0
 # AIST anthropometric database 1991-92 (see people.py), read from
 # https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03.
 TOOL_OPENING_MM = (200.0, 125.0)
-TOOL_DEPTH_MM = 300.0
-REACH_MM = 606.0
+TOOL_DEPTH_MM = 300.0  # assumption: room for a hand and a short tool in front of the part
+REACH_MM = 606.0  # source: AIST item C3 (above)
 
 
 def swept(obb: OBB, direction, travel: float) -> OBB:
@@ -91,9 +91,10 @@ def disassemble(design: dict, bs: dict[str, Body] | None = None) -> dict:
 
 def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
     """The assembly order as contract `assembly_step` records, with access checks per step:
-    no_interference (the way in is clear), tool_clearance (a 200 x 125 mm opening, 300 mm deep,
-    in front of the part on the side it comes from), hand_reach (that face within 606 mm of
-    the outside of what is already built), depends_on (parts already in place it touches)."""
+    no_interference (the way in is clear), tool_clearance (an opening of TOOL_OPENING_MM,
+    TOOL_DEPTH_MM deep, in front of the part on the side it comes from), hand_reach (that face
+    within REACH_MM of the outside of what is already built), depends_on (parts already in
+    place it touches)."""
     bs = bs or bodies(design)
     asm = disassemble(design, bs)
     members = [b for b in bs.values() if b.kind == "member"]

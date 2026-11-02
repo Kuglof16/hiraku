@@ -38,7 +38,7 @@ STATIONS = {            # x of the frame cross members (x forward, origin at the
     "B": -WHEELBASE,    # rear axle, motor, rear suspension mounts
     "E": -2100.0,       # rear end
 }
-OCCUPANT_KG = 76.6      # Q33
+OCCUPANT_KG = 76.6      # Q33; source: AIST item N1 Weight, male 95th percentile (see the docstring)
 CARGO_KG = 150.0        # Q40
 
 
@@ -47,7 +47,9 @@ def q(v, unit):
 
 
 # Powertrain and battery (design assumptions): a 51.2 V 100 Ah LiFePO4 pack and
-# a 10 kW peak motor driving the rear axle through a 10:1 reduction.
+# a 10 kW peak motor driving the rear axle through a 10:1 reduction. 51.2 V is
+# 16 cells at 3.2 V, taken as the nominal voltage of a LiFePO4 cell (not checked
+# against a cell data sheet in this repository).
 POWERTRAIN = {
     "motor_peak_power": q(10.0, "kW"),
     "motor_peak_torque": q(50.0, "N*m"),
@@ -58,10 +60,10 @@ POWERTRAIN = {
     "controller_efficiency": q(0.96, "1"),
     "regen_efficiency": q(0.5, "1"),
     "aux_power": q(150.0, "W"),
-    "battery_voltage": q(51.2, "V"),
+    "battery_voltage": q(51.2, "V"),  # 16 x 3.2 V, not checked (see above)
     "battery_capacity": q(100.0, "Ah"),
     "battery_resistance": q(0.02, "ohm"),
-    "mass_factor": q(1.05, "1"),
+    "mass_factor": q(1.05, "1"),  # assumption: the turning parts add 5 % to the mass in acceleration
     "rolling_resistance": q(0.03, "1"),
 }
 # Lumped heat capacity and thermal resistance to the air of the parts the
@@ -75,14 +77,14 @@ THERMAL = {
     "controller_thermal_resistance": q(0.1, "K/W"),
 }
 # Aerodynamics (design assumptions; the drag coefficient is set high because the
-# seats are open). Air density is the ICAO standard atmosphere at sea level, not
-# checked in this repository.
+# seats are open).
 AERO = {
     "drag_coefficient": q(0.8, "1"),
     "frontal_area": q(1.6, "m^2"),
     "side_force_coefficient": q(1.0, "1"),
     "side_area": q(2.4, "m^2"),
     "centre_of_pressure_height": q(800.0, "mm"),
+    # source: Manual of the ICAO Standard Atmosphere (ICAO Doc 7488), sea level; not checked in this repository
     "air_density": q(1.225, "kg/m^3"),
 }
 # Tyre cornering stiffness per axle (both tyres) and the steering lock (design assumptions).

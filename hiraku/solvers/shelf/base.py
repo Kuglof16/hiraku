@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
@@ -186,7 +187,7 @@ def result(quantity: str, value: float, unit: str, where: str | None = None) -> 
     return r
 
 
-class BuiltinTool:
+class BuiltinTool(ABC):
     """Base for tools whose known-answer checks are written in code.
 
     load_case_params declares every load case parameter the tool reads (name,
@@ -304,11 +305,12 @@ class BuiltinTool:
         except (KeyError, ValueError) as e:
             return [{"name": f"sensitivity not computed: {e}"}]
 
-    # -- for subclasses
+    # -- every tool writes these two
 
+    @abstractmethod
     def known_answers(self) -> list[Record]:
-        raise NotImplementedError
+        """The tool's checks against answers known in closed form (tool_check records)."""
 
+    @abstractmethod
     def analyse(self, design: Record, load_case: Record, params: dict[str, Any]) -> Record:
         """Return the analysis fields (results, fields, vectors, effects, ...)."""
-        raise NotImplementedError

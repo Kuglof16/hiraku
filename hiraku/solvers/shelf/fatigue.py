@@ -33,9 +33,11 @@ from ..k1_frame.fatigue import equivalent_range, influence, miner, rainflow, sn_
 from .base import (LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_text,
                    param_value, result)
 
-ROAD_CLASSES = {c: 16e-6 * 4**i for i, c in enumerate("ABCDEFGH")}
+ROAD_CLASSES = {c: 16e-6 * 4**i for i, c in enumerate("ABCDEFGH")}  # ISO 8608 (see above)
 N0 = 0.1  # cycle/m
 WAVINESS = 2.0
+# Band of the road model (wavelengths 0.35 m to 91 m): a modelling choice, not
+# checked against the bands ISO 8608 reports.
 N_BAND = (0.011, 2.83)  # cycle/m
 SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1", "fatigue_slope_after_knee": "1"}
 SERIES_POINTS = 600
@@ -203,7 +205,7 @@ class Fatigue(BuiltinTool):
                                 sum(r * c for r, _, c in rainflow(series)), "1", 1e-9,
                                 "every reversal is counted once: sum over cycles of range * count = half the total travel"))
         x = np.arange(0.0, 2000.0, ROAD_DX)
-        z = road_profile(x, 256e-6, 0)
+        z = road_profile(x, ROAD_CLASSES["C"], 0)
         f, p = signal.welch(z, fs=1.0 / ROAD_DX, nperseg=4096)
         band = (f > 0.05) & (f < 1.0)
         g_fit = float(np.mean(p[band] * (f[band] / N0) ** WAVINESS))
