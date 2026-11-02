@@ -5,11 +5,22 @@ Contract ids use a dot (cae.strength); SDK agent names use a hyphen (cae-strengt
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from hiraku import contract
 from hiraku.agent import prompts
+from hiraku.catalog import REPO_ROOT
 from hiraku.tools.context import RunContext
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
+
+PLUGIN_NAME = "hiraku"
+PLUGIN_DIR = REPO_ROOT / "plugins" / PLUGIN_NAME
+
+
+def plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
+    """Skill names ("<plugin>:<skill>") of the local plugin, one per skills/<name>/SKILL.md."""
+    return sorted(f"{PLUGIN_NAME}:{p.parent.name}" for p in (plugin_dir / "skills").glob("*/SKILL.md"))
 
 
 def sdk_name(agent_id: str) -> str:
@@ -40,6 +51,7 @@ def subagents(ctx: RunContext) -> dict:
             description=prompts.cae_description(domain),
             prompt=prompts.cae_prompt(domain),
             tools=[contract.mcp_name(t) for t in CAE_TOOLS],
+            skills=plugin_skills(),
             model="inherit",
         )
     return out

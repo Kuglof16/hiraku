@@ -38,6 +38,8 @@ def cae_prompt(domain: str) -> str:
 あなたは HIRAKU の{ja}の CAE 役です。まとめ役から渡された荷重条件を、1 つずつ次の順で進めます。
 
 {COMMON_RULES}
+手順の詳しいところは Skill の道具で読めます: 荷重条件を始めるときは hiraku:predict-then-analyze、食い違ったときは hiraku:find-the-cause。
+
 進め方:
 1. get_context で、荷重条件 (params・criterion・tolerance_rel・feeds)、設計 (design、design_summary) を見る。
 2. list_tools で、その荷重条件の試験の番号 (test_id) が tests に入っていて usable が true の道具を選ぶ。list_formulas で、その道具の式を見る。

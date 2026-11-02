@@ -8,13 +8,14 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
-from hiraku.agent.roles import agent_id_from_sdk, subagents
+from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
 from hiraku.tools import Attribution, RunContext, rules
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 DEFAULT_MAX_TURNS = 200
 AGENT_TOOL = "Agent"
+SKILL_TOOL = "Skill"
 
 
 class MissingApiKey(RuntimeError):
@@ -36,13 +37,17 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
 
     budget = ctx.project["cost_limit_usd"] if max_budget_usd is None else max_budget_usd
     return ClaudeAgentOptions(
-        # Only the Agent tool of the built-in set (to start the role subagents);
-        # Bash, Read, Write and the rest stay out so the tools cannot be bypassed.
-        tools=[AGENT_TOOL],
+        # Only Agent (to start the role subagents) and Skill (the procedures in
+        # plugins/hiraku) of the built-in set; Bash, Read, Write and the rest
+        # stay out so the tools cannot be bypassed.
+        tools=[AGENT_TOOL, SKILL_TOOL],
         setting_sources=[],  # never read this machine's CLAUDE.md, settings or hooks
+        plugins=[{"type": "local", "path": str(PLUGIN_DIR)}],
+        skills=plugin_skills(),  # only HIRAKU's skills, not the ones bundled with the CLI
         mcp_servers={contract.MCP_SERVER: server},
+        strict_mcp_config=True,  # no MCP servers but hiraku (no connectors of a logged-in account)
         # Exact names, not a wildcard: under dontAsk anything not listed is denied.
-        allowed_tools=[contract.mcp_name(t) for t in contract.MCP_TOOLS_MVP] + [AGENT_TOOL],
+        allowed_tools=[contract.mcp_name(t) for t in contract.MCP_TOOLS_MVP] + [AGENT_TOOL, SKILL_TOOL],
         permission_mode="dontAsk",
         hooks=hooks.matchers(),
         agents=subagents(ctx),

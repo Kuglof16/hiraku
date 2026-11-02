@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -28,12 +29,18 @@ class OptionsTest(RunCase, unittest.TestCase):
         att = Attribution()
         hooks = Hooks(self.ctx, att)
         o = build_options(self.ctx, build_server(self.ctx, att), hooks)
-        self.assertEqual(o.tools, ["Agent"])
+        self.assertEqual(o.tools, ["Agent", "Skill"])
         self.assertEqual(o.setting_sources, [])
         self.assertIn("mcp__hiraku__analyze", o.allowed_tools)
         self.assertIn("Agent", o.allowed_tools)
-        self.assertEqual(len(o.allowed_tools), 8)
+        self.assertIn("Skill", o.allowed_tools)
+        self.assertEqual(len(o.allowed_tools), 9)
         self.assertEqual(o.permission_mode, "dontAsk")
+        self.assertTrue(o.strict_mcp_config)
+        self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze"])
+        self.assertEqual(o.agents["cae-strength"].skills, o.skills)
+        self.assertEqual(len(o.plugins), 1)
+        self.assertTrue(Path(o.plugins[0]["path"]).is_dir())
         self.assertEqual(o.model, "claude-opus-5-5")
         self.assertEqual(o.effort, "high")
         self.assertEqual(o.max_budget_usd, 2.0)  # cost_limit_usd of the requirements file
