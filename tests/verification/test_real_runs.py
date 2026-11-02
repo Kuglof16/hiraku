@@ -77,6 +77,15 @@ class ScriptedRunCommand(unittest.TestCase):
                 project = json.loads((run / layout.PROJECT_FILE).read_text(encoding="utf-8"))
                 self.assertEqual(project["status"], "done", f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}")
 
+    def test_each_denial_is_followed_as_the_hook_asks(self):
+        for name, (run, proc) in self.runs.items():
+            with self.subTest(requirements=name):
+                self.assertMadeRun(run, proc)
+                lines = cr.run_effects(run)
+                denials = [s for s in lines if "_prediction_first" in s or "_cause_before_continue" in s]
+                self.assertTrue(denials, "\n".join(lines))
+                self.assertEqual([s for s in denials if "not the" in s or "nothing recorded" in s], [], "\n".join(lines))
+
 
 class ScriptedRunWithFakes(unittest.TestCase):
     CASES = {"done": (1.03, 1.03, True), "mismatch": (1.03, 1.4, True), "unusable": (1.03, 1.03, False)}
