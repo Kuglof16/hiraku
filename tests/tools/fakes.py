@@ -241,9 +241,13 @@ class FakeAssembly(FakeTool):
 
 
 def _h1_builder(spec, req, design):
+    """H1 at 30 deg; variant beyond at 40 deg."""
+    past = spec.get("variant") == "beyond"
+    angle = 40.0 if past else 30.0
     return {
-        "load_case_id": "H1-steer30", "test_id": "H1", "domain": "assembly", "title": "前輪を 30° 切ったときの干渉",
-        "params": {"steer_angle": {"value": 30.0, "unit": "deg"}},
+        "load_case_id": f"H1-steer{angle:g}" + ("-beyond" if past else ""), "test_id": "H1", "domain": "assembly",
+        "title": ("限界の外: " if past else "") + f"前輪を {angle:g}° 切ったときの干渉",
+        "params": {"steer_angle": {"value": angle, "unit": "deg"}},
         "criterion": {"quantity": "interference", "op": "<=", "limit": {"value": 0.0, "unit": "mm"},
                       "basis": "no part may overlap another (test stand-in)"},
         "tolerance_rel": 0.05,
@@ -262,9 +266,13 @@ H1_PLAN = {
 }
 
 
+H1_BEYOND_PLAN = dict(H1_PLAN, say="限界の外で、前輪を大きく切ったときに輪がレールに当たるかを見積もります")
+
+
 def builders_module(plans=True):
-    """A stand-in for hiraku.catalog.builders: H1 (assembly) only."""
-    return types.SimpleNamespace(BUILDERS={"H1": _h1_builder}, FEEDS={}, PLANS={"H1": H1_PLAN} if plans else {})
+    """A stand-in for hiraku.catalog.builders: H1 (assembly) only, with its case past the limit."""
+    return types.SimpleNamespace(BUILDERS={"H1": _h1_builder}, FEEDS={}, PLANS={"H1": H1_PLAN} if plans else {},
+                                 PLANS_BEYOND={"H1": H1_BEYOND_PLAN} if plans else {})
 
 
 class FakeDesigngen:

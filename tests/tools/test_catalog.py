@@ -46,7 +46,7 @@ class CatalogTest(unittest.TestCase):
     def test_the_video_file_has_the_demo_values(self):
         video = load_requirements(REQUIREMENTS.with_name("offroad-4w-video.yaml"))
         self.assertEqual(contract.errors("requirements_file", video), [])
-        self.assertEqual({k: v for k, v in video.items() if k != "tests"},
+        self.assertEqual({k: v for k, v in video.items() if k not in ("tests", "beyond")},
                          {k: v for k, v in self.req.items() if k != "tests"})
         self.assertLess(set(self.req["tests"]), set(video["tests"]))
 

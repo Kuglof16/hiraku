@@ -21,7 +21,8 @@
 #   design.var.<name>              design variable
 #   pred.<quantity>                newest prediction of that quantity in this run and version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
-#                                  (the load case may be named by its test id: ana.P1.front_wheel_force)
+#                                  (the load case may be named by its test id: ana.P1.front_wheel_force,
+#                                  the case of that test that feeds this one, past the limit or not)
 #   from.<name>                    what the prediction's inputs_from(design, load case) reads off the design
 #                                  (a builder's step in Python can carry that function)
 #   {ref} inside a ref             replaced by the name it points at, e.g. wheel_load_{load.rail_joint.support}
@@ -38,14 +39,16 @@
 # mismatch of its own. With safe_side true (and safe_side_reason, also written
 # in the plan) the cause is recorded as seen from the safe side: record_cause
 # checks that the prediction is the unfavourable value and makes the verdict
-# from it, and the step ends. With neither the run says `stop` and stops.
+# from it, and the step ends. With `end` true the cause is recorded and the step ends there
+# (`end_say`); when the load case's criterion judges that quantity, the test stays without a
+# verdict and the run goes on. With none of these the run says `stop` and stops.
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   # The designer's revisions, one per round, used when a tile comes out red
   # (revise_design: the variables of hiraku.designgen, absolute values).
   revise:
-    - say: 組み立てと動力が赤なので、トレッドを広げ、ステアリングを前へ出し、モーターを強くします
+    - say: 組み立てと動力の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くします
       changes:
         track: {value: 1220, unit: mm}
         steering_x: {value: -200, unit: mm}
@@ -56,7 +59,8 @@ offroad-4w:
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change
   steps:
-    - load_case: P1-step100
+    - &p1_step
+      load_case: P1-step100
       tool: step_climb
       say: 段差の前で止まっているときの前輪の荷重を、てこの比で先に見積もります
       predictions:
@@ -79,7 +83,7 @@ offroad-4w:
         fix: 偶力を入れた式 step_climb.pushed_wheel_load で、前輪の荷重と押す力を予測し直す
         retry:
           say: 偶力を入れた式で、前輪の荷重と押す力を予測し直します
-          predictions:
+          predictions: &p1_pushed
             - quantity: front_wheel_load
               formula_id: step_climb.pushed_wheel_load
               output: W
@@ -94,8 +98,8 @@ offroad-4w:
                        r: summary.front_wheel_radius, h: lc.step_height}
     - load_case: R1-step100
       tool: frame_static
-      say: 段差を押して登るときのレールを、前後の車軸で支えた梁とみて曲げの応力を見積もります
-      predictions:
+      say: &r1_say 段差を押して登るときのレールを、前後の車軸で支えた梁とみて曲げの応力を見積もります
+      predictions: &r1_beam
         - quantity: max_stress
           formula_id: frame_static.rail_step_bending
           output: sigma
@@ -103,7 +107,7 @@ offroad-4w:
           inputs:
             W: load.weight
             L: summary.wheelbase
-            F: ana.P1-step100.front_wheel_force
+            F: ana.P1.front_wheel_force
             z: summary.rail_section.z
             r: summary.front_wheel_radius
             b: summary.rail_section.b
@@ -111,17 +115,17 @@ offroad-4w:
             t: summary.rail_section.t
       expected_mismatch:
         quantity: max_stress
-        source: frame_static against frame_static.rail_step_bending on the demo vehicle
-        cause: >-
+        source: &r1_source1 frame_static against frame_static.rail_step_bending on the demo vehicle
+        cause: &r1_cause1 >-
           梁の式は前後の車軸のあいだだけを見ている。後ろの車軸より後ろに張り出した荷とモーターの重さが、
           後ろの車軸のところでレールを曲げる (張り出しの曲げ) が、両端で支えた梁の式では支点の曲げは 0 になる。
           また、車輪はレールの外側にあるので、車輪の力はレールに横の曲げとねじりも加えるが、梁の式には入っていない
-        fix: >-
+        fix: &r1_fix1 >-
           張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式 frame_static.rail_joint_stress で、
           後ろの車軸の継ぎ手のレールの応力を予測し直す
         retry:
-          say: 後ろの車軸の継ぎ手で、張り出しと押す力による縦の曲げに、車輪のずれから来る横の曲げとねじりを足して予測し直します
-          predictions:
+          say: &r1_retry_say 後ろの車軸の継ぎ手で、張り出しと押す力による縦の曲げに、車輪のずれから来る横の曲げとねじりを足して予測し直します
+          predictions: &r1_joint
             - quantity: max_stress
               formula_id: frame_static.rail_joint_stress
               output: sigma
@@ -130,8 +134,8 @@ offroad-4w:
                 - 継ぎ手の前のレールの先の端は動かないとみる
               inputs:   # load.rail_joint: read off the design for this loading (hiraku.tools.summary)
                 M_oh: load.rail_joint.M_oh
-                F: ana.P1-step100.front_wheel_force
-                W: ana.P1-step100.wheel_load_{load.rail_joint.support}
+                F: ana.P1.front_wheel_force
+                W: ana.P1.wheel_load_{load.rail_joint.support}
                 z: load.rail_joint.z
                 e: load.rail_joint.e
                 L1: load.rail_joint.L1
@@ -152,10 +156,68 @@ offroad-4w:
             cause: >-
               今度は手計算が大きい。鉛直の曲げは 1 % で合い、横の曲げとねじりが倍に出る。
               式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
-            fix: >-
+            fix: &r1_fix2 >-
               合否は安全側の手計算の値で出す。もっと近い値が要るときは、隣の継ぎ手も回るとみた式で予測し直す
             safe_side: true
             safe_side_reason: >-
               鉛直の曲げは解析と 1 % で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
               継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
               大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
+    # The same step driven in K2 (step_climb_dynamic), after R1: R1 reads the step_climb results
+    # (the wheel loads), and an upstream load case gives the newest matched analysis.
+    - &p1_dynamic
+      load_case: P1-step100
+      tool: step_climb_dynamic
+      say: 段差を K2 で走らせて、前輪が段の角から浮く瞬間の押す力と前輪の荷重を、偶力を入れた式と比べます
+      predictions: *p1_pushed
+    # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
+    # lever rule is off by -51 % there and the couple formula matches, as at 100 mm; the beam formula is
+    # +34 % off (the same cause) and rail_joint_stress -20 %, whose parts are written in the cause below.
+    - <<: *p1_step
+      load_case: P1-step250-beyond
+    - load_case: R1-step250-beyond
+      tool: frame_static
+      say: *r1_say
+      predictions: *r1_beam
+      expected_mismatch:
+        quantity: max_stress
+        source: *r1_source1
+        cause: *r1_cause1
+        fix: *r1_fix1
+        retry:
+          say: *r1_retry_say
+          predictions: *r1_joint
+          expected_mismatch:
+            quantity: max_stress
+            source: >-
+              frame_static against frame_static.rail_joint_stress on the demo vehicle at the 250 mm step, before
+              and after the designer's revision, the vertical bending, the sideways bending, the twist and the
+              axial force each (before: 0.5 %, 2.3 x, 2.0 x; after: 0.3 %, 2.3 x, 1.9 x)
+            cause: >-
+              今度も手計算が大きい (約 20〜24 %)。鉛直の曲げは 1 % 以内で合い、横の曲げは約 2.3 倍、ねじりは約 2 倍に出る。
+              式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
+            fix: *r1_fix2
+            safe_side: true
+            safe_side_reason: >-
+              鉛直の曲げは解析と 1 % 以内で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
+              継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
+              大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
+    - <<: *p1_dynamic
+      load_case: P1-step250-beyond
+      expected_mismatch:
+        quantity: front_wheel_load
+        source: >-
+          step_climb_dynamic against step_climb.pushed_wheel_load on the demo vehicle at the 250 mm step:
+          the push stops with the rear wheels spinning (required_mu_push at the road's 0.8); the same run with
+          friction 2.0 lifts the front wheels and matches the formula (W -4.5 %, F +5.8 %, required friction +3.2 %)
+        cause: >-
+          段差 250 mm を前輪が乗り越えるには、後輪が前輪の荷重の約 6 倍の力で押す必要があり、後輪の摩擦が約 μ 1.5 要る
+          (版 1 で後輪の荷重 4655 N、押す力 6775 N)。路面は μ 0.8 なので、静かな押し上げでは前輪が浮く前に後輪が空回りし、
+          K2 の値は前輪が浮いた瞬間ではなく、空回りした瞬間のもの。手計算の式は、後輪が押し切れることを前提にしている
+        fix: >-
+          後輪の駆動では、静かな押し上げではこの段差を越えられない。勢いをつける (10 km/h では越えたが、大きな衝撃が出る)、
+          前輪も駆動する、車輪を大きくする、のどれかで越える
+        end: true
+        end_say: >-
+          後輪が空回りして、静かな押し上げではこの段差を越えられませんでした。原因を記録して、この手順はここで終えます
+          (R1 には静的な釣り合いの結果を使っています)
