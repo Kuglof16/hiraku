@@ -35,6 +35,41 @@ CSS のアニメーションは Web Animations API で止めて `currentTime` �
 
 アプリの画面 (`web/`) も同じ形の口を持っています (`?t=`、`?video=1`、描き終えてから返る `window.hiraku.seek(t)`)。`export.py` はどちらの画面も同じに扱います。
 
+### 配置の決まり (`screens/layout.json`)
+
+画面の配置の数値は `screens/layout.json` の 1 か所にだけ書きます。各カットの HTML と CSS には座標を書きません。
+
+| ファイル | 中身 |
+|---|---|
+| `screens/layout.json` | 決まりの元。設計の大きさ 1920×1080、字幕の帯の上端 910、左右・上の余白、カットごとの要素の位置と大きさ (題字、N05 の格子、N08b の数字・棒・出典、N18 の光・車両・リポジトリ)、文字の最小の大きさ、点検する時刻、点検で許すもの (理由つき) |
+| `layout_build.py` | `layout.json` から `screens/layout.data.js` (`window.PROMO_LAYOUT`) を書く。画面は `file://` で開くので JSON を読み込めず、スクリプトにして渡す |
+| `screens/layout.data.js` | 生成物。手で直さない。`layout.json` と違うと試験が落ちる |
+| `screens/layout.js` | 決まりから座標を計算する。`<script src="layout.js" data-cut="n05">` で、そのカットの値を CSS 変数にして入れる (`cuts.n05.name.top` → `--name-top: calc(62 * var(--u))`)。`gridCells(grid)` は格子の各マスの x, y, w, h を返し、N05 の 12 枚のタイルはこれで置く |
+
+```
+py promo/layout_build.py
+```
+
+`layout.json` を直したら、この 1 行を回してから画面を開きます。書き換えの前後で 4 カットを 4 時刻ずつ撮って比べ、16 枚すべて 1 画素も違わないことを確かめました。時刻の値 (`--t-burst` など) は `bgm.py` が HTML から読むので、HTML に残しています。
+
+### 配置の点検 (`layout_check.py`)
+
+画面を決まった時刻で開き、名前つきの要素 (`data-check="名前"`) と、文字を持つ見える要素 (透明度 0.05 未満・`visibility: hidden`・大きさ 0・親に切られて見えないものは除く) の箱を集めて、次を一覧にします。
+
+- `band`: 字幕の帯 (y ≥ 910) に入ったもの。帯の飾り (`?guides=1`) は `layout.json` の `band_exempt` で除く
+- `outside`: 画面 (0〜1920 × 0〜1080) の外にはみ出したもの
+- `overlap`: 名前つきの要素どうしの重なり。意図した重なりは `allow_overlap` で許す (N18 の光と車両)
+- `overflow`: 文字のあふれ (scrollWidth > clientWidth + 1、高さも同じ)。`allow_overflow` で、字の大きさに対する割合まで許せる (行の高さが字体の高さより低く、箱の下に数 px 出るもの)
+- `small`: 1080p で最小 (日本語 20 px・英数字 16 px) を下回る文字。この値はこのリポジトリの決まりで、外の規格ではありません
+
+```
+py promo/layout_check.py promo/screens/n05.html <出力>
+py promo/layout_check.py all <出力>
+py promo/layout_check.py "http://127.0.0.1:8781/?run=sample&video=1" <出力> --at 2 8 15
+```
+
+時刻は `layout.json` の `check.times` (アプリは `app`) から取り、`--at` で変えられます。出力のフォルダはリポジトリの外を渡します。結果の `result.json`、表の `report.md`、時刻ごとの絵 (長辺 1280 px、問題の箱を赤い枠で描く)、全部を並べた `sheet.jpg` を書きます。問題が 1 件でもあれば終了コードは 1 です。canvas (WebGL) に描かれた文字は見えません。4 カットは 0 件です。
+
 ## 書き出し (`export.py`)
 
 ブラウザ (headless Chromium) を 1920×1080 の配置のまま 2 倍の解像度で開き、コマごとに PNG で撮って ffmpeg でつなぎます。
@@ -126,5 +161,7 @@ py promo/subs.py burn <映像> <作業>/subs/all/subs.ass <出力>.mp4 --audio <
 ## 試験
 
 ```
-python -m unittest promo.tests.test_export promo.tests.test_subs promo.tests.test_bgm
+python -m unittest promo.tests.test_export promo.tests.test_subs promo.tests.test_bgm promo.tests.test_layout
 ```
+
+`test_layout` のうちブラウザを使う試験 (点検の見本の画面、N05 のタイルと格子、4 カットが 0 件) は、playwright の無い環境 (HIRAKU の venv) では飛ばします。
