@@ -78,16 +78,20 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     return out
 
 
+def _amount(x: float, unit: str) -> str:
+    """A number and its unit; a dimensionless "1" is not written."""
+    return f"{x:.4g}" if unit == "1" else f"{x:.4g} {unit}"
+
+
 def verdict_line(v: Record) -> str:
     safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
     value, limit = v["value"]["value"], v["limit"]["value"]
     if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
-        side = margin(value, v["op"], limit)
-        room = f"{side:.4g} {v['limit']['unit']}"
+        room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])
     else:
         room = f"{v['margin_pct']:.0f} %"
-    return (f"{v['test_id']} {v['quantity']} {value:.4g} {v['value']['unit']} "
-            f"{OP_JA[v['op']]} {limit:.4g} {v['limit']['unit']} (余裕 {room}{safe})")
+    return (f"{v['test_id']} {v['quantity']} {_amount(value, v['value']['unit'])} "
+            f"{OP_JA[v['op']]} {_amount(limit, v['limit']['unit'])} (余裕 {room}{safe})")
 
 
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:

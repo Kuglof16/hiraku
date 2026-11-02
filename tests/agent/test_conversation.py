@@ -253,6 +253,19 @@ class StopButtonTest(ConversationCase, unittest.TestCase):
         self.assertEqual((status, client.interrupts), ("stopped", 1))
         self.assert_stopped_by_button()
 
+    def test_pressed_before_the_cli_starts(self):
+        async def script(client):
+            raise AssertionError("the CLI was started")
+            yield  # an async generator, like the others
+
+        FakeClient.last = None
+        self.press_stop()  # e.g. while the tools were being checked
+        status, client = self.run_claude(script)
+        self.assertEqual((status, client), ("stopped", None))
+        self.assertEqual(self.kinds("agent.started", "agent.stopped")[-2:],
+                         [("agent.started", "lead"), ("agent.stopped", "lead")])
+        self.assert_stopped_by_button()
+
 
 class OptionsTest(RunCase, unittest.TestCase):
     def test_roles_run_in_the_foreground_with_their_effort(self):

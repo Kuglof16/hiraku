@@ -237,6 +237,10 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
         ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
         ctx.store.finish(status, stop_reason=reason, stop_code=code)
 
+    if ctx.store.stop_requested():  # pressed while the tools were checked: the CLI is not started
+        close("stopped", STOPPED_BY_BUTTON, "user_stop")
+        ctx.store.clear_stop_request()
+        return "stopped"
     try:
         async with ClaudeSDKClient(options=options) as client:
             await converse(client, ctx, hooks, log)

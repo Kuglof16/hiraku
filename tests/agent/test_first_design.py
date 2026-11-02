@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from hiraku import contract
+from hiraku.contract import layout
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.runner import build_options
 from hiraku.agent.scripted import load_plan, run_scripted
@@ -109,6 +110,13 @@ class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and e["agent"] == "designer"]
         self.assertEqual(said, ["要件から最初の版を作ります", "版 1 ができました。試験: P1-step100"])
         self.assertEqual(self.ctx.store.design()["change_reason"], "既定の変数で")
+
+    def test_stop_button_before_the_first_version(self):
+        (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+        self.assertEqual(run_scripted(self.ctx), "stopped")
+        self.assertNotIn("design.created", self.kinds())  # the load cases were not built
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["stop_code"], "user_stop")
+        self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())
 
 
 if __name__ == "__main__":

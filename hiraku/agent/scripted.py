@@ -45,8 +45,11 @@ def load_plan(product: str) -> Record:
 
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     """The product's plan plus a step from the builders' PLANS for each load case it lacks,
-    ordered upstream first. `missing` lists the load cases nobody gave a step for."""
+    ordered upstream first. `missing` lists the load cases nobody gave a step for.
+    A product step whose load case this run did not build (another step height,
+    say) is left out: its causes were written for that load case."""
     out = copy.deepcopy(plan if plan is not None else load_plan(ctx.project["product"]))
+    out["steps"] = [s for s in out["steps"] if ctx.has_load_case(s["load_case"])]
     have = {s["load_case"] for s in out["steps"]}
     recipes = external_builders()[2]
     out["missing"] = []
@@ -287,7 +290,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s = ctx.store
     s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
-    if not ctx.version:
+    if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
         first = (plan if plan is not None else load_plan(ctx.project["product"])).get("propose") or {}
         s.emit("agent.started", agent="designer", data={"agent_id": "designer"})
         s.emit("agent.said", agent="designer", text=first.get("say") or "要件から、最初の版を作ります")
@@ -320,6 +323,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             started.append(agent)
 
     try:
+        _check_stop(ctx)  # pressed while the tools were checked or the first version was built
         while True:
             for step in plan["steps"]:
                 _check_stop(ctx)
