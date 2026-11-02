@@ -134,9 +134,12 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     problems += [p for e in to_emit if (p := _emit(ctx, e))]
     new = prepared.answered["answers"]
     recorded_req = False
-    add = getattr(_store(ctx), "add_requirements", None)
-    if add is not None and new:
-        add(new)
+    update = getattr(_store(ctx), "update_project", None)
+    if update is not None and new:
+        # the answers and defaults join project.requirements (the same key is replaced); project.updated says so
+        merged = {r["key"]: r for r in ctx.project["requirements"]}
+        merged.update({r["key"]: r for r in new})
+        update({"requirements": [merged[k] for k in sorted(merged)]}, agent="lead", text="ヒアリングの答えを要件に入れました")
         recorded_req = True
     out: Record = {
         "text": hearing.hearing_text(prepared),
@@ -148,7 +151,7 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "recorded": not problems,
     }
     if not recorded_req and new:
-        out["requirements_to_add"] = new  # the run store has no add_requirements yet: the caller adds them
+        out["requirements_to_add"] = new  # the run store has no update_project: the caller adds them
     if problems:
         out["not_recorded"] = problems[0]
     if not prepared.ready:
