@@ -8,7 +8,8 @@ for the author, and, when usable, a SandboxedTool that analyze can call like
 the built-in tools (its run() also goes to its own process).
 
 RunShelf keeps the tools made in one run and writes each attempt to
-<run_dir>/tools/: <name>-<n>.py (the code) and <name>-<n>.check.json.
+<run_dir>/tools/ (hiraku.contract.layout.TOOLS_DIR): <name>-<n>.py (the
+code) and <name>-<n>.check.json (the checks, problems and the reason given).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hiraku import contract
+from hiraku.contract.layout import TOOLS_DIR
 
 from . import guard
 from .runner import MARK
@@ -92,11 +94,15 @@ class Made:
     problems: list[str] = field(default_factory=list)
     printed: str = ""
     tool: "SandboxedTool | None" = None
+    reason: str | None = None  # why the tool was made (make_tool's reason), kept with the attempt
 
     def record(self) -> Record:
         """For the check file of the run folder."""
-        return {"name": self.name, "usable": self.usable, "problems": self.problems, "spec": self.spec,
-                "printed": self.printed, "made_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        out = {"name": self.name, "usable": self.usable, "problems": self.problems, "spec": self.spec,
+               "printed": self.printed, "made_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        if self.reason:
+            out["reason"] = self.reason
+        return out
 
 
 def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHECK_TIMEOUT_S,
@@ -181,16 +187,18 @@ class RunShelf:
     usable ones; tools() gives them like hiraku.solvers.builtin_tools()."""
 
     def __init__(self, run_dir: Path | str | None = None, emit: Callable[[str, Record], Any] | None = None):
-        self.dir = None if run_dir is None else Path(run_dir) / "tools"
+        self.dir = None if run_dir is None else Path(run_dir) / TOOLS_DIR
         # emit("tool.checked", spec) for every attempt whose code ran far enough to give a spec,
         # usable or not (the screen shows made -> failed its checks -> fixed -> passed)
         self.emit = emit
         self._tools: dict[str, SandboxedTool] = {}
         self._attempts: dict[str, int] = {}
 
-    def make(self, code: str, *, taken: tuple[str, ...] = (), **kwargs) -> Made:
-        """make_tool, then add() it."""
+    def make(self, code: str, *, taken: tuple[str, ...] = (), reason: str | None = None, **kwargs) -> Made:
+        """make_tool, then add() it. reason: why the tool is made (which test, and why the
+        shelf's tools do not do), kept in the attempt's check file."""
         made = make_tool(code, taken=tuple(taken) + tuple(self._tools), **kwargs)
+        made.reason = reason
         self.add(made)
         return made
 

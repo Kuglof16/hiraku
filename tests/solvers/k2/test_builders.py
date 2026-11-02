@@ -94,6 +94,23 @@ class Builders(unittest.TestCase):
             BUILDERS["S4"]({"id": "S4"}, req, self.design)
         self.assertIn("Q52", str(e.exception))
 
+    def test_s1_predicts_with_the_cargo_height_of_q41(self):
+        from hiraku.catalog.builders.k2_tests import tilt_inputs
+        h = {}
+        for above in (None, 150.0, 620.0):
+            req = copy.deepcopy(self.req)
+            req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q41"]
+            if above is not None:
+                req["requirements"].append({"key": "Q41", "name": "荷の重心の高さ", "value": above, "unit": "mm",
+                                            "source": "default", "trust": 3, "basis": "test value"})
+            lc = BUILDERS["S1"]({"id": "S1"}, req, self.design)
+            self.assertEqual("Q41" in lc["requirement_keys"], above is not None)
+            self.assertEqual("cargo_cg_above_deck" in lc["params"], above is not None)
+            h[above] = tilt_inputs(self.design, lc)["h"]["value"]
+        # the demo design's cargo box stands on its floor with its centre 150 mm up
+        self.assertAlmostEqual(h[150.0], h[None], places=6)
+        self.assertAlmostEqual(h[620.0], 712.7, delta=0.5)
+
     def test_cases_past_the_limit(self):
         for tid in BEYOND:
             with self.subTest(test=tid):

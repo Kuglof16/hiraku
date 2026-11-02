@@ -183,7 +183,7 @@ class Shelf(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             shelf = toolmaker.RunShelf(d, emit=lambda kind, data: events.append((kind, data["name"], data["usable"])))
             shelf.make("import os\n")  # refused before it runs: no spec, no event
-            bad = shelf.make(WRONG)
+            bad = shelf.make(WRONG, reason="R5: the shelf has no cantilever")
             good = shelf.make(GOOD)
             again = shelf.make(GOOD)  # the name is taken now
             files = sorted(p.name for p in (Path(d) / "tools").iterdir())
@@ -200,6 +200,7 @@ class Shelf(unittest.TestCase):
                                  "unnamed-1.check.json", "unnamed-1.py"])
         self.assertFalse(record["usable"])
         self.assertTrue(record["problems"])
+        self.assertEqual(record["reason"], "R5: the shelf has no cantilever")
 
 
 if __name__ == "__main__":
