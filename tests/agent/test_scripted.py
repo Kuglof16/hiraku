@@ -135,6 +135,36 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual(run_scripted(self.ctx, plan), "stopped")
         self.assertIn("both safe_side and a retry", self.ctx.project["stop_reason"])
 
+    def test_end_records_the_cause_and_ends_the_step(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        em = plan["steps"][0]["expected_mismatch"]  # P1 has no criterion
+        del em["retry"]
+        em.update(end=True, end_say="原因を記録して、この手順は終えます (試験)")
+        plan["steps"] = plan["steps"][:1]
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        (p1,) = comparisons(self.ctx, "P1-step100")
+        self.assertEqual((p1["quantity"], p1["status"]), ("front_wheel_load", "mismatch"))
+        self.assertFalse(cause_of(self.ctx, p1)["resolved"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("原因を記録して、この手順は終えます (試験)", said)
+        # the run went on: R1 had no step (P1 has no matched analysis for it), so strength is left pending
+        self.assertNotIn("no next prediction", self.ctx.project["stop_reason"])
+        self.assertIn("R1-step100", self.ctx.project["stop_reason"])
+        self.assert_events_fit()
+
+    def test_end_is_refused_on_a_judged_quantity_or_with_a_retry(self):
+        plan = plan_without_safe_side()
+        r1_second(plan)["expected_mismatch"]["end"] = True  # max_stress is R1's criterion
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        self.assertIn("is judged by its criterion", self.ctx.project["stop_reason"])
+        self.assertEqual(self.ctx.store.records("verdict"), [])
+
+    def test_end_and_retry_together_are_a_plan_error(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        plan["steps"][0]["expected_mismatch"]["end"] = True
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        self.assertIn("both end and a retry", self.ctx.project["stop_reason"])
+
 
 class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
     # The second R1 analysis comes out 2.7 x the beam formula: above the rail-joint prediction
@@ -204,7 +234,7 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         self.assertIn("ana.P1.wheel_load_{load.rail_joint.support}", refs)
         for r in refs:
             self.assertFalse(r.startswith(("design.section.", "summary.member_length.", "design.support.")), r)
-        self.assertEqual(len(chain), 6)  # at each step height: P1 once, R1 twice
+        self.assertEqual(len(chain), 7)  # at each step height: P1 once, R1 twice; P1 driven at 250 mm once
         for em in chain:
             self.assertTrue(em["source"] and em["cause"] and em["fix"])
 

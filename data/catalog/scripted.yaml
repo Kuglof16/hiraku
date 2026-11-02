@@ -39,7 +39,9 @@
 # mismatch of its own. With safe_side true (and safe_side_reason, also written
 # in the plan) the cause is recorded as seen from the safe side: record_cause
 # checks that the prediction is the unfavourable value and makes the verdict
-# from it, and the step ends. With neither the run says `stop` and stops.
+# from it, and the step ends. With `end` true (for a quantity no criterion of the load case
+# judges) the cause is recorded and the step ends there (`end_say`). With none of these the
+# run says `stop` and stops.
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
@@ -188,17 +190,34 @@ offroad-4w:
           expected_mismatch:
             quantity: max_stress
             source: >-
-              frame_static against frame_static.rail_joint_stress on the demo vehicle at the 250 mm step,
-              the vertical bending, the sideways bending, the twist and the axial force each
+              frame_static against frame_static.rail_joint_stress on the demo vehicle at the 250 mm step, before
+              and after the designer's revision, the vertical bending, the sideways bending, the twist and the
+              axial force each (before: 0.5 %, 2.3 x, 2.0 x; after: 0.3 %, 2.3 x, 1.9 x)
             cause: >-
-              今度も手計算が大きい。版 1 では手計算 208 MPa、解析 166 MPa で、鉛直の曲げは 0.5 % で合い
-              (127.8 と 127.2 MPa)、横の曲げは 2.3 倍 (72.1 と 31.5 MPa)、ねじり (√3τ) は 2.0 倍 (26.4 と 13.5 MPa)
-              に出る。式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
+              今度も手計算が大きい (約 20〜24 %)。鉛直の曲げは 1 % 以内で合い、横の曲げは約 2.3 倍、ねじりは約 2 倍に出る。
+              式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
             fix: *r1_fix2
             safe_side: true
             safe_side_reason: >-
-              鉛直の曲げは解析と合っていて (版 1 で 0.5 %)、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
+              鉛直の曲げは解析と 1 % 以内で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
               継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
               大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
     - <<: *p1_dynamic
       load_case: P1-step250-beyond
+      expected_mismatch:
+        quantity: front_wheel_load
+        source: >-
+          step_climb_dynamic against step_climb.pushed_wheel_load on the demo vehicle at the 250 mm step:
+          the push stops with the rear wheels spinning (required_mu_push at the road's 0.8); the same run with
+          friction 2.0 lifts the front wheels and matches the formula (W -4.5 %, F +5.8 %, required friction +3.2 %)
+        cause: >-
+          段差 250 mm を前輪が乗り越えるには、後輪が前輪の荷重の約 6 倍の力で押す必要があり、後輪の摩擦が約 μ 1.5 要る
+          (版 1 で後輪の荷重 4655 N、押す力 6775 N)。路面は μ 0.8 なので、静かな押し上げでは前輪が浮く前に後輪が空回りし、
+          K2 の値は前輪が浮いた瞬間ではなく、空回りした瞬間のもの。手計算の式は、後輪が押し切れることを前提にしている
+        fix: >-
+          後輪の駆動では、静かな押し上げではこの段差を越えられない。勢いをつける (10 km/h では越えたが、大きな衝撃が出る)、
+          前輪も駆動する、車輪を大きくする、のどれかで越える
+        end: true
+        end_say: >-
+          後輪が空回りして、静かな押し上げではこの段差を越えられませんでした。原因を記録して、この手順はここで終えます
+          (R1 には静的な釣り合いの結果を使っています)
