@@ -1,5 +1,7 @@
 # 契約 (部署のあいだの決まり)
 
+HIRAKU は、Claude Code のセッションを「部署」に見立てて並べて作った。統括部 (契約を書き、各部署の成果を確かめて main に取り込む) と、設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部。各部署は自分の git worktree と branch で、下の表の持ち場のファイルだけを書く。この文書は、その部署どうしが同じ形でつながるための決まり。
+
 形の正本は [`hiraku/contract/hiraku.schema.json`](../hiraku/contract/hiraku.schema.json)。この文書は読み方の案内で、食い違ったら schema が正しい。schema を変えたいときは統括部に頼む (部署の中で勝手に足さない)。
 
 ```python
@@ -44,10 +46,10 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 
 | ID | 中身 |
 |---|---|
-| H1 | 同じ版・同じ荷重条件の予測が無い `analyze` は止める |
-| H2 | 照合 (答えの分かっている例) に通っていない道具の `analyze` は止める |
-| H3 | 原因の無い食い違いがある分野では `analyze` と `compare` を止める |
-| H4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける) |
+| HK1 | 同じ版・同じ荷重条件の予測が無い `analyze` は止める |
+| HK2 | 照合 (答えの分かっている例) に通っていない道具の `analyze` は止める |
+| HK3 | 原因の無い食い違いがある分野では `analyze` と `compare` を止める |
+| HK4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける) |
 
 ## 解析部と設計部のあいだ (Python)
 
@@ -81,7 +83,7 @@ MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hira
 {"seq": 4, "ts": "2026-11-02T20:30:02.000+09:00", "t": 2.0, "run_id": "20261102-203000-offroad-4w",
  "kind": "hook.denied", "agent": "cae.strength", "domain": "strength",
  "text": "予測が無いので解析は止めました。…",
- "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "H1_prediction_first"}}
+ "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "HK1_prediction_first"}}
 ```
 
 - `seq` は 0 から抜けなし。`t` は `run.started` からの秒で、再生の間合いはこれで取る
