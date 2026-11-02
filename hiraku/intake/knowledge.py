@@ -287,6 +287,28 @@ def convert_sentence(text: str) -> str | None:
     return None
 
 
+_KIND_NOUNS: list[tuple[str, str]] = [  # (how a sentence names a part, the part's kind)
+    ("バッテリー", "battery"), ("電池", "battery"), ("モーター", "motor"), ("制御器", "controller"),
+    ("コントローラ", "controller"), ("座席", "seat"), ("座面", "seat"), ("シート", "seat"), ("車輪", "wheel"),
+    ("ホイール", "wheel"), ("タイヤ", "wheel"), ("乗員", "occupant"), ("積載", "cargo"), ("荷物", "cargo"),
+    ("ハンドル", "steering"), ("ステアリング", "steering"), ("床", "body"), ("外板", "body"),
+]
+_SCOPE_KINDS = {"support": ["support"], "member": ["frame"]}  # a fact of a support or a member is not a part's
+
+
+def kinds_for_sentence(text: str, check: str) -> list[str] | None:
+    """Which kinds of part a converted sentence is about: from its first fact's scope (a support's travel is a
+    support's), else from the part it names ("電池の質量は ..." is about batteries), else None (every part)."""
+    first = expression.names(check)[0]
+    if first in facts.FACTS and facts.FACTS[first][2] in _SCOPE_KINDS:
+        return _SCOPE_KINDS[facts.FACTS[first][2]]
+    subject = unicodedata.normalize("NFKC", text).split("は", 1)[0]
+    for noun, kind in _KIND_NOUNS:
+        if noun in subject:
+            return [kind]
+    return None
+
+
 # ------------------------------------------------------------------------- importing a file
 
 
@@ -336,6 +358,8 @@ def import_text(
         if check is None:
             check = convert_sentence(c.text)
             by = "code"
+            if check is not None and kinds is None:
+                kinds = kinds_for_sentence(c.text, check)
         rid = f"{doc_id}-{n:02d}"
         basis = f"dropped file {filename}, line {c.line}; the person's own know-how, not checked against a source"
         if check is not None:

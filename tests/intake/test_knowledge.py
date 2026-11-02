@@ -81,6 +81,29 @@ class SentenceTest(unittest.TestCase):
                 self.assertIsNone(convert_sentence(s))
 
 
+class KindsTest(unittest.TestCase):
+    def test_a_converted_sentence_is_about_the_part_it_names(self):
+        k = knowledge.kinds_for_sentence
+        self.assertEqual(k("電池の質量は 30 kg 以下", "mass_kg <= 30"), ["battery"])
+        self.assertEqual(k("座面の厚みは 20 mm 以上", "thickness_mm >= 20"), ["seat"])
+        self.assertIsNone(k("質量は 23 kg 以下", "mass_kg <= 23"))  # every part
+
+    def test_a_fact_of_a_support_or_a_frame_is_not_a_parts(self):
+        k = knowledge.kinds_for_sentence
+        self.assertEqual(k("サスのストロークは 100 mm 以上", "travel_mm >= 100"), ["support"])
+        self.assertEqual(k("肉厚は 1.6 mm 以上", "wall_mm >= 1.6"), ["frame"])
+
+    def test_import_uses_it(self):
+        got = import_text("a.md", "- 電池の質量は 30 kg 以下\n- 質量は 200 kg 以下\n", doc_id="U1")
+        by = {r["rule_id"]: r for r in got.record["rules"]}
+        self.assertEqual(by["U1-01"]["applies_to"], {"kinds": ["battery"]})
+        self.assertNotIn("applies_to", by["U1-02"])
+        rules = got.record["rules"]
+        hits = rulecheck.check_all(rules, mini_design(), [])
+        self.assertEqual([h["part_id"] for h in hits[0]["hits"]], ["battery"])  # the cargo is not a battery
+        self.assertEqual([h["part_id"] for h in hits[1]["hits"]], [])
+
+
 class CandidatesTest(unittest.TestCase):
     def test_markdown(self):
         c = parse_candidates("bending-notes.md", read("bending-notes.md"))
