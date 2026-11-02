@@ -64,8 +64,8 @@ class AnalysisTool(Protocol):
 
 # Rules the hooks enforce (設計部 implements them; ids are used in hook.denied events).
 HOOK_RULES = {
-    "H1_prediction_first": "analyze needs prediction_ids that exist for the same design_version and load_case_id",
-    "H2_tool_usable": "analyze needs a tool whose spec has usable=true (all known-answer checks pass)",
-    "H3_cause_before_continue": "while a comparison in a domain is a mismatch without a cause, analyze and compare in that domain are denied",
-    "H4_no_stop_before_judged": "the run may not stop while a picked domain is pending, unless the round or cost limit is reached (blocks are counted and capped)",
+    "HK1_prediction_first": "analyze needs prediction_ids that exist for the same design_version and load_case_id",
+    "HK2_tool_usable": "analyze needs a tool whose spec has usable=true (all known-answer checks pass)",
+    "HK3_cause_before_continue": "while a comparison in a domain is a mismatch without a cause, analyze and compare in that domain are denied",
+    "HK4_no_stop_before_judged": "the run may not stop while a picked domain is pending, unless the round or cost limit is reached (blocks are counted and capped)",
 }
