@@ -266,8 +266,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     stops there. After all steps, a red tile and a `revise` entry left in the
     plan make the designer call revise_design, and the steps run again on the
     new version. Ctrl+C finishes the run as stopped and is raised again.
-    run.finished carries stop_code: done, round_limit (judged with a red tile
-    and no revision left), not_judged or user_stop.
+    run.finished carries stop_code: done, round_limit (judged, but a tile is
+    red and no revision is left: status stopped), not_judged or user_stop.
     """
     s = ctx.store
     plan = compose_plan(ctx, plan)
@@ -326,7 +326,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         if left:
             status, reason, code = "stopped", left, "not_judged"
         else:
-            code = rules.judged_code(ctx)
+            status, reason, code = rules.judged_end(ctx)
     s.finish(status, stop_reason=reason, stop_code=code)
     if interrupted:
         raise KeyboardInterrupt

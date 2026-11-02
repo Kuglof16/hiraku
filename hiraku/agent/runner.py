@@ -143,7 +143,7 @@ def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tu
         why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
                if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
         return "stopped", why + left, "not_judged"
-    return "done", None, rules.judged_code(ctx)
+    return rules.judged_end(ctx)
 
 
 async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) -> None:

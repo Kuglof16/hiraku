@@ -130,6 +130,8 @@ class LoopTest(RunCase, unittest.TestCase):
         self.assertEqual((ver["basis"], ver["value_from"], ver["value"]), ("match", "analysis", out["comparison"]["analyzed"]))
         self.assertNotIn("cause_id", ver)
         self.assertAlmostEqual(ver["margin_pct"], (156.6666666 - ver["value"]["value"]) / 156.6666666 * 100, places=4)
+        self.assertEqual(ver["margin"]["unit"], "MPa")
+        self.assertAlmostEqual(ver["margin"]["value"], 156.6666666 - ver["value"]["value"], places=4)
         tile = self.ctx.store.judgements()[0]
         self.assertEqual((tile["state"], tile["verdict_ids"]), ("green", [ver["verdict_id"]]))
         self.assertIsNone(rules.stop_reason(self.ctx))
