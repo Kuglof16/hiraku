@@ -1,0 +1,5 @@
+# Only for exporting the video (promo/export.py). HIRAKU itself does not need it.
+# Install into the Python that runs export.py, then fetch Chromium:
+#   py -m pip install -r promo/requirements-video.txt
+#   py -m playwright install chromium
+playwright==1.62.0

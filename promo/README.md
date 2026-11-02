@@ -1,6 +1,6 @@
 # promo — 動画のための画面と書き出し
 
-動画だけに出る画面 (アプリの外) と、画面をコマごとに書き出して声と字幕を付ける道具です。
+動画だけに出る画面 (アプリの外) と、画面をコマごとに書き出して声・字幕・背景の音楽を付ける道具です。
 声の原稿、合成した声、書き出したコマや動画は、リポジトリの外の作業フォルダに置きます。
 
 ## 画面 (`screens/`)
@@ -9,7 +9,7 @@
 |---|---|---|
 | `n00.html` | はじめの一言: HIRAKU の名前と、7 つの分野のエージェントの札が順に灯る | 7 s |
 | `n05.html` | 題字 (冒頭): 車両が開いて試験の格子になり、題字が乗る | 5 s |
-| `n08b.html` | 数字: 99 % と 5 %、棒、出典 | 10.4 s |
+| `n08b.html` | 数字: 99 % と 5 %、棒、出典 | 9.7 s |
 | `n18.html` | 題字 (締め): 縦の光、車両の線画、題字、リポジトリ | 9 s |
 
 - 1920×1080 の配置で作り、長さはすべて `--u` (= min(100vw/1920, 100vh/1080)) の倍数で書いています。1920×1080 の窓でも、3840×2160 の窓でも同じ配置になります
@@ -37,7 +37,13 @@ CSS のアニメーションは Web Animations API で止めて `currentTime` �
 ## 書き出し (`export.py`)
 
 ブラウザ (headless Chromium) を 1920×1080 の配置のまま 2 倍の解像度で開き、コマごとに PNG で撮って ffmpeg でつなぎます。
-`playwright` (と Chromium) と ffmpeg が要ります。
+
+`playwright` は動画の書き出しにだけ要るので、HIRAKU 本体の `requirements.txt` には入れず `promo/requirements-video.txt` に書いています。HIRAKU の venv ではなく、PC の Python (Windows では `py`) に入れて、その Python で `export.py` を回します。ffmpeg は PATH に置くか、環境変数 `FFMPEG` にその場所を書きます。
+
+```
+py -m pip install -r promo/requirements-video.txt
+py -m playwright install chromium
+```
 
 ```
 py promo/export.py stills promo/screens/n18.html <作業>/stills --at 0.5 3 8
@@ -84,14 +90,34 @@ py promo/subs.py burn <作業>/clips/n00_1080p.mp4 <作業>/subs/n00/subs.ass <�
 ```
 
 - `synth` は文ごとの WAV と `voice.json` を書き、カットごとに声が枠に入るかを表で出します
+- `synth --only N07_2.wav N08b_2.wav` は、名前を挙げた文だけ合成し直し、ほかの文は前の声をそのまま使います (同じ文でも合成のたびに長さが 0.03〜0.05 秒ほど変わるので、直していない文の長さを動かさないため)
 - `layout` は各カットの文を枠の頭から並べ、字幕 (ASS) と声をつないだ WAV を書きます。1 行に入らない日本語の文は「、」で分け、分け目は声の間 (無音) に合わせます
 - 前のカットの声が終わっていなければ、次のカットの声はそのあとまで待ちます (声は重ならない)。枠を超えたカットと、何秒超えたかを表示します
 - 「、」で分けるときは、行の数をいちばん少なくし、そのなかで行の幅がいちばんそろう分け方を選びます
 - `layout --script <原稿>` は、枠と文を原稿から取り、声は合成したものをそのまま使います (枠を変えるたびに合成し直さなくてよい)。合成したあとに文が変わった文は、合成し直すように表示します
 - `burn` は下の 170 px に黒インクの帯を敷き、字幕を焼き込みます。日本語は 48 px の太字で y = 995、英語は 30 px で y = 1040 に固定 (どちらもいつも 1 行)。座標は 1920×1080 で書き、4K では libass が拡大します
 
+声のモデル: 「阿井田 茂」(制作 古山キリヲ)、Aivis Common Model License (ACML) 1.0。ライセンスの本文はエンジンの `GET /aivm_models` の `manifest.license` で読めます (営利の利用も可、クレジットの表記は任意)。
+
+## 背景の音楽 (`bgm.py`)
+
+音はすべて `bgm.py` の中で numpy と scipy で合成しています。外の曲・音源・サンプルは使っていません。
+
+- 音色: ずらした 2 つの発振器を低域だけ通したパッド、減衰する倍音を重ねた撥弦の音 (アルペジオと鐘)、サイン波のベース、短いノイズのハイハット、ノイズのライザーと低い一撃、減衰するノイズを畳み込む残響
+- 構成は原稿のカットに沿って 8 つの節に分け (はじめ・問い・題字・課題・HIRAKU の仕事・積み上げ・締め・終わり)、節の頭は最寄りの拍に合わせます (92 BPM)。ニ長調
+- 画面の時刻に合わせる所は、画面の HTML の値を読みます: N00 で札が灯るたびに鐘 (`--t-light`・`--t-step`)、N05 で車両が開く瞬間に一撃 (`--t-burst`、その前の 2.4 秒にライザー)、N18 で光が開く瞬間に鐘 (`--t-open`)
+- 最後の 2 秒で消えます
+
+```
+python promo/bgm.py render <原稿> <作業>/bgm/bgm.wav
+python promo/bgm.py mix <作業>/bgm/bgm.wav <作業>/subs/all/narration.wav <作業>/bgm/mix.wav
+py promo/subs.py burn <映像> <作業>/subs/all/subs.ass <出力>.mp4 --audio <作業>/bgm/mix.wav
+```
+
+`mix` は、声の無い所で音楽を -24 dBFS (`--music-db`) にし、声の 0.3 秒前から 9 dB (`--duck-db`) 下げ、声が止んでも 0.6 秒は下げたままにします (声の切れ目が 0.9 秒までなら上げ戻さない)。numpy と scipy (HIRAKU の `requirements.txt` にあるもの) で動きます。足したものの山が -1 dBFS を超えるときは全体を下げます。
+
 ## 試験
 
 ```
-python -m unittest promo.tests.test_export promo.tests.test_subs
+python -m unittest promo.tests.test_export promo.tests.test_subs promo.tests.test_bgm
 ```

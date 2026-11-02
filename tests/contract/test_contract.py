@@ -71,6 +71,19 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(xs["FL"], 0.0)
         self.assertLess(xs["RL"], 0.0)
 
+    def test_safe_side_cause_needs_a_reason(self):
+        c = load("cause.json")
+        c["safe_side"] = True
+        self.assertNotEqual(contract.errors("cause", c), [])
+        c["safe_side_reason"] = "the joint is taken as fixed, so twist is over-estimated"
+        self.assertEqual(contract.errors("cause", c), [])
+
+    def test_verdict_basis(self):
+        v = load("verdict.json")
+        self.assertEqual(contract.errors("verdict", {**v, "basis": "explained_safe_side",
+                                                     "value_from": "prediction", "cause_id": "cause-0001"}), [])
+        self.assertNotEqual(contract.errors("verdict", {**v, "basis": "close_enough"}), [])
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []
