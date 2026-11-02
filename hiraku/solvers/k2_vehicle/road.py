@@ -48,7 +48,8 @@ class BlockRoad(Road):
 
     name = "blocks"
 
-    def __init__(self, breaks=(), levels=(0.0,)):
+    def __init__(self, breaks=(), levels=(0.0,), y_range=None):
+        self.y_range = y_range  # the blocks lie only for y in [lo, hi]; flat ground elsewhere
         self.breaks = np.asarray(breaks, dtype=float)
         self.levels = np.asarray(levels, dtype=float)
         if len(self.levels) != len(self.breaks) + 1:
@@ -67,7 +68,11 @@ class BlockRoad(Road):
         lo = [-math.inf] + breaks
         hi = breaks + [math.inf]
         out = []
+        yr = self.y_range
         for (cx, cy, cz), r in zip(centres, radii):
+            if yr is not None and not (yr[0] <= cy <= yr[1]):
+                out.append([(cx, cy, 0.0, 0.0, 0.0, 1.0, r - cz)])
+                continue
             k = 0
             while k < len(breaks) and cx >= breaks[k]:
                 k += 1
@@ -124,8 +129,8 @@ def flat() -> BlockRoad:
     return BlockRoad()
 
 
-def step(x_step: float, height: float) -> BlockRoad:
-    return BlockRoad([x_step], [0.0, height])
+def step(x_step: float, height: float, y_range=None) -> BlockRoad:
+    return BlockRoad([x_step], [0.0, height], y_range)
 
 
 # ISO 8608 road classes: displacement PSD at n0 = 0.1 cycle/m (geometric mean of

@@ -39,6 +39,11 @@ TO_SI = {
     "W": 1.0,
     "kW": 1e3,
     "J": 1.0,
+    "mm^2": 1e-6,
+    "m^2": 1.0,
+    "kg/m^3": 1.0,
+    "kg*m^2": 1.0,
+    "N/rad": 1.0,
 }
 
 # SI unit each contract unit converts to (for checking a quantity's dimension).
@@ -57,6 +62,8 @@ SI_OF = {
     "Hz": "Hz", "rpm": "rad/s",
     "W": "W", "kW": "W",
     "J": "J",
+    "mm^2": "m^2", "m^2": "m^2",
+    "kg/m^3": "kg/m^3", "kg*m^2": "kg*m^2", "N/rad": "N/rad",
 }
 
 

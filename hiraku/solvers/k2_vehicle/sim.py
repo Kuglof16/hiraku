@@ -216,9 +216,9 @@ class Sim:
                 -side * cb1, -side * te1, self.camber0[i] + cb, self.toe0[i] + te)
 
     # ----------------------------------------------------------------- step
-    def step(self, ctl: Controls, f_ext_body=None, f_ext_point_body=None):
-        """Advance one step. f_ext_body: an external force (body axes) at body point
-        f_ext_point_body (relative to the sprung CG), e.g. aerodynamics."""
+    def step(self, ctl: Controls, ext=None):
+        """Advance one step. ext: list of (force, point) in body axes, the point relative
+        to the sprung CG (e.g. aerodynamic drag and side force at their centres of pressure)."""
         h = self.dt
         n = self.n
         r00, r01, r02, r10, r11, r12, r20, r21, r22 = _r_tuple(self.q)
@@ -468,12 +468,10 @@ class Sim:
         qtx -= r00 * acx + r01 * acy + r02 * acz
         qty -= r10 * acx + r11 * acy + r12 * acz
         qtz -= r20 * acx + r21 * acy + r22 * acz
-        if f_ext_body is not None:
-            fex, fey, fez = f_ext_body
+        for (fex, fey, fez), (ptx, pty, ptz) in (ext or ()):
             qtx += r00 * fex + r01 * fey + r02 * fez
             qty += r10 * fex + r11 * fey + r12 * fez
             qtz += r20 * fex + r21 * fey + r22 * fez
-            ptx, pty, ptz = f_ext_point_body if f_ext_point_body is not None else (0.0, 0.0, 0.0)
             qrx += pty * fez - ptz * fey
             qry += ptz * fex - ptx * fez
             qrz += ptx * fey - pty * fex

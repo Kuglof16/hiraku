@@ -6,7 +6,7 @@ import unittest
 from hiraku import contract
 from hiraku.contract.protocols import AnalysisTool
 from hiraku.solvers.k2_vehicle.model import box_design
-from hiraku.solvers.k2_vehicle.tools import TiltTool
+from hiraku.solvers.k2_vehicle.shelf import TiltTool
 
 
 def load_case(**params):
