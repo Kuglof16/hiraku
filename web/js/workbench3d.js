@@ -940,8 +940,38 @@ export class Workbench3D {
     if (this.modeShape) this.poseMembers(Math.sin(playhead * Math.PI * 2));
   }
 
+  // Draw the frame, the wheels and the scene as one see-through colour (an overlay of
+  // another case on a view, e.g. the translucent red of the case past the limit). Parts
+  // and ink lines are left out: big part boxes would turn it into one red blob.
+  tint(color, opacity) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+    mat.userData.shared = true;
+    this.parts.visible = false;
+    for (const g of [this.model, this.wheels, this.props.world, this.props.fixed]) {
+      g.traverse((o) => {
+        if (o.isLineSegments2 || o.isLine) o.visible = false;
+        else if (o.isMesh) o.material = mat;
+      });
+    }
+    this.ground.visible = false;
+    this.cg.visible = false;
+    this.tinted = true;
+  }
+
+  // Look through another view's camera (an overlay drawn over that view).
+  copyCamera(other) {
+    this.camera.position.copy(other.camera.position);
+    this.camera.quaternion.copy(other.camera.quaternion);
+    this.camera.fov = other.camera.fov;
+    this.camera.near = other.camera.near;
+    this.camera.far = other.camera.far;
+    this.camera.updateProjectionMatrix();
+    this.controls.target.copy(other.controls.target);
+    this.noFollow = true;
+  }
+
   render() {
-    this.follow();
+    if (!this.noFollow) this.follow();
     if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself
