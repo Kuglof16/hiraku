@@ -11,9 +11,16 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
 from . import fixtures
-from .base import BuiltinTool, Record, check_record, on_board, param_list, param_value, result
+from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_list, param_value,
+                   result)
 
 CLOSED_FORM_TOL = 1e-3
+STEP_HEIGHT = Param("step_height", "mm", "height of the step the step_supports climb (without it: the vehicle at rest)")
+STEP_SUPPORTS = Param("step_supports", None, "comma-separated support ids on the step, e.g. \"FL,FR\" "
+                      "(without it: the front-most supports)")
+JOINT_INPUTS = ("inputs other than F and W from hiraku.solvers.k0_handcalc.frame_inputs.rail_joint_inputs(design, "
+                "loading=...); F = the push on the stepping wheel, W = its vertical load")
+STEP_BENDING = "the rail between the axles only: misses the overhang behind the rear axle and the outboard wheel force"
 
 
 def frame_outputs(res: dict) -> Record:
@@ -153,21 +160,26 @@ class FrameStatic(BuiltinTool):
         "frame_static.bending_stress",
         "mass_props.static_wheel_loads",
     ]
+    load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
+    predicts = (
+        Predicts("max_stress", "frame_static.rail_joint_stress", "sigma", JOINT_INPUTS),
+        Predicts("max_stress", "frame_static.rail_step_bending", "sigma", STEP_BENDING),
+        Predicts("max_stress", "frame_static.rail_bending", "sigma", "one rail as a simply supported beam, one wheel force"),
+        Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
+                 "at rest only (no step_height, no upstream forces)"),
+    )
+    upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
+                "its ground forces load the frame instead of step_height")
 
     def known_answers(self) -> list[Record]:
         return frame_known_answers()
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params (all optional):
-        loading (empty / driver / two / two_cargo, default two_cargo): who and what is on board
-        g_factor (unit 1 or g, default 1): vertical load factor on every weight
-        step_height (length): add the forces of the step_supports climbing a step
-        step_supports (string, e.g. "FL,FR"; default: the front-most supports)
-        Run params: upstream_analyses {load case id: analysis}; when one of them
-        carries ground forces (reaction and grip vectors) at every support, those
-        forces load the frame instead of being worked out here, and an
-        "inertia" vector at "cg" in it is checked against what the forces leave
-        unbalanced (inertia relief takes that part).
+        """Load case params: load_case_params. Run params: upstream_analyses {load
+        case id: analysis}; when one of them carries ground forces (reaction and
+        grip vectors) at every support, those forces load the frame instead of
+        being worked out here, and an "inertia" vector at "cg" in it is checked
+        against what the forces leave unbalanced (inertia relief takes that part).
         """
         design = on_board(design, load_case)
         g = g_factor(load_case)

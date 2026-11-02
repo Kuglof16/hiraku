@@ -12,7 +12,7 @@ from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import build
 from ..k1_frame.modal import MASS_CASE, modes
 from . import fixtures
-from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_value, result
+from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 
 FLEX_LIMIT = 0.3  # a mode whose shape is more than this far from a rigid motion bends the frame
 FIELD_MODES = 6
@@ -37,6 +37,20 @@ class Modal(BuiltinTool):
     base = "K1"
     tests = ["N1"]
     formulas = ["modal.spring_mass", "modal.quarter_car", "modal.simple_beam_first_mode", "modal.rotation_excitation"]
+    load_case_params = (
+        Param("speed", "km/h", "driving speed for the wheel and motor rotation frequencies "
+              "(without it: the design variable max_speed)"),
+        Param("n_modes", "1", "number of modes to compute (1 to 40)", default=10.0),
+        LOADING,
+    )
+    predicts = (
+        Predicts("first_body_mode", "modal.quarter_car", "f", "the body bouncing on suspension and tyre springs"),
+        Predicts("first_body_mode", "modal.spring_mass", "f", "k = all suspension springs together, m = the sprung mass"),
+        Predicts("first_frame_mode", "modal.simple_beam_first_mode", "f1",
+                 "one rail as a simply supported beam on the axles, without the masses it carries"),
+        Predicts("wheel_rotation_frequency", "modal.rotation_excitation", "f_wheel"),
+        Predicts("motor_rotation_frequency", "modal.rotation_excitation", "f_motor", "i = the design variable gear_ratio"),
+    )
 
     def known_answers(self) -> list[Record]:
         out = []
@@ -62,10 +76,9 @@ class Modal(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: speed (km/h; default the design variable max_speed) for the
-        rotation excitation, n_modes (1, default 10), loading (default two_cargo)."""
+        """Load case params: load_case_params."""
         design = on_board(design, load_case)
-        n = int(param_value(load_case, "n_modes", "1", 10.0))
+        n = int(param_value(load_case, "n_modes", "1"))
         if not 1 <= n <= 40:
             raise LoadCaseError("n_modes must be between 1 and 40")
         v = param_value(load_case, "speed", "km/h")

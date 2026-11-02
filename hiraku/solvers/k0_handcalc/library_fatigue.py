@@ -37,7 +37,9 @@ def all_formulas() -> list[Formula]:
             outputs={"D": ("1", "Miner damage (failure at 1)", None), "N": ("1", "cycles to failure at this range", None)},
             assumptions=["constant stress range", "IIW-type S-N curve for welded joints (no mean stress correction)",
                          "linear damage accumulation (Miner)"],
-            source="S-N curve N = 2e6 (FAT / range)^m and Miner's rule (IIW recommendations as quoted in the requirements catalog; not checked here)",
+            source=("S-N curve N = 2e6 (FAT / range)^m and Miner's rule: A. F. Hobbacher, Recommendations for Fatigue Design "
+                    "of Welded Joints and Components, 2nd ed., Springer 2016 (IIW document IIW-2259-15); "
+                    "not checked in this repository"),
             requires=[(lambda v: v["dS"] > 0 and v["FAT"] > 0 and v["m"] > 0 and v["N_knee"] > 0 and v["m2"] > 0,
                        "dS, FAT, m, N_knee and m2 must be positive")],
             fn=_damage,
