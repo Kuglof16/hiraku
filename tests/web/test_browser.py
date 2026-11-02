@@ -121,6 +121,16 @@ def n05_layout():
             "overlay": {"color": "#c8402a", "opacity": 0.22},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
         },
+        "n02": {
+            "duration_s": 7.0,
+            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24},
+            "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
+            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
+            "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2},
+            "times": {"lead_s": 0.3},
+            "overlay": {"color": "#c8402a", "opacity": 0.22},
+            "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
+        },
     }
 
 
@@ -615,6 +625,49 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertTrue(got["ghost"] and got["tinted"])
             self.assertEqual(got["contour"], "stress")  # the K1 static analysis of the same load case
             self.assertLessEqual(got["view"], 910)
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
+    def test_n02_cut_lays_out_five_tests_and_their_limits(self):
+        """cut.html?cut=n02 on the real tools' records (HIRAKU_WEB_DEV_RUNS): panes where the grid
+        puts them, each test playing its record, the results listed as written."""
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        if not given:
+            self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
+        tmp = Path(tempfile.mkdtemp())
+        layout = n05_layout()
+        (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+        runs = Path(given)
+        run = sorted(p.name for p in runs.iterdir() if p.is_dir())[-1]
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            got = page.evaluate(
+                """() => ({ err: document.querySelector(".err")?.textContent ?? null, duration: window.hiraku.player.duration,
+                           panes: [...document.querySelectorAll(".n02-pane")].map((p) => { const r = p.getBoundingClientRect();
+                             return [p.dataset.box, Math.round(r.left), Math.round(r.top), Math.round(r.bottom)]; }),
+                           views: window.hiraku.cut.panes.filter((p) => p.view).length,
+                           results: document.querySelectorAll(".n02-res").length })"""
+            )
+            self.assertEqual(errors, [])
+            self.assertIsNone(got["err"])
+            self.assertEqual(got["duration"], 7.0)
+            g = layout["n02"]["grid"]
+            self.assertEqual([p[0] for p in got["panes"]], [f"n02.pane.{k}" for k in layout["n02"]["panes"]])
+            for i, p in enumerate(got["panes"]):
+                self.assertEqual(p[1:3], [g["x"] + (i % 3) * (g["tile_w"] + g["gap_x"]), g["y"] + (i // 3) * (g["tile_h"] + g["gap_y"])])
+                self.assertLessEqual(p[3], layout["subtitle_band"]["y"])
+            self.assertEqual(got["views"], 5)  # every test has its record in the dev run
+            self.assertEqual(got["results"], 5)
             page.close()
         finally:
             server.shutdown()

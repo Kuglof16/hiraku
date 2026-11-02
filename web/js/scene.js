@@ -182,9 +182,13 @@ function profileSurface(obj, design) {
   return { x0: xs[0], x1: xs.at(-1), yL: left[0][0], yR: right[0][0], zL: (x) => mean(left, x), zR: (x) => mean(right, x) };
 }
 
+// A slope (or a tilt table) whose angle moves in time names the series channel that
+// carries it (angle_channel); the world then turns by that channel at each frame,
+// with the same sign as rpy_deg[0] (positive: the left side up).
 function fromRecord(objects, design) {
-  const out = { objects: [], slope: null, table: false, surface: null };
+  const out = { objects: [], slope: null, table: false, surface: null, angleChannel: null };
   for (const o of objects) {
+    if (o.angle_channel && (o.kind === "slope" || o.kind === "tilt_table")) out.angleChannel = o.angle_channel;
     if (o.kind === "slope") out.slope = deg(o.rpy_deg?.[0]);
     else if (o.kind === "road_profile") out.surface = profileSurface(o, design);
     else {

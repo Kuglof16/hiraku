@@ -47,6 +47,8 @@ CASES = [
     ("P1-step100", "P1", "powertrain", "段差 100 mm を越える", "step_climb_dynamic", STEP100),
     ("P1-step250", "P1", "powertrain", "段差 250 mm を越える", "step_climb", STEP250),
     ("P1-step250", "P1", "powertrain", "段差 250 mm を越える", "step_climb_dynamic", STEP250),
+    # the strength test's load case only (no analysis): its criterion is the frame's allowable stress
+    ("R1-step100", "R1", "strength", "静的強度", None, {}),
     ("S1-tilt", "S1", "handling", "傾斜台", "tilt", {"loading": "two_cargo"}),
     ("F1-wind", "F1", "aero", "横風 30 m/s", "crosswind",
      {"loading": "empty", "wind_speed": q(30.0, "m/s"), "speed": q(40.0, "km/h")}),
@@ -115,6 +117,8 @@ def build(out_dir: Path, only: list[str] | None = None, log=print) -> Path:
     emit("design.created", 0.5, design, agent="designer")
     t = 1.0
     for i, (lc, _test, domain, _title, tool, _params) in enumerate(cases, start=1):
+        if tool is None:
+            continue
         agent = f"cae.{domain}"
         load_case = next(c for c in load_cases if c["load_case_id"] == lc)
         aid = f"ana-{i:04d}"
