@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 RUNS_DIR = Path("runs")
+SHOWCASE_DIR = Path("showcase")  # committed example runs, same layout as runs/<run_id>/
 PROJECT_FILE = "project.json"
 EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
@@ -83,6 +84,9 @@ def record_path(run_path: Path, design_version: int, kind: str, record_id: str) 
 OWNERS = {
     "lead": [
         "hiraku/contract/",
+        "hiraku/__init__.py",
+        "tests/__init__.py",
+        "LICENSE",
         "showcase/",  # saved runs committed as examples (the screen opens the newest)
         "tests/contract/",
         "docs/",

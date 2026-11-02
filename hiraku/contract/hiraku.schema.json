@@ -2008,9 +2008,74 @@
                       "user_stop",
                       "error"
                     ],
-                    "description": "Why the run ended, for the screen to word."
+                    "description": "Why the run ended, for the screen to word. done goes with status done, error with failed, the others with stopped."
                   }
-                }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "done"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "done"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "error"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "failed"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "enum": [
+                            "not_judged",
+                            "round_limit",
+                            "cost_limit",
+                            "turn_limit",
+                            "user_stop"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "stopped"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
