@@ -17,6 +17,8 @@ Channel names (the screen draws the driving animation from these):
   contact_x/y/z.<ID>            m    contact point (world); arrows start here
   reaction_x/y/z.<ID>           N    road normal force vector (world)
   grip_x/y/z.<ID>               N    tyre friction force vector (world)
+  wheel_camber.<ID>, wheel_toe.<ID>  deg  camber (top out +) and toe (toe-in +) to the body,
+                                    only when a corner runs on a K&C table
   plus scenario channels (table_angle deg, wind_speed m/s, steer deg, ...).
 
 World axes are the road's (x along the road, y left, z up). On a tilt table
@@ -51,6 +53,7 @@ class Recorder:
         self.units: dict[str, str] = {}
         self.spin_angle = [0.0] * sim.n
         self.snap: list[dict] = []
+        self.kc = any(sim.kc)
 
     def set_hz(self, hz: float):
         self.every = max(1, int(round(1.0 / (hz * self.sim.dt))))
@@ -108,6 +111,9 @@ class Recorder:
             self._put(f"wheel_stroke.{cid}", "mm", sim.s[i] * 1000.0)
             self._put(f"wheel_steer.{cid}", "deg", math.degrees(o["steer"][i]))
             self._put(f"wheel_spin.{cid}", "deg", math.degrees(self.spin_angle[i]))
+            if self.kc:
+                self._put(f"wheel_camber.{cid}", "deg", math.degrees(o["camber"][i]))
+                self._put(f"wheel_toe.{cid}", "deg", math.degrees(o["toe"][i]))
             for k, ax in enumerate("xyz"):
                 self._put(f"wheel_center_{ax}.{cid}", "m", centres[i][k])
             for k, ax in enumerate("xyz"):

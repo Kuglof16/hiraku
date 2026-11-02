@@ -61,6 +61,22 @@ class EntryPoint(unittest.TestCase):
         self.assertEqual([p["id"] for p in drv["parts"] if p["kind"] == "occupant"], ["occupant_R"])
 
 
+class KcChannels(unittest.TestCase):
+    def test_kc_vehicle_records_camber_and_toe(self):
+        from hiraku.solvers.k2_vehicle.record import Recorder
+        from hiraku.solvers.k2_vehicle.scenario import new_sim
+        veh = build_vehicle(box_design(susp="kc_table", wheel_mass=15.0))
+        sim = new_sim(veh, settle_s=0.2)
+        rec = Recorder(sim, 25.0)
+        rec.sample()
+        names = {s["channel"] for s in rec.series()}
+        self.assertIn("wheel_camber.FL", names)
+        self.assertIn("wheel_toe.RR", names)
+        fl = [s for s in rec.series() if s["channel"] == "wheel_camber.FL"][0]["values"][0]
+        fr = [s for s in rec.series() if s["channel"] == "wheel_camber.FR"][0]["values"][0]
+        self.assertEqual(fl, fr)
+
+
 class OwnChecks(unittest.TestCase):
     def test_every_tool_passes_its_known_answers(self):
         for name, tool in TOOLS.items():
