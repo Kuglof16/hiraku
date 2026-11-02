@@ -15,6 +15,12 @@ runs/<run_id>/
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Every record written to a file is also the `data` of one event, byte-for-byte
 the same object, so replaying events.jsonl alone rebuilds the screen.
+
+Updating a record (a cause becomes resolved, a comparison gets its cause_id):
+emit the same kind of event again with the same id and the whole new record,
+and rewrite the file to match. Per id, the last event wins and the file always
+equals the last event's data. design.json is never updated; a change is a new
+version.
 """
 
 from __future__ import annotations

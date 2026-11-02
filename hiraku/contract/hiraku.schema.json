@@ -10,6 +10,9 @@
         "1",
         "%",
         "mm",
+        "mm^2",
+        "mm^3",
+        "mm^4",
         "m",
         "km",
         "kg",
@@ -39,7 +42,14 @@
         "A",
         "degC",
         "K",
-        "K/W"
+        "K/W",
+        "m^2",
+        "kg/m^3",
+        "kg*m^2",
+        "N/rad",
+        "ohm",
+        "Ah",
+        "J/K"
       ]
     },
     "quantity": {
@@ -453,7 +463,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "frame, suspension, wheel, battery, motor, controller, seat, occupant, cargo, body, rollbar, ..."
+          "description": "frame, suspension, wheel, battery, motor, controller, seat, occupant, cargo, body, rollbar, ... Occupants and cargo are parts (kind occupant / cargo); a load case chooses which are on board with params.loading."
         },
         "box": {
           "type": "object",
@@ -539,7 +549,7 @@
       }
     },
     "design": {
-      "description": "One design version. Coordinates in mm, ISO 8855 axes (x forward, y left, z up), origin on the ground below the middle of the front axle. Versions are never rewritten; a change makes a new version.",
+      "description": "One design version. Coordinates in mm, ISO 8855 axes (x forward, y left, z up), origin on the ground below the middle of the front axle, so everything behind the front axle has negative x (the rear axle is at x = -wheelbase). Versions are never rewritten; a change makes a new version.",
       "type": "object",
       "required": [
         "design_version",
@@ -693,7 +703,8 @@
                 "type": "boolean"
               }
             ]
-          }
+          },
+          "description": "Test conditions. params.loading (string) chooses who and what is on board: empty, driver, two, two_cargo (catalog Q30). Without it, solvers use two_cargo."
         },
         "requirement_keys": {
           "type": "array",

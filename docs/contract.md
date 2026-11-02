@@ -26,7 +26,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 ## 座標と単位
 
-- 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面
+- 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面。だから前の車軸より後ろは x が負で、後ろの車軸は x = −ホイールベース。前後は x の大小で決め (大きいほど前)、「x が最小 = 前」としない
 - design の数値は欄の名前に単位を付ける (`position_mm`、`mass_kg`、`E_MPa`)
 - それ以外の数値は `{"value": 数, "unit": "単位"}`。単位は schema の `unit` の一覧だけ。照合は同じ単位の文字どうしでしかしない (変換は K0 の道具でしてから)
 
@@ -51,8 +51,11 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 
 `hiraku/contract/protocols.py`:
 
+- 入口は `hiraku/solvers/__init__.py` の 2 つだけ: `formula_registry()` (`FormulaRegistry` を返す) と `builtin_tools()` (`AnalysisTool` の list を返す)。`hiraku.solvers` を import しただけで何かが起きないようにする
 - `FormulaRegistry` — `list_formulas()` と `evaluate(formula_id, inputs)`。K0 の式の台帳
 - `AnalysisTool` — `spec()`・`check()`・`run(design, load_case, predictions, params)`。`run` は `analysis_id` の無い `analysis` を返し、ID は store が付ける。設計が悪くても例外にせず `status: "failed"` と、何が悪く何を変えればよいかを `error` に書く
+- 上流の荷重条件の結果 (P1 の輪の力 → R1 など) は `params["upstream_analyses"] = {荷重条件の ID: 照合で一致した analysis}` で `run` に渡る。上流の `analysis_id` を `inputs_from` に足すのは呼ぶ側 (設計部)
+- 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`
 
 MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。入力の形は schema の `tool_input.*`。結果は記録そのものを JSON の文字列で返す。
 
@@ -64,6 +67,7 @@ MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hira
 - `events.jsonl` — 1 行 1 event、足すだけ。画面は実行中も再生もこれだけで描く
 - `v001/` — 版ごとのフォルダ。`design.json` と、記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。前の版は書き換えない
 - 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる
+- 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
 - ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`)
 - `runs/` はコミットしない
 

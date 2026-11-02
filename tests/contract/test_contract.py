@@ -65,6 +65,12 @@ class SchemaTest(unittest.TestCase):
         bad["kind"] = "made.up"
         self.assertNotEqual(contract.errors("event", bad), [])
 
+    def test_example_design_points_x_forward(self):
+        # Origin below the front axle, x forward: the rear axle has negative x.
+        xs = {s["id"]: s["position_mm"][0] for s in load("design.json")["supports"]}
+        self.assertEqual(xs["FL"], 0.0)
+        self.assertLess(xs["RL"], 0.0)
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []
