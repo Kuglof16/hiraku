@@ -10,14 +10,18 @@ A ToolError message goes back to Claude as is.
 
 from __future__ import annotations
 
+import copy
 import time
 from datetime import datetime
 from typing import Any
 
+import jsonschema
+
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.judge import OP_JA, make_verdict, prediction_is_unfavourable, unfavourable_side, update_judgement
+from hiraku.tools.judge import (OP_JA, init_judgements, make_verdict, prediction_is_unfavourable, unfavourable_side,
+                                update_judgement)
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -69,6 +73,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "load_cases": load_cases,
         "design": s.design() if ctx.version else None,
         "design_summary": design_summary(s.design()) if ctx.version else None,
+        "design_variables": design_variables(ctx),
         "judgements": s.judgements() if ctx.version else [],
         "records": {
             "predictions": [_compact_prediction(x) for x in s.records("prediction")],
@@ -403,6 +408,118 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     return out
 
 
+# ---------------------------------------------------------------------------- design revision
+
+# Input of revise_design (not in the contract's tool_input yet).
+REVISE_DESIGN_INPUT: Record = {
+    "type": "object",
+    "required": ["changes", "reason"],
+    "additionalProperties": False,
+    "properties": {
+        "changes": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "design variable name -> new value {value, unit}; the unit is the variable's own",
+            "additionalProperties": {
+                "type": "object", "required": ["value", "unit"], "additionalProperties": False,
+                "properties": {"value": {"type": "number"}, "unit": {"type": "string"}},
+            },
+        },
+        "reason": {"type": "string", "description": "why: which test failed, what the change does about it"},
+    },
+}
+
+
+def _check_revise_input(args: dict[str, Any]) -> None:
+    errs = [e.message for e in jsonschema.Draft202012Validator(REVISE_DESIGN_INPUT).iter_errors(args)]
+    if errs:
+        raise ToolError("revise_design の入力の形が合いません: " + "; ".join(errs))
+
+
+def _variables(ctx: RunContext, design: Record) -> list[Record] | None:
+    """hiraku.designgen.variables(design), or None when there is no designgen or it did not build this design."""
+    if ctx.designgen is None:
+        return None
+    try:
+        return ctx.designgen.variables(design)
+    except ValueError:
+        return None
+
+
+def design_variables(ctx: RunContext) -> list[Record] | None:
+    """The variables the designer may change: name, unit, min, max, meaning and the current value."""
+    if not ctx.version:
+        return None
+    found = _variables(ctx, ctx.store.design())
+    if found is None:
+        return None
+    return [{**{k: s[k] for k in ("name", "unit", "min", "max", "meaning") if k in s},
+             "value": {"value": s["value"], "unit": s["unit"]}} for s in found if s.get("revisable")]
+
+
+def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The designer changes design variables; hiraku.designgen builds the next version from them.
+
+    Checks: only the designer; every variable is a revisable one of the
+    design (hiraku.designgen.variables), keeps its unit and stays in its
+    range; a reason; the number of revisions stays within round_limit and the
+    cost within cost_limit_usd. hiraku.designgen.regenerate rebuilds the
+    design; then design.created (parent_version, change_reason) and pending
+    tiles for the new version, whose load cases are all redone.
+    """
+    _check_revise_input(args)
+    agent = agent or "designer"
+    if agent != "designer":
+        raise ToolError("設計を直せるのは設計役 (designer) だけです。まとめ役から設計役に、どの試験をなぜ直すかを伝えてください")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、どの試験が通らず、変更がそれにどう効くかを書いてください")
+    p, v = ctx.project, ctx.version
+    if v - 1 >= p["round_limit"]:
+        raise ToolError(f"設計の直しは round_limit ({p['round_limit']} 回) まで使い切りました (今の版は {v})。"
+                        f"直さずに、今の版の判定で終えてください")
+    if p["cost_usd"] >= p["cost_limit_usd"]:
+        raise ToolError(f"費用の上限 {p['cost_limit_usd']} USD に達しているので、設計は直せません")
+    design = ctx.store.design()
+    found = _variables(ctx, design)
+    if found is None:
+        raise ToolError("この設計を変数から組み直す関数 (hiraku.designgen) が無いので、設計は直せません")
+    spec = {s["name"]: s for s in found}
+    revisable = [n for n, s in spec.items() if s.get("revisable")]
+    problems = []
+    for name, q in args["changes"].items():
+        s = spec.get(name)
+        if s is None or not s.get("revisable"):
+            what = "ありません" if s is None else "直せない変数です"
+            problems.append(f"変数 {name!r} は{what} (直せるのは {', '.join(revisable)})")
+        elif q["unit"] != s["unit"]:
+            problems.append(f"{name} の単位は {s['unit']} です ({q['unit']} ではなく)")
+        elif "min" in s and not s["min"] <= q["value"] <= s["max"]:
+            problems.append(f"{name} は {s['min']:g}〜{s['max']:g} {s['unit']} の範囲で選んでください ({q['value']:g} は外)")
+    if problems:
+        raise ToolError("設計の変数の指定が合いません: " + "; ".join(problems))
+    changes = {k: {"value": float(q["value"]), "unit": q["unit"]} for k, q in args["changes"].items()}
+    before = {k: {"value": spec[k]["value"], "unit": spec[k]["unit"]} for k in changes}
+    try:
+        new = dict(ctx.designgen.regenerate(copy.deepcopy(design), changes))
+    except ValueError as e:
+        raise ToolError(f"この変数では設計を組めません: {e}。値を変えて revise_design を呼び直してください") from None
+    new.update(design_version=v + 1, parent_version=v, change_reason=reason)
+    errs = contract.errors("design", new)
+    if errs:
+        raise ToolError("組み直した設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
+    ctx.store.write_design(new, agent=agent)
+    init_judgements(ctx, v + 1)
+    return {
+        "design_version": v + 1,
+        "parent_version": v,
+        "change_reason": reason,
+        "changes": [{"variable": k, "from": before.get(k), "to": q} for k, q in changes.items()],
+        "redo": [lc["load_case_id"] for lc in ctx.load_cases],
+        "revisions_left": p["round_limit"] - v,
+    }
+
+
 FUNCTIONS = {
     "get_context": get_context,
     "list_formulas": list_formulas,
@@ -411,4 +528,8 @@ FUNCTIONS = {
     "analyze": analyze,
     "compare": compare,
     "record_cause": record_cause,
+    "revise_design": revise_design,
 }
+
+# The MCP tools of a run: the contract's MVP set and revise_design (the designer's only).
+RUN_TOOLS = (*contract.MCP_TOOLS_MVP, "revise_design")

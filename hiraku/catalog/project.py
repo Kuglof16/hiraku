@@ -16,50 +16,63 @@ def judged_domains(load_cases: list[Record]) -> list[str]:
     return [d for d in contract.DOMAINS if d in have]
 
 
-def fixed_domain_picks(catalog: Catalog, load_cases: list[Record]) -> list[Record]:
-    """Domain picks made by code from the tests in the requirements file (MVP, no pick_domains)."""
+def fixed_domain_picks(catalog: Catalog, load_cases: list[Record], from_file: bool = True) -> list[Record]:
+    """Domain picks made by code from the load cases' tests (no pick_domains yet).
+
+    from_file: the requirements file listed the tests; otherwise the catalog
+    chose them from the product's flags.
+    """
     picks = []
     for d in judged_domains(load_cases):
         tests = [lc for lc in load_cases if lc["domain"] == d and "criterion" in lc]
         names = "・".join(f"{lc['test_id']} {catalog.test(lc['test_id'])['title']}" for lc in tests)
+        why = "要件のファイルが試験" if from_file else "製品の性質 (flags) からカタログが試験"
         picks.append({
             "domain": d,
             "shown_name": contract.DOMAIN_NAMES_JA[d],
-            "reason": f"要件のファイルが試験 {names} を選んだ",
+            "reason": f"{why} {names} を選んだ",
         })
     return picks
 
 
 def owner_agent(load_cases: list[Record], picked: list[str], load_case_id: str) -> str:
-    """The CAE role that works on a load case.
+    """The role that works on a load case.
 
-    The role of its own domain when that domain is picked; otherwise the role
-    of a load case it feeds (P1 feeds R1, so cae.strength does P1 too).
+    Assembly load cases belong to the packager. Otherwise the CAE role of its
+    own domain when that domain is picked, else the role of a load case it
+    feeds (P1 feeds R1, so cae.strength does P1 when powertrain is not picked).
     """
     by_id = {lc["load_case_id"]: lc for lc in load_cases}
     lc = by_id[load_case_id]
-    if lc["domain"] in picked and lc["domain"] != "assembly":
+    if lc["domain"] == "assembly":
+        return "packager"
+    if lc["domain"] in picked:
         return f"cae.{lc['domain']}"
     for target in lc.get("feeds", []):
         return owner_agent(load_cases, picked, target)
-    return "lead" if lc["domain"] == "assembly" else f"cae.{lc['domain']}"
+    return f"cae.{lc['domain']}"
 
 
 def agents_for(catalog: Catalog, load_cases: list[Record], picked: list[str]) -> list[Record]:
-    out = [{"agent_id": "lead", "role": "lead", "prop": catalog.prop("lead")}]
+    """lead, the designer (revise_design), the packager when there are assembly load cases, and a CAE role per domain."""
+    out = [{"agent_id": "lead", "role": "lead", "prop": catalog.prop("lead")},
+           {"agent_id": "designer", "role": "designer", "prop": catalog.prop("designer")}]
     roles = []
     for lc in load_cases:
         a = owner_agent(load_cases, picked, lc["load_case_id"])
-        if a.startswith("cae.") and a not in roles:
+        if a not in roles:
             roles.append(a)
+    if "packager" in roles:
+        out.append({"agent_id": "packager", "role": "packager", "prop": catalog.prop("packager")})
     for a in roles:
-        out.append({"agent_id": a, "role": "cae", "domain": a.split(".", 1)[1], "prop": catalog.prop(a)})
+        if a.startswith("cae."):
+            out.append({"agent_id": a, "role": "cae", "domain": a.split(".", 1)[1], "prop": catalog.prop(a)})
     return out
 
 
 def project_fields(catalog: Catalog, req: Record, load_cases: list[Record]) -> Record:
     """Everything RunStore.create needs (it adds run_id, created_at, status, cost_usd)."""
-    picks = fixed_domain_picks(catalog, load_cases)
+    picks = fixed_domain_picks(catalog, load_cases, from_file=bool(req.get("tests")))
     picked = [p["domain"] for p in picks]
     fields: Record = {
         "want": req["want"],

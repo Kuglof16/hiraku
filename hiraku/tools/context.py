@@ -23,6 +23,7 @@ class RunContext:
     formulas: FormulaRegistry
     tools: dict[str, AnalysisTool]
     specs: dict[str, Record] = field(default_factory=dict)  # checked tool_spec records
+    designgen: Any = None  # hiraku.designgen (regenerate), for revise_design; None while absent
 
     # ---------------------------------------------------------------- project views
 

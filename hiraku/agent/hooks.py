@@ -91,6 +91,9 @@ class Hooks:
             return (f"食い違いです (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
                     f"record_cause(comparison_id=\"{c['comparison_id']}\", cause=..., fix=...) を書くまで、"
                     f"この分野の analyze と compare は止まります")
+        if short == "revise_design" and v > 1 and s.design(v).get("parent_version") == v - 1:
+            return (f"設計の版 {v} ができました。判定は版ごとなので、まとめ役は全部の荷重条件を版 {v} で"
+                    f"やり直すよう各役に頼んでください")
         return None
 
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:

@@ -16,7 +16,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from hiraku import contract
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import FUNCTIONS
+from hiraku.tools.functions import FUNCTIONS, REVISE_DESIGN_INPUT, RUN_TOOLS
 
 Record = dict[str, Any]
 
@@ -55,6 +55,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "analyze": contract_input_schema("analyze"),
     "compare": contract_input_schema("compare"),
     "record_cause": contract_input_schema("record_cause"),
+    "revise_design": REVISE_DESIGN_INPUT,
 }
 
 DESCRIPTIONS = {
@@ -81,6 +82,10 @@ DESCRIPTIONS = {
         "安全側から押さえていると判断できるときだけ safe_side: true と理由 (safe_side_reason) を付ける。"
         "道具が数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る"
     ),
+    "revise_design": (
+        "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
+        "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+    ),
 }
 
 
@@ -102,7 +107,7 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
     return handler
 
 
-def build_server(ctx: RunContext, attribution: Attribution, names: tuple[str, ...] = contract.MCP_TOOLS_MVP):
+def build_server(ctx: RunContext, attribution: Attribution, names: tuple[str, ...] = RUN_TOOLS):
     tools = []
     for name in names:
         handler = make_handler(ctx, attribution, name, FUNCTIONS[name])

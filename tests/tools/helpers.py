@@ -8,15 +8,27 @@ from pathlib import Path
 
 from hiraku import contract
 from hiraku.agent.session import start_run
-from hiraku.catalog import REPO_ROOT
+from hiraku.catalog import REPO_ROOT, read_data
 from tests.tools import fakes
 
 REQUIREMENTS = REPO_ROOT / "data" / "requirements" / "offroad-4w.yaml"
 EXAMPLE_DESIGN = contract.EXAMPLES_DIR / "design.json"
 
 
+def requirements_with_tests(folder: Path, tests: list[str] | None) -> Path:
+    """The fixed requirements file with its `tests` list set (None: no list, the catalog picks)."""
+    req = read_data(REQUIREMENTS)
+    req.pop("tests", None)
+    if tests is not None:
+        req["tests"] = tests
+    path = folder / "requirements.json"
+    path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
 class RunCase:
-    """Mixin for unittest.TestCase: self.ctx is a fresh run with fake solvers."""
+    """Mixin for unittest.TestCase: self.ctx is a fresh run of P1 and R1 with fake solvers
+    and a stand-in design generator (the real builders and designgen are not used)."""
 
     step_factor = 1.03
     frame_factor = 1.03
@@ -29,8 +41,9 @@ class RunCase:
         self.design_path.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
         self.formulas = fakes.FakeFormulas()
         self.tools = fakes.shelf(self.step_factor, self.frame_factor, self.frame_checks_pass)
-        self.ctx = start_run(REQUIREMENTS, design_path=self.design_path, root=self.root, slug="offroad-4w-test",
-                             formulas=self.formulas, tools=self.tools)
+        self.ctx = start_run(requirements_with_tests(self.root, ["P1", "R1"]), design_path=self.design_path,
+                             root=self.root, slug="offroad-4w-test", formulas=self.formulas, tools=self.tools,
+                             designgen=fakes.FakeDesigngen())
 
     def tearDown(self):
         self._tmp.cleanup()

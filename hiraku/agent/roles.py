@@ -13,6 +13,7 @@ from hiraku.catalog import REPO_ROOT
 from hiraku.tools.context import RunContext
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
+DESIGNER_TOOLS = ("get_context", "list_tools", "revise_design")
 
 PLUGIN_NAME = "hiraku"
 PLUGIN_DIR = REPO_ROOT / "plugins" / PLUGIN_NAME
@@ -39,19 +40,26 @@ def agent_id_from_sdk(agent_type: str | None) -> str | None:
 
 
 def subagents(ctx: RunContext) -> dict:
-    """AgentDefinition per CAE role of this run (project.agents)."""
+    """AgentDefinition per role of this run (project.agents) but the lead: CAE roles,
+    the packager (the CAE steps on the assembly load cases) and the designer."""
     from claude_agent_sdk import AgentDefinition
 
     out = {}
     for a in ctx.project["agents"]:
-        if a["role"] != "cae":
-            continue
-        domain = a["domain"]
-        out[sdk_name(a["agent_id"])] = AgentDefinition(
-            description=prompts.cae_description(domain),
-            prompt=prompts.cae_prompt(domain),
-            tools=[contract.mcp_name(t) for t in CAE_TOOLS],
-            skills=plugin_skills(),
-            model="inherit",
-        )
+        if a["role"] in ("cae", "packager"):
+            domain = a.get("domain", "assembly")
+            out[sdk_name(a["agent_id"])] = AgentDefinition(
+                description=prompts.cae_description(domain),
+                prompt=prompts.cae_prompt(domain),
+                tools=[contract.mcp_name(t) for t in CAE_TOOLS],
+                skills=plugin_skills(),
+                model="inherit",
+            )
+        elif a["role"] == "designer":
+            out["designer"] = AgentDefinition(
+                description=prompts.DESIGNER_DESCRIPTION,
+                prompt=prompts.DESIGNER_PROMPT,
+                tools=[contract.mcp_name(t) for t in DESIGNER_TOOLS],
+                model="inherit",
+            )
     return out
