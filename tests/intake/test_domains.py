@@ -29,11 +29,10 @@ class ProductFilesTest(unittest.TestCase):
                     with self.subTest(slug=slug, key=r["key"]):
                         self.assertIn("not checked", r["basis"])
 
-    def test_sample_answers_sit_next_to_the_products_that_need_them(self):
-        files = product_files()
-        self.assertIsNotNone(answers_file(files["care-bed"]))
-        self.assertIsNotNone(answers_file(files["serving-robot"]))
-        self.assertIsNone(answers_file(files["electric-guitar"]))
+    def test_sample_answers_exist_for_the_products_that_have_must_questions(self):
+        for slug in ("care-bed", "serving-robot", "offroad-4w"):
+            self.assertIsNotNone(answers_file(slug), slug)
+        self.assertIsNone(answers_file("electric-guitar"))
 
 
 class PickDomainsTest(unittest.TestCase):

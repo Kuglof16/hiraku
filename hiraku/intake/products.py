@@ -25,9 +25,9 @@ def product_files() -> dict[str, Path]:
     return out
 
 
-def answers_file(product_path: Path) -> Path | None:
-    """The sample answers that sit next to a product's requirements file, if any."""
-    path = product_path.with_name(product_path.stem + ANSWERS_SUFFIX)
+def answers_file(slug: str) -> Path | None:
+    """The sample answers to a product's hearing (data/requirements/products/<slug>.answers.yaml), if any."""
+    path = PRODUCTS_DIR / f"{slug}{ANSWERS_SUFFIX}"
     return path if path.exists() else None
 
 
