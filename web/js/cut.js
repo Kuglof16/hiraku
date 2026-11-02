@@ -650,6 +650,7 @@ const ready = new Promise((r) => (readyResolve = r));
 const player = { duration: 5, playhead: 0 };
 
 async function drawAt(t) {
+  if (!cut) return null; // the cut could not be built; the page says why
   playhead = Math.max(0, Math.min(player.duration, Number(t) || 0));
   player.playhead = playhead;
   cut.draw(playhead);
