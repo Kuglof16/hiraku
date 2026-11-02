@@ -1,8 +1,12 @@
+import json
 import unittest
 
+from hiraku import contract
 from hiraku.agent.scripted import run_scripted
+from hiraku.contract import layout
 from hiraku.tools import ToolError
-from hiraku.tools.report import build_report, recorded_numbers, unchecked, unknown_numbers
+from hiraku.tools.functions import write_report
+from hiraku.tools.report import build_report, unchecked, unknown_numbers
 from tests.tools.helpers import RunCase
 
 
@@ -28,19 +32,34 @@ class ReportTest(RunCase, unittest.TestCase):
 
     def test_parts_come_from_the_records(self):
         r = build_report(self.ctx, {"summary": "強度は合格", "next": []}, "lead")
+        self.assertEqual(contract.errors("report", r), [])
         (strength,) = r["domains"]
         self.assertEqual((strength["domain"], strength["state"]), ("strength", "green"))
-        (r1,) = strength["cases"]
         ver = self.ctx.store.records("verdict")[-1]
-        self.assertEqual((r1["load_case_id"], r1["verdict_id"]), ("R1-step100", ver["verdict_id"]))
-        self.assertTrue(r1["line"].startswith("R1 max_stress"))
-        self.assertEqual(len(r1["differences"]), 2)  # rail_step_bending's mismatch, then the rail joint's
-        self.assertTrue(all(d["cause"] for d in r1["differences"]))
+        self.assertEqual(strength["verdict_ids"], [ver["verdict_id"]])
+        self.assertTrue(strength["line"].startswith("R1 max_stress"))
+        self.assertEqual(len(strength["differences"]), 2)  # rail_step_bending's mismatch, then the rail joint's
+        self.assertTrue(all(d["cause_id"] for d in strength["differences"]))
         self.assertEqual(r["design_version"], 1)
         self.assertEqual(r["summary"], "強度は合格")
 
+    def test_write_report_is_the_leads_and_is_recorded(self):
+        with self.assertRaisesRegex(ToolError, "まとめ役"):
+            write_report(self.ctx, {"summary": "x", "next": []}, "cae.strength")
+        with self.assertRaisesRegex(ToolError, "入力の形"):
+            write_report(self.ctx, {"summary": "x"}, "lead")
+        rep = write_report(self.ctx, {"summary": "強度は合格", "next": [
+            {"domain": "strength", "change": "レールの肉厚", "reason": "横の曲げとねじりの分が大きい"}]}, "lead")
+        stored = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(stored, rep)
+        last = self.ctx.store.events()[-1]
+        self.assertEqual((last["kind"], last["agent"], last["data"]), ("report.written", "lead", rep))
+        self.assert_events_fit()
+
     def test_unchecked_values_are_listed(self):
         got = {u["what"].split()[0] for u in unchecked(self.ctx)}
+        items = {u["item"].split()[0] for u in build_report(self.ctx, {"summary": "x", "next": []}, "lead")["unchecked"]}
+        self.assertEqual(items, got)
         self.assertIn("Q61", got)  # safety factor: an assumption
         self.assertIn("material", got)  # the example design's steel is not verified
 
@@ -57,11 +76,10 @@ class ReportTest(RunCase, unittest.TestCase):
     def test_sensitivity_on_request(self):
         r = build_report(self.ctx, {"summary": "感度を見た", "next": [], "sensitivity": [
             {"load_case_id": "R1-step100", "paths": ["sections.rt40x80x2.dims_mm.t"]}]}, "lead")
-        (s,) = r["sensitivity"]
-        (term,) = s["terms"]
-        self.assertEqual(s["quantity"], "max_stress")
+        (term,) = r["domains"][0]["sensitivity"]
+        self.assertTrue(term["name"].startswith("max_stress to sections.rt40x80x2.dims_mm.t"))
         self.assertLess(term["share"], 0)  # a thicker rail wall lowers the stress
-        self.assertIn((term["value"], "mm"), recorded_numbers(self.ctx, r["sensitivity"]))
+        self.assertEqual(contract.errors("report", r), [])
 
 
 if __name__ == "__main__":

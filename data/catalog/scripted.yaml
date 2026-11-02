@@ -45,14 +45,16 @@ offroad-4w:
   # The designer's revisions, one per round, used when a tile comes out red
   # (revise_design: the variables of hiraku.designgen, absolute values).
   revise:
-    - say: 組み立てが赤なので、トレッドを広げ、ステアリングを前へ出します
+    - say: 組み立てと動力が赤なので、トレッドを広げ、ステアリングを前へ出し、モーターを強くします
       changes:
         track: {value: 1220, unit: mm}
         steering_x: {value: -200, unit: mm}
+        motor_peak_power: {value: 12, unit: kW}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す
-      source: the assembly tool's H1 and H3 on the demo vehicle, before and after this change
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す。
+        P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
+      source: the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change
   steps:
     - load_case: P1-step100
       tool: step_climb

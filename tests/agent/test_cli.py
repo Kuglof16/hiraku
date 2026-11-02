@@ -101,6 +101,31 @@ class StartInterruptTest(unittest.TestCase):
             project = json.loads((folder / layout.PROJECT_FILE).read_text(encoding="utf-8"))
             self.assertEqual((project["status"], project["stop_reason"]), ("stopped", STOPPED_BY_USER))
 
+    def test_stop_button_while_checking_tools(self):
+        tools = fakes.shelf()
+        first, *rest = tools
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp) / "runs"
+            orig = tools[first].check
+
+            def press_then_check():
+                (folder,) = runs.iterdir()
+                (folder / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+                return orig()
+
+            tools[first].check = press_then_check
+            for name in rest:
+                tools[name].check = mock.Mock(side_effect=AssertionError(f"{name} checked after the press"))
+            design = Path(tmp) / "design.json"
+            design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+            ctx = start_run(REQUIREMENTS, design_path=design, root=runs, formulas=fakes.FakeFormulas(), tools=tools)
+            self.assertEqual(list(ctx.specs), [first])
+            self.assertEqual(run_scripted(ctx), "stopped")
+            self.assertEqual(ctx.store.events()[-1]["data"]["stop_code"], "user_stop")
+            self.assertEqual(ctx.project["stop_reason"], STOPPED_BY_BUTTON)
+            self.assertFalse((ctx.store.path / layout.STOP_REQUEST_FILE).exists())
+            self.assertNotIn("analysis.started", [e["kind"] for e in ctx.store.events()])
+
 
 class CheckCommandTest(RunCase, unittest.TestCase):
     def test_check_a_scripted_run(self):

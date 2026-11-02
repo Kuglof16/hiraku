@@ -43,15 +43,16 @@ requirements:
       (https://www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the
       table in https://link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)
   - key: Q13
-    name: 縦の坂
-    value: 12
+    name: 縦の坂 (止まって発進できる一番急な坂)
+    value: 14
     unit: "%"
     source: default
     trust: 1
     basis: >-
-      林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで,
+      林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch,
       https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf
-      (not checked in this repository)
+      (not checked in this repository). The sustained 12 % is the forest loop's grade_high in
+      data/catalog/tests.yaml (P4, T1, T2)
   - key: Q14
     name: 横の傾き
     value: 15
@@ -110,6 +111,15 @@ requirements:
     trust: 1
     basis: request
     note: 乗員とは別の荷として扱う (聞いていない)
+  - key: Q41
+    name: 荷の重心の高さ (荷台の床から)
+    value: 150
+    unit: mm
+    source: default
+    trust: 1
+    basis: >-
+      the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm
+      (data/designs/offroad-4w-v1.json, parts cargo and deck)
   - key: Q50
     name: 最高速度
     value: 40
@@ -197,7 +207,7 @@ requirements:
 # picks every test that applies to the flags and has a load-case builder (the
 # run names the others and why); C1, P4, R3, T1, T2 and H5 build, but their
 # scripted steps do not judge yet.
-tests: [P1, R1, N1, H1, H3]
+tests: [P1, R1, N1, H1, H3, P3]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 1
 cost_limit_usd: 2.0

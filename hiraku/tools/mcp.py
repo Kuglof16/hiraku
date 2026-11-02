@@ -21,7 +21,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from hiraku import contract
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS, TOOL_CODE_INPUT
+from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS
 
 Record = dict[str, Any]
 
@@ -68,8 +68,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "compare": contract_input_schema("compare"),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
-    "make_tool": TOOL_CODE_INPUT,
-    "check_tool": TOOL_CODE_INPUT,
+    "propose_design": contract_input_schema("propose_design"),
+    "make_tool": contract_input_schema("make_tool"),
+    "check_tool": contract_input_schema("check_tool"),
+    "write_report": contract_input_schema("write_report"),
 }
 
 DESCRIPTIONS = {
@@ -103,6 +105,16 @@ DESCRIPTIONS = {
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
         "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+    ),
+    "propose_design": (
+        "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
+        "最初の版を作る。座標は道具が出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
+        "版 1 ができると試験の荷重条件と担当の役が決まる"
+    ),
+    "write_report": (
+        "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
+        "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は道具が記録から入れる。"
+        "文の中の「数 + 単位」は記録にある値と合わなければ断られる"
     ),
     "check_tool": (
         "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"

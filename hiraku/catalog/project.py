@@ -5,9 +5,38 @@ from __future__ import annotations
 from typing import Any
 
 from hiraku import contract
+from hiraku.catalog.build import NO_BUILDER, CatalogError, build_load_cases
 from hiraku.catalog.loader import Catalog
 
 Record = dict[str, Any]
+
+
+def build_tests(catalog: Catalog, req: Record, design: Record) -> tuple[list[Record], list[tuple[str, str]] | None]:
+    """(load cases, tests left out): the tests the requirements file lists (each must build; none
+    left out), else every catalog test that applies to the product's flags and can be built."""
+    skipped: list[tuple[str, str]] | None = None
+    if req.get("tests"):
+        test_ids = req["tests"]
+    else:
+        test_ids, skipped = catalog.select_tests(req["flags"], req.get("speed_class")), []
+    load_cases = build_load_cases(catalog, req, design, test_ids, skipped)
+    if not load_cases:
+        raise CatalogError("no test could be built for this product: "
+                           + "; ".join(f"{t}: {why}" for t, why in skipped or []))
+    return load_cases, skipped
+
+
+def skipped_text(catalog: Catalog, skipped: list[tuple[str, str]]) -> str:
+    """One line for the screen: the tests this run leaves out, those without a builder grouped."""
+    name = lambda t: f"{t} {catalog.test(t)['title']}"  # noqa: E731
+    none = [t for t, why in skipped if why.endswith(NO_BUILDER)]
+    other = [f"{name(t)} ({why})" for t, why in skipped if not why.endswith(NO_BUILDER)]
+    parts = []
+    if none:
+        parts.append("荷重条件の作り方がまだ無い: " + "、".join(name(t) for t in none))
+    if other:
+        parts.append("要件か設計が足りない: " + "、".join(other))
+    return "この実行で見ない試験 — " + " / ".join(parts)
 
 
 def judged_domains(load_cases: list[Record]) -> list[str]:

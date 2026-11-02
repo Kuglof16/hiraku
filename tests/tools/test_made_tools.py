@@ -51,12 +51,13 @@ class MadeToolTest(RunCase, unittest.TestCase):
             make_tool(self.ctx, {"code": GOOD}, "designer")
         for args in ({}, {"code": ""}, {"code": GOOD, "name": "x"}):
             with self.subTest(args=list(args)):
-                with self.assertRaisesRegex(ToolError, "code"):
+                with self.assertRaisesRegex(ToolError, "make_tool の"):
                     make_tool(self.ctx, args, "cae.strength")
         out = make_tool(self.ctx, {"code": "import os\nos.remove('x')\n"}, "cae.strength")
         self.assertFalse(out["usable"])
         self.assertIn("import os", " ".join(out["problems"]))
         self.assertEqual(self.checked(), [])  # never ran, so nothing was checked
+        self.assertTrue(make_tool(self.ctx, {"code": GOOD, "reason": "R5 has no tool"}, "cae.strength")["usable"])
 
 
 if __name__ == "__main__":

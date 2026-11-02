@@ -166,6 +166,12 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         plan = compose_plan(self.ctx, {"steps": list(reversed(load_plan("offroad-4w")["steps"]))})
         self.assertEqual([s["load_case"] for s in plan["steps"]], ["P1-step100", "R1-step100", "H1-steer30"])
 
+    def test_a_step_for_a_load_case_the_run_did_not_build_is_left_out(self):
+        steps = [dict(s, load_case=s["load_case"].replace("step100", "step250")) for s in load_plan("offroad-4w")["steps"]]
+        plan = compose_plan(self.ctx, {"steps": steps})
+        self.assertEqual([s["load_case"] for s in plan["steps"]], ["H1-steer30"])
+        self.assertEqual(plan["missing"], ["P1-step100", "R1-step100"])
+
     def test_red_assembly_is_fixed_by_the_designer_and_judged_again(self):
         self.assertEqual(run_scripted(self.ctx, self.plan()), "done")
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")

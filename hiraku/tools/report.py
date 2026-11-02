@@ -172,9 +172,31 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
     return out
 
 
+def _domain_record(part: Record, sens: list[Record]) -> Record:
+    """One entry of the report's domains, in the contract's shape."""
+    cases = part["cases"]
+    lines = [c["line"] for c in cases]
+    out: Record = {
+        "domain": part["domain"],
+        "state": part["state"],
+        "line": " / ".join(lines) if lines else (part["summary"] or "判定の基準のある試験がありません"),
+        "verdict_ids": [c["verdict_id"] for c in cases if c["verdict_id"]],
+        "effects": [t for c in cases for t in c["effects"]],
+        "assumptions": list(dict.fromkeys(a for c in cases for a in c["assumptions"])),
+        "differences": [{"comparison_id": d["comparison_id"], "diff_rel": d["diff_rel"], "cause_id": d["cause_id"]}
+                        for c in cases for d in c["differences"]],
+    }
+    ids = {c["load_case_id"] for c in cases}
+    terms = [t for s in sens if s["load_case_id"] in ids for t in s["terms"]]
+    if terms:
+        out["sensitivity"] = terms
+    return out
+
+
 def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
-    """The report record. args: summary (text), next [{domain, change, reason}], and optional
-    sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity names them)."""
+    """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
+    and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
+    names them; not in the contract's tool input yet)."""
     if not ctx.version:
         raise ToolError("設計の版がまだ無いので、報告は書けません")
     sens = sensitivities(ctx, args.get("sensitivity") or [])
@@ -184,16 +206,16 @@ def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
     if bad:
         raise ToolError("報告の文に、記録に無い数があります: " + "、".join(bad)
                         + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
-    domains = {d["domain"] for d in domain_parts(ctx)}
+    parts = domain_parts(ctx)
+    domains = {d["domain"] for d in parts}
     wrong = [n.get("domain") for n in args.get("next") or [] if n.get("domain") not in domains]
     if wrong:
         raise ToolError(f"next の domain {wrong} は、この実行で選んだ分野 ({', '.join(sorted(domains))}) ではありません")
     return {
         "design_version": ctx.version,
         "agent": agent,
-        "domains": domain_parts(ctx),
-        "sensitivity": sens,
-        "unchecked": unchecked(ctx),
-        "next": list(args.get("next") or []),
+        "domains": [_domain_record(p, sens) for p in parts],
+        "unchecked": [{"item": u["what"], "source": u["basis"] or "not given"} for u in unchecked(ctx)],
+        "next": [{"domain": n["domain"], "change": n["change"], "reason": n["reason"]} for n in args.get("next") or []],
         "summary": args.get("summary", "").strip(),
     }
