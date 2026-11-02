@@ -122,6 +122,11 @@ class JudgeScan(unittest.TestCase):
             ]) + "\n",
             "hiraku/designgen/d.py": 'V = {"seat_x": Var("mm", -725.0, -1100.0, -500.0, "seat centre")}\n',
             "data/designs/d.json": '{\n  "variables": {\n    "air_density": {\n      "value": 1.225\n    }\n  }\n}\n',
+            # a revision whose source is written further down in the same list item
+            "data/catalog/plan.yaml": "plan:\n  revise:\n    - say: wider\n      changes:\n"
+                                      "        track: {value: 1220, unit: mm}\n      reason: >-\n"
+                                      + "".join(f"        line {i} of the reason\n" for i in range(6))
+                                      + "      source: the assembly tool before and after\n",
         })
         self.assertEqual([str(f) for f in self.scan() if f.rule in ("number.source", "stub")], [])
 
@@ -130,10 +135,14 @@ class JudgeScan(unittest.TestCase):
             "hiraku/solvers/e.py": "RHO = 1.225\n\n\ndef unfinished():\n    raise NotImplementedError\n",
             "hiraku/designgen/e.py": 'V = {"air_density": Var("kg/m^3", 1.225, meaning="")}\n',
             "data/materials/e.json": '{\n  "air_density": {\n    "value": 1.225,\n    "unit": "kg/m^3"\n  }\n}\n',
+            # the source belongs to another list item, out of the lines around the number
+            "data/catalog/e.yaml": "a:\n  - name: x\n    source: handbook\n"
+                                   + "".join(f"    k{i}: v\n" for i in range(8))
+                                   + "b:\n  rho: {value: 1.225, unit: kg/m^3}\n",
         })
         found = {f.where for f in self.scan() if f.rule in ("number.source", "stub")}
         self.assertEqual(found, {"hiraku/solvers/e.py:1", "hiraku/solvers/e.py:5", "hiraku/designgen/e.py:1",
-                                 "data/materials/e.json:3"})
+                                 "data/materials/e.json:3", "data/catalog/e.yaml:13"})
 
     def test_unverified_data_named_in_the_readme_list(self):
         unverified = '{"E_MPa": 69000.0, "source": "handbook", "verified": false}\n'
