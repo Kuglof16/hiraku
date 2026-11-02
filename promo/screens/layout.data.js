@@ -211,7 +211,7 @@ window.PROMO_LAYOUT = {
         0.9,
         0.4
       ],
-      "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier)"
+      "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier). The app's render (web/js/cut.js) uses all of these; the stand-in in promo n05.html uses push_scale only, and opens like a pair of doors (door) instead of bursting"
     },
     "ease": {
       "tile": [
@@ -240,34 +240,22 @@ window.PROMO_LAYOUT = {
       "name_s": 1.45,
       "tag_s": 2.0,
       "door_open_s": 0.3,
-      "_note": "burst: the vehicle bursts open; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed double door starts to open (it is fully open at door_open_s + door.open_dur_s, by burst_s)"
+      "_note": "burst: the vehicle bursts open; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the vehicle starts to part down its middle and swing open towards the viewer (it is fully open at door_open_s + door.open_dur_s, by burst_s)"
     },
     "door": {
       "open_dur_s": 0.65,
       "angle_deg": 105,
       "perspective_px": 2400,
       "ease": [
-        0.45,
+        0.35,
         0,
-        0.8,
-        0.55
+        0.65,
+        0.75
       ],
       "seam_w_px": 4,
       "seam_glow_w_px": 220,
       "spill_dur_s": 0.9,
-      "panel": {
-        "inset_px": 72,
-        "upper_h_px": 300,
-        "gap_px": 40,
-        "line_px": 2,
-        "bevel_px": 16
-      },
-      "handle": {
-        "w_px": 12,
-        "h_px": 200,
-        "seam_gap_px": 48
-      },
-      "_note": "double door over the whole stage, two leaves of 960 x 1080 hinged on the outer edges. It opens towards the viewer (rotateY, perspective_px from the stage) by angle_deg over open_dur_s from times.door_open_s (ease: cubic-bezier; slow at first so the swing is seen, then fast as the leaves pass out of the frame, which at this perspective happens near 68 deg); ?door=slide slides the leaves out sideways instead. seam_w_px / seam_glow_w_px: the warm light in the seam and its halo; spill_dur_s: the light behind the door, seen through the opening gap, and the light that spills out of the gap towards the viewer, both fade out over it. panel: the two raised panels on each leaf (inset from the leaf's edges, upper panel height, gap between the panels, outline width, width of the raised border); handle: the pull next to the seam"
+      "_note": "the vehicle itself opens like a pair of doors (kannon-biraki): it parts at the stage's middle (x 960) into a left and a right half, each hinged on its own outer end, and both swing towards the viewer (rotateY, perspective_px from the vehicle's centre) by angle_deg over open_dur_s from times.door_open_s (ease: cubic-bezier; slow at first so the swing is seen, then fast). A half is drawn from its front side only, so it is gone once it turns edge-on to the eye (near 77 deg here). seam_w_px / seam_glow_w_px: the warm light in the parting line and its halo, before and as it opens; spill_dur_s: the light that spills out of the widening gap towards the viewer fades out over it (from times.door_open_s)"
     },
     "fly_from": {
       "x": 960,
@@ -380,8 +368,10 @@ window.PROMO_LAYOUT = {
       ],
       "n05": [
         0,
-        0.5,
+        0.45,
+        0.6,
         0.75,
+        0.95,
         2.6,
         4.5
       ],
@@ -412,10 +402,6 @@ window.PROMO_LAYOUT = {
       {
         "selector": ".clock",
         "why": "authoring clock, drawn in the band with ?guides=1"
-      },
-      {
-        "selector": ".door",
-        "why": "N05's closed door covers the whole stage as the ground until it opens (by n05.times.burst_s); it holds no text, and the subtitles are drawn over it"
       }
     ],
     "allow_overflow": [
@@ -441,12 +427,6 @@ window.PROMO_LAYOUT = {
         "a": "n18.light",
         "b": "n18.vehicle",
         "why": "the vehicle is drawn over the vertical light on purpose"
-      },
-      {
-        "cut": "n05",
-        "a": "n05.door",
-        "b": "n05.hero",
-        "why": "the vehicle waits behind the door and is seen through the opening gap"
       }
     ]
   }

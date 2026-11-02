@@ -103,18 +103,30 @@ class SharedShape(unittest.TestCase):
     def test_n05_door(self):
         n = self.rules["n05"]
         d = n["door"]
-        self.assertTrue({"open_dur_s", "angle_deg", "perspective_px", "ease", "seam_w_px",
-                         "seam_glow_w_px", "spill_dur_s", "panel", "handle"} <= set(d))
+        # the vehicle itself opens in two halves: no door leaves, panels or handles
+        self.assertEqual(set(d) - {"_note"}, {"open_dur_s", "angle_deg", "perspective_px", "ease",
+                                              "seam_w_px", "seam_glow_w_px", "spill_dur_s"})
         self.assertEqual(len(d["ease"]), 4)
         self.assertTrue(0 < d["angle_deg"] <= 180)
-        # fully open (and hidden) before the vehicle bursts and the tiles fly out
+        # fully open (and hidden) before the burst and the tiles fly out
         self.assertLessEqual(n["times"]["door_open_s"] + d["open_dur_s"], n["times"]["burst_s"])
-        # the panels fit inside a leaf (half the stage wide)
-        p, stage = d["panel"], self.rules["stage"]
-        self.assertLess(2 * p["inset_px"], stage["w"] / 2)
-        self.assertLess(2 * p["inset_px"] + p["upper_h_px"] + p["gap_px"], stage["h"])
-        # the door covers the subtitle band, so the check lets it
-        self.assertIn(".door", [e["selector"] for e in self.rules["check"]["band_exempt"]])
+        # the halves part on the stage's middle, where the tiles fly out of
+        self.assertEqual(n["hero"]["x"] + n["hero"]["w"] / 2, self.rules["stage"]["w"] / 2)
+        self.assertEqual(n["fly_from"]["x"], self.rules["stage"]["w"] / 2)
+        # nothing of the door is left in the check's allowances
+        chk = self.rules["check"]
+        self.assertNotIn(".door", [e["selector"] for e in chk["band_exempt"]])
+        self.assertFalse([r for r in chk["allow_overlap"] if "door" in r["a"] + r["b"]])
+        # the check looks at the opening (between door_open_s and burst_s)
+        t0, t1 = n["times"]["door_open_s"], n["times"]["door_open_s"] + d["open_dur_s"]
+        self.assertTrue([t for t in chk["times"]["n05"] if t0 < t < t1])
+
+    def test_n05_page_has_no_door(self):
+        html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
+        for gone in ('class="door', 'class="leaf', "door-slide", "door-back", "--door-panel", "--door-handle"):
+            self.assertNotIn(gone, html)
+        self.assertIn('class="half half-l"', html)
+        self.assertIn('class="half half-r"', html)
 
     def test_units_in_names(self):
         def walk(obj, path):
