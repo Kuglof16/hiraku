@@ -129,6 +129,40 @@ class FormulaLedgerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "wall thickness"):
             self.R.evaluate("frame_static.bending_stress", {"M": q(1, "N*mm"), "b": q(40, "mm"), "h": q(80, "mm"), "t": q(25, "mm")})
 
+    def test_rail_joint_stress(self):
+        import json
+        from pathlib import Path
+
+        from hiraku.solvers.k0_handcalc.frame_inputs import overhang_moment, rail_joint_inputs
+
+        design = json.loads((Path(__file__).resolve().parents[2] / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        ji = rail_joint_inputs(design, loading="two_cargo")
+        self.assertEqual((ji["rail_member"][-3:], ji["cross_member"]), ("S2B", "cross_B"))
+        ins = {k: v["value"] for k, v in ji["inputs"].items()}
+        self.assertEqual((ins["z"], ins["e"], ins["L1"], ins["L_c"]), (380.0, 200.0, 700.0, 700.0))
+        # overhang by hand: deck 18 kg and cargo 150 kg over 6 bed nodes (one at the rear end, 400 mm behind),
+        # half of cross_E at that end, and the 400 mm rail piece behind the axle at 200 mm
+        g = 9.80665
+        rail_w = 7850e-9 * (40 * 80 - 35.4 * 75.4) * g
+        cross_m = 7850e-9 * (40 * 40 - 35.4 * 35.4) * 700
+        by_hand = (18 / 6 + 150 / 6) * g * 400 + cross_m / 2 * g * 400 + rail_w * 400 * 200
+        self.assertAlmostEqual(ins["M_oh"], by_hand, places=6)
+        self.assertEqual(overhang_moment(design, "LA") > ins["M_oh"], True)  # more lies behind the front axle
+        # with no offset and no overhang the formula is the traction bending plus the push
+        base = dict(ji["inputs"], F=q(1000, "N"), W=q(2000, "N"))
+        o = self.R.evaluate("frame_static.rail_joint_stress", dict(base, M_oh=q(0, "N*mm"), e=q(0, "mm")))["outputs"]
+        I = (40 * 80**3 - 35.4 * 75.4**3) / 12
+        A = 40 * 80 - 35.4 * 75.4
+        self.assertAlmostEqual(o["sigma"]["value"], 1000 * 380 * 40 / I + 1000 / A, places=9)
+        self.assertEqual(o["tau_torsion"]["value"], 0.0)
+        # the joint share: torsion G J / L1 against 2 E I_c / L_c
+        o = self.R.evaluate("frame_static.rail_joint_stress", base)["outputs"]
+        Am = 37.7 * 77.7
+        J = 4 * Am**2 * 2.3 / (2 * (37.7 + 77.7))
+        Ic = (40 * 40**3 - 35.4 * 35.4**3) / 12
+        kt, kc = 205000 / 2.6 * J / 700, 2 * 205000 * Ic / 700
+        self.assertAlmostEqual(o["T_rail"]["value"], 2000 * 200 * kt / (kt + kc), places=6)
+
     def test_rail_step_bending_limits(self):
         sec = {"b": q(40, "mm"), "h": q(80, "mm"), "t": q(2.3, "mm")}
         I = (40 * 80**3 - 35.4 * 75.4**3) / 12

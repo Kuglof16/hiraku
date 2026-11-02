@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 from scipy.optimize import brentq
 
-from ..k4_geometry import bodies, disassemble, fit, interferences, sweep
+from ..k4_geometry import bodies, disassemble, fit, interferences, steps, sweep
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
 from ..k4_geometry.obb import from_box, overlap
@@ -100,8 +99,9 @@ class Assembly(BuiltinTool):
         bs = bodies(design)
         static = interferences(design, bs)
         sw = sweep(design, bs)
-        asm = disassemble(design, bs)
+        seq = steps(design, bs)
         people = fit(design)
+        placed = [s for s in seq if s["no_interference"]]
         results = [
             result("interference_count", float(len(static)), "1"),
             result("worst_interference", static[0][2] if static else 0.0, "mm",
@@ -109,8 +109,10 @@ class Assembly(BuiltinTool):
             result("motion_interference_count", float(len(sw["hits"])), "1"),
             result("worst_motion_interference", sw["hits"][0][2] if sw["hits"] else 0.0, "mm",
                    f"{sw['hits'][0][0]} x {sw['hits'][0][1]}" if sw["hits"] else None),
-            result("assembly_steps", float(len(asm["order"])), "1"),
-            result("blocked_parts", float(len(asm["blocked"])), "1"),
+            result("assembly_steps", float(len(placed)), "1"),
+            result("blocked_parts", float(len(seq) - len(placed)), "1"),
+            result("steps_without_tool_clearance", float(sum(not s["tool_clearance"] for s in seq)), "1"),
+            result("steps_out_of_reach", float(sum(not s["hand_reach"] for s in seq)), "1"),
         ]
         if sw["free_steer"]:
             sid = min(sw["free_steer"], key=sw["free_steer"].get)
@@ -123,12 +125,17 @@ class Assembly(BuiltinTool):
                 groups[g] = (float(v), where)
         for g, (v, where) in groups.items():
             results.append(result(g, v, "mm", where))
-        effects = [{"name": f"assembly step {i + 1}: {k.split(':', 1)[1]} goes in moving {d}", "value": float(i + 1), "unit": "1"}
-                   for i, (k, d) in enumerate(asm["order"])]
-        effects += [{"name": f"blocked: {k.split(':', 1)[1]} by {', '.join(v)}", "value": float(len(v)), "unit": "1"}
-                    for k, v in asm["blocked"].items()]
-        effects += [{"name": f"interference at rest: {a} x {b}", "value": o, "unit": "mm"} for a, b, o in static]
-        effects += [{"name": f"interference in motion: {a} x {b}", "value": o, "unit": "mm"} for a, b, o in sw["hits"]]
+        found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest", "condition": "at rest"}
+                 for a, b, o in static]
+        found += [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "motion", "condition": c}
+                  for a, b, o, c in sw["hits"]]
+        out = {"results": results, "assembly": seq, "interferences": found}
         if people:
-            effects.append({"name": f"body sizes: {AIST_SOURCE}", "value": 0.0, "unit": "mm"})
-        return {"results": results, "effects": effects}
+            out["effects"] = [{"name": f"body sizes: {AIST_SOURCE}"}]
+        return out
+
+
+def _name(body_id: str) -> str:
+    """'part:battery' -> 'battery', 'member:rail_L_FA' -> 'member rail_L_FA'."""
+    kind, name = body_id.split(":", 1)
+    return name if kind == "part" else f"member {name}"

@@ -14,7 +14,7 @@ from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 PRED = [{"prediction_id": "pred-0001"}]
-TOOLS = {t.name: t for t in solvers.builtin_tools()}
+TOOLS = {t.name: t for t in solvers.builtin_tools() if t.__class__.__module__.startswith("hiraku.solvers.shelf")}
 
 
 def load_case(lc_id, test_id, domain, **params):
@@ -37,7 +37,12 @@ class EntryPointTest(unittest.TestCase):
         self.assertIn("frame_static", TOOLS)
         self.assertIn("step_climb", TOOLS)
         self.assertIs(solvers.formula_registry(), solvers.formula_registry())
-        self.assertEqual([t.name for t in solvers.builtin_tools()], list(TOOLS))
+        self.assertTrue(set(TOOLS) <= {t.name for t in solvers.builtin_tools()})
+
+    def test_tool_names_are_unique(self):
+        """One name, one tool on the shelf (K2's tools included): nothing replaces anything."""
+        names = [t.name for t in solvers.builtin_tools()]
+        self.assertEqual(sorted(n for n in set(names) if names.count(n) > 1), [])
 
     def test_import_has_no_side_effects(self):
         saved = {k: v for k, v in sys.modules.items() if k == "hiraku.solvers" or k.startswith("hiraku.solvers.")}

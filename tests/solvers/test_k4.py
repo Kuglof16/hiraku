@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from hiraku import contract, solvers
-from hiraku.solvers.k4_geometry import bodies, disassemble, fit, from_box, from_member, interferences, overlap, sweep
+from hiraku.solvers.k4_geometry import disassemble, fit, from_box, from_member, interferences, overlap, sweep
 
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
@@ -49,7 +49,8 @@ class DemoGeometryTest(unittest.TestCase):
 
     def test_steering_reaches_the_rails(self):
         sw = sweep(DESIGN)
-        self.assertTrue(all("rail" in b for _, b, _ in sw["hits"]))
+        self.assertTrue(all("rail" in h[1] for h in sw["hits"]))
+        self.assertTrue(all(h[3].startswith("steer") for h in sw["hits"]))
         # rails 80 mm inside the 600 x 200 wheel: free until w cos a + l sin a - w = 81 mm
         self.assertAlmostEqual(sw["free_steer"]["FL"], 16.48, delta=0.01)
         straight = copy.deepcopy(DESIGN)
@@ -83,7 +84,14 @@ class AssemblyToolTest(unittest.TestCase):
         self.assertGreater(r["motion_interference_count"]["value"], 0.0)
         self.assertLess(r["free_steer_angle"]["value"], r["max_steer_angle"]["value"])
         self.assertEqual(r["blocked_parts"]["value"], 0.0)
-        self.assertTrue(any(e["name"].startswith("assembly step 1:") for e in rec["effects"]))
+        seq = rec["assembly"]
+        self.assertEqual([s["order"] for s in seq], list(range(1, len(seq) + 1)))
+        self.assertTrue(all(s["no_interference"] for s in seq))
+        self.assertFalse(any("assembly step" in e["name"] for e in rec.get("effects", [])))
+        self.assertEqual({i["state"] for i in rec["interferences"]}, {"motion"})
+        self.assertTrue(all(i["b"].startswith("member rail") for i in rec["interferences"]))
+        wheel = next(s for s in seq if s["part"] == "wheel_FL")
+        self.assertIn("susp_FL", wheel["depends_on"])  # the wheel goes on the arms already in place
 
 
 class NoInfinityTest(unittest.TestCase):

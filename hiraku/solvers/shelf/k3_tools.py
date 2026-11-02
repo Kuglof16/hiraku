@@ -7,14 +7,13 @@ K3's own longitudinal driver (cycle.speed_profile).
 
 from __future__ import annotations
 
-import copy
 import math
 
 import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
-from ..k3_power_thermal import (THERMAL_PARTS, Segment, ThermalNetwork, drive, forest_loop, from_design,
-                               network_from_design, repeat, speed_profile, temperatures)
+from ..k3_power_thermal import (Segment, ThermalNetwork, drive, forest_loop, from_design, network_from_design, repeat,
+                               speed_profile, temperatures)
 from ..k3_power_thermal.powertrain import Powertrain
 from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_value, result
 

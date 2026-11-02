@@ -356,7 +356,93 @@ def _frame_static() -> list[Formula]:
         symbols=s,
     ))
     out.append(_rail_step_bending())
+    out.append(_rail_joint_stress())
     return out
+
+
+def _tube(b: float, h: float, t: float) -> dict:
+    bi, hi = b - 2 * t, h - 2 * t
+    return {"A": b * h - bi * hi, "I_v": (b * h**3 - bi * hi**3) / 12.0, "I_l": (h * b**3 - hi * bi**3) / 12.0,
+            "Am": (b - t) * (h - t), "J": 4.0 * ((b - t) * (h - t)) ** 2 * t / (2.0 * ((b - t) + (h - t)))}
+
+
+def _rail_joint(v: dict) -> dict:
+    """Stress in the rail at the rear axle joint while the rear wheels push the front ones up a step.
+
+    Vertical bending: the overhang moment plus the traction moment F z (left and right are loaded
+    alike, so the cross member turns with the joint and takes none of it). Torsion W e and the
+    sideways moment F e come in at the joint from the wheel's offset; one step of moment
+    distribution shares them between the rail ahead (far end held: G J / L1, 4 E I / L1) and the
+    cross member (bent by the mirror-image moments from both sides: 2 E I / L_c); the rail behind
+    the joint ends free and takes none. Stresses add at the worst section corner.
+    """
+    r = _tube(v["b"], v["h"], v["t"])
+    c = _tube(v["b_c"], v["h_c"], v["t_c"])
+    E, G = v["E"], v["E"] / (2.0 * (1.0 + v["nu"]))
+    F, W = v["F"], v["W"]
+    M_v = v["M_oh"] + F * v["z"]
+    k_t = G * r["J"] / v["L1"]
+    k_cv = 2.0 * E * c["I_v"] / v["L_c"]  # cross member bent vertically by the twist at both ends
+    T = W * v["e"] * k_t / (k_t + k_cv)
+    k_l = 4.0 * E * r["I_l"] / v["L1"]
+    k_cl = 2.0 * E * c["I_l"] / v["L_c"]  # cross member bent sideways
+    M_l = F * v["e"] * k_l / (k_l + k_cl)
+    s_ax = F / r["A"]
+    s_v = abs(M_v) * (v["h"] / 2.0) / r["I_v"]
+    s_l = abs(M_l) * (v["b"] / 2.0) / r["I_l"]
+    tau = abs(T) / (2.0 * r["Am"] * v["t"])
+    sigma = s_ax + s_v + s_l
+    return {"sigma": (sigma**2 + 3.0 * tau**2) ** 0.5, "sigma_vertical": s_v, "sigma_sideways": s_l,
+            "sigma_axial": s_ax, "tau_torsion": tau, "M_vertical": M_v, "M_sideways": M_l, "T_rail": T}
+
+
+def _rail_joint_stress() -> Formula:
+    mm = lambda d: {"unit": "mm", "description": d, "min": 0}  # noqa: E731
+    return Formula(
+        formula_id="frame_static.rail_joint_stress",
+        title="段差を押して登るときの後ろの車軸の所のレールの応力 (張り出し・横の曲げ・ねじりを入れる)",
+        domain="strength",
+        expression="M_v = M_oh + F z; T = W e kt/(kt + kc,v); M_l = F e kl/(kl + kc,l); "
+                   "kt = G J/L1, kl = 4 E I_l/L1, kc = 2 E I_c/L_c; sigma = F/A + M_v (h/2)/I_v + M_l (b/2)/I_l; "
+                   "von Mises sqrt(sigma^2 + 3 tau^2), tau = T/(2 A_m t)",
+        inputs={
+            "M_oh": {"unit": "N*mm", "description": "hogging moment at the joint from the loads on this rail behind the axle "
+                                                    "(rail_joint_inputs computes it from the part masses and x positions)", "min": 0},
+            "F": {"unit": "N", "description": "push of the step on one front wheel = traction of one rear wheel (P1 front_wheel_force)", "min": 0},
+            "W": {"unit": "N", "description": "vertical load on the rear wheel while climbing (P1 wheel_load of that wheel)", "min": 0},
+            "z": mm("height of the rail centre above the ground (lever of the traction)"),
+            "e": mm("sideways offset of the wheel centre from the rail centre"),
+            "L1": mm("length of the rail piece ahead of the joint"),
+            "L_c": mm("length of the cross member at the joint"),
+            "E": {"unit": "MPa", "description": "Young's modulus", "min": 0},
+            "nu": {"unit": "1", "description": "Poisson's ratio", "min": 0, "max": 0.5},
+            "b": mm("rail tube width"), "h": mm("rail tube height"), "t": mm("rail wall"),
+            "b_c": mm("cross member width"), "h_c": mm("cross member height"), "t_c": mm("cross member wall"),
+        },
+        outputs={
+            "sigma": ("MPa", "von Mises stress at the worst corner of the rail at the joint", None),
+            "sigma_vertical": ("MPa", "from vertical bending (overhang and traction)", None),
+            "sigma_sideways": ("MPa", "from sideways bending (traction at the wheel offset)", None),
+            "sigma_axial": ("MPa", "from the push (compression)", None),
+            "tau_torsion": ("MPa", "shear from the twist (wheel load at the offset)", None),
+            "M_vertical": ("N*mm", "vertical bending moment in the rail at the joint", None),
+            "M_sideways": ("N*mm", "sideways bending moment in the rail at the joint", None),
+            "T_rail": ("N*mm", "torque in the rail at the joint", None),
+        },
+        assumptions=[
+            "both front wheels on the step, each rear wheel pushes with F; quasi-static",
+            "left and right loaded alike (mirror images)",
+            "the wheel's loads reach the rail at the joint through the suspension, with the moments of the offset e",
+            "one step of moment distribution at the joint: far ends of the rail ahead held, the rail behind free at its end",
+            "loads behind the axle enter at their carried_by nodes, shared equally (no transfer moments)",
+            "thin-walled rectangular tubes (Bredt torsion); shear from transverse forces left out",
+        ],
+        source="beam statics, moment distribution at one joint (Hardy Cross) and Bredt's torsion formula (textbook structures)",
+        requires=[(lambda v: all(2 * v[t] < min(v[b], v[h]) for b, h, t in (("b", "h", "t"), ("b_c", "h_c", "t_c"))),
+                   "wall thickness must be less than half of the tube width and height"),
+                  (lambda v: v["L1"] > 0 and v["L_c"] > 0, "L1 and L_c must be positive")],
+        fn=_rail_joint,
+    )
 
 
 def _rail_step_moments(v: dict) -> dict:

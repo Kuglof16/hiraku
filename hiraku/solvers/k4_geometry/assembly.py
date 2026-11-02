@@ -21,6 +21,13 @@ from .obb import OBB, overlap
 DIRECTIONS = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
 NOT_ASSEMBLED = ("occupant", "cargo")
 NUDGE_MM = 20.0
+# Access for each step, from the side the part comes in. The opening for two hands
+# (200 x 125 mm) is MIL-STD-1472H figure 57 and the reach (606 mm, grip reach,
+# young female 5th percentile) is the AIST 1991-92 statistic, both as quoted in the
+# requirements catalog and not checked in this repository.
+TOOL_OPENING_MM = (200.0, 125.0)
+TOOL_DEPTH_MM = 300.0
+REACH_MM = 606.0
 
 
 def swept(obb: OBB, direction, travel: float) -> OBB:
@@ -78,6 +85,53 @@ def disassemble(design: dict, bs: dict[str, Body] | None = None) -> dict:
         blocked[k] = sorted({blocker(b, others, dv, travel) for dv in DIRECTIONS.values()} - {None})
     order = [(k, _reverse(d)) for k, d in reversed(removed)]
     return {"order": order, "blocked": blocked}
+
+
+def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
+    """The assembly order as contract `assembly_step` records, with access checks per step:
+    no_interference (the way in is clear), tool_clearance (a 200 x 125 mm opening, 300 mm deep,
+    in front of the part on the side it comes from), hand_reach (that face within 606 mm of
+    the outside of what is already built), depends_on (parts already in place it touches)."""
+    bs = bs or bodies(design)
+    asm = disassemble(design, bs)
+    members = [b for b in bs.values() if b.kind == "member"]
+    placed: list[Body] = []
+    out = []
+    for i, (k, d_in) in enumerate(asm["order"]):
+        part = bs[k]
+        d_from = -np.asarray(DIRECTIONS[d_in], float)  # the hands work from where the part comes from
+        tool_ok, reach_ok, reach = _access(part, members + placed, d_from)
+        touching = sorted(o.id.split(":", 1)[1] for o in placed if overlap(part.obb, o.obb) > -TOUCH_MM)
+        step = {"order": i + 1, "part": k.split(":", 1)[1], "direction": d_in, "depends_on": touching,
+                "no_interference": True, "tool_clearance": tool_ok, "hand_reach": reach_ok,
+                "note": f"face {reach:.0f} mm in from the outside of what is built"}
+        out.append(step)
+        placed.append(part)
+    n = len(out)
+    for j, (k, blockers) in enumerate(sorted(asm["blocked"].items())):
+        out.append({"order": n + j + 1, "part": k.split(":", 1)[1], "direction": "none", "no_interference": False,
+                    "tool_clearance": False, "hand_reach": False,
+                    "blocked_by": [b.split(":", 1)[1] for b in blockers],
+                    "note": "cannot go in along any of the six directions"})
+    return out
+
+
+def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, bool, float]:
+    reach_out = float(np.sum(part.obb.half * np.abs(part.obb.axes @ d_from)))
+    face = part.obb.center + d_from * reach_out
+    k = int(np.argmax(np.abs(d_from)))
+    others = [i for i in range(3) if i != k]
+    axes = np.eye(3)[[k, *others]]
+    half = np.array([TOOL_DEPTH_MM / 2.0, TOOL_OPENING_MM[0] / 2.0, TOOL_OPENING_MM[1] / 2.0])
+    corridor = OBB(face + d_from * (TOOL_DEPTH_MM / 2.0 + TOUCH_MM), axes, half)
+    tool_ok = all(overlap(corridor, o.obb) <= TOUCH_MM for o in placed)
+    if placed:
+        pts = np.vstack([o.obb.corners() for o in placed])
+        edge = float(np.max(pts @ d_from))
+        depth = max(edge - float(face @ d_from), 0.0)
+    else:
+        depth = 0.0
+    return tool_ok, depth <= REACH_MM, depth
 
 
 def _preferred(free: list[str]) -> str:

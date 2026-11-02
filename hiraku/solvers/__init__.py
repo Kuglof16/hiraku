@@ -7,9 +7,9 @@ The two entry points (hiraku.contract.protocols.SOLVER_ENTRY_POINTS):
     tools = solvers.builtin_tools()         # list of AnalysisTool
 
 Importing this package does nothing else; the solvers load on the first call.
-Tools from hiraku.solvers.k2_vehicle are included when that package exposes
-`tools()` returning AnalysisTool objects; a K2 tool replaces a built-in tool of
-the same name (step_climb moves to K2 that way).
+Tools from hiraku.solvers.k2_vehicle are added when that package exposes
+`tools()` returning AnalysisTool objects. Names on the shelf are unique: no
+tool replaces another, and tests/solvers fails when two tools share a name.
 """
 
 from __future__ import annotations
@@ -29,13 +29,7 @@ def formula_registry():
 def _tools() -> tuple:
     from .shelf import BUILTIN_TOOLS
 
-    tools = {}
-    for cls in BUILTIN_TOOLS:
-        t = cls()
-        tools[t.name] = t
-    for t in _k2_tools():
-        tools[t.name] = t
-    return tuple(tools.values())
+    return tuple([cls() for cls in BUILTIN_TOOLS] + _k2_tools())
 
 
 def builtin_tools() -> list:

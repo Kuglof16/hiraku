@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import copy
 import math
 import time
 from typing import Any
 
 from ... import contract
-from ...contract.protocols import DEFAULT_LOADING, LOADINGS
+from ...contract.protocols import DEFAULT_LOADING
 from ..k0_handcalc import units
-from ..k0_handcalc.vehicle import DesignError
+from ..k0_handcalc.vehicle import DesignError, parts_on_board
 
 Record = dict[str, Any]
 
@@ -57,34 +56,14 @@ def param_list(load_case: Record, name: str) -> list[str] | None:
     return [s.strip() for s in v.split(",") if s.strip()]
 
 
-OCCUPANTS = {"empty": 0, "driver": 1, "two": 2, "two_cargo": 2}
-CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
-assert set(OCCUPANTS) == set(CARGO) == set(LOADINGS)
-
-
 def on_board(design: Record, load_case: Record) -> Record:
-    """A copy of the design with only the occupants and cargo of params.loading.
-
-    Occupants board in the order they are listed (the first is the driver);
-    cargo parts ride only with two_cargo. Without params.loading: two_cargo.
-    """
+    """A copy of the design with only the occupants and cargo of params.loading
+    (k0_handcalc.vehicle.parts_on_board). Without params.loading: two_cargo."""
     loading = load_case.get("params", {}).get("loading", DEFAULT_LOADING)
-    if loading not in LOADINGS:
-        raise LoadCaseError(f"unknown loading {loading!r}; use one of {', '.join(LOADINGS)}")
-    parts, seated = [], 0
-    for p in design.get("parts", []):
-        if p["kind"] == "occupant":
-            if seated >= OCCUPANTS[loading]:
-                continue
-            seated += 1
-        elif p["kind"] == "cargo" and not CARGO[loading]:
-            continue
-        parts.append(p)
-    # a design with fewer occupant parts than the loading names carries the ones it has
-    # (products without seats); the catalog checks the loading against the requirements
-    out = copy.copy(design)
-    out["parts"] = parts
-    return out
+    try:
+        return parts_on_board(design, loading)
+    except ValueError as e:
+        raise LoadCaseError(str(e)) from None
 
 
 def result(quantity: str, value: float, unit: str, where: str | None = None) -> Record:

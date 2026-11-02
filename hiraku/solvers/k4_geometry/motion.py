@@ -50,10 +50,11 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
 
 
 def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
-    """Worst overlap over the travel and steering grid for every support, and the free steer angle."""
+    """Worst overlap over the travel and steering grid for every support (with where it happens),
+    and the free steer angle: {"hits": [(a, b, overlap, condition)], "free_steer": {support: deg}}."""
     bs = bs or bodies(design)
     steer_max = max_steer(design)
-    hits: dict[tuple[str, str], float] = {}
+    hits: dict[tuple[str, str], tuple[float, str]] = {}
     free = {}
     for s in design["supports"]:
         travel = float(s.get("suspension", {}).get("travel_mm") or 0.0)
@@ -62,10 +63,11 @@ def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
         for dz in dzs:
             for st in steers:
                 for a, b, ov in _hits(design, bs, s["id"], float(dz), float(st)):
-                    hits[(a, b)] = max(hits.get((a, b), 0.0), ov)
+                    if ov > hits.get((a, b), (0.0, ""))[0]:
+                        hits[(a, b)] = (ov, f"steer {st:+.0f} deg, wheel travel {dz:+.0f} mm")
         if s["actuation"]["steer"] and steer_max > 0:
             free[s["id"]] = free_steer(design, bs, s["id"], steer_max, dzs)
-    return {"hits": sorted(((a, b, o) for (a, b), o in hits.items()), key=lambda t: -t[2]), "free_steer": free}
+    return {"hits": sorted(((a, b, o, c) for (a, b), (o, c) in hits.items()), key=lambda t: -t[2]), "free_steer": free}
 
 
 def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs) -> float:

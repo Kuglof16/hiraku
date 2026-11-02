@@ -143,6 +143,7 @@ class FrameStatic(BuiltinTool):
     base = "K1"
     tests = ["R1"]
     formulas = [
+        "frame_static.rail_joint_stress",
         "frame_static.rail_step_bending",
         "frame_static.rail_bending",
         "frame_static.simple_beam_point_load",

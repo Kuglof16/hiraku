@@ -69,6 +69,33 @@ def inertia_tensor(items: list[MassItem], about: np.ndarray) -> np.ndarray:
     return J
 
 
+OCCUPANTS = {"empty": 0, "driver": 1, "two": 2, "two_cargo": 2}
+CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
+
+
+def parts_on_board(design: dict, loading: str) -> dict:
+    """A copy of the design with only the occupants and cargo of a loading (catalog Q30).
+
+    Occupants board in the order they are listed (the first is the driver);
+    cargo parts ride only with two_cargo. A design with fewer occupant parts
+    than the loading names carries the ones it has (products without seats).
+    """
+    if loading not in OCCUPANTS:
+        raise ValueError(f"unknown loading {loading!r}; use one of {', '.join(OCCUPANTS)}")
+    parts, seated = [], 0
+    for p in design.get("parts", []):
+        if p["kind"] == "occupant":
+            if seated >= OCCUPANTS[loading]:
+                continue
+            seated += 1
+        elif p["kind"] == "cargo" and not CARGO[loading]:
+            continue
+        parts.append(p)
+    out = dict(design)
+    out["parts"] = parts
+    return out
+
+
 def node_table(design: dict) -> dict[str, np.ndarray]:
     nodes = {}
     for n in design.get("nodes", []):
