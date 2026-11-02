@@ -17,6 +17,7 @@ venv の Python で、リポジトリの一番上から。
 python -m unittest                                   # 全部の試験 (skip は理由つきで出る: -v)
 python -m qa.check_run runs/<run_id>                 # 1 回の実行の記録を点検
 python -m qa.check_run --all --recompute             # runs/ の全部。予測を K0 で計算し直す
+python -m qa.check_run runs/<run_id> --effects       # hooks が止めた所とその次の記録、食い違いと原因、合否の出どころ
 python -m qa.judge_scan --ref main                   # 公開する前に main を点検
 ```
 
