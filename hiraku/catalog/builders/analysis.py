@@ -189,7 +189,8 @@ R3_PLAN = {
          "inputs_from": r3_calc},
     ],
     # Run on the demo vehicle: the hand calculation gives 0.0003, the fatigue tool 0.080. The hand
-    # value is on the unsafe side, so there is no safe-side verdict and no retry: the run stops at R3.
+    # value is on the unsafe side, so there is no safe-side verdict and no retry: the cause is
+    # recorded and R3 ends without a verdict (end), the run going on to the next step.
     "expected_mismatch": {
         "quantity": "fatigue_damage",
         "source": ("the analysis department's check of the demo vehicle (fatigue.road_damage_quarter_car 0.0003 against "
@@ -201,7 +202,8 @@ R3_PLAN = {
                   "下に落ちて損傷にほとんど数えられないため、損傷は約 270 倍違う (0.080 と 0.0003)"),
         "fix": ("後ろの張り出しを、車体の上下とピッチ (2 自由度) と 4 輪の力で曲げる手計算に作り直す。手計算は危ない側に"
                 "外れているので、安全側の判断には使えない"),
-        "stop": "手計算が危ない側に外れたので、R3 はここで止めます (原因は記録しました)",
+        "end": True,
+        "end_say": "手計算が危ない側に外れたので、R3 の合否はここでは出しません。原因を記録して、判定の無いまま次へ進みます",
     },
 }
 
