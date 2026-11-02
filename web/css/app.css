@@ -526,6 +526,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .hooks { display: flex; gap: 10px; color: var(--muted); white-space: nowrap; }
 .hooks .rule { border-radius: 6px; padding: 0 6px; }
 .hooks .rule.hit { color: var(--red); background: var(--red-pale); font-weight: 600; }
+.hooks .hk { font-family: var(--mono); font-weight: 700; }
 
 /* all-domains grid (A6): the whole width, 4 x 2 tiles */
 .main.wide { grid-template-columns: minmax(0, 1fr); }

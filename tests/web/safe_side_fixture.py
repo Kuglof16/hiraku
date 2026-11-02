@@ -67,7 +67,7 @@ def safe_side_events():
         *analysis("ana-0001", ["pred-0001", "pred-0002"], [stress, {"quantity": "max_displacement", "value": 1.2, "unit": "mm", "where": "LE"}]),
         {"kind": "comparison.recorded", **strength, "data": cmp1},
         {"kind": "hook.denied", "agent": "cae.strength", "domain": "strength", "text": "cause first (shape example)",
-         "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "H3_cause_before_continue"}},
+         "data": {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "HK3_cause_before_continue"}},
         {"kind": "cause.recorded", **strength, "data": cause1},
         {"kind": "comparison.recorded", **strength, "data": {**cmp1, "cause_id": "cause-0001"}},
         pred("pred-0003", "max_stress", PRED_2, "MPa"),

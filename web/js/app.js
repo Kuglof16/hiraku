@@ -232,7 +232,7 @@ function renderChain(s, chain) {
       (asm ? `<ul class="asm">${asm}</ul>` : "");
   } else {
     p.className = "card wait";
-    p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (H1)` : "試験がまだ無い"}</div>`;
+    p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (HK1)` : "試験がまだ無い"}</div>`;
   }
   // 2. analysis
   const a = $("card-ana");
@@ -271,7 +271,7 @@ function renderChain(s, chain) {
       ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}${safeWhy}</div>`
       : ok
         ? ""
-        : `<div class="cause">原因が書かれるまで、この分野は先に進めない (H3)</div>`;
+        : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
     // The row whose value the verdict used.
     const used = verdict ? (valueFromJa(verdict) === "予測" ? "pred" : "ana") : null;
     const tag = `<small class="used">判定の値</small>`;
@@ -453,7 +453,7 @@ function renderHooks(s, playhead) {
     counts[b.rule] = (counts[b.rule] ?? 0) + 1;
     if (playhead - b.t < SHOW_S) recent[b.rule] = true;
   }
-  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}">${r.id} ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
+  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
 let hooksHtml = "";

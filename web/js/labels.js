@@ -37,10 +37,10 @@ export const PROP_JA = {
 
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
-  { id: "H1", key: "H1_prediction_first", ja: "予測が先" },
-  { id: "H2", key: "H2_tool_usable", ja: "照合ずみの道具だけ" },
-  { id: "H3", key: "H3_cause_before_continue", ja: "食い違いは原因が先" },
-  { id: "H4", key: "H4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
+  { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみの道具だけ" },
+  { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
+  { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
 ];
 
 export const BASE_JA = {
@@ -183,9 +183,16 @@ export function agentLongName(id) {
   return agentName(id);
 }
 
+// A rule by its full key, its id ("HK1") or, for records written before the
+// ids were renamed (H1_prediction_first), by the words after the id.
 export function ruleOf(rule) {
-  const id = String(rule ?? "").split("_")[0];
-  return RULES.find((r) => r.id === id) ?? { id: id || "?", key: rule, ja: rule ?? "" };
+  const key = String(rule ?? "");
+  const [id, ...rest] = key.split("_");
+  const tail = rest.join("_");
+  return (
+    RULES.find((r) => r.key === key || r.id === id) ??
+    (tail ? RULES.find((r) => r.key.endsWith(`_${tail}`)) : null) ?? { id: id || "?", key: rule, ja: rule ?? "" }
+  );
 }
 
 const UNIT_LABEL = {

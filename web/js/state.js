@@ -286,7 +286,7 @@ export function applyEvent(s, ev) {
       break;
     }
     case "hook.blocked_stop": {
-      const r = ruleOf(d.rule ?? "H4");
+      const r = ruleOf(d.rule ?? "HK4");
       const text = ev.text || "判定がそろっていないので終われない";
       const count = typeof d.count === "number" && typeof d.limit === "number" ? ` (${d.count} / ${d.limit} 回)` : "";
       const item = { rule: r.id, text, t: ev.t, seq: ev.seq, count: d.count ?? null, limit: d.limit ?? null };
