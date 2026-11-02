@@ -2749,6 +2749,35 @@
           }
         }
       }
+    },
+    "tool_input.make_tool": {
+      "description": "Agent-facing: write a tool (Python, the AnalysisTool shape with its own known-answer checks). It runs in a separate restricted process; it goes on this run's shelf only when every check passes. Every attempt is recorded with tool.checked (usable false when it fails).",
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Which test needs it and why no tool on the shelf covers it."
+        }
+      }
+    },
+    "tool_input.check_tool": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
     }
   }
 }

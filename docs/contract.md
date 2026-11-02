@@ -70,6 +70,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 実行を外から止めるとき (画面の止めるボタン) は、実行のフォルダに `stop.request` (`layout.STOP_REQUEST_FILE`) を置く。実行の側はそれを見て、記録を整えて `stopped`・`stop_code` `user_stop` で終わる
 - 設計役が最初の版を作る実行 (要件に `design_file` が無い) では、版 1 ができたあと `project.updated` (data は project 全体) で荷重条件・選んだ分野・役を出し直す
 - 報告は `report` の記録と `report.written` の event。数はコードが記録から入れ、Claude は `summary` と `next` だけを書く (文の中の数が記録と合わなければ道具が断る)
+- 実行の中で Claude が作った道具 (N13) は、実行のフォルダの `tools/` に試みごとのコード (`<name>-<n>.py`) と照合の記録 (`.check.json`) を残す。試みは通らなくても `tool.checked` (usable false) で記録に出す。道具は別のプロセスで、使える import を絞り、空のフォルダ・API キー無し・時間の上限つきで走る。悪意のあるコードを完全に閉じ込める仕組みではなく、間違いへの守り
 - 見本として残す実行は `showcase/<run_id>/` (`layout.SHOWCASE_DIR`。統括部の持ち場。runs/ はコミットしない)。画面は URL に `?run=` が無いとき、ここのいちばん新しい実行を再生する
 
 MCP の道具 (サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
