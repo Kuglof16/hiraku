@@ -17,6 +17,7 @@ from hiraku.tools.judge import init_judgements
 Record = dict[str, Any]
 
 STOPPED_BY_USER = "stopped by the user (Ctrl+C)"
+STOPPED_BY_BUTTON = "stopped by the user (stop button: stop.request)"
 
 
 def resolve_design_path(req: Record, design_path: Path | str | None) -> Path:

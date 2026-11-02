@@ -10,7 +10,7 @@ from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
-from hiraku.agent.session import STOPPED_BY_USER
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
 from hiraku.tools.functions import RUN_TOOLS
 
@@ -28,6 +28,10 @@ FOREGROUND_ROLES_ENV = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
 # the background anyway.
 WAKE_GRACE_S = 5.0
 MAX_WAKES = 5
+# The stop button: how often stop.request is looked for, and how long the interrupted turn may
+# take to close before the reading is cut.
+STOP_POLL_S = 1.0
+STOP_GRACE_S = 10.0
 WAKE_TEXT = "担当の役の仕事が終わりました。get_context で judgements を確かめて、続きを進めてください。"
 
 
@@ -153,6 +157,8 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     them. Should a role still be at work when the lead's turn ends, the reading goes on (the
     roles are not cut off), and when the last role stops while the lead is idle, the lead is
     woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
+    The stop button (stop.request, checked every STOP_POLL_S) interrupts the CLI; the
+    hooks deny every tool from then on, and the reading ends within STOP_GRACE_S.
     """
     from claude_agent_sdk import AssistantMessage, ResultMessage
 
@@ -170,18 +176,41 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
         if state["idle"]:
             loop.create_task(wake())
 
+    main = asyncio.current_task()
+    cut = {"done": False}
+
+    async def watch_stop() -> None:
+        while not hooks.stopping():
+            await asyncio.sleep(STOP_POLL_S)
+        ctx.store.emit("agent.said", agent="system", text="止めるボタンが押されたので、実行を止めます")
+        try:
+            await client.interrupt()
+        except Exception:  # the stop goes ahead whatever the CLI says
+            pass
+        await asyncio.sleep(STOP_GRACE_S)  # the interrupted turn may close by itself meanwhile
+        cut["done"] = True
+        main.cancel()
+
     hooks.on_roles_done = roles_done
-    await client.query(prompts.lead_task(ctx))
-    async for msg in client.receive_messages():
-        log.handle(msg)
-        if isinstance(msg, ResultMessage):
-            state["idle"] = True
-            if not hooks.running:
-                return
-            ctx.store.emit("agent.said", agent="system", text="まとめ役の番が終わりましたが、役がまだ動いているので待ちます: "
-                           + "、".join(sorted(set(hooks.running.values()))))
-        elif isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is None:
-            state["idle"] = False
+    watcher = loop.create_task(watch_stop())
+    try:
+        await client.query(prompts.lead_task(ctx))
+        async for msg in client.receive_messages():
+            log.handle(msg)
+            if isinstance(msg, ResultMessage):
+                state["idle"] = True
+                if not hooks.running or hooks.stop_requested:
+                    return
+                ctx.store.emit("agent.said", agent="system", text="まとめ役の番が終わりましたが、役がまだ動いているので待ちます: "
+                               + "、".join(sorted(set(hooks.running.values()))))
+            elif isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is None:
+                state["idle"] = False
+    except asyncio.CancelledError:
+        if not cut["done"]:
+            raise  # Ctrl+C
+        main.uncancel()  # the stop button cut the reading: an ordinary end
+    finally:
+        watcher.cancel()
 
 
 async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT,
@@ -217,6 +246,10 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
     except Exception as e:
         close("failed", f"{type(e).__name__}: {e}", "error")
         raise
+    if hooks.stop_requested:
+        close("stopped", STOPPED_BY_BUTTON, "user_stop")
+        ctx.store.clear_stop_request()
+        return "stopped"
     status, reason, code = final_status(ctx, log.result, hooks)
     close(status, reason, code)
     return status

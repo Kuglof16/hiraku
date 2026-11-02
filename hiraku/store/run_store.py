@@ -192,6 +192,14 @@ class RunStore:
             self._save_project()
             return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
 
+    def stop_requested(self) -> bool:
+        """Someone (the screen's stop button) has put stop.request in the run folder."""
+        return (self.path / layout.STOP_REQUEST_FILE).exists()
+
+    def clear_stop_request(self) -> None:
+        """The request was carried out: stop.request is present only while someone asks."""
+        (self.path / layout.STOP_REQUEST_FILE).unlink(missing_ok=True)
+
     def finish(self, status: str, stop_reason: str | None = None, text: str | None = None,
                stop_code: str | None = None) -> Record:
         """Set the final status in project.json and emit run.finished (stop_code: why it

@@ -20,7 +20,7 @@ import re
 from typing import Any
 
 from hiraku import contract
-from hiraku.agent.session import STOPPED_BY_USER
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, external_builders, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import analyze, compare, record_cause, record_prediction, revise_design, trusted_analysis
@@ -157,6 +157,15 @@ class Stop(Exception):
     """The script cannot go on; the message is the run's stop_reason."""
 
 
+class StopRequested(Stop):
+    """The stop button: stop.request is in the run folder."""
+
+
+def _check_stop(ctx: RunContext) -> None:
+    if ctx.store.stop_requested():
+        raise StopRequested(STOPPED_BY_BUTTON)
+
+
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
@@ -192,6 +201,7 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     Raises Stop on anything the plan did not expect.
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
+    _check_stop(ctx)
     if _deny(ctx, agent, "analyze", args):
         raise Stop(f"a hook rule stopped analyze on {lc['load_case_id']}")
     ana = analyze(ctx, args, agent)
@@ -288,6 +298,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     try:
         while True:
             for step in plan["steps"]:
+                _check_stop(ctx)
                 lc = ctx.load_case(step["load_case"])
                 agent = ctx.owner(lc["load_case_id"])
                 start(agent, lc["domain"] if agent.startswith("cae.") else None)
@@ -303,6 +314,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             reds = _red_tiles(ctx)
             if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
                 break
+            _check_stop(ctx)
             rev = revisions.pop(0)
             start("designer")
             names = "、".join(contract.DOMAIN_NAMES_JA[j["domain"]] for j in reds)
@@ -313,6 +325,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
                 raise Stop(f"revise_design refused: {e}") from None
             s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、全部の荷重条件をやり直します")
+    except StopRequested:
+        s.emit("agent.said", agent="lead", text="止めるボタンが押されたので、ここで止めます")
+        status, reason, code = "stopped", STOPPED_BY_BUTTON, "user_stop"
     except Stop as e:
         status, reason, code = "stopped", str(e), "not_judged"
     except KeyboardInterrupt:
@@ -328,6 +343,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         else:
             status, reason, code = rules.judged_end(ctx)
     s.finish(status, stop_reason=reason, stop_code=code)
+    if reason == STOPPED_BY_BUTTON:
+        s.clear_stop_request()
     if interrupted:
         raise KeyboardInterrupt
     return status
