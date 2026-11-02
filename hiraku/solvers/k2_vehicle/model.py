@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import kinematics
-from .mass import combine, part_items
+from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
 UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
@@ -140,33 +140,6 @@ def _mirror_pairs(sups: list[dict]) -> list[int]:
     return out
 
 
-def _parts_symmetric(parts: list[dict]) -> bool:
-    def box(p):
-        b = p["box"]
-        return (np.asarray(b["center_mm"], float), np.asarray(b["size_mm"], float),
-                np.asarray(b.get("rpy_deg", [0, 0, 0]), float), float(p["mass_kg"]))
-
-    items = [box(p) for p in parts if float(p["mass_kg"]) > 0]
-    used = [False] * len(items)
-    for i, (c, s, r, m) in enumerate(items):
-        if used[i]:
-            continue
-        if abs(c[1]) < 1e-9 and abs(r[0]) < 1e-9 and abs(r[2]) < 1e-9:
-            used[i] = True
-            continue
-        for j in range(len(items)):
-            if j == i or used[j]:
-                continue
-            c2, s2, r2, m2 = items[j]
-            if (np.allclose(c2 * [1, -1, 1], c, atol=1e-9) and np.allclose(s2, s, atol=1e-9)
-                    and np.allclose(r2 * [-1, 1, -1], r, atol=1e-9) and abs(m - m2) < 1e-12):
-                used[i] = used[j] = True
-                break
-        else:
-            return False
-    return True
-
-
 def _projected(boxes: list[tuple[np.ndarray, np.ndarray]], discs: list[tuple[np.ndarray, float]],
                axes: tuple[int, int], disc_box_width: float | None, cell: float = 0.01) -> tuple[float, np.ndarray]:
     """Area and centroid of the union of boxes (AABBs) and discs projected on two axes."""
@@ -218,12 +191,19 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         raise DesignError("the design has no supports (wheels, casters or legs); add design.supports")
     parts = design.get("parts") or []
     items = part_items(parts)
+    try:
+        members = member_items(design)
+    except ValueError as e:
+        raise DesignError(str(e))
+    if members:
+        items += members
+        notes.append("frame members weighed as thin rods: density x area x length at the member centre")
     if not items:
         raise DesignError("the design has no parts with mass; add design.parts with mass_kg")
 
     m_all = sum(it[0] for it in items)
     mirror = _mirror_pairs(sups)
-    symmetric = all(j >= 0 for j in mirror) and _parts_symmetric(parts)
+    symmetric = all(j >= 0 for j in mirror) and items_symmetric(items)
 
     # Order corners in mirror pairs (left, right), then centreline and unpaired ones.
     order: list[int] = []
@@ -410,6 +390,8 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     # Aerodynamic projections: part boxes and wheels.
     boxes = []
     for m, centre, inertia, p in items:
+        if "box" not in p:
+            continue  # frame members: thin, left out of the projected areas
         size = np.asarray(p["box"]["size_mm"], dtype=float) / 1000.0
         boxes.append((centre, size / 2.0))
     discs = [(c.pos, c.radius) for c in corners if c.kind != "leg"]

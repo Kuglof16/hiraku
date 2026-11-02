@@ -904,7 +904,8 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
                 snap = {"f": [tuple(v) for v in o["f"]], "p": [tuple(v) for v in o["p"]], "n": list(o["ntot"]),
                         "fn": [(o["n"][k][0] * o["ntot"][k], o["n"][k][1] * o["ntot"][k], o["n"][k][2] * o["ntot"][k])
                                for k in range(sim.n)],
-                        "acc": tuple(o["acc"]), "cg": sim.cg_world().tolist(), "t": sim.t, "torque": total}
+                        "acc": tuple(o["acc"]), "cg": sim.cg_world().tolist(), "t": sim.t, "torque": total,
+                        "g": list(sim.g)}
         wc = sim.wheel_centres()
         if all(wc[i][2] > z_free[k] for k, i in enumerate(stepping)):
             lifted = True
@@ -1011,9 +1012,12 @@ class StepClimbTool(K2Tool):
                 g = [snap["f"][i][k] - fn[k] for k in range(3)]
                 vectors.append({"kind": "reaction", "at": c.id, "origin_mm": p, "vector_N": [float(x) for x in fn]})
                 vectors.append({"kind": "grip", "at": c.id, "origin_mm": p, "vector_N": [float(x) for x in g]})
+            # d'Alembert force of the whole vehicle: minus its rate of momentum, which in the
+            # model equals the road forces plus the weight, so the set balances the weight exactly
             m = veh.m_total
+            inertia = [-(sum(snap["f"][i][k] for i in range(len(snap["f"]))) + m * snap["g"][k]) for k in range(3)]
             vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in snap["cg"]],
-                            "vector_N": [float(-m * snap["acc"][0]), float(-m * snap["acc"][1]), float(-m * snap["acc"][2])]})
+                            "vector_N": [float(x) for x in inertia]})
         if not crawl["lifted"]:
             notes.append("pushing with a growing torque did not lift the stepping wheels"
                          + (" (the driven wheels spun: grip)" if crawl["slip"] else ""))

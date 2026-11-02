@@ -26,7 +26,29 @@ def demo_design():
     d["parts"].append({"id": "cargo", "name": "cargo", "kind": "cargo", "mass_kg": 150.0,
                        "box": {"center_mm": [-1600.0, 0.0, 600.0], "size_mm": [900.0, 1000.0, 300.0]}})
     d["variables"].update({"motor_torque": q(60.0, "N*m"), "motor_power": q(10.0, "kW"), "gear_ratio": q(8.0, "1")})
+    # a ladder frame: two rails and two cross members (steel tubes)
+    d["nodes"] = [{"id": n, "xyz_mm": xyz} for n, xyz in (
+        ("LF", [300.0, 350.0, 350.0]), ("RF", [300.0, -350.0, 350.0]), ("LR", [-2100.0, 350.0, 350.0]),
+        ("RR", [-2100.0, -350.0, 350.0]), ("LA", [0.0, 350.0, 350.0]), ("RA", [0.0, -350.0, 350.0]),
+        ("LB", [-1800.0, 350.0, 350.0]), ("RB", [-1800.0, -350.0, 350.0]))]
+    d["members"] = [
+        {"id": "rail_L", "node_a": "LF", "node_b": "LR", "section": "rt40x80x2", "material": "steel"},
+        {"id": "rail_R", "node_a": "RF", "node_b": "RR", "section": "rt40x80x2", "material": "steel"},
+        {"id": "cross_A", "node_a": "LA", "node_b": "RA", "section": "rt40x40x2", "material": "steel"},
+        {"id": "cross_B", "node_a": "LB", "node_b": "RB", "section": "rt40x40x2", "material": "steel"},
+    ]
+    d["sections"] = {"rt40x80x2": {"shape": "rect_tube", "dims_mm": {"b": 40.0, "h": 80.0, "t": 2.0}},
+                     "rt40x40x2": {"shape": "rect_tube", "dims_mm": {"b": 40.0, "h": 40.0, "t": 2.0}}}
+    d["materials"] = {"steel": {"name": "steel (test)", "E_MPa": 205000.0, "nu": 0.3, "density_kg_m3": 7850.0,
+                                "yield_MPa": 235.0, "source": "test value", "verified": False}}
     return d
+
+
+def frame_mass():
+    """Hand calculation of the test frame: density x (b h - (b - 2t)(h - 2t)) x length."""
+    rail = 7850.0 * (40 * 80 - 36 * 76) * 1e-6 * 2.4
+    cross = 7850.0 * (40 * 40 - 36 * 36) * 1e-6 * 0.7
+    return 2 * rail + 2 * cross
 
 
 CASES = {
@@ -52,7 +74,7 @@ class EntryPoint(unittest.TestCase):
     def test_loading_chooses_occupants_and_cargo(self):
         d = demo_design()
         masses = {ld: build_vehicle(on_board(d, ld)).m_total for ld in ("empty", "driver", "two", "two_cargo")}
-        base = 300.0 + 4 * 15.0
+        base = 300.0 + 4 * 15.0 + frame_mass()
         self.assertAlmostEqual(masses["empty"], base)
         self.assertAlmostEqual(masses["driver"], base + 76.6)
         self.assertAlmostEqual(masses["two"], base + 2 * 76.6)
@@ -129,6 +151,14 @@ class Runs(unittest.TestCase):
         self.assertEqual(r["climbed"], 1.0)
         kinds = {v["kind"] for v in self.recs["step_climb"]["vectors"]}
         self.assertEqual(kinds, {"reaction", "grip", "inertia"})
+
+    def test_step_vectors_balance_the_weight_with_the_frame(self):
+        from hiraku.solvers.k2_vehicle.units import G0
+        m = 300.0 + 4 * 15.0 + 2 * 76.6 + 150.0 + frame_mass()
+        tot = [sum(v["vector_N"][k] for v in self.recs["step_climb"]["vectors"]) for k in range(3)]
+        self.assertAlmostEqual(tot[0], 0.0, delta=1e-6)
+        self.assertAlmostEqual(tot[1], 0.0, delta=1e-6)
+        self.assertAlmostEqual(tot[2], m * G0, delta=1e-6 * m * G0)
 
     def test_lane_change_and_offroad_keep_wheels_down(self):
         self.assertEqual(self.res("lane_change")["two_wheel_lift"], 0.0)
