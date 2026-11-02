@@ -1,0 +1,79 @@
+# Fixed requirements for the MVP run (the demo vehicle).
+# Shape: hiraku.contract "requirements_file". Sources are written in `basis`.
+# "not checked in this repository" = the value was taken from the cited page
+# during planning and has not been re-read for this repository yet.
+# "assumption" = an engineering assumption with no public source (trust 3).
+
+want: 林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)
+product: offroad-4w
+speed_class: vehicle
+flags:
+  ride: true            # 乗: people ride on it
+  lean: true            # 預: people sit on the seat
+  self_propelled: true  # 走
+  outdoor: true         # 外
+  rough: true           # 悪: unpaved forest roads
+  public_road: false    # 公: Q70 is a required question; this file assumes private land only (not asked)
+  battery: true         # 池
+  electric: true        # 電
+  pinch: true           # 挟: suspension gaps
+  cargo: true           # 荷
+  standing: true        # 置
+  vibration: true       # 振: wheels and motor rotate
+  continuous: true      # 続
+  assembly: true        # 組
+requirements:
+  - key: Q15
+    name: 段差
+    value: 100
+    unit: mm
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q30
+    name: 人数と荷重の組 (乗員の数、荷も載せる)
+    value: 2
+    unit: "1"
+    source: user
+    trust: 1
+    basis: request (2 人乗り、積載 150 kg)
+    note: MVP は 2 人 + 荷の組だけを見る。空車・運転者だけ・2 人の組はまだ見ない
+  - key: Q33
+    name: 体重 (強さの不利側)
+    value: 76.6
+    unit: kg
+    source: default
+    trust: 1
+    basis: AIST 人体寸法データベース 1991-92, 若年男性 95 パーセンタイル, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+  - key: Q40
+    name: 積載
+    value: 150
+    unit: kg
+    source: user
+    trust: 1
+    basis: request
+    note: 乗員とは別の荷として扱う (聞いていない)
+  - key: Q50
+    name: 最高速度
+    value: 40
+    unit: km/h
+    source: user
+    trust: 1
+    basis: request
+  - key: Q61
+    name: 安全率 (降伏に対して)
+    value: 1.5
+    unit: "1"
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q70
+    name: 公道を走るか
+    value: 私有地 (林道) だけ
+    source: default
+    trust: 3
+    basis: assumption of this fixed file; Q70 is a required question and was not asked
+tests: [P1, R1]
+design_file: data/designs/offroad-4w-v1.json
+round_limit: 1
+cost_limit_usd: 2.0

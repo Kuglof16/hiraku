@@ -1,0 +1,71 @@
+# Test catalog (general form, shared by every product).
+# applies_if: a boolean expression over the product flags (hiraku.contract
+# "flags") plus speed_static / speed_walk / speed_vehicle from speed_class,
+# and `always`. Evaluated by hiraku.catalog.expr.
+# requirement_keys: requirements the test uses.
+# Tests with `build` have a load-case builder in hiraku/catalog/build.py;
+# the others are listed so pick_domains can see them, and get a builder when
+# their tool exists.
+#
+# tolerance_rel: allowed |analyzed - predicted| / |predicted| for a match.
+# No standard publishes such a width (ISO 19364 and ISO 19365 check vehicle
+# dynamics software against tests, but the width is not in their public
+# parts), so HIRAKU chooses it and writes the reason in tolerance_basis.
+
+tests:
+  - {id: S1, domain: handling, title: 静的な転倒 (傾斜台・縁の荷重), applies_if: standing, requirement_keys: [Q30, Q33, Q40, Q41, Q60]}
+  - {id: S2, domain: handling, title: 旋回での転倒 (J ターン・定常円), applies_if: self_propelled, requirement_keys: [Q50]}
+  - {id: S3, domain: handling, title: 回避 (ダブルレーンチェンジ), applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50]}
+  - {id: S4, domain: handling, title: 制動と前のめり, applies_if: self_propelled, requirement_keys: [Q11, Q50, Q52, Q53]}
+  - {id: S5, domain: handling, title: 凸凹の横斜面, applies_if: self_propelled and rough, requirement_keys: [Q12, Q14]}
+  - {id: F1, domain: aero, title: 横風, applies_if: outdoor and self_propelled, requirement_keys: [Q16, Q18]}
+  - {id: F2, domain: aero, title: 空気抵抗, applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50, Q54]}
+  - {id: F3, domain: aero, title: 液体のこぼれ, applies_if: liquid and self_propelled, requirement_keys: [Q42, Q51]}
+  - id: P1
+    domain: powertrain
+    title: 段差を越える
+    applies_if: self_propelled
+    requirement_keys: [Q15, Q30, Q33, Q40]
+    build: p1_step
+    params:
+      speed: {value: 10.0, unit: km/h, basis: assumption}
+    tolerance_rel: 0.10
+    tolerance_basis: >-
+      HIRAKU's choice. The hand calculation and the tool share the same
+      quasi-static equilibrium; they differ only in how the load splits
+      between the wheels, so 10 % is allowed.
+  - {id: P2, domain: powertrain, title: 坂を登る・坂で発進する, applies_if: self_propelled, requirement_keys: [Q13, Q53]}
+  - {id: P3, domain: powertrain, title: 加速・最高速度, applies_if: self_propelled, requirement_keys: [Q50, Q51]}
+  - {id: P4, domain: powertrain, title: 航続・稼働時間, applies_if: self_propelled and battery, requirement_keys: [Q54]}
+  - {id: P5, domain: powertrain, title: アクチュエータの力と速さ, applies_if: electric and not self_propelled, requirement_keys: [Q40, Q56]}
+  - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}
+  - {id: C2, domain: crash, title: 人との接触, applies_if: near_people and self_propelled, requirement_keys: [Q50, Q62]}
+  - id: R1
+    domain: strength
+    title: 静的強度
+    applies_if: always
+    requirement_keys: [Q15, Q33, Q40, Q61]
+    build: r1_static
+    tolerance_rel: 0.15
+    tolerance_basis: >-
+      HIRAKU's choice. The hand calculation takes one rail as a simple beam;
+      the 3D frame shares the load through the cross members, so 15 % is
+      allowed.
+  - {id: R2, domain: strength, title: 衝撃 (落錘・落下・段差), applies_if: lean or cargo or self_propelled, requirement_keys: [Q40]}
+  - {id: R3, domain: strength, title: 疲労・耐久, applies_if: always, requirement_keys: [Q90, Q91, Q92]}
+  - {id: R4, domain: strength, title: 横転時の保護枠 (ROPS), applies_if: ride and rough, requirement_keys: [Q31, Q64]}
+  - {id: R5, domain: strength, title: たわみ・ゆがみ, applies_if: (cargo or lean) and not self_propelled, requirement_keys: [Q40]}
+  - {id: R6, domain: strength, title: 電池の取付の振動, applies_if: battery and self_propelled, requirement_keys: [Q73]}
+  - {id: N1, domain: nvh, title: 固有振動数と加振, applies_if: vibration, requirement_keys: []}
+  - {id: N2, domain: nvh, title: 乗り心地, applies_if: ride and self_propelled, requirement_keys: [Q12]}
+  - {id: N3, domain: nvh, title: 騒音, applies_if: electric and lean, requirement_keys: []}
+  - {id: T1, domain: thermal, title: 電池の温度, applies_if: battery and continuous, requirement_keys: [Q19, Q54]}
+  - {id: T2, domain: thermal, title: モーター・制御器の温度, applies_if: electric and continuous, requirement_keys: [Q19]}
+  - {id: T3, domain: thermal, title: 使い方とデューティ, applies_if: electric and not continuous, requirement_keys: [Q03]}
+  - {id: H1, domain: assembly, title: 干渉, applies_if: always, requirement_keys: []}
+  - {id: H2, domain: assembly, title: 手と工具が入るか, applies_if: assembly, requirement_keys: [Q81]}
+  - {id: H3, domain: assembly, title: 体格・手が届くか, applies_if: ride or lean or handheld, requirement_keys: [Q31]}
+  - {id: H4, domain: assembly, title: 挟み込み, applies_if: pinch, requirement_keys: [Q63]}
+  - {id: H5, domain: assembly, title: 組み立ての順番, applies_if: assembly, requirement_keys: [Q82]}
+  - {id: G1, domain: assembly, title: 区分・寸法 (法令), applies_if: public_road, requirement_keys: [Q70, Q71]}
+  - {id: G2, domain: assembly, title: 規格の項目に当てる, applies_if: always, requirement_keys: [Q72]}

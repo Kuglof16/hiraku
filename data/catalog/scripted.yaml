@@ -1,0 +1,52 @@
+# Scripted runs (python -m hiraku run ... --scripted): no Claude. The same tool
+# functions and hook rules run in a fixed order, so tests, the screen and QA
+# get a real events.jsonl without an API key. The run id ends in -scripted.
+#
+# Formula ids and input names must exist in the K0 registry (hiraku.solvers).
+# Until K0 is on main these follow the contract examples and are proposals.
+#
+# Input refs:
+#   lc.<param>                     param of this load case
+#   req.<Q key>                    requirement value and unit
+#   summary.<name>                 hiraku.tools.summary.design_summary (mass, cg_x, wheelbase, front_wheels, ...)
+#   summary.member_length.<id>     length of a member
+#   design.support.<id>.<field>    e.g. design.support.FL.radius_mm (unit from the suffix)
+#   design.section.<key>.<dim>     section dimension in mm (dims_mm)
+#   design.var.<name>              design variable
+#   pred.<quantity>                newest prediction of that quantity in this run and version
+#   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
+# After analyze, every prediction whose quantity is among the analysis results is compared.
+
+offroad-4w:
+  show_h1: true   # call analyze once without a prediction, so the H1 denial is recorded
+  steps:
+    - load_case: P1-step100
+      tool: step_climb
+      say: 段差の角に前輪が当たったときの力を、剛い輪の釣り合いで先に見積もります
+      predictions:
+        - quantity: front_wheel_load
+          formula_id: mass_props.front_wheel_load
+          output: W
+          assumptions: [parts carry the occupants and the cargo, load shared equally by the front wheels]
+          inputs: {m: summary.mass, a: summary.cg_x, L: summary.wheelbase, n: summary.front_wheels}
+        - quantity: front_wheel_force
+          formula_id: step_climb.wheel_force_rigid
+          output: F
+          assumptions: [quasi-static climb]
+          inputs: {r: design.support.FL.radius_mm, h: lc.step_height, W: pred.front_wheel_load}
+    - load_case: R1-step100
+      tool: frame_static
+      say: 段差で出た前輪の力をレールにかけ、単純支持の梁とみて曲げの応力を見積もります
+      predictions:
+        # The contract has no mm^3 unit, so the section modulus cannot be a
+        # quantity of its own; the formula takes the tube dimensions.
+        - quantity: max_stress
+          formula_id: frame_static.rail_bending
+          output: sigma
+          assumptions: [one rail as a simply supported beam, the wheel force at mid span, bending about the strong axis]
+          inputs:
+            F: ana.P1-step100.front_wheel_force
+            L: summary.member_length.rail_L0
+            b: design.section.rt40x80x2.b
+            h: design.section.rt40x80x2.h
+            t: design.section.rt40x80x2.t
