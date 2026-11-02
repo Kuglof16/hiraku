@@ -1,0 +1,108 @@
+/* Shared parts of the title screens (N05, N18): dark ground, the vertical
+   light, the name, the line under it, and strokes that draw on. */
+
+.night {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 42%, var(--night-2), var(--night) 70%);
+  color: var(--on-night);
+}
+
+/* --- vertical light: a thin line grows, then opens into a band --- */
+.light {
+  position: absolute;
+  animation: light-grow 0.6s cubic-bezier(.5, 0, .2, 1) both;
+  animation-delay: var(--t-line);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+          mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+}
+.light-core, .light-glow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.light-core {
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg,
+    rgba(246, 234, 208, 0) 0%,
+    rgba(246, 234, 208, 0.35) 22%,
+    var(--glow) 50%,
+    rgba(246, 234, 208, 0.35) 78%,
+    rgba(246, 234, 208, 0) 100%);
+  animation: light-open 0.8s cubic-bezier(.2, .8, .2, 1) both;
+  animation-delay: var(--t-open);
+}
+.light-glow {
+  left: -150%;
+  right: -150%;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(246, 234, 208, 0.18), rgba(246, 234, 208, 0) 70%);
+  animation: glow-in 1.2s ease-out both;
+  animation-delay: var(--t-open);
+}
+@keyframes light-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes light-open {
+  from { transform: scaleX(0.05); }
+  to   { transform: scaleX(1); }
+}
+@keyframes glow-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* --- the name, letter by letter --- */
+.name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font: 400 calc(160 * var(--u)) / 1 var(--font-latin);
+  letter-spacing: 0.3em;
+  padding-left: 0.3em;
+  color: var(--on-night);
+}
+.name span {
+  display: inline-block;
+  animation: letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both;
+  animation-delay: calc(var(--t-name) + var(--i) * 0.07s);
+}
+@keyframes letter-in {
+  from { opacity: 0; transform: translateY(calc(28 * var(--u))); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tag {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font: 400 calc(48 * var(--u)) / 1.2 var(--font-ja);
+  letter-spacing: 0.04em;
+  color: var(--on-night);
+  animation: fade-up 0.7s ease-out both;
+  animation-delay: var(--t-tag);
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(calc(14 * var(--u))); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- strokes that draw on (vehicle.js) --- */
+.vehicle-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.v-line { stroke: var(--on-night); }
+.v-halo { stroke: var(--night); }
+.draw-on .v-line,
+.draw-on .v-halo {
+  stroke-dasharray: 1 1;
+  animation: draw 0.8s ease-in-out both;
+  animation-delay: calc(var(--t-draw) + var(--k) * 0.07s);
+}
+@keyframes draw {
+  0%   { stroke-dashoffset: 1; opacity: 0; }
+  8%   { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
