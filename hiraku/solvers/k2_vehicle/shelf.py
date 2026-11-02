@@ -1392,7 +1392,10 @@ class StepClimbTool(K2Tool):
     Results (named front_* when the stepping wheels are the front ones, step_* otherwise):
     *_wheel_force (N, the push |F_x| at lift-off), *_wheel_load (N, its vertical force),
     *_wheel_load_static (N), force_ratio (1, F_x / F_z of that wheel), push_traction (N, the
-    driven wheels' forward force), required_mu_push (1), climbed (1, run 2; where says
+    driven wheels' forward force), required_mu_push (1), lifted_by_push (1: 0 when the
+    push of run 1 did not lift the stepping wheels, e.g. the driven wheels spun first; the
+    *_wheel_* values are then those of the steepest push reached, not of a lift-off),
+    climbed (1, run 2; where says
     "grip" or "torque" when it did not), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
     series, vectors and scene all come from run 1: the series run from the standstill
@@ -1485,6 +1488,8 @@ class StepClimbTool(K2Tool):
                     _res("force_ratio", crawl["ratio"], "1", lid), _res("push_traction", push, "N")]
             if nd > 0:
                 res.append(_res("required_mu_push", push / nd, "1"))
+            res.append(_res("lifted_by_push", 1.0 if crawl["lifted"] else 0.0, "1",
+                            None if crawl["lifted"] else ("grip" if crawl["slip"] else "torque")))
             for i, c in enumerate(veh.corners):
                 p = [x * 1000.0 for x in snap["p"][i]]
                 fn = snap["fn"][i]
