@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from hiraku.catalog.build import CatalogError
+
 Record = dict[str, Any]
 
 
-class BuildError(ValueError):
+class BuildError(CatalogError):
     """A load case cannot be built; the message names the missing or wrong requirement."""
 
 
@@ -49,7 +51,7 @@ def text(req: Record, key: str, choices: tuple[str, ...] = ()) -> str:
 def loading(req: Record, design: Record) -> tuple[str, list[str]]:
     """The loading to check (Q30) after checking the design carries the requirements' load
     (hiraku.catalog.build), and the requirement keys that set it."""
-    from hiraku.catalog.build import CatalogError, check_design_loading, loading_requirement
+    from hiraku.catalog.build import check_design_loading, loading_requirement
     from hiraku.catalog.loading import CARGO, OCCUPANTS
 
     try:
