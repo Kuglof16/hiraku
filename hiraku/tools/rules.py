@@ -16,10 +16,10 @@ from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
 from hiraku.tools.judge import latest_verdicts
 
-H1 = "H1_prediction_first"
-H2 = "H2_tool_usable"
-H3 = "H3_cause_before_continue"
-H4 = "H4_no_stop_before_judged"
+H1 = "HK1_prediction_first"
+H2 = "HK2_tool_usable"
+H3 = "HK3_cause_before_continue"
+H4 = "HK4_no_stop_before_judged"
 
 assert set(HOOK_RULES) == {H1, H2, H3, H4}
 
