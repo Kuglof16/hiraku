@@ -275,9 +275,10 @@ class Runs(unittest.TestCase):
         self.assertLess(wx["values"][up] * 1000.0, edge)
 
     def test_assumptions_are_in_the_record(self):
-        notes = [e["name"] for e in self.recs["crosswind"].get("effects", [])]
-        self.assertTrue(any(n.startswith("assumption: cy = 1") for n in notes), notes)
+        notes = self.recs["crosswind"]["assumptions"]
+        self.assertTrue(any(n.startswith("cy = 1") for n in notes), notes)
         self.assertTrue(any("side_area" in n and "projection" in n for n in notes), notes)
+        self.assertFalse(any(e["name"].startswith("assumption") for e in self.recs["crosswind"].get("effects", [])))
 
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")
