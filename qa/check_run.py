@@ -13,6 +13,14 @@ their basis. What it looks at:
 - files and events: each record file has exactly one event whose data is the
   same object, and each record event has its file (layout.py)
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
+- project: project.json keeps the run.started data, except the fields that may
+  change and what project.updated re-sends after version 1 (load cases, picks,
+  roles); stop.request is gone once the run finished; tools/ holds each attempt
+  at a tool made in the run as <name>-<n>.py with its .check.json
+- report: report.json is the last report.written; each report covers the picked
+  domains with the state and verdicts of their tiles at that time, and its
+  differences are mismatches of that version with their recorded diff_rel and
+  cause (warning when a mismatch on a judged load case is left out)
 - HK1: every analysis names predictions of the same version and load case that
   were recorded before it
 - HK2: a tool is used only after a tool.checked that says usable (warning when
@@ -76,6 +84,8 @@ RECORD_EVENTS = {
 UPDATABLE_FIELDS = {"comparison": {"cause_id"}, "cause": {"resolved", "resolved_by"}}
 # project.json fields the contract lets change after run.started.
 PROJECT_MUTABLE = {"status", "stop_reason", "requirements", "cost_usd", "design_versions"}
+# and what project.updated re-sends once the designer has made version 1 (docs/contract.md)
+PROJECT_UPDATABLE = {"domain_picks", "load_cases", "agents"}
 OPS = {"<=": operator.le, ">=": operator.ge, "<": operator.lt, ">": operator.gt}
 # results the assembly tool reports about its own interference list (the analysis
 # dept's quantity names): count and deepest overlap per state. Checked when reported.
@@ -84,6 +94,8 @@ INTERFERENCE_WORST = {"worst_interference": "rest", "worst_motion_interference":
 # the record a denied call should be followed by when the agent does what the hook asks
 FOLLOW_UP = {"HK1_prediction_first": "prediction.recorded", "HK3_cause_before_continue": "cause.recorded"}
 VERSION_DIR_RE = re.compile(r"^v([0-9]{3})$")
+# tools/<name>-<n>.py and tools/<name>-<n>.check.json: one attempt at a tool made in the run
+TOOL_FILE_RE = re.compile(r"^(\w+)-([0-9]+)(\.py|\.check\.json)$")
 REL = 1e-9
 
 
@@ -127,6 +139,8 @@ class RunChecker:
         self.judgements: list[tuple[int, dict]] = []
         self.tool_checks: dict[str, list[tuple[int, dict]]] = {}
         self.started: dict[str, int] = {}
+        self.project_updates: list[tuple[int, dict]] = []
+        self.reports: list[tuple[int, dict]] = []
 
     # --- reporting ---------------------------------------------------------------
     def error(self, rule: str, where: str, message: str) -> None:
@@ -269,6 +283,10 @@ class RunChecker:
                 self.tool_checks.setdefault(data.get("name"), []).append((i, data))
             elif kind == "analysis.started":
                 self.started.setdefault(data.get("analysis_id"), i)
+            elif kind == "project.updated":
+                self.project_updates.append((i, data))
+            elif kind == "report.written":
+                self.reports.append((i, data))
             self._event_fields_agree(i, e, data)
 
     def _event_fields_agree(self, i: int, e: dict, data: dict) -> None:
@@ -299,13 +317,24 @@ class RunChecker:
     def check_project_vs_start(self) -> None:
         if not self.project or not self.events or self.events[0].get("kind") != "run.started":
             return
-        start = self.events[0].get("data") or {}
-        for key in sorted(set(start) | set(self.project)):
+        prev, prev_name = self.events[0].get("data") or {}, "run.started"
+        first = self.designs.get(1)
+        for i, data in self.project_updates:
+            w = self.where_of[i]
+            if first is None or first[0] > i:
+                self.error("project.updated", w, "project.updated before design version 1 (it re-sends the "
+                                                 "load cases, picks and roles of the first version)")
+            for key in sorted(set(prev) | set(data)):
+                if key not in PROJECT_MUTABLE | PROJECT_UPDATABLE and prev.get(key) != data.get(key):
+                    self.error("project.changed", w, f"{key} changed in project.updated (only "
+                                                     f"{', '.join(sorted(PROJECT_UPDATABLE))} are re-sent)")
+            prev, prev_name = data, f"project.updated ({w})"
+        for key in sorted(set(prev) | set(self.project)):
             if key in PROJECT_MUTABLE:
                 continue
-            if start.get(key) != self.project.get(key):
+            if prev.get(key) != self.project.get(key):
                 self.error("project.changed", layout.PROJECT_FILE,
-                           f"{key} differs from run.started data (only {', '.join(sorted(PROJECT_MUTABLE))} may change)")
+                           f"{key} differs from {prev_name} data (only {', '.join(sorted(PROJECT_MUTABLE))} may change)")
         versions = self.project.get("design_versions")
         if versions is not None and sorted(versions) != sorted(self.designs):
             self.warn("project.versions", layout.PROJECT_FILE,
@@ -319,6 +348,14 @@ class RunChecker:
             name = p.name
             if name in (layout.PROJECT_FILE, layout.EVENTS_FILE, layout.REPORT_FILE):
                 continue
+            if name == layout.STOP_REQUEST_FILE:
+                if any(e.get("kind") == "run.finished" for e in self.events):
+                    self.warn("files.stop_request", name, "left after run.finished (it is there only while "
+                                                          "someone asks the run to stop)")
+                continue
+            if name == layout.TOOLS_DIR and p.is_dir():
+                self._check_tools_dir(p)
+                continue
             m = VERSION_DIR_RE.match(name)
             if p.is_dir() and m:
                 self._check_version_dir(p, int(m.group(1)), seen, seen_designs)
@@ -331,6 +368,23 @@ class RunChecker:
         for v, (i, _) in self.designs.items():
             if v not in seen_designs:
                 self.error("files.missing", self.where_of[i], f"design version {v} has an event but no design.json")
+
+    def _check_tools_dir(self, tdir: Path) -> None:
+        """Each attempt at a tool made in the run has its code and its check file, numbered 1..n per name."""
+        names = {f.name for f in tdir.iterdir()}
+        attempts: dict[str, set[int]] = {}
+        for f in sorted(tdir.iterdir()):
+            m = TOOL_FILE_RE.match(f.name)
+            if not m or not f.is_file():
+                self.warn("files.unknown", self.rel(f), "not a tool attempt (<name>-<n>.py or .check.json)")
+                continue
+            attempts.setdefault(m.group(1), set()).add(int(m.group(2)))
+            other = f"{m.group(1)}-{m.group(2)}" + (".check.json" if m.group(3) == ".py" else ".py")
+            if other not in names:
+                self.error("files.missing", self.rel(f), f"no {other} beside it")
+        for tool, ns in sorted(attempts.items()):
+            if sorted(ns) != list(range(1, len(ns) + 1)):
+                self.error("ids.numbering", self.rel(tdir), f"attempts of {tool} are {sorted(ns)}, not 1..{len(ns)}")
 
     def _check_version_dir(self, vdir: Path, version: int, seen, seen_designs) -> None:
         dirs = {d: k for k, d in layout.RECORD_DIRS.items()}
@@ -812,6 +866,74 @@ class RunChecker:
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
 
+    def check_report(self) -> None:
+        """report.json is the last report.written; what code fills in each report is the records'."""
+        p = self.path / layout.REPORT_FILE
+        if p.exists():
+            rep = self._read_json(p)
+            if rep is not None and self._schema("report", rep, layout.REPORT_FILE):
+                if not self.reports:
+                    self.error("files.no_event", layout.REPORT_FILE, "report.json but no report.written event")
+                elif self.reports[-1][1] != rep:
+                    self.error("files.event_data", layout.REPORT_FILE,
+                               f"differs from the last report.written ({self.where_of[self.reports[-1][0]]})")
+        elif self.reports:
+            self.error("files.missing", self.where_of[self.reports[-1][0]], "report.written but no report.json")
+        for i, rep in self.reports:
+            self._check_report(i, rep)
+
+    def _check_report(self, i: int, rep: dict) -> None:
+        w, v = self.where_of[i], rep.get("design_version")
+        if v not in self.designs or self.designs[v][0] > i:
+            self.error("report.version", w, f"report on design version {v}, which was not created before it")
+        picked = [p.get("domain") for p in (self.project or {}).get("domain_picks", [])]
+        doms = [d.get("domain") for d in rep.get("domains", [])]
+        if sorted(doms) != sorted(picked):
+            self.error("report.domains", w, f"domains {doms} but the picked domains are {picked}")
+        for n in rep.get("next", []):
+            if n.get("domain") not in picked:
+                self.error("report.domains", w, f"next names {n.get('domain')}, not a picked domain")
+        tiles = {j.get("domain"): j for k, j in self.judgements if k < i and j.get("design_version") == v}
+        for d in rep.get("domains", []):
+            dom, tile = d.get("domain"), tiles.get(d.get("domain"))
+            if d.get("state") != (tile or {}).get("state", "pending"):
+                self.error("report.state", w, f"{dom} {d.get('state')} but its tile is {(tile or {}).get('state', 'pending')}")
+            vids = d.get("verdict_ids", [])
+            if tile is not None and sorted(vids) != sorted(tile.get("verdict_ids", [])):
+                self.error("report.verdicts", w, f"{dom} lists {vids} but its tile {tile.get('verdict_ids', [])}")
+            for vid in vids:
+                rec = self.recs["verdict"].get(vid)
+                if rec is None or rec[0] > i:
+                    self.error("report.verdicts", w, f"{vid} was not recorded before the report")
+            self._check_report_differences(i, w, v, dom, d.get("differences", []))
+
+    def _check_report_differences(self, i: int, w: str, v: int, dom: str, diffs: list[dict]) -> None:
+        listed = set()
+        for x in diffs:
+            cid = x.get("comparison_id")
+            listed.add(cid)
+            rec = self.recs["comparison"].get(cid)
+            if rec is None or rec[0] > i:
+                self.error("report.differences", w, f"{cid} was not recorded before the report")
+                continue
+            c = rec[1]
+            if c.get("status") != "mismatch":
+                self.error("report.differences", w, f"{cid} is listed as a difference but is a {c.get('status')}")
+            if isinstance(x.get("diff_rel"), (int, float)) and isinstance(c.get("diff_rel"), (int, float)) \
+                    and not _close(x["diff_rel"], c["diff_rel"]):
+                self.error("report.differences", w, f"{cid} diff_rel {x['diff_rel']} but the comparison says {c['diff_rel']}")
+            cause = x.get("cause_id")
+            if cause is not None:
+                crec = self.recs["cause"].get(cause)
+                if crec is None or crec[0] > i or crec[1].get("comparison_id") != cid:
+                    self.error("report.differences", w, f"{cid} cause {cause} is not a cause of it recorded before the report")
+        for cid, (k, c) in self.recs["comparison"].items():
+            p = (self.recs["prediction"].get(c.get("prediction_id")) or (None, {}))[1]
+            lc = self.load_cases.get(p.get("load_case_id")) or {}
+            if (k < i and c.get("status") == "mismatch" and cid not in listed and lc.get("domain") == dom
+                    and "criterion" in lc and self.version_of("comparison", c) == v):
+                self.warn("report.differences", w, f"{dom} leaves out the mismatch {cid} ({lc.get('load_case_id')})")
+
     def check_h3(self) -> None:
         open_mismatch: dict[str, set[str]] = {}
         for i, e in enumerate(self.events):
@@ -1062,6 +1184,7 @@ class RunChecker:
         self.check_causes()
         self.check_verdicts()
         self.check_judgements()
+        self.check_report()
         self.check_h3()
         self.check_hooks()
         self.check_agents()

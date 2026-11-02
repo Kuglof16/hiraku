@@ -30,7 +30,8 @@ def write_run(root: Path, events: list[dict]) -> Path:
     """Write project.json, events.jsonl and every record file the events describe."""
     run = root / RUN_ID
     run.mkdir(parents=True)
-    project = copy.deepcopy(events[0]["data"])
+    updates = [e for e in events if e["kind"] == "project.updated"]
+    project = copy.deepcopy((updates[-1] if updates else events[0])["data"])
     fin = [e for e in events if e["kind"] == "run.finished"]
     if fin:
         project["status"] = fin[-1]["data"]["status"]
@@ -56,6 +57,8 @@ def write_run(root: Path, events: list[dict]) -> Path:
             p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "judgement.updated":
             judgements.setdefault(d["design_version"], {})[d["domain"]] = d
+        elif e["kind"] == "report.written":
+            (run / layout.REPORT_FILE).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     for v, js in judgements.items():
         (layout.version_dir(run, v) / layout.JUDGEMENTS_FILE).write_text(
             json.dumps(list(js.values()), ensure_ascii=False), encoding="utf-8")
@@ -145,6 +148,92 @@ class CheckRun(unittest.TestCase):
         proj["want"] = "something else"
         p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
         self.assertIn("project.changed", {f.rule for f in cr.check_run(run)})
+
+    # --- project.updated, tools made in the run, stop.request ------------------------
+    @staticmethod
+    def _first_design(ev, before_design=False):
+        """The run starts without load cases or picks; project.updated re-sends them after version 1."""
+        full = copy.deepcopy(ev[0]["data"])
+        ev[0]["data"].update(load_cases=[], domain_picks=[])
+        at = by_kind(ev, "design.created")
+        upd = {"seq": 0, "ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "kind": "project.updated",
+               "agent": "designer", "data": full}
+        i = ev.index(at)
+        ev.insert(i if before_design else i + 1, upd)
+        return renumber(ev)
+
+    def test_project_updated_after_the_first_version(self):
+        self.assertEqual(self.rules(self._first_design(sample_events())), set())
+        self.assertFlags(self._first_design(sample_events(), before_design=True), "project.updated")
+        ev = self._first_design(sample_events())
+        by_kind(ev, "project.updated")["data"]["want"] = "something else"
+        self.assertFlags(ev, "project.changed")
+        run = write_run(self.root / "x", self._first_design(sample_events()))
+        p = run / layout.PROJECT_FILE
+        proj = json.loads(p.read_text(encoding="utf-8"))
+        proj["load_cases"] = []  # project.json must keep what project.updated re-sent
+        p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
+        self.assertIn("project.changed", {f.rule for f in cr.check_run(run) if f.level == "error"})
+
+    def test_tools_made_in_the_run_and_the_stop_request(self):
+        run = write_run(self.root / "x", sample_events())
+        tools = run / layout.TOOLS_DIR
+        tools.mkdir()
+        for name in ("beam-1.py", "beam-1.check.json", "beam-2.py", "beam-2.check.json"):
+            (tools / name).write_text("{}", encoding="utf-8")
+        self.assertEqual([str(f) for f in cr.check_run(run) if f.rule.startswith(("files", "ids"))], [])
+        (tools / "beam-2.check.json").unlink()
+        (tools / "beam-4.py").write_text("", encoding="utf-8")
+        (tools / "beam-4.check.json").write_text("{}", encoding="utf-8")
+        found = {(f.rule, f.level) for f in cr.check_run(run)}
+        self.assertIn(("files.missing", "error"), found)
+        self.assertIn(("ids.numbering", "error"), found)
+        (run / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+        self.assertIn("files.stop_request", {f.rule for f in cr.check_run(run) if f.level == "warn"})
+
+    # --- the report (report.json and report.written) ---------------------------------
+    @staticmethod
+    def _report(ev, **domain):
+        """A report.written right after the last judgement, filled from the records."""
+        j = [e for e in ev if e["kind"] == "judgement.updated"][-1]
+        entry = {"domain": "strength", "state": j["data"]["state"], "line": "qa line",
+                 "verdict_ids": list(j["data"]["verdict_ids"]), "differences": []}
+        entry.update(domain)
+        rep = {"design_version": 1, "agent": "lead", "domains": [entry], "unchecked": [], "next": [],
+               "summary": "qa summary"}
+        ev.insert(ev.index(j) + 1, {"seq": 0, "ts": j["ts"], "t": j["t"], "run_id": RUN_ID, "kind": "report.written",
+                                    "agent": "lead", "design_version": 1, "data": rep})
+        return renumber(ev)
+
+    def test_report_follows_its_records(self):
+        self.assertEqual(self.rules(self._report(sample_events())), set())
+        self.assertFlags(self._report(sample_events(), state="red"), "report.state")
+        self.assertFlags(self._report(sample_events(), verdict_ids=[]), "report.verdicts")
+        match = {"comparison_id": "cmp-0001", "diff_rel": 0.0, "cause_id": None}
+        self.assertFlags(self._report(sample_events(), differences=[match]), "report.differences")
+        ev = self._report(sample_events())
+        by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y"}]
+        self.assertFlags(ev, "report.domains")
+
+    def test_report_file_is_the_last_report_written(self):
+        run = write_run(self.root / "x", self._report(sample_events()))
+        p = run / layout.REPORT_FILE
+        rep = json.loads(p.read_text(encoding="utf-8"))
+        rep["summary"] = "changed"
+        p.write_text(json.dumps(rep, ensure_ascii=False), encoding="utf-8")
+        self.assertIn("files.event_data", {f.rule for f in cr.check_run(run)})
+        p.unlink()
+        self.assertIn("files.missing", {f.rule for f in cr.check_run(run)})
+
+    def test_report_lists_the_mismatches_with_their_causes(self):
+        ev = self.safe_side_flow()
+        c = [e for e in ev if e["kind"] == "comparison.recorded"][-1]["data"]
+        diff = {"comparison_id": "cmp-0001", "diff_rel": c["diff_rel"], "cause_id": "cause-0001"}
+        self.assertEqual(self.rules(self._report(copy.deepcopy(ev), differences=[diff])), set())
+        self.assertIn("report.differences", self.rules(self._report(copy.deepcopy(ev)), "warn"))
+        self.assertFlags(self._report(copy.deepcopy(ev), differences=[dict(diff, diff_rel=0.5)]), "report.differences")
+        self.assertFlags(self._report(copy.deepcopy(ev), differences=[dict(diff, cause_id="cause-0002")]),
+                         "report.differences")
 
     # --- hook rules ------------------------------------------------------------------
     def test_h1_analysis_without_its_prediction(self):
