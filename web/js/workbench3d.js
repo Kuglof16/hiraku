@@ -580,8 +580,10 @@ export class Workbench3D {
     this.buildGround();
     const d = this.sceneDesc;
     // a step, a wall or a stop reads best from the side; a lane change from the front
-    const side = d && (d.step || d.wall || analysis?.tool === "braking");
-    const view = !d ? "default" : d.table ? "table" : d.course ? "front" : side ? "side" : "default";
+    const has = (...kinds) => (d?.objects ?? []).some((o) => kinds.includes(o.kind));
+    const side = d && (d.step || d.wall || has("step", "wall", "ramp") || analysis?.tool === "braking");
+    const front = d && (d.course || has("cone", "gate"));
+    const view = !d ? "default" : d.table ? "table" : front ? "front" : side ? "side" : "default";
     this.liftIsLimit = liftIsLimit(loadCase);
     this.ghost.visible = !!this.frame && !!this.toggles.limit && this.liftIsLimit;
     if (view !== this.view && this.design) {
