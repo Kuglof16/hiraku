@@ -2,6 +2,7 @@ import copy
 import unittest
 
 from hiraku.agent.scripted import ScriptError, load_plan, resolve, run_scripted
+from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
 
@@ -17,11 +18,15 @@ def cause_of(ctx, comparison):
     return next((c for c in ctx.store.records("cause") if c["comparison_id"] == comparison["comparison_id"]), None)
 
 
-def plan_with_r1_retry():
-    """The offroad plan with a second R1 prediction the stand-in frame tool agrees with."""
+def r1_second(plan):
+    """The R1 step's retry (the rail-joint prediction)."""
+    return plan["steps"][1]["expected_mismatch"]["retry"]
+
+
+def plan_with_third_r1_prediction():
+    """The offroad plan with a third R1 prediction the stand-in frame tool agrees with."""
     plan = copy.deepcopy(load_plan("offroad-4w"))
-    r1 = plan["steps"][1]
-    r1["expected_mismatch"]["retry"] = {"predictions": [{
+    r1_second(plan)["expected_mismatch"]["retry"] = {"predictions": [{
         "quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma", "assumptions": [],
         "inputs": {"F": "ana.P1-step100.front_wheel_force", "L": "summary.wheelbase", "b": "summary.rail_section.b",
                    "h": "summary.rail_section.h", "t": "summary.rail_section.t"},
@@ -30,9 +35,10 @@ def plan_with_r1_retry():
 
 
 class ScriptedRunTest(RunCase, unittest.TestCase):
-    # The first R1 analysis comes out 1.5 x the stand-in's beam formula (like the real tool
-    # against rail_step_bending, +52 %); later ones 1.03 x, which the plan's retry matches.
-    frame_factor = (1.5, 1.03)
+    # R1 analyses come out as the stand-in's beam formula times 1.5 (+47 % against rail_step_bending,
+    # like the real tool's +52 %), then 1.8 (-19 % against the stand-in rail-joint formula, like the
+    # real -21 %), then 1.03 (a third prediction with the beam formula matches).
+    frame_factor = (1.5, 1.8, 1.03)
 
     def test_offroad_plan(self):
         self.assertEqual(run_scripted(self.ctx), "stopped")
@@ -56,22 +62,42 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertIn("偶力", cause["cause"])
         self.assertEqual(self.ctx.store.get("comparison", p1[0]["comparison_id"])["cause_id"], cause["cause_id"])
 
-        # R1: rail_step_bending mismatches, the plan's cause is written, and with no second
-        # prediction in the plan yet the run stops with R1 unjudged
-        (r1,) = comparisons(self.ctx, "R1-step100")
-        self.assertEqual(self.ctx.prediction(r1["prediction_id"])["formula_id"], "frame_static.rail_step_bending")
-        self.assertEqual(r1["status"], "mismatch")
-        self.assertFalse(cause_of(self.ctx, r1)["resolved"])
-        self.assertIn("張り出し", cause_of(self.ctx, r1)["cause"])
-        self.assertIn("no second prediction", self.ctx.project["stop_reason"])
+        # R1: rail_step_bending mismatches (analysis larger), the plan's cause is written; the
+        # rail-joint formula mismatches the other way, its cause is written, and with nothing
+        # decided after that the run stops with R1 unjudged
+        r1 = comparisons(self.ctx, "R1-step100")
+        self.assertEqual([self.ctx.prediction(c["prediction_id"])["formula_id"] for c in r1],
+                         ["frame_static.rail_step_bending", "frame_static.rail_joint_stress"])
+        self.assertEqual([c["status"] for c in r1], ["mismatch", "mismatch"])
+        self.assertGreater(r1[0]["diff_rel"], 0.15)
+        self.assertLess(r1[1]["diff_rel"], -0.15)
+        causes = [cause_of(self.ctx, c) for c in r1]
+        self.assertEqual([c["resolved"] for c in causes], [False, False])
+        self.assertIn("張り出し", causes[0]["cause"])
+        self.assertIn("rail_joint_stress", causes[0]["fix"])
+        self.assertIn("隣の継ぎ手", causes[1]["cause"])
+        self.assertIn(f"no next prediction after {r1[1]['comparison_id']}", self.ctx.project["stop_reason"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn(r1_second(load_plan("offroad-4w"))["expected_mismatch"]["stop"], said)
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
         self.assert_events_fit()
 
-    def test_r1_retry_reaches_a_verdict(self):
-        self.assertEqual(run_scripted(self.ctx, plan_with_r1_retry()), "done")
+    def test_rail_joint_inputs_come_from_the_design(self):
+        run_scripted(self.ctx)
+        pred = next(p for p in self.ctx.store.records("prediction") if p["formula_id"] == "frame_static.rail_joint_stress")
+        joint = design_summary(self.ctx.store.design())["loadings"]["two_cargo"]["rail_joint"]
+        p1 = next(a for a in self.ctx.store.records("analysis") if a["load_case_id"] == "P1-step100")
+        self.assertEqual(joint["support"], "RL")
+        rear_load = next(r for r in p1["results"] if r["quantity"] == "wheel_load_RL")
+        self.assertEqual(pred["inputs"]["W"], {"value": rear_load["value"], "unit": "N"})
+        for name in ("M_oh", "z", "e", "L1", "L_c", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c"):
+            self.assertEqual(pred["inputs"][name], joint[name], name)
+
+    def test_third_r1_prediction_reaches_a_verdict(self):
+        self.assertEqual(run_scripted(self.ctx, plan_with_third_r1_prediction()), "done")
         r1 = comparisons(self.ctx, "R1-step100")
-        self.assertEqual([c["status"] for c in r1], ["mismatch", "match"])
-        self.assertEqual(cause_of(self.ctx, r1[0])["resolved_by"], r1[1]["comparison_id"])
+        self.assertEqual([c["status"] for c in r1], ["mismatch", "mismatch", "match"])
+        self.assertEqual([cause_of(self.ctx, c)["resolved_by"] for c in r1[:2]], [r1[2]["comparison_id"]] * 2)
         self.assertEqual(self.kinds().count("verdict.recorded"), 1)
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "green")
         self.assertEqual(self.ctx.project["status"], "done")
@@ -93,7 +119,18 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual(resolve(self.ctx, "design.section.rt40x80x2.h", lc), {"value": 80.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "summary.member_length.rail_L0", lc), {"value": 900.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, {"value": 1, "unit": "N"}, lc), {"value": 1.0, "unit": "N"})
-        for bad in ("pred.nothing", "ana.P1-step100.front_wheel_force", "nope.x", "design.support.ZZ.radius_mm"):
+        # the rail joint behind the example's rear axle: rail ahead 900 mm, cross member 800 mm,
+        # wheel 250 mm outside the rail, rail centre 350 mm above the ground, nothing behind the axle
+        r1 = self.ctx.load_case("R1-step100")
+        self.assertEqual(resolve(self.ctx, "load.rail_joint.L1", r1), {"value": 900.0, "unit": "mm"})
+        self.assertEqual(resolve(self.ctx, "load.rail_joint.L_c", r1), {"value": 800.0, "unit": "mm"})
+        self.assertEqual(resolve(self.ctx, "load.rail_joint.e", r1), {"value": 250.0, "unit": "mm"})
+        self.assertEqual(resolve(self.ctx, "load.rail_joint.z", r1), {"value": 350.0, "unit": "mm"})
+        self.assertEqual(resolve(self.ctx, "load.rail_joint.M_oh", r1), {"value": 0.0, "unit": "N*mm"})
+        self.assertEqual(resolve(self.ctx, "design.support.{load.rail_joint.support}.radius_mm", r1),
+                         {"value": 300.0, "unit": "mm"})
+        for bad in ("pred.nothing", "ana.P1-step100.front_wheel_force", "nope.x", "design.support.ZZ.radius_mm",
+                    "load.rail_joint.support", "design.support.{lc.step_height}.radius_mm", "lc.{nope.x}"):
             with self.subTest(bad=bad):
                 with self.assertRaises(ScriptError):
                     resolve(self.ctx, bad, lc)
@@ -101,16 +138,21 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")
         self.assertEqual([s["load_case"] for s in plan["steps"]], ["P1-step100", "R1-step100"])
-        refs = []
+        refs, chain = [], []
         for step in plan["steps"]:
-            preds = step["predictions"] + step.get("expected_mismatch", {}).get("retry", {}).get("predictions", [])
-            refs += [r for p in preds for r in p["inputs"].values() if isinstance(r, str)]
+            node = step
+            while node is not None:
+                refs += [r for p in node["predictions"] for r in p["inputs"].values() if isinstance(r, str)]
+                em = node.get("expected_mismatch")
+                if em:
+                    chain.append(em)
+                node = em.get("retry") if em else None
+        self.assertIn("ana.P1-step100.wheel_load_{load.rail_joint.support}", refs)
         for r in refs:
             self.assertFalse(r.startswith(("design.section.", "summary.member_length.", "design.support.")), r)
-        for step in plan["steps"]:
-            em = step.get("expected_mismatch")
-            if em:
-                self.assertTrue(em["source"] and em["cause"] and em["fix"])
+        self.assertEqual(len(chain), 3)  # P1 once, R1 twice
+        for em in chain:
+            self.assertTrue(em["source"] and em["cause"] and em["fix"])
 
 
 class ScriptedNoExpectedMismatchTest(RunCase, unittest.TestCase):
