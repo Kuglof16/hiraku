@@ -10,6 +10,9 @@
         "1",
         "%",
         "mm",
+        "mm^2",
+        "mm^3",
+        "mm^4",
         "m",
         "km",
         "kg",
@@ -453,7 +456,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "frame, suspension, wheel, battery, motor, controller, seat, occupant, cargo, body, rollbar, ..."
+          "description": "frame, suspension, wheel, battery, motor, controller, seat, occupant, cargo, body, rollbar, ... Occupants and cargo are parts (kind occupant / cargo); a load case chooses which are on board with params.loading."
         },
         "box": {
           "type": "object",
@@ -693,7 +696,8 @@
                 "type": "boolean"
               }
             ]
-          }
+          },
+          "description": "Test conditions. params.loading (string) chooses who and what is on board: empty, driver, two, two_cargo (catalog Q30). Without it, solvers use two_cargo."
         },
         "requirement_keys": {
           "type": "array",
