@@ -67,19 +67,27 @@ offroad-4w:
                        r: summary.front_wheel_radius, h: lc.step_height}
     - load_case: R1-step100
       tool: frame_static
-      say: 段差で出た前輪の力でレールが曲がるとみて、曲げの応力を見積もります
-      # frame_static.rail_bending looks at a different place than the analysis's
-      # highest stress (the rear rail under the cargo and motor) and misses by
-      # about 44 % on the demo vehicle. The analysis department is writing a
-      # formula for that place; this step switches to it when its id is known.
+      say: 段差を押して登るときのレールを、前後の車軸で支えた梁とみて曲げの応力を見積もります
       predictions:
         - quantity: max_stress
-          formula_id: frame_static.rail_bending
+          formula_id: frame_static.rail_step_bending
           output: sigma
-          assumptions: [レールを前後の車軸で支えた梁とみて、真ん中に前輪の力をかける]
+          assumptions: [車体の重さは全部レールにかかるとみる (安全側)]
           inputs:
-            F: ana.P1-step100.front_wheel_force
+            W: load.weight
             L: summary.wheelbase
+            F: ana.P1-step100.front_wheel_force
+            z: summary.rail_section.z
+            r: summary.front_wheel_radius
             b: summary.rail_section.b
             h: summary.rail_section.h
             t: summary.rail_section.t
+      expected_mismatch:
+        quantity: max_stress
+        source: the analysis department's check of the demo vehicle (rail_step_bending against frame_static, +52 %), 2026-11-02
+        cause: >-
+          梁の式は前後の車軸のあいだだけを見ている。後ろの車軸より後ろに張り出した荷とモーターの重さが、
+          後ろの車軸のところでレールを曲げる (張り出しの曲げ) が、両端で支えた梁の式では支点の曲げは 0 になる。
+          また、車輪はレールの外側にあるので、車輪の力はレールに横の曲げとねじりも加えるが、梁の式には入っていない
+        fix: 張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式で予測し直す
+        # retry: the analysis department is writing that formula; add it here when its id is known.

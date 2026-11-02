@@ -161,7 +161,10 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, step: Record) -> None:
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録して、予測し直します")
     record_cause(ctx, {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}, agent)
-    retry = expected["retry"]
+    retry = expected.get("retry")
+    if retry is None:
+        _say(ctx, agent, lc, "直した式はまだ道具の棚にありません。ここで止めます")
+        raise Stop(f"the plan has no second prediction for {hit['comparison_id']} yet")
     if retry.get("say"):
         _say(ctx, agent, lc, retry["say"])
     _analyze_and_compare(ctx, lc, agent, step["tool"], _predict(ctx, lc, agent, retry["predictions"]))

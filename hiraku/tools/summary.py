@@ -1,7 +1,8 @@
 """Plain sums and distances read off a design, so hand-calculation inputs can
 be taken from a tool instead of being worked out by the model. No physics:
 masses are added (parts, and each frame member as density * area * length),
-the centre of mass is the mass-weighted centre, lengths are distances.
+weight is mass times standard gravity, the centre of mass is the
+mass-weighted centre, lengths are distances.
 
 Axes are ISO 8855 with the origin under the front axle: x points forward,
 so the front axle is the wheel row with the largest x and the rear axle sits
@@ -18,6 +19,8 @@ from hiraku.catalog.loading import parts_on_board
 from hiraku.contract.protocols import LOADINGS
 
 Record = dict[str, Any]
+
+G = 9.80665  # standard gravity in m/s^2 (exact by definition, 3rd CGPM 1901)
 
 
 def _q(value: float, unit: str) -> Record:
@@ -64,7 +67,7 @@ def frame_masses(design: Record) -> list[tuple[str, float, list[float]]]:
 
 def mass_summary(items: list[tuple[float, list[float]]], front_axle_x: float | None) -> Record:
     mass = sum(m for m, _ in items)
-    out: Record = {"mass": _q(mass, "kg")}
+    out: Record = {"mass": _q(mass, "kg"), "weight": _q(mass * G, "N")}
     if mass > 0:
         for i, axis in enumerate("xyz"):
             out[f"cg_{axis}"] = _q(sum(m * c[i] for m, c in items) / mass, "mm")
@@ -74,15 +77,18 @@ def mass_summary(items: list[tuple[float, list[float]]], front_axle_x: float | N
 
 
 def rail_section(design: Record) -> Record | None:
-    """dims_mm of the section most used by members running along x (the side rails)."""
+    """The side rails: dims_mm of the section most used by members running along x,
+    and z, the mean height of those members' end nodes (the rail centre line)."""
     nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
-    along_x = Counter()
+    along_x: Counter = Counter()
+    ends: dict[str, list[float]] = {}
     for m in design.get("members", []):
         if m["node_a"] in nodes and m["node_b"] in nodes:
             a, b = nodes[m["node_a"]], nodes[m["node_b"]]
             dx, dy, dz = (abs(p - q) for p, q in zip(a, b))
             if dx > max(dy, dz):
                 along_x[m["section"]] += 1
+                ends.setdefault(m["section"], []).extend([a[2], b[2]])
     if not along_x:
         return None
     key = along_x.most_common(1)[0][0]
@@ -90,6 +96,7 @@ def rail_section(design: Record) -> Record | None:
     if sec is None:
         return None
     out = {name: _q(v, "mm") for name, v in sec["dims_mm"].items()}
+    out["z"] = _q(sum(ends[key]) / len(ends[key]), "mm")
     out["section"] = key
     return out
 

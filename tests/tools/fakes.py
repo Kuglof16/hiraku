@@ -45,6 +45,16 @@ def _rect_tube_Z(b, h, t):
     return i / (h / 2.0)
 
 
+def rail_step_sigma(W, L, F, z, r, b, h, t, steps=2000):
+    """A rail simply supported at the axles: half the weight as a uniform load plus
+    end moments F (z - r) at the front and F z at the rear; largest |M| / Z + F / A."""
+    w = W / (2 * L)
+    ma, mb = F * (z - r), F * z
+    m_max = max(abs(w * x * (L - x) / 2 - ma * (1 - x / L) - mb * x / L) for x in (L * i / steps for i in range(steps + 1)))
+    area = b * h - (b - 2 * t) * (h - 2 * t)
+    return m_max / _rect_tube_Z(b, h, t) + F / area
+
+
 class FakeFormulas:
     def __init__(self):
         self.calls = []
@@ -63,6 +73,10 @@ class FakeFormulas:
             _f("frame_static.rail_bending", "レールの曲げ応力", "strength", "sigma = (F L / 4) / Z",
                {"F": "N", "L": "mm", "b": "mm", "h": "mm", "t": "mm"}, {"sigma": "MPa", "M": "N*mm", "Z": "mm^3"},
                ["simply supported"]),
+            _f("frame_static.rail_step_bending", "段差を押して登るときのレールの曲げ応力", "strength",
+               "w = W/(2L); M(x) = w x (L - x)/2 - F (z - r)(1 - x/L) - F z x/L; sigma = max|M|/Z + F/A",
+               {"W": "N", "L": "mm", "F": "N", "z": "mm", "r": "mm", "b": "mm", "h": "mm", "t": "mm"},
+               {"sigma": "MPa"}, ["no overhang, no sideways bending or torsion"]),
         ]
 
     def evaluate(self, formula_id, inputs):
@@ -95,11 +109,17 @@ class FakeFormulas:
             return {"outputs": {"sigma": {"value": m / z, "unit": "MPa"}, "M": {"value": m, "unit": "N*mm"},
                                 "Z": {"value": z, "unit": "mm^3"}},
                     "terms": [{"name": "M", "value": m, "unit": "N*mm", "share": 1.0}], "expression": spec["expression"]}
+        if formula_id == "frame_static.rail_step_bending":
+            sigma = rail_step_sigma(x["W"], x["L"], x["F"], x["z"], x["r"], x["b"], x["h"], x["t"])
+            return {"outputs": {"sigma": {"value": sigma, "unit": "MPa"}}, "terms": [], "expression": spec["expression"]}
         raise KeyError(formula_id)
 
 
 class FakeTool:
-    """A shelf tool whose result is the closed form times `factor` (1.03 = 3 % off)."""
+    """A shelf tool whose result is the closed form times `factor` (1.03 = 3 % off).
+
+    `factor` may be a sequence: one value per run, the last one repeating.
+    """
 
     base = "K1"
 
@@ -110,6 +130,12 @@ class FakeTool:
         self.factor = factor
         self.checks_pass = checks_pass
         self.runs = []
+
+    def current_factor(self):
+        """The factor of the run in progress (call after appending to self.runs)."""
+        if isinstance(self.factor, (list, tuple)):
+            return self.factor[min(len(self.runs), len(self.factor)) - 1]
+        return self.factor
 
     def spec(self):
         return {"name": self.name, "title": f"fake {self.name}", "domain": self.domain, "base": self.base,
@@ -137,7 +163,7 @@ class FakeStepClimb(FakeTool):
                     "results": []}
         w, f = pushed(load["mass"]["value"], load["cg_from_front_axle"]["value"], s["wheelbase"]["value"],
                       s["front_wheels"]["value"], r, h)
-        w, f = w * self.factor, f * self.factor
+        w, f = w * self.current_factor(), f * self.current_factor()
         return {"status": "ok", "base": self.base, "results": [
             {"quantity": "front_wheel_load", "value": w, "unit": "N", "where": "FL"},
             {"quantity": "front_wheel_force", "value": f, "unit": "N", "where": "FL"},
@@ -155,7 +181,8 @@ class FakeFrameStatic(FakeTool):
         summ = design_summary(design)
         L = summ["wheelbase"]["value"]
         rail = summ["rail_section"]
-        sigma = f * L / 4.0 / _rect_tube_Z(rail["b"]["value"], rail["h"]["value"], rail["t"]["value"]) * self.factor
+        sigma = f * L / 4.0 / _rect_tube_Z(rail["b"]["value"], rail["h"]["value"], rail["t"]["value"])
+        sigma *= self.current_factor()
         return {"status": "ok", "base": "K1",
                 "results": [{"quantity": "max_stress", "value": sigma, "unit": "MPa", "where": "rail_L0"}],
                 "fields": [{"kind": "stress", "label": "von Mises", "unit": "MPa", "per_member": {"rail_L0": sigma}}],
