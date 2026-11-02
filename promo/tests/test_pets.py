@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import math
 import re
 import socket
 import unittest
@@ -24,6 +25,25 @@ def roles_in_pet3d():
     block = PET3D[PET3D.index("const ROLES = ["):]
     block = block[: block.index("];")]
     return re.findall(r'\{ id: "([^"]+)", name: "([^"]+)", color: "(#[0-9a-f]{6})", prop: "(\w+)", propName: "([^"]+)" \}', block)
+
+
+def stops(src):
+    return re.findall(r"#[0-9a-f]{6}", re.search(r"STOPS = \[([^\]]+)\]", src).group(1))
+
+
+def band_colors_from_colormap_js():
+    """BAND_COLORS as web/js/colormap.js computes them (JS Math.round)."""
+    cm = (ROOT / "web" / "js" / "colormap.js").read_text(encoding="utf-8")
+    bands = int(re.search(r"BANDS = (\d+)", cm).group(1))
+    rgb = [[int(h[i:i + 2], 16) for i in (1, 3, 5)] for h in stops(cm)]
+    out = []
+    for k in range(bands):
+        x = min(1.0, max(0.0, (k + 0.5) / bands)) * (len(rgb) - 1)
+        i = min(len(rgb) - 2, int(x // 1))
+        f = x - i
+        c = [math.floor(a + (b - a) * f + 0.5) for a, b in zip(rgb[i], rgb[i + 1])]
+        out.append("#" + "".join("%02x" % v for v in c))
+    return out
 
 
 def app_role_ids():
@@ -77,6 +97,20 @@ class Roles(unittest.TestCase):
         got = re.search(r"s: \[([^\]]+)\]", PET3D).group(1)
         self.assertEqual([x.strip()[2:] for x in got.split(",")], want)
 
+    def test_contour_bands_match_colormap_js(self):
+        cm = (ROOT / "web" / "js" / "colormap.js").read_text(encoding="utf-8")
+        self.assertEqual(re.search(r"BANDS = (\d+)", PET3D).group(1), re.search(r"BANDS = (\d+)", cm).group(1))
+        self.assertEqual(stops(PET3D), stops(cm))
+        self.assertIn("web/js/colormap.js", PET3D)
+
+    def test_low_poly_mesh_levels(self):
+        # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
+        self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
+
+    def test_version_mark_is_v2(self):
+        viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
+        self.assertIn('<div id="ver">v2</div>', viewer)
+
     def test_pose_uses_no_clock_or_random(self):
         for word in ("Date.now", "performance.now", "Math.random", "requestAnimationFrame"):
             self.assertNotIn(word, PET3D)
@@ -108,6 +142,102 @@ class Viewer(unittest.TestCase):
                 self.assertEqual(errors, [])
             finally:
                 browser.close()
+
+    def test_contour_and_legend(self):
+        from playwright.sync_api import sync_playwright
+
+        url = (PETS / "viewer.html").as_uri() + "?view=one&role=cae.strength&state=pass&t=0.4"
+        js = """() => {
+          const HP = window.HirakuPets;
+          const sw = [...document.querySelectorAll('#legend .sw')].map(e => getComputedStyle(e).backgroundColor);
+          const tk = [...document.querySelectorAll('#legend .tk')].map(e => e.textContent);
+          return { bands: HP.BANDS, colors: HP.BAND_COLORS, sw, tk,
+                   legend: getComputedStyle(document.getElementById('legend')).display,
+                   ramp: [0, 1.0, 2.0, 3.3, 4.5].map(t => HP.loadFactor(t, 'working')),
+                   still: HP.loadFactor(2.0, 'pass') };
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 800, "height": 600})
+                page.goto(url)
+                page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                page.evaluate("window.petViewer.ready")
+                r = page.evaluate(js)
+                want = band_colors_from_colormap_js()
+                self.assertEqual(r["bands"], 10)
+                self.assertEqual(r["colors"], want)
+                # legend: 10 swatches, highest band on top, 11 ticks 0.0 .. 1.0
+                rgb = ["rgb(%d, %d, %d)" % tuple(int(h[i:i + 2], 16) for i in (1, 3, 5)) for h in want]
+                self.assertEqual(r["sw"], rgb[::-1])
+                self.assertEqual(r["tk"], ["%.1f" % (i / 10) for i in range(11)])
+                self.assertEqual(r["legend"], "block")
+                # working steps the load 0 -> 1, other states carry the full load
+                self.assertEqual(r["ramp"][0], 0)
+                self.assertTrue(0 < r["ramp"][1] < r["ramp"][2] < 1)
+                self.assertEqual(r["ramp"][3], 1)
+                self.assertEqual(r["ramp"][4], 0)
+                self.assertEqual(r["still"], 1)
+
+                # no legend in the grid view
+                page.goto(url.replace("view=one", "view=grid"))
+                page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                page.evaluate("window.petViewer.ready")
+                self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none")
+            finally:
+                browser.close()
+
+    def test_values_follow_the_loads(self):
+        from playwright.sync_api import sync_playwright
+
+        # build every pet in the viewer page (it has three.js on its import map)
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const out = {};
+          for (const mesh of ['coarse', 'fine']) {
+            for (const r of window.HirakuPets.ROLES) {
+              const p = window.HirakuPets.create(THREE, { role: r.id, mesh });
+              const f = p.field;
+              const node = (n) => f.loads.find(l => l.name === n).node;
+              const argmax = (a) => a.indexOf(Math.max(...a));
+              const top = f.nodes.reduce((b, q, i) => (q[1] > f.nodes[b][1] ? i : b), 0);
+              out[mesh + ':' + r.id] = {
+                counts: p.counts,
+                maxSettled: Math.max(...f.settled),
+                argSettled: argmax(f.settled), armR: node('armR'),
+                argMis: argmax(f.mismatch), legL: node('legL'),
+                top: f.settled[top], legR: f.settled[node('legR')],
+                mis: p.contour(1, 'mismatch').max, work: p.contour(0, 'working').max,
+              };
+              p.dispose();
+            }
+          }
+          return out;
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                page.goto(page_url)
+                page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                page.evaluate("window.petViewer.ready")
+                res = page.evaluate(js)
+            finally:
+                browser.close()
+        self.assertEqual(len(res), 20)
+        for k, v in res.items():
+            want = {"nodes": 42, "elements": 80} if k.startswith("coarse") else {"nodes": 92, "elements": 180}
+            self.assertEqual(v["counts"], want, k)
+            self.assertAlmostEqual(v["maxSettled"], 1.0, places=6, msg=k)
+            # the prop arm root carries the largest value, the head top a small one
+            self.assertEqual(v["argSettled"], v["armR"], k)
+            self.assertLess(v["top"], 0.15, k)
+            self.assertGreater(v["legR"], 0.5, k)
+            # mismatch: the concentration moves to the left leg root
+            self.assertEqual(v["argMis"], v["legL"], k)
+            self.assertGreater(v["mis"], 1.0, k)
+            self.assertEqual(v["work"], 0, k)
 
 
 if __name__ == "__main__":

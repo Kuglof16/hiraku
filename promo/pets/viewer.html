@@ -70,6 +70,14 @@
   .sec-lab { position: absolute; font-size: 13px; color: var(--fg-soft); }
   #caption { position: absolute; left: 18px; top: 14px; font-size: 15px; pointer-events: none; }
   #caption small { display: block; color: var(--fg-soft); font: 12px var(--font-mono); }
+  /* contour legend (one-pet view), laid out like a CAE post-processor bar */
+  #legend { position: absolute; right: 16px; top: 14px; display: none; font: 11px/1 var(--font-mono); color: var(--fg); pointer-events: none; }
+  #legend .ttl { font: 12px/1.3 var(--font-ja); margin-bottom: 6px; }
+  #legend .bar { position: relative; display: flex; flex-direction: column; width: 20px; border: 1px solid var(--fg); }
+  #legend .sw { height: 19px; }
+  #legend .tk { position: absolute; left: 26px; transform: translateY(-50%); white-space: nowrap; }
+  #legend .tk::before { content: ""; position: absolute; left: -7px; top: 50%; width: 5px; border-top: 1px solid var(--fg); }
+  #legend .info { margin-top: 8px; font: 11px/1.5 var(--font-ja); color: var(--fg-soft); white-space: nowrap; }
   #ver { position: fixed; right: 10px; bottom: 8px; font: 12px var(--font-mono); color: var(--fg-soft); pointer-events: none; }
   #err { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); max-width: 520px; padding: 16px; background: #fff; color: #1b1a17; border: 2px solid #e0472a; display: none; }
 </style>
@@ -113,8 +121,9 @@
 <div id="stage">
   <div id="labels"></div>
   <div id="caption"></div>
+  <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
 </div>
-<div id="ver">v1</div>
+<div id="ver">v2</div>
 <div id="err"></div>
 
 <script src="pet3d.js"></script>
@@ -336,6 +345,45 @@ function layout() {
   }
 }
 
+// ---- contour legend (one-pet view) --------------------------------------------
+// 10 bands from HirakuPets.BAND_COLORS (same as web/js/colormap.js), top = highest.
+const legend = document.getElementById("legend");
+(function buildLegend() {
+  const bar = legend.querySelector(".bar");
+  const SW = 19;
+  for (let i = HP.BANDS - 1; i >= 0; i--) {
+    const s = document.createElement("div");
+    s.className = "sw";
+    s.style.background = HP.BAND_COLORS[i];
+    s.dataset.band = String(i);
+    bar.appendChild(s);
+  }
+  for (let i = 0; i <= HP.BANDS; i++) {
+    const k = document.createElement("div");
+    k.className = "tk";
+    k.style.top = (HP.BANDS - i) * SW + "px";
+    k.textContent = (i / HP.BANDS).toFixed(1);
+    bar.appendChild(k);
+  }
+})();
+let legendText = "";
+function updateLegend(t) {
+  const show = S.view === "one";
+  legend.style.display = show ? "block" : "none";
+  if (!show) return;
+  const c = pets[ROLES.findIndex((r) => r.id === S.role)].contour(t, S.state);
+  const lines = [
+    c.loadCase === "mismatch" ? "荷重: 体重が左足に偏る (食い違い)" : `荷重 ${Math.round(c.load * 100)} %` + (S.state === "working" ? " (増分)" : ""),
+    `最大 ${c.max.toFixed(2)} · 最小 ${c.min.toFixed(2)}`,
+  ];
+  if (c.max > 1) lines.push("1.0 より上も赤で塗る");
+  const text = lines.join("<br>");
+  if (text !== legendText) {
+    legend.querySelector(".info").innerHTML = text;
+    legendText = text;
+  }
+}
+
 // ---- time ------------------------------------------------------------------
 let frozen = S.t;
 let t0 = performance.now() - (frozen ?? 0) * 1000;
@@ -361,6 +409,7 @@ function render() {
     renderer.render(scene, c.cam);
     p.group.visible = false;
   }
+  updateLegend(t);
   document.getElementById("tread").textContent = `t = ${t.toFixed(2)} s` + (frozen !== null ? " (止めている)" : "");
 }
 
