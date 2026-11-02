@@ -255,6 +255,7 @@ class Cut {
 // ids), else the P1 load cases with the lowest and the highest step.
 
 const N01_KEYS = ["duration_s", "view", "pane", "card", "times", "zoom", "overlay", "colors"];
+const TOP_KEYS = ["min_text_px"];
 
 function stepHeightOf(lc) {
   const p = lc?.params?.step_height;
@@ -271,7 +272,7 @@ const resultOf = (ana, q) => (ana?.results ?? []).find((r) => r.quantity === q) 
 
 class CutN01 {
   constructor(layout, s) {
-    const missing = N01_KEYS.filter((k) => layout.n01?.[k] === undefined);
+    const missing = [...N01_KEYS.filter((k) => layout.n01?.[k] === undefined), ...TOP_KEYS.filter((k) => layout[k] === undefined)];
     if (missing.length) throw new Error(`layout.json の n01 に無い: ${missing.join(", ")}`);
     this.layout = layout;
     this.s = s;
@@ -365,12 +366,14 @@ class CutN01 {
     const over = lim ? (lim.op === "<" ? stress.value >= lim.value : stress.value > lim.value) : false;
     const climb = ok === null ? "" : ok ? `<span class="ok">✓ 登れた${time ? ` (${fmt(time.value, 3)} 秒)` : ""}</span>` : `<span class="miss">✕ 登れなかった</span>`;
     const mark = climb + (over ? `<br><span class="miss">✕ フレームの応力が許容を超える</span>` : "");
-    const vs = lim ? ` <small class="${over ? "miss" : "ok"}">(許容 ${esc(fmt(lim.value, 4))} MPa ${over ? "を超える" : "以内"})</small>` : "";
+    // small notes are drawn at the layout's smallest text size
+    const small = `font-size:${this.layout.min_text_px}px`;
+    const vs = lim ? ` <small class="${over ? "miss" : "ok"}" style="${small}">(許容 ${esc(fmt(lim.value, 4))} MPa ${over ? "を超える" : "以内"})</small>` : "";
     const rows = [
       force && `<tr><td>前輪を押す力</td><td>${esc(fmt(force.value / 1000, 3))} kN</td></tr>`,
       stress && `<tr class="${over ? "miss" : ""}"><td>フレームの最大応力</td><td>${esc(fmt(stress.value, 4))} MPa${vs}</td></tr>`,
     ].filter(Boolean).join("");
-    const head = kind === "over" ? `<small>限界の外の条件: 段差 ${fmt(h, 3)} mm</small>段差 ${fmt(h, 3)} mm` : `段差 ${fmt(h, 3)} mm`;
+    const head = kind === "over" ? `<small style="${small}">限界の外の条件: 段差 ${fmt(h, 3)} mm</small>段差 ${fmt(h, 3)} mm` : `段差 ${fmt(h, 3)} mm`;
     return (
       `<div class="n01-card ${kind}" data-box="n01.card.${kind}" style="border-color:${kind === "over" ? sp.overlay.color : sp.colors.rule};border-width:${sp.card.border_px}px;border-radius:${sp.card.radius_px}px;padding:${sp.card.pad}px;margin-bottom:${sp.card.gap}px">` +
       `<h3 style="font-size:${sp.card.title_px}px">${head}</h3>${mark ? `<p style="font-size:${sp.card.text_px}px">${mark}</p>` : ""}` +

@@ -99,6 +99,7 @@ def n05_layout():
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": 910, "h": 170},
+        "min_text_px": 18,
         "colors": {"night": "#131311", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
         "n05": {
             "duration_s": 5.0,
@@ -614,8 +615,13 @@ class BrowserReplayTest(unittest.TestCase):
                            cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
                            ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
                            contour: window.hiraku.cut.contour?.kind ?? null,
-                           view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom })"""
+                           view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
+                           // the smallest text in the pane (every element that holds text of its own)
+                           minText: Math.min(...[...document.querySelectorAll('[data-box="n01.pane"] *')]
+                             .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
+                             .map((el) => parseFloat(getComputedStyle(el).fontSize))) })"""
             )
+            self.assertGreaterEqual(got["minText"], 18)
             self.assertEqual(errors, [])
             self.assertIsNone(got["err"])
             self.assertEqual(got["duration"], 4.0)
