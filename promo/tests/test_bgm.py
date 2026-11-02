@@ -1,29 +1,59 @@
+import os
+import shutil
 import unittest
 
 import numpy as np
 
 from promo import bgm, voice
 
-SCRIPT = voice.parse_script(
-    "N00\t0:00-0:07\ta。\tA.\n"
-    "N01\t0:07-0:11\tb。\tB.\n"
-    "N05\t0:11-0:16\tc。\tC.\n"
-    "N06\t0:16-0:20\td。\tD.\n"
-)
+CUTS = [("N00", 0, 4), ("N01", 4, 7), ("N05", 7, 11), ("N06", 11, 14), ("N09", 14, 17), ("N15", 17, 20),
+        ("N18", 20, 24)]
+SCRIPT = voice.parse_script("".join(f"{c}\t0:{a:02d}-0:{b:02d}\t{c}。\t{c}.\n" for c, a, b in CUTS))
+RATE = 8000
+
+SUMMARY = """[Parsed_ebur128_0 @ 0000] Summary:
+
+  Integrated loudness:
+    I:         -15.2 LUFS
+    Threshold: -26.1 LUFS
+
+  Loudness range:
+    LRA:         5.1 LU
+
+  True peak:
+    Peak:        0.1 dBFS
+"""
 
 
-class Harmony(unittest.TestCase):
+def has_ffmpeg() -> bool:
+    return bool(os.environ.get("FFMPEG") or shutil.which("ffmpeg"))
+
+
+class Story(unittest.TestCase):
     def test_midi_hz(self):
         self.assertAlmostEqual(bgm.midi_hz(69), 440.0)
         self.assertAlmostEqual(bgm.midi_hz(81), 880.0)
 
-    def test_chord_notes(self):
-        upper, bass = bgm.chord_notes("Bm")
-        self.assertEqual({m % 12 for m in upper}, {11, 2, 6})
-        self.assertTrue(all(57 <= m < 69 for m in upper))
-        self.assertEqual(bass, 47)
-        self.assertEqual(bgm.chord_notes("F#m")[1] % 12, 6)
-        self.assertEqual(len(bgm.chord_notes("Dadd9")[0]), 4)
+    def test_stretches_follow_the_cuts(self):
+        sts = bgm.stretches(SCRIPT)
+        self.assertEqual([s.start for s in sts], [0, 4, 7, 11, 14, 17, 20])
+        self.assertEqual(sts[-1].end, 24)
+
+    def test_more_grains_where_the_story_opens(self):
+        sts = bgm.stretches(SCRIPT)
+        d = lambda t: float(bgm.density_at(t, sts))  # noqa: E731
+        self.assertGreater(d(9.0), d(12.5))   # title N05 over the problem N06
+        self.assertGreater(d(15.5), d(12.5))  # the mechanism from N09
+        self.assertGreater(d(18.5), d(15.5))  # N15-N17
+        self.assertAlmostEqual(d(7.0), (d(5.5) + d(9.0)) / 2)  # ramps across a boundary
+
+    def test_pitches_stay_in_the_pentatonic_scale(self):
+        for s in bgm.stretches(SCRIPT):
+            self.assertTrue(all(m % 12 in bgm.PENTATONIC for m in s.tones))
+            pitches = bgm.grain_pitches(s)
+            self.assertTrue(all(m % 12 in bgm.PENTATONIC for m in pitches))
+            self.assertTrue(all(bgm.GRAIN_RANGE[0] <= m <= bgm.GRAIN_RANGE[1] for m in pitches))
+            self.assertTrue({2, 9} <= {m % 12 for m in pitches})  # the drone's D and A
 
     def test_screen_times(self):
         self.assertEqual(bgm.css_time(bgm.SCREENS / "n05.html", "--t-burst"), 0.95)
@@ -31,33 +61,30 @@ class Harmony(unittest.TestCase):
             bgm.css_time(bgm.SCREENS / "n05.html", "--t-nothing")
 
 
-class Form(unittest.TestCase):
-    def test_sections_follow_the_cuts(self):
-        secs = bgm.plan_sections(SCRIPT, burst_s=0.95)
-        self.assertEqual([s.style for s in secs], ["intro", "question", "title", "problem"])
-        self.assertEqual(secs[0].start, 0.0)
-        self.assertAlmostEqual(secs[1].start, 7.0, delta=bgm.BEAT / 2)
-        self.assertAlmostEqual(secs[1].start / bgm.BEAT, round(secs[1].start / bgm.BEAT))
-        self.assertAlmostEqual(secs[2].start, 11.95)  # exactly at the burst
-        self.assertEqual(secs[-1].end, 20.0)
-        for a, b in zip(secs, secs[1:]):
-            self.assertEqual(a.end, b.start)
-
-    def test_segments_merge_a_held_chord(self):
-        sec = bgm.Section("intro", 0.0, 3 * bgm.BAR + 1.0, ["D"])
-        self.assertEqual(len(list(bgm.bars(sec))), 4)
-        self.assertEqual(bgm.chord_segments(sec), [[0.0, sec.end, "D"]])
-
-
 class Render(unittest.TestCase):
-    def test_render_is_repeatable_and_in_range(self):
-        a, secs = bgm.render(SCRIPT, rate=8000, seed=3)
-        b, _ = bgm.render(SCRIPT, rate=8000, seed=3)
-        self.assertEqual(a.shape, (20 * 8000, 2))
-        self.assertTrue(np.array_equal(a, b))
-        self.assertTrue(np.isfinite(a).all())
-        self.assertAlmostEqual(np.abs(a).max(), 10 ** (-1 / 20))
-        self.assertLess(np.abs(a[-10:]).max(), 1e-3)  # faded out
+    @classmethod
+    def setUpClass(cls):
+        cls.whole, _, cls.count = bgm.render(SCRIPT, rate=RATE, seed=3)
+
+    def test_whole(self):
+        x = self.whole
+        self.assertEqual(x.shape, (24 * RATE, 2))
+        self.assertTrue(np.isfinite(x).all())
+        self.assertLess(np.abs(x).max(), 1.0)
+        self.assertLess(np.abs(x[:10]).max(), 1e-3)   # fades in
+        self.assertLess(np.abs(x[-10:]).max(), 1e-3)  # and out
+        self.assertGreater(self.count, 20)
+
+    def test_same_seed_same_music(self):
+        again, _, _ = bgm.render(SCRIPT, rate=RATE, seed=3)
+        self.assertTrue(np.array_equal(self.whole, again))
+        other, _, _ = bgm.render(SCRIPT, rate=RATE, seed=4)
+        self.assertFalse(np.allclose(self.whole, other))
+
+    def test_a_part_is_the_same_as_the_whole(self):
+        part, _, _ = bgm.render(SCRIPT, rate=RATE, seed=3, start=9.3, end=15.1)
+        self.assertEqual(len(part), round(15.1 * RATE) - round(9.3 * RATE))
+        np.testing.assert_allclose(part, self.whole[round(9.3 * RATE): round(15.1 * RATE)], atol=1e-9)
 
 
 class Mix(unittest.TestCase):
@@ -78,14 +105,32 @@ class Mix(unittest.TestCase):
         self.assertAlmostEqual(db[int(4.4 * self.RATE)], -9.0, places=3)  # held over a short pause
         self.assertAlmostEqual(db[int(5.8 * self.RATE)], 0.0, places=3)
 
-    def test_mix_level_and_peak(self):
+    def test_limit(self):
         rng = np.random.default_rng(0)
-        music = 0.3 * rng.standard_normal((6 * self.RATE, 2))
-        out = bgm.mix(music, self.voice(), self.RATE, music_db=-24.0, duck_db=9.0)
-        self.assertEqual(out.shape, (6 * self.RATE, 2))
-        self.assertLessEqual(np.abs(out).max(), 10 ** (-1 / 20) + 1e-9)
-        quiet = out[: 2 * self.RATE]
-        self.assertAlmostEqual(10 * np.log10((quiet.mean(1) ** 2).mean()), -24.0, delta=0.5)
+        x = 0.1 * rng.standard_normal((4000, 2))
+        x[2000] = [0.9, -0.8]
+        y, reduction = bgm.limit(x, 1000, -6.0)
+        self.assertLessEqual(np.abs(y).max(), bgm.db(-6.0) + 1e-12)
+        self.assertLess(reduction, -5.0)
+        np.testing.assert_array_equal(y[:1900], x[:1900])  # far from the peak nothing changes
+
+    def test_parse_ebur128(self):
+        self.assertEqual(bgm.parse_ebur128("noise\n" + SUMMARY), (-15.2, 0.1))
+        with self.assertRaises(ValueError):
+            bgm.parse_ebur128("no summary")
+
+    @unittest.skipUnless(has_ffmpeg(), "needs ffmpeg")
+    def test_mix_reaches_the_targets(self):
+        rate = 44100
+        t = np.arange(8 * rate) / rate
+        speech = 0.6 * np.sin(2 * np.pi * 180 * t) * (np.sin(2 * np.pi * 3 * t) > 0) * ((t > 2) & (t < 6))
+        music = 0.2 * np.stack([np.sin(2 * np.pi * 220 * t), np.sin(2 * np.pi * 330 * t)], 1)
+        out, rep = bgm.mix(music, speech, rate, under_voice_lu=-15, duck_db=9, lufs=-16, true_peak=-3)
+        self.assertEqual(out.shape, (8 * rate, 2))
+        self.assertAlmostEqual(rep["lufs"], -16.0, delta=0.15)
+        self.assertLessEqual(rep["true_peak"], -3.0 + 0.15)
+        louder, _ = bgm.ebur128(out * bgm.db(6.0), rate)
+        self.assertAlmostEqual(louder, rep["lufs"] + 6.0, delta=0.15)
 
 
 if __name__ == "__main__":
