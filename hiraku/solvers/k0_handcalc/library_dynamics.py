@@ -1,10 +1,5 @@
 """K0 formulas for stability and longitudinal performance: tilt, crosswind,
-lane change, braking, launch.
-
-Air density is a constant inside the formulas (the contract has no density
-unit yet): 1.225 kg/m^3, the sea-level value of the ICAO standard atmosphere
-(15 degC). Not checked against the standard text in this repository.
-"""
+lane change, braking, launch."""
 
 from __future__ import annotations
 
@@ -18,10 +13,9 @@ from .registry import Formula
 from .units import STANDARD_GRAVITY
 
 G = sp.Float(STANDARD_GRAVITY)
-RHO_AIR = 1.225  # kg/m^3, ICAO standard atmosphere at sea level (not checked here)
-RHO = sp.Float(RHO_AIR)
-RHO_NOTE = "air density 1.225 kg/m^3 (ICAO standard atmosphere, sea level, 15 degC; not checked in this repository)"
 G_NOTE = "g = 9.80665 m/s^2"
+RHO_INPUT = {"unit": "kg/m^3", "min": 0,
+             "description": "air density (1.225 at sea level and 15 degC in the ICAO standard atmosphere; not checked here)"}
 
 
 def _sym(*names: str) -> dict[str, sp.Symbol]:
@@ -133,18 +127,19 @@ def _tilt() -> list[Formula]:
 
 def _crosswind() -> list[Formula]:
     out = []
-    s = _sym("C_y", "A", "v")
-    Cy, A, v = s["C_y"], s["A"], s["v"]
+    s = _sym("C_y", "A", "v", "rho")
+    Cy, A, v, rho = s["C_y"], s["A"], s["v"], s["rho"]
     out.append(Formula(
         formula_id="crosswind.side_force",
         title="横風の力",
         domain="aero",
         expression="F = 1/2 rho C_y A v^2",
         inputs={"C_y": _in("1", "side force coefficient (take the unfavourable end of its range)", min=0),
-                "A": _in("mm^2", "side area seen by the wind", min=0),
-                "v": _in("m/s", "wind speed relative to the vehicle, across it", min=0)},
-        outputs={"F": ("N", "side force", RHO * Cy * A * 1e-6 * v**2 / 2)},
-        assumptions=["steady wind across the vehicle", RHO_NOTE],
+                "A": _in("m^2", "side area seen by the wind", min=0),
+                "v": _in("m/s", "wind speed relative to the vehicle, across it", min=0),
+                "rho": RHO_INPUT},
+        outputs={"F": ("N", "side force", rho * Cy * A * v**2 / 2)},
+        assumptions=["steady wind across the vehicle"],
         source="aerodynamic force F = 1/2 rho C A v^2 (textbook fluid mechanics)",
         symbols=s,
     ))
@@ -165,8 +160,8 @@ def _crosswind() -> list[Formula]:
         requires=[(t > 0, "track t must be positive")],
         symbols=s,
     ))
-    s = _sym("m", "t", "C_y", "A", "h_cp")
-    m, t, Cy, A, hcp = (s[k] for k in ("m", "t", "C_y", "A", "h_cp"))
+    s = _sym("m", "t", "C_y", "A", "h_cp", "rho")
+    m, t, Cy, A, hcp, rho = (s[k] for k in ("m", "t", "C_y", "A", "h_cp", "rho"))
     out.append(Formula(
         formula_id="crosswind.critical_wind_speed",
         title="風上の輪が浮く風速",
@@ -174,14 +169,15 @@ def _crosswind() -> list[Formula]:
         expression="v_crit = sqrt(m g t / (rho C_y A h_cp))",
         inputs={"m": _in("kg", "total mass", min=0), "t": _in("mm", "track", min=0),
                 "C_y": _in("1", "side force coefficient (take the unfavourable end of its range)", min=0),
-                "A": _in("mm^2", "side area seen by the wind", min=0),
-                "h_cp": _in("mm", "height of the centre of pressure above the ground", min=0)},
+                "A": _in("m^2", "side area seen by the wind", min=0),
+                "h_cp": _in("mm", "height of the centre of pressure above the ground", min=0),
+                "rho": RHO_INPUT},
         outputs={"v_crit": ("m/s", "relative wind speed at which the windward wheels lift",
-                            sp.sqrt(m * G * t / (RHO * Cy * A * 1e-6 * hcp)))},
+                            sp.sqrt(m * G * t / (rho * Cy * A * hcp)))},
         assumptions=["steady wind across the vehicle", "rigid vehicle, no roll", "centre of gravity on the centre line",
-                     "no aerodynamic lift", RHO_NOTE, G_NOTE],
+                     "no aerodynamic lift", G_NOTE],
         source="1/2 rho C_y A v^2 h_cp = m g t / 2 (textbook statics and fluid mechanics)",
-        requires=[(sp.And(Cy > 0, A > 0, hcp > 0), "C_y, A and h_cp must be positive")],
+        requires=[(sp.And(Cy > 0, A > 0, hcp > 0, rho > 0), "C_y, A, h_cp and rho must be positive")],
         symbols=s,
     ))
     return out
@@ -252,7 +248,7 @@ def _lane_change() -> list[Formula]:
     s = _sym("L", "R", "W_f", "W_r", "C_f", "C_r", "v")
     L, R, Wf, Wr, Cf, Cr, v = (s[x] for x in ("L", "R", "W_f", "W_r", "C_f", "C_r", "v"))
     deg = 180 / sp.pi
-    K = (Wf / (Cf * deg) - Wr / (Cr * deg))  # rad per g: C in N per degree, times deg per rad -> N/rad
+    K = Wf / Cf - Wr / Cr  # rad per g
     ay = (v / 3.6) ** 2 / R / G
     out.append(Formula(
         formula_id="lane_change.steady_steer",
@@ -261,8 +257,8 @@ def _lane_change() -> list[Formula]:
         expression="delta = L/R + K a_y; K = W_f/C_af - W_r/C_ar; a_y = v^2/(R g)",
         inputs={"L": _in("mm", "wheelbase", min=0), "R": _in("m", "radius of the circle", min=0),
                 "W_f": _in("N", "front axle load", min=0), "W_r": _in("N", "rear axle load", min=0),
-                "C_f": _in("N", "cornering force of the front axle at 1 deg slip angle", min=0),
-                "C_r": _in("N", "cornering force of the rear axle at 1 deg slip angle", min=0),
+                "C_f": _in("N/rad", "cornering stiffness of the front axle (both tyres)", min=0),
+                "C_r": _in("N/rad", "cornering stiffness of the rear axle (both tyres)", min=0),
                 "v": _in("km/h", "speed", min=0)},
         outputs={"delta": ("deg", "road-wheel steer angle", (L / 1000 / R + K * ay) * deg),
                  "K": ("deg", "understeer gradient: extra steer per 1 g (positive = understeer)", K * deg),
@@ -331,15 +327,16 @@ def _drive_force(v: float, F_max: float, P_w: float, eta: float) -> float:
     return min(F_max, eta * P_w / v)
 
 
-def _resistance(v: float, m: float, Crr: float, CdA_m2: float, grade: float) -> float:
+def _resistance(v: float, m: float, Crr: float, CdA_m2: float, grade: float, rho: float) -> float:
     th = math.atan(grade)
-    return m * STANDARD_GRAVITY * (Crr * math.cos(th) + math.sin(th)) + 0.5 * RHO_AIR * CdA_m2 * v * v
+    return m * STANDARD_GRAVITY * (Crr * math.cos(th) + math.sin(th)) + 0.5 * rho * CdA_m2 * v * v
 
 
 def _launch(v: dict) -> dict:
-    m, F_max, P, eta, Crr, Cd, A, grade, lam, v_t = (v[x] for x in ("m", "F_max", "P", "eta", "C_rr", "C_d", "A", "grade", "lambda", "v"))
-    P_w, CdA, gr, vt = P * 1000.0, Cd * A * 1e-6, grade / 100.0, v_t / 3.6
-    net = lambda u: _drive_force(u, F_max, P_w, eta) - _resistance(u, m, Crr, CdA, gr)
+    m, F_max, P, eta, Crr, Cd, A, grade, lam, v_t, rho = (
+        v[x] for x in ("m", "F_max", "P", "eta", "C_rr", "C_d", "A", "grade", "lambda", "v", "rho"))
+    P_w, CdA, gr, vt = P * 1000.0, Cd * A, grade / 100.0, v_t / 3.6
+    net = lambda u: _drive_force(u, F_max, P_w, eta) - _resistance(u, m, Crr, CdA, gr, rho)
     if net(0.0) <= 0:
         raise ValueError("the drive force cannot overcome the resistance at standstill (raise F_max or lower the grade)")
     vtop = _top_speed(net)
@@ -358,8 +355,8 @@ def _top_speed(net) -> float:
 
 
 def _top(v: dict) -> dict:
-    m, P, eta, Crr, Cd, A, grade = (v[x] for x in ("m", "P", "eta", "C_rr", "C_d", "A", "grade"))
-    net = lambda u: (eta * P * 1000.0 / u if u > 0 else math.inf) - _resistance(u, m, Crr, Cd * A * 1e-6, grade / 100.0)
+    m, P, eta, Crr, Cd, A, grade, rho = (v[x] for x in ("m", "P", "eta", "C_rr", "C_d", "A", "grade", "rho"))
+    net = lambda u: (eta * P * 1000.0 / u if u > 0 else math.inf) - _resistance(u, m, Crr, Cd * A, grade / 100.0, rho)
     vtop = _top_speed(net)
     return {"v_top": vtop * 3.6, "F": eta * P * 1000.0 / vtop}
 
@@ -376,15 +373,16 @@ def _launch_formulas() -> list[Formula]:
                 "eta": _in("1", "efficiency from motor shaft to wheels", min=0, max=1),
                 "C_rr": _in("1", "rolling resistance coefficient", min=0),
                 "C_d": _in("1", "drag coefficient", min=0),
-                "A": _in("mm^2", "frontal area", min=0),
+                "A": _in("m^2", "frontal area", min=0),
                 "grade": _in("%", "road grade (rise over run)", min=0),
                 "lambda": _in("1", "mass factor for rotating parts (1 = none)", min=1),
-                "v": _in("km/h", "target speed", min=0)},
+                "v": _in("km/h", "target speed", min=0),
+                "rho": RHO_INPUT},
         outputs={"t": ("s", "time from standstill to the target speed", None),
                  "s": ("m", "distance covered meanwhile", None),
                  "a_mean": ("m/s^2", "mean acceleration", None)},
         assumptions=["full drive force from standstill, no wheel spin (traction not checked)",
-                     "drive force torque-limited, then power-limited", "steady grade, no wind", RHO_NOTE, G_NOTE],
+                     "drive force torque-limited, then power-limited", "steady grade, no wind", G_NOTE],
         source="Newton's second law integrated over speed (textbook vehicle performance)",
         requires=[(lambda v: v["F_max"] > 0 and v["P"] > 0 and v["eta"] > 0, "F_max, P and eta must be positive")],
         fn=_launch,
@@ -398,12 +396,13 @@ def _launch_formulas() -> list[Formula]:
                 "eta": _in("1", "efficiency from motor shaft to wheels", min=0, max=1),
                 "C_rr": _in("1", "rolling resistance coefficient", min=0),
                 "C_d": _in("1", "drag coefficient", min=0),
-                "A": _in("mm^2", "frontal area", min=0),
-                "grade": _in("%", "road grade (rise over run)", min=0)},
+                "A": _in("m^2", "frontal area", min=0),
+                "grade": _in("%", "road grade (rise over run)", min=0),
+                "rho": RHO_INPUT},
         outputs={"v_top": ("km/h", "top speed (motor speed limits not included)", None),
                  "F": ("N", "tractive force at top speed", None)},
         assumptions=["power-limited at top speed", "motor and gear speed limits not included", "steady grade, no wind",
-                     RHO_NOTE, G_NOTE],
+                     G_NOTE],
         source="power balance eta P = road load times speed (textbook vehicle performance)",
         requires=[(lambda v: v["P"] > 0 and v["eta"] > 0 and v["C_d"] * v["A"] > 0,
                    "P, eta and the drag area C_d A must be positive (without drag there is no top speed)")],

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-from .library_dynamics import G, G_NOTE, RHO, RHO_NOTE
+from .library_dynamics import G, G_NOTE, RHO_INPUT
 from .registry import Formula
 
 
@@ -19,12 +19,13 @@ def _in(unit: str, description: str, **kw) -> dict:
 
 def _drive_energy() -> list[Formula]:
     out = []
-    s = _sym("m", "d", "v", "C_rr", "C_d", "A", "H", "eta", "eta_regen", "E_batt")
-    m, d, v, Crr, Cd, A, H, eta, eta_r, Eb = (s[k] for k in ("m", "d", "v", "C_rr", "C_d", "A", "H", "eta", "eta_regen", "E_batt"))
+    s = _sym("m", "d", "v", "C_rr", "C_d", "A", "H", "eta", "eta_regen", "E_batt", "rho")
+    m, d, v, Crr, Cd, A, H, eta, eta_r, Eb, rho = (
+        s[k] for k in ("m", "d", "v", "C_rr", "C_d", "A", "H", "eta", "eta_regen", "E_batt", "rho"))
     J_TO_WH = sp.Rational(1, 3600)
     vm = v / 3.6
     rolling = m * G * Crr * d * 1000 / eta * J_TO_WH
-    aero = RHO * Cd * A * 1e-6 * vm**2 / 2 * d * 1000 / eta * J_TO_WH
+    aero = rho * Cd * A * vm**2 / 2 * d * 1000 / eta * J_TO_WH
     climb = m * G * H / eta * J_TO_WH
     regen = -eta_r * m * G * H * J_TO_WH
     E = rolling + aero + climb + regen
@@ -38,29 +39,30 @@ def _drive_energy() -> list[Formula]:
                 "v": _in("km/h", "typical speed (for the air drag)", min=0),
                 "C_rr": _in("1", "rolling resistance coefficient", min=0),
                 "C_d": _in("1", "drag coefficient", min=0),
-                "A": _in("mm^2", "frontal area", min=0),
+                "A": _in("m^2", "frontal area", min=0),
                 "H": _in("m", "total height climbed over the distance (the loop comes back down as much)", min=0),
                 "eta": _in("1", "efficiency from battery to wheels", min=0, max=1),
                 "eta_regen": _in("1", "share of the descent's potential energy returned to the battery (0 without regeneration)", min=0, max=1),
-                "E_batt": _in("kWh", "usable battery energy", min=0)},
+                "E_batt": _in("kWh", "usable battery energy", min=0),
+                "rho": RHO_INPUT},
         outputs={"E": ("Wh", "energy taken from the battery", E),
                  "soc_used": ("%", "share of the battery used", E / (Eb * 1000) * 100),
                  "range": ("km", "distance the battery lasts at this rate", d * Eb * 1000 / E)},
         assumptions=["constant speed, accelerations ignored", "small grades (cos = 1)",
                      "the descent returns eta_regen of its potential energy, after nothing else", "no auxiliary loads",
-                     RHO_NOTE, G_NOTE],
+                     G_NOTE],
         source="sum of resistance work over the distance (textbook vehicle performance)",
         terms={"rolling": rolling, "aero": aero, "climb": climb, "regen": regen},
         requires=[(sp.And(eta > 0, Eb > 0), "eta and E_batt must be positive")],
         symbols=s,
     ))
-    s = _sym("m", "v", "grade", "C_rr", "C_d", "A", "eta")
-    m, v, gr, Crr, Cd, A, eta = (s[k] for k in ("m", "v", "grade", "C_rr", "C_d", "A", "eta"))
+    s = _sym("m", "v", "grade", "C_rr", "C_d", "A", "eta", "rho")
+    m, v, gr, Crr, Cd, A, eta, rho = (s[k] for k in ("m", "v", "grade", "C_rr", "C_d", "A", "eta", "rho"))
     vm = v / 3.6
     th = sp.atan(gr / 100)
     F_roll = m * G * Crr * sp.cos(th)
     F_grade = m * G * sp.sin(th)
-    F_aero = RHO * Cd * A * 1e-6 * vm**2 / 2
+    F_aero = rho * Cd * A * vm**2 / 2
     out.append(Formula(
         formula_id="drive_energy.steady_power",
         title="一定の速さ・坂で走るときの電池の電力",
@@ -69,11 +71,12 @@ def _drive_energy() -> list[Formula]:
         inputs={"m": _in("kg", "total mass", min=0), "v": _in("km/h", "speed", min=0),
                 "grade": _in("%", "road grade (rise over run, uphill positive)"),
                 "C_rr": _in("1", "rolling resistance coefficient", min=0), "C_d": _in("1", "drag coefficient", min=0),
-                "A": _in("mm^2", "frontal area", min=0),
-                "eta": _in("1", "efficiency from battery to wheels", min=0, max=1)},
+                "A": _in("m^2", "frontal area", min=0),
+                "eta": _in("1", "efficiency from battery to wheels", min=0, max=1),
+                "rho": RHO_INPUT},
         outputs={"P": ("kW", "battery power", (F_roll + F_grade + F_aero) * vm / eta / 1000),
                  "F": ("N", "tractive force at the wheels", F_roll + F_grade + F_aero)},
-        assumptions=["steady speed", "no auxiliary loads", "driving (not regenerating)", RHO_NOTE, G_NOTE],
+        assumptions=["steady speed", "no auxiliary loads", "driving (not regenerating)", G_NOTE],
         source="road load times speed (textbook vehicle performance)",
         terms={"rolling": F_roll * vm / eta / 1000, "grade": F_grade * vm / eta / 1000, "aero": F_aero * vm / eta / 1000},
         requires=[(eta > 0, "eta must be positive")],

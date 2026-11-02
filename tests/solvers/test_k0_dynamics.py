@@ -58,11 +58,11 @@ class TiltTest(unittest.TestCase):
 class CrosswindTest(unittest.TestCase):
     def test_side_force(self):
         # 1/2 * 1.225 * 1 * 1.5 m^2 * (20 m/s)^2 = 367.5 N
-        self.assertAlmostEqual(out("crosswind.side_force", C_y=q(1, "1"), A=q(1.5e6, "mm^2"), v=q(20, "m/s"))["F"], 367.5, places=9)
+        self.assertAlmostEqual(out("crosswind.side_force", C_y=q(1, "1"), A=q(1.5, "m^2"), v=q(20, "m/s"), rho=q(1.225, "kg/m^3"))["F"], 367.5, places=9)
 
     def test_critical_speed_empties_the_windward_wheels(self):
-        v = out("crosswind.critical_wind_speed", m=q(591, "kg"), t=q(1100, "mm"), C_y=q(1, "1"), A=q(1.5e6, "mm^2"), h_cp=q(900, "mm"))["v_crit"]
-        F = out("crosswind.side_force", C_y=q(1, "1"), A=q(1.5e6, "mm^2"), v=q(v, "m/s"))["F"]
+        v = out("crosswind.critical_wind_speed", m=q(591, "kg"), t=q(1100, "mm"), C_y=q(1, "1"), A=q(1.5, "m^2"), h_cp=q(900, "mm"), rho=q(1.225, "kg/m^3"))["v_crit"]
+        F = out("crosswind.side_force", C_y=q(1, "1"), A=q(1.5, "m^2"), v=q(v, "m/s"), rho=q(1.225, "kg/m^3"))["F"]
         W = out("crosswind.windward_wheel_load", m=q(591, "kg"), t=q(1100, "mm"), F=q(F, "N"), h_cp=q(900, "mm"))["W_windward"]
         self.assertAlmostEqual(W, 0.0, delta=1e-6)
 
@@ -89,11 +89,11 @@ class LaneChangeTest(unittest.TestCase):
 
     def test_neutral_steer_is_ackermann(self):
         o = out("lane_change.steady_steer", L=q(1700, "mm"), R=q(15, "m"), W_f=q(2000, "N"), W_r=q(3000, "N"),
-                C_f=q(400, "N"), C_r=q(600, "N"), v=q(20, "km/h"))
+                C_f=q(40000, "N/rad"), C_r=q(60000, "N/rad"), v=q(20, "km/h"))
         self.assertAlmostEqual(o["K"], 0.0, places=12)
         self.assertAlmostEqual(o["delta"], math.degrees(1.7 / 15), places=9)
         o = out("lane_change.steady_steer", L=q(1700, "mm"), R=q(15, "m"), W_f=q(2400, "N"), W_r=q(3000, "N"),
-                C_f=q(400, "N"), C_r=q(600, "N"), v=q(20, "km/h"))
+                C_f=q(40000, "N/rad"), C_r=q(60000, "N/rad"), v=q(20, "km/h"))
         self.assertGreater(o["K"], 0)  # more load on the front for the same tyres: understeer
 
 
@@ -116,7 +116,7 @@ class BrakingTest(unittest.TestCase):
 
 class LaunchTest(unittest.TestCase):
     BASE = dict(m=q(600, "kg"), F_max=q(1200, "N"), P=q(1000, "kW"), eta=q(1, "1"), C_rr=q(0, "1"), C_d=q(0, "1"),
-                A=q(1e6, "mm^2"), grade=q(0, "%"), **{"lambda": q(1, "1")}, v=q(36, "km/h"))
+                A=q(1, "m^2"), grade=q(0, "%"), **{"lambda": q(1, "1")}, v=q(36, "km/h"), rho=q(1.225, "kg/m^3"))
 
     def test_constant_force_without_resistance(self):
         # v = F t / m: 10 m/s * 600 kg / 1200 N = 5 s, s = v t / 2 = 25 m
@@ -128,16 +128,16 @@ class LaunchTest(unittest.TestCase):
         self.assertAlmostEqual(e["F_max"], -1.0, places=5)
 
     def test_power_limit_and_top_speed(self):
-        o = out("launch.time_to_speed", **dict(self.BASE, P=q(6, "kW"), C_rr=q(0.03, "1"), C_d=q(0.8, "1"), A=q(1.6e6, "mm^2")))
+        o = out("launch.time_to_speed", **dict(self.BASE, P=q(6, "kW"), C_rr=q(0.03, "1"), C_d=q(0.8, "1"), A=q(1.6, "m^2")))
         self.assertGreater(o["t"], 5.0)
         top = out("launch.top_speed", m=q(600, "kg"), P=q(6, "kW"), eta=q(1, "1"), C_rr=q(0.03, "1"), C_d=q(0.8, "1"),
-                  A=q(1.6e6, "mm^2"), grade=q(0, "%"))
+                  A=q(1.6, "m^2"), grade=q(0, "%"), rho=q(1.225, "kg/m^3"))
         # at top speed eta P / v equals the road load
         v = top["v_top"] / 3.6
         self.assertAlmostEqual(6000 / v, 600 * G * 0.03 + 0.5 * 1.225 * 0.8 * 1.6 * v * v, delta=1e-6)
         with self.assertRaisesRegex(ValueError, "drag area"):
             ev("launch.top_speed", m=q(600, "kg"), P=q(6, "kW"), eta=q(1, "1"), C_rr=q(0.03, "1"), C_d=q(0, "1"),
-               A=q(1.6e6, "mm^2"), grade=q(0, "%"))
+               A=q(1.6, "m^2"), grade=q(0, "%"), rho=q(1.225, "kg/m^3"))
 
     def test_unreachable_speed(self):
         with self.assertRaisesRegex(ValueError, "top speed"):
@@ -147,15 +147,15 @@ class LaunchTest(unittest.TestCase):
 class EnergyAndHeatTest(unittest.TestCase):
     def test_loop_energy(self):
         r = ev("drive_energy.loop_energy", m=q(600, "kg"), d=q(10, "km"), v=q(30, "km/h"), C_rr=q(0.02, "1"),
-               C_d=q(0, "1"), A=q(1e6, "mm^2"), H=q(0, "m"), eta=q(1, "1"), eta_regen=q(0, "1"), E_batt=q(5, "kWh"))
+               C_d=q(0, "1"), A=q(1, "m^2"), H=q(0, "m"), eta=q(1, "1"), eta_regen=q(0, "1"), E_batt=q(5, "kWh"), rho=q(1.225, "kg/m^3"))
         self.assertAlmostEqual(r["outputs"]["E"]["value"], 600 * G * 0.02 * 10000 / 3600, places=9)
         r = ev("drive_energy.loop_energy", m=q(600, "kg"), d=q(10, "km"), v=q(30, "km/h"), C_rr=q(0.02, "1"),
-               C_d=q(0.8, "1"), A=q(1.6e6, "mm^2"), H=q(300, "m"), eta=q(0.85, "1"), eta_regen=q(0.3, "1"), E_batt=q(5, "kWh"))
+               C_d=q(0.8, "1"), A=q(1.6, "m^2"), H=q(300, "m"), eta=q(0.85, "1"), eta_regen=q(0.3, "1"), E_batt=q(5, "kWh"), rho=q(1.225, "kg/m^3"))
         self.assertAlmostEqual(sum(t["value"] for t in r["terms"]), r["outputs"]["E"]["value"], places=9)
 
     def test_steady_power(self):
         o = out("drive_energy.steady_power", m=q(600, "kg"), v=q(36, "km/h"), grade=q(0, "%"), C_rr=q(0.02, "1"),
-                C_d=q(0, "1"), A=q(1e6, "mm^2"), eta=q(0.5, "1"))
+                C_d=q(0, "1"), A=q(1, "m^2"), eta=q(0.5, "1"), rho=q(1.225, "kg/m^3"))
         self.assertAlmostEqual(o["P"], 600 * G * 0.02 * 10 / 0.5 / 1000, places=9)
 
     def test_rc_step(self):
