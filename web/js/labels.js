@@ -96,6 +96,10 @@ const UNIT_LABEL = {
   "mm^2": "mm²",
   "mm^3": "mm³",
   "mm^4": "mm⁴",
+  "m^2": "m²",
+  "kg/m^3": "kg/m³",
+  "kg*m^2": "kg·m²",
+  ohm: "Ω",
 };
 
 export function unitLabel(u) {
