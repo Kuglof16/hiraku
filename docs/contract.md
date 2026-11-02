@@ -63,6 +63,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - `AnalysisTool` — `spec()`・`check()`・`run(design, load_case, predictions, params)`。`run` は `analysis_id` の無い `analysis` を返し、ID は store が付ける。設計が悪くても例外にせず `status: "failed"` と、何が悪く何を変えればよいかを `error` に書く
 - 上流の荷重条件の結果 (P1 の輪の力 → R1 など) は `params["upstream_analyses"] = {荷重条件の ID: 照合で一致した analysis}` で `run` に渡る。上流の `analysis_id` を `inputs_from` に足すのは呼ぶ側 (設計部)
 - 組み立ての順番と干渉は `analysis` の `assembly` (手順ごとの `assembly_step`) と `interferences` に入れる (`effects` に混ぜない)。手順には任意で、留め方 `fastenings` (何に・ボルト/溶接/載せる/ピン)、入れる道筋 `path_mm` (折れ線、最後が付いた位置)、手順の 1 文 `text` (コードで組む) を付ける
+- 板 (シェル) のメッシュ: 版ごとに、コードが設計からフレームのメッシュ (管の壁と板の中面) を作り、`mesh` の記録 (`v<NNN>/meshes/mesh-NNNN.json`、event `mesh.created`) にする。節は `nodes_mm`、要素は節の番号 3 つか 4 つ (`elements`)、要素ごとにどの部材か (`element_member`)、部材の厚さ (`member_thickness_mm`)。解析の結果は field に `mesh_id` と、要素ごとの値 `per_element` か節ごとの値 `per_mesh_node` (変位とモードの形は vec3) を入れ、シェルの応力は `surface` (`top`・`mid`・`bottom`・`max`) を付ける。梁 (K1) の `per_member` と同じ analysis に並べてよい
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` に道具が書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線)
@@ -104,7 +105,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `v001/` — 版ごとのフォルダ。`design.json` と、その版の記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。設計を直すと次の版のフォルダ (`v002/`) ができ、前の版の `design.json` は書き換えない。前の版の記録は、下の「記録を後から直すとき」の場合だけ書き換わる
 - 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる。記録の種類と event の種類の対応は `layout.RECORD_EVENT` (逆向きは `layout.RECORD_OF_EVENT`、ID の欄は `<種類>_id`) だけに書き、store と点検はそれを引く
 - 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
-- ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`)
+- ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`・`mesh-0001`)
 - `runs/` はコミットしない
 
 ## events.jsonl の 1 行

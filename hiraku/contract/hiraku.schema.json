@@ -1106,6 +1106,126 @@
         "frequency_Hz": {
           "type": "number",
           "description": "For mode_shape."
+        },
+        "mesh_id": {
+          "type": "string",
+          "pattern": "^mesh-[0-9]{4,}$",
+          "description": "With per_element / per_mesh_node: the mesh the values belong to."
+        },
+        "per_element": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "One value per element of the mesh, in its element order."
+        },
+        "per_mesh_node": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/$defs/vec3"
+              }
+            ]
+          },
+          "description": "One value per mesh node, in nodes_mm order (vec3 for displacement and mode shapes)."
+        },
+        "surface": {
+          "enum": [
+            "top",
+            "mid",
+            "bottom",
+            "max"
+          ],
+          "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
+        }
+      },
+      "dependentRequired": {
+        "per_element": [
+          "mesh_id"
+        ],
+        "per_mesh_node": [
+          "mesh_id"
+        ]
+      }
+    },
+    "mesh": {
+      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a shell mesh of the frame (mid-surfaces of the tube walls and plates), made by code from one design version. Analyses of that version name it by mesh_id in their fields.",
+      "type": "object",
+      "required": [
+        "mesh_id",
+        "design_version",
+        "element_type",
+        "nodes_mm",
+        "elements",
+        "element_member",
+        "member_thickness_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mesh_id": {
+          "type": "string",
+          "pattern": "^mesh-[0-9]{4,}$"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "element_type": {
+          "enum": [
+            "shell"
+          ],
+          "description": "Shell elements with 3 or 4 nodes on the mid-surface."
+        },
+        "formulation": {
+          "type": "string",
+          "description": "Element formulation in words, e.g. MITC4."
+        },
+        "element_size_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Target edge length."
+        },
+        "nodes_mm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vec3"
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Node indices (into nodes_mm), counter-clockwise seen from the outer side."
+        },
+        "element_member": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For each element, the design member (or part) id it belongs to."
+        },
+        "member_thickness_mm": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "Wall thickness of each member (or part) in the mesh."
+        },
+        "notes": {
+          "type": "string",
+          "description": "How the joints, welds and load points were modelled."
         }
       }
     },
@@ -2216,7 +2336,8 @@
         "hearing.asked",
         "hearing.answered",
         "knowledge.imported",
-        "rule_check.recorded"
+        "rule_check.recorded",
+        "mesh.created"
       ]
     },
     "event": {
@@ -2794,6 +2915,25 @@
             "properties": {
               "data": {
                 "$ref": "#/$defs/rule_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mesh.created"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/mesh"
               }
             }
           }

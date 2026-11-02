@@ -10,6 +10,7 @@ runs/<run_id>/
     v001/causes/cause-0001.json       CAUSE
     v001/verdicts/ver-0001.json       VERDICT
     v001/rule_checks/rchk-0001.json   RULE_CHECK (a knowledge rule checked on this version's parts)
+    v001/meshes/mesh-0001.json        MESH (shell mesh of this version's frame; fields name it by mesh_id)
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
     report.json                       REPORT (later)
     stop.request                      present only while someone asks the run to stop
@@ -56,6 +57,7 @@ RECORD_DIRS = {
     "cause": "causes",
     "verdict": "verdicts",
     "rule_check": "rule_checks",
+    "mesh": "meshes",
 }
 
 ID_PREFIX = {
@@ -65,6 +67,7 @@ ID_PREFIX = {
     "cause": "cause",
     "verdict": "ver",
     "rule_check": "rchk",
+    "mesh": "mesh",
 }
 
 # Event emitted when a record of this kind is written (its data is the record;
@@ -76,6 +79,7 @@ RECORD_EVENT = {
     "cause": "cause.recorded",
     "verdict": "verdict.recorded",
     "rule_check": "rule_check.recorded",
+    "mesh": "mesh.created",
 }
 RECORD_OF_EVENT = {event: kind for kind, event in RECORD_EVENT.items()}
 

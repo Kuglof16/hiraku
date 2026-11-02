@@ -27,6 +27,7 @@ EXAMPLES = {
     "hearing_answered": "hearing_answered.json",
     "knowledge_imported": "knowledge_imported.json",
     "rule_check": "rule_check.json",
+    "mesh": "mesh.json",
 }
 
 # intake event kind -> its data shape (docs/contract.md, 分野を選ぶ・ヒアリング・ナレッジ)
@@ -174,6 +175,15 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("rule_check", {**r, "pass": True}), [])
         self.assertNotEqual(contract.errors("rule_check", {**r, "hits": [], "pass": False}), [])
         self.assertEqual(contract.errors("rule_check", {**r, "hits": [], "pass": True}), [])
+
+    def test_mesh_event_and_field(self):
+        m = load("mesh.json")
+        ev = {**self.ev, "kind": "mesh.created", "agent": "cae.strength", "design_version": 1, "data": m}
+        self.assertEqual(contract.errors("event", ev), [])
+        field = {"kind": "stress", "unit": "MPa", "mesh_id": m["mesh_id"], "per_element": [12.5, 30.1], "surface": "max"}
+        self.assertEqual(contract.errors("field", field), [])
+        self.assertNotEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_element": [1.0]}), [])
+        self.assertNotEqual(contract.errors("mesh", {**m, "elements": [[0, 1]]}), [])
 
     def test_rule_needs_a_known_category_and_a_basis(self):
         rule = load("knowledge_imported.json")["rules"][0]
