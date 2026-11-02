@@ -13,7 +13,7 @@ from hiraku import contract, solvers
 from hiraku.catalog import REPO_ROOT, load_requirements
 from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
 from hiraku.catalog.builders.common import BuildError
-from hiraku.catalog.builders.k2_tests import BUILDERS, PLANS
+from hiraku.catalog.builders.k2_tests import BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
 from hiraku.tools.summary import design_summary
@@ -94,6 +94,41 @@ class Builders(unittest.TestCase):
             BUILDERS["S4"]({"id": "S4"}, req, self.design)
         self.assertIn("Q52", str(e.exception))
 
+    def test_s1_predicts_with_the_cargo_height_of_q41(self):
+        from hiraku.catalog.builders.k2_tests import tilt_inputs
+        h = {}
+        for above in (None, 150.0, 620.0):
+            req = copy.deepcopy(self.req)
+            req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q41"]
+            if above is not None:
+                req["requirements"].append({"key": "Q41", "name": "荷の重心の高さ", "value": above, "unit": "mm",
+                                            "source": "default", "trust": 3, "basis": "test value"})
+            lc = BUILDERS["S1"]({"id": "S1"}, req, self.design)
+            self.assertEqual("Q41" in lc["requirement_keys"], above is not None)
+            self.assertEqual("cargo_cg_above_deck" in lc["params"], above is not None)
+            h[above] = tilt_inputs(self.design, lc)["h"]["value"]
+        # the demo design's cargo box stands on its floor with its centre 150 mm up
+        self.assertAlmostEqual(h[150.0], h[None], places=6)
+        self.assertAlmostEqual(h[620.0], 712.7, delta=0.5)
+
+    def test_cases_past_the_limit(self):
+        for tid in BEYOND:
+            with self.subTest(test=tid):
+                lc = BUILDERS[tid]({"id": tid, "variant": "beyond"}, self.req, self.design)
+                self.assertEqual(contract.errors("load_case", lc), [])
+                self.assertIn("beyond", lc["load_case_id"])
+                self.assertTrue(lc["title"].startswith("限界の外"))
+                declared = {p["name"] for p in TOOLS[TOOL_OF[tid]].describe()["params"]}
+                self.assertEqual(set(lc["params"]) - declared, set())
+        f1 = BUILDERS["F1"]({"id": "F1", "variant": "beyond"}, self.req, self.design)
+        self.assertEqual(f1["params"]["wind_speed"]["value"], f1["criterion"]["limit"]["value"])
+        s5 = BUILDERS["S5"]({"id": "S5", "variant": "beyond"}, self.req, self.design)
+        self.assertEqual(s5["criterion"]["quantity"], "tip_slope_angle")
+        self.assertAlmostEqual(s5["params"]["side_slope"]["value"], s5["criterion"]["limit"]["value"])
+        self.assertGreater(s5["params"]["side_slope"]["value"], 30.0 * BEYOND_FACTOR)
+        with self.assertRaises(BuildError):
+            BUILDERS["S3"]({"id": "S3", "variant": "beyond"}, self.req, self.design)
+
     def test_a_catalog_tolerance_replaces_the_default(self):
         lc = BUILDERS["S4"]({"id": "S4", "tolerance_rel": 0.2}, self.req, self.design)
         self.assertEqual(lc["tolerance_rel"], 0.2)
@@ -123,8 +158,13 @@ class Plans(unittest.TestCase):
             return self.design["variables"][rest[4:]]
         self.fail(f"unexpected ref {ref}")
 
+    def steps(self):
+        """(test id, catalog spec, step) of every plan, the cases past the limit included."""
+        out = [(tid, {"id": tid}, step) for tid, step in PLANS.items()]
+        return out + [(tid, {"id": tid, "variant": "beyond"}, PLANS_BEYOND.get(tid, PLANS[tid])) for tid in BEYOND]
+
     def test_steps_predict_with_paired_formulas(self):
-        for tid, step in PLANS.items():
+        for tid, _, step in self.steps():
             tool = TOOLS[step["tool"]]
             self.assertEqual(step["tool"], TOOL_OF[tid])
             pairs = {(p["quantity"], p["formula_id"], p["output"]) for p in tool.describe()["predicts"]}
@@ -142,8 +182,8 @@ class Plans(unittest.TestCase):
                     self.assertTrue(p["assumptions"])
 
     def test_refs_resolve_and_the_formulas_evaluate(self):
-        for tid, step in PLANS.items():
-            lc = BUILDERS[tid]({"id": tid}, self.req, self.design)
+        for tid, spec, step in self.steps():
+            lc = BUILDERS[tid](spec, self.req, self.design)
             preds = {}
             for p in predictions(step):
                 with self.subTest(test=tid, quantity=p["quantity"], formula=p["formula_id"]):

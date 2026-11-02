@@ -52,7 +52,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n05", "n08b", "n18", "check"})
+                                "n00", "n01", "n02", "n05", "n08b", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -61,6 +61,31 @@ class SharedShape(unittest.TestCase):
         self.assertEqual(r["min_text_px"], 18)
         for k in ("night", "ink", "tile_bg", "tile_border"):
             self.assertRegex(r["colors"][k], r"^#[0-9a-f]{6}$")
+
+    def test_n01_boxes_stay_above_the_band(self):
+        # N01 is drawn by the screens department from these values
+        n, r = self.rules["n01"], self.rules
+        for name in ("view", "pane"):
+            b = n[name]
+            self.assertLessEqual(b["y"] + b["h"], r["subtitle_band"]["y"], name)
+            self.assertLessEqual(b["x"] + b["w"], r["stage"]["w"], name)
+            self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
+        self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
+        self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_n02_boxes_stay_above_the_band(self):
+        # N02 is drawn by the screens department from these values
+        n, r = self.rules["n02"], self.rules
+        g = n["grid"]
+        right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+        bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+        self.assertLessEqual(bottom, r["subtitle_band"]["y"])
+        self.assertLessEqual(right, n["result"]["x"])  # the grid and the result column side by side
+        res = n["result"]
+        self.assertLessEqual(res["y"] + res["h"], r["subtitle_band"]["y"])
+        self.assertLessEqual(res["x"] + res["w"], r["safe"]["x"] + r["safe"]["w"])
+        self.assertEqual(len(n["panes"]), g["cols"] * g["rows"])
+        self.assertGreaterEqual(min(res["title_px"], res["text_px"], n["pane"]["rate"]["size_px"]), r["min_text_px"])
 
     def test_n05(self):
         n = self.rules["n05"]

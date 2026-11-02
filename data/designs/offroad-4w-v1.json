@@ -252,6 +252,10 @@
       "value": 150.0,
       "unit": "mm"
     },
+    "cargo_height": {
+      "value": 300.0,
+      "unit": "mm"
+    },
     "battery_max_temperature": {
       "value": 55.0,
       "unit": "degC"

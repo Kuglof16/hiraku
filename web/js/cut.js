@@ -10,9 +10,10 @@
 // the squeeze in its corner.
 
 import * as THREE from "three";
+import { BAND_COLORS } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
-import { esc, fmt } from "./labels.js";
+import { esc, fmt, fmtVU, quantityName } from "./labels.js";
 import { channelsOf, lerpAt, motionOf, nearestAt } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -245,6 +246,352 @@ class Cut {
   }
 }
 
+// ---- N01: a step climbed, and the case past the limit over it in translucent red ----
+//
+// The main view plays the climb of the lower step (K2 motion) with the frame coloured by
+// the K1 static analysis of the same load case (the stress at the push, said on the
+// card), the reaction and grip arrows and the centre of gravity. The higher step's motion
+// runs on the same clock as a red see-through overlay. Cases: ?ok= and ?over= (load case
+// ids), else the P1 load cases with the lowest and the highest step.
+
+const N01_KEYS = ["duration_s", "view", "pane", "card", "times", "zoom", "overlay", "colors"];
+
+function stepHeightOf(lc) {
+  const p = lc?.params?.step_height;
+  return typeof p === "number" ? p * 1000 : p?.unit === "m" ? p.value * 1000 : p?.value ?? NaN;
+}
+
+// The newest ok analysis of a load case by a test of `pick` (motion: has series; still: has a stress field).
+function analysisOf(s, lcId, pick) {
+  const list = s.order.analyses.map((id) => s.analyses[id]).filter((a) => a.load_case_id === lcId && a.status === "ok");
+  return list.filter(pick).at(-1) ?? null;
+}
+
+const resultOf = (ana, q) => (ana?.results ?? []).find((r) => r.quantity === q) ?? null;
+
+class CutN01 {
+  constructor(layout, s) {
+    const missing = N01_KEYS.filter((k) => layout.n01?.[k] === undefined);
+    if (missing.length) throw new Error(`layout.json の n01 に無い: ${missing.join(", ")}`);
+    this.layout = layout;
+    this.s = s;
+    this.spec = layout.n01;
+    this.stage = $("stage");
+    this.stage.style.background = this.spec.colors.bg;
+    this.scale = 1;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer.setPixelRatio(1);
+    const steps = (s.project?.load_cases ?? []).filter((c) => c.test_id === "P1").sort((a, b) => stepHeightOf(a) - stepHeightOf(b));
+    const byId = (id) => steps.find((c) => c.load_case_id === id);
+    this.ok = this.caseOf(byId(params.get("ok")) ?? steps[0]);
+    this.over = this.caseOf(byId(params.get("over")) ?? steps.at(-1));
+    if (!this.ok?.motion) throw new Error("段差の動きの記録 (P1 の step_climb_dynamic) が無い");
+    this.build();
+  }
+
+  caseOf(lc) {
+    if (!lc) return null;
+    const dyn = analysisOf(this.s, lc.load_case_id, (a) => (a.series ?? []).length > 0);
+    const still = analysisOf(this.s, lc.load_case_id, (a) => fieldsOf(a).some((f) => f.kind === "stress"));
+    return { lc, dyn, still, motion: dyn ? motionOf(dyn) : null };
+  }
+
+  view(c, tint) {
+    const design = this.s.designs[c.dyn.design_version] ?? this.s.designs[this.s.currentVersion];
+    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    v.setDesign(design);
+    v.setLoading(c.lc.params?.loading ?? null);
+    v.setMotion(c.motion);
+    v.setScene(c.lc, c.dyn);
+    if (tint) {
+      v.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
+      v.tint(tint.color, tint.opacity);
+    } else {
+      const field = c.still ? fieldsOf(c.still).find((f) => f.kind === "stress") : null;
+      this.contour = field ? contourOf(c.still, field, c.lc.criterion) : null;
+      v.setContour(this.contour);
+      v.setToggles({ parts: true, contour: true, arrows: true, cg: true, names: false, limit: false });
+    }
+    return v;
+  }
+
+  build() {
+    const sp = this.spec;
+    const V = sp.view;
+    const box = document.createElement("div");
+    box.className = "n01-view";
+    box.dataset.box = "n01.view";
+    Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border: `${sp.card.border_px}px solid ${sp.colors.rule}`, borderRadius: `${sp.card.radius_px}px` });
+    box.innerHTML = `<canvas class="main"></canvas><canvas class="over"></canvas>`;
+    this.stage.append(box);
+    this.inner = { w: V.w - 2 * sp.card.border_px, h: V.h - 2 * sp.card.border_px };
+    this.main = { el: box.querySelector("canvas.main"), view: this.view(this.ok, null) };
+    this.ghost = this.over?.motion ? { el: box.querySelector("canvas.over"), view: this.view(this.over, sp.overlay) } : null;
+    for (const v of [this.main.view, this.ghost?.view].filter(Boolean)) v.resize(this.inner.w, this.inner.h);
+    // what the camera takes in: the vehicle and the step's edge
+    this.points = this.main.view.contentPoints();
+    for (const o of this.main.view.sceneDesc?.objects ?? []) if (o.kind === "step") this.points.push(new THREE.Vector3(o.position_mm[0] - o.size_mm[0] / 2, o.position_mm[1], o.position_mm[2]));
+    this.span = Math.max(...[this.ok, this.over].filter((c) => c?.motion).map((c) => c.motion.duration));
+    this.buildPane();
+  }
+
+  // The frame's allowable stress: the limit of the run's load case judged on max_stress
+  // (the strength test R1), in the stress's own unit; null when the run has none.
+  allowable(unit) {
+    const lc = (this.s.project?.load_cases ?? []).find((c) => c.criterion?.quantity === "max_stress" && c.criterion?.limit?.unit === unit);
+    return lc ? { value: lc.criterion.limit.value, op: lc.criterion.op, test: lc.test_id } : null;
+  }
+
+  card(c, kind) {
+    const sp = this.spec;
+    const h = stepHeightOf(c.lc);
+    const climbed = resultOf(c.dyn, "climbed");
+    const time = resultOf(c.dyn, "climb_time");
+    const force = resultOf(c.dyn, "front_wheel_force");
+    const stress = resultOf(c.still, "max_stress");
+    const ok = climbed ? climbed.value >= 1 : null;
+    const mark = ok === null ? "" : ok ? `<span class="ok">✓ 登れた${time ? ` (${fmt(time.value, 3)} 秒)` : ""}</span>` : `<span class="miss">✕ 登れなかった</span>`;
+    // the stress against the allowable, when the run gives one (the words say which way it falls)
+    const lim = stress ? this.allowable(stress.unit) : null;
+    const over = lim ? (lim.op === "<" ? stress.value >= lim.value : stress.value > lim.value) : false;
+    const vs = lim ? ` <small class="${over ? "miss" : "ok"}">(許容 ${esc(fmt(lim.value, 4))} MPa ${over ? "を超える" : "以内"})</small>` : "";
+    const rows = [
+      force && `<tr><td>前輪を押す力</td><td>${esc(fmt(force.value / 1000, 3))} kN</td></tr>`,
+      stress && `<tr class="${over ? "miss" : ""}"><td>フレームの最大応力</td><td>${esc(fmt(stress.value, 4))} MPa${vs}</td></tr>`,
+    ].filter(Boolean).join("");
+    const head = kind === "over" ? `<small>限界の外の条件: 段差 ${fmt(h, 3)} mm</small>段差 ${fmt(h, 3)} mm` : `段差 ${fmt(h, 3)} mm`;
+    return (
+      `<div class="n01-card ${kind}" data-box="n01.card.${kind}" style="border-color:${kind === "over" ? sp.overlay.color : sp.colors.rule};border-width:${sp.card.border_px}px;border-radius:${sp.card.radius_px}px;padding:${sp.card.pad}px;margin-bottom:${sp.card.gap}px">` +
+      `<h3 style="font-size:${sp.card.title_px}px">${head}</h3>${mark ? `<p style="font-size:${sp.card.text_px}px">${mark}</p>` : ""}` +
+      `<table style="font-size:${sp.card.text_px}px">${rows}</table></div>`
+    );
+  }
+
+  buildPane() {
+    const sp = this.spec;
+    const P = sp.pane;
+    const pane = document.createElement("div");
+    pane.className = "n01-pane";
+    pane.dataset.box = "n01.pane";
+    Object.assign(pane.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px` });
+    const ct = this.contour;
+    const legend = ct
+      ? `<div class="n01-legend" data-box="n01.legend" style="font-size:${sp.card.text_px}px"><span>応力 [MPa]</span><i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${fmt(ct.max, 3)}</span></div>`
+      : "";
+    pane.innerHTML =
+      this.card(this.ok, "ok") +
+      (this.over && this.over !== this.ok ? this.card(this.over, "over") : "") +
+      legend +
+      `<p class="n01-note" data-box="n01.note" style="font-size:${sp.card.text_px}px">フレームの色: 応力は段を押して登る瞬間の静的な解析 (K1)。半透明の赤: 限界の外の条件の動き</p>`;
+    this.stage.append(pane);
+  }
+
+  resize(scale) {
+    this.scale = scale;
+    this.renderer.setSize(Math.ceil(this.inner.w * scale), Math.ceil(this.inner.h * scale), false);
+    for (const c of [this.main, this.ghost].filter(Boolean)) {
+      c.el.width = Math.round(this.inner.w * scale);
+      c.el.height = Math.round(this.inner.h * scale);
+    }
+  }
+
+  draw(t) {
+    const sp = this.spec;
+    const { tau } = squeeze(t, sp.times.lead_s, sp.duration_s, 0, this.span);
+    // the camera comes closer over the first zoom_s seconds
+    const z = Math.min(1, t / sp.times.zoom_s);
+    const margin = sp.zoom.from + (sp.zoom.to - sp.zoom.from) * (1 - (1 - z) ** 3);
+    const mv = this.main.view;
+    mv.fitPoints(this.points, VIEWS[mv.view ?? "side"], margin);
+    const m = this.ok.motion;
+    mv.setFrame(m.frame(Math.min(m.t1, m.t0 + tau)));
+    mv.renderInto(this.main.el.getContext("2d"), this.main.el.width, this.main.el.height, this.scale);
+    if (this.ghost) {
+      const g = this.over.motion;
+      this.ghost.view.setFrame(g.frame(Math.min(g.t1, g.t0 + tau)));
+      this.ghost.view.copyCamera(mv);
+      this.ghost.view.renderInto(this.ghost.el.getContext("2d"), this.ghost.el.width, this.ghost.el.height, this.scale);
+    }
+  }
+}
+
+// ---- N02: five tests side by side, each with its case past the limit over it ----
+//
+// One pane per test in the layout's grid (and one for the legend): the motion of the
+// test's load case with the centre of gravity and the reaction and grip arrows; the
+// load case of the same test whose id ends in -beyond (the K2 team's "限界の外"
+// conditions) runs on the same clock as a red see-through overlay. The result pane
+// lists the first results of each record as they were written.
+
+const N02_KEYS = ["duration_s", "grid", "panes", "pane", "result", "times", "overlay", "colors"];
+const N02_TESTS = {
+  tilt: { test: "S1", name: "傾斜台" },
+  wind: { test: "F1", name: "横風" },
+  rough: { test: "S5", name: "凸凹の横斜面" },
+  dlc: { test: "S3", name: "ダブルレーンチェンジ" },
+  brake: { test: "S4", name: "急ブレーキ" },
+};
+const BEYOND = /-beyond$/;
+
+class CutN02 {
+  constructor(layout, s) {
+    const missing = N02_KEYS.filter((k) => layout.n02?.[k] === undefined);
+    if (missing.length) throw new Error(`layout.json の n02 に無い: ${missing.join(", ")}`);
+    this.layout = layout;
+    this.s = s;
+    this.spec = layout.n02;
+    this.stage = $("stage");
+    this.stage.style.background = this.spec.colors.bg;
+    this.scale = 1;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer.setPixelRatio(1);
+    this.build();
+  }
+
+  // The test's case and its case past the limit (the newest motion of each).
+  casesOf(testId) {
+    const lcs = (this.s.project?.load_cases ?? []).filter((c) => c.test_id === testId);
+    const motionCase = (lc) => {
+      if (!lc) return null;
+      const ana = analysisOf(this.s, lc.load_case_id, (a) => (a.series ?? []).length > 0);
+      return ana ? { lc, ana, motion: motionOf(ana) } : null;
+    };
+    return { ok: motionCase(lcs.find((c) => !BEYOND.test(c.load_case_id))), over: motionCase(lcs.find((c) => BEYOND.test(c.load_case_id))) };
+  }
+
+  makeView(c, tint, w, h) {
+    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    v.setDesign(this.s.designs[c.ana.design_version] ?? this.s.designs[this.s.currentVersion]);
+    v.setLoading(c.lc.params?.loading ?? null);
+    v.setMotion(c.motion);
+    v.setScene(c.lc, c.ana);
+    if (tint) {
+      v.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
+      v.tint(tint.color, tint.opacity);
+    } else {
+      v.setContour(null);
+      v.setToggles({ parts: true, contour: false, arrows: true, cg: true, names: false, limit: true });
+    }
+    v.resize(w, h);
+    return v;
+  }
+
+  build() {
+    const sp = this.spec;
+    const st = sp.pane;
+    const rects = gridRects(sp.grid);
+    this.panes = sp.panes.map((key, i) => {
+      const r = rects[i];
+      const el = document.createElement("div");
+      el.className = "n02-pane";
+      el.dataset.box = `n02.pane.${key}`;
+      Object.assign(el.style, {
+        left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px`,
+        background: sp.colors.panel, border: `${st.border_px}px solid ${sp.colors.rule}`, borderRadius: `${st.radius_px}px`,
+      });
+      this.stage.append(el);
+      const inner = { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px };
+      if (key === "legend") {
+        el.innerHTML = this.legendHtml();
+        return { key, el, inner };
+      }
+      const def = N02_TESTS[key] ?? { name: key };
+      el.innerHTML =
+        `<canvas class="main"></canvas><canvas class="over"></canvas>` +
+        `<b data-box="n02.pane.${key}.label" style="left:${st.label.x}px;top:${st.label.y}px;font-size:${st.label.size_px}px">${esc(def.name)}</b>` +
+        `<span class="rate" data-box="n02.pane.${key}.rate" style="right:${st.label.x}px;bottom:${st.label.y}px;font-size:${st.rate.size_px}px"></span>`;
+      const { ok, over } = def.test ? this.casesOf(def.test) : {};
+      const pane = { key, def, el, inner, ok, over, main: el.querySelector("canvas.main"), ghostEl: el.querySelector("canvas.over") };
+      if (!ok) {
+        el.insertAdjacentHTML("beforeend", `<span class="none">記録がまだ無い (${esc(def.test)})</span>`);
+        return pane;
+      }
+      pane.view = this.makeView(ok, null, inner.w, inner.h);
+      pane.ghost = over ? this.makeView(over, sp.overlay, inner.w, inner.h) : null;
+      pane.span = Math.max(ok.motion.duration, over?.motion?.duration ?? 0);
+      // the camera takes in the vehicle at rest from the scene's own direction
+      pane.view.fitPoints(pane.view.contentPoints(), VIEWS[pane.view.view ?? "default"], 1.12);
+      if (over) el.insertAdjacentHTML("beforeend", `<span class="beyond" data-box="n02.pane.${key}.beyond" style="left:${st.label.x}px;bottom:${st.label.y}px;font-size:${st.rate.size_px}px;color:${sp.overlay.color}">${esc(over.lc.title ?? "限界の外の条件")}</span>`);
+      return pane;
+    });
+    this.buildResult();
+  }
+
+  legendHtml() {
+    const sp = this.spec;
+    const st = sp.pane;
+    const C = { reaction: "#2b59c3", grip: "#8e6bbf" };
+    const arrow = (c) => `<svg width="34" height="20" viewBox="0 0 34 20"><line x1="2" y1="10" x2="24" y2="10" stroke="${c}" stroke-width="4"/><path d="M22 3 L33 10 L22 17 Z" fill="${c}"/></svg>`;
+    const cg = `<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fbf9f4" stroke="#1d1d1f" stroke-width="2"/><path d="M11 11 L11 2 A9 9 0 0 1 20 11 Z M11 11 L11 20 A9 9 0 0 1 2 11 Z" fill="#1d1d1f"/></svg>`;
+    const ghost = `<i style="display:inline-block;width:30px;height:16px;background:${sp.overlay.color};opacity:${Math.min(1, sp.overlay.opacity * 2.5)};border-radius:3px"></i>`;
+    const rows = [
+      [cg, "重心"],
+      [arrow(C.reaction), "路面の反力 (輪ごと)"],
+      [arrow(C.grip), "グリップ (タイヤの横・前後の力)"],
+      [ghost, "限界の外の条件の動き"],
+    ];
+    return (
+      `<b data-box="n02.pane.legend.label" style="left:${st.label.x}px;top:${st.label.y}px;font-size:${st.label.size_px}px">凡例</b>` +
+      `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y * 2 + st.label.size_px}px;font-size:${sp.result.text_px}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`
+    );
+  }
+
+  buildResult() {
+    const sp = this.spec;
+    const R = sp.result;
+    const el = document.createElement("div");
+    el.className = "n02-result";
+    el.dataset.box = "n02.result";
+    Object.assign(el.style, { left: `${R.x}px`, top: `${R.y}px`, width: `${R.w}px`, height: `${R.h}px` });
+    const line = (c) => (c?.ana?.results ?? []).slice(0, R.rows).map((r) => `<tr><td>${esc(quantityName(r.quantity))}</td><td>${esc(fmtVU(r.value, r.unit, 3))}</td></tr>`).join("");
+    el.innerHTML =
+      `<h3 style="font-size:${R.title_px}px">限界の値</h3>` +
+      this.panes
+        .filter((p) => p.ok)
+        .map(
+          (p) =>
+            `<div class="n02-res" data-box="n02.result.${p.key}" style="margin-bottom:${R.row_gap}px;font-size:${R.text_px}px"><b>${esc(p.def.name)}</b>` +
+            `<table>${line(p.ok)}</table>` +
+            (p.over ? `<div class="over" style="color:${sp.overlay.color}">✕ ${esc(p.over.lc.title ?? "限界の外の条件")}</div><table>${line(p.over)}</table>` : "") +
+            `</div>`,
+        )
+        .join("");
+    this.stage.append(el);
+  }
+
+  resize(scale) {
+    this.scale = scale;
+    const r = gridRects(this.spec.grid)[0];
+    this.renderer.setSize(Math.ceil(r.w * scale), Math.ceil(r.h * scale), false);
+    for (const p of this.panes) {
+      for (const c of [p.main, p.ghostEl].filter(Boolean)) {
+        c.width = Math.round(p.inner.w * scale);
+        c.height = Math.round(p.inner.h * scale);
+      }
+    }
+  }
+
+  draw(t) {
+    const sp = this.spec;
+    for (const p of this.panes) {
+      if (!p.view) continue;
+      const q = squeeze(t, sp.times.lead_s, sp.duration_s, 0, p.span);
+      p.el.querySelector(".rate").textContent = rateLabel(q.rate);
+      const m = p.ok.motion;
+      p.view.setFrame(m.frame(Math.min(m.t1, m.t0 + q.tau)));
+      p.view.renderInto(p.main.getContext("2d"), p.main.width, p.main.height, this.scale);
+      if (p.ghost) {
+        const g = p.over.motion;
+        p.ghost.setFrame(g.frame(Math.min(g.t1, g.t0 + q.tau)));
+        p.ghost.copyCamera(p.view);
+        p.ghost.renderInto(p.ghostEl.getContext("2d"), p.ghostEl.width, p.ghostEl.height, this.scale);
+      }
+    }
+  }
+}
+
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02 };
+
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;
 const STAGE_H = 1080;
@@ -286,11 +633,11 @@ window.hiraku = {
 async function main() {
   try {
     const name = params.get("cut") ?? "n05";
-    if (name !== "n05") throw new Error(`no cut named ${name}`);
+    if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
-    cut = new Cut(layout, stateOf(events));
+    cut = new CUTS[name](layout, stateOf(events));
     window.hiraku.cut = cut;
-    player.duration = layout.n05.duration_s;
+    player.duration = layout[name].duration_s;
     window.addEventListener("resize", fit);
     fit();
     if (params.has("t")) await drawAt(playhead);
