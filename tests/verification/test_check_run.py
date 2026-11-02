@@ -212,8 +212,9 @@ class CheckRun(unittest.TestCase):
         a = by_kind(ev, "analysis.finished")["data"]
         step = lambda n, part, deps=(): {"order": n, "part": part, "direction": "-z", "depends_on": list(deps),
                                          "no_interference": True, "tool_clearance": True, "hand_reach": True}
-        a["assembly"] = [step(1, "part:battery"), step(2, "part:seat", ["part:battery", "member:cross1"])]
-        a["interferences"] = [{"a": "part:seat", "b": "member:cross1", "depth_mm": 4.0, "state": "rest"},
+        a["assembly"] = [step(1, "battery"), step(2, "part:seat", ["battery", "member:cross1"])]
+        a["assembly"][1]["tool_clearance"] = False  # goes in, but a tool cannot reach: not blocked
+        a["interferences"] = [{"a": "seat", "b": "member cross1", "depth_mm": 4.0, "state": "rest"},
                               {"a": "FL", "b": "rail_L0", "depth_mm": 12.5, "state": "motion",
                                "condition": "steer 30 deg, bump 80 mm"}]
         a["results"] += [{"quantity": "interference_count", "value": 1.0, "unit": "1"},
@@ -240,19 +241,19 @@ class CheckRun(unittest.TestCase):
         steps[0]["depends_on"] = ["part:seat"]
         self.assertFlags(ev, "analysis.assembly")
 
-    def test_blocked_step_that_passes_every_check(self):
+    def test_blocked_step_that_goes_in_without_interference(self):
         ev = sample_events()
-        self._assembly(ev)["assembly"][1]["blocked_by"] = ["member:cross1"]
+        self._assembly(ev)["assembly"][1]["blocked_by"] = ["cross1"]
         self.assertFlags(ev, "analysis.assembly")
 
-    def test_failed_step_without_blocked_by_is_a_warning(self):
+    def test_step_that_cannot_go_in_without_blocked_by_is_a_warning(self):
         ev = sample_events()
-        self._assembly(ev)["assembly"][1]["hand_reach"] = False
+        self._assembly(ev)["assembly"][1]["no_interference"] = False
         self.assertIn("analysis.assembly", self.rules(ev, "warn"))
 
     def test_part_interfering_with_itself(self):
         ev = sample_events()
-        self._assembly(ev)["interferences"][0]["b"] = "part:seat"
+        self._assembly(ev)["interferences"][0]["b"] = "seat"
         self.assertFlags(ev, "analysis.interference")
 
     def test_interference_count_disagrees_with_the_list(self):

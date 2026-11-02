@@ -16,7 +16,7 @@ there is an error (or a warning with --strict). What it looks at:
   the run has no tool.checked for it at all)
 - H3: after a mismatch, no analysis or comparison in that domain until a cause
 - assembly and interferences in an analysis: steps numbered 1..n, each part
-  once, dependencies go in earlier, blocked_by agrees with the three checks;
+  once, dependencies go in earlier, blocked_by only when no_interference is false;
   no part interferes with itself; the tool's interference counts and deepest
   overlap agree with its list
 - comparisons: values copied from the prediction and the analysis, signed diffs
@@ -466,8 +466,12 @@ class RunChecker:
 
     @staticmethod
     def _names_a_thing(name: str, ids: set[str] | None) -> bool:
-        """An id of the design, bare or as kind:id (K4 names bodies part:<id>, member:<id>)."""
-        return ids is None or (isinstance(name, str) and (name in ids or name.split(":", 1)[-1] in ids))
+        """An id of the design, bare or after a kind (part:<id>, member:<id>, "member <id>")."""
+        if ids is None:
+            return True
+        if not isinstance(name, str) or not name.strip():
+            return False
+        return name in ids or name.replace(":", " ").split()[-1] in ids
 
     def check_assembly(self) -> None:
         for aid, (i, a) in self.recs["analysis"].items():
@@ -493,11 +497,12 @@ class RunChecker:
                         self.error("analysis.assembly", w, f"{aid} step {n}: {part} depends on {dep}, which goes in at step {step_of[dep]}")
                     elif dep not in step_of and not self._names_a_thing(dep, ids):
                         self.warn("analysis.assembly", w, f"{aid} step {n}: depends on {dep}, which is neither a step nor in the design")
-                clear = all(s.get(f) for f in ("no_interference", "tool_clearance", "hand_reach"))
-                if clear and s.get("blocked_by"):
-                    self.error("analysis.assembly", w, f"{aid} step {n}: {part} is clear on every check but blocked by {s['blocked_by']}")
-                elif not clear and not s.get("blocked_by"):
-                    self.warn("analysis.assembly", w, f"{aid} step {n}: {part} fails a check but names nothing in blocked_by")
+                # blocked_by says what stops a part going in, so it goes with no_interference
+                # (a part can go in and still lack tool clearance or hand reach)
+                if s.get("no_interference") and s.get("blocked_by"):
+                    self.error("analysis.assembly", w, f"{aid} step {n}: {part} goes in without interference but is blocked by {s['blocked_by']}")
+                elif s.get("no_interference") is False and not s.get("blocked_by"):
+                    self.warn("analysis.assembly", w, f"{aid} step {n}: {part} cannot go in but names nothing in blocked_by")
             inters = [f for f in a.get("interferences") or [] if isinstance(f, dict)]
             seen = set()
             for f in inters:

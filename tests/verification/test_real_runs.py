@@ -6,7 +6,9 @@
    (tests/tools/fakes.py), so the store's output is checked before the real
    solvers land: a run that ends done, one stopped by a mismatch, one stopped
    by H2.
-3. Every folder already under runs/ in this checkout. runs/ is not committed,
+3. The assembly tool's assembly and interferences on the demo design, through
+   check_run's rules for them (no run needed).
+4. Every folder already under runs/ in this checkout. runs/ is not committed,
    so this part only does something on a machine that has runs.
 """
 
@@ -21,6 +23,8 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.contract import layout
 from qa import check_run as cr
+
+from ._solvers import tool_or_skip
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = sorted((ROOT / "data" / "requirements").glob("*.yaml"))
@@ -96,6 +100,32 @@ class ScriptedRunWithFakes(unittest.TestCase):
                                 tools=fakes.shelf(step, frame, checks_pass))
                 run_scripted(ctx)
                 self.assertEqual(_errors(ctx.store.path, recompute=False), [])  # fake formulas
+
+
+class AssemblyToolRecord(unittest.TestCase):
+    """The assembly tool's own `assembly` and `interferences` on the demo design pass
+    check_run's rules for them (names in the design, steps 1..n, counts agree)."""
+
+    def test_assembly_record_on_the_demo_design(self):
+        tool = tool_or_skip("assembly")
+        path = ROOT / "data" / "designs" / "offroad-4w-v1.json"
+        if not path.exists():
+            self.skipTest("needs data/designs/offroad-4w-v1.json (design dept)")
+        design = json.loads(path.read_text(encoding="utf-8"))
+        lc = json.loads((contract.EXAMPLES_DIR / "load_case.json").read_text(encoding="utf-8"))
+        lc.update(load_case_id="H1", test_id="H1", domain="assembly", params={"loading": "two_cargo"})
+        pred = json.loads((contract.EXAMPLES_DIR / "prediction.json").read_text(encoding="utf-8"))
+        pred.update(load_case_id="H1", test_id="H1", domain="assembly")
+        out = tool.run(design, lc, [pred], {})
+        self.assertEqual(out.get("status"), "ok", out.get("error"))
+        self.assertIn("assembly", out)
+        self.assertIn("interferences", out)
+        checker = cr.RunChecker(ROOT)
+        checker.where_of = ["assembly analysis"]
+        checker.designs[design["design_version"]] = (0, design)
+        checker.recs["analysis"]["ana-0001"] = (0, dict(out, analysis_id="ana-0001", design_version=design["design_version"]))
+        checker.check_assembly()
+        self.assertEqual([str(f) for f in checker.findings], [])
 
 
 class SavedRuns(unittest.TestCase):
