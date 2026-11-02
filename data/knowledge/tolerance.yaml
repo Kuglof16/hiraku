@@ -1,0 +1,19 @@
+# Built-in rules: tolerance (公差). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the standard; the standard was not opened for this repository.
+doc_id: KN-TL
+title: 公差の決まり
+category: tolerance
+rules:
+  - id: TL-01
+    text: 組み合う部品の隙間は、公差の積み上げより大きい
+    kinds: [frame, body]
+    check: clearance_mm > tolerance_stack_mm
+    trust: 3
+    basis: ordinary tolerance-stack practice (assumption); no single primary source was read
+  - id: TL-02
+    text: 固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内
+    kinds: [frame, body]
+    check: position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2
+    trust: 2
+    basis: >-
+      ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)

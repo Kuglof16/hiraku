@@ -1,0 +1,33 @@
+# Built-in rules: people (人). See sheet-metal.yaml for the shape.
+# The body sizes are AIST 1991-92 values from the catalog research (sitting hip breadth, 95th percentile
+# female 391 mm; buttock-popliteal length, 5th percentile female 406 mm); the page has not been read
+# again for this repository.
+doc_id: KN-HU
+title: 人の決まり
+category: human
+rules:
+  - id: HU-01
+    text: 座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上
+    kinds: [seat]
+    check: size_y_mm >= 391
+    trust: 1
+    basis: >-
+      AIST 人体寸法データベース 1991-92, 座位殿幅, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
+      (not checked in this repository)
+  - id: HU-02
+    text: 座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下
+    kinds: [seat]
+    check: size_x_mm <= 406
+    trust: 1
+    basis: >-
+      AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
+      (not checked in this repository). The seat box may include the back, so a hit is a question to the
+      designer, not a verdict
+  - id: HU-03
+    text: 動いて閉じる隙間は、指が入る 25 mm より小さくしない
+    kinds: [suspension, frame]
+    check: closing_gap_mm >= 25
+    trust: 1
+    basis: >-
+      ISO 13854:1996 (finger 25 mm), https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
+      (not checked in this repository)

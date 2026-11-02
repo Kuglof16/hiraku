@@ -1,0 +1,24 @@
+# Built-in rules: battery (電池). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the standard; the standard was not opened for this repository.
+doc_id: KN-BT
+title: 電池の決まり
+category: battery
+rules:
+  - id: BT-01
+    text: 使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下
+    kinds: [battery]
+    check: req_Q19 <= 55
+    trust: 1
+    basis: >-
+      EVE LF50K datasheet: cell temperature up to 55 degC,
+      https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf
+      (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen;
+      the thermal tests (T1) judge the cell temperature itself
+  - id: BT-02
+    text: 電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る
+    kinds: [battery]
+    check: var_battery_voltage <= 60
+    trust: 2
+    basis: >-
+      UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository),
+      https://www.mlit.go.jp/jidosha/un/UN_R100.pdf

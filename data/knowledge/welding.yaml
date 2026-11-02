@@ -1,0 +1,22 @@
+# Built-in rules: welding (溶接). See sheet-metal.yaml for the shape.
+# "recalled" = written from memory of the standard; the standard was not opened for this repository.
+doc_id: KN-WD
+title: 溶接の決まり
+category: weld
+rules:
+  - id: WD-01
+    text: 溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下
+    kinds: [frame]
+    check: section_ratio_max <= 35
+    trust: 2
+    basis: >-
+      EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for
+      b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)
+  - id: WD-02
+    text: すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上
+    kinds: [frame]
+    check: weld_length_mm >= max(30, 6 * weld_throat_mm)
+    trust: 2
+    basis: >-
+      EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness
+      (recalled; not checked in this repository)
