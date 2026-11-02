@@ -9,7 +9,9 @@ contract unit, default in that unit, design variables that stand in when the
 load case does not give it) and reads no others; describe()["params"] gives
 them as records. params.loading (empty, driver, two, two_cargo; default
 two_cargo) chooses the occupant and cargo parts on board for every tool. A
-load-case param the tool does not read is named in the record's effects.
+load-case param the tool does not read is named in the record's effects; the
+values K2 assumed because neither the load case nor the design gave them are
+the record's assumptions.
 Tool options in `params` (not the load case): dt (s), record_hz.
 
 Predictions: `pairs` names, for a result quantity, a K0 formula output that
@@ -36,12 +38,6 @@ from .model import DesignError, Vehicle, box_design, build_vehicle
 from .record import Recorder
 from .scenario import HOLD_TORQUE, hold, new_sim, settle, side_gravity, slope_gravity, tilt_sweep
 from .units import G0, si
-
-try:  # the contract may grow an `assumptions` list on analysis records
-    from hiraku import contract as _contract
-    _ANALYSIS_PROPS = set(_contract.schema()["$defs"]["analysis"]["properties"])
-except Exception:  # pragma: no cover
-    _ANALYSIS_PROPS = set()
 
 
 def _res(quantity: str, value: float, unit: str, where: str | None = None) -> dict:
@@ -192,16 +188,13 @@ class K2Tool(ABC):
         for key in ("series", "vectors", "scene"):
             if out.get(key):
                 rec[key] = out[key]
-        # the values the design did not give and K2 took on its own, in the record itself
+        # the values neither the load case nor the design gave, which K2 took on its own
         assumptions = list(dict.fromkeys(list(out.get("assumptions", [])) + self._assumed))
-        if "assumptions" in _ANALYSIS_PROPS and assumptions:
+        if assumptions:
             rec["assumptions"] = assumptions
-        effects = [{"name": "assumption: " + a} for a in assumptions]
         unread = sorted(set(lp) - {p.name for p in (LOADING,) + self.params})
         if unread:
-            effects.insert(0, {"name": "load-case params this tool does not read: " + ", ".join(unread)})
-        if effects:
-            rec["effects"] = effects
+            rec["effects"] = [{"name": "load-case params this tool does not read: " + ", ".join(unread)}]
         if out.get("error"):
             rec["status"] = "failed"
             rec["error"] = out["error"]
@@ -224,7 +217,7 @@ class K2Tool(ABC):
     _vars: dict = {}
 
     def _note(self, text: str) -> None:
-        """Write down an assumption of this run (it goes into the record's effects)."""
+        """Write down an assumption of this run (it goes into the record's assumptions)."""
         self.__dict__.setdefault("_assumed", []).append(text)
 
     def q(self, lp: dict, name: str, want: str) -> float | None:
@@ -632,8 +625,14 @@ class CrosswindTool(K2Tool):
 
 # ------------------------------------------------------------------ braking
 def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | None = None, grade: float = 0.0,
-               dt: float = 1e-3, aero: Aero | None = None, rec_hz: float = 0.0) -> dict:
-    """Run at v0 for 0.5 s, coast `reaction` s, then brake until the vehicle stops."""
+               dt: float = 1e-3, aero: Aero | None = None, rec_hz: float = 0.0, rise: float = 0.0) -> dict:
+    """Run at v0 for 0.5 s, coast `reaction` s, then brake until the vehicle stops.
+
+    rise: the brake torque grows linearly from 0 over this time (s). With rise 0 and no
+    brake_torque the braked wheels are held at once (the locked-wheel closed form); with
+    rise > 0 and no brake_torque the torque grows to mu W r per braked wheel, enough to
+    lock any wheel, so that a wheel's spin is not stopped within one step.
+    """
     sim = new_sim(veh, dt=dt, settle_s=1.0)
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
@@ -641,8 +640,14 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
     start_rolling(sim, v0)
     ctrl = SpeedController(sim)
     n = sim.n
-    tq = HOLD_TORQUE if brake_torque is None else brake_torque
-    brake_on = [tq if c.brake else 0.0 for c in veh.corners]
+    if brake_torque is not None:
+        tq = brake_torque
+    elif rise > 0.0:
+        tq = max(c.mu for c in veh.corners) * veh.m_total * G0 * max(c.radius for c in veh.corners)
+    else:
+        tq = HOLD_TORQUE
+    brake_full = [tq if c.brake else 0.0 for c in veh.corners]
+    brake_on = brake_full
     if not any(brake_on):
         raise DesignError("no support has actuation.brake; braking needs a braked wheel")
     t_cmd, t_brake = 0.5, 0.5 + reaction
@@ -659,7 +664,8 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
         elif t < t_brake:
             drive, brake = [0.0] * n, [0.0] * n
         else:
-            drive, brake = [0.0] * n, brake_on
+            u = 1.0 if rise <= 0.0 else min(1.0, (t - t_brake) / rise)
+            drive, brake = [0.0] * n, [u * x for x in brake_full]
         sim.step(controls(sim, 0.0, drive, brake), aero.forces(sim) if aero is not None else None)
         if x_cmd is None and t >= t_cmd:
             x_cmd = float(sim.design_origin()[0])
@@ -692,8 +698,11 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
 class BrakingTool(K2Tool):
     """Emergency stop (S4) and parking on a slope (S4b).
 
+    The brake torque grows over brake_rise_time: a brake that stops a wheel's spin within
+    one step tips the body by the spin's momentum (the empty demo vehicle's rear unloaded
+    to 0 within 18 ms at mu 0.6; with 0.2 s it keeps 325 N).
     Results: stopping_distance (m, from the brake command), braking_distance (m, from the
-    brakes coming on), mean_decel (m/s^2 = v^2 / 2 s_braking), mean_decel_g (g, the same),
+    brakes coming on, the rise included), mean_decel (m/s^2 = v^2 / 2 s_braking), mean_decel_g (g, the same),
     peak_decel (m/s^2), min_wheel_load (N, where = support), min_rear_wheel_load (N, supports
     behind the CG: 0 = the rear lifts), min_rear_axle_load (N, those supports together),
     max_pitch (deg, nose down +); with parking_slope: parking_drift (mm in 60 s, facing uphill,
@@ -708,6 +717,8 @@ class BrakingTool(K2Tool):
               MU,
               P("reaction_time", "s", 0.0, "coasting from the command until the brakes come on"),
               P("brake_torque", "N*m", None, "per braked wheel (default: enough to lock every braked wheel, no ABS)"),
+              P("brake_rise_time", "s", 0.2, "the brake torque grows from 0 to full over this time (0.2 s "
+                                             "assumed; no source read in this repository)", assumed=True),
               P("grade", "%", 0.0, "road grade, + uphill"),
               P("parking_slope", "%", None, "optional: also park on this slope, brakes on, 60 s"),
               P("cd", "1", 0.0, "drag coefficient (default 0: no air drag)"),
@@ -747,7 +758,8 @@ class BrakingTool(K2Tool):
         if tq is None:
             notes.append("brakes strong enough to lock every braked wheel (no ABS)")
         r = brake_stop(veh, v0, reaction=self.q(lp, "reaction_time", "s"), brake_torque=tq,
-                       grade=self.q(lp, "grade", "1"), dt=self.dt, aero=aero, rec_hz=self.record_hz)
+                       grade=self.q(lp, "grade", "1"), dt=self.dt, aero=aero, rec_hz=self.record_hz,
+                       rise=self.q(lp, "brake_rise_time", "s"))
         cid, mn = _min_load(r["min_load"])
         x_cg = float(veh.cg_total[0])
         rear = [c.id for c in veh.corners if float(c.pos[0]) < x_cg]
