@@ -9,9 +9,15 @@ runs/<run_id>/
     v001/comparisons/cmp-0001.json    COMPARISON
     v001/causes/cause-0001.json       CAUSE
     v001/verdicts/ver-0001.json       VERDICT
+    v001/rule_checks/rchk-0001.json   RULE_CHECK (a knowledge rule checked on this version's parts)
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
     report.json                       REPORT (later)
     stop.request                      present only while someone asks the run to stop
+    tools/<name>-<n>.py               a tool Claude wrote during the run (attempt n)
+    tools/<name>-<n>.check.json       its known-answer checks (tool_check records)
+    knowledge/<filename>              a knowledge file the person dropped (its rules live in events only)
+    hearing.request.json              (later) questions waiting for an answer during the run
+    hearing.answer.json               (later) the answer put by the screen; the run reads and removes both
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Every record written to a file is also the `data` of one event, byte-for-byte
@@ -37,7 +43,11 @@ EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
 JUDGEMENTS_FILE = "judgements.json"
 REPORT_FILE = "report.json"
+TOOLS_DIR = "tools"  # tools written during the run and their checks
 STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
+KNOWLEDGE_DIR = "knowledge"  # knowledge files the person dropped, kept as given
+HEARING_REQUEST_FILE = "hearing.request.json"  # later: hearing during the run
+HEARING_ANSWER_FILE = "hearing.answer.json"
 
 RECORD_DIRS = {
     "prediction": "predictions",
@@ -45,6 +55,7 @@ RECORD_DIRS = {
     "comparison": "comparisons",
     "cause": "causes",
     "verdict": "verdicts",
+    "rule_check": "rule_checks",
 }
 
 ID_PREFIX = {
@@ -53,6 +64,7 @@ ID_PREFIX = {
     "comparison": "cmp",
     "cause": "cause",
     "verdict": "ver",
+    "rule_check": "rchk",
 }
 
 RUN_ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[a-z0-9-]+$")

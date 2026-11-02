@@ -192,8 +192,37 @@ class RunStore:
             self._save_project()
             return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
 
-    def finish(self, status: str, stop_reason: str | None = None, text: str | None = None) -> Record:
-        """Set the final status in project.json and emit run.finished."""
+    def update_project(self, fields: Record, *, agent: str = "system", text: str | None = None) -> Record:
+        """Change project fields after the start (the load cases, picks and roles of a run whose
+        first version the designer made) and emit project.updated with the whole project."""
+        with self._lock:
+            contract.validate("project", dict(self._project, **fields))
+            self._project.update(fields)
+            self._save_project()
+            self.emit("project.updated", agent=agent, text=text, data=self._project)
+            return self._project
+
+    def write_report(self, report: Record, *, agent: str = "lead") -> Record:
+        """Write report.json (validated) and emit report.written with the same object; a later
+        report replaces it, as the file always equals the last event."""
+        with self._lock:
+            contract.validate("report", report)
+            _write_json(self.path / layout.REPORT_FILE, report)
+            self.emit("report.written", agent=agent, design_version=report["design_version"], data=report)
+            return report
+
+    def stop_requested(self) -> bool:
+        """Someone (the screen's stop button) has put stop.request in the run folder."""
+        return (self.path / layout.STOP_REQUEST_FILE).exists()
+
+    def clear_stop_request(self) -> None:
+        """The request was carried out: stop.request is present only while someone asks."""
+        (self.path / layout.STOP_REQUEST_FILE).unlink(missing_ok=True)
+
+    def finish(self, status: str, stop_reason: str | None = None, text: str | None = None,
+               stop_code: str | None = None) -> Record:
+        """Set the final status in project.json and emit run.finished (stop_code: why it
+        ended, one of the contract's codes, for the screen to word)."""
         with self._lock:
             self._project["status"] = status
             if stop_reason:
@@ -202,6 +231,8 @@ class RunStore:
             data: Record = {"status": status}
             if stop_reason:
                 data["stop_reason"] = stop_reason
+            if stop_code:
+                data["stop_code"] = stop_code
             return self.emit("run.finished", agent="system", text=text, data=data)
 
     # ------------------------------------------------------------------ design

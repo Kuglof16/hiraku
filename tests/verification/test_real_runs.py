@@ -70,12 +70,23 @@ class ScriptedRunCommand(unittest.TestCase):
                 self.assertEqual(_errors(run), [], run.name)
 
     def test_mvp_scripted_run_goes_through(self):
-        # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done
+        # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done.
+        # A run with load cases past the limit (load_case_id ending -beyond, whose verdicts are meant to
+        # fail) does not end done: it stops at round_limit, or not_judged while a load case is left
+        # without a verdict.
         for name, (run, proc) in self.runs.items():
             with self.subTest(requirements=name):
                 self.assertMadeRun(run, proc)
                 project = json.loads((run / layout.PROJECT_FILE).read_text(encoding="utf-8"))
-                self.assertEqual(project["status"], "done", f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}")
+                with (run / layout.EVENTS_FILE).open(encoding="utf-8") as f:
+                    fin = [e for e in map(json.loads, f) if e["kind"] == "run.finished"]
+                self.assertEqual(len(fin), 1, f"stdout: {proc.stdout[-800:]}")
+                why = f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}"
+                if any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
+                    self.assertEqual(project["status"], "stopped", why)
+                    self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
+                else:
+                    self.assertEqual(project["status"], "done", why)
 
     def test_each_denial_is_followed_as_the_hook_asks(self):
         for name, (run, proc) in self.runs.items():

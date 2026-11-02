@@ -233,9 +233,12 @@ class Runs(unittest.TestCase):
 
     def test_paired_results_carry_the_formula_unit(self):
         formulas = k0_formulas()
+        only_past_the_limit = {"tip_slope_angle"}  # in test_a_vehicle_that_tips_stops_the_run
         for name, rec in self.recs.items():
             units = {r["quantity"]: r["unit"] for r in rec["results"]}
             for pair in TOOLS[name].describe()["predicts"]:
+                if pair["quantity"] in only_past_the_limit:
+                    continue
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     self.assertIn(pair["quantity"], units)
                     self.assertEqual(units[pair["quantity"]],
@@ -274,10 +277,28 @@ class Runs(unittest.TestCase):
         self.assertGreater(wx["values"][up] * 1000.0, edge - r)
         self.assertLess(wx["values"][up] * 1000.0, edge)
 
+    def test_a_vehicle_that_tips_stops_the_run(self):
+        params = {"loading": "two_cargo", "side_slope": q(55.0, "deg"), "length": q(20.0, "m"),
+                  "slope_ramp_time": q(8.0, "s"), "mu": q(2.0, "1")}  # held tyres: it tips, not slides
+        rec = TOOLS["offroad_roll"].run(self.d, {"load_case_id": "x", "params": params},
+                                        [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        res = {r["quantity"]: r for r in rec["results"]}
+        self.assertEqual(res["tipped"]["value"], 1.0)
+        self.assertEqual(res["tip_slope_angle"]["unit"], "deg")
+        self.assertLess(res["tip_slope_angle"]["value"], 55.0)
+        series = {s["channel"]: s for s in rec["series"]}
+        self.assertEqual(len({len(s["values"]) for s in rec["series"]}), 1)
+        self.assertEqual(series["slope_angle"]["values"][0] < 5.0, True)  # the record starts level
+        self.assertLess(max(abs(v) for v in series["roll"]["values"]), 61.0)  # and stops once tipped
+        self.assertEqual(rec["scene"][1]["angle_channel"], "slope_angle")
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+
     def test_assumptions_are_in_the_record(self):
-        notes = [e["name"] for e in self.recs["crosswind"].get("effects", [])]
-        self.assertTrue(any(n.startswith("assumption: cy = 1") for n in notes), notes)
+        notes = self.recs["crosswind"]["assumptions"]
+        self.assertTrue(any(n.startswith("cy = 1") for n in notes), notes)
         self.assertTrue(any("side_area" in n and "projection" in n for n in notes), notes)
+        self.assertFalse(any(e["name"].startswith("assumption") for e in self.recs["crosswind"].get("effects", [])))
 
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")

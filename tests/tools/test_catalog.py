@@ -43,6 +43,13 @@ class CatalogTest(unittest.TestCase):
                 if r["trust"] == 3:
                     self.assertIn("assumption", r["basis"])
 
+    def test_the_video_file_has_the_demo_values(self):
+        video = load_requirements(REQUIREMENTS.with_name("offroad-4w-video.yaml"))
+        self.assertEqual(contract.errors("requirements_file", video), [])
+        self.assertEqual({k: v for k, v in video.items() if k not in ("tests", "beyond")},
+                         {k: v for k, v in self.req.items() if k != "tests"})
+        self.assertLess(set(self.req["tests"]), set(video["tests"]))
+
     def test_vehicle_tests_follow_the_flags(self):
         ids = self.catalog.select_tests(self.req["flags"], self.req["speed_class"])
         for t in ("S1", "P1", "R1", "R4", "C1", "T1", "H4"):

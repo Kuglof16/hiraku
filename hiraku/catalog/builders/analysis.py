@@ -141,6 +141,72 @@ def r3_fatigue(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
+def r3_calc(design: Record, load_case: Record) -> Record:
+    """The quarter car under the wheel of the rail joint the static stress is taken at: its static
+    load, unsprung mass, spring, damping ratio, and the road class's roughness."""
+    import math as _m
+
+    from hiraku.solvers.k0_handcalc.frame_inputs import rail_joint_inputs
+    from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, parts_on_board, support_loads
+    from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
+
+    loading_name = load_case["params"].get("loading", "two_cargo")
+    try:
+        sid = rail_joint_inputs(design, loading=loading_name)["support"]
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no rail joint for the hand calculation: {e}") from None
+    on = parts_on_board(design, loading_name)
+    summ = mass_summary(on)
+    W = float(support_loads(on, summary=summ)["supports"][sid]["force_N"][2])
+    m_u = sum(it.mass_kg for it in summ["items"] if it.carrier == "support" and it.carried_by[0] == sid)
+    s = next(x for x in design["supports"] if x["id"] == sid)
+    k = float(s["suspension"].get("stiffness_N_per_mm") or 0.0)
+    c = float(s["suspension"].get("damping_Ns_per_mm") or 0.0)
+    m_s = W / STANDARD_GRAVITY - m_u
+    if k <= 0 or m_s <= 0:
+        raise BuildError(f"support {sid} has no spring or carries no sprung mass")
+    zeta = c * 1e3 / (2.0 * _m.sqrt(k * 1e3 * m_s))
+    return {"W": q(W, "N"), "m_u": q(m_u, "kg"), "k_s": q(k, "N/mm"), "zeta": q(zeta, "1"),
+            "G_d": q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")}
+
+
+_JOINT = {k: f"load.rail_joint.{k}" for k in ("M_oh", "z", "e", "L1", "L_c", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c")}
+R3_PLAN = {
+    "tool": "fatigue",
+    "say": "止まっているときに一番応力の大きいレールの継ぎ手を、その下の輪 1 つの 1/4 車が悪路で受ける力のゆれで揺らすとみて、疲労の損傷を先に見積もります",
+    "predictions": [
+        {"quantity": "weld_stress_at_rest", "formula_id": "frame_static.rail_joint_stress", "output": "sigma",
+         "assumptions": ["止まっているとき (段差の力 F は 0)", "継ぎ手の前のレールの先の端は動かないとみる"],
+         "inputs": {**_JOINT, "F": {"value": 0.0, "unit": "N"}, "W": "from.W"}, "inputs_from": r3_calc},
+        {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_quarter_car", "output": "D",
+         "assumptions": ["継ぎ手の応力は、その下の輪の力に比例してゆれる", "ほかの輪と車体のピッチは入れない",
+                         "繰り返しはレイリー分布 (狭い帯域)"],
+         "inputs": {"sigma_w": "pred.weld_stress_at_rest", "W": "from.W", "m_u": "from.m_u", "k_s": "from.k_s",
+                    "zeta": "from.zeta", "k_t": "design.var.tyre_stiffness", "G_d": "from.G_d", "v": "lc.speed",
+                    "d": "lc.distance", "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
+                    "N_knee": "design.var.fatigue_knee_cycles", "m2": "design.var.fatigue_slope_after_knee"},
+         "inputs_from": r3_calc},
+    ],
+    # Run on the demo vehicle: the hand calculation gives 0.0003, the fatigue tool 0.080. The hand
+    # value is on the unsafe side, so there is no safe-side verdict and no retry: the cause is
+    # recorded and R3 ends without a verdict (end), the run going on to the next step.
+    "expected_mismatch": {
+        "quantity": "fatigue_damage",
+        "source": ("the analysis department's check of the demo vehicle (fatigue.road_damage_quarter_car 0.0003 against "
+                   "the fatigue tool 0.080 at cross_E), 2026-11-03"),
+        "cause": ("手計算は、止まっているときに一番応力の大きいレールの継ぎ手 (後輪 RL の上、22 MPa) を、その下の輪 1 つの "
+                  "1/4 車の力のゆれ (静的な荷重の 22 %) で揺らした。解析で一番傷むのは後ろの端のクロスメンバー (cross_E) の"
+                  "溶接で、後輪より後ろに張り出した荷台と荷が、4 輪の力で車体が上下・ピッチするたびにそこを曲げる。応力の幅は"
+                  "手計算の約 2.6 倍 (等価な幅 39.8 と 15.4 MPa) で、手計算の幅は大半が S-N 線図の折れ点 (41.5 MPa) より"
+                  "下に落ちて損傷にほとんど数えられないため、損傷は約 270 倍違う (0.080 と 0.0003)"),
+        "fix": ("後ろの張り出しを、車体の上下とピッチ (2 自由度) と 4 輪の力で曲げる手計算に作り直す。手計算は危ない側に"
+                "外れているので、安全側の判断には使えない"),
+        "end": True,
+        "end_say": "手計算が危ない側に外れたので、R3 の合否はここでは出しません。原因を記録して、判定の無いまま次へ進みます",
+    },
+}
+
 # ---------------------------------------------------------------- P4, T1, T2 on the forest loop
 
 # The hand calculation leaves out the accelerations and braking, the
@@ -153,29 +219,36 @@ T_TOL = 0.15
 
 
 def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[str]]:
-    """The forest loop: the steep grades are Q13 and the flat parts are driven at Q50; the
-    gentle grades and the speed on the steep ones are the test's params grade_low and
-    speed_low in the catalog, else half of Q13 and of Q50 (an assumption of this load case)."""
+    """The forest loop: the flat parts are driven at Q50. The steep grades are the test's
+    param grade_high in the catalog (the grade driven up for a long way), else Q13; the gentle
+    grades and the speed on the steep ones are the params grade_low and speed_low, else half
+    of the steep grade and of Q50 (an assumption of this load case)."""
     from hiraku.solvers.k0_handcalc import units
 
     d = number(req, distance_key, "km")
-    grade = number(req, "Q13", "%")
     v = number(req, "Q50", "km/h")
     given = spec.get("params", {})
 
-    def from_spec(name: str, unit: str, fallback: float) -> Record:
+    def from_spec(name: str, unit: str) -> float | None:
         if name not in given:
-            return q(fallback, unit)
+            return None
         try:
-            return q(units.to_unit(given[name], unit, name), unit)
+            return units.to_unit(given[name], unit, name)
         except ValueError as e:
             raise BuildError(f"catalog params of {spec['id']}: {e}") from None
 
-    params = {"distance": q(d, "km"), "grade_low": from_spec("grade_low", "%", grade / 2.0), "grade_high": q(grade, "%"),
-              "speed_low": from_spec("speed_low", "km/h", v / 2.0), "speed_high": q(v, "km/h")}
+    keys = [distance_key, "Q50"]
+    grade = from_spec("grade_high", "%")
+    if grade is None:
+        grade = number(req, "Q13", "%")
+        keys.insert(1, "Q13")
+    low = from_spec("grade_low", "%")
+    slow = from_spec("speed_low", "km/h")
+    params = {"distance": q(d, "km"), "grade_low": q(grade / 2.0 if low is None else low, "%"), "grade_high": q(grade, "%"),
+              "speed_low": q(v / 2.0 if slow is None else slow, "km/h"), "speed_high": q(v, "km/h")}
     if not (0 <= params["grade_low"]["value"] <= grade and 0 < params["speed_low"]["value"] <= v):
-        raise BuildError(f"{spec['id']}: grade_low must lie within 0..Q13 and speed_low within 0..Q50")
-    return params, [distance_key, "Q13", "Q50"]
+        raise BuildError(f"{spec['id']}: grade_low must lie within 0..grade_high and speed_low within 0..Q50")
+    return params, keys
 
 
 def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
@@ -439,10 +512,6 @@ BUILDERS = {
     "H3": h3_people,
     "H5": h5_assembly,
 }
-PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN, "H3": H3_PLAN,
-         "H5": H5_PLAN}
+PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN,
+         "H3": H3_PLAN, "H5": H5_PLAN}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
-# R3 has no scripted plan. Its worst weld on the demo vehicle is the rear-end cross
-# member, loaded by the heave and pitch of the body and cargo behind the rear axle;
-# one quarter car's tyre force scaled by the static stress at the rail joint gives a
-# damage some 270 times below the fatigue tool, so no hand calculation here predicts it.

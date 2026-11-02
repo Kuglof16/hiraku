@@ -20,6 +20,13 @@ predicts with the slope taken as a lateral acceleration, expects the mismatch
 that gave on the demo vehicle (the cause found by splitting the gap), and
 predicts again with the side-slope balance.
 
+Past the limit: a catalog spec with "variant": "beyond" makes BUILDERS build
+the case past the design's own limit (BEYOND: F1, S4, S5; load_case_id ending
+-beyond, title starting 限界の外), whose verdict is expected to fail;
+PLANS_BEYOND holds the steps that differ (S5). S3 has none:
+on the demo vehicle the tyres slide before a wheel lifts (no lift up to
+80 km/h at friction 0.8), so a lift past the limit is not there to show.
+
 Importing this module computes nothing; the K2 model loads on the first call.
 """
 
@@ -29,8 +36,8 @@ import math
 from typing import Any, Callable
 
 from hiraku.catalog.build import CatalogError, check_design_loading
-from hiraku.catalog.builders.common import BuildError, loading, number, q, text, tolerance
-from hiraku.catalog.loading import LOADING_JA
+from hiraku.catalog.builders.common import BuildError, entry, loading, number, q, text, tolerance
+from hiraku.catalog.loading import CARGO, LOADING_JA
 
 Record = dict[str, Any]
 
@@ -49,6 +56,25 @@ SSF_MIN = 1.0
 # https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf).
 # Not checked in this repository.
 S5_SPEED_KMH = 20.0
+
+# Past the limit (the cases that should end in a fail, for showing it): a catalog spec with
+# variant "beyond" builds the case past the design's own limit, worked out by K0 here.
+# 10 % past: far enough that the outcome is plain, near enough to be a case the vehicle
+# could meet (HIRAKU's choice, an assumption).
+BEYOND_FACTOR = 1.1
+# S4: slippery gravel, friction 0.3 (an assumption; no source read in this repository).
+BEYOND_MU = 0.3
+# S5: the slope is turned slowly so that the wheels lift nearly as on a static slope
+# (HIRAKU's choice, an assumption).
+BEYOND_RAMP_S = 12.0
+# S5: the tyres are held (friction 2, as the tilt table does) so that the case shows the
+# uphill wheels lifting, not the vehicle sliding down first: on the demo vehicle the two
+# limits are within a degree at friction 0.8 (HIRAKU's choice, an assumption).
+BEYOND_HOLD_MU = 2.0
+
+# Load-case params that only the predictions read (inputs_from), not the tool: the tool's
+# record names them in its effects as params it does not read.
+PREDICTION_ONLY_PARAMS = ("cargo_cg_above_deck",)  # S1: the requirement's cargo height (Q41)
 
 # tolerance_rel per test: what the hand calculation leaves out of the tool.
 TOLERANCE = {
@@ -106,6 +132,18 @@ def _crit(quantity: str, op: str, limit: Record, basis: str, keys: list[str]) ->
     return out
 
 
+def _k0(formula_id: str, output: str, inputs: Record) -> float:
+    from hiraku import solvers
+    return solvers.formula_registry().evaluate(formula_id, inputs)["outputs"][output]["value"]
+
+
+def _summary(design: Record, on: str) -> tuple[Record, Record]:
+    """The design summary and the loading's part of it (mass, CG)."""
+    from hiraku.tools.summary import design_summary
+    s = design_summary(design)
+    return s, s["loadings"][on]
+
+
 def _cg_y(design: Record, on: str) -> float:
     from hiraku.solvers.k2_vehicle.drive import on_board
     from hiraku.solvers.k2_vehicle.model import build_vehicle
@@ -116,8 +154,14 @@ def _cg_y(design: Record, on: str) -> float:
 def _s1_tilt(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
     lim = number(req, "Q60", "deg")
-    return _case(spec, "S1", "handling", f"S1-tilt-{on}", f"傾斜台で倒れない ({LOADING_JA[on]})",
-                 {"loading": on, "direction": "both"}, keys + ["Q60"],
+    params = {"loading": on, "direction": "both"}
+    keys = keys + ["Q60"]
+    if entry(req, "Q41") is not None and CARGO[on]:
+        # the cargo's CG height above its floor as the requirement has it: the prediction places
+        # the cargo there; the tool solves the cargo where the design puts it (and does not read it)
+        params["cargo_cg_above_deck"] = q(number(req, "Q41", "mm"), "mm")
+        keys.append("Q41")
+    return _case(spec, "S1", "handling", f"S1-tilt-{on}", f"傾斜台で倒れない ({LOADING_JA[on]})", params, keys,
                  _crit("tilt_angle", ">=", q(lim, "deg"), f"Q60 {lim:g} deg (for the loading of Q30)", ["Q60"]))
 
 
@@ -207,17 +251,100 @@ def _p3_accel(spec: Record, req: Record, design: Record) -> Record:
                  _crit("time_to_speed", "<=", q(limit, "s"), f"Q51 {limit:g} s to Q50 {target:g} km/h", ["Q51"]))
 
 
+# ------------------------------------------------------------------ past the limit
+def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    speed = number(req, "Q50", "km/h")
+    s, load = _summary(design, on)
+    w = wind_inputs(design, {"params": {"loading": on}})
+    crit = _k0("crosswind.critical_wind_speed", "v_crit",
+               {"m": load["mass"], "t": s["track_front"], "C_y": w["C_y"], "A": w["A"], "h_cp": w["h_cp"], "rho": w["rho"]})
+    gust = BEYOND_FACTOR * crit
+    wind_from = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "F1", "aero", f"F1-gust{gust:.0f}-beyond",
+                 f"限界の外: 転倒する風速 {crit:.1f} m/s (手計算) の {BEYOND_FACTOR:g} 倍、{gust:.1f} m/s の横風 "
+                 f"({LOADING_JA[on]})",
+                 {"loading": on, "wind_speed": q(gust, "m/s"), "speed": q(speed, "km/h"), "wind_from": wind_from},
+                 keys + ["Q50"],
+                 _crit("critical_wind_speed", ">=", q(gust, "m/s"),
+                       f"the gust of this case, {BEYOND_FACTOR:g} x the hand-calculated tipping wind speed", []))
+
+
+def _s4_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    stop = number(req, "Q52", "m")
+    return _case(spec, "S4", "handling", f"S4-mu{BEYOND_MU:g}-beyond",
+                 f"限界の外: 滑りやすい砂利 (μ {BEYOND_MU:g} は仮定) で {S4_SPEED_KMH:g} km/h から急制動、"
+                 f"{stop:g} m 以内に止まる ({LOADING_JA[on]})",
+                 {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(BEYOND_MU, "1"), "reaction_time": q(0.0, "s")},
+                 keys + ["Q52"],
+                 _crit("stopping_distance", "<=", q(stop, "m"),
+                       f"Q52 {stop:g} m from {S4_SPEED_KMH:g} km/h (細目告示 第171条 第5項, borrowed)", ["Q52"]))
+
+
+def _s5_beyond(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    cls = text(req, "Q12", tuple("ABCDEFGH"))
+    s, load = _summary(design, on)
+    ti = tilt_inputs(design, {"params": {"loading": on}})
+    tip = _k0("tilt.spring_roll_angle", "theta", dict(ti, t=s["track_front"], m=load["mass"]))
+    beta = BEYOND_FACTOR * tip
+    slope_up = "left" if _cg_y(design, on) <= 0.0 else "right"
+    return _case(spec, "S5", "handling", f"S5-slope{beta:.0f}-beyond",
+                 f"限界の外: 上の輪が浮く傾き {tip:.1f}° (手計算) の {BEYOND_FACTOR:g} 倍、横 {beta:.1f}° の斜面 "
+                 f"(タイヤは滑らないものとして μ {BEYOND_HOLD_MU:g}、{LOADING_JA[on]})",
+                 {"loading": on, "road_class": cls, "side_slope": q(beta, "deg"), "slope_up": slope_up,
+                  "speed": q(S5_SPEED_KMH, "km/h"), "length": q(20.0, "m"), "slope_ramp_time": q(BEYOND_RAMP_S, "s"),
+                  "mu": q(BEYOND_HOLD_MU, "1")},
+                 keys + ["Q12"],
+                 _crit("tip_slope_angle", ">", q(beta, "deg"),
+                       "the uphill wheels must stay down up to this slope: the slope at which they lift must be steeper",
+                       []))
+
+
+# variant "beyond" of the catalog spec; PLANS_BEYOND has the steps that differ from PLANS
+BEYOND: dict[str, Callable[[Record, Record, Record], Record]] = {"F1": _f1_beyond, "S4": _s4_beyond, "S5": _s5_beyond}
+
+
+def _variant(test_id: str, fn):
+    def build(spec: Record, req: Record, design: Record) -> Record:
+        if spec.get("variant") == "beyond":
+            if test_id not in BEYOND:
+                raise BuildError(f"test {test_id} has no case past the limit (variant beyond): only "
+                                 + ", ".join(BEYOND))
+            return BEYOND[test_id](spec, req, design)
+        return fn(spec, req, design)
+    build.__name__ = fn.__name__
+    build.__doc__ = fn.__doc__
+    return build
+
+
 BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
-    "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
-    "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel,
+    tid: _variant(tid, fn) for tid, fn in {
+        "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
+        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel}.items()
 }
 
 
 # ------------------------------------------------------------------ inputs read off the design
 def _vehicle(design: Record, load_case: Record):
+    """The K2 model of the design for the load case's loading. With params
+    cargo_cg_above_deck (the requirement Q41), the cargo parts' centres are put that high
+    above the floor they stand on (the bottom of their boxes) first."""
+    import copy
+
     from hiraku.solvers.k2_vehicle.drive import on_board
     from hiraku.solvers.k2_vehicle.model import build_vehicle
-    veh = build_vehicle(on_board(design, load_case.get("params", {}).get("loading")))
+    from hiraku.solvers.k2_vehicle.units import si
+    lp = load_case.get("params", {})
+    if "cargo_cg_above_deck" in lp:
+        above = si(lp["cargo_cg_above_deck"], "m") * 1000.0
+        design = copy.deepcopy(design)
+        for p in design.get("parts", []):
+            if p.get("kind") == "cargo":
+                box = p["box"]
+                box["center_mm"][2] = box["center_mm"][2] - box["size_mm"][2] / 2.0 + above
+    veh = build_vehicle(on_board(design, lp.get("loading")))
     ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
     return veh, ground
 
@@ -229,7 +356,8 @@ def _height(veh, ground: float) -> Record:
 def tilt_inputs(design: Record, load_case: Record) -> Record:
     """h, e (toward the side it tips to first) of the whole vehicle; m_s, h_s (above the
     ground: the roll axis of vertical supports) of the sprung part; k, the mean wheel rate;
-    n, the number of axles."""
+    n, the number of axles. With params cargo_cg_above_deck the cargo is placed as the
+    requirement says (see _vehicle)."""
     veh, ground = _vehicle(design, load_case)
     sprung = [c for c in veh.corners if c.dof]
     return {"h": _height(veh, ground), "e": q(abs(float(veh.cg_total[1])) * 1000.0, "mm"),
@@ -280,7 +408,7 @@ def slope_inputs(design: Record, load_case: Record) -> Record:
 
 def launch_inputs(design: Record, load_case: Record) -> Record:
     """The launch tool's motor and road load: F_max = T i eta / r of the driven wheels,
-    P, eta, C_rr, C_d, A (front), rho, and lambda = 1 + sum(J / r^2) / m."""
+    P, eta, C_rr, C_d, A (front) and rho."""
     from hiraku.solvers.k2_vehicle.shelf import LaunchTool
     veh, _ = _vehicle(design, load_case)
     tool = LaunchTool()
@@ -290,15 +418,17 @@ def launch_inputs(design: Record, load_case: Record) -> Record:
     aero = tool.aero(veh, lp)
     driven = [c for c in veh.corners if c.drive]
     r = sum(c.radius for c in driven) / len(driven)
-    lam = 1.0 + sum(c.j_w / c.radius ** 2 for c in veh.corners) / veh.m_total
     return {"F_max": q(motor.torque * motor.gear * motor.efficiency / r, "N"), "P": q(motor.power / 1000.0, "kW"),
             "eta": q(motor.efficiency, "1"), "C_rr": q(veh.corners[0].c_rr, "1"), "C_d": q(aero.cd, "1"),
-            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3"), "lambda": q(lam, "1")}
+            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3")}
 
 
 # ------------------------------------------------------------------ scripted steps
+# lambda is the design's mass_factor (K2 itself takes the wheels as discs of the unsprung
+# mass, about 1 % more on the demo vehicle)
 _LAUNCH_REFS = {"m": "load.mass", "F_max": "from.F_max", "P": "from.P", "eta": "from.eta", "C_rr": "from.C_rr",
-                "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho", "lambda": "from.lambda"}
+                "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho",
+                "lambda": "design.var.mass_factor"}
 
 PLANS: dict[str, Record] = {
     "S1": {"tool": "tilt", "say": "傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります",
@@ -380,4 +510,15 @@ PLANS: dict[str, Record] = {
                "quantity": "time_to_speed", "formula_id": "launch.time_to_speed", "output": "t",
                "assumptions": ["発進から全力、輪は滑らない", "トルクで決まり、その先は出力で決まる"],
                "inputs": dict(_LAUNCH_REFS, v="lc.target_speed"), "inputs_from": launch_inputs}]},
+}
+
+# The steps of the cases past the limit that differ from PLANS (F1 and S4 predict as PLANS).
+PLANS_BEYOND: dict[str, Record] = {
+    "S5": {"tool": "offroad_roll", "say": "上の輪が浮く横の傾きを、ばねで車体がロールする分を入れた式で先に見積もります",
+           "predictions": [{
+               "quantity": "tip_slope_angle", "formula_id": "tilt.spring_roll_angle", "output": "theta",
+               "assumptions": ["止まった斜面は傾斜台と同じ", "車体はばねの上でロールし、ロールの軸は地面にある"],
+               "inputs": {"t": "summary.track_front", "h": "from.h", "e": "from.e", "m": "load.mass", "m_s": "from.m_s",
+                          "h_s": "from.h_s", "k": "from.k", "n": "from.n"},
+               "inputs_from": tilt_inputs}]},
 }

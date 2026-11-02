@@ -115,8 +115,22 @@ def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list
     return out
 
 
+def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a run that ended with every picked domain judged:
+    stopped at round_limit when a tile is red and no design revision is left, else done."""
+    reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
+    if reds and ctx.version - 1 >= ctx.project["round_limit"]:
+        names = "、".join(_ja(j["domain"]) for j in reds)
+        return ("stopped", f"{names}が赤のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を"
+                           f"使い切りました (版 {ctx.version})", "round_limit")
+    return "done", None, "done"
+
+
 def stop_reason(ctx: RunContext) -> str | None:
     """HK4: why the run may not stop yet (None when every picked domain is judged)."""
+    if not ctx.version:
+        return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
+                "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
     left = pending(ctx)
     if not left:
         return None

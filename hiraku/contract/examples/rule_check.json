@@ -1,0 +1,28 @@
+{
+  "rule_check_id": "rchk-0001",
+  "design_version": 1,
+  "rule_id": "SM-01",
+  "targets": [
+    "bracket_FL",
+    "bracket_FR"
+  ],
+  "hits": [
+    {
+      "part_id": "bracket_FL",
+      "values": {
+        "bend_radius_mm": 1.0,
+        "thickness_mm": 2.0
+      },
+      "message": "曲げの内側の半径 1.0 mm が板厚 2.0 mm より小さい"
+    }
+  ],
+  "not_evaluable": [
+    {
+      "part_id": "bracket_FR",
+      "missing": [
+        "bend_radius_mm"
+      ]
+    }
+  ],
+  "pass": false
+}

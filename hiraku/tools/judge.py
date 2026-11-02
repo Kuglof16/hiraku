@@ -20,12 +20,16 @@ OPS = {
 OP_JA = {"<=": "≤", "<": "<", ">=": "≥", ">": ">"}
 
 
-def margin_pct(value: float, op: str, limit: float) -> float:
-    """How far the value is from the limit, as % of the limit; positive on the passing side."""
+def margin(value: float, op: str, limit: float) -> float:
+    """How far the value is from the limit in its own unit; positive on the passing side."""
+    return (limit - value) if op in ("<=", "<") else (value - limit)
+
+
+def margin_pct(value: float, op: str, limit: float) -> float | None:
+    """margin as % of the limit; None when the limit is 0 (a % of zero says nothing)."""
     if limit == 0:
-        return 0.0
-    side = (limit - value) if op in ("<=", "<") else (value - limit)
-    return side / abs(limit) * 100.0
+        return None
+    return margin(value, op, limit) / abs(limit) * 100.0
 
 
 def unfavourable_side(op: str) -> str:
@@ -59,6 +63,7 @@ def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case
         "op": crit["op"],
         "limit": dict(limit),
         "pass": OPS[crit["op"]](value["value"], limit["value"]),
+        "margin": {"value": margin(value["value"], crit["op"], limit["value"]), "unit": limit["unit"]},
         "margin_pct": margin_pct(value["value"], crit["op"], limit["value"]),
         "requirement_keys": list(crit.get("requirement_keys", [])),
         **extra,
@@ -73,16 +78,20 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     return out
 
 
+def _amount(x: float, unit: str) -> str:
+    """A number and its unit; a dimensionless "1" is not written."""
+    return f"{x:.4g}" if unit == "1" else f"{x:.4g} {unit}"
+
+
 def verdict_line(v: Record) -> str:
     safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
     value, limit = v["value"]["value"], v["limit"]["value"]
-    if limit == 0:  # a % of zero says nothing: the margin in the quantity's own unit
-        side = (limit - value) if v["op"] in ("<=", "<") else (value - limit)
-        margin = f"{side:.4g} {v['limit']['unit']}"
+    if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
+        room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])
     else:
-        margin = f"{v['margin_pct']:.0f} %"
-    return (f"{v['test_id']} {v['quantity']} {value:.4g} {v['value']['unit']} "
-            f"{OP_JA[v['op']]} {limit:.4g} {v['limit']['unit']} (余裕 {margin}{safe})")
+        room = f"{v['margin_pct']:.0f} %"
+    return (f"{v['test_id']} {v['quantity']} {_amount(value, v['value']['unit'])} "
+            f"{OP_JA[v['op']]} {_amount(limit, v['limit']['unit'])} (余裕 {room}{safe})")
 
 
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
@@ -92,8 +101,10 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     got = [verdicts[lc["load_case_id"]] for lc in cases if lc["load_case_id"] in verdicts]
     missing = [lc["load_case_id"] for lc in cases if lc["load_case_id"] not in verdicts]
     reds = [x for x in got if not x["pass"]]
-    if reds:
+    if reds:  # red even with tests left without a verdict; they are counted in the line
         state, summary = "red", f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)
+        if missing:
+            summary += f"。判定の無い試験 {len(missing)}: " + "、".join(missing)
     elif got and not missing:
         state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
     else:

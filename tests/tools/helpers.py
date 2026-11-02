@@ -15,12 +15,15 @@ REQUIREMENTS = REPO_ROOT / "data" / "requirements" / "offroad-4w.yaml"
 EXAMPLE_DESIGN = contract.EXAMPLES_DIR / "design.json"
 
 
-def requirements_with_tests(folder: Path, tests: list[str] | None) -> Path:
-    """The fixed requirements file with its `tests` list set (None: no list, the catalog picks)."""
+def requirements_with_tests(folder: Path, tests: list[str] | None, beyond: list[str] | None = None) -> Path:
+    """The fixed requirements file with its `tests` list set (None: no list, the catalog picks)
+    and, given, its `beyond` list (the tests that also get a case past the limit)."""
     req = read_data(REQUIREMENTS)
     req.pop("tests", None)
     if tests is not None:
         req["tests"] = tests
+    if beyond is not None:
+        req["beyond"] = beyond
     path = folder / "requirements.json"
     path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
     return path

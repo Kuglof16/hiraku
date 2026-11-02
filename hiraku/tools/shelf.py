@@ -69,8 +69,11 @@ def check_tool(tool: AnalysisTool) -> Record:
 
 
 def check_shelf(ctx: RunContext) -> dict[str, Record]:
-    """Check every tool on the shelf and emit tool.checked for each."""
+    """Check every tool on the shelf and emit tool.checked for each. Once the stop button's
+    stop.request is in the run folder the rest are not checked: the run is about to stop."""
     for name, tool in ctx.tools.items():
+        if ctx.store.stop_requested():
+            break
         spec = check_tool(tool)
         ctx.specs[name] = spec
         ok = "使えます" if spec["usable"] else "使えません (答えの分かっている例に通らない)"

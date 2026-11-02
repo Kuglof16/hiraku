@@ -36,7 +36,18 @@ tests:
       between the wheels, so 10 % is allowed.
   - {id: P2, domain: powertrain, title: 坂を登る・坂で発進する, applies_if: self_propelled, requirement_keys: [Q13, Q53]}
   - {id: P3, domain: powertrain, title: 加速・最高速度, applies_if: self_propelled, requirement_keys: [Q50, Q51]}
-  - {id: P4, domain: powertrain, title: 航続・稼働時間, applies_if: self_propelled and battery, requirement_keys: [Q54]}
+  - id: P4
+    domain: powertrain
+    title: 航続・稼働時間
+    applies_if: self_propelled and battery
+    requirement_keys: [Q54]
+    # The forest loop: grades from gentle to the sustained steepest (林道規程: 縦断勾配は続けて
+    # 12 % まで, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf,
+    # not checked in this repository; Q13 is the short 14 %), speeds up to Q50. T1 and T2 drive the same loop.
+    params: &forest_loop
+      grade_low: {value: 7, unit: "%", basis: assumption}
+      grade_high: {value: 12, unit: "%", basis: "林道規程, sustained grade (not checked in this repository)"}
+      speed_low: {value: 20, unit: km/h, basis: assumption}
   - {id: P5, domain: powertrain, title: アクチュエータの力と速さ, applies_if: electric and not self_propelled, requirement_keys: [Q40, Q56]}
   - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}
   - {id: C2, domain: crash, title: 人との接触, applies_if: near_people and self_propelled, requirement_keys: [Q50, Q62]}
@@ -59,8 +70,10 @@ tests:
   - {id: N1, domain: nvh, title: 固有振動数と加振, applies_if: vibration, requirement_keys: []}
   - {id: N2, domain: nvh, title: 乗り心地, applies_if: ride and self_propelled, requirement_keys: [Q12]}
   - {id: N3, domain: nvh, title: 騒音, applies_if: electric and lean, requirement_keys: []}
-  - {id: T1, domain: thermal, title: 電池の温度, applies_if: battery and continuous, requirement_keys: [Q19, Q54]}
-  - {id: T2, domain: thermal, title: モーター・制御器の温度, applies_if: electric and continuous, requirement_keys: [Q19]}
+  - {id: T1, domain: thermal, title: 電池の温度, applies_if: battery and continuous, requirement_keys: [Q19, Q54],
+     params: *forest_loop}
+  - {id: T2, domain: thermal, title: モーター・制御器の温度, applies_if: electric and continuous, requirement_keys: [Q19],
+     params: *forest_loop}
   - {id: T3, domain: thermal, title: 使い方とデューティ, applies_if: electric and not continuous, requirement_keys: [Q03]}
   - {id: H1, domain: assembly, title: 干渉, applies_if: always, requirement_keys: []}
   - {id: H2, domain: assembly, title: 手と工具が入るか, applies_if: assembly, requirement_keys: [Q81]}

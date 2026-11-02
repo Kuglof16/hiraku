@@ -1,8 +1,13 @@
 """The MCP server "hiraku": a thin wrapper around hiraku.tools.functions.
 
 Input schemas come from the contract (tool_input.*), with $refs inlined so
-each schema stands alone. Results are the records as JSON text; a ToolError
-comes back with is_error and its message (what is wrong, what to do next).
+each schema stands alone; get_context, list_formulas and list_tools have
+their own. Results are JSON text of what the function returns: the record
+for record_prediction; for analyze the record without what only the screen
+uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
+record_cause; a summary of the new version for revise_design; the asked-for
+parts for the reading tools. A ToolError comes back with is_error and its
+message (what is wrong, what to do next).
 """
 
 from __future__ import annotations
@@ -63,6 +68,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "compare": contract_input_schema("compare"),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
+    "propose_design": contract_input_schema("propose_design"),
+    "make_tool": contract_input_schema("make_tool"),
+    "check_tool": contract_input_schema("check_tool"),
+    "write_report": contract_input_schema("write_report"),
 }
 
 DESCRIPTIONS = {
@@ -96,6 +105,27 @@ DESCRIPTIONS = {
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
         "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+    ),
+    "propose_design": (
+        "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
+        "最初の版を作る。座標は道具が出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
+        "版 1 ができると試験の荷重条件と担当の役が決まる"
+    ),
+    "write_report": (
+        "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
+        "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は道具が記録から入れる。"
+        "文の中の「数 + 単位」は記録にある値と合わなければ断られる"
+    ),
+    "check_tool": (
+        "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
+        "通らない例・使えない import・例外は problems に文で返る。make_tool の前の試しに使う"
+    ),
+    "make_tool": (
+        "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
+        "全部通れば棚に入り (origin claude)、analyze で使える。code は hiraku.solvers.shelf.base の BuiltinTool を継ぐ"
+        "クラス 1 つ (name・title・domain・base・tests・load_case_params、known_answers() は check_record で閉じた式や"
+        "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
+        "hiraku.solvers の一部だけ"
     ),
 }
 

@@ -5,39 +5,36 @@
 <title>N18 Title (closing)</title>
 <link rel="stylesheet" href="common.css">
 <link rel="stylesheet" href="title.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n18"></script>
 <style>
   /* N18: a vertical light opens in the dark, the vehicle is drawn over it,
-     then the name, the line and the repository. Ends on black. */
+     then the name, the line and the repository. Ends on black.
+     Placement and times: layout.json n18 (CSS variables from layout.js;
+     --t-line, --t-open, --t-draw, --t-name, --t-tag, --t-url, --t-out from
+     n18.times). */
   :root {
     --page-bg: var(--night);
-    --t-line: 0.15s;    /* thin vertical line grows */
-    --t-open: 0.8s;     /* the line opens into a band */
-    --t-draw: 1.1s;     /* vehicle strokes start */
-    --t-name: 2.3s;
-    --t-tag: 3.0s;
-    --t-url: 3.6s;
-    --t-out: 8.2s;      /* fade to black */
   }
 
-  .light { left: calc(895 * var(--u)); top: calc(40 * var(--u));
-           width: calc(130 * var(--u)); height: calc(470 * var(--u)); }
+  .light { left: var(--light-x); top: var(--light-y);
+           width: var(--light-w); height: var(--light-h); }
 
   .vehicle {
     position: absolute;
-    left: calc(750 * var(--u));
-    top: calc(130 * var(--u));
-    width: calc(420 * var(--u));
+    left: var(--vehicle-x);
+    top: var(--vehicle-y);
+    width: var(--vehicle-w);
   }
 
-  .name { top: calc(545 * var(--u)); font-size: calc(170 * var(--u)); }
-  .tag  { top: calc(745 * var(--u)); }
   .url {
     position: absolute;
     left: 0;
     right: 0;
-    top: calc(826 * var(--u));
+    top: var(--url-y);
+    margin: 0;
     text-align: center;
-    font: 400 calc(30 * var(--u)) / 1 var(--font-mono);
+    font: 400 var(--url-size-px) / 1 var(--font-mono);
     letter-spacing: 0.02em;
     color: var(--on-night-soft);
     animation: fade-up 0.6s ease-out both;
@@ -59,11 +56,11 @@
 <div class="stage night">
   <div class="all">
     <div class="safe">
-      <div class="light"><div class="light-glow"></div><div class="light-core"></div></div>
-      <div class="vehicle draw-on"></div>
-      <h1 class="name" aria-label="HIRAKU"></h1>
-      <p class="tag">CAE を、すべての作り手へ拓く。</p>
-      <p class="url">github.com/Kuglof16/hiraku<span class="powered"> · Powered by Claude</span></p>
+      <div class="light" data-box="n18.light"><div class="light-glow"></div><div class="light-core"></div></div>
+      <div class="vehicle draw-on" data-box="n18.vehicle"></div>
+      <h1 class="name" aria-label="HIRAKU" data-box="n18.title.name"></h1>
+      <p class="tag" data-box="n18.title.tag">CAE を、すべての作り手へ拓く。</p>
+      <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku<span class="powered"> · Powered by Claude</span></p>
     </div>
   </div>
   <div class="guide-band"></div>

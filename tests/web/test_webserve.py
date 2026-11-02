@@ -203,6 +203,32 @@ class SavedRunsTest(unittest.TestCase):
         self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
 
 
+class LayoutTest(unittest.TestCase):
+    def test_layout_rules_are_served_or_missing_is_said(self):
+        tmp = Path(tempfile.mkdtemp())
+        servers = []
+        try:
+            for name, body in (("layout.json", {"stage": {"w": 1920, "h": 1080}}), ("absent.json", None)):
+                if body:
+                    (tmp / name).write_text(json.dumps(body), encoding="utf-8")
+                s = make_server("127.0.0.1", 0, tmp, tmp, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / name)
+                threading.Thread(target=s.serve_forever, daemon=True).start()
+                servers.append(s)
+                url = f"http://127.0.0.1:{s.server_address[1]}/layout.json"
+                if body:
+                    with urllib.request.urlopen(url, timeout=5) as r:
+                        self.assertEqual(json.loads(r.read()), body)
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(url, timeout=5)
+                    self.assertEqual(cm.exception.code, 404)
+        finally:
+            for s in servers:
+                s.shutdown()
+                s.server_close()
+            shutil.rmtree(tmp)
+
+
 class LaunchTest(unittest.TestCase):
     """Starting a run from the screen (the child is a stand-in for python -m hiraku run)."""
 
@@ -262,6 +288,20 @@ class LaunchTest(unittest.TestCase):
         self.assertTrue((self.runs / self.RUN / "events.jsonl").exists())
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
         self.assertEqual(status, 409)  # the first one is still going
+
+    def test_stop_puts_the_request_in_the_started_run_only(self):
+        base = self.serve({})
+        _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": "20991231-000000-other"}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(cm.exception.code, 409)  # not the run started here
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": out["run_id"]}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertTrue(json.loads(r.read())["stop_requested"])
+        self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
 
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})

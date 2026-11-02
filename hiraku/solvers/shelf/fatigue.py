@@ -181,7 +181,8 @@ class Fatigue(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R3"]
-    formulas = ["fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance", "modal.quarter_car"]
+    formulas = ["fatigue.road_damage_quarter_car", "fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance",
+                "modal.quarter_car", "frame_static.rail_joint_stress"]
     load_case_params = (
         Param("distance", "km", "life to check: the distance the damage is scaled to (e.g. requirement key Q90)",
               required=True),
@@ -193,6 +194,9 @@ class Fatigue(BuiltinTool):
         LOADING,
     )
     predicts = (
+        Predicts("fatigue_damage", "fatigue.road_damage_quarter_car", "D",
+                 "sigma_w from frame_static.rail_joint_stress at rest (F = 0, W = the joint's wheel load); one quarter "
+                 "car on the road class of the load case"),
         Predicts("fatigue_damage", "fatigue.constant_amplitude_damage", "D",
                  "dS = equivalent_stress_range, n = cycles_counted, S-N data from the design variables"),
         Predicts("cycles_counted", "fatigue.cycles_over_distance", "n",

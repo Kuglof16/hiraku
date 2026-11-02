@@ -9,7 +9,9 @@ contract unit, default in that unit, design variables that stand in when the
 load case does not give it) and reads no others; describe()["params"] gives
 them as records. params.loading (empty, driver, two, two_cargo; default
 two_cargo) chooses the occupant and cargo parts on board for every tool. A
-load-case param the tool does not read is named in the record's effects.
+load-case param the tool does not read is named in the record's effects; the
+values K2 assumed because neither the load case nor the design gave them are
+the record's assumptions.
 Tool options in `params` (not the load case): dt (s), record_hz.
 
 Predictions: `pairs` names, for a result quantity, a K0 formula output that
@@ -36,12 +38,6 @@ from .model import DesignError, Vehicle, box_design, build_vehicle
 from .record import Recorder
 from .scenario import HOLD_TORQUE, hold, new_sim, settle, side_gravity, slope_gravity, tilt_sweep
 from .units import G0, si
-
-try:  # the contract may grow an `assumptions` list on analysis records
-    from hiraku import contract as _contract
-    _ANALYSIS_PROPS = set(_contract.schema()["$defs"]["analysis"]["properties"])
-except Exception:  # pragma: no cover
-    _ANALYSIS_PROPS = set()
 
 
 def _res(quantity: str, value: float, unit: str, where: str | None = None) -> dict:
@@ -192,16 +188,13 @@ class K2Tool(ABC):
         for key in ("series", "vectors", "scene"):
             if out.get(key):
                 rec[key] = out[key]
-        # the values the design did not give and K2 took on its own, in the record itself
+        # the values neither the load case nor the design gave, which K2 took on its own
         assumptions = list(dict.fromkeys(list(out.get("assumptions", [])) + self._assumed))
-        if "assumptions" in _ANALYSIS_PROPS and assumptions:
+        if assumptions:
             rec["assumptions"] = assumptions
-        effects = [{"name": "assumption: " + a} for a in assumptions]
         unread = sorted(set(lp) - {p.name for p in (LOADING,) + self.params})
         if unread:
-            effects.insert(0, {"name": "load-case params this tool does not read: " + ", ".join(unread)})
-        if effects:
-            rec["effects"] = effects
+            rec["effects"] = [{"name": "load-case params this tool does not read: " + ", ".join(unread)}]
         if out.get("error"):
             rec["status"] = "failed"
             rec["error"] = out["error"]
@@ -224,7 +217,7 @@ class K2Tool(ABC):
     _vars: dict = {}
 
     def _note(self, text: str) -> None:
-        """Write down an assumption of this run (it goes into the record's effects)."""
+        """Write down an assumption of this run (it goes into the record's assumptions)."""
         self.__dict__.setdefault("_assumed", []).append(text)
 
     def q(self, lp: dict, name: str, want: str) -> float | None:
@@ -479,15 +472,43 @@ def _min_load(series_min: dict) -> tuple[str, float]:
     return cid, series_min[cid]
 
 
-def _ramp_gravity(sim, grav_of, angle: float, seconds: float = 1.0):
-    """Turn gravity to the slope or table angle with the brakes held, then settle."""
+TIPPED_ROLL = math.radians(60.0)  # a body rolled this far has tipped over (K2 has no body-ground contact)
+
+
+def _ramp_gravity(sim, grav_of, angle: float, seconds: float = 1.0, rec: Recorder | None = None,
+                  up: list[int] | None = None, extra=None) -> float | None:
+    """Turn gravity to the slope or table angle with the brakes held, then settle.
+
+    Without rec the clock restarts at 0. With rec the turn is recorded (channel
+    slope_angle, deg, plus extra() so the channels stay the same as the run's after it)
+    and the clock runs on. up: the wheels on the high side; returns the angle (rad) at
+    which they all left the ground, or None. Stops when the body has tipped.
+    """
     ctl = hold(sim)
     steps = int(round(seconds / sim.dt))
+    lift = None
+
+    def tick(a):
+        if rec is not None:
+            rec.tick(dict(extra() if extra else {}, slope_angle=("deg", math.degrees(a))))
+
     for k in range(steps):
-        sim.set_gravity(grav_of(angle * (k + 1) / steps))
+        a = angle * (k + 1) / steps
+        sim.set_gravity(grav_of(a))
         sim.step(ctl)
-    settle(sim, 1.0, ctl)
-    sim.t = 0.0
+        tick(a)
+        if up and lift is None and all(sim.out["ntot"][i] <= 0.0 for i in up):
+            lift = abs(a)
+        if abs(sim.attitude()[0]) > TIPPED_ROLL:
+            return lift
+    for _ in range(int(round(1.0 / sim.dt))):
+        sim.step(ctl)
+        tick(angle)
+        if abs(sim.attitude()[0]) > TIPPED_ROLL:
+            break
+    if rec is None:
+        sim.t = 0.0
+    return lift
 
 
 # ------------------------------------------------------------------ crosswind
@@ -618,10 +639,15 @@ class CrosswindTool(K2Tool):
                     min_up = nu
                     rec.snap = []
                     rec.keep_snapshot()
+            if abs(sim.attitude()[0]) > TIPPED_ROLL:
+                notes.append("the vehicle tipped over in the gust; the run stops there (K2 has no body-ground contact)")
+                break
+        tipped = abs(sim.attitude()[0]) > TIPPED_ROLL
         if y_d is None:
             y_d = float(sim.cg_world()[1])
         res.append(_res("min_upwind_wheel_load", min_up, "N", ",".join(veh.corners[i].id for i in up)))
         res.append(_res("lateral_drift", abs(y_d - y_g), "m"))
+        res.append(_res("tipped", 1.0 if tipped else 0.0, "1"))
         r_ = sim.rotation()
         cp_world = [sim.p[k] + float(r_[k] @ aero.side_cp) for k in range(3)]
         side = 0.5 * aero.rho * aero.cy * aero.side_area * gust * gust * (-1.0 if from_left else 1.0)
@@ -632,8 +658,14 @@ class CrosswindTool(K2Tool):
 
 # ------------------------------------------------------------------ braking
 def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | None = None, grade: float = 0.0,
-               dt: float = 1e-3, aero: Aero | None = None, rec_hz: float = 0.0) -> dict:
-    """Run at v0 for 0.5 s, coast `reaction` s, then brake until the vehicle stops."""
+               dt: float = 1e-3, aero: Aero | None = None, rec_hz: float = 0.0, rise: float = 0.0) -> dict:
+    """Run at v0 for 0.5 s, coast `reaction` s, then brake until the vehicle stops.
+
+    rise: the brake torque grows linearly from 0 over this time (s). With rise 0 and no
+    brake_torque the braked wheels are held at once (the locked-wheel closed form); with
+    rise > 0 and no brake_torque the torque grows to mu W r per braked wheel, enough to
+    lock any wheel, so that a wheel's spin is not stopped within one step.
+    """
     sim = new_sim(veh, dt=dt, settle_s=1.0)
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
@@ -641,8 +673,14 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
     start_rolling(sim, v0)
     ctrl = SpeedController(sim)
     n = sim.n
-    tq = HOLD_TORQUE if brake_torque is None else brake_torque
-    brake_on = [tq if c.brake else 0.0 for c in veh.corners]
+    if brake_torque is not None:
+        tq = brake_torque
+    elif rise > 0.0:
+        tq = max(c.mu for c in veh.corners) * veh.m_total * G0 * max(c.radius for c in veh.corners)
+    else:
+        tq = HOLD_TORQUE
+    brake_full = [tq if c.brake else 0.0 for c in veh.corners]
+    brake_on = brake_full
     if not any(brake_on):
         raise DesignError("no support has actuation.brake; braking needs a braked wheel")
     t_cmd, t_brake = 0.5, 0.5 + reaction
@@ -659,7 +697,8 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
         elif t < t_brake:
             drive, brake = [0.0] * n, [0.0] * n
         else:
-            drive, brake = [0.0] * n, brake_on
+            u = 1.0 if rise <= 0.0 else min(1.0, (t - t_brake) / rise)
+            drive, brake = [0.0] * n, [u * x for x in brake_full]
         sim.step(controls(sim, 0.0, drive, brake), aero.forces(sim) if aero is not None else None)
         if x_cmd is None and t >= t_cmd:
             x_cmd = float(sim.design_origin()[0])
@@ -692,8 +731,11 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
 class BrakingTool(K2Tool):
     """Emergency stop (S4) and parking on a slope (S4b).
 
+    The brake torque grows over brake_rise_time: a brake that stops a wheel's spin within
+    one step tips the body by the spin's momentum (the empty demo vehicle's rear unloaded
+    to 0 within 18 ms at mu 0.6; with 0.2 s it keeps 325 N).
     Results: stopping_distance (m, from the brake command), braking_distance (m, from the
-    brakes coming on), mean_decel (m/s^2 = v^2 / 2 s_braking), mean_decel_g (g, the same),
+    brakes coming on, the rise included), mean_decel (m/s^2 = v^2 / 2 s_braking), mean_decel_g (g, the same),
     peak_decel (m/s^2), min_wheel_load (N, where = support), min_rear_wheel_load (N, supports
     behind the CG: 0 = the rear lifts), min_rear_axle_load (N, those supports together),
     max_pitch (deg, nose down +); with parking_slope: parking_drift (mm in 60 s, facing uphill,
@@ -708,6 +750,8 @@ class BrakingTool(K2Tool):
               MU,
               P("reaction_time", "s", 0.0, "coasting from the command until the brakes come on"),
               P("brake_torque", "N*m", None, "per braked wheel (default: enough to lock every braked wheel, no ABS)"),
+              P("brake_rise_time", "s", 0.2, "the brake torque grows from 0 to full over this time (0.2 s "
+                                             "assumed; no source read in this repository)", assumed=True),
               P("grade", "%", 0.0, "road grade, + uphill"),
               P("parking_slope", "%", None, "optional: also park on this slope, brakes on, 60 s"),
               P("cd", "1", 0.0, "drag coefficient (default 0: no air drag)"),
@@ -747,7 +791,8 @@ class BrakingTool(K2Tool):
         if tq is None:
             notes.append("brakes strong enough to lock every braked wheel (no ABS)")
         r = brake_stop(veh, v0, reaction=self.q(lp, "reaction_time", "s"), brake_torque=tq,
-                       grade=self.q(lp, "grade", "1"), dt=self.dt, aero=aero, rec_hz=self.record_hz)
+                       grade=self.q(lp, "grade", "1"), dt=self.dt, aero=aero, rec_hz=self.record_hz,
+                       rise=self.q(lp, "brake_rise_time", "s"))
         cid, mn = _min_load(r["min_load"])
         x_cg = float(veh.cg_total[0])
         rear = [c.id for c in veh.corners if float(c.pos[0]) < x_cg]
@@ -949,24 +994,43 @@ def dlc_path(x0: float = 10.0, offset: float = DLC_OFFSET, sections=DLC_SECTIONS
 
 
 def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz: float = 0.0, road=None,
-             gravity=None, steer_fn=None) -> dict:
-    """Drive along y_ref(x) at a held speed until the design origin passes x_end."""
+             gravity=None, steer_fn=None, ramp_s: float = 1.0) -> dict:
+    """Drive along y_ref(x) at a held speed until the design origin passes x_end.
+
+    gravity = (gravity_of_angle, angle): the slope is made by turning gravity over ramp_s
+    with the brakes held first; that turn is in the record (slope_angle), and the angle at
+    which the high-side wheels all left the ground is st["tip_angle"]. A body rolled past
+    TIPPED_ROLL has tipped over: the run stops there (st["tipped"]).
+    """
     sim = new_sim(veh, road=road, dt=dt, settle_s=1.0)
-    if gravity is not None:
-        _ramp_gravity(sim, gravity[0], gravity[1])
     rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
-    start_rolling(sim, speed)
-    drv = PathDriver(sim, y_ref)
-    ctrl = SpeedController(sim)
     left = _side_ids(sim, True)
     right = _side_ids(sim, False)
+
+    def extra(delta=0.0):
+        cg = sim.cg_world()
+        out = {"steer": ("deg", math.degrees(delta)), "path_y": ("m", y_ref(float(cg[0])))}
+        if gravity is not None:
+            out["slope_angle"] = ("deg", math.degrees(gravity[1]))
+        return out
+
+    tip = None
+    if gravity is not None:
+        high = left if gravity[1] > 0 else right
+        tip = _ramp_gravity(sim, gravity[0], gravity[1], ramp_s, rec=rec, up=high, extra=extra)
+    t0 = sim.t
+    tipped = abs(sim.attitude()[0]) > TIPPED_ROLL
+    if not tipped:
+        start_rolling(sim, speed)
+    drv = PathDriver(sim, y_ref)
+    ctrl = SpeedController(sim)
     st = {"min_load": {c.id: math.inf for c in veh.corners}, "two_lift_time": 0.0, "any_lift": False,
           "max_ay": 0.0, "max_roll": 0.0, "max_err": 0.0, "max_steer": 0.0, "min_side": {"left": math.inf, "right": math.inf},
-          "mean_side": {"left": 0.0, "right": 0.0}, "az": []}
+          "mean_side": {"left": 0.0, "right": 0.0}, "az": [], "tip_angle": tip}
     steps = 0
     t_limit = 3.0 * abs(x_end) / max(speed, 0.5) + 5.0
     worst = math.inf
-    while sim.design_origin()[0] < x_end and sim.t < t_limit:
+    while not tipped and sim.design_origin()[0] < x_end and sim.t - t0 < t_limit:
         delta = steer_fn(sim) if steer_fn is not None else drv.steer()
         drive, brake = ctrl.torques(sim, speed)
         sim.step(controls(sim, delta, drive, brake))
@@ -996,14 +1060,26 @@ def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz
         st["max_steer"] = max(st["max_steer"], abs(delta))
         m = min(nt)
         if rec is not None:
-            rec.tick({"steer": ("deg", math.degrees(delta)), "path_y": ("m", y_ref(float(cg[0])))})
+            rec.tick(extra(delta))
             if m < worst:
                 worst = m
                 rec.snap = []
                 rec.keep_snapshot()
+        tipped = abs(sim.attitude()[0]) > TIPPED_ROLL
+    if steps == 0:  # tipped while the slope was made: the loads of that moment
+        nt = sim.out["ntot"]
+        for i, c in enumerate(veh.corners):
+            st["min_load"][c.id] = nt[i]
+        st["any_lift"] = any(x <= 0.0 for x in nt)
+        for side, ids in (("left", left), ("right", right)):
+            st["min_side"][side] = st["mean_side"][side] = sum(nt[i] for i in ids)
+        st["max_roll"] = abs(sim.attitude()[0])
+        if rec is not None:
+            rec.keep_snapshot()
     for side in ("left", "right"):
         st["mean_side"][side] /= max(steps, 1)
-    st["finished"] = sim.design_origin()[0] >= x_end
+    st["tipped"] = tipped
+    st["finished"] = not tipped and sim.design_origin()[0] >= x_end
     st["recorder"] = rec
     st["sim"] = sim
     return st
@@ -1088,7 +1164,10 @@ class LaneChangeTool(K2Tool):
                _res("two_wheel_lift", 1.0 if st["two_lift_time"] > 0 else 0.0, "1"),
                _res("max_lateral_accel", st["max_ay"], "m/s^2"), _res("max_lateral_accel_g", st["max_ay"] / G0, "g"),
                _res("max_roll", math.degrees(st["max_roll"]), "deg"),
-               _res("max_path_error", st["max_err"], "m"), _res("max_steer", math.degrees(st["max_steer"]), "deg")]
+               _res("max_path_error", st["max_err"], "m"), _res("max_steer", math.degrees(st["max_steer"]), "deg"),
+               _res("tipped", 1.0 if st["tipped"] else 0.0, "1")]
+        if st["tipped"]:
+            notes.append("the vehicle tipped over; the run stops there (K2 has no body-ground contact)")
         if self.flag(lp, "find_limit"):
             lo, hi = self.q(lp, "v_min", "m/s"), self.q(lp, "v_max", "m/s")
             if self._lift(veh, lo, y_ref, x_end):
@@ -1114,10 +1193,14 @@ class LaneChangeTool(K2Tool):
 class OffroadRollTool(K2Tool):
     """Rough side slope (S5): an ISO 8608 road on a side slope, driven straight at a held speed.
 
+    The slope is made first by turning gravity over slope_ramp_time with the brakes held
+    (recorded, channel slope_angle); a vehicle that tips over then or while driving stops
+    the run (the body has no contact with the ground in K2).
     Results: min_wheel_load (N, where), wheel_lift (1), two_wheel_lift_time (s, both
     uphill wheels off at once), min_uphill_load (N, the uphill wheels' sum),
     mean_uphill_load (N, its mean over the run), max_roll (deg, against the slope),
-    rms_vertical_accel (m/s^2, body axis).
+    rms_vertical_accel (m/s^2, body axis), tipped (1), and tip_slope_angle (deg, the slope
+    at which the uphill wheels all left the ground while it was made, when they did).
     """
 
     name = "offroad_roll"
@@ -1131,8 +1214,14 @@ class OffroadRollTool(K2Tool):
               P("speed", "km/h", 20.0, "held speed"),
               P("length", "m", 100.0, "distance driven"),
               P("seed", "1", 1.0, "random phases of the road (an integer)"),
+              P("slope_ramp_time", "s", 1.0, "time to turn from level to the side slope, brakes held "
+                                             "(slow, e.g. 8 s, to find tip_slope_angle quasi-statically)"),
               MU)
-    pairs = (Pair("mean_uphill_load", "tilt.side_slope_uphill_load", "W_up", (("beta", "side_slope"),),
+    pairs = (Pair("tip_slope_angle", "tilt.spring_roll_angle", "theta",
+                  note="a side slope at rest is a tilt table; K2 turns the slope in slope_ramp_time, so a fast "
+                       "turn tips it a little early"),
+             Pair("tip_slope_angle", "tilt.rigid_angle", "theta", note="rigid: above K2 by the body roll on the springs"),
+             Pair("mean_uphill_load", "tilt.side_slope_uphill_load", "W_up", (("beta", "side_slope"),),
                   "rigid balance on the slope; K2's body also rolls downhill on its springs, and min_uphill_load "
                   "has no hand calculation (the road roughness)"),
              Pair("mean_uphill_load", "lane_change.inner_wheel_load", "W_inner",
@@ -1184,7 +1273,8 @@ class OffroadRollTool(K2Tool):
         ys = [abs(float(c.pos[1])) for c in veh.corners]
         road = RandomRoad(cls, max(ys) if ys else 0.6, seed=seed)
         g = (side_gravity, beta if left_up else -beta)
-        st = path_run(veh, speed, lambda x: 0.0, length, dt=self.dt, rec_hz=self.record_hz, road=road, gravity=g)
+        st = path_run(veh, speed, lambda x: 0.0, length, dt=self.dt, rec_hz=self.record_hz, road=road, gravity=g,
+                      ramp_s=self.q(lp, "slope_ramp_time", "s"))
         cid, mn = _min_load(st["min_load"])
         az = np.array(st["az"])
         res = [_res("min_wheel_load", mn, "N", cid), _res("wheel_lift", 1.0 if st["any_lift"] else 0.0, "1"),
@@ -1192,7 +1282,12 @@ class OffroadRollTool(K2Tool):
                _res("min_uphill_load", st["min_side"]["left" if left_up else "right"], "N"),
                _res("mean_uphill_load", st["mean_side"]["left" if left_up else "right"], "N"),
                _res("max_roll", math.degrees(st["max_roll"]), "deg"),
-               _res("rms_vertical_accel", float(np.sqrt(np.mean((az - az.mean()) ** 2))) if az.size else 0.0, "m/s^2")]
+               _res("rms_vertical_accel", float(np.sqrt(np.mean((az - az.mean()) ** 2))) if az.size else 0.0, "m/s^2"),
+               _res("tipped", 1.0 if st["tipped"] else 0.0, "1")]
+        if st["tip_angle"] is not None:
+            res.append(_res("tip_slope_angle", math.degrees(st["tip_angle"]), "deg"))
+        if st["tipped"]:
+            notes.append("the vehicle tipped over; the run stops there (K2 has no body-ground contact)")
         rec = st["recorder"]
         # the road under the two wheel tracks, every 0.1 m from behind the start to past the end
         x = np.arange(-_length(veh) - 1.0, length + _length(veh) + 1.0, 0.1)
@@ -1206,8 +1301,8 @@ class OffroadRollTool(K2Tool):
         scene = [{"kind": "road_profile", "profile": profile,
                   "label": f"ISO 8608 クラス {cls} (seed {seed})。left は y = +{ht:.0f} mm、right は y = -{ht:.0f} mm の"
                            "通り道の高さ。その間は直線、外は近い方の通り道と同じ"},
-                 _slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)", veh, float(x[0]), float(x[-1]),
-                        roll=beta if left_up else -beta)]
+                 dict(_slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)。slope_angle の通りに水平から傾く", veh,
+                             float(x[0]), float(x[-1]), roll=beta if left_up else -beta), angle_channel="slope_angle")]
         return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
                 "assumptions": notes}
 

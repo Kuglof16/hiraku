@@ -15,12 +15,16 @@ from unittest import mock
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
 from hiraku.agent import runner
+from hiraku.contract import layout
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.runner import FOREGROUND_ROLES_ENV, WAKE_TEXT, build_options, run_with_claude
 from hiraku.tools import Attribution
 from hiraku.tools.functions import analyze, compare
 from hiraku.tools.mcp import build_server
 from tests.tools.helpers import RunCase
+
+
+INTERRUPT = "<interrupt>"
 
 
 def result(cost):
@@ -51,6 +55,10 @@ class FakeClient:
         self.queries.append(prompt)
         await self.inbox.put(prompt)
 
+    async def interrupt(self):
+        self.interrupts = getattr(self, "interrupts", 0) + 1
+        await self.inbox.put(INTERRUPT)
+
     def hook(self, event):
         return self.options.hooks[event][0].hooks[0]
 
@@ -65,9 +73,13 @@ class ConversationCase(RunCase):
     def run_claude(self, script):
         client = type("Client", (FakeClient,), {"script": staticmethod(script)})
         with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), \
-                mock.patch("claude_agent_sdk.ClaudeSDKClient", client), mock.patch.object(runner, "WAKE_GRACE_S", 0.01):
+                mock.patch("claude_agent_sdk.ClaudeSDKClient", client), mock.patch.object(runner, "WAKE_GRACE_S", 0.01), \
+                mock.patch.object(runner, "STOP_POLL_S", 0.01), mock.patch.object(runner, "STOP_GRACE_S", 0.05):
             status = asyncio.run(asyncio.wait_for(run_with_claude(self.ctx), timeout=10))
         return status, FakeClient.last
+
+    def press_stop(self):
+        (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
 
     def strength_work(self):
         """What cae.strength does with the stand-in tools: P1 matched, then R1 matched and judged."""
@@ -105,6 +117,7 @@ class BackgroundRoleTest(ConversationCase, unittest.TestCase):
 
         status, client = self.run_claude(script)
         self.assertEqual(status, "done")
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["stop_code"], "done")
         self.assertEqual(client.queries[1:], [WAKE_TEXT])
         self.assertEqual(client.stop_answers, [{}] * 5)  # never blocked, never counted
         self.assertEqual(self.kinds("hook.blocked_stop"), [])
@@ -172,6 +185,86 @@ class ForegroundRoleTest(ConversationCase, unittest.TestCase):
         self.assertEqual(status, "stopped")
         self.assertEqual([a.get("decision") for a in client.stop_answers], ["block", "block", "block", None])
         self.assertEqual(len(self.kinds("hook.blocked_stop")), 3)
+        finished = self.ctx.store.events()[-1]["data"]
+        self.assertEqual(finished["stop_code"], "not_judged")
+        self.assertIn("止めるのを 3 回断ったあと、上限で終了", finished["stop_reason"])
+
+    def test_roles_cut_off_with_the_run_are_stopped_too(self):
+        async def script(client):
+            await client.inbox.get()
+            await client.hook("SubagentStart")({"agent_id": "a1", "agent_type": "cae-strength"}, None, None)
+            yield AssistantMessage(content=[TextBlock(text="渡しました")], model="m")
+            raise RuntimeError("the CLI went away")  # the stream ends with the role still marked running
+
+        with self.assertRaises(RuntimeError):
+            self.run_claude(script)
+        self.assertEqual(self.kinds("agent.started", "agent.stopped")[-2:],
+                         [("agent.stopped", "cae.strength"), ("agent.stopped", "lead")])
+        finished = self.ctx.store.events()[-1]["data"]
+        self.assertEqual((finished["status"], finished["stop_code"]), ("failed", "error"))
+        self.assert_events_fit()
+
+
+class StopButtonTest(ConversationCase, unittest.TestCase):
+    def assert_stopped_by_button(self):
+        finished = self.ctx.store.events()[-1]
+        self.assertEqual(finished["kind"], "run.finished")
+        self.assertEqual((finished["data"]["status"], finished["data"]["stop_code"]), ("stopped", "user_stop"))
+        self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())  # carried out, so taken away
+        self.assertEqual(self.kinds("hook.blocked_stop"), [])
+        self.assert_events_fit()
+
+    def test_the_interrupted_turn_closes(self):
+        case = self
+
+        async def script(client):
+            await client.inbox.get()
+            await client.hook("SubagentStart")({"agent_id": "a1", "agent_type": "cae-strength"}, None, None)
+            yield AssistantMessage(content=[TextBlock(text="強度役に渡しました")], model="m")
+            case.press_stop()
+            # a tool call after the press is refused
+            denied = await client.hook("PreToolUse")({"tool_name": "mcp__hiraku__get_context", "tool_input": {},
+                                                      "agent_type": "cae-strength", "agent_id": "a1"}, "tu", None)
+            client.denied = denied["hookSpecificOutput"]["permissionDecision"]
+            assert await client.inbox.get() == INTERRUPT  # the run interrupts the CLI
+            await client.stop()  # the lead's stop goes through
+            yield result(0.05)
+            await asyncio.Event().wait()
+
+        status, client = self.run_claude(script)
+        self.assertEqual(status, "stopped")
+        self.assertEqual((client.interrupts, client.denied), (1, "deny"))
+        self.assertEqual(client.stop_answers, [{}])
+        self.assertEqual(self.kinds("agent.started", "agent.stopped")[-2:],
+                         [("agent.stopped", "cae.strength"), ("agent.stopped", "lead")])
+        self.assert_stopped_by_button()
+
+    def test_a_cli_that_does_not_close_is_cut_after_the_grace(self):
+        case = self
+
+        async def script(client):
+            await client.inbox.get()
+            yield AssistantMessage(content=[TextBlock(text="考えています")], model="m")
+            case.press_stop()
+            await asyncio.Event().wait()  # never answers the interrupt
+            yield result(0.0)
+
+        status, client = self.run_claude(script)
+        self.assertEqual((status, client.interrupts), ("stopped", 1))
+        self.assert_stopped_by_button()
+
+    def test_pressed_before_the_cli_starts(self):
+        async def script(client):
+            raise AssertionError("the CLI was started")
+            yield  # an async generator, like the others
+
+        FakeClient.last = None
+        self.press_stop()  # e.g. while the tools were being checked
+        status, client = self.run_claude(script)
+        self.assertEqual((status, client), ("stopped", None))
+        self.assertEqual(self.kinds("agent.started", "agent.stopped")[-2:],
+                         [("agent.started", "lead"), ("agent.stopped", "lead")])
+        self.assert_stopped_by_button()
 
 
 class OptionsTest(RunCase, unittest.TestCase):

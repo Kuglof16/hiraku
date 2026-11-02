@@ -63,6 +63,7 @@ EVENT_KINDS: tuple[str, ...] = _enum("event_kind")
 DOMAINS: tuple[str, ...] = _enum("domain")
 UNITS: tuple[str, ...] = _enum("unit")
 BASES: tuple[str, ...] = _enum("base")
+RULE_CATEGORIES: tuple[str, ...] = _enum("rule_category")
 
 DOMAIN_NAMES_JA = {
     "handling": "操安",
@@ -75,11 +76,24 @@ DOMAIN_NAMES_JA = {
     "assembly": "組み立て",
 }
 
+RULE_CATEGORY_NAMES_JA = {
+    "sheet_metal": "板金",
+    "fastener": "締結",
+    "weld": "溶接",
+    "tolerance": "公差",
+    "human": "人",
+    "battery": "電池",
+    "assembly": "組み立て",
+    "suspension": "サス",
+    "manufacturing": "製造",
+}
+
 # Agent-facing MCP tools (served by create_sdk_mcp_server under the name "hiraku").
 MCP_SERVER = "hiraku"
 MCP_TOOLS_MVP = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
 MCP_TOOLS_DESIGNER = ("revise_design",)
-MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "make_tool", "check_tool", "import_knowledge", "write_report")
+MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "make_tool", "check_tool", "import_knowledge", "rule_check",
+                   "write_report")
 
 
 def mcp_name(tool: str) -> str:

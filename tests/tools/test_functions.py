@@ -2,6 +2,7 @@ import unittest
 
 from hiraku.tools import ToolError, rules
 from hiraku.tools.functions import analyze, compare, get_context, list_formulas, list_tools, record_cause, record_prediction
+from hiraku.tools.judge import compute_judgement
 from tests.tools.helpers import RunCase
 
 
@@ -130,6 +131,8 @@ class LoopTest(RunCase, unittest.TestCase):
         self.assertEqual((ver["basis"], ver["value_from"], ver["value"]), ("match", "analysis", out["comparison"]["analyzed"]))
         self.assertNotIn("cause_id", ver)
         self.assertAlmostEqual(ver["margin_pct"], (156.6666666 - ver["value"]["value"]) / 156.6666666 * 100, places=4)
+        self.assertEqual(ver["margin"]["unit"], "MPa")
+        self.assertAlmostEqual(ver["margin"]["value"], 156.6666666 - ver["value"]["value"], places=4)
         tile = self.ctx.store.judgements()[0]
         self.assertEqual((tile["state"], tile["verdict_ids"]), ("green", [ver["verdict_id"]]))
         self.assertIsNone(rules.stop_reason(self.ctx))
@@ -143,6 +146,24 @@ class LoopTest(RunCase, unittest.TestCase):
         self.assertIn("boom", ana["error"])
         with self.assertRaises(ToolError):
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
+
+
+class PickResultTest(unittest.TestCase):
+    def test_several_places_give_the_unfavourable_one(self):
+        from hiraku.tools.functions import _pick_result
+
+        ana = {"analysis_id": "ana-0001", "results": [
+            {"quantity": "free_steer_angle", "value": 34.0, "unit": "deg", "where": "FR"},
+            {"quantity": "free_steer_angle", "value": 28.0, "unit": "deg", "where": "FL"},
+            {"quantity": "max_stress", "value": -90.0, "unit": "MPa", "where": "a"},
+            {"quantity": "max_stress", "value": 60.0, "unit": "MPa", "where": "b"},
+        ]}
+        at_least = {"quantity": "free_steer_angle", "op": ">=", "limit": {"value": 30.0, "unit": "deg"}}
+        at_most = {"quantity": "max_stress", "op": "<=", "limit": {"value": 160.0, "unit": "MPa"}}
+        self.assertEqual(_pick_result(ana, "free_steer_angle", at_least)["where"], "FL")  # >=: the smallest
+        self.assertEqual(_pick_result(ana, "max_stress", at_most)["where"], "b")  # <=: the largest
+        self.assertEqual(_pick_result(ana, "max_stress")["where"], "a")  # no criterion: the largest in size
+        self.assertEqual(_pick_result(ana, "free_steer_angle", at_most)["where"], "FR")  # criterion on another quantity
 
 
 class LeverRuleTest(RunCase, unittest.TestCase):
@@ -311,6 +332,13 @@ class RedVerdictTest(RunCase, unittest.TestCase):
         tile = self.ctx.store.judgements()[0]
         self.assertEqual((tile["state"], tile["red_count"]), ("red", 1))
         self.assertIsNone(rules.stop_reason(self.ctx))  # judged (red), so the run may stop
+        # a second test of the domain without a verdict: the tile stays red and counts it,
+        # but the run is not judged until that test has a verdict too (HK4 goes by load case)
+        self.ctx.load_cases.append(dict(self.ctx.load_case("R1-step100"), load_case_id="R1-step250-beyond"))
+        tile = compute_judgement(self.ctx, "strength")
+        self.assertEqual(tile["state"], "red")
+        self.assertTrue(tile["summary"].endswith("。判定の無い試験 1: R1-step250-beyond"), tile["summary"])
+        self.assertIn("R1-step250-beyond", rules.stop_reason(self.ctx))
 
 
 if __name__ == "__main__":

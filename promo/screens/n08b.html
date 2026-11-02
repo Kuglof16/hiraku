@@ -4,35 +4,35 @@
 <meta charset="utf-8">
 <title>N08b Numbers</title>
 <link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n08b"></script>
 <style>
   /* N08b: two rounded figures on a dark ground, the bars behind the second
-     one, and the sources with the exact values. Figures come from DATA. */
+     one, and the sources with the exact values. Figures come from DATA.
+     Placement and times: layout.json n08b (CSS variables from layout.js;
+     --t-left, --t-right, --t-bars, --t-src from n08b.times). */
   :root {
     --page-bg: var(--night);
-    --t-left: 0.3s;     /* 99 %, with the first sentence */
-    --t-right: 4.8s;    /* 5 %, just before the second sentence (voice at 5.0 s) */
-    --t-bars: 6.1s;
-    --t-src: 7.1s;
   }
   .stage { background: var(--night); color: var(--on-night); }
 
   .fig {
     position: absolute;
-    top: calc(210 * var(--u));
-    width: calc(860 * var(--u));
+    top: var(--fig-y);
+    width: var(--fig-w);
     text-align: center;
   }
-  .fig.left  { left: calc(70 * var(--u)); }
-  .fig.right { left: calc(990 * var(--u)); }
+  .fig.left  { left: var(--fig-left-x); }
+  .fig.right { left: var(--fig-right-x); }
   .num {
-    font: 400 calc(200 * var(--u)) / 1 var(--font-latin);
+    font: 400 var(--fig-num-size-px) / 1 var(--font-latin);
     letter-spacing: 0.01em;
     animation: rise 0.8s cubic-bezier(.2, .7, .2, 1) both;
   }
   .num small { font-size: 0.62em; margin-left: 0.12em; }
   .cap {
-    margin-top: calc(26 * var(--u));
-    font: 500 calc(44 * var(--u)) / 1.3 var(--font-ja);
+    margin-top: var(--fig-cap-gap-px);
+    font: 500 var(--fig-cap-size-px) / 1.3 var(--font-ja);
     animation: fade-up 0.6s ease-out both;
   }
   .left .num  { animation-delay: var(--t-left); }
@@ -50,10 +50,10 @@
 
   .divider {
     position: absolute;
-    left: calc(959 * var(--u));
-    top: calc(230 * var(--u));
-    width: calc(2 * var(--u));
-    height: calc(260 * var(--u));
+    left: var(--divider-x);
+    top: var(--divider-y);
+    width: var(--divider-w);
+    height: var(--divider-h);
     background: rgba(241, 236, 224, 0.28);
     animation: grow-y 0.6s ease-out both;
     animation-delay: calc(var(--t-right) - 0.4s);
@@ -62,27 +62,28 @@
 
   .bars {
     position: absolute;
-    left: calc(930 * var(--u));
-    top: calc(560 * var(--u));
-    width: calc(930 * var(--u));
+    left: var(--bars-x);
+    top: var(--bars-y);
+    width: var(--bars-w);
   }
   .bar-row {
     display: grid;
-    grid-template-columns: calc(290 * var(--u)) 1fr;
+    grid-template-columns: var(--bars-label-w) 1fr;
     align-items: center;
-    column-gap: calc(22 * var(--u));
-    height: calc(64 * var(--u));
+    column-gap: var(--bars-col-gap-px);
+    height: var(--bars-row-h);
     animation: fade-up 0.5s ease-out both;
     animation-delay: calc(var(--t-bars) + var(--i) * 0.15s);
   }
   .bar-row span {
     text-align: right;
-    font: 400 calc(30 * var(--u)) / 1 var(--font-ja);
+    font: 400 var(--bars-label-size-px) / 1 var(--font-ja);
     color: var(--on-night-soft);
   }
-  .bar-track { display: flex; align-items: center; gap: calc(16 * var(--u)); }
+  .bar-track { display: flex; align-items: center; gap: var(--bars-value-gap-px); }
   .bar {
-    height: calc(36 * var(--u));
+    flex: none;  /* keep the width to scale; never squeezed by the value */
+    height: var(--bars-bar-h);
     border-radius: calc(4 * var(--u));
     background: #6b6862;
     transform-origin: 0 50%;
@@ -91,7 +92,9 @@
   }
   .bar.hot { background: var(--warm); }
   .bar-track b {
-    font: 700 calc(32 * var(--u)) / 1 var(--font-latin);
+    flex: none;          /* one line; if it does not fit, it shows (layout_check: escape) */
+    white-space: nowrap;
+    font: 700 var(--bars-value-size-px) / 1 var(--font-latin);
     animation: fade-up 0.4s ease-out both;
     animation-delay: calc(var(--t-bars) + 0.8s + var(--i) * 0.15s);
   }
@@ -99,52 +102,59 @@
 
   .sources {
     position: absolute;
-    left: calc(90 * var(--u));
-    right: calc(90 * var(--u));
-    top: calc(770 * var(--u));
+    left: var(--sources-side-px);
+    right: var(--sources-side-px);
+    top: var(--sources-y);
     margin: 0;
     padding: 0;
     list-style: none;
-    font: 400 calc(21 * var(--u)) / 1.75 var(--font-ja);
+    font: 400 var(--sources-size-px) / 1.75 var(--font-ja);
     color: var(--on-night-soft);
     animation: fade-up 0.6s ease-out both;
     animation-delay: var(--t-src);
   }
 </style>
 </head>
-<body data-duration="9.7">
+<body data-duration="10">
 <div class="stage">
   <div class="safe">
-    <div class="fig left"><div class="num"></div><div class="cap">製造業の企業のうち、中小企業</div></div>
-    <div class="divider"></div>
-    <div class="fig right"><div class="num"></div><div class="cap">小さな会社の CAE の導入率</div></div>
-    <div class="bars"></div>
-    <ul class="sources"></ul>
+    <div class="fig left" data-box="n08b.fig.left"><div class="num" data-box="n08b.fig.left.num"></div><div class="cap" data-box="n08b.fig.left.cap">製造業の企業のうち、中小企業</div></div>
+    <div class="divider" data-box="n08b.divider"></div>
+    <div class="fig right" data-box="n08b.fig.right"><div class="num" data-box="n08b.fig.right.num"></div><div class="cap" data-box="n08b.fig.right.cap">小さな会社の CAE の導入率</div></div>
+    <div class="bars" data-box="n08b.bars"></div>
+    <ul class="sources" data-box="n08b.sources"></ul>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
 </div>
 <script>
   // Figures from outside sources. The shares on screen are computed here.
-  // Checked against the source table and figure on 2026-11-02: all four
-  // values match. The survey's question wording was not seen, so the screen
-  // uses the figure's own term (導入率, adoption rate).
   const DATA = {
     // 中小企業庁「2025 年版 中小企業白書」付属統計資料 1 表 (産業別規模別企業数),
     // 2021 年 6 月時点. https://www.chusho.meti.go.jp/pamflet/hakusyo/2025/chusho/excel/f1.xlsx
     // Enterprises = companies and sole proprietors; manufacturing row, 2021.
+    // Checked against the source table on 2026-11-02.
     manufacturing: {
       all: 337490,
       sme: 335552,
       source: "中小企業白書 2025 付属統計資料 1 表、2021 年 6 月",
     },
-    // 『金融構造研究』第 43 号, 図表 11「製造業の従業員規模別システム導入率」(%),
-    // citing メイテック「機械系エンジニア 500 人調査」(2016). CAE row.
-    // https://www.chiginkyo.or.jp/pdf/kin_43_01.pdf
+    // Meitec release, 2017-09-26: 「CAEツールの導入率は43.4％。1万人超の企業では
+    // 67.9％が導入済み」 (株式会社メイテック, distributed through PR TIMES), as
+    // reprinted on the Nikkan Kogyo Shimbun company-release page:
+    // https://www.nikkan.co.jp/releases/view/1612
+    // Survey: internet research of 500 manufacturing engineers, 2017-08-25.
+    // Question: whether their own company has introduced CAE tools
+    // (「導入している」); the share of engineers who answered so, by the
+    // number of employees of their employer. It is a question to engineers,
+    // not a count of companies. 1 万人超: 67.9 %, 100 人以内: 16.0 %.
+    // The release allows citing it as 「fabcross for エンジニア」調べ.
+    // Checked against the original release on 2026-11-03.
     cae_adoption: {
-      small: { label: "従業員 1〜100 人", pct: 5.2 },
-      large: { label: "1 万人以上", pct: 54.7 },
-      source: "メイテック「機械系エンジニア 500 人調査」2016 年、『金融構造研究』第 43 号 図表 11",
+      small: { label: "従業員 100 人以内", pct: 16.0 },
+      large: { label: "1 万人超", pct: 67.9 },
+      source: "「fabcross for エンジニア」調べ (メイテック、2017 年、製造系エンジニア 500 人)",
+      source_short: "「fabcross for エンジニア」調べ (メイテック、2017 年)",
     },
   };
 
@@ -156,23 +166,25 @@
   document.querySelector(".left .num").innerHTML = pctHtml(smePct);
   document.querySelector(".right .num").innerHTML = pctHtml(DATA.cae_adoption.small.pct);
 
-  // Bars share one scale: 100 % = 800 design px.
-  const PX_PER_PCT = 8;
-  const rows = [DATA.cae_adoption.small, DATA.cae_adoption.large];
-  document.querySelector(".bars").innerHTML = rows.map((r, i) => `
-    <div class="bar-row" style="--i:${i}">
-      <span>${r.label}</span>
+  // Bars share one scale (layout.json n08b.bars.px_per_pct).
+  const { px, cutRules } = window.promoLayout;
+  const PX_PER_PCT = cutRules.bars.px_per_pct;
+  const rows = [["small", DATA.cae_adoption.small], ["large", DATA.cae_adoption.large]];
+  document.querySelector(".bars").innerHTML = rows.map(([key, r], i) => `
+    <div class="bar-row" style="--i:${i}" data-box="n08b.bars.${key}">
+      <span data-box="n08b.bars.${key}.label">${r.label}</span>
       <div class="bar-track">
-        <div class="bar${i === 0 ? " hot" : ""}" style="--i:${i};width:calc(${r.pct * PX_PER_PCT} * var(--u))"></div>
-        <b style="--i:${i}">${fmt1(r.pct)} %</b>
+        <div class="bar${i === 0 ? " hot" : ""}" data-box="n08b.bars.${key}.bar"
+             style="--i:${i};width:${px(r.pct * PX_PER_PCT)}"></div>
+        <b style="--i:${i}" data-box="n08b.bars.${key}.value">${fmt1(r.pct)} %</b>
       </div>
     </div>`).join("");
 
   const m = DATA.manufacturing, c = DATA.cae_adoption;
   document.querySelector(".sources").innerHTML = [
     `製造業の企業 ${count(m.all)} のうち中小企業 ${count(m.sme)} (${fmt1(smePct)} %)。${m.source}`,
-    `製造業の従業員規模別の CAE の導入率: ${c.small.label} ${fmt1(c.small.pct)} %、` +
-      `${c.large.label} ${fmt1(c.large.pct)} %。${c.source}`,
+    `勤め先の従業員数別の CAE ツールの導入率 (製造系エンジニアの回答): ` +
+      `${c.small.label} ${fmt1(c.small.pct)} %、${c.large.label} ${fmt1(c.large.pct)} %。${c.source_short}`,
   ].map((s) => `<li>${s}</li>`).join("");
 </script>
 <script src="timeline.js"></script>

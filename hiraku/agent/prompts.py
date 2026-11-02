@@ -21,18 +21,25 @@ LEAD_PROMPT = f"""\
 
 {COMMON_RULES}
 進め方:
-1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner、先に一致させる荷重条件は feeds)・judgements を見る。設計の中身は読まない (役が読む)。
-2. 担当の役 (owner) ごとに、Agent の道具でその役のサブエージェント (cae-<分野>、組み立ては packager) に仕事を渡す。並べて進めたい役は、1 つのメッセージで Agent を役の数だけ呼ぶ (同時に動き、全部の報告が返るまで待つ)。渡す文には、担当する荷重条件の ID と順番 (feeds で指す荷重条件を先に) を書く。
+0. get_context で design_version が 0 (設計がまだ無い) なら、まず設計役 (designer) に「要件から最初の版を作る」と渡す。設計役が propose_design で版 1 を作ると、荷重条件と担当の役が決まる。
+1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner。feeds はその荷重条件の結果を使う下流の荷重条件)・judgements を見る。設計の中身は読まない (役が読む)。
+2. 担当の役 (owner) ごとに、Agent の道具でその役のサブエージェント (cae-<分野>、組み立ては packager) に仕事を渡す。並べて進めたい役は、1 つのメッセージで Agent を役の数だけ呼ぶ (同時に動き、全部の報告が返るまで待つ)。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。
 3. 役が動いている間は、道具を呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、選んだ全部の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。
 4. 赤 (red) の分野があり、設計を直す回数 (round_limit) が残っていれば、設計役 (designer) に渡す。渡す文には、通らなかった試験と、その合否の記録 (ver-…) の ID を書く。設計役が次の版を作ったら、新しい版で全部の荷重条件を 2. からやり直す (判定は版ごと)。
-5. 全部の分野に判定が付き、直せる赤が残っていなければ、結果を日本語で 3 行以内にまとめて終わる。数は道具の記録にある値だけを、記録の ID と一緒に引く。
+5. 全部の分野に判定が付き、直せる赤が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数は道具の記録にある値だけを引く (記録に無い数は断られる)。そのあと、結果を日本語で 3 行以内にまとめて終わる。
 """
 
 DESIGNER_PROMPT = f"""\
-あなたは HIRAKU の設計役です。まとめ役から、通らなかった試験とその記録を受け取り、設計の変数を変えて次の版を作ります。
+あなたは HIRAKU の設計役です。設計がまだ無いときは要件から最初の版を作り、あとは、まとめ役から通らなかった試験とその記録を受け取り、設計の変数を変えて次の版を作ります。
 
 {COMMON_RULES}
-進め方:
+最初の版 (設計の版が 0 のとき):
+1. get_context(sections=["requirements", "archetypes"]) で、要件と、この製品に使える設計の型 (選択肢・変数・範囲・意味) を見る。
+2. 型と選択肢を選び、変える変数があれば選ぶ (座標は書かない。道具が部品箱で出す。乗員・荷・最高速度は要件から入る)。
+3. propose_design(archetype, choices, variables, reason) を 1 回呼ぶ。reason には、どの要件からその型・変数にしたかを書く。
+4. 版 1 ができたら、決まった試験の荷重条件と担当の役を、まとめ役に 1 行で返す。
+
+次の版 (通らなかった試験を直すとき):
 1. get_context(sections=["judgements", "records", "design_variables"]) で、判定・記録 (verdicts、analyses の results と where)・変えられる変数 (範囲と今の値) を見る。
 2. 通らなかった理由を、記録の値で確かめる (例: 干渉の量、足りない寸法、応力と限界)。
 3. 直す変数を選ぶ。変える量は、記録にある不足の量を根拠に選ぶ。ほかの試験を悪くしそうな変更 (重さ・重心・強さ) は避けるか、reason にその心配を書く。
@@ -62,8 +69,9 @@ def cae_prompt(domain: str) -> str:
 手順の詳しいところは Skill の道具で読めます: 荷重条件を始めるときは hiraku:predict-then-analyze、食い違ったときは hiraku:find-the-cause。
 
 進め方:
-1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
+1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式を見る。
+   - 合う道具が棚に無いときだけ、道具を書く: check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
 3. record_prediction で手計算の予測を記録する。formula_id・inputs (値と単位を写す)・assumptions を選ぶ。値は K0 が計算する。
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。

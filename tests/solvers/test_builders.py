@@ -44,6 +44,8 @@ def tool_for(test_id):
 
 
 def resolve(ref, design, lc, extra, preds=None):
+    if isinstance(ref, dict):  # a quantity written in the plan
+        return ref
     head, _, rest = ref.partition(".")
     if head == "pred":
         return preds[rest]
@@ -56,7 +58,10 @@ def resolve(ref, design, lc, extra, preds=None):
         assert kind == "var", ref
         return design["variables"][name]
     if head == "load":
-        return design_summary(design)["loadings"][lc["params"].get("loading", "two_cargo")][rest]
+        node = design_summary(design)["loadings"][lc["params"].get("loading", "two_cargo")]
+        for part in rest.split("."):
+            node = node[part]
+        return node
     if head == "summary":
         return design_summary(design)[rest]
     raise AssertionError(f"unknown ref {ref}")
@@ -97,9 +102,17 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(p["distance"], {"value": 20.0, "unit": "km"})
         self.assertEqual((p["grade_high"]["value"], p["grade_low"]["value"]), (12.0, 7.0))
         self.assertEqual((p["speed_high"]["value"], p["speed_low"]["value"]), (40.0, 20.0))
-        no_params = dict(CATALOG.test("P4"), params={})  # without the catalog's loop params: half of Q13 and Q50
+        no_params = dict(CATALOG.test("P4"), params={})  # without the catalog's loop params: Q13, half of it and of Q50
+        q13 = next(r["value"] for r in REQ["requirements"] if r["key"] == "Q13")
         bare = BUILDERS["P4"](no_params, REQ, DESIGN)["params"]
-        self.assertEqual((bare["grade_low"]["value"], bare["speed_low"]["value"]), (6.0, 20.0))
+        self.assertEqual((bare["grade_high"]["value"], bare["grade_low"]["value"], bare["speed_low"]["value"]),
+                         (q13, q13 / 2, 20.0))
+        # Q13 is the steepest grade to stop and start on; the grade driven up for long is the catalog's grade_high
+        steep = dict(REQ, requirements=[dict(r, value=14) if r["key"] == "Q13" else r for r in REQ["requirements"]])
+        given = dict(CATALOG.test("P4"), params={**LOOP, "grade_high": {"value": 12, "unit": "%"}})
+        lc = BUILDERS["P4"](given, steep, DESIGN)
+        self.assertEqual((lc["params"]["grade_high"]["value"], lc["params"]["grade_low"]["value"]), (12.0, 7.0))
+        self.assertNotIn("Q13", lc["requirement_keys"])
         self.assertEqual(self.cases["T1"]["criterion"]["limit"], {"value": 55.0, "unit": "degC"})
         self.assertEqual(self.cases["T2"]["criterion"]["limit"], {"value": 85.0, "unit": "degC"})
         self.assertEqual(self.cases["R3"]["params"]["road_class"], "C")
@@ -120,22 +133,37 @@ class BuildersTest(unittest.TestCase):
             self.assertEqual(plan["tool"], tool_for(tid).name)
             got = {r["quantity"]: r for r in self.runs[tid]["results"]}
             preds = {}
+            expected = plan.get("expected_mismatch", {}).get("quantity")
             for p in plan["predictions"]:
                 extra = p["inputs_from"](DESIGN, lc) if "inputs_from" in p else {}
-                self.assertEqual(any(ref.startswith("from.") for ref in p["inputs"].values()), "inputs_from" in p)
+                refs = [ref for ref in p["inputs"].values() if isinstance(ref, str)]
+                self.assertEqual(any(ref.startswith("from.") for ref in refs), "inputs_from" in p)
                 inputs = {k: resolve(ref, DESIGN, lc, extra, preds) for k, ref in p["inputs"].items()}
                 out = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
                 preds[p["quantity"]] = out
+                self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                if p["quantity"] not in got:  # an intermediate hand value, not compared
+                    continue
                 ana = got[p["quantity"]]
                 self.assertEqual(out["unit"], ana["unit"], f"{tid} {p['quantity']}")
                 rel = (ana["value"] - out["value"]) / abs(out["value"])
-                self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
-                self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
+                    self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
+                else:
+                    self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
+
+    def test_r3_misses_on_the_unsafe_side_and_ends_without_a_verdict(self):
+        plan = PLANS["R3"]
+        self.assertNotIn("retry", plan["expected_mismatch"])
+        self.assertNotIn("safe_side", plan["expected_mismatch"])
+        self.assertTrue(plan["expected_mismatch"]["end"])  # the cause is recorded and the run goes on
+        damage = {r["quantity"]: r["value"] for r in self.runs["R3"]["results"]}["fatigue_damage"]
+        self.assertGreater(damage, 0.0)  # the analysis is what the hand value falls short of
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
         for tid, lc in self.cases.items():
-            if "criterion" not in lc or tid == "R3":
+            if "criterion" not in lc:
                 continue
             self.assertIn(tid, PLANS)
             self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in PLANS[tid]["predictions"]], tid)

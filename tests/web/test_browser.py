@@ -93,6 +93,48 @@ def claude_like_events():
     return out
 
 
+def n05_layout():
+    """Layout rules in the shape the cut pages read (promo/screens/layout.json); the
+    values are those of promo/screens/n05.html."""
+    return {
+        "stage": {"w": 1920, "h": 1080},
+        "subtitle_band": {"y": 910, "h": 170},
+        "min_text_px": 18,
+        "colors": {"night": "#131311", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
+        "n05": {
+            "duration_s": 5.0,
+            "grid": {"x": 96, "y": 280, "cols": 4, "rows": 3, "tile_w": 408, "tile_h": 180, "gap_x": 32, "gap_y": 26},
+            "tile": {"border_px": 2, "radius_px": 10, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
+            "hero": {"x": 210, "y": 60, "w": 1500, "h": 820},
+            "hero_motion": {"push_scale": 1.04, "burst_scale": 1.7, "burst_dur_s": 0.4, "ease": [0.5, 0, 0.9, 0.4]},
+            "times": {"burst_s": 0.95, "tiles_s": 1.05, "tile_in_s": 0.6, "tile_stagger_s": 0.05},
+            "ease": {"tile": [0.2, 0.9, 0.3, 1.15]},
+            "fly_from": {"x": 960, "y": 470},
+            "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"],
+        },
+        "n01": {
+            "duration_s": 4.0,
+            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
+            "pane": {"x": 1328, "y": 96, "w": 496, "h": 790},
+            "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2},
+            "times": {"lead_s": 0.4, "zoom_s": 1.6},
+            "zoom": {"from": 1.6, "to": 1.06},
+            "overlay": {"color": "#c8402a", "opacity": 0.22},
+            "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
+        },
+        "n02": {
+            "duration_s": 7.0,
+            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24},
+            "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
+            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
+            "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2},
+            "times": {"lead_s": 0.3},
+            "overlay": {"color": "#c8402a", "opacity": 0.22},
+            "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
+        },
+    }
+
+
 @unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
@@ -368,14 +410,17 @@ class BrowserReplayTest(unittest.TestCase):
                     """async () => {
                       await window.hiraku.seek(window.hiraku.player.playhead);
                       const b = window.hiraku.bench;
-                      return { step: b.sceneDesc?.step ?? null, shadows: b.renderer.shadowMap.enabled,
+                      // the step from the tool's own scene, or read off the contact points
+                      const rec = (b.sceneDesc?.objects ?? []).find((o) => o.kind === "step");
+                      const step = rec ? { h: rec.size_mm[2], x0: rec.position_mm[0] - rec.size_mm[0] / 2 } : b.sceneDesc?.step ?? null;
+                      return { step, shadows: b.renderer.shadowMap.enabled,
                                limitButton: !!document.querySelector('#toggles [data-toggle="limit"]'),
                                standard: b.members[Object.keys(b.members)[0]].mesh.material.type };
                     }"""
                 )
                 self.assertEqual(errors, [], look)
                 self.assertEqual(got["step"]["h"], 100.0)
-                self.assertGreater(got["step"]["x0"], 1000.0)  # the step stands ahead of the front wheels
+                self.assertGreater(got["step"]["x0"], 0.0)  # the step stands ahead of the front axle (x = 0)
                 self.assertFalse(got["limitButton"])  # climbing lifts a wheel: not a limit on a step
                 self.assertEqual(got["shadows"], look == "real")
                 self.assertEqual(got["standard"], "MeshStandardMaterial" if look == "real" else "MeshLambertMaterial")
@@ -461,6 +506,234 @@ class BrowserReplayTest(unittest.TestCase):
                 lau.proc.wait()
             shutil.rmtree(tmp)
 
+    def test_project_updated_and_report_written(self):
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        project = copy.deepcopy(events[0]["data"])
+        extra = {**copy.deepcopy(project["load_cases"][0]), "load_case_id": "R1-step150", "title": "段差 150 mm (形の見本)"}
+        extra["params"] = {**extra["params"], "step_height": {"value": 150.0, "unit": "mm"}}
+        project["load_cases"].append(extra)
+        report = {"design_version": 1, "domains": [{"domain": "strength", "state": "green", "line": "段差で降伏しない (形の見本)"}],
+                  "unchecked": [{"item": "yield 235 MPa", "source": "materials (形の見本)"}],
+                  "next": [{"domain": "strength", "change": "段差 150 mm も確かめる", "reason": "形の見本"}], "summary": "強度は合格 (形の見本)"}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00"}
+        updated = {**base, "seq": 0, "t": 0.7, "kind": "project.updated", "agent": "designer", "data": project}
+        written = {**base, "seq": 0, "t": events[-1]["t"] - 0.1, "kind": "report.written", "agent": "lead", "data": report}
+        events = events[:2] + [updated] + events[2:-1] + [written, events[-1]]
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+            self.assertEqual(contract.errors("event", ev), [], ev["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const s = window.hiraku.state();
+              return { cases: s.project.load_cases.map((c) => c.load_case_id), tests: document.querySelectorAll("#tests button.test").length,
+                       report: s.reports[1]?.summary ?? null,
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent).filter((x) => x.includes("試験と分野を決めた") || x.includes("報告を書いた")) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["cases"], ["R1-step100", "R1-step150"])
+        self.assertEqual(got["tests"], 2)
+        self.assertEqual(got["report"], "強度は合格 (形の見本)")
+        self.assertEqual(len(got["lines"]), 2)
+        page.close()
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_events_are_kept(self):
+        """domains.picked, hearing.*, knowledge.imported and rule_check.recorded (the
+        contract's examples) land in state.intake; a rule check sent again replaces its line."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported", "rule_check")}
+        passed = {**copy.deepcopy(ex["rule_check"]), "hits": [], "pass": True}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        checks = [
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": ex["rule_check"]},
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": passed},
+        ]
+        t0 = events[0]["t"]
+        intake = [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)]
+        t1 = events[-1]["t"]
+        checks = [{**base, "t": t1 - 0.2 + 0.1 * i, **ev} for i, ev in enumerate(checks)]
+        events = events[:1] + intake + events[1:-1] + checks + [events[-1]]
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+            self.assertEqual(contract.errors("event", ev), [], ev["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const k = window.hiraku.state().intake;
+              return { picks: k.picked.picks.map((p) => p.domain), questions: k.questions.map((q) => q.req_key),
+                       answers: k.answers.map((a) => a.key), note: k.note, docs: k.docs.map((x) => x.doc.doc_id),
+                       rules: Object.keys(k.rules), checks: Object.values(k.ruleChecks).map((c) => [c.rule_check_id, c.pass]),
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent)
+                         .filter((x) => ["分野を選んだ", "要件を", "答えがそろった", "規則の束", "規則 SM-01"].some((w) => x.includes(w))) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["picks"], ["strength"])
+        self.assertEqual(got["questions"], ["Q15"])
+        self.assertEqual(got["answers"], ["Q15"])
+        self.assertEqual(got["note"], ex["hearing_answered"]["note"])
+        self.assertEqual(got["docs"], ["builtin-sheet-metal"])
+        self.assertEqual(got["rules"], ["SM-01"])
+        self.assertEqual(got["checks"], [["rchk-0001", True]])
+        self.assertEqual(len(got["lines"]), 5, got["lines"])
+        self.assertIn("当てはまる試験 2", got["lines"][0])
+        self.assertIn("値が無くて当てられない部品 1", got["lines"][4])
+        self.assertNotIn("守れていない", got["lines"][4])
+        page.close()
+
+    def test_n05_cut_is_laid_out_from_the_layout_rules(self):
+        """cut.html?cut=n05: tiles where layout.json puts them, the hero before the burst and
+        the grid after, nothing in the subtitle band. With HIRAKU_WEB_DEV_RUNS the tiles play
+        the real tools' records; without it the sample run leaves them empty."""
+        tmp = Path(tempfile.mkdtemp())
+        layout = n05_layout()
+        (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        runs = Path(given) if given else tmp / "runs"
+        run = sorted(p.name for p in runs.iterdir() if p.is_dir())[-1] if given else "sample"
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/cut.html?cut=n05&run={run}&t=0.5")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            js = """async (t) => {
+              await window.hiraku.seek(t);
+              const box = (el) => { const r = el.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
+              const tiles = [...document.querySelectorAll('[data-box^="n05.tile."]')].filter((el) => el.classList.contains("tile"));
+              return { duration: window.hiraku.player.duration,
+                       hero: getComputedStyle(document.querySelector('[data-box="n05.hero"]')).visibility,
+                       tiles: tiles.map((el) => ({ key: el.dataset.box, box: box(el), shown: getComputedStyle(el).visibility,
+                                                    rate: el.querySelector(".rate").textContent })) };
+            }"""
+            early = page.evaluate(js, 0.5)
+            late = page.evaluate(js, 4.9)
+            self.assertEqual(errors, [])
+            self.assertEqual(early["duration"], 5.0)
+            self.assertEqual(early["hero"], "visible")
+            self.assertTrue(all(t["shown"] == "hidden" for t in early["tiles"]))
+            self.assertEqual(late["hero"], "hidden")
+            g = layout["n05"]["grid"]
+            self.assertEqual([t["key"] for t in late["tiles"]], [f"n05.tile.{k}" for k in layout["n05"]["tests"]])
+            for i, t in enumerate(late["tiles"]):
+                col, row = i % g["cols"], i // g["cols"]
+                self.assertEqual(t["box"], [g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"]), g["tile_w"], g["tile_h"]])
+                self.assertLessEqual(t["box"][1] + t["box"][3], layout["subtitle_band"]["y"])
+                self.assertEqual(t["shown"], "visible")
+            if given:
+                self.assertTrue(all(t["rate"].startswith("×") for t in late["tiles"] if t["key"] not in ("n05.tile.nvh", "n05.tile.fatigue", "n05.tile.heat")))
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
+    def test_n01_cut_plays_the_step_and_the_case_past_the_limit(self):
+        """cut.html?cut=n01 on the real tools' records (HIRAKU_WEB_DEV_RUNS): the main view, the
+        red overlay of the higher step, one card per case filled from the records."""
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        if not given:
+            self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "layout.json").write_text(json.dumps(n05_layout()), encoding="utf-8")
+        runs = Path(given)
+        run = sorted(p.name for p in runs.iterdir() if p.is_dir())[-1]
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n01&run={run}&t=2")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            got = page.evaluate(
+                """() => ({ duration: window.hiraku.player.duration, err: document.querySelector(".err")?.textContent ?? null,
+                           cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
+                           ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
+                           contour: window.hiraku.cut.contour?.kind ?? null,
+                           view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
+                           // the smallest text in the pane (every element that holds text of its own)
+                           minText: Math.min(...[...document.querySelectorAll('[data-box="n01.pane"] *')]
+                             .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
+                             .map((el) => parseFloat(getComputedStyle(el).fontSize))) })"""
+            )
+            self.assertGreaterEqual(got["minText"], 18)
+            self.assertEqual(errors, [])
+            self.assertIsNone(got["err"])
+            self.assertEqual(got["duration"], 4.0)
+            self.assertEqual([c[0] for c in got["cards"]], ["n01.card.ok", "n01.card.over"])
+            self.assertIn("100 mm", got["cards"][0][1])
+            self.assertIn("限界の外の条件", got["cards"][1][1])
+            self.assertTrue(got["ghost"] and got["tinted"])
+            self.assertEqual(got["contour"], "stress")  # the K1 static analysis of the same load case
+            self.assertLessEqual(got["view"], 910)
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
+    def test_n02_cut_lays_out_five_tests_and_their_limits(self):
+        """cut.html?cut=n02 on the real tools' records (HIRAKU_WEB_DEV_RUNS): panes where the grid
+        puts them, each test playing its record, the results listed as written."""
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        if not given:
+            self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
+        tmp = Path(tempfile.mkdtemp())
+        layout = n05_layout()
+        (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+        runs = Path(given)
+        run = sorted(p.name for p in runs.iterdir() if p.is_dir())[-1]
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            got = page.evaluate(
+                """() => ({ err: document.querySelector(".err")?.textContent ?? null, duration: window.hiraku.player.duration,
+                           panes: [...document.querySelectorAll(".n02-pane")].map((p) => { const r = p.getBoundingClientRect();
+                             return [p.dataset.box, Math.round(r.left), Math.round(r.top), Math.round(r.bottom)]; }),
+                           views: window.hiraku.cut.panes.filter((p) => p.view).length,
+                           results: document.querySelectorAll(".n02-res").length })"""
+            )
+            self.assertEqual(errors, [])
+            self.assertIsNone(got["err"])
+            self.assertEqual(got["duration"], 7.0)
+            g = layout["n02"]["grid"]
+            self.assertEqual([p[0] for p in got["panes"]], [f"n02.pane.{k}" for k in layout["n02"]["panes"]])
+            for i, p in enumerate(got["panes"]):
+                self.assertEqual(p[1:3], [g["x"] + (i % 3) * (g["tile_w"] + g["gap_x"]), g["y"] + (i // 3) * (g["tile_h"] + g["gap_y"])])
+                self.assertLessEqual(p[3], layout["subtitle_band"]["y"])
+            self.assertEqual(got["views"], 5)  # every test has its record in the dev run
+            self.assertEqual(got["results"], 5)
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
     def test_opens_the_saved_run_without_run_in_the_url(self):
         tmp = Path(tempfile.mkdtemp())
         run_id = "20261106-100000-offroad-4w"
@@ -482,7 +755,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.goto(f"{base}/?list=1")
             page.wait_for_selector("#runlist h3")
             listing = page.evaluate(
-                """() => ({ heads: [...document.querySelectorAll("#runlist h3")].map((h) => h.textContent),
+                """() => ({ heads: [...document.querySelectorAll("#runlist > h3")].map((h) => h.textContent),
                            def: document.querySelector("#runlist .def")?.closest("tr").querySelector(".rid").textContent })"""
             )
             self.assertEqual(listing["heads"], ["保存した実行", "契約の形の見本"])

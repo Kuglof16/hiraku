@@ -9,7 +9,7 @@ from unittest import mock
 
 from hiraku.__main__ import main
 from hiraku.agent.scripted import run_scripted
-from hiraku.agent.session import STOPPED_BY_USER, start_run
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER, start_run
 from hiraku.contract import layout
 from tests.tools import fakes
 from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS, RunCase
@@ -52,6 +52,23 @@ class RunCommandTest(RunCase, unittest.TestCase):
         self.assertIn("status: stopped", out)
         self.assertEqual(self.kinds()[-1], "run.finished")
 
+    def test_stop_button_in_the_scripted_run(self):
+        orig = self.tools["step_climb"].run
+
+        def press_then_run(*a):  # the button is pressed while P1 is being analysed
+            (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+            return orig(*a)
+
+        self.tools["step_climb"].run = press_then_run
+        self.assertEqual(run_scripted(self.ctx), "stopped")
+        finished = self.ctx.store.events()[-1]
+        self.assertEqual((finished["data"]["status"], finished["data"]["stop_code"]), ("stopped", "user_stop"))
+        self.assertEqual(self.ctx.project["stop_reason"], STOPPED_BY_BUTTON)
+        self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())
+        self.assertEqual(len(self.tools["step_climb"].runs), 1)  # nothing analysed after the press
+        self.assertEqual(self.tools["frame_static"].runs, [])
+        self.assert_events_fit()
+
     def test_ctrl_c_in_the_scripted_run(self):
         def interrupt(*a):
             raise KeyboardInterrupt
@@ -83,6 +100,31 @@ class StartInterruptTest(unittest.TestCase):
             (folder,) = (Path(tmp) / "runs").iterdir()
             project = json.loads((folder / layout.PROJECT_FILE).read_text(encoding="utf-8"))
             self.assertEqual((project["status"], project["stop_reason"]), ("stopped", STOPPED_BY_USER))
+
+    def test_stop_button_while_checking_tools(self):
+        tools = fakes.shelf()
+        first, *rest = tools
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp) / "runs"
+            orig = tools[first].check
+
+            def press_then_check():
+                (folder,) = runs.iterdir()
+                (folder / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+                return orig()
+
+            tools[first].check = press_then_check
+            for name in rest:
+                tools[name].check = mock.Mock(side_effect=AssertionError(f"{name} checked after the press"))
+            design = Path(tmp) / "design.json"
+            design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+            ctx = start_run(REQUIREMENTS, design_path=design, root=runs, formulas=fakes.FakeFormulas(), tools=tools)
+            self.assertEqual(list(ctx.specs), [first])
+            self.assertEqual(run_scripted(ctx), "stopped")
+            self.assertEqual(ctx.store.events()[-1]["data"]["stop_code"], "user_stop")
+            self.assertEqual(ctx.project["stop_reason"], STOPPED_BY_BUTTON)
+            self.assertFalse((ctx.store.path / layout.STOP_REQUEST_FILE).exists())
+            self.assertNotIn("analysis.started", [e["kind"] for e in ctx.store.events()])
 
 
 class CheckCommandTest(RunCase, unittest.TestCase):

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from hiraku.webserve.launch import KEY_NAME
-from hiraku.webserve.server import DEFAULT_HOST, DEFAULT_PORT, SAVED_DIR, WEB_DIR, list_runs, make_server
+from hiraku.webserve.server import DEFAULT_HOST, DEFAULT_PORT, LAYOUT_FILE, SAVED_DIR, WEB_DIR, list_runs, make_server
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,11 +18,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--saved", default=str(SAVED_DIR), help="folder of saved runs kept in the repository (default: showcase/ of this repository)")
     p.add_argument("--default-run", default=None, help="run the screen opens when the URL names none (default: the newest saved run)")
     p.add_argument("--web", default=str(WEB_DIR), help="folder of the screen files (default: web/ of this repository)")
+    p.add_argument("--layout", default=str(LAYOUT_FILE), help="the video's layout rules served as /layout.json (default: promo/screens/layout.json)")
     p.add_argument("--quiet", action="store_true", help="do not log each request")
     args = p.parse_args(argv)
 
     server = make_server(args.host, args.port, Path(args.runs), Path(args.web), quiet=args.quiet,
-                         saved_dir=Path(args.saved), default_run=args.default_run)
+                         saved_dir=Path(args.saved), default_run=args.default_run, layout_file=Path(args.layout))
     host, port = server.server_address[:2]
     print(f"HIRAKU screen: http://{host}:{port}/  (runs: {Path(args.runs).resolve()})", flush=True)
     default = next((r["run_id"] for r in list_runs(Path(args.runs), Path(args.saved), args.default_run) if r["default"]), None)

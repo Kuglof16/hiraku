@@ -20,7 +20,10 @@ from hiraku.designgen import ladder_4w
 from hiraku.designgen.ladder_4w import DesignGenError
 
 Record = dict[str, Any]
-GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w}
+GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w}  # by product
+ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w}  # by kind of design
+# requirement keys that set variables of the design (key -> (variable, unit))
+FROM_REQUIREMENTS = {"Q33": ("occupant_mass", "kg"), "Q40": ("cargo_mass", "kg"), "Q50": ("max_speed", "km/h")}
 
 
 def generator(product: str) -> ModuleType:
@@ -70,4 +73,39 @@ def regenerate(design: Record, changes: dict[str, Record]) -> Record:
                      parent=design.get("parent_version"), reason=design.get("change_reason"), name=design.get("name"))
 
 
-__all__ = ["GENERATORS", "DesignGenError", "generator", "generator_of", "ladder_4w", "regenerate", "variables"]
+def archetypes(flags: dict) -> list[Record]:
+    """The kinds of design that suit a product's flags: name, title, choices {name: [options]}, variables (as spec())."""
+    return [{"name": name, "title": gen.TITLE, "choices": {k: list(v) for k, v in gen.CHOICES.items()}, "variables": gen.spec()}
+            for name, gen in ARCHETYPES.items() if gen.applies(flags)]
+
+
+def propose(archetype: str, choices: dict, values: dict, requirements: Record) -> Record:
+    """The first version of a design of this kind: the variables given (the others their defaults),
+    with the occupants' and cargo's masses and the top speed from the requirements (Q33, Q40, Q50).
+    The caller sets design_version, parent_version and change_reason."""
+    from hiraku.solvers.k0_handcalc import units
+
+    gen = ARCHETYPES.get(archetype)
+    if gen is None:
+        raise DesignGenError(f"no kind of design {archetype!r}; known: {', '.join(ARCHETYPES)}")
+    for k, opt in (choices or {}).items():
+        if k not in gen.CHOICES:
+            raise DesignGenError(f"{archetype} has no choice {k!r}" + (f"; its choices: {', '.join(gen.CHOICES)}" if gen.CHOICES else ""))
+        if opt not in gen.CHOICES[k]:
+            raise DesignGenError(f"{k} must be one of {', '.join(gen.CHOICES[k])}, got {opt!r}")
+    vals = dict(values or {})
+    for r in requirements.get("requirements", []):
+        if r["key"] in FROM_REQUIREMENTS and isinstance(r.get("value"), (int, float)) and not isinstance(r["value"], bool):
+            name, unit = FROM_REQUIREMENTS[r["key"]]
+            if name in vals:
+                raise DesignGenError(f"{name} comes from requirement {r['key']}; do not give it as a value")
+            try:
+                vals[name] = {"value": units.convert(float(r["value"]), r.get("unit", unit), unit, r["key"]), "unit": unit}
+            except ValueError as e:
+                raise DesignGenError(f"requirement {r['key']}: {e}") from None
+    product = requirements.get("product", archetype)
+    return gen.build(vals, version=1, parent=None, reason="first version", name=f"{product} v1: {gen.DESCRIPTION}")
+
+
+__all__ = ["ARCHETYPES", "GENERATORS", "DesignGenError", "archetypes", "generator", "generator_of", "ladder_4w", "propose",
+           "regenerate", "variables"]

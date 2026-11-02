@@ -31,7 +31,7 @@ import { GRAY, colorOf } from "./colormap.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
-import { wheelName } from "./series.js";
+import { ANGLE, lerpAt, wheelName } from "./series.js";
 import { partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
@@ -42,7 +42,7 @@ const LIMIT_RED = "#c8402a";
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a" };
 const UP = new THREE.Vector3(0, 1, 0);
 // Camera directions (ISO, from the target) for the scenes that need their own view.
-const VIEWS = {
+export const VIEWS = {
   default: [0.85, 0.95, 0.62],
   table: [1, 0.14, 0.2], // a tilt table from the front, low: the table's turn reads as a turn
   front: [1, 0.08, 0.32], // a lane change from the front
@@ -195,23 +195,33 @@ function wheelMatrix(base, steer, spin) {
 }
 
 export class Workbench3D {
-  constructor(host, lookName = "zu") {
+  // opts.renderer: a WebGLRenderer shared with other views (the cut pages draw many
+  // views through one); such a view has no labels and no mouse control, and is
+  // drawn with renderInto. opts.ground: "shadow" for a ground that only takes the
+  // shadow (a vehicle standing on the page's own background).
+  constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
     this.look = new Look(lookName);
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    this.renderer.setClearColor(0x000000, 0);
-    this.renderer.domElement.className = "gl";
-    host.appendChild(this.renderer.domElement);
-    this.labelRenderer = new CSS2DRenderer();
-    this.labelRenderer.domElement.className = "gl-labels";
-    host.appendChild(this.labelRenderer.domElement);
-
+    this.ownRenderer = !opts.renderer;
+    this.groundStyle = opts.ground ?? null;
+    this.renderer = opts.renderer ?? new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(28, 1, 0.05, 200);
     this.camera.position.set(4, 3, 4);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = false;
-    this.controls.screenSpacePanning = true;
+    if (this.ownRenderer) {
+      this.renderer.setClearColor(0x000000, 0);
+      this.renderer.domElement.className = "gl";
+      host.appendChild(this.renderer.domElement);
+      this.labelRenderer = new CSS2DRenderer();
+      this.labelRenderer.domElement.className = "gl-labels";
+      host.appendChild(this.labelRenderer.domElement);
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = false;
+      this.controls.screenSpacePanning = true;
+    } else {
+      this.labelRenderer = null;
+      this.controls = { target: new THREE.Vector3(), update: () => this.camera.lookAt(this.controls.target) };
+    }
 
     this.sun = this.look.setUp(this.renderer, this.scene);
 
@@ -275,9 +285,11 @@ export class Workbench3D {
 
   resize(w, h, pixelRatio) {
     this.size = { w, h };
-    this.renderer.setPixelRatio(pixelRatio);
-    this.renderer.setSize(w, h, true);
-    this.labelRenderer.setSize(w, h);
+    if (this.ownRenderer) {
+      this.renderer.setPixelRatio(pixelRatio);
+      this.renderer.setSize(w, h, true);
+      this.labelRenderer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
@@ -368,8 +380,8 @@ export class Workbench3D {
       tag.position.set(0, 0, r + 60);
       group.add(tag);
       this.wheels.add(group);
-      this.wheelObjs[s.id] = { group, base: c, ring, tag, r, frameNode: s.frame_node ?? null };
-      box.expandByPoint(c.clone().addScalar(r)).expandByPoint(c.clone().addScalar(-r));
+      this.wheelObjs[s.id] = { group, base: c, ring, tag, r, w, frameNode: s.frame_node ?? null };
+      box.expandByPoint(c.clone().add(v3([r, w / 2, r]))).expandByPoint(c.clone().sub(v3([r, w / 2, r])));
     }
 
     // Wheels listed as parts are drawn from the supports instead.
@@ -532,12 +544,12 @@ export class Workbench3D {
     const x1 = Math.ceil((b.max.x + pad) / 100) * 100;
     const y0 = desc?.table ? -(desc.halfWidth + 700) : Math.floor((b.min.y - pad) / 1000) * 1000;
     const y1 = desc?.table ? desc.halfWidth + 700 : Math.ceil((b.max.y + pad) / 1000) * 1000;
-    if (this.look.real) {
+    if (this.look.real || this.groundStyle === "shadow") {
       if (desc?.table) return; // the table's own plate
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      holder.add(this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
+      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
       this.ground.add(holder);
       return;
     }
@@ -881,9 +893,13 @@ export class Workbench3D {
     }
   }
 
-  // The world's turn about x: the tilt table's angle at the frame, else the road's side slope.
+  // The world's turn about x: the tilt table's angle at the frame, else the angle channel
+  // the scene names (a slope tilted in time), else the road's side slope.
   worldAngle(frame) {
-    return frame?.table ?? this.sceneDesc?.slope ?? 0;
+    if (frame?.table != null) return frame.table;
+    const ch = this.sceneDesc?.angleChannel ? this.motion?.channels.get(this.sceneDesc.angleChannel) : null;
+    if (ch && frame && ANGLE[ch.unit]) return lerpAt(ch, frame.t) * ANGLE[ch.unit];
+    return this.sceneDesc?.slope ?? 0;
   }
 
   // Where a frame's centre of mass (or body origin) is on screen space, in three.js metres.
@@ -928,11 +944,121 @@ export class Workbench3D {
     if (this.modeShape) this.poseMembers(Math.sin(playhead * Math.PI * 2));
   }
 
+  // Draw the frame, the wheels and the scene as one see-through colour (an overlay of
+  // another case on a view, e.g. the translucent red of the case past the limit). Parts
+  // and ink lines are left out: big part boxes would turn it into one red blob.
+  tint(color, opacity) {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+    mat.userData.shared = true;
+    this.parts.visible = false;
+    for (const g of [this.model, this.wheels, this.props.world, this.props.fixed]) {
+      g.traverse((o) => {
+        if (o.isLineSegments2 || o.isLine) o.visible = false;
+        else if (o.isMesh) o.material = mat;
+      });
+    }
+    this.ground.visible = false;
+    this.cg.visible = false;
+    this.tinted = true;
+  }
+
+  // Look through another view's camera (an overlay drawn over that view).
+  copyCamera(other) {
+    this.camera.position.copy(other.camera.position);
+    this.camera.quaternion.copy(other.camera.quaternion);
+    this.camera.fov = other.camera.fov;
+    this.camera.near = other.camera.near;
+    this.camera.far = other.camera.far;
+    this.camera.updateProjectionMatrix();
+    this.controls.target.copy(other.controls.target);
+    this.noFollow = true;
+  }
+
   render() {
-    this.follow();
+    if (!this.noFollow) this.follow();
     if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
+    if (!this.ownRenderer) {
+      // views of both looks share the renderer: each sets the renderer's look for itself
+      this.renderer.toneMapping = this.look.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+      this.renderer.shadowMap.enabled = this.look.real;
+    }
     this.renderer.render(this.scene, this.camera);
-    this.labelRenderer.render(this.scene, this.camera);
+    this.labelRenderer?.render(this.scene, this.camera);
+  }
+
+  // A view on a shared renderer: draw into the lower left w x h pixels of its canvas
+  // and copy them onto a 2D canvas (the renderer's canvas must be at least that big).
+  // scale: device pixels per stage pixel, so ink lines keep their stage width.
+  renderInto(ctx, w, h, scale = 1) {
+    if (this.size.w !== w || this.size.h !== h) this.resize(w, h);
+    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w / scale, h / scale);
+    this.props.resize(w / scale, h / scale);
+    const r = this.renderer;
+    const H = r.domElement.height;
+    r.setScissorTest(true);
+    r.setViewport(0, 0, w, h);
+    r.setScissor(0, 0, w, h);
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    this.render();
+    r.setScissorTest(false);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.drawImage(r.domElement, 0, H - h, w, h, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+
+  // Points that outline the design at rest (ISO mm): frame nodes, the corners of the
+  // part boxes and points around each wheel's rims.
+  contentPoints() {
+    const pts = Object.values(this.nodes ?? {}).map((n) => n.clone());
+    for (const p of this.design?.parts ?? []) {
+      const c = p.box.center_mm;
+      const h = p.box.size_mm.map((v) => v / 2);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) pts.push(v3([c[0] + sx * h[0], c[1] + sy * h[1], c[2] + sz * h[2]]));
+    }
+    for (const o of Object.values(this.wheelObjs)) {
+      for (let k = 0; k < 8; k += 1) {
+        const a = (k / 8) * Math.PI * 2;
+        for (const side of [-1, 1]) pts.push(o.base.clone().add(v3([o.r * Math.cos(a), (side * o.w) / 2, o.r * Math.sin(a)])));
+      }
+    }
+    return pts;
+  }
+
+  // Frame a box (ISO mm) from a direction so it fills the view's width or height,
+  // whichever binds (a wide tile is filled across, not by a sphere around the box).
+  fitBox(box, dir, margin = 1.08) {
+    const pts = [];
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(v3([x, y, z]));
+    this.fitPoints(pts, dir, margin);
+  }
+
+  // Frame points (ISO mm) from a direction: the camera stands as close as it can with
+  // every point inside the view, looking at the points' middle.
+  fitPoints(points, dir, margin = 1.08) {
+    const box = new THREE.Box3().setFromPoints(points);
+    const center = isoToThree(box.getCenter(new THREE.Vector3()).toArray());
+    const d = isoToThree(dir).normalize();
+    // Each corner p of the box, seen from distance D along d, stays inside the view when
+    // D >= |p across| / tan(half fov) + p along d; the camera stands at the largest D.
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(up, d).normalize();
+    const camUp = new THREE.Vector3().crossVectors(d, right).normalize();
+    const tv = Math.tan((this.camera.fov * Math.PI) / 360);
+    const th = tv * this.camera.aspect;
+    let dist = 0;
+    for (const q of points) {
+      const p = isoToThree(q.toArray()).sub(center);
+      const along = p.dot(d);
+      dist = Math.max(dist, (margin * Math.abs(p.dot(right))) / th + along, (margin * Math.abs(p.dot(camUp))) / tv + along);
+    }
+    this.controls.target.copy(center);
+    this.camera.position.copy(center).addScaledVector(d, dist);
+    this.camera.near = dist / 50;
+    this.camera.far = dist * 20;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+    this.followBase = null;
+    this.followApplied = null;
   }
 }
 

@@ -30,7 +30,8 @@ def write_run(root: Path, events: list[dict]) -> Path:
     """Write project.json, events.jsonl and every record file the events describe."""
     run = root / RUN_ID
     run.mkdir(parents=True)
-    project = copy.deepcopy(events[0]["data"])
+    updates = [e for e in events if e["kind"] == "project.updated"]
+    project = copy.deepcopy((updates[-1] if updates else events[0])["data"])
     fin = [e for e in events if e["kind"] == "run.finished"]
     if fin:
         project["status"] = fin[-1]["data"]["status"]
@@ -56,6 +57,8 @@ def write_run(root: Path, events: list[dict]) -> Path:
             p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "judgement.updated":
             judgements.setdefault(d["design_version"], {})[d["domain"]] = d
+        elif e["kind"] == "report.written":
+            (run / layout.REPORT_FILE).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     for v, js in judgements.items():
         (layout.version_dir(run, v) / layout.JUDGEMENTS_FILE).write_text(
             json.dumps(list(js.values()), ensure_ascii=False), encoding="utf-8")
@@ -146,6 +149,92 @@ class CheckRun(unittest.TestCase):
         p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
         self.assertIn("project.changed", {f.rule for f in cr.check_run(run)})
 
+    # --- project.updated, tools made in the run, stop.request ------------------------
+    @staticmethod
+    def _first_design(ev, before_design=False):
+        """The run starts without load cases or picks; project.updated re-sends them after version 1."""
+        full = copy.deepcopy(ev[0]["data"])
+        ev[0]["data"].update(load_cases=[], domain_picks=[])
+        at = by_kind(ev, "design.created")
+        upd = {"seq": 0, "ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "kind": "project.updated",
+               "agent": "designer", "data": full}
+        i = ev.index(at)
+        ev.insert(i if before_design else i + 1, upd)
+        return renumber(ev)
+
+    def test_project_updated_after_the_first_version(self):
+        self.assertEqual(self.rules(self._first_design(sample_events())), set())
+        self.assertFlags(self._first_design(sample_events(), before_design=True), "project.updated")
+        ev = self._first_design(sample_events())
+        by_kind(ev, "project.updated")["data"]["want"] = "something else"
+        self.assertFlags(ev, "project.changed")
+        run = write_run(self.root / "x", self._first_design(sample_events()))
+        p = run / layout.PROJECT_FILE
+        proj = json.loads(p.read_text(encoding="utf-8"))
+        proj["load_cases"] = []  # project.json must keep what project.updated re-sent
+        p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
+        self.assertIn("project.changed", {f.rule for f in cr.check_run(run) if f.level == "error"})
+
+    def test_tools_made_in_the_run_and_the_stop_request(self):
+        run = write_run(self.root / "x", sample_events())
+        tools = run / layout.TOOLS_DIR
+        tools.mkdir()
+        for name in ("beam-1.py", "beam-1.check.json", "beam-2.py", "beam-2.check.json"):
+            (tools / name).write_text("{}", encoding="utf-8")
+        self.assertEqual([str(f) for f in cr.check_run(run) if f.rule.startswith(("files", "ids"))], [])
+        (tools / "beam-2.check.json").unlink()
+        (tools / "beam-4.py").write_text("", encoding="utf-8")
+        (tools / "beam-4.check.json").write_text("{}", encoding="utf-8")
+        found = {(f.rule, f.level) for f in cr.check_run(run)}
+        self.assertIn(("files.missing", "error"), found)
+        self.assertIn(("ids.numbering", "error"), found)
+        (run / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+        self.assertIn("files.stop_request", {f.rule for f in cr.check_run(run) if f.level == "warn"})
+
+    # --- the report (report.json and report.written) ---------------------------------
+    @staticmethod
+    def _report(ev, **domain):
+        """A report.written right after the last judgement, filled from the records."""
+        j = [e for e in ev if e["kind"] == "judgement.updated"][-1]
+        entry = {"domain": "strength", "state": j["data"]["state"], "line": "qa line",
+                 "verdict_ids": list(j["data"]["verdict_ids"]), "differences": []}
+        entry.update(domain)
+        rep = {"design_version": 1, "agent": "lead", "domains": [entry], "unchecked": [], "next": [],
+               "summary": "qa summary"}
+        ev.insert(ev.index(j) + 1, {"seq": 0, "ts": j["ts"], "t": j["t"], "run_id": RUN_ID, "kind": "report.written",
+                                    "agent": "lead", "design_version": 1, "data": rep})
+        return renumber(ev)
+
+    def test_report_follows_its_records(self):
+        self.assertEqual(self.rules(self._report(sample_events())), set())
+        self.assertFlags(self._report(sample_events(), state="red"), "report.state")
+        self.assertFlags(self._report(sample_events(), verdict_ids=[]), "report.verdicts")
+        match = {"comparison_id": "cmp-0001", "diff_rel": 0.0, "cause_id": None}
+        self.assertFlags(self._report(sample_events(), differences=[match]), "report.differences")
+        ev = self._report(sample_events())
+        by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y"}]
+        self.assertFlags(ev, "report.domains")
+
+    def test_report_file_is_the_last_report_written(self):
+        run = write_run(self.root / "x", self._report(sample_events()))
+        p = run / layout.REPORT_FILE
+        rep = json.loads(p.read_text(encoding="utf-8"))
+        rep["summary"] = "changed"
+        p.write_text(json.dumps(rep, ensure_ascii=False), encoding="utf-8")
+        self.assertIn("files.event_data", {f.rule for f in cr.check_run(run)})
+        p.unlink()
+        self.assertIn("files.missing", {f.rule for f in cr.check_run(run)})
+
+    def test_report_lists_the_mismatches_with_their_causes(self):
+        ev = self.safe_side_flow()
+        c = [e for e in ev if e["kind"] == "comparison.recorded"][-1]["data"]
+        diff = {"comparison_id": "cmp-0001", "diff_rel": c["diff_rel"], "cause_id": "cause-0001"}
+        self.assertEqual(self.rules(self._report(copy.deepcopy(ev), differences=[diff])), set())
+        self.assertIn("report.differences", self.rules(self._report(copy.deepcopy(ev)), "warn"))
+        self.assertFlags(self._report(copy.deepcopy(ev), differences=[dict(diff, diff_rel=0.5)]), "report.differences")
+        self.assertFlags(self._report(copy.deepcopy(ev), differences=[dict(diff, cause_id="cause-0002")]),
+                         "report.differences")
+
     # --- hook rules ------------------------------------------------------------------
     def test_h1_analysis_without_its_prediction(self):
         ev = sample_events()
@@ -200,6 +289,45 @@ class CheckRun(unittest.TestCase):
         j.update(state="pending")
         self.assertFlags(ev, "HK4_no_stop_before_judged")
 
+    @staticmethod
+    def _unjudged_case(ev):
+        """A second strength load case with a criterion that never gets a verdict."""
+        lcs = ev[0]["data"]["load_cases"]
+        lc = copy.deepcopy(lcs[0])
+        lc.update(load_case_id="R3-qa", test_id="R3", title="qa case without a verdict")
+        lcs.append(lc)
+        return ev
+
+    @staticmethod
+    def _red(ev):
+        """The sample's R1 verdict fails: its limit is set 10 MPa under the analysed value."""
+        v = by_kind(ev, "verdict.recorded")["data"]
+        lim = v["value"]["value"] - 10.0
+        ev[0]["data"]["load_cases"][0]["criterion"]["limit"]["value"] = lim
+        v["limit"]["value"] = lim
+        v.update({"pass": False, "margin_pct": -1000.0 / lim, "margin": {"value": -10.0, "unit": "MPa"}})
+        by_kind(ev, "judgement.updated")["data"].update(state="red", red_count=1)
+        return ev
+
+    def test_tile_state_follows_the_load_cases(self):
+        # red when a verdict fails, even with a load case left without one
+        self.assertNotIn("judgement.state", self.rules(self._unjudged_case(self._red(sample_events()))))
+        # else pending while a load case has no verdict, and green only when every one has
+        self.assertIn("judgement.state", self.rules(self._unjudged_case(sample_events())))  # the sample says green
+        ev = self._unjudged_case(sample_events())
+        by_kind(ev, "judgement.updated")["data"]["state"] = "pending"
+        self.assertNotIn("judgement.state", self.rules(ev))
+        ev = sample_events()
+        by_kind(ev, "judgement.updated")["data"]["state"] = "pending"  # its only load case passed
+        self.assertIn("judgement.state", self.rules(ev))
+
+    def test_h4_counts_load_cases_not_tiles(self):
+        # a red tile does not end the domain while another of its load cases has no verdict
+        self.assertEqual(self.rules(self._red(sample_events())), set())
+        self.assertIn("HK4_no_stop_before_judged", self.rules(self._red(sample_events()), "warn"))
+        self.assertFlags(self._unjudged_case(self._red(sample_events())), "HK4_no_stop_before_judged")
+        self.assertFlags(self._unjudged_case(sample_events()), "HK4_no_stop_before_judged")
+
     # --- how the run ended (run.finished stop_code) ----------------------------------
     @staticmethod
     def _finish(ev, status, code=None, state=None):
@@ -221,9 +349,15 @@ class CheckRun(unittest.TestCase):
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "done", "not_judged")))
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "done")))
 
-    def test_not_judged_needs_a_pending_domain(self):
+    def test_not_judged_needs_a_load_case_without_a_verdict(self):
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged")))
-        self.assertEqual(self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")), set())
+        # a pending tile while every load case has a verdict is not what HK4 waits for
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")))
+        ev = self._finish(self._unjudged_case(sample_events()), "stopped", "not_judged", state="pending")
+        self.assertEqual(self.rules(ev), set())
+        # the red tile of the R1 failure with R3 still without a verdict ends as not_judged
+        ev = self._finish(self._unjudged_case(self._red(sample_events())), "stopped", "not_judged")
+        self.assertEqual(self.rules(ev), set())
 
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made
@@ -400,6 +534,32 @@ class CheckRun(unittest.TestCase):
         ev = sample_events()
         by_kind(ev, "verdict.recorded")["data"]["pass"] = False
         self.assertFlags(ev, "verdict.math")
+
+    def test_verdict_margin_in_the_limit_unit(self):
+        ev = sample_events()
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "MPa"}
+        self.assertEqual(self.rules(ev), set())
+        v["margin"] = {"value": 30.0, "unit": "MPa"}
+        self.assertFlags(ev, "verdict.math")
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "N"}
+        self.assertFlags(ev, "verdict.units")
+
+    @staticmethod
+    def _zero_limit(ev, margin_pct=None, margin=True):
+        """R1 judged against a lower limit of 0 MPa: 123.6 >= 0 passes by 123.6 MPa."""
+        lc = next(lc for lc in ev[0]["data"]["load_cases"] if lc["load_case_id"] == "R1-step100")
+        lc["criterion"].update(op=">=", limit={"value": 0.0, "unit": "MPa"})
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v.update(op=">=", limit={"value": 0.0, "unit": "MPa"}, margin_pct=margin_pct)
+        if margin:
+            v["margin"] = {"value": v["value"]["value"], "unit": "MPa"}
+        return ev
+
+    def test_limit_of_zero_takes_null_margin_pct_and_a_margin(self):
+        self.assertEqual(self.rules(self._zero_limit(sample_events())), set())
+        self.assertFlags(self._zero_limit(sample_events(), margin_pct=0.0), "verdict.math")
+        self.assertIn("verdict.margin", self.rules(self._zero_limit(sample_events(), margin=False), "warn"))
 
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()

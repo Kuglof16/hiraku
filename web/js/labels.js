@@ -124,6 +124,9 @@ const QUANTITY_JA = {
   mean_speed: "平均速度",
   // vehicle motion (K2)
   tilt_angle: "転倒する傾き",
+  tilt_angle_right: "右へ転倒する傾き",
+  tilt_angle_left: "左へ転倒する傾き",
+  min_side_load: "軽い側の輪の荷重の和 (最小)",
   static_stability_factor: "静的安定係数",
   body_roll_at_tip: "転倒のときの車体のロール",
   cg_shift_at_tip: "転倒のときの重心のずれ",
@@ -178,6 +181,15 @@ export function vectorName(kind) {
   return VECTOR_JA[kind] ?? kind;
 }
 
+// Results that answer yes or no (recorded as 1 or 0).
+const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "reached_target", "moved_uphill"]);
+
+// A result's value with its unit, or はい / いいえ for a yes-or-no result.
+export function resultText(r, sig = 3) {
+  if (YES_NO.has(r?.quantity)) return r.value >= 0.5 ? "はい" : "いいえ";
+  return fmtVU(r?.value, r?.unit, sig);
+}
+
 export function quantityName(q) {
   return QUANTITY_JA[q] ?? q ?? "";
 }
@@ -209,6 +221,7 @@ export function ruleOf(rule) {
 const UNIT_LABEL = {
   1: "",
   degC: "℃",
+  deg: "°",
   "m/s^2": "m/s²",
   "N*mm": "N·mm",
   "N*m": "N·m",
