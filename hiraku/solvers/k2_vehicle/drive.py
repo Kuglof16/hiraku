@@ -60,12 +60,17 @@ class Aero:
 
     @classmethod
     def of(cls, veh: Vehicle, rho: float, cd: float, cy: float, front_area: float | None = None,
-           side_area: float | None = None) -> "Aero":
+           side_area: float | None = None, side_cp_height: float | None = None) -> "Aero":
+        """Areas and centres of pressure from the part boxes unless given; side_cp_height
+        (m above the ground under the wheels) replaces the side centre's height."""
         fcp = tuple(float(x) for x in (veh.front_cp - veh.cg_s))
         scp = tuple(float(x) for x in (veh.side_cp - veh.cg_s))
         if veh.symmetric:
             fcp = (fcp[0], 0.0, fcp[2])
             scp = (scp[0], 0.0, scp[2])
+        if side_cp_height is not None:
+            ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
+            scp = (scp[0], scp[1], ground + side_cp_height - float(veh.cg_s[2]))
         # the drag acts at the frontal centre of pressure's height, on the body centreline length-wise
         fcp = (scp[0], fcp[1], fcp[2])
         return cls(rho, cd, cy, veh.front_area if front_area is None else front_area,

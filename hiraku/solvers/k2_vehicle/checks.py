@@ -3,9 +3,10 @@
 1. static wheel loads: moment balance W (x_cg - x_rear) / L / 2, left = right bit for bit
 2. mirror: straight driving keeps yaw at 0; a left manoeuvre and its mirror give opposite yaw (< 1e-9 rad)
 3. free fall: the body follows the semi-implicit Euler sum z_N = z_0 - g h^2 N (N + 1) / 2
-4. quarter car: 1.891 Hz = (1/2 pi) sqrt(k_ride / m_s), k_s 20 kN/m, k_t 150 kN/m, m_s 125 kg;
-   and the exact two-mass frequency with a 25 kg wheel
-5. rigid tilt table: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m, the same to the left and right
+4. quarter car, closed form: 1.891 Hz = (1/2 pi) sqrt(k_ride / m_s), k_s 20 kN/m, k_t 150 kN/m, m_s 125 kg
+   (check-vehicle values); and the exact two-mass frequency with a 25 kg wheel
+5. rigid tilt table, closed form: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m (check-vehicle values),
+   the same to the left and right
 6. parked on a 20 % slope with the brakes on: moves < 1 mm in 60 s
 """
 
@@ -195,7 +196,9 @@ def check_rigid_tilt() -> list[dict]:
 
 
 def parked_drift(veh, grade: float = 0.20, seconds: float = 60.0, dt: float = 1e-3) -> dict:
-    """Park on a slope with the brakes on; return the drift over `seconds` after settling."""
+    """Park on a slope (facing uphill) with the brakes on; return the drift over `seconds`
+    after settling, and the friction demand: the largest |tyre force along the road| / normal
+    force among the braked wheels at the end."""
     sim = new_sim(veh, settle_s=1.0, dt=dt)
     ctl = hold(sim)
     alpha = math.atan(grade)
@@ -207,7 +210,10 @@ def parked_drift(veh, grade: float = 0.20, seconds: float = 60.0, dt: float = 1e
     p0 = sim.design_origin()
     settle(sim, seconds, ctl)
     p1 = sim.design_origin()
-    return {"drift": float(np.linalg.norm(p1 - p0)), "sim": sim}
+    f = sim.out["f"]
+    demand = max((math.hypot(f[i][0], f[i][1]) / f[i][2] for i, c in enumerate(veh.corners) if c.brake and f[i][2] > 0.0),
+                 default=math.inf)
+    return {"drift": float(np.linalg.norm(p1 - p0)), "friction_demand": demand, "sim": sim}
 
 
 def check_parked_on_slope() -> list[dict]:

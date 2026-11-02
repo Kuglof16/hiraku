@@ -171,10 +171,20 @@ def _projected(boxes: list[tuple[np.ndarray, np.ndarray]], discs: list[tuple[np.
     return n * cell * cell, np.array([uu[mask].mean(), vv[mask].mean()])
 
 
+# Other names of the same design variables, as the designs on the shelf write them.
+VARIABLE_ALIASES = {
+    "tire_vertical_stiffness": ("tyre_stiffness", "tire_stiffness"),
+    "tire_rolling_resistance": ("rolling_resistance",),
+    "tire_mu": ("tyre_mu",),
+    "max_steer": ("max_steer_angle",),
+}
+
+
 def _var(design: dict, name: str, want: str, notes: list[str], default_key: str | None = None):
     var = design.get("variables", {}) or {}
-    if name in var:
-        return si(var[name], want)
+    for n in (name,) + VARIABLE_ALIASES.get(name, ()):
+        if n in var:
+            return si(var[n], want)
     key = default_key or name
     value, _, text = DEFAULTS[key]
     if text not in notes:
