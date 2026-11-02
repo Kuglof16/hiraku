@@ -34,14 +34,14 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
-from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE
+from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR
 from hiraku.webserve.launch import Launcher, LaunchError
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 REPO_DIR = Path(__file__).resolve().parents[2]
 WEB_DIR = REPO_DIR / "web"
-SAVED_DIR = REPO_DIR / "showcase"  # saved runs kept in the repository
+SAVED_DIR = REPO_DIR / SHOWCASE_DIR  # saved runs kept in the repository
 SAMPLE_ID = "sample"
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
