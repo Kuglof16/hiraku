@@ -58,7 +58,8 @@ CASES = {
     "launch": {"loading": "two_cargo", "target_speed": q(40.0, "km/h")},
     "lane_change": {"loading": "two", "speed": q(40.0, "km/h"), "mu": q(0.8, "1"), "find_limit": False},
     "offroad_roll": {"loading": "two_cargo", "speed": q(20.0, "km/h"), "side_slope": q(15.0, "deg"), "length": q(40.0, "m")},
-    "step_climb": {"loading": "two_cargo", "step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"), "mu": q(0.8, "1")},
+    "step_climb_dynamic": {"loading": "two_cargo", "step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"),
+                           "mu": q(0.8, "1")},
 }
 
 
@@ -67,7 +68,9 @@ class EntryPoint(unittest.TestCase):
         t0 = time.perf_counter()
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
-        self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll", "step_climb"])
+        self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
+                                 "step_climb_dynamic"])
+        self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
 
@@ -146,16 +149,16 @@ class Runs(unittest.TestCase):
         self.assertGreater(r["min_upwind_wheel_load"], 0.0)
 
     def test_step_force_ratio_near_rigid_wheel(self):
-        r = self.res("step_climb")
+        r = self.res("step_climb_dynamic")
         self.assertAlmostEqual(r["force_ratio"], 1.118, delta=0.08)
         self.assertEqual(r["climbed"], 1.0)
-        kinds = {v["kind"] for v in self.recs["step_climb"]["vectors"]}
+        kinds = {v["kind"] for v in self.recs["step_climb_dynamic"]["vectors"]}
         self.assertEqual(kinds, {"reaction", "grip", "inertia"})
 
     def test_step_vectors_balance_the_weight_with_the_frame(self):
         from hiraku.solvers.k2_vehicle.units import G0
         m = 300.0 + 4 * 15.0 + 2 * 76.6 + 150.0 + frame_mass()
-        tot = [sum(v["vector_N"][k] for v in self.recs["step_climb"]["vectors"]) for k in range(3)]
+        tot = [sum(v["vector_N"][k] for v in self.recs["step_climb_dynamic"]["vectors"]) for k in range(3)]
         self.assertAlmostEqual(tot[0], 0.0, delta=1e-6)
         self.assertAlmostEqual(tot[1], 0.0, delta=1e-6)
         self.assertAlmostEqual(tot[2], m * G0, delta=1e-6 * m * G0)

@@ -918,7 +918,9 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
 
 
 class StepClimbTool(K2Tool):
-    """Step climb (P1, feeds R1): K2 drives over the step.
+    """Step climb driven in K2 (step_climb_dynamic; P1, feeds R1). The analysis
+    department's step_climb is the hand-calculation balance -> K1; this one drives over
+    the step and is the moving picture and the second opinion.
 
     Two runs. (1) Quasi-static: the stepping wheels stand against the step corner and the
     drive torque grows slowly until they leave the low ground; the forces at that moment
@@ -934,10 +936,10 @@ class StepClimbTool(K2Tool):
     "grip" or "torque" when it did not), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
     vectors: run 1 at lift-off: each wheel's reaction and grip, and the inertia force
-    -m a at the CG, so the set is in balance with the weight.
+    -(road forces + weight) at the CG, so the set is in balance with the weight.
     """
 
-    name = "step_climb"
+    name = "step_climb_dynamic"
     title = "段差越え (K2 で段差を走らせる)"
     domain = "powertrain"
     tests = ["P1", "R1"]
@@ -970,7 +972,7 @@ class StepClimbTool(K2Tool):
         notes = list(veh.assumptions)
         h = param(lp, "step_height", "m", None)
         if h is None or h <= 0:
-            return {"error": "step_climb needs a positive step_height (a length) in the load case params"}
+            return {"error": "step_climb_dynamic needs a positive step_height (a length) in the load case params"}
         ids = veh.ids()
         if "step_supports" in lp:
             want = [x.strip() for x in str(lp["step_supports"]).split(",") if x.strip()]
