@@ -5,6 +5,7 @@
 <title>N05 Title (opening)</title>
 <link rel="stylesheet" href="common.css">
 <link rel="stylesheet" href="title.css">
+<link rel="stylesheet" href="tests.css">
 <style>
   /* N05: the vehicle fills the screen, bursts open into a grid of the
      preset tests, and the name settles above the grid.
@@ -78,6 +79,8 @@
     overflow: hidden;
     animation: tile-in 0.6s cubic-bezier(.2, .9, .3, 1.15) both;
     animation-delay: calc(var(--t-tiles) + var(--d) * 0.05s);
+    /* the test loop inside starts once the tile has landed (tests.css) */
+    --t0: calc(var(--t-tiles) + var(--d) * 0.05s + 0.6s);
   }
   @keyframes tile-in {
     from {
@@ -118,40 +121,15 @@
   <div class="clock"></div>
 </div>
 <script src="vehicle.js"></script>
+<script src="tests.js"></script>
 <script>
-  // Preset tests in the grid, in reading order. The marks only say which
-  // test a tile is; they show no result.
-  const ARROW = (x1, y1, x2, y2) => {
-    const a = Math.atan2(y2 - y1, x2 - x1), h = 10;
-    const p = (s) => `${x2 - h * Math.cos(a + s)},${y2 - h * Math.sin(a + s)}`;
-    return `<path class="mark" d="M${x1} ${y1}L${x2} ${y2}M${p(0.5)}L${x2},${y2}L${p(-0.5)}"/>`;
-  };
-  const GROUND = `<path class="mark" d="M20 152H380"/>`;
-  const TESTS = [
-    ["段差越え", { rot: -5 }, `<path class="mark" d="M20 152H262V136H380"/>`],
-    ["傾斜台", { rot: -12 }, `<path class="solid" d="M60 160L340 100L340 160Z"/>`],
-    ["横風", {}, GROUND + ARROW(26, 78, 92, 78) + ARROW(26, 104, 92, 104) + ARROW(26, 130, 92, 130)],
-    ["オフロード走行", {}, `<path class="mark" d="M20 150Q60 138 100 150T180 150T260 146T340 152T380 148"/>`],
-    ["DLC", {}, GROUND + `<path class="solid" d="M44 152l8-22 8 22zM340 152l8-22 8 22z"/>`],
-    ["急ブレーキ", { rot: 3 }, GROUND + `<path class="mark" d="M60 158H112M60 164H96"/>`],
-    ["長時間", {}, GROUND + `<path class="mark" d="M352 46a20 20 0 1 1-14-14"/><path class="mark" d="M332 26l8 6-9 5"/>`],
-    ["発進", {}, GROUND + `<path class="mark" d="M28 96H76M40 116H86M28 136H70"/>`],
-    ["衝突", { dx: 14 }, GROUND + `<path class="solid" d="M352 52H376V152H352Z"/>`],
-    ["音振", {}, GROUND + `<path class="mark" d="M146 70q6-8 12 0t12 0t12 0M226 70q6-8 12 0t12 0t12 0"/>`],
-    ["疲労", {}, `<path class="mark" d="M20 152H380"/><path class="mark" d="M40 40V84H96M44 48Q60 74 92 78"/>`],
-    ["熱", {}, GROUND + `<path class="mark" d="M180 92q-6-10 0-20t0-20M200 92q-6-10 0-20t0-20M220 92q-6-10 0-20t0-20"/>`],
-  ];
+  // Preset tests in the grid, in reading order: [name, key, svg]. Each tile
+  // loops a line drawing of how its test is run (tests.js, tests.css); it
+  // shows no result.
+  const TESTS = window.TEST_TILES;
 
-  function tileArt([, pose, marks]) {
-    // vehicle 250 wide in a 400x170 box, wheels resting on y = 152
-    const s = 250 / 600, x = 75 + (pose.dx || 0), y = 152 - 280 * s;
-    const rot = pose.rot ? `rotate(${pose.rot} 200 152)` : "";
-    return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">
-      ${marks}
-      <g transform="${rot} translate(${x} ${y}) scale(${s})" fill="none"
-         stroke-linecap="round" stroke-linejoin="round">${drawVehicle({ strokeScale: 1.6 })
-        .replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</g>
-    </svg>`;
+  function tileArt([, , art]) {
+    return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">${art}</svg>`;
   }
 
   // Each tile flies in from the middle of the screen; --d orders them by
@@ -165,7 +143,7 @@
   });
   const order = [...tiles].sort((a, b) => a.dist - b.dist);
   grid.innerHTML = tiles.map((t) =>
-    `<div class="tile" style="--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
+    `<div class="tile t-${t.test[1]}" style="--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
        ${tileArt(t.test)}<b>${t.test[0]}</b></div>`).join("");
 
   document.querySelector(".hero").innerHTML = drawVehicle({ strokeScale: 0.7 });

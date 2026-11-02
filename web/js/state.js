@@ -13,6 +13,7 @@ import {
   fmtSigned,
   fmtVU,
   opLabel,
+  plainText,
   quantityName,
   ruleOf,
 } from "./labels.js";
@@ -175,9 +176,10 @@ export function applyEvent(s, ev) {
     }
     case "agent.said":
     case "user.said": {
-      s.said = { agent: ev.kind === "user.said" ? "user" : ev.agent, text: ev.text ?? "", t: ev.t, seq: ev.seq };
-      log(s, ev, "said", ev.text ?? "");
-      setActivity(s, ev, ev.text ?? "");
+      const text = plainText(ev.text);
+      s.said = { agent: ev.kind === "user.said" ? "user" : ev.agent, text, t: ev.t, seq: ev.seq };
+      log(s, ev, "said", text);
+      setActivity(s, ev, text.split("\n")[0]);
       break;
     }
     case "design.created": {

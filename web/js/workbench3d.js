@@ -5,9 +5,10 @@
 // three.js (m, y up).
 //
 //   scene
-//     world            turned about x by the tilt table's angle (gravity stays down on screen)
-//       ground         the road (or the table top) grid
+//     world            turned about x by the tilt table's or the side slope's angle (gravity stays down on screen)
+//       ground         the road grid (diagram look) or earth (real look)
 //       iso            ISO mm -> three.js m
+//         props.world  the test's surroundings that tilt with the road (scene.js)
 //         body         frame members, parts, names, stress ghosts (moves with the body pose)
 //         wheels       one group per support (centre, steer, spin)
 //         links        support -> frame node lines
@@ -15,6 +16,10 @@
 //         motionArrows reaction / grip per wheel from the series (animated)
 //         ghost        translucent red copy at the pose beyond the limit
 //         cg, markers
+//     fixedIso         ISO mm, level: props.fixed (e.g. a tilt table's post and floor)
+//
+// Parts are shaped by kind inside their boxes (shapes.js); the look (?look=)
+// picks materials and light (look.js).
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -24,17 +29,25 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { GRAY, colorOf } from "./colormap.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
+import { Look } from "./look.js";
+import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { wheelName } from "./series.js";
+import { partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
 const RULE = "#e2dccf";
 const RULE_MAJOR = "#c9c3b6";
-const WHEEL_FILL = "#fbf9f4";
 const LIMIT_RED = "#c8402a";
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a" };
-const PART_COLORS = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6" };
 const UP = new THREE.Vector3(0, 1, 0);
+// Camera directions (ISO, from the target) for the scenes that need their own view.
+const VIEWS = {
+  default: [0.85, 0.95, 0.62],
+  table: [1, 0.14, 0.2], // a tilt table from the front, low: the table's turn reads as a turn
+  front: [1, 0.08, 0.32], // a lane change from the front
+  side: [0.06, 1, 0.3], // braking from the side
+};
 
 // ISO 8855 mm -> three.js m: X = x, Y = z, Z = -y (a proper rotation, then a scale).
 export const ISO_TO_THREE = new THREE.Matrix4()
@@ -100,15 +113,6 @@ function pushEdges(out, geometry, matrix, threshold = 20) {
     out.push(p.x, p.y, p.z);
   }
   edges.dispose();
-}
-
-// A circle of radius r in the x-z plane at y (a wheel's side), as line segments.
-function ringPoints(out, y, r, n = 40) {
-  for (let i = 0; i < n; i += 1) {
-    const a0 = (i / n) * Math.PI * 2;
-    const a1 = ((i + 1) / n) * Math.PI * 2;
-    out.push(r * Math.cos(a0), y, r * Math.sin(a0), r * Math.cos(a1), y, r * Math.sin(a1));
-  }
 }
 
 function cgTexture() {
@@ -191,8 +195,9 @@ function wheelMatrix(base, steer, spin) {
 }
 
 export class Workbench3D {
-  constructor(host) {
+  constructor(host, lookName = "zu") {
     this.host = host;
+    this.look = new Look(lookName);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.domElement.className = "gl";
@@ -208,10 +213,7 @@ export class Workbench3D {
     this.controls.enableDamping = false;
     this.controls.screenSpacePanning = true;
 
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d2c3, 2.4));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-    sun.position.set(3, 6, 2);
-    this.scene.add(sun);
+    this.sun = this.look.setUp(this.renderer, this.scene);
 
     this.world = new THREE.Group();
     this.scene.add(this.world);
@@ -242,6 +244,16 @@ export class Workbench3D {
     this.links = new LineSegments2(new LineSegmentsGeometry(), this.mutedMat);
     this.iso.add(this.links);
 
+    this.props = new SceneProps(this.look, this.inkMat, this.mutedMat);
+    this.iso.add(this.props.world);
+    this.fixedIso = new THREE.Group();
+    this.fixedIso.matrixAutoUpdate = false;
+    this.fixedIso.matrix.copy(ISO_TO_THREE);
+    this.fixedIso.add(this.props.fixed);
+    this.scene.add(this.fixedIso);
+    this.sceneDesc = null;
+    this.sceneKey = null;
+
     this.cg = new THREE.Sprite(new THREE.SpriteMaterial({ map: cgTexture(), depthTest: false, transparent: true }));
     this.cg.renderOrder = 10;
     this.cg.scale.setScalar(150);
@@ -254,7 +266,7 @@ export class Workbench3D {
     this.partObjs = {};
     this.motion = null;
     this.frame = null;
-    this.view = null; // camera preset in use: null (front left, above) or "table"
+    this.view = null; // camera preset in use (a key of VIEWS)
     this.toggles = {};
     this.fitted = false;
     this.keys = { contour: null, vectors: null };
@@ -269,6 +281,7 @@ export class Workbench3D {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
+    this.props.resize(w, h);
   }
 
   setDesign(design) {
@@ -281,6 +294,9 @@ export class Workbench3D {
     this.keys.contour = null;
     this.motion = null;
     this.frame = undefined;
+    this.sceneKey = null;
+    this.sceneDesc = null;
+    this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
     if (!design) return;
@@ -293,7 +309,9 @@ export class Workbench3D {
     for (const m of design.members ?? []) {
       const g = memberGeometry(design, m, nodes);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g.geo, new THREE.MeshLambertMaterial({ color: GRAY }));
+      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial());
+      mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
+      mesh.castShadow = mesh.receiveShadow = this.look.real;
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(g.matrix);
       mesh.userData = { id: m.id };
@@ -315,7 +333,7 @@ export class Workbench3D {
     }
     this.restInk = ink;
     this.inkLines = new LineSegments2(new LineSegmentsGeometry().setPositions(ink.length ? ink : [0, 0, 0, 0, 0, 0]), this.inkMat);
-    this.inkLines.visible = ink.length > 0;
+    this.inkLines.visible = ink.length > 0 && !this.look.real;
     this.model.add(this.inkLines);
     this.modeShape = null;
 
@@ -324,15 +342,22 @@ export class Workbench3D {
       const { geo, r, w } = supportGeometry(s);
       const group = new THREE.Group();
       group.matrixAutoUpdate = false;
-      group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: WHEEL_FILL })));
       const lines = [];
-      pushEdges(lines, geo, null, 30);
       if (s.kind === "wheel") {
-        for (const side of [-1, 1]) ringPoints(lines, (side * w) / 2, r * 0.45);
-        // A spoke on each side so the wheel's turning shows.
-        for (const side of [-1, 1]) lines.push(0, (side * w) / 2, 0, r * 0.92, (side * w) / 2, 0);
+        // A tyre, rim, hub and spokes (the spokes show the wheel turning).
+        for (const pc of wheelPieces(r, w)) {
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial("wheel", pc.sub));
+          mesh.castShadow = mesh.receiveShadow = this.look.real;
+          group.add(mesh);
+          if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
+        }
+        for (const side of [-1, 1]) lines.push(0, side * w * 0.36, 0, r * 0.6, side * w * 0.36, 0);
+        geo.dispose();
+      } else {
+        group.add(new THREE.Mesh(geo, this.look.partMaterial("wheel", "tyre")));
+        pushEdges(lines, geo, null, 30);
       }
-      group.add(new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.inkMat));
+      if (!this.look.real) group.add(new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.inkMat));
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(r * 1.06, Math.max(12, r * 0.07), 8, 48).rotateX(Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: LIMIT_RED, transparent: true, opacity: 0.55, depthWrite: false }),
@@ -356,11 +381,9 @@ export class Workbench3D {
       box.expandByPoint(c.clone().add(v3(sz).multiplyScalar(0.5))).expandByPoint(c.clone().sub(v3(sz).multiplyScalar(0.5)));
       if (p.kind === "wheel" && wheelAt(c)) continue;
       const g = new THREE.Group();
-      const color = PART_COLORS[p.kind] ?? "#c9c3b6";
       let edges = null;
       if (p.kind === "occupant") {
-        const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false });
-        mat.userData.baseOpacity = 0.8;
+        const mat = this.look.partMaterial("occupant");
         const r = Math.min(sz[0], sz[1]) * 0.26;
         const head = Math.min(sz[0], sz[1]) * 0.2;
         const torsoLen = Math.max(10, sz[2] - 2 * head - 2 * r);
@@ -369,22 +392,30 @@ export class Workbench3D {
         torso.position.set(c.x, c.y, c.z - sz[2] / 2 + r + torsoLen / 2);
         const ball = new THREE.Mesh(new THREE.SphereGeometry(head, 20, 14), mat);
         ball.position.set(c.x, c.y, c.z + sz[2] / 2 - head);
+        for (const m of [torso, ball]) m.castShadow = this.look.real;
         g.add(torso, ball);
       } else {
-        const geo = new THREE.BoxGeometry(sz[0], sz[1], sz[2]);
-        const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false });
-        mat.userData.baseOpacity = 0.32;
-        mat.userData.baseColor = color;
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.copy(c);
+        // The part's shape for its kind inside its box, or the box itself.
+        const pieces = partPieces(p) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
+        const holder = new THREE.Group();
+        holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
-        mesh.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-        mesh.updateMatrix();
-        mesh.renderOrder = 2;
+        holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
+        holder.updateMatrix();
         const lines = [];
-        pushEdges(lines, geo, mesh.matrix);
-        edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.mutedMat);
-        g.add(mesh, edges);
+        for (const pc of pieces) {
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p.kind, pc.sub));
+          mesh.material.userData.sub = pc.sub;
+          mesh.renderOrder = 2;
+          mesh.castShadow = mesh.receiveShadow = this.look.real;
+          holder.add(mesh);
+          pushEdges(lines, pc.geo, holder.matrix, 35);
+        }
+        g.add(holder);
+        if (!this.look.real) {
+          edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.mutedMat);
+          g.add(edges);
+        }
       }
       // Short name on the tag (the part before a bracket); the full name is the tooltip.
       const short = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
@@ -429,20 +460,20 @@ export class Workbench3D {
 
   // A part's colour and opacity: off board is faint; a part with a contour value
   // (e.g. its temperature) takes the contour colour; otherwise its own colour.
+  // In the real look a part that stays off is not drawn at all.
   applyPartLook() {
     const ct = this.keys.contour;
+    const real = this.look.real;
     for (const [id, o] of Object.entries(this.partObjs)) {
       const v = ct?.parts?.[id];
+      if (real) o.group.visible = o.onBoard;
       o.group.traverse((x) => {
         const m = x.isMesh ? x.material : null;
-        if (!m || m.userData.baseOpacity === undefined) return;
-        if (typeof v === "number") {
-          m.color.set(colorOf(v, ct.max, ct.min));
-          m.opacity = o.onBoard ? 0.85 : 0.07;
-        } else {
-          if (m.userData.baseColor) m.color.set(m.userData.baseColor);
-          m.opacity = o.onBoard ? m.userData.baseOpacity : 0.07;
-        }
+        if (!m || m.userData.baseColor === undefined) return;
+        const own = !m.userData.sub; // pieces like a spring keep their colour
+        const valued = typeof v === "number" && own;
+        m.color.set(valued ? colorOf(v, ct.max, ct.min) : m.userData.baseColor);
+        if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
   }
@@ -486,16 +517,30 @@ export class Workbench3D {
     this.cg.visible = !!this.toggles.cg && !!this.cgPos;
   }
 
+  // The ground under the vehicle: a ruled grid (diagram look) or earth (real look).
+  // A rough road's own surface replaces it; on a tilt table it is the table top.
   buildGround() {
     disposeTree(this.ground);
+    const desc = this.sceneDesc;
+    if (desc?.surface || !this.bboxIso) return;
     const b = this.bboxIso.clone();
     const p = this.motion?.path;
-    if (p) b.expandByPoint(new THREE.Vector3(p.minX, p.minY, 0)).expandByPoint(new THREE.Vector3(p.maxX, p.maxY, 0));
-    const pad = 1500;
-    const x0 = Math.floor((b.min.x - pad) / 1000) * 1000;
-    const x1 = Math.ceil((b.max.x + pad) / 1000) * 1000;
-    const y0 = Math.floor((b.min.y - pad) / 1000) * 1000;
-    const y1 = Math.ceil((b.max.y + pad) / 1000) * 1000;
+    // the vehicle anywhere along its path (the path is the design origin's)
+    if (p) b.expandByPoint(new THREE.Vector3(p.minX + b.min.x, p.minY + b.min.y, 0)).expandByPoint(new THREE.Vector3(p.maxX + b.max.x, p.maxY + b.max.y, 0));
+    const pad = desc?.table ? 700 : 1500;
+    const x0 = Math.floor((b.min.x - pad) / 100) * 100;
+    const x1 = Math.ceil((b.max.x + pad) / 100) * 100;
+    const y0 = desc?.table ? -(desc.halfWidth + 700) : Math.floor((b.min.y - pad) / 1000) * 1000;
+    const y1 = desc?.table ? desc.halfWidth + 700 : Math.ceil((b.max.y + pad) / 1000) * 1000;
+    if (this.look.real) {
+      if (desc?.table) return; // the table's own plate
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.copy(ISO_TO_THREE);
+      holder.add(this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
+      this.ground.add(holder);
+      return;
+    }
     const minor = [];
     const major = [];
     for (let x = x0; x <= x1; x += 100) (x % 1000 === 0 ? major : minor).push(x, y0, 0, x, y1, 0);
@@ -522,9 +567,32 @@ export class Workbench3D {
     }
   }
 
-  // Frame the design. The default view is from the front left, above; a tilt
-  // table is seen from the front, low, so the table's turn reads as a turn on screen.
-  fit(view = [0.85, 0.95, 0.62]) {
+  // The test's surroundings (scene.js) for a load case and its shown analysis;
+  // also picks the camera view the scene needs.
+  setScene(loadCase, analysis) {
+    const key = `${loadCase?.load_case_id ?? ""}|${analysis?.analysis_id ?? ""}|${this.design?.design_version ?? ""}`;
+    if (key === this.sceneKey && this.sceneMotion === this.motion) return;
+    this.sceneKey = key;
+    this.sceneMotion = this.motion;
+    if (!this.design) return;
+    this.sceneDesc = sceneOf(loadCase, analysis, this.motion, this.design);
+    this.props.build(this.sceneDesc, this.bboxIso ?? new THREE.Box3());
+    this.buildGround();
+    const d = this.sceneDesc;
+    // a step, a wall or a stop reads best from the side; a lane change from the front
+    const side = d && (d.step || d.wall || analysis?.tool === "braking");
+    const view = !d ? "default" : d.table ? "table" : d.course ? "front" : side ? "side" : "default";
+    this.liftIsLimit = liftIsLimit(loadCase);
+    this.ghost.visible = !!this.frame && !!this.toggles.limit && this.liftIsLimit;
+    if (view !== this.view && this.design) {
+      this.fit(VIEWS[view]);
+      this.view = view;
+    }
+    this.setFrame(this.frame ?? null);
+  }
+
+  // Frame the design from a direction (VIEWS).
+  fit(view = VIEWS.default) {
     const b = this.bboxIso;
     const center = isoToThree(b.getCenter(new THREE.Vector3()).toArray());
     const radius = b.getSize(new THREE.Vector3()).length() * 0.0005;
@@ -553,8 +621,9 @@ export class Workbench3D {
       const mat = info.mesh.material;
       const geo = info.mesh.geometry;
       mat.vertexColors = false;
+      const plain = mat.userData.baseColor ?? GRAY;
       if (!contour) {
-        mat.color.set(GRAY);
+        mat.color.set(plain);
         mat.needsUpdate = true;
         continue;
       }
@@ -576,7 +645,7 @@ export class Workbench3D {
         mat.color.set("#ffffff");
         mat.vertexColors = true;
       } else {
-        mat.color.set(GRAY);
+        mat.color.set(plain);
       }
       mat.needsUpdate = true;
       const over = typeof v === "number" ? v > contour.max : Math.max(va ?? -Infinity, vb ?? -Infinity) > contour.max;
@@ -703,11 +772,6 @@ export class Workbench3D {
     this.followBase = null;
     this.followApplied = null;
     this.buildGround();
-    const view = motion?.hasTable ? "table" : null;
-    if (view !== this.view && this.design) {
-      this.fit(view === "table" ? [1, 0.14, 0.2] : undefined);
-      this.view = view;
-    }
     if (!motion || !this.design) {
       this.setFrame(null);
       return;
@@ -780,10 +844,11 @@ export class Workbench3D {
     this.links.geometry.dispose();
     this.links.geometry = new LineSegmentsGeometry().setPositions(links.length ? links : [0, 0, 0, 0, 0, 0]);
     this.links.visible = links.length > 0;
-    this.world.rotation.x = frame?.table ?? 0;
+    this.world.rotation.x = this.worldAngle(frame);
+    this.props.update(frame);
     this.placeCg();
     this.placeMotionArrows(frame);
-    this.ghost.visible = !!frame && !!this.toggles.limit;
+    this.ghost.visible = !!frame && !!this.toggles.limit && this.liftIsLimit !== false;
   }
 
   placeMotionArrows(frame) {
@@ -814,10 +879,15 @@ export class Workbench3D {
     }
   }
 
+  // The world's turn about x: the tilt table's angle at the frame, else the road's side slope.
+  worldAngle(frame) {
+    return frame?.table ?? this.sceneDesc?.slope ?? 0;
+  }
+
   // Where a frame's centre of mass (or body origin) is on screen space, in three.js metres.
   anchorOf(frame) {
     const p = v3(frame.cg ?? frame.body).applyMatrix4(ISO_TO_THREE);
-    return p.applyAxisAngle(new THREE.Vector3(1, 0, 0), frame.table ?? 0);
+    return p.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.worldAngle(frame));
   }
 
   // Keep the camera on the moving vehicle: camera and target are shifted by how
@@ -844,7 +914,7 @@ export class Workbench3D {
     for (const o of Object.values(this.partObjs)) o.tag.visible = !!t.names;
     for (const o of Object.values(this.wheelObjs)) o.tag.visible = !!t.names || o.ring.visible;
     this.overGhosts.visible = !!t.contour;
-    this.ghost.visible = !!this.frame && !!t.limit;
+    this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
     this.cg.visible = !!t.cg && !!this.cgPos;
     this.placeMotionArrows(this.frame);
   }
@@ -858,6 +928,7 @@ export class Workbench3D {
 
   render() {
     this.follow();
+    if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
   }

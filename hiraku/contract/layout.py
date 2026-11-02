@@ -83,6 +83,7 @@ def record_path(run_path: Path, design_version: int, kind: str, record_id: str) 
 OWNERS = {
     "lead": [
         "hiraku/contract/",
+        "showcase/",  # saved runs committed as examples (the screen opens the newest)
         "tests/contract/",
         "docs/",
         "README.md",
