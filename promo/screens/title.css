@@ -53,13 +53,15 @@
 }
 
 /* --- the name, letter by letter --- */
+/* --name-top, --name-size, --tag-top, --tag-size: layout.json (cuts.<cut>.name, .tag) */
 .name {
   position: absolute;
   left: 0;
   right: 0;
+  top: var(--name-top);
   margin: 0;
   text-align: center;
-  font: 400 calc(160 * var(--u)) / 1 var(--font-latin);
+  font: 400 var(--name-size) / 1 var(--font-latin);
   letter-spacing: 0.3em;
   padding-left: 0.3em;
   color: var(--on-night);
@@ -78,9 +80,10 @@
   position: absolute;
   left: 0;
   right: 0;
+  top: var(--tag-top);
   margin: 0;
   text-align: center;
-  font: 400 calc(48 * var(--u)) / 1.2 var(--font-ja);
+  font: 400 var(--tag-size) / 1.2 var(--font-ja);
   letter-spacing: 0.04em;
   color: var(--on-night);
   animation: fade-up 0.7s ease-out both;

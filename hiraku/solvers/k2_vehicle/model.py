@@ -21,20 +21,30 @@ UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
 HALF_UNSPRUNG_KINDS = {"suspension"}
 
 # Defaults used when the design does not say. They are modelling choices,
-# not values from a source; each one used is reported in Vehicle.assumptions.
+# not values from a source; each one used is reported in Vehicle.assumptions
+# (and the tools write those into the analysis record's assumptions). The keys
+# are the design variable names of hiraku.designgen where it has one.
 DEFAULTS = {
-    "tire_vertical_stiffness": (150e3, "N/m", "tyre vertical stiffness 150 N/mm (assumed)"),
-    "tire_vertical_damping_ratio": (0.05, "1", "tyre vertical damping ratio 0.05 (assumed)"),
-    "tire_cornering_coeff": (8.0, "1/rad", "cornering stiffness 8 x static wheel load per rad (assumed)"),
-    "tire_long_slip_coeff": (10.0, "1", "longitudinal slip stiffness 10 x static wheel load (assumed)"),
-    "tire_relaxation_length": (None, "m", "relaxation length = wheel radius (assumed)"),
+    "tyre_stiffness": (150e3, "N/m", "tyre vertical stiffness 150 N/mm (assumed; the design has no tyre_stiffness)"),
+    "tyre_damping_ratio": (0.05, "1", "tyre vertical damping ratio 0.05 (assumed; the design has no tyre_damping_ratio)"),
+    "tire_cornering_coeff": (8.0, "1/rad", "cornering stiffness 8 x static wheel load per rad (assumed; the design "
+                                           "has no front_cornering_stiffness / rear_cornering_stiffness)"),
+    "tyre_slip_stiffness_coeff": (10.0, "1", "longitudinal slip stiffness 10 x static wheel load (assumed; the "
+                                             "design has no tyre_slip_stiffness_coeff)"),
+    "tyre_relaxation_length": (None, "m", "relaxation length = wheel radius (assumed; the design has no "
+                                          "tyre_relaxation_length)"),
+    "wheel_inertia": (None, "kg*m^2", "wheel spin inertia as a solid disc of the unsprung mass, J = m r^2 / 2 "
+                                      "(assumed; the design has no wheel_inertia)"),
     "tire_mu": (0.8, "1", "friction coefficient 0.8 (assumed; the load case usually gives mu)"),
-    "tire_rolling_resistance": (0.015, "1", "rolling resistance coefficient 0.015 (assumed)"),
+    "rolling_resistance": (0.015, "1", "rolling resistance coefficient 0.015 (assumed; the design has no "
+                                       "rolling_resistance)"),
     "damping_ratio": (0.3, "1", "suspension damping ratio 0.3 of the corner (assumed)"),
     "travel": (0.10, "m", "suspension travel 100 mm, half bump half rebound (assumed)"),
-    "bump_stop_factor": (10.0, "1", "bump and rebound stops 10 x wheel rate (assumed)"),
+    "bump_stop_factor": (10.0, "1", "bump and rebound stops 10 x wheel rate (assumed; the design has no "
+                                    "bump_stop_factor)"),
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
-    "max_steer": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed)"),
+    "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
+                                                   "max_steer_angle)"),
 }
 
 
@@ -171,13 +181,22 @@ def _projected(boxes: list[tuple[np.ndarray, np.ndarray]], discs: list[tuple[np.
     return n * cell * cell, np.array([uu[mask].mean(), vv[mask].mean()])
 
 
-# Other names of the same design variables, as the designs on the shelf write them.
+# Older names of the same design variables, read when the designgen name is absent.
 VARIABLE_ALIASES = {
-    "tire_vertical_stiffness": ("tyre_stiffness", "tire_stiffness"),
-    "tire_rolling_resistance": ("rolling_resistance",),
+    "tyre_stiffness": ("tire_vertical_stiffness", "tire_stiffness"),
+    "rolling_resistance": ("tire_rolling_resistance",),
     "tire_mu": ("tyre_mu",),
-    "max_steer": ("max_steer_angle",),
+    "max_steer_angle": ("max_steer",),
+    "tyre_damping_ratio": ("tire_vertical_damping_ratio",),
+    "tyre_slip_stiffness_coeff": ("tire_long_slip_coeff",),
+    "tyre_relaxation_length": ("tire_relaxation_length",),
 }
+
+
+def _given(design: dict, name: str):
+    """The design variable `name` (or an older name of it), or None."""
+    var = design.get("variables", {}) or {}
+    return next((var[n] for n in (name,) + VARIABLE_ALIASES.get(name, ()) if n in var), None)
 
 
 def _var(design: dict, name: str, want: str, notes: list[str], default_key: str | None = None):
@@ -237,18 +256,17 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
 
     k_z = overrides.get("tire_vertical_stiffness")
     if k_z is None:
-        k_z = _var(design, "tire_vertical_stiffness", "N/m", notes)
-    zeta_z = _var(design, "tire_vertical_damping_ratio", "1", notes)
-    c_alpha = _var(design, "tire_cornering_coeff", "1", notes)
-    c_kappa = _var(design, "tire_long_slip_coeff", "1", notes)
+        k_z = _var(design, "tyre_stiffness", "N/m", notes)
+    zeta_z = _var(design, "tyre_damping_ratio", "1", notes)
+    c_kappa = _var(design, "tyre_slip_stiffness_coeff", "1", notes)
     mu = overrides.get("mu")
     if mu is None:
         mu = _var(design, "tire_mu", "1", notes)
     c_rr = overrides.get("c_rr")
     if c_rr is None:
-        c_rr = _var(design, "tire_rolling_resistance", "1", notes)
+        c_rr = _var(design, "rolling_resistance", "1", notes)
     zeta_s = _var(design, "damping_ratio", "1", [])
-    max_steer = _var(design, "max_steer", "rad", notes)
+    max_steer = _var(design, "max_steer_angle", "rad", notes)
 
     corners: list[Corner] = []
     for k, s in enumerate(sups):
@@ -283,9 +301,7 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
                 if DEFAULTS["travel"][2] not in notes:
                     notes.append(DEFAULTS["travel"][2])
             c.s_min, c.s_max = -travel / 2.0, travel / 2.0
-            c.k_stop = DEFAULTS["bump_stop_factor"][0] * c.k_w
-            if DEFAULTS["bump_stop_factor"][2] not in notes:
-                notes.append(DEFAULTS["bump_stop_factor"][2])
+            c.k_stop = _var(design, "bump_stop_factor", "1", notes) * c.k_w
             if typ == "kc_table":
                 ref = sus["kc_table"]
                 if ref.startswith("builtin:"):
@@ -330,9 +346,13 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         if c.dof:
             c.m_u = mw
         c.j_w = 0.5 * mw * c.radius ** 2
-    note = "wheel spin inertia as a solid disc of the unsprung mass, J = m r^2 / 2 (assumed)"
-    if any(c.kind == "wheel" for c in corners):
-        notes.append(note)
+    j_given = _given(design, "wheel_inertia")
+    if j_given is not None:
+        for c in corners:
+            if c.kind == "wheel":
+                c.j_w = si(j_given, "kg*m^2")
+    elif any(c.kind == "wheel" for c in corners):
+        notes.append(DEFAULTS["wheel_inertia"][2])
     if any(c.kind == "caster" for c in corners):
         notes.append("casters swivel freely: no side force, rolling resistance only")
 
@@ -349,6 +369,19 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         i_s[0, 1] = i_s[1, 0] = i_s[1, 2] = i_s[2, 1] = 0.0
     if np.any(np.linalg.eigvalsh(i_s) <= 0.0):
         raise DesignError("the body inertia is not positive; check the part boxes and masses")
+
+    # Cornering stiffness per axle (both tyres) from the design, shared by the wheels of
+    # the front-most and the rear-most axle; other wheels fall back on the coefficient.
+    axle_cornering: dict[int, float] = {}
+    var = design.get("variables") or {}
+    wheels = [i for i, c in enumerate(corners) if c.kind == "wheel"]
+    if wheels:
+        for name, x in (("front_cornering_stiffness", max(float(corners[i].pos[0]) for i in wheels)),
+                        ("rear_cornering_stiffness", min(float(corners[i].pos[0]) for i in wheels))):
+            if name in var:
+                on = [i for i in wheels if abs(float(corners[i].pos[0]) - x) < 1e-9]
+                for i in on:
+                    axle_cornering[i] = si(var[name], "N/rad") / len(on)
 
     # Static loads: rigid body on elastic supports (series spring + tyre).
     xs = np.array([c.pos[0] for c in corners])
@@ -386,16 +419,17 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
                     notes.append(DEFAULTS["damping_ratio"][2])
         m_vert = c.m_u if c.dof else f / G0
         c.c_z = 2.0 * zeta_z * math.sqrt(c.k_z * m_vert)
-        sigma = (si(design["variables"]["tire_relaxation_length"], "m")
-                 if "tire_relaxation_length" in (design.get("variables") or {}) else c.radius)
-        c.sigma = sigma
+        relax = _given(design, "tyre_relaxation_length")
+        c.sigma = si(relax, "m") if relax is not None else c.radius
         if c.kind == "caster":
             c.c_long = c.c_lat = 0.0
         else:
             c.c_long = c_kappa * f
-            c.c_lat = c_alpha * f
-    if "tire_relaxation_length" not in (design.get("variables") or {}):
-        notes.append(DEFAULTS["tire_relaxation_length"][2])
+            c.c_lat = axle_cornering.get(i)
+            if c.c_lat is None:
+                c.c_lat = _var(design, "tire_cornering_coeff", "1", notes) * f
+    if _given(design, "tyre_relaxation_length") is None:
+        notes.append(DEFAULTS["tyre_relaxation_length"][2])
 
     # Aerodynamic projections: part boxes and wheels.
     boxes = []
@@ -408,7 +442,9 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     side_area, side_c = _projected(boxes, discs, (0, 2), None)
     front_area, front_c = _projected(boxes, [(c.pos, c.radius) for c in corners if c.kind != "leg"], (1, 2),
                                      max([c.width for c in corners] + [0.0]) or 0.1)
-    notes.append("aerodynamic areas from the part boxes and wheels projected on the side and front planes; centre of pressure at the area centroid (assumed)")
+    notes.append("centres of pressure at the centroids of the part boxes and wheels projected on the side and front "
+                 "planes (along x always; the areas and the side centre's height only where the design does not give "
+                 "them) (assumed)")
     side_cp = np.array([side_c[0], 0.0, side_c[1]])
     front_cp = np.array([0.0, front_c[0], front_c[1]])
     if symmetric:

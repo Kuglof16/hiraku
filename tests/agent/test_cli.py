@@ -9,7 +9,7 @@ from unittest import mock
 
 from hiraku.__main__ import main
 from hiraku.agent.scripted import run_scripted
-from hiraku.agent.session import STOPPED_BY_USER, start_run
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER, start_run
 from hiraku.contract import layout
 from tests.tools import fakes
 from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS, RunCase
@@ -51,6 +51,23 @@ class RunCommandTest(RunCase, unittest.TestCase):
         self.assertIn(f"run_id: {self.ctx.project['run_id']}", out)
         self.assertIn("status: stopped", out)
         self.assertEqual(self.kinds()[-1], "run.finished")
+
+    def test_stop_button_in_the_scripted_run(self):
+        orig = self.tools["step_climb"].run
+
+        def press_then_run(*a):  # the button is pressed while P1 is being analysed
+            (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
+            return orig(*a)
+
+        self.tools["step_climb"].run = press_then_run
+        self.assertEqual(run_scripted(self.ctx), "stopped")
+        finished = self.ctx.store.events()[-1]
+        self.assertEqual((finished["data"]["status"], finished["data"]["stop_code"]), ("stopped", "user_stop"))
+        self.assertEqual(self.ctx.project["stop_reason"], STOPPED_BY_BUTTON)
+        self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())
+        self.assertEqual(len(self.tools["step_climb"].runs), 1)  # nothing analysed after the press
+        self.assertEqual(self.tools["frame_static"].runs, [])
+        self.assert_events_fit()
 
     def test_ctrl_c_in_the_scripted_run(self):
         def interrupt(*a):

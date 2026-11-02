@@ -8,8 +8,8 @@
    by HK2.
 3. The assembly tool's assembly and interferences on the demo design, through
    check_run's rules for them (no run needed).
-4. Every folder already under runs/ in this checkout. runs/ is not committed,
-   so this part only does something on a machine that has runs.
+4. Every example run committed under showcase/ (runs/ is local and is checked by
+   hand with python -m qa.check_run --all).
 """
 
 import json
@@ -138,10 +138,13 @@ class AssemblyToolRecord(unittest.TestCase):
 
 
 class SavedRuns(unittest.TestCase):
-    def test_saved_runs_follow_the_contract(self):
-        runs = sorted(p for p in (ROOT / layout.RUNS_DIR).glob("*/") if p.is_dir())
+    """The example runs committed under showcase/<run_id>/. runs/ is local and not
+    committed, so it is not checked here (python -m qa.check_run --all does that by hand)."""
+
+    def test_showcase_runs_follow_the_contract(self):
+        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir())
         if not runs:
-            self.skipTest("no saved runs under runs/ in this checkout")
+            self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
             with self.subTest(run=run.name):
                 self.assertEqual(_errors(run), [])

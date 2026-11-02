@@ -280,7 +280,7 @@ def slope_inputs(design: Record, load_case: Record) -> Record:
 
 def launch_inputs(design: Record, load_case: Record) -> Record:
     """The launch tool's motor and road load: F_max = T i eta / r of the driven wheels,
-    P, eta, C_rr, C_d, A (front), rho, and lambda = 1 + sum(J / r^2) / m."""
+    P, eta, C_rr, C_d, A (front) and rho."""
     from hiraku.solvers.k2_vehicle.shelf import LaunchTool
     veh, _ = _vehicle(design, load_case)
     tool = LaunchTool()
@@ -290,15 +290,17 @@ def launch_inputs(design: Record, load_case: Record) -> Record:
     aero = tool.aero(veh, lp)
     driven = [c for c in veh.corners if c.drive]
     r = sum(c.radius for c in driven) / len(driven)
-    lam = 1.0 + sum(c.j_w / c.radius ** 2 for c in veh.corners) / veh.m_total
     return {"F_max": q(motor.torque * motor.gear * motor.efficiency / r, "N"), "P": q(motor.power / 1000.0, "kW"),
             "eta": q(motor.efficiency, "1"), "C_rr": q(veh.corners[0].c_rr, "1"), "C_d": q(aero.cd, "1"),
-            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3"), "lambda": q(lam, "1")}
+            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3")}
 
 
 # ------------------------------------------------------------------ scripted steps
+# lambda is the design's mass_factor (K2 itself takes the wheels as discs of the unsprung
+# mass, about 1 % more on the demo vehicle)
 _LAUNCH_REFS = {"m": "load.mass", "F_max": "from.F_max", "P": "from.P", "eta": "from.eta", "C_rr": "from.C_rr",
-                "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho", "lambda": "from.lambda"}
+                "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho",
+                "lambda": "design.var.mass_factor"}
 
 PLANS: dict[str, Record] = {
     "S1": {"tool": "tilt", "say": "傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります",

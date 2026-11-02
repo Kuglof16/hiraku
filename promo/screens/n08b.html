@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <title>N08b Numbers</title>
 <link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n08b"></script>
 <style>
   /* N08b: two rounded figures on a dark ground, the bars behind the second
-     one, and the sources with the exact values. Figures come from DATA. */
+     one, and the sources with the exact values. Figures come from DATA.
+     Placement: layout.json cuts.n08b (CSS variables from layout.js). */
   :root {
     --page-bg: var(--night);
     --t-left: 0.3s;     /* 99 %, with the first sentence */
@@ -18,21 +21,21 @@
 
   .fig {
     position: absolute;
-    top: calc(210 * var(--u));
-    width: calc(860 * var(--u));
+    top: var(--fig-top);
+    width: var(--fig-w);
     text-align: center;
   }
-  .fig.left  { left: calc(70 * var(--u)); }
-  .fig.right { left: calc(990 * var(--u)); }
+  .fig.left  { left: var(--fig-left-x); }
+  .fig.right { left: var(--fig-right-x); }
   .num {
-    font: 400 calc(200 * var(--u)) / 1 var(--font-latin);
+    font: 400 var(--fig-num-size) / 1 var(--font-latin);
     letter-spacing: 0.01em;
     animation: rise 0.8s cubic-bezier(.2, .7, .2, 1) both;
   }
   .num small { font-size: 0.62em; margin-left: 0.12em; }
   .cap {
-    margin-top: calc(26 * var(--u));
-    font: 500 calc(44 * var(--u)) / 1.3 var(--font-ja);
+    margin-top: var(--fig-cap-gap);
+    font: 500 var(--fig-cap-size) / 1.3 var(--font-ja);
     animation: fade-up 0.6s ease-out both;
   }
   .left .num  { animation-delay: var(--t-left); }
@@ -50,10 +53,10 @@
 
   .divider {
     position: absolute;
-    left: calc(959 * var(--u));
-    top: calc(230 * var(--u));
-    width: calc(2 * var(--u));
-    height: calc(260 * var(--u));
+    left: var(--divider-left);
+    top: var(--divider-top);
+    width: var(--divider-w);
+    height: var(--divider-h);
     background: rgba(241, 236, 224, 0.28);
     animation: grow-y 0.6s ease-out both;
     animation-delay: calc(var(--t-right) - 0.4s);
@@ -62,27 +65,27 @@
 
   .bars {
     position: absolute;
-    left: calc(930 * var(--u));
-    top: calc(560 * var(--u));
-    width: calc(930 * var(--u));
+    left: var(--bars-left);
+    top: var(--bars-top);
+    width: var(--bars-w);
   }
   .bar-row {
     display: grid;
-    grid-template-columns: calc(290 * var(--u)) 1fr;
+    grid-template-columns: var(--bars-label-w) 1fr;
     align-items: center;
-    column-gap: calc(22 * var(--u));
-    height: calc(64 * var(--u));
+    column-gap: var(--bars-col-gap);
+    height: var(--bars-row-h);
     animation: fade-up 0.5s ease-out both;
     animation-delay: calc(var(--t-bars) + var(--i) * 0.15s);
   }
   .bar-row span {
     text-align: right;
-    font: 400 calc(30 * var(--u)) / 1 var(--font-ja);
+    font: 400 var(--bars-label-size) / 1 var(--font-ja);
     color: var(--on-night-soft);
   }
-  .bar-track { display: flex; align-items: center; gap: calc(16 * var(--u)); }
+  .bar-track { display: flex; align-items: center; gap: var(--bars-value-gap); }
   .bar {
-    height: calc(36 * var(--u));
+    height: var(--bars-bar-h);
     border-radius: calc(4 * var(--u));
     background: #6b6862;
     transform-origin: 0 50%;
@@ -91,7 +94,7 @@
   }
   .bar.hot { background: var(--warm); }
   .bar-track b {
-    font: 700 calc(32 * var(--u)) / 1 var(--font-latin);
+    font: 700 var(--bars-value-size) / 1 var(--font-latin);
     animation: fade-up 0.4s ease-out both;
     animation-delay: calc(var(--t-bars) + 0.8s + var(--i) * 0.15s);
   }
@@ -99,13 +102,13 @@
 
   .sources {
     position: absolute;
-    left: calc(90 * var(--u));
-    right: calc(90 * var(--u));
-    top: calc(770 * var(--u));
+    left: var(--sources-side);
+    right: var(--sources-side);
+    top: var(--sources-top);
     margin: 0;
     padding: 0;
     list-style: none;
-    font: 400 calc(21 * var(--u)) / 1.75 var(--font-ja);
+    font: 400 var(--sources-size) / 1.75 var(--font-ja);
     color: var(--on-night-soft);
     animation: fade-up 0.6s ease-out both;
     animation-delay: var(--t-src);
@@ -115,11 +118,11 @@
 <body data-duration="9.7">
 <div class="stage">
   <div class="safe">
-    <div class="fig left"><div class="num"></div><div class="cap">製造業の企業のうち、中小企業</div></div>
-    <div class="divider"></div>
-    <div class="fig right"><div class="num"></div><div class="cap">小さな会社の CAE の導入率</div></div>
-    <div class="bars"></div>
-    <ul class="sources"></ul>
+    <div class="fig left" data-check="fig-left"><div class="num"></div><div class="cap">製造業の企業のうち、中小企業</div></div>
+    <div class="divider" data-check="divider"></div>
+    <div class="fig right" data-check="fig-right"><div class="num"></div><div class="cap">小さな会社の CAE の導入率</div></div>
+    <div class="bars" data-check="bars"></div>
+    <ul class="sources" data-check="sources"></ul>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -156,14 +159,15 @@
   document.querySelector(".left .num").innerHTML = pctHtml(smePct);
   document.querySelector(".right .num").innerHTML = pctHtml(DATA.cae_adoption.small.pct);
 
-  // Bars share one scale: 100 % = 800 design px.
-  const PX_PER_PCT = 8;
+  // Bars share one scale (layout.json cuts.n08b.bars.px_per_pct).
+  const { px, cutRules } = window.promoLayout;
+  const PX_PER_PCT = cutRules.bars.px_per_pct;
   const rows = [DATA.cae_adoption.small, DATA.cae_adoption.large];
   document.querySelector(".bars").innerHTML = rows.map((r, i) => `
     <div class="bar-row" style="--i:${i}">
       <span>${r.label}</span>
       <div class="bar-track">
-        <div class="bar${i === 0 ? " hot" : ""}" style="--i:${i};width:calc(${r.pct * PX_PER_PCT} * var(--u))"></div>
+        <div class="bar${i === 0 ? " hot" : ""}" style="--i:${i};width:${px(r.pct * PX_PER_PCT)}"></div>
         <b style="--i:${i}">${fmt1(r.pct)} %</b>
       </div>
     </div>`).join("");

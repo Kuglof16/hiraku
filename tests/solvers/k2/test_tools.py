@@ -153,6 +153,26 @@ class Declarations(unittest.TestCase):
         self.assertEqual({c.c_rr for c in veh.corners}, {0.03})
         self.assertEqual({c.k_z for c in veh.corners}, {120e3})
 
+    def test_designgen_names_are_read(self):
+        import math
+        from hiraku.solvers.k2_vehicle.shelf import LaunchTool
+        d = demo_design()
+        d["variables"].update({"max_steer_angle": q(30.0, "deg"), "front_cornering_stiffness": q(25000.0, "N/rad"),
+                               "rear_cornering_stiffness": q(30000.0, "N/rad"), "drivetrain_efficiency": q(0.95, "1")})
+        veh = build_vehicle(on_board(d, "two_cargo"))
+        self.assertAlmostEqual(veh.max_steer, math.radians(30.0))
+        front = max(float(c.pos[0]) for c in veh.corners)
+        self.assertEqual({c.c_lat for c in veh.corners if float(c.pos[0]) == front}, {12500.0})
+        self.assertEqual({c.c_lat for c in veh.corners if float(c.pos[0]) != front}, {15000.0})
+        self.assertFalse(any("cornering" in a for a in veh.assumptions))
+        tool = LaunchTool()
+        tool._vars = d["variables"]
+        self.assertAlmostEqual(tool.q({}, "efficiency", "1"), 0.95)
+        tool._vars = {}
+        tool._assumed = []
+        self.assertAlmostEqual(tool.q({}, "efficiency", "1"), 0.9)
+        self.assertIn("drivetrain_efficiency", tool._assumed[0])
+
     def test_unread_params_are_named_and_bad_choices_fail(self):
         d = demo_design()
         lc = {"load_case_id": "x", "params": {"stepheight": q(100.0, "mm")}}
@@ -220,6 +240,45 @@ class Runs(unittest.TestCase):
                     self.assertIn(pair["quantity"], units)
                     self.assertEqual(units[pair["quantity"]],
                                      formulas[pair["formula_id"]]["outputs"][pair["output"]]["unit"])
+
+    def test_scenes(self):
+        kinds = {name: [o["kind"] for o in rec.get("scene", [])] for name, rec in self.recs.items()}
+        self.assertEqual(kinds["tilt"], ["tilt_table"])
+        self.assertEqual(self.recs["tilt"]["scene"][0]["angle_channel"], "table_angle")
+        self.assertIn("table_angle", {s["channel"] for s in self.recs["tilt"]["series"]})
+        self.assertEqual(kinds["lane_change"].count("gate"), 6)
+        self.assertEqual(kinds["lane_change"].count("cone"), 12)
+        self.assertEqual(kinds["offroad_roll"], ["road_profile", "slope"])
+        prof = self.recs["offroad_roll"]["scene"][0]["profile"]
+        self.assertEqual(len(prof["z_mm"]["left"]), len(prof["x_mm"]))
+        self.assertEqual(self.recs["offroad_roll"]["scene"][1]["rpy_deg"], [15.0, 0.0, 0.0])
+        self.assertEqual(kinds["step_climb_dynamic"], ["step"])
+        self.assertEqual(kinds["crosswind"], [])
+
+    def test_step_scene_series_and_vectors_from_one_run(self):
+        rec = self.recs["step_climb_dynamic"]
+        step = rec["scene"][0]
+        edge = step["position_mm"][0] - step["size_mm"][0] / 2.0
+        self.assertAlmostEqual(step["size_mm"][2], 100.0)
+        on_corner = [v["origin_mm"][0] for v in rec["vectors"]
+                     if v["kind"] == "reaction" and abs(v["origin_mm"][2] - 100.0) < 5.0]
+        self.assertTrue(on_corner)
+        for x in on_corner:  # the reactions at lift-off push on the step's corner
+            self.assertLess(abs(x - edge), 5.0)
+        # the animated wheel meets this step: when its centre has risen 20 mm it is within a
+        # wheel radius behind the corner (the faster run 2 has its step 2 m further on)
+        series = {s["channel"]: s for s in rec["series"]}
+        wx, wz = series["wheel_center_x.FL"], series["wheel_center_z.FL"]
+        up = next(i for i, z in enumerate(wz["values"]) if z > wz["values"][0] + 0.02)
+        r = next(s["radius_mm"] for s in self.d["supports"] if s["id"] == "FL")
+        self.assertGreater(wx["values"][up] * 1000.0, edge - r)
+        self.assertLess(wx["values"][up] * 1000.0, edge)
+
+    def test_assumptions_are_in_the_record(self):
+        notes = self.recs["crosswind"]["assumptions"]
+        self.assertTrue(any(n.startswith("cy = 1") for n in notes), notes)
+        self.assertTrue(any("side_area" in n and "projection" in n for n in notes), notes)
+        self.assertFalse(any(e["name"].startswith("assumption") for e in self.recs["crosswind"].get("effects", [])))
 
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")

@@ -6,12 +6,13 @@
  * or a 3840x2160 window without changing its layout.
  *
  * The bottom 170 design px are the subtitle band. Nothing is placed there;
- * content goes inside .safe (the top 910 px).
+ * content goes inside .safe (above --band-top).
+ *
+ * --u, the stage size, the band and the placement of each cut's parts are
+ * CSS variables set by layout.js from layout.json (the layout rules).
  */
 
 :root {
-  --u: min(calc(100vw / 1920), calc(100vh / 1080));
-
   --paper: #f4f1ea;      /* unbleached paper ground */
   --ink: #1b1a17;        /* black ink */
   --ink-soft: #5c5a54;
@@ -67,8 +68,8 @@ body {
 
 .stage {
   position: relative;
-  width: calc(1920 * var(--u));
-  height: calc(1080 * var(--u));
+  width: var(--stage-w);
+  height: var(--stage-h);
   overflow: hidden;
   background: var(--stage-bg, var(--paper));
 }
@@ -78,7 +79,7 @@ body {
   left: 0;
   top: 0;
   width: 100%;
-  height: calc(910 * var(--u));
+  height: var(--band-top);
 }
 
 /* Paper with a faint 40 px grid, drawn with gradients (no image files). */
@@ -104,7 +105,7 @@ html.layer-fg .bg-only { display: none !important; }
   left: 0;
   bottom: 0;
   width: 100%;
-  height: calc(170 * var(--u));
+  height: var(--band-h);
   background: repeating-linear-gradient(-45deg,
     rgba(224, 71, 42, 0.18) 0 calc(6 * var(--u)),
     transparent calc(6 * var(--u)) calc(18 * var(--u)));

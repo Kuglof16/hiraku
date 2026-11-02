@@ -20,7 +20,7 @@ import re
 from typing import Any
 
 from hiraku import contract
-from hiraku.agent.session import STOPPED_BY_USER
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, external_builders, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import analyze, compare, record_cause, record_prediction, revise_design, trusted_analysis
@@ -157,6 +157,15 @@ class Stop(Exception):
     """The script cannot go on; the message is the run's stop_reason."""
 
 
+class StopRequested(Stop):
+    """The stop button: stop.request is in the run folder."""
+
+
+def _check_stop(ctx: RunContext) -> None:
+    if ctx.store.stop_requested():
+        raise StopRequested(STOPPED_BY_BUTTON)
+
+
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
@@ -192,6 +201,7 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     Raises Stop on anything the plan did not expect.
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
+    _check_stop(ctx)
     if _deny(ctx, agent, "analyze", args):
         raise Stop(f"a hook rule stopped analyze on {lc['load_case_id']}")
     ana = analyze(ctx, args, agent)
@@ -259,11 +269,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 
     A mismatch stops the run unless the plan names it in expected_mismatch;
-    then the plan's cause (written in the plan with its source) is recorded and
-    the step predicts again with the plan's retry, or, with no retry, the run
+    then the plan's cause (written in the plan with its source) is recorded,
+    and either the plan judges the mismatch safe side (record_cause checks the
+    numbers and makes the verdict from the prediction, and the step ends), or
+    the step predicts again with the plan's retry, or, with neither, the run
     stops there. After all steps, a red tile and a `revise` entry left in the
     plan make the designer call revise_design, and the steps run again on the
     new version. Ctrl+C finishes the run as stopped and is raised again.
+    run.finished carries stop_code: done, round_limit (judged, but a tile is
+    red and no revision is left: status stopped), not_judged or user_stop.
     """
     s = ctx.store
     plan = compose_plan(ctx, plan)
@@ -274,7 +288,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
-    status, reason, interrupted = "done", None, False
+    status, reason, code, interrupted = "done", None, "done", False
 
     def start(agent: str, domain: str | None = None) -> None:
         if agent not in started:
@@ -284,6 +298,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     try:
         while True:
             for step in plan["steps"]:
+                _check_stop(ctx)
                 lc = ctx.load_case(step["load_case"])
                 agent = ctx.owner(lc["load_case_id"])
                 start(agent, lc["domain"] if agent.startswith("cae.") else None)
@@ -299,6 +314,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             reds = _red_tiles(ctx)
             if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
                 break
+            _check_stop(ctx)
             rev = revisions.pop(0)
             start("designer")
             names = "、".join(contract.DOMAIN_NAMES_JA[j["domain"]] for j in reds)
@@ -309,10 +325,13 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
                 raise Stop(f"revise_design refused: {e}") from None
             s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、全部の荷重条件をやり直します")
+    except StopRequested:
+        s.emit("agent.said", agent="lead", text="止めるボタンが押されたので、ここで止めます")
+        status, reason, code = "stopped", STOPPED_BY_BUTTON, "user_stop"
     except Stop as e:
-        status, reason = "stopped", str(e)
+        status, reason, code = "stopped", str(e), "not_judged"
     except KeyboardInterrupt:
-        status, reason, interrupted = "stopped", STOPPED_BY_USER, True
+        status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
@@ -320,8 +339,12 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if status == "done":
         left = rules.stop_reason(ctx)
         if left:
-            status, reason = "stopped", left
-    s.finish(status, stop_reason=reason)
+            status, reason, code = "stopped", left, "not_judged"
+        else:
+            status, reason, code = rules.judged_end(ctx)
+    s.finish(status, stop_reason=reason, stop_code=code)
+    if reason == STOPPED_BY_BUTTON:
+        s.clear_stop_request()
     if interrupted:
         raise KeyboardInterrupt
     return status

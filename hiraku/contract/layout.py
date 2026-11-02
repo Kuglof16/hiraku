@@ -11,6 +11,7 @@ runs/<run_id>/
     v001/verdicts/ver-0001.json       VERDICT
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
     report.json                       REPORT (later)
+    stop.request                      present only while someone asks the run to stop
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Every record written to a file is also the `data` of one event, byte-for-byte
@@ -36,6 +37,7 @@ EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
 JUDGEMENTS_FILE = "judgements.json"
 REPORT_FILE = "report.json"
+STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
 
 RECORD_DIRS = {
     "prediction": "predictions",
@@ -127,6 +129,13 @@ OWNERS = {
     ],
     "promo": [  # 広報部: title and explainer screens, video prep
         "promo/",
+    ],
+    "intake": [  # 受付部: picking domains, hearing, knowledge rules (N09, N14)
+        "hiraku/intake/",
+        "data/requirements/products/",
+        "data/knowledge/",
+        "web/js/intake/",
+        "tests/intake/",
     ],
 }
 
