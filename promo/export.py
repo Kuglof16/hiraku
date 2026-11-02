@@ -1,13 +1,18 @@
-"""Export a promo screen frame by frame and join the frames with ffmpeg.
+"""Export a screen frame by frame and join the frames with ffmpeg.
 
 The screen is opened in headless Chromium with a 1920x1080 layout at device
-scale 2 (3840x2160 pixels), moved to each frame time with
-``window.promo.seek(t)`` (see screens/timeline.js), and captured as PNG.
+scale 2 (3840x2160 pixels), moved to each frame time, and captured as PNG.
+A screen is a promo page (``window.promo.seek(t)``, see screens/timeline.js)
+or the app's replay at an http URL (``window.hiraku.seek(t)``, web/js/app.js).
 
     py promo/export.py stills promo/screens/n18.html OUT_DIR --at 0.5 3 8
     py promo/export.py frames promo/screens/n18.html OUT_DIR --fps 30
+    py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" OUT_DIR --gpu
     py promo/export.py encode OUT_DIR clip.mp4 --fps 30 --height 1080
     py promo/export.py clip   promo/screens/n18.html clip.mp4 --frames-dir OUT_DIR
+
+``--gpu`` draws WebGL on the graphics card (ANGLE on Direct3D 11); without
+it headless Chromium draws WebGL in software (SwiftShader), about half as fast.
 
 Needs the ``playwright`` package with its Chromium (frames, stills, clip)
 and ffmpeg on PATH or in the FFMPEG environment variable (encode, clip).
@@ -22,10 +27,25 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 DESIGN_W, DESIGN_H = 1920, 1080
 FRAME_PATTERN = "%05d.png"
+GPU_ARGS = ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"]
+
+# One interface over the two kinds of screen, installed as window.__export.
+ADAPTER = """() => {
+  if (window.promo) window.__export = {
+    ready: () => window.promo.ready(),
+    seek: (t) => window.promo.seek(t),
+    duration: () => window.promo.duration,
+  };
+  else window.__export = {
+    ready: () => window.hiraku.ready,
+    seek: (t) => window.hiraku.seek(t),
+    duration: () => window.hiraku.player.duration,
+  };
+}"""
 
 
 def frame_times(start: float, end: float, fps: int) -> list[float]:
@@ -38,8 +58,13 @@ def frame_times(start: float, end: float, fps: int) -> list[float]:
     return [start + i / fps for i in range(count)]
 
 
-def screen_url(screen: Path, t: float | None = None, layer: str | None = None,
+def is_url(screen: str | Path) -> bool:
+    return str(screen).startswith(("http://", "https://"))
+
+
+def screen_url(screen: str | Path, t: float | None = None, layer: str | None = None,
                guides: bool = False) -> str:
+    """A file path or an http URL, with the export parameters added to its query."""
     query = {}
     if t is not None:
         query["t"] = f"{t:.6f}"
@@ -47,8 +72,18 @@ def screen_url(screen: Path, t: float | None = None, layer: str | None = None,
         query["layer"] = layer
     if guides:
         query["guides"] = "1"
-    url = screen.resolve().as_uri()
+    if is_url(screen):
+        parts = urlsplit(str(screen))
+        merged = dict(parse_qsl(parts.query, keep_blank_values=True)) | query
+        return urlunsplit(parts._replace(query=urlencode(merged)))
+    url = Path(screen).resolve().as_uri()
     return url + ("?" + urlencode(query) if query else "")
+
+
+def screen_name(screen: str | Path) -> str:
+    """Short name for file names: the page's stem, or 'app' for the app's root URL."""
+    path = urlsplit(str(screen)).path if is_url(screen) else str(screen)
+    return Path(path).stem or "app"
 
 
 def frame_name(index: int) -> str:
@@ -88,37 +123,43 @@ def encode_command(frames_dir: Path, out: Path, fps: int, height: int,
 class Capture:
     """One headless Chromium page showing one screen."""
 
-    def __init__(self, screen: Path, scale: float = 2.0, size: tuple[int, int] = (DESIGN_W, DESIGN_H),
-                 layer: str | None = None, guides: bool = False):
+    def __init__(self, screen: str | Path, scale: float = 2.0, size: tuple[int, int] = (DESIGN_W, DESIGN_H),
+                 layer: str | None = None, guides: bool = False, gpu: bool = False):
         from playwright.sync_api import sync_playwright  # only needed here
 
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch()
+        self._browser = self._pw.chromium.launch(args=GPU_ARGS if gpu else [])
         self.page = self._browser.new_page(
             viewport={"width": size[0], "height": size[1]},
             device_scale_factor=scale,
         )
+        self.errors: list[str] = []
+        self.page.on("pageerror", lambda e: self.errors.append(str(e)))
         self.transparent = layer == "fg"
         self.page.goto(screen_url(screen, t=0, layer=layer, guides=guides))
-        self.page.wait_for_function("window.promo !== undefined")
-        self.page.evaluate("window.promo.ready()")
-        self.duration = float(self.page.evaluate("window.promo.duration"))
+        self.page.wait_for_function("window.promo !== undefined || window.hiraku !== undefined",
+                                    timeout=60_000)
+        self.page.evaluate(ADAPTER)
+        self.page.evaluate("window.__export.ready()")
+        self.duration = float(self.page.evaluate("window.__export.duration()"))
 
     def shoot(self, t: float, path: Path) -> None:
-        self.page.evaluate("t => window.promo.seek(t)", t)
+        self.page.evaluate("t => window.__export.seek(t)", t)
         self.page.screenshot(path=str(path), type="png", omit_background=self.transparent)
+        if self.errors:
+            raise RuntimeError(f"page error at t={t:.3f}: {self.errors[0]}")
 
     def close(self) -> None:
         self._browser.close()
         self._pw.stop()
 
 
-def export_frames(screen: Path, out_dir: Path, fps: int, scale: float, start: float,
-                  end: float | None, layer: str | None, size: tuple[int, int]) -> int:
+def export_frames(screen: str | Path, out_dir: Path, fps: int, scale: float, start: float,
+                  end: float | None, layer: str | None, size: tuple[int, int], gpu: bool = False) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("*.png"):
         old.unlink()
-    cap = Capture(screen, scale=scale, size=size, layer=layer)
+    cap = Capture(screen, scale=scale, size=size, layer=layer, gpu=gpu)
     try:
         stop = cap.duration if end is None else end
         times = frame_times(start, stop, fps)
@@ -134,14 +175,14 @@ def export_frames(screen: Path, out_dir: Path, fps: int, scale: float, start: fl
         cap.close()
 
 
-def export_stills(screen: Path, out_dir: Path, at: list[float], scale: float,
-                  guides: bool, size: tuple[int, int]) -> list[Path]:
+def export_stills(screen: str | Path, out_dir: Path, at: list[float], scale: float,
+                  guides: bool, size: tuple[int, int], gpu: bool = False) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    cap = Capture(screen, scale=scale, size=size, guides=guides)
+    cap = Capture(screen, scale=scale, size=size, guides=guides, gpu=gpu)
     paths = []
     try:
         for t in at:
-            p = out_dir / f"{screen.stem}_t{t:06.2f}.png"
+            p = out_dir / f"{screen_name(screen)}_t{t:06.2f}.png"
             cap.shoot(t, p)
             paths.append(p)
     finally:
@@ -168,16 +209,20 @@ def main(argv: list[str] | None = None) -> int:
     def capture_args(p):
         p.add_argument("--scale", type=float, default=2.0, help="device scale factor (2 -> 3840x2160)")
         p.add_argument("--size", type=parse_size, default=(DESIGN_W, DESIGN_H), help="window size in CSS px")
+        p.add_argument("--gpu", action="store_true", help="draw WebGL on the graphics card")
+
+    def screen_arg(text: str) -> str | Path:
+        return text if is_url(text) else Path(text)
 
     p = sub.add_parser("stills", help="capture a few frames")
-    p.add_argument("screen", type=Path)
+    p.add_argument("screen", type=screen_arg)
     p.add_argument("out_dir", type=Path)
     p.add_argument("--at", type=float, nargs="+", required=True)
     p.add_argument("--guides", action="store_true")
     capture_args(p)
 
     p = sub.add_parser("frames", help="capture every frame")
-    p.add_argument("screen", type=Path)
+    p.add_argument("screen", type=screen_arg)
     p.add_argument("out_dir", type=Path)
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--start", type=float, default=0.0)
@@ -193,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--crf", type=int, default=14)
 
     p = sub.add_parser("clip", help="frames + encode")
-    p.add_argument("screen", type=Path)
+    p.add_argument("screen", type=screen_arg)
     p.add_argument("out", type=Path)
     p.add_argument("--frames-dir", type=Path, required=True)
     p.add_argument("--fps", type=int, default=30)
@@ -203,14 +248,14 @@ def main(argv: list[str] | None = None) -> int:
 
     a = ap.parse_args(argv)
     if a.cmd == "stills":
-        for path in export_stills(a.screen, a.out_dir, a.at, a.scale, a.guides, a.size):
+        for path in export_stills(a.screen, a.out_dir, a.at, a.scale, a.guides, a.size, a.gpu):
             print(path)
     elif a.cmd == "frames":
-        export_frames(a.screen, a.out_dir, a.fps, a.scale, a.start, a.end, a.layer, a.size)
+        export_frames(a.screen, a.out_dir, a.fps, a.scale, a.start, a.end, a.layer, a.size, a.gpu)
     elif a.cmd == "encode":
         encode(a.frames_dir, a.out, a.fps, a.height, a.crf)
     elif a.cmd == "clip":
-        export_frames(a.screen, a.frames_dir, a.fps, a.scale, 0.0, None, None, a.size)
+        export_frames(a.screen, a.frames_dir, a.fps, a.scale, 0.0, None, None, a.size, a.gpu)
         encode(a.frames_dir, a.out, a.fps, a.height, a.crf)
     return 0
 

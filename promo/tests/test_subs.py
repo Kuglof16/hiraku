@@ -82,6 +82,16 @@ class Timeline(unittest.TestCase):
         shifted = subs.place_sentences(lines[1:], lead=0.3, gap=0.4, origin=7.0)
         self.assertEqual([p["at"] for p in shifted], [0.3, 2.2])
 
+    def test_a_late_cut_pushes_the_next(self):
+        lines = [
+            {"cut": "N00", "start": 0.0, "end": 4.0, "seconds": 4.5, "ja": "a", "en": "a"},
+            {"cut": "N01", "start": 4.0, "end": 8.0, "seconds": 2.0, "ja": "b", "en": "b"},
+        ]
+        placed = subs.place_sentences(lines, lead=0.3, gap=0.4)
+        # N00 ends at 4.8; N01 would start at 4.3, so it waits until 4.8 + gap
+        self.assertEqual([p["at"] for p in placed], [0.3, 5.2])
+        self.assertEqual(subs.late_cuts(placed), [("N00", 0.8)])
+
     def test_cues_and_english(self):
         placed = [{"at": 1.0, "seconds": 4.0, "ja": "短い。", "en": "Short."}]
         cues = subs.build_cues(placed, [[0.0]])

@@ -156,12 +156,17 @@ class Cue:
 
 def place_sentences(lines: list[dict], lead: float = LEAD_S, gap: float = GAP_S,
                     origin: float = 0.0) -> list[dict]:
-    """Start time on the video timeline for every sentence (lines from voice.json)."""
-    placed, cursor, cut = [], None, None
+    """Start time on the video timeline for every sentence (lines from voice.json).
+
+    A cut's first sentence starts ``lead`` into its slot, or later if the
+    previous cut's voice has not finished: sentences never overlap, and a
+    late cut pushes the ones after it.
+    """
+    placed, cursor, cut = [], 0.0, None
     for ln in lines:
         if ln["cut"] != cut:
             cut = ln["cut"]
-            cursor = ln["start"] - origin + lead
+            cursor = max(ln["start"] - origin + lead, cursor)
         start = cursor
         cursor = start + ln["seconds"] + gap
         placed.append({**ln, "at": round(start, 3)})
@@ -303,10 +308,18 @@ def cmd_layout(voice_dir: Path, out_dir: Path, cuts: list[str] | None, hot: list
     (out_dir / "cues.json").write_text(json.dumps(
         {"origin_s": origin, "length_s": total, "sentences": placed,
          "cues": [c.__dict__ for c in cues]}, ensure_ascii=False, indent=2), encoding="utf-8")
-    late = [ln["cut"] for ln in placed if ln["at"] + ln["seconds"] > ln["end"] - origin]
     print(f"{len(placed)} sentences, {len(cues)} Japanese lines, {total:.2f} s")
-    if late:
-        print("voice runs past its slot in: " + ", ".join(sorted(set(late))))
+    for cut, over in late_cuts(placed, origin):
+        print(f"  {cut}: voice ends {over:.2f} s after its slot")
+
+
+def late_cuts(placed: list[dict], origin: float = 0.0) -> list[tuple[str, float]]:
+    """Cuts whose voice ends after the slot ends, and by how much (s)."""
+    ends: dict[str, float] = {}
+    for ln in placed:
+        over = ln["at"] + ln["seconds"] - (ln["end"] - origin)
+        ends[ln["cut"]] = max(ends.get(ln["cut"], over), over)
+    return [(cut, round(over, 2)) for cut, over in ends.items() if over > 0]
 
 
 def burn_command(video: Path, ass: Path, out: Path, audio: Path | None, ffmpeg: str = "ffmpeg",
