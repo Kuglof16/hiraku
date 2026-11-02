@@ -259,11 +259,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 
     A mismatch stops the run unless the plan names it in expected_mismatch;
-    then the plan's cause (written in the plan with its source) is recorded and
-    the step predicts again with the plan's retry, or, with no retry, the run
+    then the plan's cause (written in the plan with its source) is recorded,
+    and either the plan judges the mismatch safe side (record_cause checks the
+    numbers and makes the verdict from the prediction, and the step ends), or
+    the step predicts again with the plan's retry, or, with neither, the run
     stops there. After all steps, a red tile and a `revise` entry left in the
     plan make the designer call revise_design, and the steps run again on the
     new version. Ctrl+C finishes the run as stopped and is raised again.
+    run.finished carries stop_code: done, round_limit (judged with a red tile
+    and no revision left), not_judged or user_stop.
     """
     s = ctx.store
     plan = compose_plan(ctx, plan)
@@ -274,7 +278,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
-    status, reason, interrupted = "done", None, False
+    status, reason, code, interrupted = "done", None, "done", False
 
     def start(agent: str, domain: str | None = None) -> None:
         if agent not in started:
@@ -310,9 +314,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 raise Stop(f"revise_design refused: {e}") from None
             s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、全部の荷重条件をやり直します")
     except Stop as e:
-        status, reason = "stopped", str(e)
+        status, reason, code = "stopped", str(e), "not_judged"
     except KeyboardInterrupt:
-        status, reason, interrupted = "stopped", STOPPED_BY_USER, True
+        status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
@@ -320,8 +324,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if status == "done":
         left = rules.stop_reason(ctx)
         if left:
-            status, reason = "stopped", left
-    s.finish(status, stop_reason=reason)
+            status, reason, code = "stopped", left, "not_judged"
+        else:
+            code = rules.judged_code(ctx)
+    s.finish(status, stop_reason=reason, stop_code=code)
     if interrupted:
         raise KeyboardInterrupt
     return status

@@ -89,6 +89,6 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
         check_shelf(ctx)
         init_judgements(ctx)
     except KeyboardInterrupt:  # the tool checks take a while; do not leave the folder "running"
-        store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        store.finish("stopped", stop_reason=STOPPED_BY_USER, stop_code="user_stop")
         raise
     return ctx

@@ -115,6 +115,13 @@ def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list
     return out
 
 
+def judged_code(ctx: RunContext) -> str:
+    """stop_code of a run that ended with every picked domain judged: round_limit when a tile
+    is red and no design revision is left (round_limit), else done."""
+    red = any(j["state"] == "red" for j in ctx.store.judgements())
+    return "round_limit" if red and ctx.version - 1 >= ctx.project["round_limit"] else "done"
+
+
 def stop_reason(ctx: RunContext) -> str | None:
     """HK4: why the run may not stop yet (None when every picked domain is judged)."""
     left = pending(ctx)

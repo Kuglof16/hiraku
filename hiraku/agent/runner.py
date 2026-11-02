@@ -128,18 +128,22 @@ def error_text(ctx: RunContext, result: Any) -> str:
     return (getattr(result, "subtype", None) or "error") + tail
 
 
-def final_status(ctx: RunContext, result: Any) -> tuple[str, str | None]:
+def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a Claude run from its last result message."""
     subtype = getattr(result, "subtype", None)
     if subtype == "error_max_budget_usd":
-        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached"
+        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached", "cost_limit"
     if subtype == "error_max_turns":
-        return "stopped", "turn limit reached"
+        return "stopped", "turn limit reached", "turn_limit"
     if result is None or getattr(result, "is_error", False):
-        return "failed", error_text(ctx, result)
+        return "failed", error_text(ctx, result), "error"
     left = rules.stop_reason(ctx)
     if left:
-        return "stopped", left
-    return "done", None
+        blocks = hooks.stop_blocks if hooks is not None else 0
+        why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
+               if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
+        return "stopped", why + left, "not_judged"
+    return "done", None, rules.judged_code(ctx)
 
 
 async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) -> None:
@@ -194,18 +198,25 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
                             max_budget_usd=max_budget_usd, max_turns=max_turns)
     log = MessageLog(ctx)
     ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
+
+    def close(status: str, reason: str | None, code: str) -> None:
+        # roles the CLI never reported stopped (cut off with the run) stop with it, then the lead
+        for agent in sorted(set(hooks.running.values())):
+            domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
+            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+        hooks.running.clear()
+        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        ctx.store.finish(status, stop_reason=reason, stop_code=code)
+
     try:
         async with ClaudeSDKClient(options=options) as client:
             await converse(client, ctx, hooks, log)
     except (KeyboardInterrupt, asyncio.CancelledError):  # Ctrl+C: asyncio.run cancels this task
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-        ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        close("stopped", STOPPED_BY_USER, "user_stop")
         raise
     except Exception as e:
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-        ctx.store.finish("failed", stop_reason=f"{type(e).__name__}: {e}")
+        close("failed", f"{type(e).__name__}: {e}", "error")
         raise
-    ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-    status, reason = final_status(ctx, log.result)
-    ctx.store.finish(status, stop_reason=reason)
+    status, reason, code = final_status(ctx, log.result, hooks)
+    close(status, reason, code)
     return status

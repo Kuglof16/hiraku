@@ -49,7 +49,7 @@ def _cmd_run(a: argparse.Namespace) -> int:
                                         max_turns=a.max_turns))
     except KeyboardInterrupt:
         if ctx.store.project["status"] == "running":  # stopped between the run's own handlers
-            ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)
+            ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER, stop_code="user_stop")
         _print_end(ctx, scripted=a.scripted)
         return 130
     _print_end(ctx, scripted=a.scripted)

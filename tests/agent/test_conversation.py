@@ -105,6 +105,7 @@ class BackgroundRoleTest(ConversationCase, unittest.TestCase):
 
         status, client = self.run_claude(script)
         self.assertEqual(status, "done")
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["stop_code"], "done")
         self.assertEqual(client.queries[1:], [WAKE_TEXT])
         self.assertEqual(client.stop_answers, [{}] * 5)  # never blocked, never counted
         self.assertEqual(self.kinds("hook.blocked_stop"), [])
@@ -172,6 +173,24 @@ class ForegroundRoleTest(ConversationCase, unittest.TestCase):
         self.assertEqual(status, "stopped")
         self.assertEqual([a.get("decision") for a in client.stop_answers], ["block", "block", "block", None])
         self.assertEqual(len(self.kinds("hook.blocked_stop")), 3)
+        finished = self.ctx.store.events()[-1]["data"]
+        self.assertEqual(finished["stop_code"], "not_judged")
+        self.assertIn("止めるのを 3 回断ったあと、上限で終了", finished["stop_reason"])
+
+    def test_roles_cut_off_with_the_run_are_stopped_too(self):
+        async def script(client):
+            await client.inbox.get()
+            await client.hook("SubagentStart")({"agent_id": "a1", "agent_type": "cae-strength"}, None, None)
+            yield AssistantMessage(content=[TextBlock(text="渡しました")], model="m")
+            raise RuntimeError("the CLI went away")  # the stream ends with the role still marked running
+
+        with self.assertRaises(RuntimeError):
+            self.run_claude(script)
+        self.assertEqual(self.kinds("agent.started", "agent.stopped")[-2:],
+                         [("agent.stopped", "cae.strength"), ("agent.stopped", "lead")])
+        finished = self.ctx.store.events()[-1]["data"]
+        self.assertEqual((finished["status"], finished["stop_code"]), ("failed", "error"))
+        self.assert_events_fit()
 
 
 class OptionsTest(RunCase, unittest.TestCase):

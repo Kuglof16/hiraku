@@ -279,7 +279,10 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 # ---------------------------------------------------------------------------- comparison
 
 
-def _pick_result(analysis: Record, quantity: str) -> Record:
+def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None) -> Record:
+    """The analysis result of a quantity. Given at several places, the unfavourable one: for
+    the criterion's quantity the largest under <= and <, the smallest under >= and >;
+    otherwise the largest in size."""
     hits = [r for r in analysis["results"] if r["quantity"] == quantity]
     if not hits:
         have = ", ".join(sorted({r["quantity"] for r in analysis["results"]})) or "なし"
@@ -287,7 +290,11 @@ def _pick_result(analysis: Record, quantity: str) -> Record:
             f"解析 {analysis['analysis_id']} の結果に {quantity!r} がありません (結果: {have})。"
             f"名前が違うだけなら result_quantity で解析の側の名前を指定してください"
         )
-    return max(hits, key=lambda r: abs(r["value"]))  # several places: the largest, the safe side
+    if criterion is not None and criterion["quantity"] == quantity:
+        if unfavourable_side(criterion["op"]) == "larger":
+            return max(hits, key=lambda r: r["value"])
+        return min(hits, key=lambda r: r["value"])
+    return max(hits, key=lambda r: abs(r["value"]))
 
 
 def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> None:
@@ -322,14 +329,14 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
             f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids'])} に対して走らせたもので、"
             f"{pred['prediction_id']} は入っていません"
         )
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"])
+    lc = ctx.load_case(pred["load_case_id"])
+    crit = lc.get("criterion")
+    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit)
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
             f"K0 の式で解析と同じ単位 {res['unit']} の予測を記録し直してください"
         )
-    lc = ctx.load_case(pred["load_case_id"])
-    crit = lc.get("criterion")
     agent = agent or ctx.owner(lc["load_case_id"])
 
     predicted, analyzed = pred["value"], res["value"]

@@ -1,8 +1,13 @@
 """The MCP server "hiraku": a thin wrapper around hiraku.tools.functions.
 
 Input schemas come from the contract (tool_input.*), with $refs inlined so
-each schema stands alone. Results are the records as JSON text; a ToolError
-comes back with is_error and its message (what is wrong, what to do next).
+each schema stands alone; get_context, list_formulas and list_tools have
+their own. Results are JSON text of what the function returns: the record
+for record_prediction; for analyze the record without what only the screen
+uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
+record_cause; a summary of the new version for revise_design; the asked-for
+parts for the reading tools. A ToolError comes back with is_error and its
+message (what is wrong, what to do next).
 """
 
 from __future__ import annotations

@@ -167,6 +167,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
 
     def test_red_assembly_is_fixed_by_the_designer_and_judged_again(self):
         self.assertEqual(run_scripted(self.ctx, self.plan()), "done")
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")
         v1 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(1)}
         v2 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(2)}
         self.assertEqual(v1, {"strength": "green", "assembly": "red"})
@@ -190,6 +191,14 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual(self.ctx.version, 1)
         self.assertEqual({j["domain"]: j["state"] for j in self.ctx.store.judgements()},
                          {"strength": "green", "assembly": "red"})
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")  # a revision was left
+
+    def test_red_after_the_last_revision_ends_at_the_round_limit(self):
+        plan = self.plan()
+        plan["revise"] = [{"changes": {"track": {"value": 1250.0, "unit": "mm"}}, "reason": "not enough"}]
+        self.assertEqual(run_scripted(self.ctx, plan), "done")
+        self.assertEqual((self.ctx.version, self.ctx.store.judgements()[-1]["state"]), (2, "red"))
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "round_limit")
 
     def test_refused_revision_stops_the_run(self):
         plan = self.plan()
@@ -206,6 +215,7 @@ class MissingStepTest(BuildersCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertIn("台本の予測のしかたが無いので回せない荷重条件: H1-steer30", said)
         self.assertIn("H1-steer30", self.ctx.project["stop_reason"])
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "not_judged")
         project = json.loads((self.ctx.store.path / layout.PROJECT_FILE).read_text(encoding="utf-8"))
         self.assertEqual(project["status"], "stopped")
 

@@ -145,6 +145,24 @@ class LoopTest(RunCase, unittest.TestCase):
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
 
 
+class PickResultTest(unittest.TestCase):
+    def test_several_places_give_the_unfavourable_one(self):
+        from hiraku.tools.functions import _pick_result
+
+        ana = {"analysis_id": "ana-0001", "results": [
+            {"quantity": "free_steer_angle", "value": 34.0, "unit": "deg", "where": "FR"},
+            {"quantity": "free_steer_angle", "value": 28.0, "unit": "deg", "where": "FL"},
+            {"quantity": "max_stress", "value": -90.0, "unit": "MPa", "where": "a"},
+            {"quantity": "max_stress", "value": 60.0, "unit": "MPa", "where": "b"},
+        ]}
+        at_least = {"quantity": "free_steer_angle", "op": ">=", "limit": {"value": 30.0, "unit": "deg"}}
+        at_most = {"quantity": "max_stress", "op": "<=", "limit": {"value": 160.0, "unit": "MPa"}}
+        self.assertEqual(_pick_result(ana, "free_steer_angle", at_least)["where"], "FL")  # >=: the smallest
+        self.assertEqual(_pick_result(ana, "max_stress", at_most)["where"], "b")  # <=: the largest
+        self.assertEqual(_pick_result(ana, "max_stress")["where"], "a")  # no criterion: the largest in size
+        self.assertEqual(_pick_result(ana, "free_steer_angle", at_most)["where"], "FR")  # criterion on another quantity
+
+
 class LeverRuleTest(RunCase, unittest.TestCase):
     def test_lever_rule_at_rest_overestimates_the_climbing_wheel(self):
         load, force = self.predict_p1(formula_id="mass_props.front_wheel_load")
