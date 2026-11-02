@@ -23,6 +23,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier の照合は `qa/rapier/`、Node はここだけ) |
 | 広報部 | `promo/` |
+| 受付部 | `hiraku/intake/` (分野を選ぶ・ヒアリング・ナレッジの規則)、`data/requirements/products/` (デモ以外の製品の要件)、`data/knowledge/` (最初から入っている規則)、`web/js/intake/` (A1・A2・A5 の画面)、`tests/intake/` |
 
 機械で引く表は `hiraku/contract/layout.py` の `OWNERS` (`owner_of(path)`)。
 

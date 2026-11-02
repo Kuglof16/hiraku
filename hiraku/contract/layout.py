@@ -130,6 +130,13 @@ OWNERS = {
     "promo": [  # 広報部: title and explainer screens, video prep
         "promo/",
     ],
+    "intake": [  # 受付部: picking domains, hearing, knowledge rules (N09, N14)
+        "hiraku/intake/",
+        "data/requirements/products/",
+        "data/knowledge/",
+        "web/js/intake/",
+        "tests/intake/",
+    ],
 }
 
 
