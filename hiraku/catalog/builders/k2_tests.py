@@ -21,8 +21,9 @@ that gave on the demo vehicle (the cause found by splitting the gap), and
 predicts again with the side-slope balance.
 
 Past the limit: a catalog spec with "variant": "beyond" makes BUILDERS build
-the case past the design's own limit (BEYOND: F1, S4, S5), whose verdict is
-expected to fail; PLANS_BEYOND holds the steps that differ (S5). S3 has none:
+the case past the design's own limit (BEYOND: F1, S4, S5; load_case_id ending
+-beyond, title starting 限界の外), whose verdict is expected to fail;
+PLANS_BEYOND holds the steps that differ (S5). S3 has none:
 on the demo vehicle the tyres slide before a wheel lifts (no lift up to
 80 km/h at friction 0.8), so a lift past the limit is not there to show.
 
@@ -260,7 +261,7 @@ def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
                {"m": load["mass"], "t": s["track_front"], "C_y": w["C_y"], "A": w["A"], "h_cp": w["h_cp"], "rho": w["rho"]})
     gust = BEYOND_FACTOR * crit
     wind_from = "left" if _cg_y(design, on) <= 0.0 else "right"
-    return _case(spec, "F1", "aero", f"F1-beyond{gust:.0f}",
+    return _case(spec, "F1", "aero", f"F1-gust{gust:.0f}-beyond",
                  f"限界の外: 転倒する風速 {crit:.1f} m/s (手計算) の {BEYOND_FACTOR:g} 倍、{gust:.1f} m/s の横風 "
                  f"({LOADING_JA[on]})",
                  {"loading": on, "wind_speed": q(gust, "m/s"), "speed": q(speed, "km/h"), "wind_from": wind_from},
@@ -272,7 +273,7 @@ def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
 def _s4_beyond(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
     stop = number(req, "Q52", "m")
-    return _case(spec, "S4", "handling", f"S4-beyond-mu{BEYOND_MU:g}",
+    return _case(spec, "S4", "handling", f"S4-mu{BEYOND_MU:g}-beyond",
                  f"限界の外: 滑りやすい砂利 (μ {BEYOND_MU:g} は仮定) で {S4_SPEED_KMH:g} km/h から急制動、"
                  f"{stop:g} m 以内に止まる ({LOADING_JA[on]})",
                  {"loading": on, "speed": q(S4_SPEED_KMH, "km/h"), "mu": q(BEYOND_MU, "1"), "reaction_time": q(0.0, "s")},
@@ -289,7 +290,7 @@ def _s5_beyond(spec: Record, req: Record, design: Record) -> Record:
     tip = _k0("tilt.spring_roll_angle", "theta", dict(ti, t=s["track_front"], m=load["mass"]))
     beta = BEYOND_FACTOR * tip
     slope_up = "left" if _cg_y(design, on) <= 0.0 else "right"
-    return _case(spec, "S5", "handling", f"S5-beyond{beta:.0f}",
+    return _case(spec, "S5", "handling", f"S5-slope{beta:.0f}-beyond",
                  f"限界の外: 上の輪が浮く傾き {tip:.1f}° (手計算) の {BEYOND_FACTOR:g} 倍、横 {beta:.1f}° の斜面 "
                  f"(タイヤは滑らないものとして μ {BEYOND_HOLD_MU:g}、{LOADING_JA[on]})",
                  {"loading": on, "road_class": cls, "side_slope": q(beta, "deg"), "slope_up": slope_up,

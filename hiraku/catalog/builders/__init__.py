@@ -13,10 +13,12 @@ formula_id, output, assumptions and input refs, optionally expected_mismatch),
 without load_case (it is the built one). Refs are those of scripted.yaml plus
 from.<name>: the value the prediction's inputs_from(design, load_case) returns
 under that name. FEEDS[test_id] lists the tests that take its results.
+A spec with "variant": "beyond" builds the case past the limit (load_case_id
+ending -beyond); PLANS_BEYOND[test_id] is its step where it differs from PLANS.
 
 The analysis department's tests are in analysis.py; the K2 team's in k2_*.py,
 which this package collects by name. Each module exports BUILDERS and may
-export PLANS and FEEDS; a test id belongs to one module only.
+export PLANS, PLANS_BEYOND and FEEDS; a test id belongs to one module only.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from hiraku.catalog.builders.common import BuildError, Record
 
 BUILDERS: dict = {}
 PLANS: dict[str, Record] = {}
+PLANS_BEYOND: dict[str, Record] = {}  # steps of the cases past the limit that differ from PLANS
 FEEDS: dict[str, list[str]] = {}
 
 
@@ -42,10 +45,11 @@ def _collect() -> None:
             owner[test_id] = name
             BUILDERS[test_id] = fn
         PLANS.update(getattr(mod, "PLANS", {}))
+        PLANS_BEYOND.update(getattr(mod, "PLANS_BEYOND", {}))
         for test_id, down in getattr(mod, "FEEDS", {}).items():
             FEEDS.setdefault(test_id, []).extend(t for t in down if t not in FEEDS.get(test_id, []))
 
 
 _collect()
 
-__all__ = ["BUILDERS", "FEEDS", "PLANS", "BuildError"]
+__all__ = ["BUILDERS", "FEEDS", "PLANS", "PLANS_BEYOND", "BuildError"]

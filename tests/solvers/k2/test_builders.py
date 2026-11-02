@@ -61,6 +61,9 @@ class Builders(unittest.TestCase):
         self.assertEqual(set(PLANS), set(BUILDERS))
         for tid, fn in BUILDERS.items():  # the package collects this module
             self.assertIs(ALL_BUILDERS[tid], fn)
+        from hiraku.catalog.builders import PLANS_BEYOND as ALL_PLANS_BEYOND
+        for tid, step in PLANS_BEYOND.items():
+            self.assertIs(ALL_PLANS_BEYOND[tid], step)
 
     def test_load_cases_fit_the_contract(self):
         for tid, lc in self.cases.items():
@@ -119,7 +122,7 @@ class Builders(unittest.TestCase):
             with self.subTest(test=tid):
                 lc = BUILDERS[tid]({"id": tid, "variant": "beyond"}, self.req, self.design)
                 self.assertEqual(contract.errors("load_case", lc), [])
-                self.assertIn("beyond", lc["load_case_id"])
+                self.assertTrue(lc["load_case_id"].endswith("-beyond"), lc["load_case_id"])
                 self.assertTrue(lc["title"].startswith("限界の外"))
                 declared = {p["name"] for p in TOOLS[TOOL_OF[tid]].describe()["params"]}
                 self.assertEqual(set(lc["params"]) - declared, set())
