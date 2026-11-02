@@ -68,6 +68,10 @@ class MailboxTest(unittest.TestCase):
                          {"answers": {"Q40": {"value": 1700, "unit": "N"}}, "note": "ok", "use_defaults": True})
         self.assertEqual(list(self.run_path.glob("*.tmp")), [])
 
+    def test_save_answer_takes_the_buttons_spelling(self):
+        path = hearing.save_answer(self.run_path, {"answers": {}, "note": "", "useDefaults": False})
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["use_defaults"], False)
+
     def test_save_answer_refuses_bad_bodies(self):
         for body in ({"stuff": 1}, {"answers": []}, {"answers": {"Q98": 1}}, {"answers": {"Q40": {"value": 1, "unit": "lbf"}}}):
             with self.subTest(body=body):

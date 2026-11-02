@@ -245,6 +245,9 @@ def write_request(run_path: Path, asked: Record) -> Path:
 
 def save_answer(run_path: Path, body: Record) -> Path:
     """What the screen's server calls with the body of A2's answer: checks it and writes hearing.answer.json."""
+    body = dict(body)
+    if "useDefaults" in body:  # A2's button sends the JavaScript spelling
+        body["use_defaults"] = body.pop("useDefaults")
     unknown = [k for k in body if k not in ("answers", "note", "use_defaults")]
     if unknown:
         raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults だけ)")
