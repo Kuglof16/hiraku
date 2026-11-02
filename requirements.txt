@@ -1,0 +1,7 @@
+numpy==2.4.4
+scipy==1.18.0
+PyNiteFEA==3.2.0
+sympy==1.14.0
+PyYAML==6.0.3
+jsonschema==4.26.0
+claude-agent-sdk==0.2.173

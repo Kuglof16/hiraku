@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets and files that stay on this machine
+.env
+.env.*
+*.local.*
+CLAUDE.local.md
+.private/
+
+# Run records (one folder per run)
+runs/
+
+# Node
+node_modules/
+
+# Worktrees made by Claude Code
+.claude/worktrees/
+
+# OS and editors
+Thumbs.db
+.DS_Store
+.vscode/
