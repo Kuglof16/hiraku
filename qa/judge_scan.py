@@ -28,9 +28,14 @@ review (a person decides):
   Not counted, as they are not values taken from outside: docstrings, a tool's
   own known-answer cases (functions named *known_answer*, *check*, test*),
   constants exact by definition (9.80665, 273.15, ...), guards such as 0.999,
+  integer counts of a numerical method (SCENE_POINTS = 801, nperseg=4096),
   integer coefficients of a closed form (384 in 5 w L^4 / (384 E I)),
-  subscripts, and a design's coordinates and sizes in mm (data/designs/)
-- records with verified=false, and data files with no `source`
+  subscripts, design variables with their range (Var(unit, default, lo, hi) in
+  hiraku/designgen/), and the design JSON that hiraku/designgen/ writes
+  (data/designs/*.json; its values are checked in the generator)
+- data files with verified=false values that README's 確かめていない list does not
+  name (by the file's path, or for a design JSON by hiraku/designgen/, which writes
+  it), and data files with no `source`
 - whether README says which values were not checked (確かめていない)
 - binary files (rights of images and other material)
 """
@@ -54,7 +59,7 @@ CODE_DIRS = ("hiraku/", "data/", "web/", "plugins/", "promo/")
 NOT_CODE = ("hiraku/contract/examples/", "hiraku/contract/hiraku.schema.json")
 # where values taken from outside (material data, catalog limits, constants) live;
 # screen sizes, ports and buffer sizes elsewhere are not such values
-NUMBER_DIRS = ("hiraku/solvers/", "hiraku/catalog/", "hiraku/tools/", "data/")
+NUMBER_DIRS = ("hiraku/solvers/", "hiraku/catalog/", "hiraku/tools/", "hiraku/designgen/", "data/")
 SELF = "qa/judge_scan.py"  # holds the patterns themselves
 NO_SPEECH_CHECK = ("CLAUDE.md",)  # states the rule against quoting
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -79,10 +84,14 @@ SELF_CHECK_FN = re.compile(r"(?i)known_answer|check|^_?test")
 DEFINED = {"9.80665", "273.15", "101325", "101325.0", "25.4", "0.0254", "0.3048", "0.45359237", "1.609344"}
 # - numerical guards just below or above 1 (0.999, 1.001)
 GUARD_RE = re.compile(r"^(0\.9{3,}|1\.0{2,}1)$")
-# - in a design file, coordinates and sizes in mm: the design chooses them
-DESIGN_DIR = "data/designs/"
-TRIPLE_RE = re.compile(r"\[\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\]")
-JSON_LIST_KEY = re.compile(r'"(\w+)"\s*:\s*\[\s*$')
+# - counts of a numerical method (points, steps, samples, terms, bins, iterations)
+COUNT_RE = re.compile(r"(?i)\b(\w*(?:points|steps|samples|terms|bins|iters?|iterations|nperseg)\w*\s*[:=]\s*)\d+\b")
+# - a design JSON is written by hiraku/designgen/ (data/designs/make_*.py), whose code
+#   holds the values and their sources and is checked itself
+GENERATED_JSON = re.compile(r"^data/designs/[^/]+\.json$")
+# - a design variable with its range, Var(unit, default, lo, hi, ...) in hiraku/designgen/:
+#   the design chooses it (a Var without a range is a fixed value and needs its note)
+DESIGN_VAR_RE = re.compile(r"\bVar\(\s*\"[^\"]*\"\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+")
 
 
 @dataclass(frozen=True)
@@ -135,6 +144,17 @@ def _enclosing_def(lines: list[str], n: int) -> str | None:
     return None
 
 
+def _unchecked_list(readme: str) -> str:
+    """The part of README that lists the values not checked: from the first line with
+    確かめていない to the next heading ("" when there is none)."""
+    lines = readme.splitlines()
+    start = next((k for k, s in enumerate(lines) if "確かめていない" in s), None)
+    if start is None:
+        return ""
+    end = next((k for k in range(start + 1, len(lines)) if re.match(r"#{1,6}\s", lines[k])), len(lines))
+    return "\n".join(lines[start:end])
+
+
 def _abstract_method(lines: list[str], n: int, texts: set[int]) -> bool:
     """Line n is `raise NotImplementedError` as the whole body of a method: a base class
     leaving it to its subclasses, not unfinished work."""
@@ -170,17 +190,6 @@ def _value_numbers(bare: str) -> list[str]:
     return out
 
 
-def _design_geometry(lines: list[str], n: int) -> bool:
-    """In a design JSON file, line n is an element of a list whose key ends in _mm."""
-    if not re.fullmatch(r"\s*-?[\d.eE+-]+,?\s*", lines[n - 1]):
-        return False
-    for k in range(n - 2, max(-1, n - 6), -1):
-        m = JSON_LIST_KEY.search(lines[k])
-        if m:
-            return m.group(1).endswith("_mm")
-    return False
-
-
 def git(*args: str, cwd: Path) -> str:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", check=True).stdout
@@ -210,6 +219,7 @@ class Scan:
         self.repo, self.ref = repo, ref
         self.private = private_patterns(hook)
         self.findings: list[Finding] = []
+        self.unchecked = ""  # README's list of values not checked (確かめていない), read by scan_files
         if not self.private:
             self.add("error", "private.patterns", str(hook.name), "no WORDS/PATHS patterns found; private words not checked")
 
@@ -238,7 +248,8 @@ class Scan:
 
     def scan_files(self) -> None:
         names = self.files()
-        readme_has_unchecked = False
+        readme = git("show", f"{self.ref}:README.md", cwd=self.repo) if "README.md" in names else ""
+        self.unchecked = _unchecked_list(readme)
         for name in names:
             if LOCAL_FILES.search(name):
                 self.add("error", "local.file", name, "should not be tracked")
@@ -263,11 +274,9 @@ class Scan:
                 self.check_line(f"{name}:{n}", line, doc)
                 if code:
                     self.check_code_line(name, n, line, lines, suffix, texts)
-            if name == "README.md" and "確かめていない" in text:
-                readme_has_unchecked = True
             if suffix == ".json" and name.startswith("data/"):
                 self.check_data_json(name, text)
-        if "README.md" in names and not readme_has_unchecked:
+        if "README.md" in names and not self.unchecked:
             self.add("review", "readme.unchecked", "README.md", "no 確かめていない list yet")
         if "LICENSE" not in names:
             self.add("error", "license", "LICENSE", "missing")
@@ -284,11 +293,10 @@ class Scan:
         if suffix in (".py", ".json", ".yaml", ".yml") and name.startswith(NUMBER_DIRS) and "/tests/" not in f"/{name}":
             if n in texts or (suffix == ".py" and SELF_CHECK_FN.search(_enclosing_def(lines, n) or "")):
                 return  # a docstring, or a tool's own known-answer cases
-            if suffix == ".json" and name.startswith(DESIGN_DIR) and _design_geometry(lines, n):
-                return
+            if GENERATED_JSON.match(name) or DESIGN_VAR_RE.search(line):
+                return  # written by hiraku/designgen/ (checked there), or a design variable with its range
             bare = STRING_RE.sub('""', line.split("#")[0] if suffix == ".py" else line)
-            if name.startswith(DESIGN_DIR):
-                bare = TRIPLE_RE.sub("[]", bare)  # coordinates and box sizes in mm
+            bare = COUNT_RE.sub(r"\1", bare)  # SCENE_POINTS = 801, nperseg=4096: chosen by the code
             if _value_numbers(bare):
                 # code: the line and the comment lines above it; data: the surrounding object
                 above, below = (4, 0) if suffix == ".py" else (6, 6)
@@ -298,7 +306,11 @@ class Scan:
 
     def check_data_json(self, name: str, text: str) -> None:
         if VERIFIED_FALSE.search(text):
-            self.add("review", "unverified", name, "has verified=false values; README must list them")
+            # listed by its path, or a design JSON by the generator that writes it
+            listed = name in self.unchecked or bool(GENERATED_JSON.match(name) and "hiraku/designgen/" in self.unchecked)
+            if not listed:
+                self.add("review", "unverified", name,
+                         "has verified=false values that README's 確かめていない list does not name")
         if '"source"' not in text:
             self.add("review", "data.source", name, "data file without any source field")
 
