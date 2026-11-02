@@ -386,6 +386,81 @@ class BrowserReplayTest(unittest.TestCase):
             if tmp:
                 shutil.rmtree(tmp)
 
+    def test_scene_objects_and_stop_code_from_the_record(self):
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        # shape example of a tool's scene: a step ahead, a cone, the road sloping 10 deg to the right
+        ana["scene"] = [
+            {"kind": "step", "position_mm": [900.0, 0.0, 50.0], "size_mm": [600.0, 2000.0, 100.0]},
+            {"kind": "cone", "position_mm": [2000.0, 1500.0, 350.0], "size_mm": [300.0, 300.0, 700.0]},
+            {"kind": "slope", "rpy_deg": [10.0, 0.0, 0.0]},
+        ]
+        end = next(e for e in events if e["kind"] == "run.finished")
+        end["data"] = {"status": "stopped", "stop_code": "turn_limit", "stop_reason": "turn limit reached"}
+        for ev in events:
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const b = window.hiraku.bench;
+              return { recorded: b.sceneDesc.recorded, kinds: b.sceneDesc.objects.map((o) => o.kind), view: b.view,
+                       world: b.world.rotation.x,
+                       end: [...document.querySelectorAll("#log li")].map((li) => li.textContent).find((x) => x.includes("実行が終わった")) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertTrue(got["recorded"])
+        self.assertEqual(got["kinds"], ["step", "cone"])
+        self.assertEqual(got["view"], "front")  # cones mark a course, seen from the front
+        self.assertAlmostEqual(got["world"], 10 * 3.141592653589793 / 180)
+        self.assertIn("ターン数の上限に達した", got["end"])
+        page.close()
+
+    def test_start_a_run_from_the_screen(self):
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={"ANTHROPIC_API_KEY": "test-value-not-a-real-key"},
+                       command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .lreq")
+            ask = page.locator("#launch button[data-launch-ask]")
+            self.assertIn("$2", ask.text_content())  # the cost limit shows before anything starts
+            ask.click()
+            page.wait_for_selector("#launch .confirm")
+            self.assertIn("費用の上限は $2", page.text_content("#launch .confirm"))
+            page.click("#launch button[data-launch-cancel]")
+            page.wait_for_selector("#launch button[data-launch-ask]")
+            self.assertFalse(lau.started)  # nothing ran yet
+            page.click('#launch button[data-launch="scripted"]')
+            page.wait_for_url(f"**/?run={run_id}", timeout=30000)
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.evaluate("window.hiraku.ready")
+            self.assertGreater(page.evaluate("window.hiraku.player.events.length"), 0)
+            self.assertEqual([s["mode"] for s in lau.started], ["scripted"])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp)
+
     def test_opens_the_saved_run_without_run_in_the_url(self):
         tmp = Path(tempfile.mkdtemp())
         run_id = "20261106-100000-offroad-4w"

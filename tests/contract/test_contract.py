@@ -84,6 +84,15 @@ class SchemaTest(unittest.TestCase):
                                                      "value_from": "prediction", "cause_id": "cause-0001"}), [])
         self.assertNotEqual(contract.errors("verdict", {**v, "basis": "close_enough"}), [])
 
+    def test_stop_code_goes_with_status(self):
+        ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
+        ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop")]
+        for status, code in ok:
+            self.assertEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
+        for status, code in [("done", "cost_limit"), ("failed", "done"), ("stopped", "error")]:
+            self.assertNotEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
+        self.assertEqual(contract.errors("event", {**ev, "data": {"status": "stopped"}}), [])  # stop_code optional
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []

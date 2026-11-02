@@ -10,7 +10,7 @@ from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
-from hiraku.agent.session import STOPPED_BY_USER
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
 from hiraku.tools.functions import RUN_TOOLS
 
@@ -19,6 +19,20 @@ DEFAULT_EFFORT = "high"
 DEFAULT_MAX_TURNS = 200
 AGENT_TOOL = "Agent"
 SKILL_TOOL = "Skill"
+
+# The bundled CLI launches subagents in the background by default; with this set, the Agent
+# tool has no run_in_background and every subagent is synchronous (checked in CLI 2.1.309).
+FOREGROUND_ROLES_ENV = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
+# How long to wait after the last role stops, while the lead's turn has ended, before the lead
+# is woken with WAKE_TEXT (the CLI may start a turn by itself first). Only for roles that ran in
+# the background anyway.
+WAKE_GRACE_S = 5.0
+MAX_WAKES = 5
+# The stop button: how often stop.request is looked for, and how long the interrupted turn may
+# take to close before the reading is cut.
+STOP_POLL_S = 1.0
+STOP_GRACE_S = 10.0
+WAKE_TEXT = "担当の役の仕事が終わりました。get_context で judgements を確かめて、続きを進めてください。"
 
 
 class MissingApiKey(RuntimeError):
@@ -61,6 +75,9 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
         max_turns=max_turns,
         forward_subagent_text=True,
         cwd=str(ctx.store.path.resolve()),
+        # Roles run in the foreground: the lead's turn waits for their results (several Agent
+        # calls in one message run side by side) instead of ending while they work.
+        env=dict(FOREGROUND_ROLES_ENV),
     )
 
 
@@ -115,18 +132,85 @@ def error_text(ctx: RunContext, result: Any) -> str:
     return (getattr(result, "subtype", None) or "error") + tail
 
 
-def final_status(ctx: RunContext, result: Any) -> tuple[str, str | None]:
+def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a Claude run from its last result message."""
     subtype = getattr(result, "subtype", None)
     if subtype == "error_max_budget_usd":
-        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached"
+        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached", "cost_limit"
     if subtype == "error_max_turns":
-        return "stopped", "turn limit reached"
+        return "stopped", "turn limit reached", "turn_limit"
     if result is None or getattr(result, "is_error", False):
-        return "failed", error_text(ctx, result)
+        return "failed", error_text(ctx, result), "error"
     left = rules.stop_reason(ctx)
     if left:
-        return "stopped", left
-    return "done", None
+        blocks = hooks.stop_blocks if hooks is not None else 0
+        why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
+               if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
+        return "stopped", why + left, "not_judged"
+    return rules.judged_end(ctx)
+
+
+async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) -> None:
+    """Give the lead its task and read messages until its turn ends with no role at work.
+
+    Roles run in the foreground (FOREGROUND_ROLES_ENV), so the lead's turn normally outlasts
+    them. Should a role still be at work when the lead's turn ends, the reading goes on (the
+    roles are not cut off), and when the last role stops while the lead is idle, the lead is
+    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
+    The stop button (stop.request, checked every STOP_POLL_S) interrupts the CLI; the
+    hooks deny every tool from then on, and the reading ends within STOP_GRACE_S.
+    """
+    from claude_agent_sdk import AssistantMessage, ResultMessage
+
+    state = {"idle": False, "wakes": 0}
+    loop = asyncio.get_running_loop()
+
+    async def wake() -> None:
+        await asyncio.sleep(WAKE_GRACE_S)
+        if state["idle"] and not hooks.running and state["wakes"] < MAX_WAKES:
+            state["wakes"] += 1
+            state["idle"] = False
+            await client.query(WAKE_TEXT)
+
+    def roles_done() -> None:
+        if state["idle"]:
+            loop.create_task(wake())
+
+    main = asyncio.current_task()
+    cut = {"done": False}
+
+    async def watch_stop() -> None:
+        while not hooks.stopping():
+            await asyncio.sleep(STOP_POLL_S)
+        ctx.store.emit("agent.said", agent="system", text="止めるボタンが押されたので、実行を止めます")
+        try:
+            await client.interrupt()
+        except Exception:  # the stop goes ahead whatever the CLI says
+            pass
+        await asyncio.sleep(STOP_GRACE_S)  # the interrupted turn may close by itself meanwhile
+        cut["done"] = True
+        main.cancel()
+
+    hooks.on_roles_done = roles_done
+    watcher = loop.create_task(watch_stop())
+    try:
+        await client.query(prompts.lead_task(ctx))
+        async for msg in client.receive_messages():
+            log.handle(msg)
+            if isinstance(msg, ResultMessage):
+                state["idle"] = True
+                if not hooks.running or hooks.stop_requested:
+                    return
+                ctx.store.emit("agent.said", agent="system", text="まとめ役の番が終わりましたが、役がまだ動いているので待ちます: "
+                               + "、".join(sorted(set(hooks.running.values()))))
+            elif isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is None:
+                state["idle"] = False
+    except asyncio.CancelledError:
+        if not cut["done"]:
+            raise  # Ctrl+C
+        main.uncancel()  # the stop button cut the reading: an ordinary end
+    finally:
+        watcher.cancel()
 
 
 async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT,
@@ -143,20 +227,29 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
                             max_budget_usd=max_budget_usd, max_turns=max_turns)
     log = MessageLog(ctx)
     ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
+
+    def close(status: str, reason: str | None, code: str) -> None:
+        # roles the CLI never reported stopped (cut off with the run) stop with it, then the lead
+        for agent in sorted(set(hooks.running.values())):
+            domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
+            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+        hooks.running.clear()
+        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        ctx.store.finish(status, stop_reason=reason, stop_code=code)
+
     try:
         async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompts.lead_task(ctx))
-            async for msg in client.receive_response():
-                log.handle(msg)
+            await converse(client, ctx, hooks, log)
     except (KeyboardInterrupt, asyncio.CancelledError):  # Ctrl+C: asyncio.run cancels this task
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-        ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        close("stopped", STOPPED_BY_USER, "user_stop")
         raise
     except Exception as e:
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-        ctx.store.finish("failed", stop_reason=f"{type(e).__name__}: {e}")
+        close("failed", f"{type(e).__name__}: {e}", "error")
         raise
-    ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-    status, reason = final_status(ctx, log.result)
-    ctx.store.finish(status, stop_reason=reason)
+    if hooks.stop_requested:
+        close("stopped", STOPPED_BY_BUTTON, "user_stop")
+        ctx.store.clear_stop_request()
+        return "stopped"
+    status, reason, code = final_status(ctx, log.result, hooks)
+    close(status, reason, code)
     return status

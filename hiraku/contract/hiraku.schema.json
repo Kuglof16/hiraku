@@ -1273,6 +1273,13 @@
             "$ref": "#/$defs/scene_object"
           },
           "description": "What to draw around the vehicle for this test (from the load case and the solver, never hand-placed)."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values the tool had to assume because neither the load case nor the design gives them (e.g. a default side-force coefficient)."
         }
       }
     },
@@ -1457,8 +1464,11 @@
           "type": "boolean"
         },
         "margin_pct": {
-          "type": "number",
-          "description": "Positive when passing: how far the value is from the limit, as % of the limit."
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "How far the value is from the limit, as % of the limit, positive when passing. null when the limit is 0 (use margin)."
         },
         "requirement_keys": {
           "type": "array",
@@ -1482,6 +1492,10 @@
         "cause_id": {
           "type": "string",
           "pattern": "^cause-[0-9]{4,}$"
+        },
+        "margin": {
+          "$ref": "#/$defs/quantity",
+          "description": "How far the value is from the limit in its own unit, positive when passing."
         }
       }
     },
@@ -1691,7 +1705,9 @@
         "hook.denied",
         "hook.blocked_stop",
         "screen.focus",
-        "cost.updated"
+        "cost.updated",
+        "project.updated",
+        "report.written"
       ]
     },
     "event": {
@@ -2008,9 +2024,74 @@
                       "user_stop",
                       "error"
                     ],
-                    "description": "Why the run ended, for the screen to word."
+                    "description": "Why the run ended, for the screen to word. done goes with status done, error with failed, the others with stopped."
                   }
-                }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "done"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "done"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "const": "error"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "failed"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "stop_code"
+                      ],
+                      "properties": {
+                        "stop_code": {
+                          "enum": [
+                            "not_judged",
+                            "round_limit",
+                            "cost_limit",
+                            "turn_limit",
+                            "user_stop"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "status": {
+                          "const": "stopped"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -2071,6 +2152,44 @@
                 "required": [
                   "cost_usd"
                 ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "project.updated"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/project"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "report.written"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/report"
               }
             }
           }
@@ -2239,6 +2358,46 @@
         },
         "note": {
           "type": "string"
+        },
+        "fastenings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "kind"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "What it is fastened to, e.g. 'node LS1', 'member rail_L_AS1', 'part susp_FL'."
+              },
+              "kind": {
+                "enum": [
+                  "bolt",
+                  "weld",
+                  "rest",
+                  "pin"
+                ]
+              },
+              "at_mm": {
+                "$ref": "#/$defs/vec3"
+              }
+            }
+          }
+        },
+        "path_mm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vec3"
+          },
+          "minItems": 2,
+          "description": "Polyline the part's centre follows from outside the vehicle to its place (last point = its place)."
+        },
+        "text": {
+          "type": "string",
+          "description": "The step in one Japanese sentence, built by code."
         }
       }
     },
@@ -2323,13 +2482,16 @@
           "type": "string"
         },
         "position_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Centre of the box (size_mm). A cone is a point; a gate is a line through it."
         },
         "size_mm": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Edge lengths of the box. A gate is [0, width, 0]."
         },
         "rpy_deg": {
-          "$ref": "#/$defs/vec3"
+          "$ref": "#/$defs/vec3",
+          "description": "Roll, pitch, yaw about the centre (roll + = left side up, pitch - = front up)."
         },
         "profile": {
           "type": "object",
@@ -2370,6 +2532,250 @@
         "angle_channel": {
           "type": "string",
           "description": "Series channel that moves this object in time (e.g. table_angle for the tilt table)."
+        }
+      }
+    },
+    "report": {
+      "description": "The report (A8, N17). Numbers are filled by code from the records; the model writes only summary and next.",
+      "type": "object",
+      "required": [
+        "design_version",
+        "domains",
+        "unchecked",
+        "next",
+        "summary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "agent": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "domain",
+              "state",
+              "line"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "state": {
+                "enum": [
+                  "green",
+                  "red",
+                  "pending"
+                ]
+              },
+              "verdict_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "line": {
+                "type": "string",
+                "description": "One line of result for the domain."
+              },
+              "effects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/term"
+                },
+                "description": "Terms that matter (from analysis effects and prediction terms)."
+              },
+              "assumptions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "differences": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "comparison_id",
+                    "diff_rel"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "comparison_id": {
+                      "type": "string"
+                    },
+                    "diff_rel": {
+                      "type": "number"
+                    },
+                    "cause_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "sensitivity": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/term"
+                }
+              }
+            }
+          }
+        },
+        "unchecked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "item",
+              "source"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Values whose sources are not checked, picked up by code from requirements, materials and design."
+        },
+        "next": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "domain",
+              "change",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "change": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.propose_design": {
+      "description": "Designer only: the first version from a design archetype; hiraku.designgen.kit computes every coordinate.",
+      "type": "object",
+      "required": [
+        "archetype",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archetype": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.write_report": {
+      "description": "Write the report: the model gives the summary and the next changes; numbers in them must match the records or the tool refuses.",
+      "type": "object",
+      "required": [
+        "summary",
+        "next"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string"
+        },
+        "next": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "domain",
+              "change",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "change": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tool_input.make_tool": {
+      "description": "Agent-facing: write a tool (Python, the AnalysisTool shape with its own known-answer checks). It runs in a separate restricted process; it goes on this run's shelf only when every check passes. Every attempt is recorded with tool.checked (usable false when it fails).",
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Which test needs it and why no tool on the shelf covers it."
+        }
+      }
+    },
+    "tool_input.check_tool": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
         }
       }
     }

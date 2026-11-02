@@ -13,6 +13,7 @@ import types
 import unittest
 from pathlib import Path
 
+from hiraku import contract
 from hiraku.agent.scripted import compose_plan, load_plan, run_scripted
 from hiraku.agent.session import start_run
 from hiraku.catalog import CatalogError, build_load_cases, load_catalog, read_data
@@ -103,7 +104,7 @@ class AutoTestsTest(BuildersCase, unittest.TestCase):
 
 class ReviseDesignTest(BuildersCase, unittest.TestCase):
     def test_designer_sees_the_revisable_variables(self):
-        (track,) = get_context(self.ctx)["design_variables"]
+        (track,) = get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"]
         self.assertEqual(track, {"name": "track", "unit": "mm", "min": 1000.0, "max": 1600.0,
                                  "meaning": "front and rear track", "value": {"value": 1300.0, "unit": "mm"}})
 
@@ -148,7 +149,7 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
         self.ctx.designgen = None
         with self.assertRaisesRegex(ToolError, "hiraku.designgen"):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
-        self.assertIsNone(get_context(self.ctx)["design_variables"])
+        self.assertIsNone(get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"])
 
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
@@ -167,11 +168,16 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
 
     def test_red_assembly_is_fixed_by_the_designer_and_judged_again(self):
         self.assertEqual(run_scripted(self.ctx, self.plan()), "done")
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")
         v1 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(1)}
         v2 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(2)}
         self.assertEqual(v1, {"strength": "green", "assembly": "red"})
         self.assertEqual(v2, {"strength": "green", "assembly": "green"})
         self.assertEqual(self.designgen.calls, [TRACK_FIX])
+        # a zero limit (interference <= 0 mm): margin in mm, no percentage
+        h1_verdicts = [v for v in self.ctx.store.records("verdict") if v["load_case_id"] == "H1-steer30"]
+        self.assertEqual([(v["margin"], v["margin_pct"]) for v in h1_verdicts],
+                         [({"value": -100.0, "unit": "mm"}, None), ({"value": 0.0, "unit": "mm"}, None)])
         h1 = [p for p in self.ctx.store.records("prediction") if p["load_case_id"] == "H1-steer30"]
         self.assertEqual([(p["design_version"], p["value"], p["agent"]) for p in h1],
                          [(1, 100.0, "packager"), (2, 0.0, "packager")])
@@ -190,6 +196,18 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual(self.ctx.version, 1)
         self.assertEqual({j["domain"]: j["state"] for j in self.ctx.store.judgements()},
                          {"strength": "green", "assembly": "red"})
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")  # a revision was left
+
+    def test_red_after_the_last_revision_ends_at_the_round_limit(self):
+        plan = self.plan()
+        plan["revise"] = [{"changes": {"track": {"value": 1250.0, "unit": "mm"}}, "reason": "not enough"}]
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        self.assertEqual((self.ctx.version, self.ctx.store.judgements()[-1]["state"]), (2, "red"))
+        finished = self.events("run.finished")[-1]["data"]
+        self.assertEqual((finished["status"], finished["stop_code"]), ("stopped", "round_limit"))
+        self.assertIn("組み立てが赤のまま", finished["stop_reason"])
+        events = self.ctx.store.events()
+        self.assertEqual(contract.errors("event", events[-1]), [])
 
     def test_refused_revision_stops_the_run(self):
         plan = self.plan()
@@ -206,6 +224,7 @@ class MissingStepTest(BuildersCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertIn("台本の予測のしかたが無いので回せない荷重条件: H1-steer30", said)
         self.assertIn("H1-steer30", self.ctx.project["stop_reason"])
+        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "not_judged")
         project = json.loads((self.ctx.store.path / layout.PROJECT_FILE).read_text(encoding="utf-8"))
         self.assertEqual(project["status"], "stopped")
 

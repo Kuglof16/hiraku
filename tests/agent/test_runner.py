@@ -81,15 +81,21 @@ class MessageLogTest(RunCase, unittest.TestCase):
 
     def test_final_status(self):
         ok = SimpleNamespace(subtype="success", is_error=False)
-        self.assertEqual(final_status(self.ctx, ok)[0], "stopped")  # R1 still pending
-        self.assertEqual(final_status(self.ctx, SimpleNamespace(subtype="error_max_budget_usd", is_error=True))[0], "stopped")
-        self.assertEqual(final_status(self.ctx, None), ("failed", "no result message from Claude"))
+        status, reason, code = final_status(self.ctx, ok)  # R1 still pending
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        self.assertTrue(reason.startswith("まとめ役が、判定の付いていない分野を残して止まりました。"))
+        self.assertIn("R1-step100", reason)
+        self.assertEqual(final_status(self.ctx, SimpleNamespace(subtype="error_max_budget_usd", is_error=True))[::2],
+                         ("stopped", "cost_limit"))
+        self.assertEqual(final_status(self.ctx, SimpleNamespace(subtype="error_max_turns", is_error=True))[::2],
+                         ("stopped", "turn_limit"))
+        self.assertEqual(final_status(self.ctx, None), ("failed", "no result message from Claude", "error"))
 
     def test_failure_reason_is_the_error_text(self):
         # an invalid key: is_error with subtype "success"; the reason is only in the result text
         bad_key = ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=True, num_turns=1,
                                 session_id="s", result="Invalid API key · Fix external API key")
-        self.assertEqual(final_status(self.ctx, bad_key), ("failed", "Invalid API key · Fix external API key"))
+        self.assertEqual(final_status(self.ctx, bad_key), ("failed", "Invalid API key · Fix external API key", "error"))
         with_status = ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=True, num_turns=1,
                                     session_id="s", result="Invalid API key", api_error_status=401)
         self.assertEqual(final_status(self.ctx, with_status)[1], "Invalid API key (API status 401)")
@@ -119,7 +125,7 @@ def interrupted_client(exc):
         async def query(self, prompt):
             pass
 
-        async def receive_response(self):
+        async def receive_messages(self):
             yield AssistantMessage(content=[TextBlock(text="分野を選びます")], model="m")
             raise exc
 
@@ -134,6 +140,7 @@ class InterruptTest(RunCase, unittest.TestCase):
                 asyncio.run(run_with_claude(self.ctx))
         self.assertEqual((self.ctx.project["status"], self.ctx.project["stop_reason"]), ("stopped", STOPPED_BY_USER))
         self.assertEqual(self.kinds()[-2:], ["agent.stopped", "run.finished"])
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["stop_code"], "user_stop")
         self.assert_events_fit()
 
     def test_cancelled(self):  # asyncio.run cancels the task on Ctrl+C

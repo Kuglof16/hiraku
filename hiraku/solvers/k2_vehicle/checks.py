@@ -133,7 +133,7 @@ def check_free_fall() -> list[dict]:
 
 def _quarter_car_freq(m_u: float) -> tuple[float, float]:
     d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, k_w=20.0, c_w=0.0, wheel_mass=m_u, travel=400.0,
-                   variables={"tire_vertical_stiffness": {"value": 150.0, "unit": "N/mm"},
+                   variables={"tyre_stiffness": {"value": 150.0, "unit": "N/mm"},
                               "tire_vertical_damping_ratio": {"value": 0.0, "unit": "1"}},
                    name="quarter car check")
     veh = build_vehicle(d)
@@ -179,7 +179,7 @@ def check_quarter_car() -> list[dict]:
 
 def check_rigid_tilt() -> list[dict]:
     d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, susp="rigid",
-                   variables={"tire_vertical_stiffness": {"value": 10000.0, "unit": "N/mm"},
+                   variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                               "tire_mu": {"value": 2.0, "unit": "1"}}, name="rigid tilt check")
     veh = build_vehicle(d)
     left = tilt_sweep(veh, left_up=True)["tip_angle"]

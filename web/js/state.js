@@ -5,6 +5,7 @@
 import {
   DOMAINS,
   DOMAIN_JA,
+  STOP_CODE_JA,
   agentLongName,
   agentName,
   fmt,
@@ -28,6 +29,7 @@ export function initialState() {
     startTs: null,
     status: "empty", // empty | running | done | stopped | failed
     stopReason: null,
+    stopCode: null, // run.finished stop_code (done, not_judged, round_limit, ...)
     t: 0,
     seq: -1,
     designs: {},
@@ -157,7 +159,9 @@ export function applyEvent(s, ev) {
       s.status = d.status ?? "done";
       for (const a of Object.values(s.agents)) a.active = false;
       s.stopReason = d.stop_reason ?? null;
-      const why = d.stop_reason ? `・${d.stop_reason}` : "";
+      s.stopCode = d.stop_code ?? null;
+      const said = STOP_CODE_JA[d.stop_code] ?? d.stop_reason;
+      const why = said && d.stop_code !== "done" ? `・${said}` : "";
       log(s, ev, d.status === "failed" ? "bad" : "info", `実行が終わった (${d.status ?? ""}${why})${ev.text ? ": " + ev.text : ""}`);
       setActivity(s, ev, ev.text || "実行が終わった");
       break;

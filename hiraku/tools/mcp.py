@@ -1,8 +1,13 @@
 """The MCP server "hiraku": a thin wrapper around hiraku.tools.functions.
 
 Input schemas come from the contract (tool_input.*), with $refs inlined so
-each schema stands alone. Results are the records as JSON text; a ToolError
-comes back with is_error and its message (what is wrong, what to do next).
+each schema stands alone; get_context, list_formulas and list_tools have
+their own. Results are JSON text of what the function returns: the record
+for record_prediction; for analyze the record without what only the screen
+uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
+record_cause; a summary of the new version for revise_design; the asked-for
+parts for the reading tools. A ToolError comes back with is_error and its
+message (what is wrong, what to do next).
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from hiraku import contract
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import FUNCTIONS, REVISE_DESIGN_INPUT, RUN_TOOLS
+from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS
 
 Record = dict[str, Any]
 
@@ -48,23 +53,34 @@ def _domain_filter(extra: Record | None = None) -> Record:
 
 
 INPUT_SCHEMAS: dict[str, Record] = {
-    "get_context": {"type": "object", "properties": {}, "additionalProperties": False},
-    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具の式だけ (formula_id の . の前)"}}),
-    "list_tools": _domain_filter(),
+    "get_context": {"type": "object", "additionalProperties": False, "properties": {
+        "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
+                     "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
+                                    "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables"},
+    }},
+    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
+    "list_tools": _domain_filter({
+        "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
+        "test_id": {"type": "string", "description": "この試験を解析できる道具だけ"},
+    }),
     "record_prediction": contract_input_schema("record_prediction"),
     "analyze": contract_input_schema("analyze"),
     "compare": contract_input_schema("compare"),
     "record_cause": contract_input_schema("record_cause"),
-    "revise_design": REVISE_DESIGN_INPUT,
+    "revise_design": contract_input_schema("revise_design"),
 }
 
 DESCRIPTIONS = {
     "get_context": (
-        "この実行の要件・荷重条件 (load_cases、担当の役と基準と許す幅つき)・今の版の設計・判定・"
-        "これまでの予測/解析/照合/原因/合否を返す。式の入力の値はここから取る"
+        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
+        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
+        "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む"
     ),
-    "list_formulas": "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提",
-    "list_tools": "解析の道具の棚。usable が true の道具だけ analyze で使える",
+    "list_formulas": "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool でその道具の式だけにする",
+    "list_tools": (
+        "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
+        "tool を付けるとその道具の全体 (答えの分かっている例・式)"
+    ),
     "record_prediction": (
         "解析の前に、手計算の予測を記録する。式 (formula_id) と入力 (inputs、値と単位) と前提を選ぶだけで、"
         "値は K0 が計算する。返った prediction_id を analyze に渡す。値を自分で計算して書かないこと"
@@ -93,6 +109,19 @@ def _text(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
+# What an agent reads of an analysis: the run records the whole record (fields, vectors and
+# series are for the screen), the agent gets what it predicts and compares against.
+ANALYSIS_FOR_AGENT = ("analysis_id", "tool", "base", "design_version", "load_case_id", "prediction_ids", "status",
+                      "error", "results", "inputs_from", "assumptions")
+
+
+def for_agent(name: str, result: Any) -> Any:
+    """The part of a tool's result that goes into the calling agent's context."""
+    if name == "analyze" and isinstance(result, dict):
+        return {k: result[k] for k in ANALYSIS_FOR_AGENT if k in result}
+    return result
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
@@ -102,7 +131,7 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
             result = await asyncio.to_thread(fn, ctx, args, agent)
         except ToolError as e:
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
-        return {"content": [{"type": "text", "text": _text(result)}]}
+        return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 
     return handler
 

@@ -200,6 +200,74 @@ class CheckRun(unittest.TestCase):
         j.update(state="pending")
         self.assertFlags(ev, "HK4_no_stop_before_judged")
 
+    # --- how the run ended (run.finished stop_code) ----------------------------------
+    @staticmethod
+    def _finish(ev, status, code=None, state=None):
+        d = by_kind(ev, "run.finished")["data"]
+        d["status"] = status
+        if code is not None:
+            d["stop_code"] = code
+        if status != "done":
+            d["stop_reason"] = "qa case"
+            ev[0]["data"]["stop_reason"] = "qa case"
+        if state is not None:
+            by_kind(ev, "judgement.updated")["data"]["state"] = state
+        return ev
+
+    def test_stop_code_done_with_done(self):
+        self.assertEqual(self.rules(self._finish(sample_events(), "done", "done")), set())
+
+    def test_stop_code_must_agree_with_the_status(self):
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "done", "not_judged")))
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "done")))
+
+    def test_not_judged_needs_a_pending_domain(self):
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged")))
+        self.assertEqual(self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")), set())
+
+    def test_round_limit_needs_the_revisions_used(self):
+        # one design version and round_limit 1: no revision was made
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
+
+    def test_stopped_without_stop_code_is_a_warning(self):
+        ev = self._finish(sample_events(), "stopped", state="pending")
+        self.assertIn("run.stop_code", self.rules(ev, "warn"))
+
+    # --- the test scene of an analysis ------------------------------------------------
+    @staticmethod
+    def _scene(ev, scene, series=None):
+        a = by_kind(ev, "analysis.finished")["data"]
+        a["scene"] = scene
+        if series is not None:
+            a["series"] = series
+        return ev
+
+    STEP = {"kind": "step", "label": "100 mm step", "position_mm": [600.0, 0.0, 0.0], "size_mm": [200.0, 3000.0, 100.0]}
+    ROAD = {"kind": "road_profile", "profile": {"x_mm": [0.0, 100.0, 200.0], "z_mm": {"left": [0.0, 5.0, 0.0],
+                                                                                    "right": [0.0, 3.0, 1.0]}}}
+    TABLE = {"kind": "tilt_table", "size_mm": [3000.0, 2000.0, 50.0], "angle_channel": "table_angle"}
+    ANGLE = {"channel": "table_angle", "unit": "deg", "t_s": [0.0, 1.0], "values": [0.0, 10.0]}
+
+    def test_clean_scene(self):
+        ev = self._scene(sample_events(), [self.STEP, self.ROAD, self.TABLE], [self.ANGLE])
+        self.assertEqual(self.rules(ev), set())
+
+    def test_road_profile_heights_and_order(self):
+        road = copy.deepcopy(self.ROAD)
+        road["profile"]["z_mm"]["right"] = [0.0, 3.0]
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [road])))
+        road = copy.deepcopy(self.ROAD)
+        road["profile"]["x_mm"] = [0.0, 200.0, 100.0]
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [road])))
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [{"kind": "road_profile"}])))
+
+    def test_moving_object_names_a_series_of_its_analysis(self):
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [self.TABLE])))
+
+    def test_negative_size(self):
+        step = dict(self.STEP, size_mm=[200.0, -3000.0, 100.0])
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [step])))
+
     def test_unknown_hook_rule(self):
         ev = sample_events()
         by_kind(ev, "hook.denied")["data"]["rule"] = "H9_made_up"
@@ -332,6 +400,32 @@ class CheckRun(unittest.TestCase):
         ev = sample_events()
         by_kind(ev, "verdict.recorded")["data"]["pass"] = False
         self.assertFlags(ev, "verdict.math")
+
+    def test_verdict_margin_in_the_limit_unit(self):
+        ev = sample_events()
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "MPa"}
+        self.assertEqual(self.rules(ev), set())
+        v["margin"] = {"value": 30.0, "unit": "MPa"}
+        self.assertFlags(ev, "verdict.math")
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "N"}
+        self.assertFlags(ev, "verdict.units")
+
+    @staticmethod
+    def _zero_limit(ev, margin_pct=None, margin=True):
+        """R1 judged against a lower limit of 0 MPa: 123.6 >= 0 passes by 123.6 MPa."""
+        lc = next(lc for lc in ev[0]["data"]["load_cases"] if lc["load_case_id"] == "R1-step100")
+        lc["criterion"].update(op=">=", limit={"value": 0.0, "unit": "MPa"})
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v.update(op=">=", limit={"value": 0.0, "unit": "MPa"}, margin_pct=margin_pct)
+        if margin:
+            v["margin"] = {"value": v["value"]["value"], "unit": "MPa"}
+        return ev
+
+    def test_limit_of_zero_takes_null_margin_pct_and_a_margin(self):
+        self.assertEqual(self.rules(self._zero_limit(sample_events())), set())
+        self.assertFlags(self._zero_limit(sample_events(), margin_pct=0.0), "verdict.math")
+        self.assertIn("verdict.margin", self.rules(self._zero_limit(sample_events(), margin=False), "warn"))
 
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()
@@ -505,6 +599,22 @@ class CheckRun(unittest.TestCase):
         self.assertIn("cmp-0001 R1 max_stress: predicted 150 MPa, analyzed 123.6 MPa, diff -17.6 % (tolerance 15 %)", text)
         self.assertIn("safe side: pinned joints give the larger rail moment", text)
         self.assertIn("explained_safe_side (value from the prediction, cause-0001, cmp-0001)", text)
+
+    def test_run_finished_while_an_agent_was_still_working(self):
+        ev = sample_events()
+        ev.remove(by_kind(ev, "agent.stopped"))
+        self.assertIn("run.agents", self.rules(renumber(ev), "warn"))
+
+    def test_effects_show_the_stop_block_limit_and_who_was_still_working(self):
+        ev = sample_events()
+        at = by_kind(ev, "agent.said")
+        block = {"ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "seq": 0, "kind": "hook.blocked_stop", "agent": "lead",
+                 "text": "pending", "data": {"hook": "Stop", "rule": "HK4_no_stop_before_judged", "count": 1, "limit": 1}}
+        ev.insert(ev.index(at) + 1, block)
+        ev.remove(by_kind(ev, "agent.stopped"))
+        text = self.effects(renumber(ev))
+        self.assertIn("block limit reached (1 of 1): the next stop ends the run, while cae.strength were still working", text)
+        self.assertIn("still working at the end: cae.strength", text)
 
     def test_effects_name_a_denial_not_followed_as_asked(self):
         ev = sample_events()

@@ -5,13 +5,17 @@
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
-  (hook.blocked_stop); blocks are counted and capped so a run always ends.
+  (hook.blocked_stop); blocks are counted and capped so a run always ends. The
+  lead's stop while a role is still running is neither blocked nor counted: the
+  run waits for the role (hiraku.agent.runner.converse).
+- The stop button (stop.request in the run folder): every tool call is denied
+  and every stop is let through, so the run winds down (runner.converse).
 - SubagentStart / SubagentStop: agent.started / agent.stopped.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from hiraku import contract
 from hiraku.agent.roles import agent_id_from_sdk
@@ -20,6 +24,7 @@ from hiraku.tools import Attribution, RunContext, rules
 PREFIX = f"mcp__{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
+STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。道具を呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 
 
 class Hooks:
@@ -32,6 +37,8 @@ class Hooks:
         self.stop_blocks = 0
         self.subagent_stop_blocks: dict[str, int] = {}
         self.running: dict[str, str] = {}  # SDK agent_id -> contract agent id
+        self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
+        self.stop_requested = False  # set once stop.request is seen; it stays set
 
     # ------------------------------------------------------------------ helpers
 
@@ -45,8 +52,20 @@ class Hooks:
 
     # ------------------------------------------------------------------ PreToolUse
 
+    def stopping(self) -> bool:
+        """The stop button was pressed (stop.request in the run folder)."""
+        if not self.stop_requested and self.ctx.store.stop_requested():
+            self.stop_requested = True
+        return self.stop_requested
+
     async def pre_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         name = input_data.get("tool_name", "")
+        if self.stopping():  # no more work of any kind, HIRAKU's tools or the Agent tool
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": STOP_REASON_FOR_AGENT,
+            }}
         short = self._short(name)
         if short is None:
             return {}
@@ -111,6 +130,10 @@ class Hooks:
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        if self.stopping():  # the stop button: let it end
+            return {}
+        if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
+            return {}
         reason = rules.stop_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
             return {}
@@ -136,7 +159,7 @@ class Hooks:
         if agent is None:
             return {}
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        if domain is not None:
+        if domain is not None and not self.stopping():
             left = [lc for d, lcs in rules.pending(self.ctx) if d == domain for lc in lcs]
             n = self.subagent_stop_blocks.get(agent, 0)
             if left and n < self.max_subagent_stop_blocks:
@@ -146,8 +169,11 @@ class Hooks:
                     "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })
                 return {"decision": "block", "reason": reason}
+        was_running = bool(self.running)
         self.running.pop(input_data.get("agent_id", ""), None)
         self.ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+        if was_running and not self.running and self.on_roles_done is not None:
+            self.on_roles_done()
         return {}
 
     # ------------------------------------------------------------------ wiring
