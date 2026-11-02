@@ -57,6 +57,9 @@ export function initialState() {
     seqOf: {},
     firstSeqOf: {}, // record id -> seq of the event that first brought it
     tOf: {}, // record id -> t of the event that brought it (the last one when sent again)
+    // What the intake events brought (drawn by js/intake/): the picked domains, the
+    // hearing, the rule documents and the rule checks (the last per rule_check_id).
+    intake: { picked: null, questions: [], answers: [], note: null, docs: [], rules: {}, ruleChecks: {} },
   };
   for (const r of RECORDS) {
     s[r] = {};
@@ -164,6 +167,66 @@ export function applyEvent(s, ev) {
       for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
       log(s, ev, "info", `試験と分野を決めた: 荷重条件 ${(d.load_cases ?? []).length}・分野 ${(d.domain_picks ?? []).length}`);
       setActivity(s, ev, "版 1 から試験と分野を決めた");
+      break;
+    }
+    case "domains.picked": {
+      s.intake.picked = d;
+      const picks = d.picks ?? [];
+      const tests = new Set(picks.flatMap((p) => p.test_ids ?? []));
+      const names = picks.map((p) => p.shown_name ?? DOMAIN_JA[p.domain] ?? p.domain).join("・");
+      const txt = `分野を選んだ: ${names || "なし"} (当てはまる試験 ${tests.size}・選ばなかった分野 ${(d.off ?? []).length})`;
+      log(s, ev, "info", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "hearing.asked": {
+      const qs = d.questions ?? [];
+      s.intake.questions = qs;
+      if (agent) agent.status = "答え待ち";
+      const must = qs.filter((q) => q.ask === "must").length;
+      const txt = `足りない要件を ${qs.length} 個聞いた (値がまだ無い ${must}・既定値を確かめる ${qs.length - must})`;
+      log(s, ev, "step", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "hearing.answered": {
+      const ans = d.answers ?? [];
+      s.intake.answers = ans;
+      s.intake.note = d.note ?? null;
+      if (agent) agent.status = "見守り";
+      const byDefault = ans.filter((a) => a.source === "default").length;
+      const txt = `答えがそろった: ${ans.length} 個 (既定値のまま ${byDefault})`;
+      log(s, ev, "step", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "knowledge.imported": {
+      const doc = d.doc ?? {};
+      const rules = d.rules ?? [];
+      // The same document imported again replaces its rules.
+      const i = s.intake.docs.findIndex((x) => x.doc?.doc_id === doc.doc_id);
+      if (i >= 0) s.intake.docs[i] = d;
+      else s.intake.docs.push(d);
+      for (const r of rules) s.intake.rules[r.rule_id] = r;
+      const skipped = (doc.skipped ?? []).length;
+      const txt = `規則の束「${doc.filename ?? doc.doc_id ?? ""}」を入れた: 規則 ${rules.length}${skipped ? `・規則にしなかった行 ${skipped}` : ""}`;
+      log(s, ev, "info", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "rule_check.recorded": {
+      s.intake.ruleChecks[d.rule_check_id] = d;
+      const hits = d.hits ?? [];
+      const notEval = (d.not_evaluable ?? []).length;
+      const checked = (d.targets ?? []).length - notEval;
+      const parts = [];
+      if (hits.length) parts.push(`守れていない部品 ${hits.length} (${hits.map((h) => h.part_id).join("・")})`);
+      else if (checked > 0) parts.push(`当てた部品 ${checked} は守れている`);
+      if (notEval) parts.push(`値が無くて当てられない部品 ${notEval}`);
+      const txt = `規則 ${d.rule_id} を版 ${d.design_version} に当てた: ${parts.join("・")}`;
+      if (agent) agent.status = "規則を当てた";
+      logRecord(s, ev, d.rule_check_id, hits.length ? "bad" : notEval ? "warn" : "ok", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
       break;
     }
     case "report.written": {
