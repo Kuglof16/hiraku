@@ -95,6 +95,18 @@ CRASH = {
     "bumper_stroke": q(80.0, "mm"),
     "crush_stiffness": q(600.0, "N/mm"),
 }
+# Fatigue of the welded frame joints. The S-N form (slope 3, knee at 1e7
+# cycles) follows the IIW recommendations as quoted in the requirements
+# catalog (secondary source, not checked here); the catalog's example is FAT
+# 112 for a ground butt weld. FAT 71 for the frame's fillet-welded tube joints
+# and the slope 22 beyond the knee are assumptions, not checked against IIW.
+FATIGUE = {
+    "fatigue_fat_class": q(71.0, "MPa"),
+    "fatigue_slope": q(3.0, "1"),
+    "fatigue_knee_cycles": q(1e7, "1"),
+    "fatigue_slope_after_knee": q(22.0, "1"),
+    "tyre_stiffness": q(150.0, "N/mm"),
+}
 
 
 def node(side, st):
@@ -188,6 +200,7 @@ def build() -> dict:
             **AERO,
             **HANDLING,
             **CRASH,
+            **FATIGUE,
         },
         "supports": supports,
         "parts": parts,

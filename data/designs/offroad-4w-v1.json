@@ -175,6 +175,26 @@
     "crush_stiffness": {
       "value": 600.0,
       "unit": "N/mm"
+    },
+    "fatigue_fat_class": {
+      "value": 71.0,
+      "unit": "MPa"
+    },
+    "fatigue_slope": {
+      "value": 3.0,
+      "unit": "1"
+    },
+    "fatigue_knee_cycles": {
+      "value": 10000000.0,
+      "unit": "1"
+    },
+    "fatigue_slope_after_knee": {
+      "value": 22.0,
+      "unit": "1"
+    },
+    "tyre_stiffness": {
+      "value": 150.0,
+      "unit": "N/mm"
     }
   },
   "supports": [
