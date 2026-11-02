@@ -30,6 +30,8 @@ their basis. What it looks at:
   value; pass and margin recomputed; limit and op from the load case criterion
 - judgements: red_count and state follow the listed verdicts
 - HK4: a run that finished as done has no picked domain still pending
+- agents: each agent.started has its agent.stopped before run.finished (warning:
+  an agent still working when the run ended was cut off)
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
 """
@@ -790,6 +792,26 @@ class RunChecker:
                 if tool is not None and not str(tool).startswith(f"mcp__{contract.MCP_SERVER}__"):
                     self.warn("hook.tool", self.where_of[i], f"tool {tool!r} is not one of HIRAKU's MCP tools")
 
+    def _running_at(self, end: int) -> dict[str, int]:
+        """Agents started and not stopped before event index `end` (agent id -> start index)."""
+        running: dict[str, int] = {}
+        for i, e in enumerate(self.events[:end]):
+            agent = (e.get("data") or {}).get("agent_id") or e.get("agent")
+            if e.get("kind") == "agent.started":
+                running.setdefault(agent, i)
+            elif e.get("kind") == "agent.stopped":
+                running.pop(agent, None)
+        return running
+
+    def check_agents(self) -> None:
+        fin = next((i for i, e in enumerate(self.events) if e.get("kind") == "run.finished"), None)
+        if fin is None:
+            return
+        running = self._running_at(fin)
+        if running:
+            self.warn("run.agents", self.where_of[fin], f"finished while {', '.join(sorted(running))} "
+                                                        f"had no agent.stopped (their work was cut off)")
+
     def check_finish(self) -> None:
         fin = [(i, e) for i, e in enumerate(self.events) if e.get("kind") == "run.finished"]
         status = self.project.get("status") if self.project else None
@@ -873,10 +895,15 @@ class RunChecker:
                 if want and kind != want:
                     line += f", not the {want} the rule asks for"
             out.append(line)
-        unusable = sorted({n for n, checks in self.tool_checks.items() if not checks[-1][1].get("usable")})
+            if e["kind"] == "hook.blocked_stop" and isinstance(d.get("count"), int) and d.get("count") == d.get("limit"):
+                busy = sorted(a for a in self._running_at(i) if a != e.get("agent"))
+                out.append(f"    block limit reached ({d['count']} of {d['limit']}): the next stop ends the run"
+                           + (f", while {', '.join(busy)} were still working" if busy else ""))
+        unusable =sorted({n for n, checks in self.tool_checks.items() if not checks[-1][1].get("usable")})
         if unusable:
             out.append(f"  tools left unusable by their checks (HK2): {', '.join(unusable)}")
         mism = [(cid, c) for cid, (_, c) in self.recs["comparison"].items() if c.get("status") == "mismatch"]
+        out.append(f"comparisons: {len(self.recs['comparison'])} ({len(self.recs['comparison']) - len(mism)} match)")
         out.append(f"mismatches: {len(mism)}")
         for cid, c in mism:
             p = (self.recs["prediction"].get(c.get("prediction_id")) or (0, {}))[1]
@@ -902,10 +929,12 @@ class RunChecker:
             last = max(self.designs)
             for dom, j in sorted(self.latest_judgements(last).items(), key=lambda x: str(x[0])):
                 out.append(f"judgement v{last} {dom}: {j.get('state')} ({j.get('summary', '')[:80]})")
-        fin = [e for e in self.events if e.get("kind") == "run.finished"]
-        status = (fin[-1].get("data") or {}).get("status") if fin else "not finished"
+        fin = [i for i, e in enumerate(self.events) if e.get("kind") == "run.finished"]
+        status = (self.events[fin[-1]].get("data") or {}).get("status") if fin else "not finished"
         reason = (self.project or {}).get("stop_reason")
         out.append(f"finished: {status}" + (f" ({reason})" if reason else ""))
+        if fin and self._running_at(fin[-1]):
+            out.append(f"  still working at the end: {', '.join(sorted(self._running_at(fin[-1])))}")
         return out
 
     # --- all ---------------------------------------------------------------------
@@ -930,6 +959,7 @@ class RunChecker:
         self.check_judgements()
         self.check_h3()
         self.check_hooks()
+        self.check_agents()
         self.check_finish()
         if self.recompute:
             self.check_recompute()

@@ -506,6 +506,22 @@ class CheckRun(unittest.TestCase):
         self.assertIn("safe side: pinned joints give the larger rail moment", text)
         self.assertIn("explained_safe_side (value from the prediction, cause-0001, cmp-0001)", text)
 
+    def test_run_finished_while_an_agent_was_still_working(self):
+        ev = sample_events()
+        ev.remove(by_kind(ev, "agent.stopped"))
+        self.assertIn("run.agents", self.rules(renumber(ev), "warn"))
+
+    def test_effects_show_the_stop_block_limit_and_who_was_still_working(self):
+        ev = sample_events()
+        at = by_kind(ev, "agent.said")
+        block = {"ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "seq": 0, "kind": "hook.blocked_stop", "agent": "lead",
+                 "text": "pending", "data": {"hook": "Stop", "rule": "HK4_no_stop_before_judged", "count": 1, "limit": 1}}
+        ev.insert(ev.index(at) + 1, block)
+        ev.remove(by_kind(ev, "agent.stopped"))
+        text = self.effects(renumber(ev))
+        self.assertIn("block limit reached (1 of 1): the next stop ends the run, while cae.strength were still working", text)
+        self.assertIn("still working at the end: cae.strength", text)
+
     def test_effects_name_a_denial_not_followed_as_asked(self):
         ev = sample_events()
         by_kind(ev, "hook.denied")["data"]["rule"] = "HK3_cause_before_continue"  # next is a prediction, not a cause
