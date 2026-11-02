@@ -112,7 +112,7 @@ def n05_layout():
             "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"],
         },
         "n01": {
-            "duration_s": 6.0,
+            "duration_s": 4.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
             "pane": {"x": 1328, "y": 96, "w": 496, "h": 790},
             "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2},
@@ -618,7 +618,7 @@ class BrowserReplayTest(unittest.TestCase):
             )
             self.assertEqual(errors, [])
             self.assertIsNone(got["err"])
-            self.assertEqual(got["duration"], 6.0)
+            self.assertEqual(got["duration"], 4.0)
             self.assertEqual([c[0] for c in got["cards"]], ["n01.card.ok", "n01.card.over"])
             self.assertIn("100 mm", got["cards"][0][1])
             self.assertIn("限界の外の条件", got["cards"][1][1])

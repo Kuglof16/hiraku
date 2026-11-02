@@ -181,6 +181,15 @@ export function vectorName(kind) {
   return VECTOR_JA[kind] ?? kind;
 }
 
+// Results that answer yes or no (recorded as 1 or 0).
+const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "reached_target", "moved_uphill"]);
+
+// A result's value with its unit, or はい / いいえ for a yes-or-no result.
+export function resultText(r, sig = 3) {
+  if (YES_NO.has(r?.quantity)) return r.value >= 0.5 ? "はい" : "いいえ";
+  return fmtVU(r?.value, r?.unit, sig);
+}
+
 export function quantityName(q) {
   return QUANTITY_JA[q] ?? q ?? "";
 }

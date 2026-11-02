@@ -10,10 +10,10 @@
 // the squeeze in its corner.
 
 import * as THREE from "three";
-import { BAND_COLORS } from "./colormap.js";
+import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
-import { esc, fmt, fmtVU, quantityName } from "./labels.js";
+import { esc, fmt, quantityName, resultText } from "./labels.js";
 import { channelsOf, lerpAt, motionOf, nearestAt } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -307,12 +307,19 @@ class CutN01 {
       v.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
       v.tint(tint.color, tint.opacity);
     } else {
+      // The colour band's top is the allowable stress when the run judges stress (R1), so the
+      // two cases are read on one scale; otherwise the field's own maximum.
       const field = c.still ? fieldsOf(c.still).find((f) => f.kind === "stress") : null;
-      this.contour = field ? contourOf(c.still, field, c.lc.criterion) : null;
+      const lim = field ? this.allowableCriterion(field.unit) : null;
+      this.contour = field ? contourOf(c.still, field, lim ?? c.lc.criterion) : null;
       v.setContour(this.contour);
       v.setToggles({ parts: true, contour: true, arrows: true, cg: true, names: false, limit: false });
     }
     return v;
+  }
+
+  allowableCriterion(unit) {
+    return (this.s.project?.load_cases ?? []).find((c) => c.criterion?.quantity === "max_stress" && c.criterion?.limit?.unit === unit)?.criterion ?? null;
   }
 
   build() {
@@ -322,8 +329,11 @@ class CutN01 {
     box.className = "n01-view";
     box.dataset.box = "n01.view";
     Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border: `${sp.card.border_px}px solid ${sp.colors.rule}`, borderRadius: `${sp.card.radius_px}px` });
-    box.innerHTML = `<canvas class="main"></canvas><canvas class="over"></canvas>`;
+    box.innerHTML =
+      `<canvas class="main"></canvas><canvas class="over"></canvas>` +
+      `<span class="rate" data-box="n01.view.rate" style="right:${sp.card.pad}px;bottom:${sp.card.pad}px;font-size:${sp.card.text_px}px"></span>`;
     this.stage.append(box);
+    this.rateEl = box.querySelector(".rate");
     this.inner = { w: V.w - 2 * sp.card.border_px, h: V.h - 2 * sp.card.border_px };
     this.main = { el: box.querySelector("canvas.main"), view: this.view(this.ok, null) };
     this.ghost = this.over?.motion ? { el: box.querySelector("canvas.over"), view: this.view(this.over, sp.overlay) } : null;
@@ -350,10 +360,11 @@ class CutN01 {
     const force = resultOf(c.dyn, "front_wheel_force");
     const stress = resultOf(c.still, "max_stress");
     const ok = climbed ? climbed.value >= 1 : null;
-    const mark = ok === null ? "" : ok ? `<span class="ok">✓ 登れた${time ? ` (${fmt(time.value, 3)} 秒)` : ""}</span>` : `<span class="miss">✕ 登れなかった</span>`;
     // the stress against the allowable, when the run gives one (the words say which way it falls)
     const lim = stress ? this.allowable(stress.unit) : null;
     const over = lim ? (lim.op === "<" ? stress.value >= lim.value : stress.value > lim.value) : false;
+    const climb = ok === null ? "" : ok ? `<span class="ok">✓ 登れた${time ? ` (${fmt(time.value, 3)} 秒)` : ""}</span>` : `<span class="miss">✕ 登れなかった</span>`;
+    const mark = climb + (over ? `<br><span class="miss">✕ フレームの応力が許容を超える</span>` : "");
     const vs = lim ? ` <small class="${over ? "miss" : "ok"}">(許容 ${esc(fmt(lim.value, 4))} MPa ${over ? "を超える" : "以内"})</small>` : "";
     const rows = [
       force && `<tr><td>前輪を押す力</td><td>${esc(fmt(force.value / 1000, 3))} kN</td></tr>`,
@@ -375,8 +386,12 @@ class CutN01 {
     pane.dataset.box = "n01.pane";
     Object.assign(pane.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px` });
     const ct = this.contour;
+    // the band says whose stress it colours, and what its top is (the allowable or the maximum)
+    const top = ct?.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct?.max, 3);
     const legend = ct
-      ? `<div class="n01-legend" data-box="n01.legend" style="font-size:${sp.card.text_px}px"><span>応力 [MPa]</span><i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${fmt(ct.max, 3)}</span></div>`
+      ? `<div class="n01-legend" data-box="n01.legend" style="font-size:${sp.card.text_px}px"><span>応力 [MPa]・段差 ${fmt(stepHeightOf(this.ok.lc), 3)} mm</span>` +
+        `<i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${top}</span></div>` +
+        (ct.limitKnown ? `<p class="n01-note" style="font-size:${sp.card.text_px}px;margin-bottom:${sp.card.gap}px"><i style="display:inline-block;width:14px;height:14px;background:${OVER_COLOR};vertical-align:-2px"></i> 許容を超えた部材</p>` : "")
       : "";
     pane.innerHTML =
       this.card(this.ok, "ok") +
@@ -397,7 +412,8 @@ class CutN01 {
 
   draw(t) {
     const sp = this.spec;
-    const { tau } = squeeze(t, sp.times.lead_s, sp.duration_s, 0, this.span);
+    const { tau, rate } = squeeze(t, sp.times.lead_s, sp.duration_s, 0, this.span);
+    this.rateEl.textContent = rateLabel(rate);
     // the camera comes closer over the first zoom_s seconds
     const z = Math.min(1, t / sp.times.zoom_s);
     const margin = sp.zoom.from + (sp.zoom.to - sp.zoom.from) * (1 - (1 - z) ** 3);
@@ -543,14 +559,32 @@ class CutN02 {
     el.className = "n02-result";
     el.dataset.box = "n02.result";
     Object.assign(el.style, { left: `${R.x}px`, top: `${R.y}px`, width: `${R.w}px`, height: `${R.h}px` });
-    const line = (c) => (c?.ana?.results ?? []).slice(0, R.rows).map((r) => `<tr><td>${esc(quantityName(r.quantity))}</td><td>${esc(fmtVU(r.value, r.unit, 3))}</td></tr>`).join("");
+    // The first results of a record, a value repeated with the same unit shown once.
+    const line = (c) => {
+      const seen = new Set();
+      const rows = [];
+      for (const r of c?.ana?.results ?? []) {
+        const key = `${r.value}|${r.unit}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push(`<tr><td>${esc(quantityName(r.quantity))}</td><td>${esc(resultText(r))}</td></tr>`);
+        if (rows.length >= R.rows) break;
+      }
+      return rows.join("");
+    };
+    // ✓ / ✕ from the load case's verdicts when the run judged it; a case past the limit is ✕ by its conditions.
+    const mark = (lc) => {
+      const vs = Object.values(this.s.verdicts).filter((v) => v.load_case_id === lc.load_case_id);
+      if (!vs.length) return "";
+      return vs.every((v) => v.pass) ? `<span class="ok">✓</span> ` : `<span class="miss">✕</span> `;
+    };
     el.innerHTML =
       `<h3 style="font-size:${R.title_px}px">限界の値</h3>` +
       this.panes
         .filter((p) => p.ok)
         .map(
           (p) =>
-            `<div class="n02-res" data-box="n02.result.${p.key}" style="margin-bottom:${R.row_gap}px;font-size:${R.text_px}px"><b>${esc(p.def.name)}</b>` +
+            `<div class="n02-res" data-box="n02.result.${p.key}" style="margin-bottom:${R.row_gap}px;font-size:${R.text_px}px"><b>${mark(p.ok.lc)}${esc(p.def.name)}</b>` +
             `<table>${line(p.ok)}</table>` +
             (p.over ? `<div class="over" style="color:${sp.overlay.color}">✕ ${esc(p.over.lc.title ?? "限界の外の条件")}</div><table>${line(p.over)}</table>` : "") +
             `</div>`,
