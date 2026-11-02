@@ -9,6 +9,7 @@ Standard library only. Routes:
     GET /api/runs/<run_id>/events?offset=N
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
+    GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -25,6 +26,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +35,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
 from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE
+from hiraku.webserve.launch import Launcher, LaunchError
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -224,6 +227,7 @@ class Handler(BaseHTTPRequestHandler):
     runs_dir: Path = Path("runs")
     saved_dir: Path | None = SAVED_DIR
     default_run: str | None = None
+    launcher: Launcher | None = None
     quiet: bool = False
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
@@ -237,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/runs":
             self._send_json(list_runs(self.runs_dir, self.saved_dir, self.default_run))
             return
+        if path == "/api/launch":
+            self._send_json(self.launcher.status() if self.launcher else {"available": False})
+            return
         m = _EVENTS_PATH_RE.match(path)
         if m:
             self._send_events(m.group(1), query)
@@ -245,6 +252,42 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         self._send_static(path)
+
+    def do_POST(self) -> None:  # noqa: N802 (stdlib name)
+        if urlsplit(self.path).path != "/api/launch" or not self.launcher:
+            self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+            return
+        # Only this server's own page may start a run: another web page could
+        # otherwise make a browser start one (and spend money). A JSON body makes a
+        # browser ask first (CORS preflight), which this server never allows, and
+        # the Origin, when sent, must be this server.
+        origin = self.headers.get("Origin")
+        host = self.headers.get("Host", "")
+        # and only under a loopback name (another name pointed at this machine is refused)
+        if host.rsplit(":", 1)[0] not in ("127.0.0.1", "localhost", "[::1]"):
+            self._send_json({"error": "a run can only be started from this machine (127.0.0.1 or localhost)"}, HTTPStatus.FORBIDDEN)
+            return
+        if origin and origin not in (f"http://{host}", f"https://{host}"):
+            self._send_json({"error": "a run can only be started from this server's own page"}, HTTPStatus.FORBIDDEN)
+            return
+        if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+            self._send_json({"error": "a run can only be started from this server's own page"}, HTTPStatus.FORBIDDEN)
+            return
+        if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+            self._send_json({"error": "send JSON"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(min(length, 10000)).decode("utf-8") or "{}")
+            if not isinstance(body, dict):
+                raise ValueError("not an object")
+        except (ValueError, UnicodeDecodeError) as e:
+            self._send_json({"error": f"bad JSON: {e}"}, HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
+        except LaunchError as e:
+            self._send_json({"error": str(e)}, HTTPStatus(e.status))
 
     def do_HEAD(self) -> None:  # noqa: N802 (stdlib name)
         # Answer like GET without a body (used by tools that probe the server).
@@ -296,6 +339,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address) -> None:
+        # A page that closes while its request is answered is not an error of the server.
+        if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def make_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
@@ -304,8 +355,15 @@ def make_server(
     quiet: bool = False,
     saved_dir: Path | str | None = SAVED_DIR,
     default_run: str | None = None,
+    launcher: Launcher | bool | None = None,
 ) -> ThreadingHTTPServer:
-    """Build (but do not start) the server. Port 0 picks a free port."""
+    """Build (but do not start) the server. Port 0 picks a free port.
+
+    launcher: None starts runs into runs_dir with this process' environment;
+    False turns starting runs off; or a Launcher to use.
+    """
+    if launcher is None:
+        launcher = Launcher(Path(runs_dir))
     handler = type(
         "BoundHandler",
         (Handler,),
@@ -314,7 +372,8 @@ def make_server(
             "web_dir": Path(web_dir),
             "saved_dir": Path(saved_dir) if saved_dir is not None else None,
             "default_run": default_run,
+            "launcher": launcher or None,
             "quiet": quiet,
         },
     )
-    return ThreadingHTTPServer((host, port), handler)
+    return Server((host, port), handler)
