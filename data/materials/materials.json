@@ -1,0 +1,38 @@
+{
+  "stkr400": {
+    "name": "JIS G 3466 STKR400 (square and rectangular steel tube for general structure)",
+    "E_MPa": 205000.0,
+    "nu": 0.3,
+    "density_kg_m3": 7850.0,
+    "yield_MPa": 245.0,
+    "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+    "verified": false
+  },
+  "stkm13a": {
+    "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+    "E_MPa": 205000.0,
+    "nu": 0.3,
+    "density_kg_m3": 7850.0,
+    "yield_MPa": 215.0,
+    "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+    "verified": false
+  },
+  "ss400": {
+    "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+    "E_MPa": 205000.0,
+    "nu": 0.3,
+    "density_kg_m3": 7850.0,
+    "yield_MPa": 245.0,
+    "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+    "verified": false
+  },
+  "a6061_t6": {
+    "name": "Aluminium alloy 6061-T6",
+    "E_MPa": 68900.0,
+    "nu": 0.33,
+    "density_kg_m3": 2700.0,
+    "yield_MPa": 276.0,
+    "source": "typical handbook values for 6061-T6 (not a guaranteed minimum). Not checked against a cited handbook in this repository.",
+    "verified": false
+  }
+}
