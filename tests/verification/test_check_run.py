@@ -200,6 +200,33 @@ class CheckRun(unittest.TestCase):
         j.update(state="pending")
         self.assertFlags(ev, "HK4_no_stop_before_judged")
 
+    @staticmethod
+    def _unjudged_case(ev):
+        """A second strength load case with a criterion that never gets a verdict."""
+        lcs = ev[0]["data"]["load_cases"]
+        lc = copy.deepcopy(lcs[0])
+        lc.update(load_case_id="R3-qa", test_id="R3", title="qa case without a verdict")
+        lcs.append(lc)
+        return ev
+
+    @staticmethod
+    def _red(ev):
+        """The sample's R1 verdict fails: its limit is set 10 MPa under the analysed value."""
+        v = by_kind(ev, "verdict.recorded")["data"]
+        lim = v["value"]["value"] - 10.0
+        ev[0]["data"]["load_cases"][0]["criterion"]["limit"]["value"] = lim
+        v["limit"]["value"] = lim
+        v.update({"pass": False, "margin_pct": -1000.0 / lim, "margin": {"value": -10.0, "unit": "MPa"}})
+        by_kind(ev, "judgement.updated")["data"].update(state="red", red_count=1)
+        return ev
+
+    def test_h4_counts_load_cases_not_tiles(self):
+        # a red tile does not end the domain while another of its load cases has no verdict
+        self.assertEqual(self.rules(self._red(sample_events())), set())
+        self.assertIn("HK4_no_stop_before_judged", self.rules(self._red(sample_events()), "warn"))
+        self.assertFlags(self._unjudged_case(self._red(sample_events())), "HK4_no_stop_before_judged")
+        self.assertFlags(self._unjudged_case(sample_events()), "HK4_no_stop_before_judged")
+
     # --- how the run ended (run.finished stop_code) ----------------------------------
     @staticmethod
     def _finish(ev, status, code=None, state=None):
@@ -221,9 +248,15 @@ class CheckRun(unittest.TestCase):
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "done", "not_judged")))
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "done")))
 
-    def test_not_judged_needs_a_pending_domain(self):
+    def test_not_judged_needs_a_load_case_without_a_verdict(self):
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged")))
-        self.assertEqual(self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")), set())
+        # a pending tile while every load case has a verdict is not what HK4 waits for
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")))
+        ev = self._finish(self._unjudged_case(sample_events()), "stopped", "not_judged", state="pending")
+        self.assertEqual(self.rules(ev), set())
+        # the red tile of the R1 failure with R3 still without a verdict ends as not_judged
+        ev = self._finish(self._unjudged_case(self._red(sample_events())), "stopped", "not_judged")
+        self.assertEqual(self.rules(ev), set())
 
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made

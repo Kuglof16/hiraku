@@ -31,11 +31,13 @@ their basis. What it looks at:
   unit; a warning when the limit is 0 and there is none) recomputed; limit and op
   from the load case criterion
 - judgements: red_count and state follow the listed verdicts
-- HK4: a run that finished as done has no picked domain still pending
+- HK4: a run that finished as done has no picked domain still pending: every load
+  case with a criterion has a verdict in the last version (a red tile alone does
+  not end a domain), and no tile is left pending
 - agents: each agent.started has its agent.stopped before run.finished (warning:
   an agent still working when the run ended was cut off)
 - run.finished: stop_code done exactly when the status is done (error with
-  failed); not_judged only with a picked domain still pending; round_limit only
+  failed); not_judged only with a picked domain still pending (as for HK4); round_limit only
   when the design revisions reached round_limit; stop_reason as in project.json
 - scene in an analysis: a road profile has one height per x along an increasing
   x, sizes are not negative, angle_channel names a series of that analysis
@@ -863,13 +865,23 @@ class RunChecker:
             self.warn("run.agents", self.where_of[fin], f"finished while {', '.join(sorted(running))} "
                                                         f"had no agent.stopped (their work was cut off)")
 
-    def _unjudged(self) -> list[str] | None:
-        """Picked domains with no judgement or a pending one in the last design version."""
+    def _unjudged(self) -> dict[str, list[str]] | None:
+        """Picked domains still pending as HK4 counts them (hiraku.tools.rules.pending), with
+        their load cases that have a criterion and no verdict in the last design version.
+        A red tile does not end a domain while another of its load cases has no verdict."""
         if not self.project or not self.designs:
             return None
-        latest = self.latest_judgements(max(self.designs))
-        return [p.get("domain") for p in self.project.get("domain_picks", [])
-                if (latest.get(p.get("domain")) or {}).get("state", "pending") == "pending"]
+        last = max(self.designs)
+        judged = {v.get("load_case_id") for _, v in self.recs["verdict"].values()
+                  if self.version_of("verdict", v) == last}
+        out = {}
+        for p in self.project.get("domain_picks", []):
+            dom = p.get("domain")
+            missing = [lc_id for lc_id, lc in self.load_cases.items()
+                       if lc.get("domain") == dom and "criterion" in lc and lc_id not in judged]
+            if missing:
+                out[dom] = missing
+        return out
 
     def _check_stop_code(self, code: str | None, status: str | None, w: str) -> None:
         """run.finished's stop_code agrees with the status and with what the records show."""
@@ -881,9 +893,9 @@ class RunChecker:
             self.error("run.stop_code", w, f"stop_code {code} with status {status}")
         if (code == "error") != (status == "failed"):
             self.warn("run.stop_code", w, f"stop_code {code} with status {status} (error goes with failed)")
-        unjudged = self._unjudged()
-        if code == "not_judged" and unjudged == []:
-            self.error("run.stop_code", w, "stop_code not_judged but every picked domain is judged")
+        if code == "not_judged" and self._unjudged() == {}:
+            self.error("run.stop_code", w, "stop_code not_judged but every load case with a criterion in the "
+                                           "picked domains has a verdict")
         if code == "round_limit" and self.project and self.designs:
             used, limit = max(self.designs) - 1, self.project.get("round_limit")
             if isinstance(limit, int) and used < limit:
@@ -919,11 +931,15 @@ class RunChecker:
             return
         last = max(self.designs)
         latest = self.latest_judgements(last)
+        unjudged = self._unjudged() or {}
         for pick in self.project.get("domain_picks", []):
             dom = pick.get("domain")
             j = latest.get(dom)
-            if j is None or j.get("state") == "pending":
-                self.error("HK4_no_stop_before_judged", w, f"done while {dom} is not judged for version {last}")
+            if dom in unjudged:
+                self.error("HK4_no_stop_before_judged", w,
+                           f"done while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
+            elif j is None or j.get("state") == "pending":
+                self.error("HK4_no_stop_before_judged", w, f"done while the {dom} tile is not judged for version {last}")
             elif j.get("state") == "red":
                 self.warn("HK4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
 
