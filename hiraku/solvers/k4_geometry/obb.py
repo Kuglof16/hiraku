@@ -62,24 +62,17 @@ def from_member(a, b, width: float, height: float, name: str = "") -> OBB:
 
 
 def overlap(a: OBB, b: OBB) -> float:
-    """Positive: smallest overlap over the axes (they intersect). Negative: minus the largest gap."""
-    axes = [*a.axes, *b.axes]
-    for u in a.axes:
-        for v in b.axes:
-            c = np.cross(u, v)
-            n = np.linalg.norm(c)
-            if n > 1e-9:
-                axes.append(c / n)
-    d = b.center - a.center
-    best_overlap = np.inf
-    best_gap = 0.0
-    for n in axes:
-        ra = float(np.sum(a.half * np.abs(a.axes @ n)))
-        rb = float(np.sum(b.half * np.abs(b.axes @ n)))
-        dist = abs(float(d @ n))
-        o = ra + rb - dist
-        if o < 0:
-            best_gap = max(best_gap, -o)
-        else:
-            best_overlap = min(best_overlap, o)
-    return -best_gap if best_gap > 0 else float(best_overlap)
+    """Positive: smallest overlap over the axes (they intersect). Negative: minus the largest gap.
+
+    Worked in a's own axes: column j of R = a.axes b.axes^T is b's axis j there,
+    and a_i x b_j is e_i x R[:, j] (the sign of an axis does not matter).
+    """
+    R = a.axes @ b.axes.T
+    z = np.zeros(3)
+    c = np.array([[z, -R[2], R[1]], [R[2], z, -R[0]], [-R[1], R[0], z]]).transpose(0, 2, 1).reshape(9, 3)
+    n = np.sqrt(np.einsum("ij,ij->i", c, c))
+    keep = n > 1e-9  # parallel edges give no axis
+    axes = np.concatenate([np.eye(3), R.T, c[keep] / n[keep, None]])
+    o = np.abs(axes) @ a.half + np.abs(axes @ R) @ b.half - np.abs(axes @ (a.axes @ (b.center - a.center)))
+    gaps = o[o < 0]
+    return float(gaps.min()) if gaps.size else float(o.min())

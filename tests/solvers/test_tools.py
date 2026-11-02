@@ -70,6 +70,81 @@ class EntryPointTest(unittest.TestCase):
             self.assertTrue(set(spec["formulas"]) <= formula_ids)
 
 
+def required_case(tool, test_id):
+    """A load case with the required params of a tool, at values that run on the demo vehicle."""
+    values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
+              "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
+              "speed": q(20, "km/h")}
+    params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
+    if tool.name == "fatigue":
+        params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
+    return load_case(f"{test_id}-x", test_id, tool.domain, **params)
+
+
+class DeclarationsTest(unittest.TestCase):
+    """load_case_params and predicts: what the design department wires load cases and predictions from."""
+
+    def test_describe(self):
+        registry = {f["formula_id"]: f for f in solvers.formula_registry().list_formulas()}
+        for t in TOOLS.values():
+            d = t.describe()
+            json.dumps(d, allow_nan=False)
+            names = [p["name"] for p in d["params"]]
+            self.assertEqual(len(names), len(set(names)), t.name)
+            self.assertTrue(set(LOADINGS) <= set(next(p for p in d["params"] if p["name"] == "loading")["choices"]))
+            for p in t.predicts:
+                self.assertIn(p.formula_id, t.formulas, f"{t.name}: {p.formula_id}")
+                outs = registry[p.formula_id]["outputs"]
+                if "<support>" in p.output:
+                    self.assertTrue(any(o.startswith(p.output.split("<")[0]) for o in outs), p.output)
+                else:
+                    self.assertIn(p.output, outs, f"{t.name}: {p.formula_id}")
+
+    def test_required_params_run_and_predicted_quantities_exist(self):
+        for t in TOOLS.values():
+            if not t.predicts:
+                continue
+            rec = t.run(DESIGN, required_case(t, t.tests[0]), PRED, {})
+            self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
+            got = [r["quantity"] for r in rec["results"]]
+            for p in t.predicts:
+                head, _, tail = p.quantity.partition("<")
+                tail = tail.partition(">")[2]
+                self.assertTrue(any(g.startswith(head) and g.endswith(tail) for g in got), f"{t.name}: {p.quantity}")
+
+    def test_missing_required_param_is_named(self):
+        for t in TOOLS.values():
+            for p in t.load_case_params:
+                if p.required:
+                    rec = t.run(DESIGN, load_case("x", t.tests[0], t.domain), PRED, {})
+                    self.assertEqual(rec["status"], "failed", t.name)
+                    self.assertIn(f"{p.name} [{p.unit}]", rec["error"])
+
+    def test_bad_values_fail(self):
+        tool = TOOLS["frame_static"]
+        for bad in ({"g_factor": q(2, "mm")}, {"loading": "three"}, {"step_supports": 3}, {"g_factor": 2.0}):
+            rec = tool.run(DESIGN, load_case("R1", "R1", "strength", **bad), PRED, {})
+            self.assertEqual(rec["status"], "failed", bad)
+            self.assertIn(next(iter(bad)), rec["error"])
+
+    def test_undeclared_read_is_a_tool_fault(self):
+        from hiraku.solvers.shelf.base import G_FACTOR
+
+        class Forgetful(type(TOOLS["frame_static"])):
+            load_case_params = (G_FACTOR,)  # reads loading without declaring it
+
+        rec = Forgetful().run(DESIGN, load_case("R1", "R1", "strength"), PRED, {})
+        self.assertEqual(rec["status"], "failed")
+        self.assertIn("does not declare it", rec["error"])
+
+    def test_defaults_are_filled_and_extra_params_ignored(self):
+        tool = TOOLS["frame_static"]
+        a = results(tool.run(DESIGN, load_case("R1", "R1", "strength"), PRED, {}))
+        b = results(tool.run(DESIGN, load_case("R1", "R1", "strength", g_factor=q(1, "1"), loading="two_cargo",
+                                               speed=q(10, "km/h")), PRED, {}))
+        self.assertEqual(a["max_stress"]["value"], b["max_stress"]["value"])
+
+
 class StepClimbTest(unittest.TestCase):
     tool = TOOLS["step_climb"]
 

@@ -15,10 +15,20 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k3_power_thermal import (Segment, ThermalNetwork, drive, forest_loop, from_design, network_from_design, repeat,
                                speed_profile, temperatures)
 from ..k3_power_thermal.powertrain import Powertrain
-from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_value, result
+from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 
 SERIES_STEP_S = 5.0  # finest sampling of the series written into the record
 SERIES_MAX_POINTS = 600  # longer runs are sampled more coarsely
+LOOP_PARAMS = (
+    Param("distance", "km", "distance driven: laps of a 2 km forest loop, the last one cut", required=True),
+    Param("grade_low", "%", "grade of the gentle climb and descent (300 m each per lap)", required=True),
+    Param("grade_high", "%", "grade of the steep climb and descent (200 m each per lap)", required=True),
+    Param("speed_low", "km/h", "target speed on the steep grades", required=True),
+    Param("speed_high", "km/h", "target speed on the flat parts (the gentle grades take the mean of the two)",
+          required=True),
+    Param("soc_start", "%", "battery state of charge at the start", default=100.0),
+    LOADING,
+)
 
 
 def _cycle(load_case: Record) -> tuple[list[Segment], float]:
@@ -34,7 +44,7 @@ def _cycle(load_case: Record) -> tuple[list[Segment], float]:
 
 
 def _soc0(load_case: Record) -> float:
-    s = param_value(load_case, "soc_start", "%", 100.0)
+    s = param_value(load_case, "soc_start", "%")
     if not 0 < s <= 100:
         raise LoadCaseError(f"soc_start must be in (0, 100] %, got {s}")
     return s / 100.0
@@ -59,13 +69,20 @@ class DriveEnergy(BuiltinTool):
     base = "K3"
     tests = ["P4"]
     formulas = ["drive_energy.loop_energy", "drive_energy.steady_power"]
+    load_case_params = LOOP_PARAMS
+    predicts = (
+        Predicts("energy_used", "drive_energy.loop_energy", "E", "H = total height climbed over the distance"),
+        Predicts("soc_used", "drive_energy.loop_energy", "soc_used"),
+        Predicts("range", "drive_energy.loop_energy", "range"),
+        Predicts("max_battery_power", "drive_energy.steady_power", "P",
+                 "rough: steady climb at speed_high up grade_high, without acceleration or auxiliary loads"),
+    )
 
     def known_answers(self) -> list[Record]:
         return drive_known_answers()
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: distance (km), grade_low, grade_high (%), speed_low, speed_high (km/h),
-        soc_start (%, default 100), loading (default two_cargo)."""
+        """Load case params: load_case_params."""
         design = on_board(design, load_case)
         segs, dist = _cycle(load_case)
         pt = from_design(design)
@@ -115,13 +132,25 @@ class Thermal(BuiltinTool):
     base = "K3"
     tests = ["T1", "T2", "T3"]
     formulas = ["thermal.steady_temperature", "thermal.rc_step", "thermal.loss_from_efficiency"]
+    load_case_params = LOOP_PARAMS + (
+        Param("ambient_temperature", "degC", "air temperature (and the parts' starting temperature)", required=True),
+        Param("charge_power", "kW", "charging power after the drive (with charge_time; without them: no charge)"),
+        Param("charge_time", "h", "charging time after the drive (with charge_power)"),
+    )
+    predicts = (
+        Predicts("temp_<part>_max", "thermal.rc_step", "T",
+                 "P = loss_<part>_mean, R and tau = R C of the part, t = drive_time"),
+        Predicts("temp_<part>_max", "thermal.steady_temperature", "T",
+                 "the upper bound for a long drive: P = loss_<part>_mean"),
+        Predicts("loss_<part>_mean", "thermal.loss_from_efficiency", "P_loss",
+                 "motor and controller: P_out = the mean output power of that part over the drive"),
+    )
 
     def known_answers(self) -> list[Record]:
         return thermal_known_answers()
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: the drive_energy loop parameters, ambient_temperature (degC, required),
-        charge_power (kW) and charge_time (h) for a charge after the drive (optional)."""
+        """Load case params: load_case_params."""
         design = on_board(design, load_case)
         segs, dist = _cycle(load_case)
         T_amb = param_value(load_case, "ambient_temperature", "degC")

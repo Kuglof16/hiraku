@@ -9,14 +9,18 @@ the wheel forces will come from driving over the step instead.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import mass_summary, resultant, step_geometry, support_loads
 from ..k1_frame import analyze
 from . import fixtures
-from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_list, param_value, result
-from .frame_static import frame_known_answers, frame_outputs, front_supports, g_factor
+from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Predicts, Record, check_record, on_board, param_list,
+                   param_value, result)
+from .frame_static import (JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, frame_known_answers, frame_outputs,
+                           front_supports, g_factor)
 
 
 class StepClimb(BuiltinTool):
@@ -31,11 +35,28 @@ class StepClimb(BuiltinTool):
         "step_climb.self_climb",
         "mass_props.front_wheel_load",
         "mass_props.static_wheel_loads",
+        "frame_static.rail_joint_stress",
+        "frame_static.rail_step_bending",
         "frame_static.rail_bending",
         "frame_static.simple_beam_point_load",
         "frame_static.cantilever_tip_load",
         "frame_static.bending_stress",
     ]
+    load_case_params = (replace(STEP_HEIGHT, required=True, meaning="height of the step the step_supports climb"),
+                        STEP_SUPPORTS, LOADING, G_FACTOR)
+    predicts = (
+        Predicts("front_wheel_load", "step_climb.pushed_wheel_load", "W",
+                 "the stepping wheel as it lifts off: the push couple moves load to the rear "
+                 "(results are named step_* instead of front_* when the step_supports are not the front ones)"),
+        Predicts("front_wheel_force", "step_climb.pushed_wheel_load", "F"),
+        Predicts("front_wheel_force", "step_climb.wheel_force_rigid", "F",
+                 "with W = the climbing load (pushed_wheel_load W); the static load overpredicts it"),
+        Predicts("front_wheel_load_static", "mass_props.front_wheel_load", "W"),
+        Predicts("corner_distance", "step_climb.wheel_force_rigid", "d"),
+        Predicts("self_climb_torque", "step_climb.self_climb", "tau", "with W = front_wheel_load"),
+        Predicts("max_stress", "frame_static.rail_joint_stress", "sigma", JOINT_INPUTS),
+        Predicts("max_stress", "frame_static.rail_step_bending", "sigma", STEP_BENDING),
+    )
 
     def known_answers(self) -> list[Record]:
         out = []
@@ -73,10 +94,7 @@ class StepClimb(BuiltinTool):
         return out + frame_known_answers()
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params:
-        step_height (length, required)
-        step_supports (string, default: the front-most supports, e.g. "FL,FR")
-        loading (empty / driver / two / two_cargo, default two_cargo), g_factor (unit 1 or g, default 1)
+        """Load case params: load_case_params.
 
         Results for the stepping wheel that takes the largest push (named
         front_* when the stepping wheels are the front ones, step_* otherwise):

@@ -70,6 +70,42 @@ def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
     return {"hits": sorted(((a, b, o, c) for (a, b), (o, c) in hits.items()), key=lambda t: -t[2]), "free_steer": free}
 
 
+def steer_room(design: dict, bs: dict[str, Body] | None = None) -> dict[str, dict]:
+    """Inputs of the hand calculation geometry.free_steer_angle for each steered support:
+    half width w and half length l of its wheel (kind wheel) and the room c between the
+    wheel's inner face and the nearest frame member beside it (within the wheel's length and
+    height), plus TOUCH_MM (touching is not contact). Supports with no member beside them
+    are left out."""
+    bs = bs or bodies(design)
+    out = {}
+    for s in design["supports"]:
+        if not s["actuation"]["steer"]:
+            continue
+        wheel = next((b for b in bs.values() if b.support == s["id"] and b.kind == "wheel"), None)
+        if wheel is None:
+            continue
+        c = np.asarray(s["position_mm"], float)
+        corners = wheel.obb.corners()
+        w = float(np.ptp(corners[:, 1])) / 2.0
+        l = float(np.ptp(corners[:, 0])) / 2.0
+        h = float(np.ptp(corners[:, 2])) / 2.0
+        side = 1.0 if c[1] >= 0 else -1.0
+        inner = side * c[1] - w  # distance of the inner face from the centre line
+        best = None
+        for b in bs.values():
+            if b.kind != "member":
+                continue
+            m = b.obb.corners()
+            if m[:, 0].max() < c[0] - l or m[:, 0].min() > c[0] + l or m[:, 2].max() < c[2] - h or m[:, 2].min() > c[2] + h:
+                continue
+            face = float((side * m[:, 1]).max())  # the member's face toward the wheel
+            if face <= inner and (best is None or face > best[0]):
+                best = (face, b.id.split(":", 1)[1])
+        if best is not None:
+            out[s["id"]] = {"w": w, "l": l, "c": float(inner - best[0] + TOUCH_MM), "member": best[1]}
+    return out
+
+
 def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs) -> float:
     """Largest steer angle (deg, both ways, whole travel) that adds no contact to what the
     straight-ahead wheel already has, by bisection."""

@@ -15,7 +15,8 @@ from .units import STANDARD_GRAVITY
 G = sp.Float(STANDARD_GRAVITY)
 G_NOTE = "g = 9.80665 m/s^2"
 RHO_INPUT = {"unit": "kg/m^3", "min": 0,
-             "description": "air density (1.225 at sea level and 15 degC in the ICAO standard atmosphere; not checked here)"}
+             "description": "air density (1.225 at sea level and 15 degC in the Manual of the ICAO Standard Atmosphere, "
+                            "ICAO Doc 7488; not checked in this repository)"}
 
 
 def _sym(*names: str) -> dict[str, sp.Symbol]:
