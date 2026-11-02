@@ -69,8 +69,10 @@ def sn_cycles(stress_range: float, fat: float, m: float, n_knee: float, m2: floa
         return math.inf
     s_knee = fat * (2e6 / n_knee) ** (1.0 / m)
     if stress_range >= s_knee:
-        return 2e6 * (fat / stress_range) ** m
-    return n_knee * (s_knee / stress_range) ** m2
+        log_n = math.log(2e6) + m * math.log(fat / stress_range)
+    else:
+        log_n = math.log(n_knee) + m2 * math.log(s_knee / stress_range)
+    return math.exp(log_n) if log_n < 700.0 else math.inf
 
 
 def miner(cycles: list[tuple[float, float, float]], fat: float, m: float, n_knee: float, m2: float) -> float:

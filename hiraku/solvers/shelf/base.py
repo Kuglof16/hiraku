@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import time
 from typing import Any
 
@@ -151,6 +152,10 @@ class BuiltinTool:
                 rec["status"] = "failed"
                 rec["error"] = str(e)
                 rec["results"] = []
+        dropped = [r["quantity"] for r in rec["results"] if not math.isfinite(r["value"])]
+        if dropped:  # JSON has no infinity; say what was left out instead
+            rec["results"] = [r for r in rec["results"] if math.isfinite(r["value"])]
+            rec.setdefault("effects", []).append({"name": "not finite, left out: " + ", ".join(dropped)})
         sens = (params or {}).get("sensitivity")
         if sens and rec["status"] == "ok":
             rec.setdefault("effects", []).extend(self._sensitivity(design, load_case, params, sens))

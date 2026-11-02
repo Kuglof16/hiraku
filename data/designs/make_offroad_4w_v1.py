@@ -83,10 +83,11 @@ AERO = {
     "centre_of_pressure_height": q(800.0, "mm"),
     "air_density": q(1.225, "kg/m^3"),
 }
-# Tyre cornering stiffness per axle (both tyres; design assumption).
+# Tyre cornering stiffness per axle (both tyres) and the steering lock (design assumptions).
 HANDLING = {
     "front_cornering_stiffness": q(25000.0, "N/rad"),
     "rear_cornering_stiffness": q(30000.0, "N/rad"),
+    "max_steer_angle": q(30.0, "deg"),
 }
 # Front against a rigid wall (design assumption): a rubber bumper, then a crush
 # zone in the front overhang once the bumper bottoms out.
@@ -157,16 +158,16 @@ def build() -> dict:
         part("motor", "モーターと減速機", "motor", [-1550.0, 0.0, 310.0], [250.0, 300.0, 220.0], 25.0, ["LB", "RB"]),
         part("controller", "モーターの制御器", "controller", [-1110.0, 0.0, 300.0], [250.0, 200.0, 80.0], 4.0, ["LS2", "RS2"]),
         part("aux", "配線と 12 V の補機", "electrical", [-300.0, 0.0, 300.0], [300.0, 300.0, 100.0], 6.0, ["LA", "RA", "LS1", "RS1"]),
-        part("floor_front", "足元の床", "body", [-225.0, 0.0, 440.0], [450.0, 1100.0, 20.0], 6.0, ["LA", "RA", "LS1", "RS1"]),
+        part("floor_front", "足元の床", "body", [-225.0, 0.0, 440.0], [450.0, 600.0, 20.0], 6.0, ["LA", "RA", "LS1", "RS1"]),
         part("floor", "座席の下の床", "body", [-725.0, 0.0, 440.0], [550.0, 1100.0, 20.0], 8.0, mid4),
-        part("deck", "荷台の床", "body", [-1625.0, 0.0, 440.0], [950.0, 1100.0, 20.0], 18.0, bed),
-        part("front_body", "前の外板とバンパー", "body", [220.0, 0.0, 560.0], [360.0, 880.0, 280.0], 15.0, ["LF", "RF", "LA", "RA"]),
-        part("steering", "ハンドルとペダル", "steering", [-250.0, -300.0, 750.0], [300.0, 400.0, 500.0], 12.0, ["RA", "RS1"]),
+        part("deck", "荷台の床", "body", [-1625.0, 0.0, 440.0], [950.0, 880.0, 20.0], 18.0, bed),
+        part("front_body", "前の外板とバンパー", "body", [220.0, 0.0, 570.0], [360.0, 600.0, 280.0], 15.0, ["LF", "RF", "LA", "RA"]),
+        part("steering", "ハンドルとペダル", "steering", [-250.0, -200.0, 750.0], [300.0, 200.0, 500.0], 12.0, ["RA", "RS1"]),
         part("seat_R", "運転席", "seat", [-725.0, -300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["RS1", "RS2"]),
         part("seat_L", "助手席", "seat", [-725.0, 300.0, 580.0], [500.0, 500.0, 260.0], 12.0, ["LS1", "LS2"]),
         part("occupant_R", "運転者 (体重は強さの不利側)", "occupant", [-780.0, -300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["RS1", "RS2"]),
         part("occupant_L", "同乗者 (体重は強さの不利側)", "occupant", [-780.0, 300.0, 970.0], [450.0, 450.0, 520.0], OCCUPANT_KG, ["LS1", "LS2"]),
-        part("cargo", "荷", "cargo", [-1625.0, 0.0, 600.0], [900.0, 1000.0, 300.0], CARGO_KG, bed),
+        part("cargo", "荷", "cargo", [-1625.0, 0.0, 600.0], [900.0, 880.0, 300.0], CARGO_KG, bed),
     ]
     for s in supports:
         x, y, z = s["position_mm"]
