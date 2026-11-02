@@ -10,6 +10,7 @@
    so this part only does something on a machine that has runs.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -25,27 +26,52 @@ ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = sorted((ROOT / "data" / "requirements").glob("*.yaml"))
 
 
-def _errors(run: Path) -> list[str]:
-    return [str(f) for f in cr.check_run(run, recompute=True) if f.level == "error"]
+def _errors(run: Path, recompute: bool = True) -> list[str]:
+    return [str(f) for f in cr.check_run(run, recompute=recompute) if f.level == "error"]
 
 
 class ScriptedRunCommand(unittest.TestCase):
-    def test_scripted_run_follows_the_contract(self):
+    """One scripted run per requirements file, made once, with the real solvers."""
+
+    @classmethod
+    def setUpClass(cls):
         if not (ROOT / "hiraku" / "__main__.py").exists() or not REQUIREMENTS:
-            self.skipTest("needs hiraku/__main__.py and data/requirements/*.yaml (design dept)")
+            raise unittest.SkipTest("needs hiraku/__main__.py and data/requirements/*.yaml (design dept)")
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.runs = {}  # requirements file name -> (run folder, process)
+        env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUTF8="1")  # Japanese status lines
+        env.pop("ANTHROPIC_API_KEY", None)  # the scripted run must not need it
         for req in REQUIREMENTS:
-            with self.subTest(requirements=req.name), tempfile.TemporaryDirectory() as tmp:
-                env = dict(os.environ, PYTHONPATH=str(ROOT))
-                env.pop("ANTHROPIC_API_KEY", None)  # the scripted run must not need it
-                proc = subprocess.run([sys.executable, "-m", "hiraku", "run", str(req), "--scripted", "--runs", tmp],
-                                      cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
-                                      timeout=600)
-                if proc.returncode == 2 and "cannot start the run" in proc.stderr:
-                    self.skipTest(f"scripted run cannot start yet: {proc.stderr.strip()[-300:]}")
-                runs = sorted(p for p in Path(tmp).iterdir() if p.is_dir())
-                self.assertTrue(runs, f"no run folder in {tmp}; stdout: {proc.stdout[-1000:]} {proc.stderr[-1000:]}")
-                for run in runs:
-                    self.assertEqual(_errors(run), [], run.name)
+            out = Path(cls._tmp.name) / req.stem
+            proc = subprocess.run([sys.executable, "-m", "hiraku", "run", str(req), "--scripted", "--runs", str(out)],
+                                  cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=600)
+            if proc.returncode == 2 and "cannot start the run" in proc.stderr:
+                cls._tmp.cleanup()
+                raise unittest.SkipTest(f"scripted run cannot start yet: {proc.stderr.strip()[-300:]}")
+            folders = sorted(p for p in out.iterdir() if p.is_dir()) if out.is_dir() else []
+            cls.runs[req.name] = (folders[0] if len(folders) == 1 else None, proc)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def assertMadeRun(self, run, proc):
+        self.assertIsNotNone(run, f"expected one run folder; stdout: {proc.stdout[-800:]} stderr: {proc.stderr[-800:]}")
+
+    def test_records_follow_the_contract(self):
+        for name, (run, proc) in self.runs.items():
+            with self.subTest(requirements=name):
+                self.assertMadeRun(run, proc)
+                self.assertEqual(_errors(run), [], run.name)
+
+    def test_mvp_scripted_run_goes_through(self):
+        # the MVP of 11/2: fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement
+        for name, (run, proc) in self.runs.items():
+            with self.subTest(requirements=name):
+                self.assertMadeRun(run, proc)
+                project = json.loads((run / layout.PROJECT_FILE).read_text(encoding="utf-8"))
+                self.assertEqual(project["status"], "done", f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}")
 
 
 class ScriptedRunWithFakes(unittest.TestCase):
@@ -61,11 +87,15 @@ class ScriptedRunWithFakes(unittest.TestCase):
         req = ROOT / "data" / "requirements" / "offroad-4w.yaml"
         for name, (step, frame, checks_pass) in self.CASES.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
-                ctx = start_run(req, design_path=contract.EXAMPLES_DIR / "design.json", root=Path(tmp),
+                design = contract.EXAMPLES_DIR / "design.json"
+                if callable(getattr(fakes, "loaded_design", None)):  # the design the fakes are made for
+                    design = Path(tmp) / "design.json"
+                    design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+                ctx = start_run(req, design_path=design, root=Path(tmp),
                                 slug=f"qa-{name}", formulas=fakes.FakeFormulas(),
                                 tools=fakes.shelf(step, frame, checks_pass))
                 run_scripted(ctx)
-                self.assertEqual(_errors(ctx.store.path), [])
+                self.assertEqual(_errors(ctx.store.path, recompute=False), [])  # fake formulas
 
 
 class SavedRuns(unittest.TestCase):
