@@ -28,7 +28,8 @@ window.PROMO_LAYOUT = {
     "_note": "night: ground of the title screens; ink: black ink on paper; tile_*: the N05 test tiles"
   },
   "n00": {
-    "duration_s": 7.0,
+    "duration_s": 6.5,
+    "_duration_note": "6.5 s is N00's slot in the narration script (draft 5: 0:00-0:06.5, the silent tail after the voice cut by 0.5 s)",
     "name": {
       "y": 172,
       "size_px": 210
