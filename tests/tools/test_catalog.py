@@ -1,16 +1,16 @@
 import copy
-import json
 import unittest
 
 from hiraku import contract
 from hiraku.catalog import (CatalogError, applies, build_load_cases, load_catalog, load_requirements, min_frame_yield,
-                            owner_agent, project_fields)
-from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS
+                            owner_agent, parts_on_board, project_fields)
+from hiraku.tools.summary import design_summary
+from tests.tools.fakes import example_design, loaded_design
+from tests.tools.helpers import REQUIREMENTS
 
 
 def design():
-    with EXAMPLE_DESIGN.open(encoding="utf-8") as f:
-        return json.load(f)
+    return loaded_design()
 
 
 class ExprTest(unittest.TestCase):
@@ -60,7 +60,9 @@ class CatalogTest(unittest.TestCase):
         p1, r1 = lcs
         self.assertEqual(p1["load_case_id"], "P1-step100")
         self.assertEqual(p1["feeds"], ["R1-step100"])
-        self.assertEqual(p1["params"]["occupant_mass"], {"value": 76.6, "unit": "kg"})
+        self.assertEqual(p1["params"]["loading"], "two_cargo")
+        self.assertEqual(r1["params"]["loading"], "two_cargo")
+        self.assertEqual(p1["requirement_keys"], ["Q15", "Q30", "Q33", "Q40"])
         self.assertNotIn("criterion", p1)
         crit = r1["criterion"]
         self.assertAlmostEqual(crit["limit"]["value"], 235.0 / 1.5)
@@ -85,6 +87,39 @@ class CatalogTest(unittest.TestCase):
         self.assertIn("Q15", str(cm.exception))
         with self.assertRaises(CatalogError):
             build_load_cases(self.catalog, self.req, design(), ["S1"])  # no builder yet
+
+    def test_design_must_carry_the_requirements_load(self):
+        cases = [
+            (example_design(), "needs 2 occupant parts"),
+            (loaded_design(person_kg=70.0), "Q33 = 76.6 kg"),
+            (loaded_design(cargo_kg=100.0), "Q40 = 150 kg"),
+        ]
+        for d, needle in cases:
+            with self.subTest(needle=needle):
+                with self.assertRaises(CatalogError) as cm:
+                    build_load_cases(self.catalog, self.req, d, ["P1"])
+                self.assertIn(needle, str(cm.exception))
+        req = copy.deepcopy(self.req)
+        next(r for r in req["requirements"] if r["key"] == "Q30")["value"] = "three"
+        with self.assertRaises(CatalogError):
+            build_load_cases(self.catalog, req, design(), ["P1"])
+        next(r for r in req["requirements"] if r["key"] == "Q30")["value"] = "two"
+        p1 = build_load_cases(self.catalog, req, loaded_design(cargo_kg=1.0), ["P1"])[0]  # cargo stays off
+        self.assertEqual((p1["params"]["loading"], p1["requirement_keys"]), ("two", ["Q15", "Q30", "Q33"]))
+
+    def test_parts_on_board(self):
+        d = design()
+        ids = {name: [p["id"] for p in parts_on_board(d, name)] for name in ("empty", "driver", "two", "two_cargo")}
+        self.assertEqual(ids["empty"], ["battery", "seat"])
+        self.assertEqual(ids["driver"], ["battery", "seat", "driver"])
+        self.assertEqual(ids["two"], ["battery", "seat", "driver", "passenger"])
+        self.assertEqual(ids["two_cargo"], ["battery", "seat", "driver", "passenger", "cargo"])
+        with self.assertRaises(ValueError):
+            parts_on_board(d, "three")
+        s = design_summary(d)["loadings"]
+        self.assertAlmostEqual(s["empty"]["mass"]["value"], 60.0)
+        self.assertAlmostEqual(s["two_cargo"]["mass"]["value"], 60.0 + 2 * 76.6 + 150.0)
+        self.assertGreater(s["two_cargo"]["cg_x"]["value"], s["two"]["cg_x"]["value"])  # cargo sits behind
 
     def test_project_fields(self):
         lcs = build_load_cases(self.catalog, self.req, design(), ["P1", "R1"])

@@ -6,7 +6,7 @@ import importlib
 from typing import Any
 
 from hiraku import contract
-from hiraku.contract.protocols import AnalysisTool, FormulaRegistry
+from hiraku.contract.protocols import SOLVER_ENTRY_POINTS, AnalysisTool, FormulaRegistry
 from hiraku.tools.context import RunContext
 
 Record = dict[str, Any]
@@ -28,7 +28,7 @@ def load_solvers(module: str = SOLVERS_MODULE) -> tuple[FormulaRegistry, dict[st
         mod = importlib.import_module(module)
     except ModuleNotFoundError as e:
         raise SolversMissing(f"{module} is not here yet ({e}). The analysis department writes it.") from None
-    missing = [n for n in ("formula_registry", "builtin_tools") if not hasattr(mod, n)]
+    missing = [n for n in SOLVER_ENTRY_POINTS if not hasattr(mod, n)]
     if missing:
         raise SolversMissing(f"{module} does not provide {', '.join(missing)}()")
     tools = mod.builtin_tools()

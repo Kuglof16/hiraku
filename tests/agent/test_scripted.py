@@ -24,6 +24,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         lc = self.ctx.load_case("P1-step100")
         self.assertEqual(resolve(self.ctx, "lc.step_height", lc), {"value": 100.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "req.Q33", lc), {"value": 76.6, "unit": "kg"})
+        self.assertAlmostEqual(resolve(self.ctx, "load.mass", lc)["value"], 60.0 + 2 * 76.6 + 150.0)
         self.assertEqual(resolve(self.ctx, "design.support.FL.radius_mm", lc), {"value": 300.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "design.section.rt40x80x2.h", lc), {"value": 80.0, "unit": "mm"})
         self.assertEqual(resolve(self.ctx, "summary.member_length.rail_L0", lc), {"value": 900.0, "unit": "mm"})

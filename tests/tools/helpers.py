@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -24,9 +25,11 @@ class RunCase:
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
+        self.design_path = self.root / "design.json"
+        self.design_path.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
         self.formulas = fakes.FakeFormulas()
         self.tools = fakes.shelf(self.step_factor, self.frame_factor, self.frame_checks_pass)
-        self.ctx = start_run(REQUIREMENTS, design_path=EXAMPLE_DESIGN, root=self.root, slug="offroad-4w-test",
+        self.ctx = start_run(REQUIREMENTS, design_path=self.design_path, root=self.root, slug="offroad-4w-test",
                              formulas=self.formulas, tools=self.tools)
 
     def tearDown(self):
@@ -50,7 +53,8 @@ class RunCase:
         s = design_summary(self.ctx.store.design())
         load = record_prediction(self.ctx, {
             "load_case_id": "P1-step100", "quantity": "front_wheel_load", "formula_id": "mass_props.front_wheel_load",
-            "inputs": {"m": s["mass"], "a": s["cg_x"], "L": s["wheelbase"], "n": s["front_wheels"]},
+            "inputs": {"m": s["loadings"]["two_cargo"]["mass"], "a": s["loadings"]["two_cargo"]["cg_x"],
+                       "L": s["wheelbase"], "n": s["front_wheels"]},
             "assumptions": ["test"],
         }, agent)
         force = record_prediction(self.ctx, {

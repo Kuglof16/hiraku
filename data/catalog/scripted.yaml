@@ -8,7 +8,8 @@
 # Input refs:
 #   lc.<param>                     param of this load case
 #   req.<Q key>                    requirement value and unit
-#   summary.<name>                 hiraku.tools.summary.design_summary (mass, cg_x, wheelbase, front_wheels, ...)
+#   load.<name>                    mass, cg_x, cg_y, cg_z of the parts on board under this load case's loading
+#   summary.<name>                 hiraku.tools.summary.design_summary (wheelbase, front_wheels, track_front, ...)
 #   summary.member_length.<id>     length of a member
 #   design.support.<id>.<field>    e.g. design.support.FL.radius_mm (unit from the suffix)
 #   design.section.<key>.<dim>     section dimension in mm (dims_mm)
@@ -27,8 +28,8 @@ offroad-4w:
         - quantity: front_wheel_load
           formula_id: mass_props.front_wheel_load
           output: W
-          assumptions: [parts carry the occupants and the cargo, load shared equally by the front wheels]
-          inputs: {m: summary.mass, a: summary.cg_x, L: summary.wheelbase, n: summary.front_wheels}
+          assumptions: [load shared equally by the front wheels]
+          inputs: {m: load.mass, a: load.cg_x, L: summary.wheelbase, n: summary.front_wheels}
         - quantity: front_wheel_force
           formula_id: step_climb.wheel_force_rigid
           output: F

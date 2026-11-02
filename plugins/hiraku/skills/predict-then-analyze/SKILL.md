@@ -10,12 +10,14 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 ## 1. 見る
 
 - `get_context` の `load_cases` から担当の荷重条件を探す。見るところ:
-  - `params`: 段差の高さ・速さ・乗員と荷の質量など。予測の入力にそのまま写せる
+  - `params`: 段差の高さ・速さなどの量 (予測の入力にそのまま写せる) と、`loading` (載せる組: empty・driver・two・two_cargo)。乗員と荷は設計の部品 (kind occupant / cargo) で、`loading` が誰と何を載せるかを決める
   - `criterion`: 合否の量 (`quantity`)・向き (`op`)・限界 (`limit`)。この量の予測が無いと合否は付かない
   - `tolerance_rel`: 予測と解析の差をどこまで許すか。決まっているので変えられない
   - `feeds`: この荷重条件の結果を入力に使う、下流の荷重条件
 - 上流 (自分を `feeds` で指している荷重条件) があれば、そちらを先に照合で一致させる。一致していない上流があると `analyze` は止まる
-- `design` と `design_summary`: 質量の和・重心・ホイールベース・部材の長さ・断面の寸法。入力はここから写す
+- `design` と `design_summary`: 入力はここから写す
+  - `design_summary.loadings.<loading>`: その組で載っている部品の質量の和 (`mass`) と重心 (`cg_x`・`cg_y`・`cg_z`)。荷重条件の `loading` と同じ組を使う
+  - ホイールベース・前輪の数・トレッド・部材の長さ (`member_length`)。断面の寸法は `design.sections`
 
 ## 2. 道具と式を選ぶ
 

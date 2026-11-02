@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from hiraku import contract
-from hiraku.catalog import CATALOG_DIR, read_data
+from hiraku.catalog import CATALOG_DIR, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import analyze, compare, record_prediction, trusted_analysis
 from hiraku.tools.summary import design_summary
@@ -47,6 +47,8 @@ def resolve(ctx: RunContext, ref: Any, load_case: Record) -> Record:
         if head == "req":
             r = next(x for x in ctx.project["requirements"] if x["key"] == rest)
             return {"value": float(r["value"]), "unit": r["unit"]}
+        if head == "load":
+            return dict(design_summary(design)["loadings"][loading_of(load_case)][rest])
         if head == "summary":
             node: Any = design_summary(design)
             for part in rest.split("."):

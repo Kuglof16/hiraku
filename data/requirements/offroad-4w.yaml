@@ -31,13 +31,12 @@ requirements:
     trust: 3
     basis: assumption
   - key: Q30
-    name: 人数と荷重の組 (乗員の数、荷も載せる)
-    value: 2
-    unit: "1"
+    name: 人数と荷重の組 (見る組)
+    value: two_cargo
     source: user
     trust: 1
     basis: request (2 人乗り、積載 150 kg)
-    note: MVP は 2 人 + 荷の組だけを見る。空車・運転者だけ・2 人の組はまだ見ない
+    note: MVP は two_cargo (2 人 + 荷) だけを見る。empty・driver・two はまだ見ない。乗員と荷は設計の部品 (kind occupant / cargo)
   - key: Q33
     name: 体重 (強さの不利側)
     value: 76.6

@@ -36,8 +36,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     path = resolve_design_path(req, design_path)
     if not path.exists():
         raise FileNotFoundError(
-            f"design file {path} does not exist. The analysis department writes data/designs/; "
-            f"until then pass --design hiraku/contract/examples/design.json (a shape example, not a computed design)"
+            f"design file {path} does not exist. The analysis department writes data/designs/ "
+            f"(occupants and cargo as parts); pass --design to use another file"
         )
     design = dict(read_data(path))
     design["design_version"] = 1

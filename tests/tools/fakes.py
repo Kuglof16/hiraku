@@ -12,6 +12,7 @@ import math
 from typing import Any
 
 from hiraku import contract
+from hiraku.catalog import loading_of, parts_on_board
 
 G = 9.80665  # standard gravity, m/s^2 (exact by definition)
 
@@ -109,7 +110,7 @@ class FakeStepClimb(FakeTool):
 
     def run(self, design, load_case, predictions, params):
         self.runs.append((design, load_case, predictions, params))
-        parts = design["parts"]
+        parts = parts_on_board(design, loading_of(load_case))
         m = sum(p["mass_kg"] for p in parts)
         a = sum(p["mass_kg"] * p["box"]["center_mm"][0] for p in parts) / m
         wheels = [s for s in design["supports"] if s["kind"] == "wheel"]
@@ -152,6 +153,22 @@ class FakeFrameStatic(FakeTool):
 def example_design() -> Record:
     with (contract.EXAMPLES_DIR / "design.json").open(encoding="utf-8") as f:
         return json.load(f)
+
+
+def _part(pid, kind, center, size, mass):
+    return {"id": pid, "name": pid, "kind": kind, "box": {"center_mm": center, "size_mm": size}, "mass_kg": mass,
+            "carried_by": ["L1", "R1"]}
+
+
+def loaded_design(person_kg=76.6, cargo_kg=150.0) -> Record:
+    """The contract's shape example plus two occupants (driver first) and cargo, as the contract asks."""
+    d = example_design()
+    d["parts"] += [
+        _part("driver", "occupant", [900.0, 250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
+        _part("passenger", "occupant", [900.0, -250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
+        _part("cargo", "cargo", [1500.0, 0.0, 550.0], [500.0, 800.0, 300.0], cargo_kg),
+    ]
+    return d
 
 
 def shelf(step_factor=1.03, frame_factor=1.03, frame_checks_pass=True):
