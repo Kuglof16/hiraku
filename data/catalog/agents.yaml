@@ -1,0 +1,12 @@
+# Roles (pets) and their props. agent_id follows hiraku.contract "agent_id".
+lead: {role: lead, prop: binder}
+designer: {role: designer, prop: pencil}
+packager: {role: packager, prop: spanner}
+cae:
+  handling: steering_wheel
+  powertrain: battery
+  aero: windsock
+  crash: crash_target
+  strength: i_beam
+  nvh: tuning_fork
+  thermal: thermometer

@@ -1,0 +1,99 @@
+"""Command line: python -m hiraku run <requirements.yaml> [--scripted]."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+from hiraku import contract
+from hiraku.contract import layout
+
+
+def _cmd_run(a: argparse.Namespace) -> int:
+    from hiraku.agent.scripted import SCRIPTED_SLUG_SUFFIX, run_scripted
+    from hiraku.agent.session import start_run
+    from hiraku.catalog import load_requirements
+
+    if not a.scripted:
+        from hiraku.agent.runner import MissingApiKey, require_api_key
+
+        try:
+            require_api_key()  # before a run folder is made
+        except MissingApiKey as e:
+            print(e, file=sys.stderr)
+            return 2
+
+    from hiraku.catalog import CatalogError
+    from hiraku.tools import SolversMissing
+
+    try:
+        slug = load_requirements(a.requirements)["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
+        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug)
+    except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:
+        print(f"cannot start the run: {e}", file=sys.stderr)
+        return 2
+    print(f"run folder: {ctx.store.path}")
+    if a.scripted:
+        status = run_scripted(ctx)
+    else:
+        from hiraku.agent.runner import run_with_claude
+
+        status = asyncio.run(run_with_claude(ctx, model=a.model, effort=a.effort, max_budget_usd=a.budget,
+                                             max_turns=a.max_turns))
+    p = ctx.store.project
+    print(f"status: {status}" + (f" ({p['stop_reason']})" if p.get("stop_reason") else ""))
+    for j in ctx.store.judgements():
+        print(f"  {contract.DOMAIN_NAMES_JA[j['domain']]}: {j['state']}  {j['summary']}")
+    return 0 if status == "done" else 1
+
+
+def _cmd_check(a: argparse.Namespace) -> int:
+    """Check a run folder: every event fits the contract, seq has no gaps, t never goes back."""
+    path = Path(a.run)
+    lines = (path / layout.EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+    bad = 0
+    prev_t = 0.0
+    for i, line in enumerate(lines):
+        e = json.loads(line)
+        errs = contract.errors("event", e)
+        if e.get("seq") != i:
+            errs.append(f"seq {e.get('seq')} where {i} was expected")
+        if e.get("t", 0) < prev_t:
+            errs.append(f"t {e.get('t')} goes back from {prev_t}")
+        prev_t = e.get("t", prev_t)
+        for err in errs:
+            bad += 1
+            print(f"line {i + 1}: {err}")
+    print(f"{len(lines)} events, {bad} problems")
+    return 1 if bad else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="python -m hiraku")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    run = sub.add_parser("run", help="run HIRAKU on a requirements file")
+    run.add_argument("requirements", type=Path)
+    run.add_argument("--scripted", action="store_true",
+                     help="no Claude: call the same tools in a fixed order (data/catalog/scripted.yaml)")
+    run.add_argument("--design", type=Path, help="design JSON (default: design_file of the requirements)")
+    run.add_argument("--runs", type=Path, default=layout.RUNS_DIR, help="folder for run folders (default: runs)")
+    run.add_argument("--model", default="claude-opus-5-5")
+    run.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
+    run.add_argument("--budget", type=float, help="cost limit in USD (default: cost_limit_usd of the requirements)")
+    run.add_argument("--max-turns", type=int, default=200)
+    run.set_defaults(fn=_cmd_run)
+
+    check = sub.add_parser("check", help="check a run folder's events.jsonl against the contract")
+    check.add_argument("run", type=Path)
+    check.set_defaults(fn=_cmd_check)
+
+    a = ap.parse_args(argv)
+    return a.fn(a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
