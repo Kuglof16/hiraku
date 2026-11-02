@@ -15,7 +15,7 @@ music). There is no beat and no rhythm:
 The random numbers come from generators seeded by (seed, block of time), so a
 stretch of music is the same whichever part is rendered and from where
 (``--start``/``--end`` render a part). Grains also mark three moments of the
-screens, at the times written in their pages: the agents lighting in N00, the
+screens, at the times in screens/layout.json (the ones the pages use): the agents lighting in N00, the
 vehicle bursting open in N05 and the light opening in N18.
 
     py promo/bgm.py render SCRIPT OUT.wav [--seed 1] [--start S] [--end E]
@@ -32,6 +32,7 @@ measured with ffmpeg's ebur128 filter (ITU-R BS.1770).
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 import subprocess
@@ -98,12 +99,14 @@ def midi_hz(m: float) -> float:
     return 440.0 * 2 ** ((m - 69) / 12)
 
 
-def css_time(page: Path, name: str) -> float:
-    """A '--t-x: 0.95s;' custom property of a screen, in seconds."""
-    m = re.search(re.escape(name) + r"\s*:\s*([0-9.]+)s", page.read_text(encoding="utf-8"))
-    if not m:
-        raise ValueError(f"{name} not found in {page.name}")
-    return float(m.group(1))
+def screen_time(screens: Path, cut: str, name: str) -> float:
+    """A time of a screen in seconds from the start of its cut: layout.json
+    ``<cut>.times.<name>_s`` (the same value the page's ``--t-<name>`` gets)."""
+    layout = json.loads((screens / "layout.json").read_text(encoding="utf-8"))
+    try:
+        return float(layout[cut]["times"][name + "_s"])
+    except KeyError:
+        raise ValueError(f"{cut}.times.{name}_s not found in layout.json") from None
 
 
 def cut_starts(lines: list[Line]) -> dict[str, float]:
@@ -235,20 +238,19 @@ def screen_grains(lines: list[Line], sts: list[Stretch], seed: int, screens: Pat
     starts = cut_starts(lines)
     out = []
     if "N00" in starts:  # one grain per agent as its chip lights, rising
-        page = screens / "n00.html"
-        t0, dt = css_time(page, "--t-light"), css_time(page, "--t-step")
+        t0, dt = screen_time(screens, "n00", "light"), screen_time(screens, "n00", "step")
         for i, m in enumerate([86, 88, 90, 93, 95, 98, 100]):
             out.append(Grain(starts["N00"] + t0 + i * dt, m, GRAIN_GAIN * 0.9, -0.6 + 0.2 * i, 0.006, 0.6))
     if "N05" in starts:  # a spray as the vehicle bursts open
         rng = np.random.default_rng([seed, KEY_BURST])
-        t = starts["N05"] + css_time(screens / "n05.html", "--t-burst")
+        t = starts["N05"] + screen_time(screens, "n05", "burst")
         pitches = grain_pitches(stretch_at(t + 0.01, sts))
         for _ in range(14):
             out.append(Grain(t, pitches[rng.integers(len(pitches))], GRAIN_GAIN * rng.uniform(0.6, 1.0),
                              rng.uniform(-0.9, 0.9), 0.004, rng.uniform(0.2, 0.6)))
             t += rng.exponential(0.09)
     if "N18" in starts:  # the light opens
-        t = starts["N18"] + css_time(screens / "n18.html", "--t-open")
+        t = starts["N18"] + screen_time(screens, "n18", "open")
         for i, m in enumerate([86, 90, 93, 98, 102]):
             out.append(Grain(t + 0.12 * i, m, GRAIN_GAIN * 0.8, -0.4 + 0.2 * i, 0.008, 0.7))
     return out
