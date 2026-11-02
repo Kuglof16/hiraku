@@ -1,8 +1,13 @@
 """The MCP server "hiraku": a thin wrapper around hiraku.tools.functions.
 
 Input schemas come from the contract (tool_input.*), with $refs inlined so
-each schema stands alone. Results are the records as JSON text; a ToolError
-comes back with is_error and its message (what is wrong, what to do next).
+each schema stands alone; get_context, list_formulas and list_tools have
+their own. Results are JSON text of what the function returns: the record
+for record_prediction; for analyze the record without what only the screen
+uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
+record_cause; a summary of the new version for revise_design; the asked-for
+parts for the reading tools. A ToolError comes back with is_error and its
+message (what is wrong, what to do next).
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from hiraku import contract
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS
+from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS, TOOL_CODE_INPUT
 
 Record = dict[str, Any]
 
@@ -63,6 +68,8 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "compare": contract_input_schema("compare"),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
+    "make_tool": TOOL_CODE_INPUT,
+    "check_tool": TOOL_CODE_INPUT,
 }
 
 DESCRIPTIONS = {
@@ -96,6 +103,17 @@ DESCRIPTIONS = {
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
         "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+    ),
+    "check_tool": (
+        "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
+        "通らない例・使えない import・例外は problems に文で返る。make_tool の前の試しに使う"
+    ),
+    "make_tool": (
+        "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
+        "全部通れば棚に入り (origin claude)、analyze で使える。code は hiraku.solvers.shelf.base の BuiltinTool を継ぐ"
+        "クラス 1 つ (name・title・domain・base・tests・load_case_params、known_answers() は check_record で閉じた式や"
+        "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
+        "hiraku.solvers の一部だけ"
     ),
 }
 

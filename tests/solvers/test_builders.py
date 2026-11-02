@@ -97,9 +97,17 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(p["distance"], {"value": 20.0, "unit": "km"})
         self.assertEqual((p["grade_high"]["value"], p["grade_low"]["value"]), (12.0, 7.0))
         self.assertEqual((p["speed_high"]["value"], p["speed_low"]["value"]), (40.0, 20.0))
-        no_params = dict(CATALOG.test("P4"), params={})  # without the catalog's loop params: half of Q13 and Q50
+        no_params = dict(CATALOG.test("P4"), params={})  # without the catalog's loop params: Q13, half of it and of Q50
+        q13 = next(r["value"] for r in REQ["requirements"] if r["key"] == "Q13")
         bare = BUILDERS["P4"](no_params, REQ, DESIGN)["params"]
-        self.assertEqual((bare["grade_low"]["value"], bare["speed_low"]["value"]), (6.0, 20.0))
+        self.assertEqual((bare["grade_high"]["value"], bare["grade_low"]["value"], bare["speed_low"]["value"]),
+                         (q13, q13 / 2, 20.0))
+        # Q13 is the steepest grade to stop and start on; the grade driven up for long is the catalog's grade_high
+        steep = dict(REQ, requirements=[dict(r, value=14) if r["key"] == "Q13" else r for r in REQ["requirements"]])
+        given = dict(CATALOG.test("P4"), params={**LOOP, "grade_high": {"value": 12, "unit": "%"}})
+        lc = BUILDERS["P4"](given, steep, DESIGN)
+        self.assertEqual((lc["params"]["grade_high"]["value"], lc["params"]["grade_low"]["value"]), (12.0, 7.0))
+        self.assertNotIn("Q13", lc["requirement_keys"])
         self.assertEqual(self.cases["T1"]["criterion"]["limit"], {"value": 55.0, "unit": "degC"})
         self.assertEqual(self.cases["T2"]["criterion"]["limit"], {"value": 85.0, "unit": "degC"})
         self.assertEqual(self.cases["R3"]["params"]["road_class"], "C")

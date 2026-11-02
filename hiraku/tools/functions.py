@@ -279,7 +279,10 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 # ---------------------------------------------------------------------------- comparison
 
 
-def _pick_result(analysis: Record, quantity: str) -> Record:
+def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None) -> Record:
+    """The analysis result of a quantity. Given at several places, the unfavourable one: for
+    the criterion's quantity the largest under <= and <, the smallest under >= and >;
+    otherwise the largest in size."""
     hits = [r for r in analysis["results"] if r["quantity"] == quantity]
     if not hits:
         have = ", ".join(sorted({r["quantity"] for r in analysis["results"]})) or "なし"
@@ -287,7 +290,11 @@ def _pick_result(analysis: Record, quantity: str) -> Record:
             f"解析 {analysis['analysis_id']} の結果に {quantity!r} がありません (結果: {have})。"
             f"名前が違うだけなら result_quantity で解析の側の名前を指定してください"
         )
-    return max(hits, key=lambda r: abs(r["value"]))  # several places: the largest, the safe side
+    if criterion is not None and criterion["quantity"] == quantity:
+        if unfavourable_side(criterion["op"]) == "larger":
+            return max(hits, key=lambda r: r["value"])
+        return min(hits, key=lambda r: r["value"])
+    return max(hits, key=lambda r: abs(r["value"]))
 
 
 def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> None:
@@ -322,14 +329,14 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
             f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids'])} に対して走らせたもので、"
             f"{pred['prediction_id']} は入っていません"
         )
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"])
+    lc = ctx.load_case(pred["load_case_id"])
+    crit = lc.get("criterion")
+    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit)
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
             f"K0 の式で解析と同じ単位 {res['unit']} の予測を記録し直してください"
         )
-    lc = ctx.load_case(pred["load_case_id"])
-    crit = lc.get("criterion")
     agent = agent or ctx.owner(lc["load_case_id"])
 
     predicted, analyzed = pred["value"], res["value"]
@@ -525,6 +532,62 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     }
 
 
+# ---------------------------------------------------------------------------- tools made in the run (N13)
+
+# Input of make_tool and check_tool (not in the contract's tool_input yet).
+TOOL_CODE_INPUT: Record = {
+    "type": "object",
+    "required": ["code"],
+    "additionalProperties": False,
+    "properties": {"code": {"type": "string", "minLength": 1,
+                            "description": "Python: one subclass of hiraku.solvers.shelf.base.BuiltinTool, or TOOL = an instance"}},
+}
+
+
+def _check_code_input(name: str, args: dict[str, Any]) -> str:
+    code = args.get("code") if isinstance(args, dict) else None
+    if not isinstance(code, str) or not code.strip() or set(args) != {"code"}:
+        raise ToolError(f"{name} の入力は {{\"code\": 道具の Python の文}} だけです")
+    return code
+
+
+def _made_answer(made: Any) -> Record:
+    return {"name": made.name, "usable": made.usable, "checks": made.checks, "problems": made.problems,
+            "printed": made.printed[-2000:]}
+
+
+def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """Check a tool's code on its own known answers in a separate process, without shelving it."""
+    from hiraku.solvers import toolmaker
+
+    code = _check_code_input("check_tool", args)
+    return _made_answer(toolmaker.make_tool(code, taken=tuple(ctx.tools)))
+
+
+def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """Check a tool's code like check_tool; every checked attempt is recorded (tool.checked, and
+    the code under <run>/tools/), and a tool that passes all its known answers goes on the shelf
+    (origin claude), where analyze can run it like a built-in tool."""
+    from hiraku.solvers import toolmaker
+
+    code = _check_code_input("make_tool", args)
+    agent = agent or "lead"
+    if agent == "designer":
+        raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
+    if ctx.made_tools is None:
+        ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
+    made = ctx.made_tools.make(code, taken=tuple(ctx.tools))
+    spec = made.spec
+    if spec is not None and not contract.errors("tool_spec", spec):
+        ok = "使えます" if made.usable else "使えません (" + "; ".join(made.problems)[:300] + ")"
+        ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"道具 {spec['name']} を作って確かめました: {ok}",
+                       data=spec)
+    if made.usable:
+        ctx.tools[made.name] = made.tool
+        ctx.specs[made.name] = spec
+    return _made_answer(made)
+
+
 FUNCTIONS = {
     "get_context": get_context,
     "list_formulas": list_formulas,
@@ -534,7 +597,9 @@ FUNCTIONS = {
     "compare": compare,
     "record_cause": record_cause,
     "revise_design": revise_design,
+    "make_tool": make_tool,
+    "check_tool": check_tool,
 }
 
-# The MCP tools of a run: the contract's MVP set and the designer's (revise_design).
-RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER)
+# The MCP tools of a run: the contract's MVP set, the designer's (revise_design) and the tool making.
+RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "make_tool", "check_tool")

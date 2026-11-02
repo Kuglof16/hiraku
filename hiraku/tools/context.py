@@ -24,6 +24,7 @@ class RunContext:
     tools: dict[str, AnalysisTool]
     specs: dict[str, Record] = field(default_factory=dict)  # checked tool_spec records
     designgen: Any = None  # hiraku.designgen (regenerate), for revise_design; None while absent
+    made_tools: Any = None  # hiraku.solvers.toolmaker.RunShelf of this run, made on the first make_tool
 
     # ---------------------------------------------------------------- project views
 

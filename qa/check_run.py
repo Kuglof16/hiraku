@@ -27,7 +27,9 @@ their basis. What it looks at:
 - verdicts: from a matching comparison with the analysis value, or (basis
   explained_safe_side) from a mismatch whose own earlier cause says safe_side with a
   reason, the prediction on the unfavourable side of the criterion and taken as the
-  value; pass and margin recomputed; limit and op from the load case criterion
+  value; pass, margin_pct (null when the limit is 0) and margin (in the limit's
+  unit; a warning when the limit is 0 and there is none) recomputed; limit and op
+  from the load case criterion
 - judgements: red_count and state follow the listed verdicts
 - HK4: a run that finished as done has no picked domain still pending
 - agents: each agent.started has its agent.stopped before run.finished (warning:
@@ -769,11 +771,23 @@ class RunChecker:
             self.error("verdict.units", w, f"{vid} compares {v['value'].get('unit')} with {v['limit'].get('unit')}")
         if v.get("pass") != OPS[op](val, lim):
             self.error("verdict.math", w, f"{vid} pass={v.get('pass')} but {val} {op} {lim} is {OPS[op](val, lim)}")
+        # contract: margin_pct = room as % of the limit (null when the limit is 0); margin = room in
+        # the limit's unit; both positive when passing
+        room, unit = (lim - val) if op in ("<=", "<") else (val - lim), v["limit"].get("unit")
         if lim != 0:
-            room = (lim - val) if op in ("<=", "<") else (val - lim)
-            margin = 100.0 * room / abs(lim)
-            if not _close(v.get("margin_pct", math.nan), margin):
-                self.error("verdict.math", w, f"{vid} margin_pct {v.get('margin_pct')} but {margin}")
+            pct = 100.0 * room / abs(lim)
+            if not _close(v.get("margin_pct") if v.get("margin_pct") is not None else math.nan, pct):
+                self.error("verdict.math", w, f"{vid} margin_pct {v.get('margin_pct')} but {pct}")
+        elif v.get("margin_pct") is not None:
+            self.error("verdict.math", w, f"{vid} margin_pct {v['margin_pct']} with a limit of 0 (null, and the margin in {unit})")
+        m = v.get("margin")
+        if not isinstance(m, dict):
+            if lim == 0:
+                self.warn("verdict.margin", w, f"{vid}: the limit is 0 and there is no margin, so nothing says how far it is")
+        elif m.get("unit") != unit:
+            self.error("verdict.units", w, f"{vid} margin in {m.get('unit')}, the limit in {unit}")
+        elif not _close(m.get("value") if isinstance(m.get("value"), (int, float)) else math.nan, room):
+            self.error("verdict.math", w, f"{vid} margin {m.get('value')} {unit} but {room} {unit}")
 
     def check_judgements(self) -> None:
         for i, j in self.judgements:
@@ -994,8 +1008,10 @@ class RunChecker:
         out.append(f"verdicts: {len(self.recs['verdict'])}")
         for vid, (_, v) in self.recs["verdict"].items():
             src = f"value from the {v.get('value_from', 'analysis')}" + (f", {v['cause_id']}" if v.get("cause_id") else "")
+            margin = (f"{_num(v['margin_pct'])} %" if v.get("margin_pct") is not None
+                      else _fmt(v["margin"]) if isinstance(v.get("margin"), dict) else "?")
             out.append(f"  {vid} {v.get('test_id')} {v.get('quantity')} {_fmt(v.get('value'))} {v.get('op')} "
-                       f"{_fmt(v.get('limit'))}: {'pass' if v.get('pass') else 'fail'}, margin {_num(v.get('margin_pct'))} %; "
+                       f"{_fmt(v.get('limit'))}: {'pass' if v.get('pass') else 'fail'}, margin {margin}; "
                        f"{v.get('basis', 'match')} ({src}, {v.get('comparison_id')})")
         if self.designs:
             last = max(self.designs)

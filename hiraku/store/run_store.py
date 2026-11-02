@@ -192,8 +192,18 @@ class RunStore:
             self._save_project()
             return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
 
-    def finish(self, status: str, stop_reason: str | None = None, text: str | None = None) -> Record:
-        """Set the final status in project.json and emit run.finished."""
+    def stop_requested(self) -> bool:
+        """Someone (the screen's stop button) has put stop.request in the run folder."""
+        return (self.path / layout.STOP_REQUEST_FILE).exists()
+
+    def clear_stop_request(self) -> None:
+        """The request was carried out: stop.request is present only while someone asks."""
+        (self.path / layout.STOP_REQUEST_FILE).unlink(missing_ok=True)
+
+    def finish(self, status: str, stop_reason: str | None = None, text: str | None = None,
+               stop_code: str | None = None) -> Record:
+        """Set the final status in project.json and emit run.finished (stop_code: why it
+        ended, one of the contract's codes, for the screen to word)."""
         with self._lock:
             self._project["status"] = status
             if stop_reason:
@@ -202,6 +212,8 @@ class RunStore:
             data: Record = {"status": status}
             if stop_reason:
                 data["stop_reason"] = stop_reason
+            if stop_code:
+                data["stop_code"] = stop_code
             return self.emit("run.finished", agent="system", text=text, data=data)
 
     # ------------------------------------------------------------------ design

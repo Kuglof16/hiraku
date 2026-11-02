@@ -21,8 +21,8 @@ LEAD_PROMPT = f"""\
 
 {COMMON_RULES}
 進め方:
-1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner、先に一致させる荷重条件は feeds)・judgements を見る。設計の中身は読まない (役が読む)。
-2. 担当の役 (owner) ごとに、Agent の道具でその役のサブエージェント (cae-<分野>、組み立ては packager) に仕事を渡す。並べて進めたい役は、1 つのメッセージで Agent を役の数だけ呼ぶ (同時に動き、全部の報告が返るまで待つ)。渡す文には、担当する荷重条件の ID と順番 (feeds で指す荷重条件を先に) を書く。
+1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner。feeds はその荷重条件の結果を使う下流の荷重条件)・judgements を見る。設計の中身は読まない (役が読む)。
+2. 担当の役 (owner) ごとに、Agent の道具でその役のサブエージェント (cae-<分野>、組み立ては packager) に仕事を渡す。並べて進めたい役は、1 つのメッセージで Agent を役の数だけ呼ぶ (同時に動き、全部の報告が返るまで待つ)。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。
 3. 役が動いている間は、道具を呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、選んだ全部の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。
 4. 赤 (red) の分野があり、設計を直す回数 (round_limit) が残っていれば、設計役 (designer) に渡す。渡す文には、通らなかった試験と、その合否の記録 (ver-…) の ID を書く。設計役が次の版を作ったら、新しい版で全部の荷重条件を 2. からやり直す (判定は版ごと)。
 5. 全部の分野に判定が付き、直せる赤が残っていなければ、結果を日本語で 3 行以内にまとめて終わる。数は道具の記録にある値だけを、記録の ID と一緒に引く。
@@ -62,8 +62,9 @@ def cae_prompt(domain: str) -> str:
 手順の詳しいところは Skill の道具で読めます: 荷重条件を始めるときは hiraku:predict-then-analyze、食い違ったときは hiraku:find-the-cause。
 
 進め方:
-1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
+1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式を見る。
+   - 合う道具が棚に無いときだけ、道具を書く: check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
 3. record_prediction で手計算の予測を記録する。formula_id・inputs (値と単位を写す)・assumptions を選ぶ。値は K0 が計算する。
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。

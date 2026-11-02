@@ -10,6 +10,8 @@ Standard library only. Routes:
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
     GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
+    GET /layout.json                    the video's layout rules (promo/screens/layout.json,
+                                        the promo department's), read by the cut pages
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -42,6 +44,7 @@ DEFAULT_PORT = 8765
 REPO_DIR = Path(__file__).resolve().parents[2]
 WEB_DIR = REPO_DIR / "web"
 SAVED_DIR = REPO_DIR / SHOWCASE_DIR  # saved runs kept in the repository
+LAYOUT_FILE = REPO_DIR / "promo" / "screens" / "layout.json"  # the video's layout rules (promo's)
 SAMPLE_ID = "sample"
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
@@ -228,6 +231,7 @@ class Handler(BaseHTTPRequestHandler):
     saved_dir: Path | None = SAVED_DIR
     default_run: str | None = None
     launcher: Launcher | None = None
+    layout_file: Path = LAYOUT_FILE
     quiet: bool = False
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
@@ -244,6 +248,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/launch":
             self._send_json(self.launcher.status() if self.launcher else {"available": False})
             return
+        if path == "/layout.json":
+            try:
+                self._send_json(json.loads(Path(self.layout_file).read_text(encoding="utf-8")))
+            except FileNotFoundError:
+                self._send_json({"error": f"no layout file ({Path(self.layout_file).name})"}, HTTPStatus.NOT_FOUND)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+                self._send_json({"error": f"layout file unreadable: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
         m = _EVENTS_PATH_RE.match(path)
         if m:
             self._send_events(m.group(1), query)
@@ -254,6 +266,13 @@ class Handler(BaseHTTPRequestHandler):
         self._send_static(path)
 
     def do_POST(self) -> None:  # noqa: N802 (stdlib name)
+        # The body is read before any answer: an answer to an unread body can reach the
+        # client as a reset connection on Windows.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(min(max(length, 0), 10000))
         if urlsplit(self.path).path != "/api/launch" or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -277,8 +296,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "send JSON"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
             return
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(min(length, 10000)).decode("utf-8") or "{}")
+            body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
                 raise ValueError("not an object")
         except (ValueError, UnicodeDecodeError) as e:
@@ -356,6 +374,7 @@ def make_server(
     saved_dir: Path | str | None = SAVED_DIR,
     default_run: str | None = None,
     launcher: Launcher | bool | None = None,
+    layout_file: Path | str = LAYOUT_FILE,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
@@ -373,6 +392,7 @@ def make_server(
             "saved_dir": Path(saved_dir) if saved_dir is not None else None,
             "default_run": default_run,
             "launcher": launcher or None,
+            "layout_file": Path(layout_file),
             "quiet": quiet,
         },
     )

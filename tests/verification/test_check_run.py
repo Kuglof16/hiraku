@@ -401,6 +401,32 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "verdict.recorded")["data"]["pass"] = False
         self.assertFlags(ev, "verdict.math")
 
+    def test_verdict_margin_in_the_limit_unit(self):
+        ev = sample_events()
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "MPa"}
+        self.assertEqual(self.rules(ev), set())
+        v["margin"] = {"value": 30.0, "unit": "MPa"}
+        self.assertFlags(ev, "verdict.math")
+        v["margin"] = {"value": v["limit"]["value"] - v["value"]["value"], "unit": "N"}
+        self.assertFlags(ev, "verdict.units")
+
+    @staticmethod
+    def _zero_limit(ev, margin_pct=None, margin=True):
+        """R1 judged against a lower limit of 0 MPa: 123.6 >= 0 passes by 123.6 MPa."""
+        lc = next(lc for lc in ev[0]["data"]["load_cases"] if lc["load_case_id"] == "R1-step100")
+        lc["criterion"].update(op=">=", limit={"value": 0.0, "unit": "MPa"})
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v.update(op=">=", limit={"value": 0.0, "unit": "MPa"}, margin_pct=margin_pct)
+        if margin:
+            v["margin"] = {"value": v["value"]["value"], "unit": "MPa"}
+        return ev
+
+    def test_limit_of_zero_takes_null_margin_pct_and_a_margin(self):
+        self.assertEqual(self.rules(self._zero_limit(sample_events())), set())
+        self.assertFlags(self._zero_limit(sample_events(), margin_pct=0.0), "verdict.math")
+        self.assertIn("verdict.margin", self.rules(self._zero_limit(sample_events(), margin=False), "warn"))
+
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()
         v = by_kind(ev, "verdict.recorded")["data"]

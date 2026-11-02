@@ -12,7 +12,8 @@ from hiraku.agent import prompts
 from hiraku.catalog import REPO_ROOT
 from hiraku.tools.context import RunContext
 
-CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
+CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
+             "check_tool", "make_tool")
 DESIGNER_TOOLS = ("get_context", "list_tools", "revise_design")
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).

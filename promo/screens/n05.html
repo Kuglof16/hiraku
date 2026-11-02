@@ -6,38 +6,41 @@
 <link rel="stylesheet" href="common.css">
 <link rel="stylesheet" href="title.css">
 <link rel="stylesheet" href="tests.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n05"></script>
 <style>
   /* N05: the vehicle fills the screen, bursts open into a grid of the
      preset tests, and the name settles above the grid.
      The hero and the tiles are stand-ins (.bg-only): the video uses the
-     app's own renders there, with this page laid over them (?layer=fg). */
+     app's own renders there, with this page laid over them (?layer=fg).
+     Placement and times: layout.json n05 (CSS variables from layout.js;
+     --t-burst, --t-tiles, --t-tile-in, --t-tile-stagger, --t-name, --t-tag
+     from n05.times); the tiles are placed on the cells of
+     promoLayout.gridCells(n05.grid). */
   :root {
     --page-bg: var(--night);
-    --t-burst: 0.95s;   /* the vehicle bursts open */
-    --t-tiles: 1.05s;   /* first tile lands */
-    --t-name: 1.45s;
-    --t-tag: 2.0s;
   }
 
   .hero {
     position: absolute;
-    left: calc(210 * var(--u));
-    top: calc(60 * var(--u));
-    width: calc(1500 * var(--u));
+    left: var(--hero-x);
+    top: var(--hero-y);
+    width: var(--hero-w);
     transform-origin: 50% 55%;
+    /* layout.json n05.hero_motion: grows until the burst, then bursts and fades */
     animation:
-      hero-push 0.95s linear both,
-      hero-burst 0.4s cubic-bezier(.5, 0, .9, .4) both;
+      hero-push var(--t-burst) linear both,
+      hero-burst var(--hero-motion-burst-dur) var(--hero-motion-ease) both;
     animation-delay: 0s, var(--t-burst);
   }
   .hero .v-line { stroke: var(--on-night); }
   @keyframes hero-push {
     from { transform: scale(1); }
-    to   { transform: scale(1.04); }
+    to   { transform: scale(var(--hero-motion-push-scale)); }
   }
   @keyframes hero-burst {
-    from { transform: scale(1.04); opacity: 1; }
-    to   { transform: scale(1.7); opacity: 0; }
+    from { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
+    to   { transform: scale(var(--hero-motion-burst-scale)); opacity: 0; }
   }
 
   .burst {
@@ -58,29 +61,20 @@
     100% { transform: scaleX(1.4); opacity: 0; }
   }
 
-  .name { top: calc(62 * var(--u)); font-size: calc(124 * var(--u)); }
-  .tag  { top: calc(200 * var(--u)); font-size: calc(42 * var(--u)); }
-
   .grid {
     position: absolute;
-    left: calc(96 * var(--u));
-    top: calc(280 * var(--u));
-    width: calc(1728 * var(--u));
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: calc(180 * var(--u));
-    gap: calc(26 * var(--u)) calc(32 * var(--u));
+    inset: 0;
   }
   .tile {
-    position: relative;
-    background: #f7f4ec;
-    border: calc(2 * var(--u)) solid #3b3934;
-    border-radius: calc(10 * var(--u));
+    position: absolute;  /* left, top, width, height: one cell of gridCells */
+    background: var(--tile-bg);
+    border: var(--tile-border-px) solid var(--tile-border);
+    border-radius: var(--tile-radius-px);
     overflow: hidden;
-    animation: tile-in 0.6s cubic-bezier(.2, .9, .3, 1.15) both;
-    animation-delay: calc(var(--t-tiles) + var(--d) * 0.05s);
+    animation: tile-in var(--t-tile-in) var(--ease-tile) both;
+    animation-delay: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger));
     /* the test loop inside starts once the tile has landed (tests.css) */
-    --t0: calc(var(--t-tiles) + var(--d) * 0.05s + 0.6s);
+    --t0: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger) + var(--t-tile-in));
   }
   @keyframes tile-in {
     from {
@@ -91,9 +85,9 @@
   }
   .tile b {
     position: absolute;
-    left: calc(16 * var(--u));
-    top: calc(12 * var(--u));
-    font: 700 calc(26 * var(--u)) / 1 var(--font-ja);
+    left: var(--tile-label-x);
+    top: var(--tile-label-y);
+    font: 700 var(--tile-label-size-px) / 1 var(--font-ja);
     color: var(--ink);
   }
   .tile svg.art {
@@ -111,11 +105,11 @@
 <body data-duration="5">
 <div class="stage night">
   <div class="safe">
-    <div class="hero bg-only"></div>
+    <div class="hero bg-only" data-box="n05.hero"></div>
     <div class="grid bg-only"></div>
     <div class="burst"></div>
-    <h1 class="name" aria-label="HIRAKU"></h1>
-    <p class="tag">CAE を、すべての作り手へ拓く。</p>
+    <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
+    <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -123,28 +117,33 @@
 <script src="vehicle.js"></script>
 <script src="tests.js"></script>
 <script>
-  // Preset tests in the grid, in reading order: [name, key, svg]. Each tile
-  // loops a line drawing of how its test is run (tests.js, tests.css); it
-  // shows no result.
-  const TESTS = window.TEST_TILES;
+  // Preset tests in the grid, in reading order (layout.json n05.tests), each
+  // [name, key, svg] from tests.js. Each tile loops a line drawing of how its
+  // test is run (tests.js, tests.css); it shows no result.
+  const { gridCells, boxStyle, cutRules } = window.promoLayout;
+  const TESTS = cutRules.tests.map((key) => {
+    const t = window.TEST_TILES.find(([, k]) => k === key);
+    if (!t) throw new Error(`n05: no tile "${key}" in tests.js`);
+    return t;
+  });
 
   function tileArt([, , art]) {
     return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">${art}</svg>`;
   }
 
-  // Each tile flies in from the middle of the screen; --d orders them by
-  // distance from the middle so the grid opens outward.
+  // Each tile sits on one cell of the grid rule and flies in from fly_from;
+  // --d orders them by distance from there so the grid opens outward.
   const grid = document.querySelector(".grid");
-  const W = 408, H = 180, GX = 32, GY = 26, X0 = 96, Y0 = 280;
-  const tiles = TESTS.map((test, n) => {
-    const c = n % 4, r = Math.floor(n / 4);
-    const cx = X0 + c * (W + GX) + W / 2, cy = Y0 + r * (H + GY) + H / 2;
-    return { test, dx: 960 - cx, dy: 470 - cy, dist: Math.hypot(960 - cx, 470 - cy) };
+  const from = cutRules.fly_from;
+  const tiles = gridCells(cutRules.grid).slice(0, TESTS.length).map((cell, n) => {
+    const dx = from.x - cell.cx, dy = from.y - cell.cy;
+    return { test: TESTS[n], cell, dx, dy, dist: Math.hypot(dx, dy) };
   });
   const order = [...tiles].sort((a, b) => a.dist - b.dist);
   grid.innerHTML = tiles.map((t) =>
-    `<div class="tile t-${t.test[1]}" style="--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
-       ${tileArt(t.test)}<b>${t.test[0]}</b></div>`).join("");
+    `<div class="tile t-${t.test[1]}" data-box="n05.tile.${t.test[1]}"
+          style="${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
+       ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label">${t.test[0]}</b></div>`).join("");
 
   document.querySelector(".hero").innerHTML = drawVehicle({ strokeScale: 0.7 });
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
