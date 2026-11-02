@@ -2,52 +2,84 @@
 # functions and hook rules run in a fixed order, so tests, the screen and QA
 # get a real events.jsonl without an API key. The run id ends in -scripted.
 #
-# Formula ids and input names must exist in the K0 registry (hiraku.solvers).
-# Until K0 is on main these follow the contract examples and are proposals.
+# Formula ids and input names are those of the K0 registry (hiraku.solvers).
+# Inputs never name a member or section of one design; they are read off the
+# design through hiraku.tools.summary.design_summary.
 #
 # Input refs:
 #   lc.<param>                     param of this load case
 #   req.<Q key>                    requirement value and unit
-#   load.<name>                    mass, cg_x, cg_y, cg_z of the parts on board under this load case's loading
-#   summary.<name>                 hiraku.tools.summary.design_summary (wheelbase, front_wheels, track_front, ...)
+#   load.<name>                    mass, cg_x/y/z, cg_from_front_axle of the frame and the parts on board
+#                                  under this load case's loading
+#   summary.<name>                 wheelbase, front_axle_x, front_wheels, front_wheel_radius, track_front, ...
+#   summary.rail_section.<dim>     dims of the section most used by members along x
 #   summary.member_length.<id>     length of a member
 #   design.support.<id>.<field>    e.g. design.support.FL.radius_mm (unit from the suffix)
 #   design.section.<key>.<dim>     section dimension in mm (dims_mm)
 #   design.var.<name>              design variable
 #   pred.<quantity>                newest prediction of that quantity in this run and version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
-# After analyze, every prediction whose quantity is among the analysis results is compared.
+#
+# After analyze, every prediction whose quantity is among the analysis results
+# is compared. A mismatch stops the run unless the step names it in
+# expected_mismatch: then its cause and fix (worked out beforehand; `source`
+# says by whom) are recorded with record_cause, compare in that domain is
+# denied by H3 until then, and the step predicts again with `retry`.
 
 offroad-4w:
   show_h1: true   # call analyze once without a prediction, so the H1 denial is recorded
   steps:
     - load_case: P1-step100
       tool: step_climb
-      say: 段差の角に前輪が当たったときの力を、剛い輪の釣り合いで先に見積もります
+      say: 段差の前で止まっているときの前輪の荷重を、てこの比で先に見積もります
       predictions:
         - quantity: front_wheel_load
           formula_id: mass_props.front_wheel_load
           output: W
-          assumptions: [load shared equally by the front wheels]
-          inputs: {m: load.mass, a: load.cg_x, L: summary.wheelbase, n: summary.front_wheels}
+          assumptions: [前輪の荷重は止まっているときと同じとみる]
+          inputs: {m: load.mass, a: load.cg_from_front_axle, L: summary.wheelbase, n: summary.front_wheels}
         - quantity: front_wheel_force
           formula_id: step_climb.wheel_force_rigid
           output: F
-          assumptions: [quasi-static climb]
-          inputs: {r: design.support.FL.radius_mm, h: lc.step_height, W: pred.front_wheel_load}
+          assumptions: [押す力は前輪の車軸にかかる]
+          inputs: {r: summary.front_wheel_radius, h: lc.step_height, W: pred.front_wheel_load}
+      expected_mismatch:
+        quantity: front_wheel_load
+        source: the analysis department's check of the demo vehicle (step_climb against the lever rule), 2026-11-02
+        cause: >-
+          てこの比の式は止まっているときの前輪の荷重を出す。段を登るときは、後輪が地面の高さで押し、
+          段の角が前輪の車軸の高さで押し返すので、その偶力で荷重が後輪へ移り、前輪の荷重は小さくなる
+        fix: 偶力を入れた式 step_climb.pushed_wheel_load で、前輪の荷重と押す力を予測し直す
+        retry:
+          say: 偶力を入れた式で、前輪の荷重と押す力を予測し直します
+          predictions:
+            - quantity: front_wheel_load
+              formula_id: step_climb.pushed_wheel_load
+              output: W
+              assumptions: [後輪が地面の高さで押し、段が前輪の車軸の高さで押し返す]
+              inputs: {m: load.mass, a: load.cg_from_front_axle, L: summary.wheelbase, n: summary.front_wheels,
+                       r: summary.front_wheel_radius, h: lc.step_height}
+            - quantity: front_wheel_force
+              formula_id: step_climb.pushed_wheel_load
+              output: F
+              assumptions: [後輪が地面の高さで押し、段が前輪の車軸の高さで押し返す]
+              inputs: {m: load.mass, a: load.cg_from_front_axle, L: summary.wheelbase, n: summary.front_wheels,
+                       r: summary.front_wheel_radius, h: lc.step_height}
     - load_case: R1-step100
       tool: frame_static
-      say: 段差で出た前輪の力をレールにかけ、単純支持の梁とみて曲げの応力を見積もります
+      say: 段差で出た前輪の力でレールが曲がるとみて、曲げの応力を見積もります
+      # frame_static.rail_bending looks at a different place than the analysis's
+      # highest stress (the rear rail under the cargo and motor) and misses by
+      # about 44 % on the demo vehicle. The analysis department is writing a
+      # formula for that place; this step switches to it when its id is known.
       predictions:
-        # The contract has no mm^3 unit, so the section modulus cannot be a
-        # quantity of its own; the formula takes the tube dimensions.
         - quantity: max_stress
           formula_id: frame_static.rail_bending
           output: sigma
-          assumptions: [one rail as a simply supported beam, the wheel force at mid span, bending about the strong axis]
+          assumptions: [レールを前後の車軸で支えた梁とみて、真ん中に前輪の力をかける]
           inputs:
             F: ana.P1-step100.front_wheel_force
-            L: summary.member_length.rail_L0
-            b: design.section.rt40x80x2.b
-            h: design.section.rt40x80x2.h
-            t: design.section.rt40x80x2.t
+            L: summary.wheelbase
+            b: summary.rail_section.b
+            h: summary.rail_section.h
+            t: summary.rail_section.t
