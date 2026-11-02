@@ -200,6 +200,74 @@ class CheckRun(unittest.TestCase):
         j.update(state="pending")
         self.assertFlags(ev, "HK4_no_stop_before_judged")
 
+    # --- how the run ended (run.finished stop_code) ----------------------------------
+    @staticmethod
+    def _finish(ev, status, code=None, state=None):
+        d = by_kind(ev, "run.finished")["data"]
+        d["status"] = status
+        if code is not None:
+            d["stop_code"] = code
+        if status != "done":
+            d["stop_reason"] = "qa case"
+            ev[0]["data"]["stop_reason"] = "qa case"
+        if state is not None:
+            by_kind(ev, "judgement.updated")["data"]["state"] = state
+        return ev
+
+    def test_stop_code_done_with_done(self):
+        self.assertEqual(self.rules(self._finish(sample_events(), "done", "done")), set())
+
+    def test_stop_code_must_agree_with_the_status(self):
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "done", "not_judged")))
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "done")))
+
+    def test_not_judged_needs_a_pending_domain(self):
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "not_judged")))
+        self.assertEqual(self.rules(self._finish(sample_events(), "stopped", "not_judged", state="pending")), set())
+
+    def test_round_limit_needs_the_revisions_used(self):
+        # one design version and round_limit 1: no revision was made
+        self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
+
+    def test_stopped_without_stop_code_is_a_warning(self):
+        ev = self._finish(sample_events(), "stopped", state="pending")
+        self.assertIn("run.stop_code", self.rules(ev, "warn"))
+
+    # --- the test scene of an analysis ------------------------------------------------
+    @staticmethod
+    def _scene(ev, scene, series=None):
+        a = by_kind(ev, "analysis.finished")["data"]
+        a["scene"] = scene
+        if series is not None:
+            a["series"] = series
+        return ev
+
+    STEP = {"kind": "step", "label": "100 mm step", "position_mm": [600.0, 0.0, 0.0], "size_mm": [200.0, 3000.0, 100.0]}
+    ROAD = {"kind": "road_profile", "profile": {"x_mm": [0.0, 100.0, 200.0], "z_mm": {"left": [0.0, 5.0, 0.0],
+                                                                                    "right": [0.0, 3.0, 1.0]}}}
+    TABLE = {"kind": "tilt_table", "size_mm": [3000.0, 2000.0, 50.0], "angle_channel": "table_angle"}
+    ANGLE = {"channel": "table_angle", "unit": "deg", "t_s": [0.0, 1.0], "values": [0.0, 10.0]}
+
+    def test_clean_scene(self):
+        ev = self._scene(sample_events(), [self.STEP, self.ROAD, self.TABLE], [self.ANGLE])
+        self.assertEqual(self.rules(ev), set())
+
+    def test_road_profile_heights_and_order(self):
+        road = copy.deepcopy(self.ROAD)
+        road["profile"]["z_mm"]["right"] = [0.0, 3.0]
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [road])))
+        road = copy.deepcopy(self.ROAD)
+        road["profile"]["x_mm"] = [0.0, 200.0, 100.0]
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [road])))
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [{"kind": "road_profile"}])))
+
+    def test_moving_object_names_a_series_of_its_analysis(self):
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [self.TABLE])))
+
+    def test_negative_size(self):
+        step = dict(self.STEP, size_mm=[200.0, -3000.0, 100.0])
+        self.assertIn("analysis.scene", self.rules(self._scene(sample_events(), [step])))
+
     def test_unknown_hook_rule(self):
         ev = sample_events()
         by_kind(ev, "hook.denied")["data"]["rule"] = "H9_made_up"

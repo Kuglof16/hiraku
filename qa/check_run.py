@@ -32,6 +32,11 @@ their basis. What it looks at:
 - HK4: a run that finished as done has no picked domain still pending
 - agents: each agent.started has its agent.stopped before run.finished (warning:
   an agent still working when the run ended was cut off)
+- run.finished: stop_code done exactly when the status is done (error with
+  failed); not_judged only with a picked domain still pending; round_limit only
+  when the design revisions reached round_limit; stop_reason as in project.json
+- scene in an analysis: a road profile has one height per x along an increasing
+  x, sizes are not negative, angle_channel names a series of that analysis
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
 """
@@ -551,6 +556,38 @@ class RunChecker:
                     if not _close(results[q], worst):
                         self.error("analysis.interference", w, f"{aid} reports {q} {results[q]} but the deepest listed is {worst}")
 
+    def check_scene(self) -> None:
+        """The test scene an analysis draws: a road profile has one height per x along an
+        increasing x, sizes are not negative, and a moving object names a series of its analysis."""
+        for aid, (i, a) in self.recs["analysis"].items():
+            w = self.where_of[i]
+            channels = {s.get("channel") for s in a.get("series") or [] if isinstance(s, dict)}
+            for k, obj in enumerate(a.get("scene") or []):
+                if not isinstance(obj, dict):
+                    continue
+                tag = f"{aid} scene[{k}] {obj.get('kind')}"
+                size = obj.get("size_mm")
+                if isinstance(size, list) and any(isinstance(x, (int, float)) and x < 0 for x in size):
+                    self.error("analysis.scene", w, f"{tag}: negative size {size}")
+                prof = obj.get("profile")
+                if obj.get("kind") == "road_profile" and not prof:
+                    self.error("analysis.scene", w, f"{tag} without a profile")
+                elif prof and obj.get("kind") != "road_profile":
+                    self.warn("analysis.scene", w, f"{tag} has a profile (meant for road_profile)")
+                if isinstance(prof, dict):
+                    xs = [x for x in prof.get("x_mm") or [] if isinstance(x, (int, float))]
+                    if any(b <= a_ for a_, b in zip(xs, xs[1:])):
+                        self.error("analysis.scene", w, f"{tag}: x_mm does not increase")
+                    zs = prof.get("z_mm")
+                    for track, z in (zs.items() if isinstance(zs, dict) else [("", zs)]):
+                        if isinstance(z, list) and len(z) != len(xs):
+                            self.error("analysis.scene", w, f"{tag}{' ' + track if track else ''}: "
+                                                            f"{len(z)} heights for {len(xs)} x values")
+                ch = obj.get("angle_channel")
+                if ch is not None and ch not in channels:
+                    self.error("analysis.scene", w, f"{tag}: angle_channel {ch!r} is not a series of {aid} "
+                                                    f"({', '.join(sorted(map(str, channels))) or 'none'})")
+
     def check_tool_specs(self) -> None:
         for name, specs in self.tool_checks.items():
             for i, s in specs:
@@ -812,6 +849,37 @@ class RunChecker:
             self.warn("run.agents", self.where_of[fin], f"finished while {', '.join(sorted(running))} "
                                                         f"had no agent.stopped (their work was cut off)")
 
+    def _unjudged(self) -> list[str] | None:
+        """Picked domains with no judgement or a pending one in the last design version."""
+        if not self.project or not self.designs:
+            return None
+        latest = self.latest_judgements(max(self.designs))
+        return [p.get("domain") for p in self.project.get("domain_picks", [])
+                if (latest.get(p.get("domain")) or {}).get("state", "pending") == "pending"]
+
+    def _check_stop_code(self, code: str | None, status: str | None, w: str) -> None:
+        """run.finished's stop_code agrees with the status and with what the records show."""
+        if code is None:
+            if status in ("stopped", "failed"):
+                self.warn("run.stop_code", w, f"{status} without stop_code (the screen cannot say why the run ended)")
+            return
+        if (code == "done") != (status == "done"):
+            self.error("run.stop_code", w, f"stop_code {code} with status {status}")
+        if (code == "error") != (status == "failed"):
+            self.warn("run.stop_code", w, f"stop_code {code} with status {status} (error goes with failed)")
+        unjudged = self._unjudged()
+        if code == "not_judged" and unjudged == []:
+            self.error("run.stop_code", w, "stop_code not_judged but every picked domain is judged")
+        if code == "round_limit" and self.project and self.designs:
+            used, limit = max(self.designs) - 1, self.project.get("round_limit")
+            if isinstance(limit, int) and used < limit:
+                self.error("run.stop_code", w, f"stop_code round_limit after {used} of {limit} design revisions")
+        if code == "cost_limit" and self.project:
+            costs = [(ev.get("data") or {}).get("cost_usd") for ev in self.events if ev.get("kind") == "cost.updated"]
+            limit = self.project.get("cost_limit_usd")
+            if costs and isinstance(costs[-1], (int, float)) and isinstance(limit, (int, float)) and costs[-1] < limit:
+                self.warn("run.stop_code", w, f"stop_code cost_limit but the last cost is {costs[-1]} of {limit} USD")
+
     def check_finish(self) -> None:
         fin = [(i, e) for i, e in enumerate(self.events) if e.get("kind") == "run.finished"]
         status = self.project.get("status") if self.project else None
@@ -826,6 +894,10 @@ class RunChecker:
             self.error("run.status", layout.PROJECT_FILE, f"status {status} but run.finished says {fstatus}")
         if fstatus == "stopped" and self.project and not self.project.get("stop_reason"):
             self.warn("run.status", layout.PROJECT_FILE, "stopped without stop_reason")
+        d = e.get("data") or {}
+        if self.project and d.get("stop_reason") and self.project.get("stop_reason") not in (None, d["stop_reason"]):
+            self.error("run.status", layout.PROJECT_FILE, "stop_reason differs from the one in run.finished")
+        self._check_stop_code(d.get("stop_code"), fstatus, w)
         if fstatus != "done" or not self.project:
             return
         if not self.designs:
@@ -953,6 +1025,7 @@ class RunChecker:
         self.check_analyses()
         self.check_tool_specs()
         self.check_assembly()
+        self.check_scene()
         self.check_comparisons()
         self.check_causes()
         self.check_verdicts()
