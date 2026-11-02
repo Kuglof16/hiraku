@@ -40,6 +40,20 @@ class ScreenUrl(unittest.TestCase):
     def test_plain(self):
         self.assertNotIn("?", export.screen_url(Path("promo/screens/n00.html")))
 
+    def test_app_url_keeps_its_query(self):
+        url = export.screen_url("http://127.0.0.1:8765/?run=sample&video=1&t=3", t=0.5)
+        parts = urlparse(url)
+        self.assertEqual((parts.scheme, parts.netloc, parts.path), ("http", "127.0.0.1:8765", "/"))
+        q = parse_qs(parts.query)
+        self.assertEqual(q["run"], ["sample"])
+        self.assertEqual(q["video"], ["1"])
+        self.assertEqual(float(q["t"][0]), 0.5)  # the export time replaces the one in the URL
+
+    def test_screen_name(self):
+        self.assertEqual(export.screen_name(Path("promo/screens/n18.html")), "n18")
+        self.assertEqual(export.screen_name("http://127.0.0.1:8765/?run=sample"), "app")
+        self.assertEqual(export.screen_name("http://127.0.0.1:8765/grid.html?run=x"), "grid")
+
 
 class EncodeCommand(unittest.TestCase):
     def test_1080p_from_frames(self):
