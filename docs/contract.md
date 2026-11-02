@@ -64,7 +64,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 上流の荷重条件の結果 (P1 の輪の力 → R1 など) は `params["upstream_analyses"] = {荷重条件の ID: 照合で一致した analysis}` で `run` に渡る。上流の `analysis_id` を `inputs_from` に足すのは呼ぶ側 (設計部)
 - 組み立ての順番と干渉は `analysis` の `assembly` (手順ごとの `assembly_step`) と `interferences` に入れる (`effects` に混ぜない)。手順には任意で、留め方 `fastenings` (何に・ボルト/溶接/載せる/ピン)、入れる道筋 `path_mm` (折れ線、最後が付いた位置)、手順の 1 文 `text` (コードで組む) を付ける
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
-- 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る
+- 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` に道具が書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線)
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`・`error`)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
 - 実行を外から止めるとき (画面の止めるボタン) は、実行のフォルダに `stop.request` (`layout.STOP_REQUEST_FILE`) を置く。実行の側はそれを見て、記録を整えて `stopped`・`stop_code` `user_stop` で終わる
@@ -89,9 +89,9 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 
 - `domain_pick` には任意で `test_ids` (その分野で製品のフラグに当てはまる試験) が付く。画面はその数を「当てはまる試験の数」に出す
 - ヒアリングで決まった要件は `project.requirements` にも入る。実行の途中で要件が変わったときは `project.updated` で出し直す
-- 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。式を作ったのが文の型 (コード) か Claude かは `check_by`。出典は `basis`、確かめていないものは `not checked`
+- 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。式を誰が書いたかは `check_by`: `file` (規則のファイルに式ごと書いてあった。最初から入っている規則と式つきの表)、`code` (文の型からコードが作った)、`claude` (Claude が書き、コードが検査した)。出典は `basis`、確かめていないものは `not checked`
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い
-- 規則の束は event にだけ持ち、ファイルにはしない。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
+- 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
 - 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は、決まったら schema の `tool_input.*` に入れる (統括部に送る)
 
@@ -102,7 +102,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `project.json` — 実行の初めに書く。あとで書き換えるのは `status`・`stop_reason`・要件・`cost_usd`・`design_versions` だけ
 - `events.jsonl` — 1 行 1 event、足すだけ。画面は実行中も再生もこれだけで描く
 - `v001/` — 版ごとのフォルダ。`design.json` と、その版の記録の種類ごとのフォルダ (`predictions/pred-0001.json` など)。設計を直すと次の版のフォルダ (`v002/`) ができ、前の版の `design.json` は書き換えない。前の版の記録は、下の「記録を後から直すとき」の場合だけ書き換わる
-- 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる
+- 記録のファイルに書いたものは、同じ中身を 1 つの event の `data` にも入れる。記録の種類と event の種類の対応は `layout.RECORD_EVENT` (逆向きは `layout.RECORD_OF_EVENT`、ID の欄は `<種類>_id`) だけに書き、store と点検はそれを引く
 - 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
 - ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`)
 - `runs/` はコミットしない

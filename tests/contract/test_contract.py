@@ -7,6 +7,7 @@ import jsonschema
 
 from hiraku import contract
 from hiraku.contract import layout
+from hiraku.contract import loading as loading_rule
 
 EXAMPLES = {
     "requirements_file": "requirements_file.json",
@@ -198,6 +199,46 @@ class LayoutTest(unittest.TestCase):
 
     def test_record_kinds_agree(self):
         self.assertEqual(set(layout.RECORD_DIRS), set(layout.ID_PREFIX))
+        self.assertEqual(set(layout.RECORD_EVENT), set(layout.ID_PREFIX))
+        self.assertTrue(set(layout.RECORD_EVENT.values()) <= set(contract.EVENT_KINDS))
+        self.assertEqual(layout.RECORD_OF_EVENT["rule_check.recorded"], "rule_check")
+
+
+class LoadingTest(unittest.TestCase):
+    @staticmethod
+    def design(*kinds):
+        return {"parts": [{"id": f"{k}{i}", "kind": k} for i, k in enumerate(kinds)]}
+
+    def ids(self, design, loading):
+        return [p["id"] for p in loading_rule.parts_on_board(design, loading)]
+
+    def test_occupants_board_in_order_and_cargo_only_with_two_cargo(self):
+        d = self.design("frame", "occupant", "occupant", "cargo")
+        self.assertEqual(self.ids(d, "empty"), ["frame0"])
+        self.assertEqual(self.ids(d, "driver"), ["frame0", "occupant1"])
+        self.assertEqual(self.ids(d, "two"), ["frame0", "occupant1", "occupant2"])
+        self.assertEqual(self.ids(d, "two_cargo"), ["frame0", "occupant1", "occupant2", "cargo3"])
+        self.assertEqual(self.ids(d, None), self.ids(d, "two_cargo"))
+
+    def test_too_few_occupants_does_not_fit(self):
+        with self.assertRaises(ValueError):
+            loading_rule.parts_on_board(self.design("frame", "occupant"), "two")
+        self.assertEqual(self.ids(self.design("frame", "cargo"), "two_cargo"), ["frame0", "cargo1"])  # no seats
+
+    def test_unknown_loading(self):
+        with self.assertRaises(ValueError):
+            loading_rule.parts_on_board(self.design("frame"), "three")
+
+    def test_on_board_copies_the_design(self):
+        d = {**self.design("occupant", "cargo"), "name": "x"}
+        out = loading_rule.on_board(d, "driver")
+        self.assertEqual([p["id"] for p in out["parts"]], ["occupant0"])
+        self.assertEqual(len(d["parts"]), 2)
+        self.assertEqual(out["name"], "x")
+
+    def test_loading_of(self):
+        self.assertEqual(loading_rule.loading_of({"params": {"loading": "two"}}), "two")
+        self.assertEqual(loading_rule.loading_of({}), "two_cargo")
 
     def test_ids_fit_the_schema_patterns(self):
         for kind in layout.ID_PREFIX:

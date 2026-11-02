@@ -67,6 +67,18 @@ ID_PREFIX = {
     "rule_check": "rchk",
 }
 
+# Event emitted when a record of this kind is written (its data is the record;
+# the id field is f"{kind}_id"). RECORD_OF_EVENT is the same map read backwards.
+RECORD_EVENT = {
+    "prediction": "prediction.recorded",
+    "analysis": "analysis.finished",
+    "comparison": "comparison.recorded",
+    "cause": "cause.recorded",
+    "verdict": "verdict.recorded",
+    "rule_check": "rule_check.recorded",
+}
+RECORD_OF_EVENT = {event: kind for kind, event in RECORD_EVENT.items()}
+
 RUN_ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[a-z0-9-]+$")
 
 

@@ -1852,10 +1852,11 @@
         },
         "check_by": {
           "enum": [
+            "file",
             "code",
             "claude"
           ],
-          "description": "Who turned the text into check: a code pattern or Claude."
+          "description": "Who wrote check: given with the rule in a file (builtin rules, tables with expressions), a code pattern from the text, or Claude."
         },
         "trust": {
           "$ref": "#/$defs/trust"
@@ -1867,7 +1868,7 @@
       }
     },
     "knowledge_imported": {
-      "description": "data of knowledge.imported: one bundle of rules taken in (the builtin set, or a file the person dropped). Kept only in events; a dropped file itself may be kept in runs/<run_id>/knowledge/.",
+      "description": "data of knowledge.imported: one bundle of rules taken in (the builtin set, or a file the person dropped). Kept only in events; a dropped file itself may be kept in runs/<run_id>/knowledge/. Per doc_id the last knowledge.imported event wins (giving the same file again re-sends it, e.g. with more checks).",
       "type": "object",
       "required": [
         "doc",
