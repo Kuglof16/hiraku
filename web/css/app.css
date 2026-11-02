@@ -612,6 +612,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .runlist .confirm { color: var(--red); font-size: 14px; font-weight: 600; }
 .mode .launch-link { margin-left: 10px; font-size: 13px; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 1px 10px; text-decoration: none; white-space: nowrap; }
 body.video .mode .launch-link { display: none; }
+.mode .stop-btn { margin-left: 10px; font: inherit; font-size: 13px; color: var(--red); background: var(--panel); border: 1.5px solid var(--red); border-radius: 999px; padding: 1px 10px; cursor: pointer; white-space: nowrap; }
+.mode .stop-btn:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
+body.video .mode .stop-btn { display: none; }
 .runlist table { width: 100%; border-collapse: collapse; font-size: 16px; }
 .runlist td, .runlist th { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
 .runlist .rid { font-family: var(--mono); font-size: 13px; color: var(--muted); }

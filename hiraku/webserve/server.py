@@ -10,6 +10,7 @@ Standard library only. Routes:
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
     GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
+    POST /api/launch/stop               ask that run to stop (stop.request in its folder)
     GET /layout.json                    the video's layout rules (promo/screens/layout.json,
                                         the promo department's), read by the cut pages
 
@@ -273,7 +274,8 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             length = 0
         raw = self.rfile.read(min(max(length, 0), 10000))
-        if urlsplit(self.path).path != "/api/launch" or not self.launcher:
+        route = urlsplit(self.path).path
+        if route not in ("/api/launch", "/api/launch/stop") or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         # Only this server's own page may start a run: another web page could
@@ -303,7 +305,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"bad JSON: {e}"}, HTTPStatus.BAD_REQUEST)
             return
         try:
-            self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
+            if route == "/api/launch/stop":
+                self._send_json(self.launcher.stop(body.get("run_id")))
+            else:
+                self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
         except LaunchError as e:
             self._send_json({"error": str(e)}, HTTPStatus(e.status))
 

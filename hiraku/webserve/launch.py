@@ -5,6 +5,9 @@
                        the run started here, if one is still going
     POST /api/launch   {"requirements": "<file name>", "mode": "scripted" | "claude"}
                        -> {"run_id": ...} once the run folder exists
+    POST /api/launch/stop  {"run_id": ...}: asks the run started here to stop, by
+                       putting layout.STOP_REQUEST_FILE in its folder (the run then
+                       ends as stopped, stop_code user_stop, within seconds)
 
 A run is `python -m hiraku run data/requirements/<file> [--scripted] --runs <runs>`
 in a child process with this server's environment. The key is never put into a
@@ -26,7 +29,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
-from hiraku.contract.layout import EVENTS_FILE, RUN_ID_RE
+from hiraku.contract.layout import EVENTS_FILE, RUN_ID_RE, STOP_REQUEST_FILE
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_DIR / "data" / "requirements"
@@ -140,6 +143,14 @@ class Launcher:
                 raise LaunchError(500, "the run ended before it started: " + " / ".join(tail))
             time.sleep(0.1)
         raise LaunchError(504, "the run folder did not appear in time")
+
+    def stop(self, run_id: Any) -> dict[str, Any]:
+        """Ask the run started here to stop (only that one, and only while it runs)."""
+        if not self.running() or not self.current or self.current.get("run_id") != run_id:
+            raise LaunchError(409, "no run started from this screen is going under that id")
+        (self.runs_dir / run_id / STOP_REQUEST_FILE).write_bytes(b"")
+        self.current["stop_requested"] = True
+        return {"run_id": run_id, "stop_requested": True}
 
     @staticmethod
     def _read(proc: subprocess.Popen, info: dict[str, Any], tail: deque[str]) -> None:

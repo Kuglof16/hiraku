@@ -43,6 +43,8 @@ const ui = {
   anim: { key: null, local: false, playing: false, tau: 0 },
   graphGroup: null,
   fieldKind: null, // contour field picked in the legend (null: the first one)
+  stoppable: null, // the run id when this screen started the run being followed
+  stopAsked: false,
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
@@ -149,7 +151,10 @@ function renderTop(s) {
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
-    `<a class="launch-link" href="?list=1" title="台本か Claude で、新しく走らせる">▶ その場で走らせる</a>`;
+    // a run this screen started can be stopped while it goes
+    (ui.stoppable && ui.stoppable === s.runId && s.status === "running"
+      ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
+      : `<a class="launch-link" href="?list=1" title="台本か Claude で、新しく走らせる">▶ その場で走らせる</a>`);
 }
 
 function renderChips(s, lcId) {
@@ -777,7 +782,19 @@ async function openRun(runId) {
   }
   const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
-  if (follow) feed.follow(() => player.finished);
+  if (follow) {
+    feed.follow(() => player.finished);
+    // started from this screen? then it can be stopped from here
+    fetch("/api/launch", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((info) => {
+        if (info.running?.run_id === runId) {
+          ui.stoppable = runId;
+          drawn.rev = -1;
+        }
+      })
+      .catch(() => {});
+  }
   startPlayback();
 }
 
@@ -853,7 +870,9 @@ async function renderLaunch(message = "") {
       );
     })
     .join("");
-  const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(info.running.run_id ?? "")}">${esc(info.running.run_id ?? "")} を追いかける</a></p>` : "";
+  const rid = info.running?.run_id ?? "";
+  const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
+  const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(rid)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
   box.innerHTML = `<h3>その場で走らせる</h3>${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
@@ -870,10 +889,34 @@ async function launch(file, mode) {
   }
 }
 
+// Ask the run started from this screen to stop (it ends as stopped, stop_code user_stop).
+async function stopRun(runId) {
+  const res = await fetch("/api/launch/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: runId }) });
+  const out = await res.json();
+  if (!res.ok) throw new Error(out.error ?? String(res.status));
+  return out;
+}
+
+$("mode").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-stop]");
+  if (!b) return;
+  ui.stopAsked = true;
+  drawn.rev = -1;
+  stopRun(b.dataset.stop).catch(() => {
+    ui.stopAsked = false;
+    drawn.rev = -1;
+  });
+});
+
 $("runlist").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
-  if (b.dataset.launch) launch(b.dataset.req, b.dataset.launch);
+  if (b.dataset.launchStop) {
+    b.disabled = true;
+    stopRun(b.dataset.launchStop)
+      .then(() => renderLaunch())
+      .catch((e) => renderLaunch(`止められなかった: ${e.message ?? e}`));
+  } else if (b.dataset.launch) launch(b.dataset.req, b.dataset.launch);
   else if (b.dataset.launchAsk) {
     launchConfirm = b.dataset.launchAsk;
     renderLaunch();

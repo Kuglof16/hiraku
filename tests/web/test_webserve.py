@@ -289,6 +289,20 @@ class LaunchTest(unittest.TestCase):
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
         self.assertEqual(status, 409)  # the first one is still going
 
+    def test_stop_puts_the_request_in_the_started_run_only(self):
+        base = self.serve({})
+        _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": "20991231-000000-other"}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(cm.exception.code, 409)  # not the run started here
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": out["run_id"]}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertTrue(json.loads(r.read())["stop_requested"])
+        self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
+
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})

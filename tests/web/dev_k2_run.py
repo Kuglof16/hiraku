@@ -37,11 +37,16 @@ def q(v, u):
 # says so. The 250 mm step is the one the demo vehicle is not meant to climb.
 REQUIREMENTS = ROOT / "data" / "requirements" / "offroad-4w.yaml"
 LOOP = {"distance": q(20, "km"), "grade_low": q(7, "%"), "grade_high": q(12, "%"), "speed_low": q(20, "km/h"), "speed_high": q(40, "km/h")}
+STEP100 = {"loading": "two_cargo", "step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"), "mu": q(0.8, "1")}
+STEP250 = {**STEP100, "step_height": q(250.0, "mm")}
+# A load case may be analysed by more than one tool (the first entry gives its params):
+# the steps get the K1 hand-balance tool (the frame's stress at the push) before the K2
+# drive (the motion), so the motion is the newest analysis of the case.
 CASES = [
-    ("P1-step100", "P1", "powertrain", "段差 100 mm を越える", "step_climb_dynamic",
-     {"loading": "two_cargo", "step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"), "mu": q(0.8, "1")}),
-    ("P1-step250", "P1", "powertrain", "段差 250 mm を越える", "step_climb_dynamic",
-     {"loading": "two_cargo", "step_height": q(250.0, "mm"), "speed": q(10.0, "km/h"), "mu": q(0.8, "1")}),
+    ("P1-step100", "P1", "powertrain", "段差 100 mm を越える", "step_climb", STEP100),
+    ("P1-step100", "P1", "powertrain", "段差 100 mm を越える", "step_climb_dynamic", STEP100),
+    ("P1-step250", "P1", "powertrain", "段差 250 mm を越える", "step_climb", STEP250),
+    ("P1-step250", "P1", "powertrain", "段差 250 mm を越える", "step_climb_dynamic", STEP250),
     ("S1-tilt", "S1", "handling", "傾斜台", "tilt", {"loading": "two_cargo"}),
     ("F1-wind", "F1", "aero", "横風 30 m/s", "crosswind",
      {"loading": "empty", "wind_speed": q(30.0, "m/s"), "speed": q(40.0, "km/h")}),
@@ -84,6 +89,8 @@ def build(out_dir: Path, only: list[str] | None = None, log=print) -> Path:
     run.mkdir(parents=True)
     load_cases = []
     for lc, test, domain, title, _tool, params in cases:
+        if any(c["load_case_id"] == lc for c in load_cases):
+            continue
         cat = catalog_load_case(test, design) if lc != "P1-step250" else None
         if cat:
             load_cases.append({**cat, "load_case_id": lc, "title": f"{title} (カタログの荷重条件)"})
