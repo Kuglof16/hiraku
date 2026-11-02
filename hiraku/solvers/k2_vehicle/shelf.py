@@ -6,8 +6,8 @@ predictions, params) -> analysis record without analysis_id.
 
 Load-case params: each tool declares the ones it reads in `params` (name,
 contract unit, default in that unit, design variables that stand in when the
-load case does not give it) and reads no others; load_params() gives them as
-records. params.loading (empty, driver, two, two_cargo; default
+load case does not give it) and reads no others; describe()["params"] gives
+them as records. params.loading (empty, driver, two, two_cargo; default
 two_cargo) chooses the occupant and cargo parts on board for every tool. A
 load-case param the tool does not read is named in the record's effects.
 Tool options in `params` (not the load case): dt (s), record_hz.
@@ -68,13 +68,15 @@ class P:
     choices: tuple = ()
     var: tuple = ()
 
-    def record(self) -> dict:
+    def describe(self) -> dict:
+        """The shape of hiraku.solvers.shelf.base.Param.describe(), plus kind "boolean" and
+        design_variables."""
         kind = "quantity" if self.unit else ("boolean" if isinstance(self.default, bool) else "string")
-        default = self.default
-        if kind == "quantity" and default is not None:
-            default = {"value": float(default), "unit": self.unit}
-        out = {"name": self.name, "type": kind, "unit": self.unit, "default": default, "required": self.required,
-               "text": self.text}
+        out = {"name": self.name, "kind": kind, "required": self.required, "meaning": self.text}
+        if self.unit:
+            out["unit"] = self.unit
+        if self.default is not None:
+            out["default"] = {"value": float(self.default), "unit": self.unit} if self.unit else self.default
         if self.choices:
             out["choices"] = list(self.choices)
         if self.var:
@@ -97,9 +99,14 @@ class Pair:
     inputs: tuple = ()
     note: str = ""
 
-    def record(self) -> dict:
-        return {"quantity": self.quantity, "formula_id": self.formula_id, "output": self.output,
-                "inputs_from_load_case": dict(self.inputs), "note": self.note}
+    def describe(self) -> dict:
+        """The shape of hiraku.solvers.shelf.base.Predicts.describe(), plus inputs_from_load_case."""
+        out = {"quantity": self.quantity, "formula_id": self.formula_id, "output": self.output}
+        if self.note:
+            out["note"] = self.note
+        if self.inputs:
+            out["inputs_from_load_case"] = dict(self.inputs)
+        return out
 
 
 DRIVELINE_EFFICIENCY = 0.9  # assumed when neither the load case nor the design gives one
@@ -151,13 +158,13 @@ class K2Tool:
     def formula_ids(self) -> list[str]:
         return list(dict.fromkeys(p.formula_id for p in self.pairs))
 
-    def load_params(self) -> list[dict]:
-        """The load-case params this tool reads: name, type, unit, default, required, text."""
-        return [p.record() for p in (LOADING,) + self.params]
-
-    def prediction_pairs(self) -> list[dict]:
-        """For each result quantity, the K0 formula output that predicts it (same unit)."""
-        return [p.record() for p in self.pairs]
+    def describe(self) -> dict:
+        """What a load case for this tool needs (params) and which K0 formula outputs predict
+        which results in the same unit (predicts); the shape of the analysis department's
+        BuiltinTool.describe()."""
+        return {"name": self.name, "title": self.title, "domain": self.domain, "tests": list(self.tests),
+                "params": [p.describe() for p in (LOADING,) + self.params],
+                "predicts": [p.describe() for p in self.pairs], "formulas": self.formula_ids()}
 
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
         t0 = time.perf_counter()
@@ -382,10 +389,12 @@ class TiltTool(K2Tool):
 
 
 def _ssf(veh) -> float:
-    """T / 2h of the vehicle as designed (track between the outermost supports, total CG height)."""
+    """T / 2h of the vehicle as designed (track between the outermost supports, total CG height
+    above the ground under the wheels)."""
     ys = [float(c.pos[1]) for c in veh.corners]
     t = max(ys) - min(ys)
-    return t / (2.0 * float(veh.cg_total[2]))
+    ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
+    return t / (2.0 * (float(veh.cg_total[2]) - ground))
 
 
 # ------------------------------------------------------------------ helpers
@@ -466,7 +475,7 @@ class CrosswindTool(K2Tool):
     pairs = (Pair("critical_wind_speed", "crosswind.critical_wind_speed", "v_crit",
                   (("C_y", "cy"), ("A", "side_area"), ("rho", "rho"), ("h_cp", "side_cp_height")),
                   "K2 at rest with the tyres held (mu 2); the body also rolls on its springs. C_y, A, h_cp, rho: "
-                  "the load case, else the design variables named in load_params, else K2's defaults (A and "
+                  "the load case, else the design variables named in describe(), else K2's defaults (A and "
                   "h_cp from the side projection of the part boxes)"),
              Pair("side_force", "crosswind.side_force", "F",
                   (("C_y", "cy"), ("A", "side_area"), ("v", "wind_speed"), ("rho", "rho"))),
@@ -624,7 +633,8 @@ class BrakingTool(K2Tool):
     brakes coming on), mean_decel (m/s^2 = v^2 / 2 s_braking), mean_decel_g (g, the same),
     peak_decel (m/s^2), min_wheel_load (N, where = support), min_rear_wheel_load (N, supports
     behind the CG: 0 = the rear lifts), min_rear_axle_load (N, those supports together),
-    max_pitch (deg, nose down +), parking_drift (mm).
+    max_pitch (deg, nose down +); with parking_slope: parking_drift (mm in 60 s, facing uphill,
+    brakes on) and parking_friction_demand (1, the largest |F_road| / F_z of a braked wheel).
     """
 
     name = "braking"
@@ -683,15 +693,18 @@ class BrakingTool(K2Tool):
         slope = self.q(lp, "parking_slope", "1")
         if slope is not None:
             from .checks import parked_drift
-            res.append(_res("parking_drift", parked_drift(veh, slope, 60.0, self.dt)["drift"] * 1000.0, "mm"))
+            park = parked_drift(veh, slope, 60.0, self.dt)
+            res.append(_res("parking_drift", park["drift"] * 1000.0, "mm"))
+            res.append(_res("parking_friction_demand", park["friction_demand"], "1"))
         rec = r["recorder"]
         return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "assumptions": notes}
 
 
 # ------------------------------------------------------------------ launch
 def launch_run(veh, motor: Motor, target: float, *, grade: float = 0.0, max_time: float = 30.0, dt: float = 1e-3,
-               aero: Aero | None = None, rec_hz: float = 0.0) -> dict:
-    """Full throttle from rest until `target` speed (then 1 s more), or until it stops accelerating."""
+               aero: Aero | None = None, rec_hz: float = 0.0, until_top: bool = False) -> dict:
+    """Full throttle from rest until `target` speed (then 1 s more), or until it stops accelerating.
+    until_top: go on past the target until it stops accelerating (the top speed)."""
     sim = new_sim(veh, dt=dt, settle_s=1.0)
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
@@ -725,10 +738,10 @@ def launch_run(veh, motor: Motor, target: float, *, grade: float = 0.0, max_time
                 rec.keep_snapshot()
         hist.append(v)
         k += 1
-        if sim.t >= max_time or (t_hit is not None and sim.t > t_hit + 1.0):
+        if sim.t >= max_time or (not until_top and t_hit is not None and sim.t > t_hit + 1.0):
             break
-        if t_hit is None and k % 1000 == 0 and len(hist) > 2000 and hist[-1] - hist[-1001] < 0.02:
-            break  # no longer accelerating: the top speed is below the target
+        if (until_top or t_hit is None) and k % 1000 == 0 and len(hist) > 2000 and hist[-1] - hist[-1001] < 0.02:
+            break  # no longer accelerating: the top speed (below the target unless until_top)
     return {"time": t_hit, "distance": x_hit, "top_speed": vmax, "slip_max": slip_max, "recorder": rec,
             "moved": float(sim.design_origin()[0]) - x0, "sim": sim}
 
@@ -738,8 +751,8 @@ class LaunchTool(K2Tool):
 
     Results: time_to_speed (s), distance_to_speed (m), mean_accel (m/s^2), top_speed (km/h,
     highest speed reached), reached_target (1), max_wheel_slip (1), moved_uphill (m, on a grade).
-    The run ends 1 s after target_speed, or when the speed gains less than 0.02 m/s in 1 s,
-    or at max_time.
+    The run ends 1 s after target_speed (until "target"), or when the speed gains less
+    than 0.02 m/s in 1 s, or at max_time.
     """
 
     name = "launch"
@@ -747,13 +760,15 @@ class LaunchTool(K2Tool):
     domain = "powertrain"
     tests = ["P2", "P3"]
     params = (P("target_speed", "km/h", 40.0, "full throttle from rest up to this speed"),
+              P("until", None, "target", "target: stop 1 s after target_speed; top_speed: go on until the "
+                                         "speed stops rising", choices=("target", "top_speed")),
               P("grade", "%", 0.0, "road grade, + uphill"),
               *MOTOR,
               P("max_time", "s", 30.0, "longest run"),
               CD, RHO, FRONT_AREA, MU)
     _launch_inputs = (("v", "target_speed"), ("grade", "grade"), ("P", "motor_power"), ("eta", "efficiency"),
                       ("C_d", "cd"), ("A", "front_area"), ("rho", "rho"))
-    _launch_note = ("these inputs: the load case, else the design variables named in load_params; F_max = "
+    _launch_note = ("these inputs: the load case, else the design variables named in describe(); F_max = "
                     "motor_torque gear_ratio efficiency / loaded wheel radius; C_rr = design variable "
                     "tire_rolling_resistance or rolling_resistance (0.015 assumed in K2 when absent); lambda = "
                     "1 + sum(J / r^2) / m, K2 takes J = m_u r^2 / 2 per wheel (a solid disc of the unsprung mass), "
@@ -763,9 +778,9 @@ class LaunchTool(K2Tool):
              Pair("distance_to_speed", "launch.time_to_speed", "s", _launch_inputs, _launch_note),
              Pair("mean_accel", "launch.time_to_speed", "a_mean", _launch_inputs, _launch_note),
              Pair("top_speed", "launch.top_speed", "v_top", _launch_inputs[1:],
-                  "give target_speed above the top speed, so that K2 runs until the speed stops rising "
-                  "(it stops when the gain is below 0.02 m/s in 1 s, a little under the limit); "
-                  "motor_max_speed is not in the formula"))
+                  "give until = top_speed, so that K2 runs until the speed stops rising (it stops when the "
+                  "gain is below 0.02 m/s in 1 s, a little under the limit); motor_max_speed is not in the "
+                  "formula"))
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="launch check",
@@ -791,7 +806,7 @@ class LaunchTool(K2Tool):
         if not self.given(lp, "cd"):
             notes.append("cd = 0.8 (assumed)")
         r = launch_run(veh, motor, target, grade=grade, max_time=self.q(lp, "max_time", "s"), dt=self.dt,
-                       aero=aero, rec_hz=self.record_hz)
+                       aero=aero, rec_hz=self.record_hz, until_top=self.text(lp, "until") == "top_speed")
         res = []
         if r["time"] is not None:
             res += [_res("time_to_speed", r["time"], "s"), _res("distance_to_speed", r["distance"], "m"),

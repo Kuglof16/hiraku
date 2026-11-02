@@ -94,34 +94,39 @@ def k0_formulas():
 class Declarations(unittest.TestCase):
     """The load-case params and the K0 pairs that the load-case builders and the agents use."""
 
-    def test_load_params_are_records(self):
+    def test_describe_params(self):
         for name, tool in TOOLS.items():
             with self.subTest(tool=name):
-                recs = tool.load_params()
+                desc = tool.describe()
+                self.assertEqual(desc["name"], name)
+                self.assertEqual(desc["tests"], tool.tests)
+                recs = desc["params"]
                 names = [p["name"] for p in recs]
                 self.assertEqual(len(names), len(set(names)))
                 self.assertEqual(recs[0]["name"], "loading")
                 self.assertEqual(recs[0]["choices"], list(LOADINGS))
                 for p in recs:
-                    self.assertIn(p["type"], ("quantity", "string", "boolean"))
-                    if p["type"] == "quantity":
+                    self.assertIn(p["kind"], ("quantity", "string", "boolean"))
+                    self.assertTrue(p["meaning"])
+                    if p["kind"] == "quantity":
                         self.assertIn(p["unit"], contract.UNITS)
-                        if p["default"] is not None:
+                        if "default" in p:
                             self.assertEqual(contract.errors("quantity", p["default"]), [])
                             self.assertEqual(p["default"]["unit"], p["unit"])
-                json.dumps(recs)
+                json.dumps(desc)
 
-    def test_pairs_name_k0_outputs_and_declared_params(self):
+    def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
         for name, tool in TOOLS.items():
-            declared = {p["name"]: p for p in tool.load_params()}
-            self.assertTrue(tool.prediction_pairs(), name)
-            self.assertEqual(tool.spec()["formulas"], tool.formula_ids())
-            for pair in tool.prediction_pairs():
+            desc = tool.describe()
+            declared = {p["name"]: p for p in desc["params"]}
+            self.assertTrue(desc["predicts"], name)
+            self.assertEqual(tool.spec()["formulas"], desc["formulas"])
+            for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     f = formulas[pair["formula_id"]]
                     self.assertIn(pair["output"], f["outputs"])
-                    for inp, lc_name in pair["inputs_from_load_case"].items():
+                    for inp, lc_name in pair.get("inputs_from_load_case", {}).items():
                         self.assertIn(inp, f["inputs"])
                         self.assertIn(lc_name, declared)
                         # the registry converts units of the same dimension
@@ -210,7 +215,7 @@ class Runs(unittest.TestCase):
         formulas = k0_formulas()
         for name, rec in self.recs.items():
             units = {r["quantity"]: r["unit"] for r in rec["results"]}
-            for pair in TOOLS[name].prediction_pairs():
+            for pair in TOOLS[name].describe()["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     self.assertIn(pair["quantity"], units)
                     self.assertEqual(units[pair["quantity"]],

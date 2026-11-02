@@ -195,7 +195,9 @@ def check_rigid_tilt() -> list[dict]:
 
 
 def parked_drift(veh, grade: float = 0.20, seconds: float = 60.0, dt: float = 1e-3) -> dict:
-    """Park on a slope with the brakes on; return the drift over `seconds` after settling."""
+    """Park on a slope (facing uphill) with the brakes on; return the drift over `seconds`
+    after settling, and the friction demand: the largest |tyre force along the road| / normal
+    force among the braked wheels at the end."""
     sim = new_sim(veh, settle_s=1.0, dt=dt)
     ctl = hold(sim)
     alpha = math.atan(grade)
@@ -207,7 +209,10 @@ def parked_drift(veh, grade: float = 0.20, seconds: float = 60.0, dt: float = 1e
     p0 = sim.design_origin()
     settle(sim, seconds, ctl)
     p1 = sim.design_origin()
-    return {"drift": float(np.linalg.norm(p1 - p0)), "sim": sim}
+    f = sim.out["f"]
+    demand = max((math.hypot(f[i][0], f[i][1]) / f[i][2] for i, c in enumerate(veh.corners) if c.brake and f[i][2] > 0.0),
+                 default=math.inf)
+    return {"drift": float(np.linalg.norm(p1 - p0)), "friction_demand": demand, "sim": sim}
 
 
 def check_parked_on_slope() -> list[dict]:
