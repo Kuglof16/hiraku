@@ -85,8 +85,8 @@ VARIABLES: dict[str, Var] = {
     # powertrain and battery: a 51.2 V LiFePO4 pack (16 cells at 3.2 V, taken as the nominal
     # voltage of a LiFePO4 cell, not checked against a cell data sheet in this repository),
     # a 10 kW peak motor driving the rear axle through a reduction
-    "motor_peak_power": Var("kW", 10.0, 5.0, 20.0, "motor peak power"),
-    "motor_peak_torque": Var("N*m", 50.0, 30.0, 120.0, "motor peak torque (the motor's mass is kept)"),
+    "motor_peak_power": Var("kW", 10.0, 5.0, 20.0, "motor peak power (the motor's mass goes with it)"),
+    "motor_peak_torque": Var("N*m", 50.0, 30.0, 120.0, "motor peak torque (the motor's mass goes with it)"),
     "motor_max_speed": Var("rpm", 6000.0, 3000.0, 10000.0, "motor speed limit (with gear_ratio and the wheel radius it "
                            "sets the top speed)"),
     "gear_ratio": Var("1", 10.0, 6.0, 14.0, "reduction from motor to wheel"),
@@ -154,6 +154,9 @@ _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing"
              "fatigue_knee_cycles", "fatigue_slope_after_knee", "tyre_stiffness"]
 SEAT_HALF_MM = 275.0  # seat cross members ahead and behind the seat centre (assumption)
 BATTERY_V1 = {"length": 500.0, "width": 600.0, "height": 200.0, "mass": 50.0, "capacity": 100.0}  # the v1 pack (assumption)
+# The v1 motor and reducer (assumption): a bigger motor weighs more, in proportion to
+# whichever of its peak power and peak torque grows more.
+MOTOR_V1 = {"mass": 25.0, "power": 10.0, "torque": 50.0}
 
 
 def spec() -> list[Record]:
@@ -266,7 +269,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     parts = [
         part("battery", f"電池 (LiFePO4 {v['battery_voltage']:g} V {v['battery_capacity']:g} Ah)", "battery",
              [v["battery_x"], 0.0, 330.0], [b_l, b_w, BATTERY_V1["height"]], BATTERY_V1["mass"] * scale, between(v["battery_x"])),
-        part("motor", "モーターと減速機", "motor", [-wb + 150.0, 0.0, 310.0], [250.0, 300.0, 220.0], 25.0,
+        part("motor", "モーターと減速機", "motor", [-wb + 150.0, 0.0, 310.0], [250.0, 300.0, 220.0],
+             MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"]),
              [node("L", "B"), node("R", "B")]),
         part("controller", "モーターの制御器", "controller", [S2 - 110.0, 0.0, 300.0], [250.0, 200.0, 80.0], 4.0,
              [node("L", "S2"), node("R", "S2")]),
