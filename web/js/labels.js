@@ -86,7 +86,21 @@ export function ruleOf(rule) {
   return RULES.find((r) => r.id === id) ?? { id: id || "?", key: rule, ja: rule ?? "" };
 }
 
-const UNIT_LABEL = { 1: "", degC: "℃", "m/s^2": "m/s²", "N*mm": "N·mm", "N*m": "N·m", "%": "%" };
+const UNIT_LABEL = {
+  1: "",
+  degC: "℃",
+  "m/s^2": "m/s²",
+  "N*mm": "N·mm",
+  "N*m": "N·m",
+  "%": "%",
+  "mm^2": "mm²",
+  "mm^3": "mm³",
+  "mm^4": "mm⁴",
+  "m^2": "m²",
+  "kg/m^3": "kg/m³",
+  "kg*m^2": "kg·m²",
+  ohm: "Ω",
+};
 
 export function unitLabel(u) {
   return u in UNIT_LABEL ? UNIT_LABEL[u] : u ?? "";

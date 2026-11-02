@@ -38,6 +38,9 @@ export function initialState() {
     agents: {},
     agentOrder: [],
     log: [],
+    logIdx: {}, // record id -> index of its log line
+    logRev: 0, // bumped when an earlier log line is rewritten
+    touched: null, // {idx, seq}: the line the current event wrote
     hooks: { denied: [], blockedStops: [] },
     cost: 0,
     focus: { screen: "A3", testId: null, loadCaseId: null, t: 0 },
@@ -84,6 +87,24 @@ function put(s, kind, id, rec, ev) {
 
 function log(s, ev, level, text) {
   s.log.push({ seq: ev.seq, t: ev.t, kind: ev.kind, agent: ev.agent ?? null, domain: ev.domain ?? null, level, text });
+  s.touched = { idx: s.log.length - 1, seq: ev.seq };
+}
+
+// One log line per record id. A record sent again with the same id (the
+// contract's way to update it; the last event wins) rewrites its line in place.
+// Returns true when the record was already there.
+function logRecord(s, ev, id, level, text) {
+  const i = s.logIdx[id];
+  if (i === undefined) {
+    log(s, ev, level, text);
+    s.logIdx[id] = s.log.length - 1;
+    s.log[s.log.length - 1].recId = id;
+    return false;
+  }
+  Object.assign(s.log[i], { level, text, updatedT: ev.t });
+  s.touched = { idx: i, seq: ev.seq };
+  s.logRev += 1;
+  return true;
 }
 
 function setActivity(s, ev, text) {
@@ -168,7 +189,7 @@ export function applyEvent(s, ev) {
       focusLoadCase(s, d.load_case_id, ev.t);
       if (agent) agent.status = "予測した";
       const txt = `予測を記録した: ${quantityName(d.quantity)} = ${fmtVU(d.value, d.unit)} (${d.formula_id})`;
-      log(s, ev, "step", `${who(ev)}: ${txt}`);
+      logRecord(s, ev, d.prediction_id, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
     }
@@ -187,7 +208,7 @@ export function applyEvent(s, ev) {
       focusLoadCase(s, d.load_case_id, ev.t);
       if (d.status === "failed") {
         if (agent) agent.status = "解析が通らない";
-        log(s, ev, "bad", `${who(ev)}: ${d.tool} の解析が通らなかった: ${d.error ?? ""}`);
+        logRecord(s, ev, d.analysis_id, "bad", `${who(ev)}: ${d.tool} の解析が通らなかった: ${d.error ?? ""}`);
         setActivity(s, ev, `解析が通らなかった: ${d.error ?? ""}`);
       } else {
         if (agent) agent.status = "解析した";
@@ -195,44 +216,39 @@ export function applyEvent(s, ev) {
         const txt = r
           ? `解析が終わった: ${quantityName(r.quantity)} = ${fmtVU(r.value, r.unit)}${r.where ? ` (${r.where})` : ""}`
           : "解析が終わった";
-        log(s, ev, "step", `${who(ev)}: ${txt}`);
+        logRecord(s, ev, d.analysis_id, "step", `${who(ev)}: ${txt}`);
         setActivity(s, ev, txt);
       }
       break;
     }
     case "comparison.recorded": {
-      // A record sent again with the same id replaces the earlier one (the last is right).
-      const before = s.comparisons[d.comparison_id];
+      const again = d.comparison_id in s.comparisons;
       put(s, "comparisons", d.comparison_id, d, ev);
-      if (before) {
-        log(s, ev, "muted", `照合 ${d.comparison_id} を更新した${d.cause_id && d.cause_id !== before.cause_id ? ` (原因 ${d.cause_id} が付いた)` : ""}`);
-        break;
-      }
       const ok = d.status === "match";
-      if (agent) agent.status = ok ? "照合した" : "食い違い";
       const txt = ok
         ? `照合: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
-        : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。原因を書くまで先に進めない`;
-      log(s, ev, ok ? "ok" : "bad", `${who(ev)}: ${txt}`);
-      setActivity(s, ev, txt);
+        : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
+          (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
+      logRecord(s, ev, d.comparison_id, ok ? "ok" : "bad", `${who(ev)}: ${txt}`);
+      if (!again) {
+        if (agent) agent.status = ok ? "照合した" : "食い違い";
+        setActivity(s, ev, txt);
+      }
       break;
     }
     case "cause.recorded": {
       const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
-      if (before) {
-        const fixed = d.resolved && !before.resolved;
-        log(s, ev, fixed ? "ok" : "muted", fixed ? `原因 ${d.cause_id} は直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : `原因 ${d.cause_id} を更新した`);
-        break;
-      }
-      log(s, ev, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」`);
-      setActivity(s, ev, `食い違いの原因を書いた: ${d.cause}`);
+      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : "";
+      logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}`);
+      if (!before) setActivity(s, ev, `食い違いの原因を書いた: ${d.cause}`);
+      else if (d.resolved && !before.resolved) setActivity(s, ev, `原因 ${d.cause_id} は直った`);
       break;
     }
     case "verdict.recorded": {
       put(s, "verdicts", d.verdict_id, d, ev);
       const txt = `判定: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmt(d.margin_pct, 3)} %)`;
-      log(s, ev, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
+      logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
     }
@@ -289,9 +305,10 @@ export function applyEvent(s, ev) {
       s.unknown += 1;
       log(s, ev, "muted", `(知らない event: ${ev.kind})`);
   }
-  if (ev.text && !["agent.said", "user.said", "hook.denied", "hook.blocked_stop", "run.finished"].includes(ev.kind)) {
+  if (ev.text && s.touched?.seq === ev.seq && !["agent.said", "user.said", "hook.denied", "hook.blocked_stop", "run.finished"].includes(ev.kind)) {
     // Extra words on a record event are shown as is under its log line.
-    s.log[s.log.length - 1].note = ev.text;
+    s.log[s.touched.idx].note = ev.text;
+    if (s.touched.idx !== s.log.length - 1) s.logRev += 1;
   }
   return s;
 }
