@@ -1,0 +1,10 @@
+{
+  "name": "hiraku-qa-rapier",
+  "private": true,
+  "type": "module",
+  "description": "Rigid-body second opinion with Rapier for HIRAKU's QA tests only; HIRAKU itself does not use it.",
+  "license": "MIT",
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0"
+  }
+}
