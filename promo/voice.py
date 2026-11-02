@@ -11,10 +11,11 @@ words the engine misreads; subtitles keep the text as written.
     py promo/voice.py speakers
     py promo/voice.py models                       # voice models and their licences
     py promo/voice.py reading SCRIPT --speaker ID [--readings FILE]
-    py promo/voice.py synth   SCRIPT OUT_DIR --speaker ID [--readings FILE]
+    py promo/voice.py synth   SCRIPT OUT_DIR --speaker ID [--readings FILE] [--only N07_2.wav ...]
 
 ``synth`` writes one WAV per sentence and ``voice.json`` (file, seconds,
-text), then prints how each cut's voice fits its slot.
+text), then prints how each cut's voice fits its slot. ``--only`` remakes
+just the named sentences and keeps the others as they were.
 The engine address is http://127.0.0.1:10101 unless AIVIS_URL is set.
 """
 
@@ -159,14 +160,42 @@ def load(script: Path, readings_file: Path | None):
     return lines, readings
 
 
-def cmd_synth(script: Path, out_dir: Path, speaker: int, readings_file: Path | None, speed: float) -> None:
-    lines, readings = load(script, readings_file)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    records, seconds = [], []
+def sentence_files(lines: list[Line]) -> list[str]:
+    """'<cut>_<k>.wav' for the k-th sentence of each cut."""
     counter: dict[str, int] = {}
+    names = []
     for ln in lines:
         counter[ln.cut] = counter.get(ln.cut, 0) + 1
-        name = f"{ln.cut}_{counter[ln.cut]}.wav"
+        names.append(f"{ln.cut}_{counter[ln.cut]}.wav")
+    return names
+
+
+def cmd_synth(script: Path, out_dir: Path, speaker: int, readings_file: Path | None, speed: float,
+              only: list[str] | None = None) -> None:
+    """With ``only``, synthesize just those files and keep the rest from voice.json
+    (the engine varies a little each time, so untouched sentences keep their length)."""
+    lines, readings = load(script, readings_file)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    names = sentence_files(lines)
+    kept: dict[str, dict] = {}
+    if only:
+        unknown = sorted(set(only) - set(names))
+        if unknown:
+            raise SystemExit(f"not in the script: {', '.join(unknown)}")
+        old = json.loads((out_dir / "voice.json").read_text(encoding="utf-8"))
+        if (old["speaker"], old["speed"]) != (speaker, speed):
+            raise SystemExit("voice.json was made with another speaker or speed; synthesize all")
+        kept = {r["file"]: r for r in old["lines"]}
+    records, seconds = [], []
+    for ln, name in zip(lines, names):
+        if only and name not in only:
+            if name not in kept:
+                raise SystemExit(f"{name} is not in voice.json; add it to --only")
+            # old text and audio, new slot
+            rec = {**kept[name], "start": ln.start, "end": ln.end}
+            records.append(rec)
+            seconds.append(rec["seconds"])
+            continue
         spoken = apply_readings(ln.ja, readings)
         (out_dir / name).write_bytes(synthesize(spoken, speaker, speed))
         sec = wav_seconds(out_dir / name)
@@ -201,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--speaker", type=int, required=True)
     p.add_argument("--readings", type=Path)
     p.add_argument("--speed", type=float, default=1.0)
+    p.add_argument("--only", nargs="+", metavar="FILE",
+                   help="synthesize only these (e.g. N07_2.wav); keep the others from voice.json")
     a = ap.parse_args(argv)
 
     if a.cmd == "speakers":
@@ -216,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         for ln in lines:
             print(f"{ln.cut:5s} {reading(apply_readings(ln.ja, readings), a.speaker)}")
     elif a.cmd == "synth":
-        cmd_synth(a.script, a.out_dir, a.speaker, a.readings, a.speed)
+        cmd_synth(a.script, a.out_dir, a.speaker, a.readings, a.speed, a.only)
     return 0
 
 

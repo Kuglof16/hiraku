@@ -26,6 +26,10 @@ class Script(unittest.TestCase):
         with self.assertRaises(ValueError):
             voice.parse_slot("0:07-0:07")
 
+    def test_sentence_files(self):
+        lines = voice.parse_script(self.TEXT)
+        self.assertEqual(voice.sentence_files(lines), ["N00_1.wav", "N08b_1.wav", "N08b_2.wav"])
+
     def test_readings_longest_first(self):
         r = voice.parse_readings("作り\tつくり\n作り手\tつくりて\n")
         self.assertEqual(voice.apply_readings("すべての作り手へ", r), "すべてのつくりてへ")
