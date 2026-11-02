@@ -58,6 +58,67 @@ class PackageTest(unittest.TestCase):
                        target=(-1000, 0, 500))
 
 
+class FrameKitTest(unittest.TestCase):
+    def test_sections(self):
+        from hiraku.designgen.kit.sections import rect_tube, round_tube, table
+        key, sec = rect_tube(40, 80, 2.3)
+        self.assertEqual(key, "rt40x80x2.3")
+        self.assertEqual(sec, V1["sections"][key])
+        t = table({key: sec, **dict([round_tube(50, 3)])})
+        self.assertAlmostEqual(t[key]["A_mm2"], 40 * 80 - (40 - 4.6) * (80 - 4.6), places=9)
+        self.assertAlmostEqual(t["ct50x3"]["J_mm4"], 2 * 3.141592653589793 / 64 * (50**4 - 44**4), places=6)
+
+    def test_ladder_is_v1(self):
+        from hiraku.designgen.kit.frame import Frame
+        from hiraku.designgen.kit.sections import rect_tube
+        f = Frame("stkr400")
+        rail, cross = f.section(*rect_tube(40, 80, 2.3)), f.section(*rect_tube(40, 40, 2.3))
+        f.ladder({"F": 400.0, "A": 0.0, "S1": -450.0, "S2": -1000.0, "B": -1700.0, "E": -2100.0}, 350.0, 380.0, rail, cross)
+        part = f.part()
+        self.assertEqual(part["nodes"], V1["nodes"])
+        self.assertEqual(part["members"], V1["members"])
+
+    def test_lines_curves_mirror_and_merge(self):
+        import math
+        from hiraku.designgen.kit.frame import Frame, FrameError
+        from hiraku.designgen.kit.sections import round_tube
+        f = Frame("m")
+        tube = f.section(*round_tube(30, 2))
+        pts = Frame.arc([0, 300, 1000], 200, 180, 0, 4)  # a hoop over the seat, 4 straight pieces
+        self.assertTrue(all(abs(math.dist(p, [0, 300, 1000]) - 200) < 1e-9 for p in pts))
+        ids = f.polyline("hoop", [(f"LH{i}", p) for i, p in enumerate(pts)], tube)
+        self.assertEqual(len(ids), 4)
+        copies = f.mirror_y(ids)
+        self.assertEqual(copies[0], "hoop_RH0RH1")
+        self.assertEqual(f.nodes["RH2"], [f.nodes["LH2"][0], -f.nodes["LH2"][1], f.nodes["LH2"][2]])
+        self.assertEqual(f.node("near", [f.nodes["LH0"][0] + 0.5, 300, 1000]), "LH0")  # within 1 mm: the same joint
+        with self.assertRaisesRegex(FrameError, "not defined"):
+            f.member("x", "LH0", "LH1", "nope")
+        with self.assertRaisesRegex(FrameError, "already exists"):
+            f.member(ids[0], "LH0", "LH1", tube)
+
+
+class RunningGearTest(unittest.TestCase):
+    def test_four_wheels_is_v1(self):
+        from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
+        s = Suspension("spring", 20.0, 1.2, 150.0)
+        sup = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s)
+        self.assertEqual(sup, V1["supports"])
+        self.assertEqual([corner_name(x, sup) for x in sup], ["前左", "前右", "後左", "後右"])
+        awd = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s, drive="all")
+        self.assertTrue(all(x["actuation"]["drive"] for x in awd))
+
+    def test_suspension_types(self):
+        from hiraku.designgen.kit.running_gear import Suspension
+        self.assertEqual(Suspension("rigid").record(), {"type": "rigid"})
+        self.assertEqual(Suspension("kc_table", 20.0, kc_table="builtin:double_wishbone").record(),
+                         {"type": "kc_table", "stiffness_N_per_mm": 20.0, "kc_table": "builtin:double_wishbone"})
+        with self.assertRaisesRegex(ValueError, "kc_table"):
+            Suspension("kc_table", 20.0).record()
+        with self.assertRaisesRegex(ValueError, "wheel rate"):
+            Suspension("spring").record()
+
+
 class CheckTest(unittest.TestCase):
     def test_v1(self):
         r = check.check(V1)

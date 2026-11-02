@@ -153,29 +153,36 @@ T_TOL = 0.15
 
 
 def _loop(spec: Record, req: Record, distance_key: str) -> tuple[Record, list[str]]:
-    """The forest loop: the steep grades are Q13 and the flat parts are driven at Q50; the
-    gentle grades and the speed on the steep ones are the test's params grade_low and
-    speed_low in the catalog, else half of Q13 and of Q50 (an assumption of this load case)."""
+    """The forest loop: the flat parts are driven at Q50. The steep grades are the test's
+    param grade_high in the catalog (the grade driven up for a long way), else Q13; the gentle
+    grades and the speed on the steep ones are the params grade_low and speed_low, else half
+    of the steep grade and of Q50 (an assumption of this load case)."""
     from hiraku.solvers.k0_handcalc import units
 
     d = number(req, distance_key, "km")
-    grade = number(req, "Q13", "%")
     v = number(req, "Q50", "km/h")
     given = spec.get("params", {})
 
-    def from_spec(name: str, unit: str, fallback: float) -> Record:
+    def from_spec(name: str, unit: str) -> float | None:
         if name not in given:
-            return q(fallback, unit)
+            return None
         try:
-            return q(units.to_unit(given[name], unit, name), unit)
+            return units.to_unit(given[name], unit, name)
         except ValueError as e:
             raise BuildError(f"catalog params of {spec['id']}: {e}") from None
 
-    params = {"distance": q(d, "km"), "grade_low": from_spec("grade_low", "%", grade / 2.0), "grade_high": q(grade, "%"),
-              "speed_low": from_spec("speed_low", "km/h", v / 2.0), "speed_high": q(v, "km/h")}
+    keys = [distance_key, "Q50"]
+    grade = from_spec("grade_high", "%")
+    if grade is None:
+        grade = number(req, "Q13", "%")
+        keys.insert(1, "Q13")
+    low = from_spec("grade_low", "%")
+    slow = from_spec("speed_low", "km/h")
+    params = {"distance": q(d, "km"), "grade_low": q(grade / 2.0 if low is None else low, "%"), "grade_high": q(grade, "%"),
+              "speed_low": q(v / 2.0 if slow is None else slow, "km/h"), "speed_high": q(v, "km/h")}
     if not (0 <= params["grade_low"]["value"] <= grade and 0 < params["speed_low"]["value"] <= v):
-        raise BuildError(f"{spec['id']}: grade_low must lie within 0..Q13 and speed_low within 0..Q50")
-    return params, [distance_key, "Q13", "Q50"]
+        raise BuildError(f"{spec['id']}: grade_low must lie within 0..grade_high and speed_low within 0..Q50")
+    return params, keys
 
 
 def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
