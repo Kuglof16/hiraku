@@ -35,8 +35,9 @@ SIG = 6  # significant digits kept in series values
 
 
 def _round(x: float) -> float:
+    x = float(x)
     if x == 0.0 or not math.isfinite(x):
-        return 0.0 if not math.isfinite(x) else x
+        return 0.0
     return float(f"{x:.{SIG}g}")
 
 
@@ -50,6 +51,10 @@ class Recorder:
         self.units: dict[str, str] = {}
         self.spin_angle = [0.0] * sim.n
         self.snap: list[dict] = []
+
+    def set_hz(self, hz: float):
+        self.every = max(1, int(round(1.0 / (hz * self.sim.dt))))
+        self.k = 0
 
     def _put(self, name: str, unit: str, value: float):
         if name not in self.ch:

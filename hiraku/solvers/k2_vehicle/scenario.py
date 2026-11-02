@@ -70,7 +70,8 @@ def upper_side(sim: Sim, left_up: bool) -> list[int]:
 
 def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: float = math.radians(4.0),
                slow_rate: float = math.radians(0.25), slow_below: float = 0.35, max_angle: float = math.radians(80.0),
-               settle_s: float = 2.0, record_hz: float = 0.0, after_s: float = 1.0) -> dict:
+               settle_s: float = 2.0, record_hz: float = 0.0, after_s: float = 1.5, slow_hz: float = 2.0,
+               after_hz: float = 25.0) -> dict:
     """Turn gravity slowly (a tilt table) until the upper-side wheels carry no load.
 
     The table turns at fast_rate until the upper wheels carry less than
@@ -79,6 +80,8 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
     """
     sim = new_sim(veh, dt=dt, settle_s=settle_s)
     rec = Recorder(sim, record_hz) if record_hz > 0 else None
+    slow_hz = min(record_hz, slow_hz)
+    slow_started = False
     ctl = hold(sim)
     up = upper_side(sim, left_up)
     sign = 1.0 if left_up else -1.0
@@ -92,13 +95,16 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
     slide = None
     while theta < max_angle:
         rate = fast_rate if prev[1] > slow_below * n0 else slow_rate
+        if rec is not None and rate == slow_rate and not slow_started:
+            rec.set_hz(slow_hz)
+            slow_started = True
         theta += rate * dt
         sim.set_gravity(side_gravity(sign * theta))
         sim.step(ctl)
         n_up = 0.0
         for i in up:
             n_up += sim.out["ntot"][i]
-        if slide is None and any(sim.out["sliding"][i] for i in range(sim.n) if i not in up) :
+        if slide is None and any(sim.out["sliding"][i] for i in range(sim.n) if i not in up):
             slide = theta
         if rec is not None:
             rec.tick({"table_angle": ("deg", math.degrees(sign * theta))})
@@ -109,7 +115,9 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
         prev = (theta, n_up)
     snap = None
     if rec is not None:
+        rec.sample({"table_angle": ("deg", math.degrees(sign * theta))})
         snap = rec.keep_snapshot()
+        rec.set_hz(after_hz)
         # keep turning a little so the animation shows the tip
         steps = int(after_s / dt)
         for _ in range(steps):

@@ -280,12 +280,29 @@ class Sim:
             fnx = fny = fnz = 0.0
             ntot = 0.0
             pex = pey = pez = 0.0
+            rad = self.radius[i]
+            mnx = mny = mnz = 0.0
             for (qx_, qy_, qz_, nx, ny, nz, dep) in contacts[i]:
+                if dep <= 0.0:
+                    continue
+                # the wheel is a disc: its lowest point toward this contact plane
+                sa = ax * nx + ay * ny + az * nz
+                cg2 = 1.0 - sa * sa
+                cgam = math.sqrt(cg2) if cg2 > 0.0 else 0.0
+                dc = rad - dep
+                dep = rad * cgam - dc
                 if dep <= 0.0:
                     continue
                 fk = kz * dep - cz_ * (Vx * nx + Vy * ny + Vz * nz)
                 if fk <= 0.0:
                     continue
+                if cgam > 1e-12:
+                    ux, uy, uz = (nx - sa * ax) / cgam, (ny - sa * ay) / cgam, (nz - sa * az) / cgam
+                else:
+                    ux, uy, uz = nx, ny, nz
+                qx_ = Cx - rad * ux + dep * nx
+                qy_ = Cy - rad * uy + dep * ny
+                qz_ = Cz - rad * uz + dep * nz
                 fnx += fk * nx
                 fny += fk * ny
                 fnz += fk * nz
@@ -293,12 +310,16 @@ class Sim:
                 pex += fk * qx_
                 pey += fk * qy_
                 pez += fk * qz_
+                # moment of this normal force about the wheel centre
+                qcx, qcy, qcz = qx_ - Cx, qy_ - Cy, qz_ - Cz
+                mnx += fk * (qcy * nz - qcz * ny)
+                mny += fk * (qcz * nx - qcx * nz)
+                mnz += fk * (qcx * ny - qcy * nx)
             if ntot > 0.0:
                 pex, pey, pez = pex / ntot, pey / ntot, pez / ntot
                 fm = math.sqrt(fnx * fnx + fny * fny + fnz * fnz)
                 nex, ney, nez = fnx / fm, fny / fm, fnz / fm
             else:
-                rad = self.radius[i]
                 pex, pey, pez = Cx, Cy, Cz - rad
                 nex, ney, nez = 0.0, 0.0, 1.0
 
@@ -348,9 +369,9 @@ class Sim:
             fz_ = fnz + ftz
 
             # spin: implicit Coulomb torque of the brake and the rolling resistance
-            mtx = rhy * ftz - rhz * fty
-            mty = rhz * ftx - rhx * ftz
-            mtz = rhx * fty - rhy * ftx
+            mtx = rhy * ftz - rhz * fty + mnx
+            mty = rhz * ftx - rhx * ftz + mny
+            mtz = rhx * fty - rhy * ftx + mnz
             tau = mtx * ax + mty * ay + mtz * az
             if self.spins[i]:
                 jw = self.j_w[i]

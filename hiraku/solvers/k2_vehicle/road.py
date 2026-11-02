@@ -1,8 +1,10 @@
 """Road surfaces and the tyre contact query.
 
-The tyre is a sphere of the wheel radius for the contact geometry: each
-contact is the closest point of the road solid to the wheel centre, with the
-normal pointing from that point to the centre and depth = radius - distance.
+Each contact is the closest point of the road solid to the wheel centre,
+with the normal pointing from that point to the centre and depth = radius -
+distance (a sphere). The simulator then takes the wheel as a disc: the
+contact moves to the disc's lowest point toward that plane, so a cambered
+wheel touches at its rim as in the K&C bench.
 A step gives a second contact at its corner, so a wheel touches a step when
 the centre is d = sqrt(2 r h - h^2) before it (the hand-calculation
 geometry). Slopes and tilt tables are made by turning gravity, not the road.
