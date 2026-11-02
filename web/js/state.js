@@ -50,6 +50,7 @@ export function initialState() {
     unknown: 0,
     order: {},
     seqOf: {},
+    tOf: {}, // record id -> t of the event that brought it (the last one when sent again)
   };
   for (const r of RECORDS) {
     s[r] = {};
@@ -83,10 +84,12 @@ function put(s, kind, id, rec, ev) {
   if (!(id in s[kind])) s.order[kind].push(id);
   s[kind][id] = rec;
   s.seqOf[id] = ev.seq;
+  s.tOf[id] = ev.t;
 }
 
+// t is display time (the replay's clock); tRec is the recorded t shown on the line.
 function log(s, ev, level, text) {
-  s.log.push({ seq: ev.seq, t: ev.t, kind: ev.kind, agent: ev.agent ?? null, domain: ev.domain ?? null, level, text });
+  s.log.push({ seq: ev.seq, t: ev.t, tRec: ev.t_rec ?? ev.t, kind: ev.kind, agent: ev.agent ?? null, domain: ev.domain ?? null, level, text });
   s.touched = { idx: s.log.length - 1, seq: ev.seq };
 }
 
@@ -101,7 +104,7 @@ function logRecord(s, ev, id, level, text) {
     s.log[s.log.length - 1].recId = id;
     return false;
   }
-  Object.assign(s.log[i], { level, text, updatedT: ev.t });
+  Object.assign(s.log[i], { level, text, updatedT: ev.t_rec ?? ev.t });
   s.touched = { idx: i, seq: ev.seq };
   s.logRev += 1;
   return true;

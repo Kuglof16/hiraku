@@ -36,6 +36,12 @@ class ContractCoverageTest(unittest.TestCase):
         order = re.search(r"export const DOMAINS = \[(.*?)\]", src).group(1)
         self.assertEqual([s.strip().strip('"') for s in order.split(",")], list(contract.DOMAINS))
 
+    def test_every_field_kind_is_drawn(self):
+        src = read(JS / "fields.js")
+        order = re.search(r"export const FIELD_ORDER = \[(.*?)\]", src).group(1)
+        drawn = sorted(s.strip().strip('"') for s in order.split(","))
+        self.assertEqual(drawn, sorted(contract.schema()["$defs"]["field"]["properties"]["kind"]["enum"]))
+
     def test_every_unit_label_is_a_contract_unit(self):
         src = read(JS / "labels.js")
         block = re.search(r"const UNIT_LABEL = \{(.*?)\};", src, re.S).group(1)

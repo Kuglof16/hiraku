@@ -1,4 +1,4 @@
-// Banded contour colours (blue -> red), shared by the 3D view and its legend.
+// Banded contour colours (blue -> red), shared by the 3D view, the A6 tiles and the legend.
 
 export const BANDS = 10;
 const STOPS = ["#2b59c3", "#2fa7d6", "#4cbf7a", "#e8c547", "#e9893a", "#c8402a"];
@@ -25,10 +25,10 @@ function lerpStops(u) {
 
 export const BAND_COLORS = Array.from({ length: BANDS }, (_, i) => lerpStops((i + 0.5) / BANDS));
 
-// Colour of value v on a [0, max] scale; values above max are OVER_COLOR.
-export function colorOf(v, max) {
-  if (v === null || v === undefined || !Number.isFinite(v) || !(max > 0)) return GRAY;
-  if (v > max * (1 + 1e-9)) return OVER_COLOR;
-  const i = Math.min(BANDS - 1, Math.max(0, Math.floor((v / max) * BANDS)));
+// Colour of v on a [min, max] scale; values above max are OVER_COLOR.
+export function colorOf(v, max, min = 0) {
+  if (v === null || v === undefined || !Number.isFinite(v) || !(max > min)) return GRAY;
+  if (v > max + Math.abs(max) * 1e-9) return OVER_COLOR;
+  const i = Math.min(BANDS - 1, Math.max(0, Math.floor(((v - min) / (max - min)) * BANDS)));
   return BAND_COLORS[i];
 }

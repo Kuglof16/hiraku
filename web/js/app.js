@@ -15,6 +15,10 @@ import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt,
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, judgementState, roundsUsed } from "./state.js";
+import { SeriesChart } from "./chart.js";
+import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
+import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
+import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,6 +26,7 @@ const params = new URLSearchParams(location.search);
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
+const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
@@ -29,8 +34,13 @@ const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" :
 const ui = {
   pinnedLc: null,
   pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false },
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
   frozen: params.has("t"),
+  // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
+  // until the replay playhead moves again.
+  anim: { key: null, local: false, playing: false, tau: 0 },
+  graphGroup: null,
+  fieldKind: null, // contour field picked in the legend (null: the first one)
 };
 
 if (params.get("video") === "1") document.body.classList.add("video");
@@ -61,6 +71,49 @@ window.addEventListener("resize", fitStage);
 // ---- player ---------------------------------------------------------------
 const player = new Player();
 if (params.has("speed")) player.speed = Number(params.get("speed")) || 1;
+
+// Pacing (?pace=0 turns it off, ?gapmax=3 sets the longest gap). Seconds each
+// kind of event stays on screen before the next one at least.
+const PACE_MIN = {
+  "run.started": 1.2,
+  "design.created": 1.6,
+  "agent.said": 2.2,
+  "user.said": 2.2,
+  "hook.denied": 2.5,
+  "hook.blocked_stop": 2.0,
+  "prediction.recorded": 1.6,
+  "analysis.started": 1.0,
+  "analysis.finished": 1.6,
+  "comparison.recorded": 1.6,
+  "cause.recorded": 2.0,
+  "verdict.recorded": 1.4,
+  "judgement.updated": 0.8,
+  "tool.checked": 0.4,
+  "agent.started": 0.4,
+  "agent.stopped": 0.3,
+  "screen.focus": 0.3,
+  "cost.updated": 0.1,
+  "run.finished": 0.5,
+};
+const motionSpans = new Map(); // analysis_id -> seconds of motion (or null)
+function motionSpanOf(ev) {
+  const id = ev.data?.analysis_id;
+  if (!motionSpans.has(id)) motionSpans.set(id, ev.data?.series ? motionSpan(ev.data) : null);
+  return motionSpans.get(id);
+}
+function paceAfter(ev) {
+  let s = PACE_MIN[ev.kind] ?? 0.5;
+  if (ev.kind === "agent.said" || ev.kind === "user.said") s = Math.min(4.5, Math.max(s, 0.8 + (ev.text?.length ?? 0) * 0.07));
+  if (ev.kind === "hook.denied") s = Math.min(5, Math.max(s, 1 + (ev.text?.length ?? 0) * 0.05));
+  if (ev.kind === "analysis.finished") {
+    const span = motionSpanOf(ev);
+    if (span !== null) s = Math.max(s, Math.min(span, ANIM_MAX_S)); // let the test's motion play out
+  }
+  return s;
+}
+player.pacer = paceAfter;
+player.pacing = params.get("pace") !== "0";
+if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapmax")) || 3);
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
@@ -122,7 +175,7 @@ function logItem(e) {
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
-  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm">${fmtTime(e.t)}s</span>${upd}${note}</li>`;
+  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s) {
@@ -227,70 +280,151 @@ function renderChain(s, chain) {
   }
 }
 
+// The contour of the shown analysis: the field the viewer picked (ui.fieldKind)
+// or the first of stress, damage, temperature, mode shape, displacement.
 function buildContour(chain) {
-  const ana = chain.shown;
-  if (!ana || ana.status !== "ok") return null;
-  const field = (ana.fields ?? []).find((f) => f.kind === "stress");
-  if (!field) return null;
-  const values = field.per_member ?? {};
-  const nodes = Object.fromEntries(Object.entries(field.per_node ?? {}).filter(([, v]) => typeof v === "number"));
-  const all = [...Object.values(values), ...Object.values(nodes)].filter(Number.isFinite);
-  if (!all.length) return null;
-  const crit = chain.loadCase?.criterion;
-  const limitKnown = !!crit && crit.limit?.unit === field.unit && crit.limit.value > 0;
-  const fieldMax = Math.max(...all);
-  const max = limitKnown ? crit.limit.value : fieldMax;
-  const result = (ana.results ?? []).find((r) => r.where && r.unit === field.unit) ?? null;
-  return { key: `${ana.analysis_id}|${field.label}`, values, nodes, max, limitKnown, field, crit, fieldMax, where: result?.where, result, analysisId: ana.analysis_id };
+  const fields = fieldsOf(chain.shown);
+  const field = fields.find((f) => f.kind === ui.fieldKind) ?? fields[0];
+  const ct = field ? contourOf(chain.shown, field, chain.loadCase?.criterion) : null;
+  return ct ? { ...ct, kinds: fields.map((f) => f.kind) } : null;
 }
 
 function renderLegend(ct) {
   const el = $("legend");
-  if (!ct || !ui.toggles.contour) {
+  if (!ct?.key || !ui.toggles.contour) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
   const unit = unitLabel(ct.field.unit);
+  const relative = ct.kind === "mode_shape";
   const rows = [];
   for (let i = BANDS - 1; i >= 0; i -= 1) {
-    const top = (ct.max * (i + 1)) / BANDS;
-    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 ? fmt(top, 3) : ""}</span>`);
+    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
-  rows.push(`<span></span><span class="tk">0</span>`);
+  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた</div>` : "";
+  const chips = ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "";
+  const title = relative
+    ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
+    : `${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
   el.innerHTML =
-    `<div class="ttl">${esc(ct.field.label ?? "応力")} [${esc(unit)}]</div>` +
+    chips +
+    `<div class="ttl">${title}</div>` +
     `<div class="bar">${rows.join("")}</div>` +
     over +
-    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : "・上端 = 最大値"}</div>`;
+    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
 }
 
-function renderToggles() {
+function renderToggles(motion) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
-    btn("shape", "形状", !t.contour) + btn("contour", "コンター", t.contour) + btn("arrows", "力の矢印", t.arrows) + btn("cg", "重心", t.cg) + btn("parts", "部品", t.parts) + btn("names", "名前", t.names);
+    btn("shape", "形状", !t.contour) +
+    btn("contour", "コンター", t.contour) +
+    btn("arrows", "力の矢印", t.arrows) +
+    btn("cg", "重心", t.cg) +
+    btn("parts", "部品", t.parts) +
+    btn("names", "名前", t.names) +
+    (motion?.liftT != null ? btn("limit", "限界の重ね", t.limit) : "") +
+    (motion ? btn("graph", "グラフ", t.graph) : "");
 }
 
+// ---- the test's motion (series) -------------------------------------------
+let motionMemo = { ana: null, motion: null };
+function motionFor(ana) {
+  if (ana !== motionMemo.ana) motionMemo = { ana, motion: ana && ana.status === "ok" ? motionOf(ana) : null };
+  return motionMemo.motion;
+}
+
+const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
+
+// Animation time (the series' own seconds). By default it starts when the
+// analysis arrived in the replay and runs at animRate, so a frozen ?t= frame
+// always shows the same pose.
+function animTau(s, ana, motion) {
+  if (ui.anim.local && ui.anim.key === ana.analysis_id) return ui.anim.tau;
+  const tf = s.tOf[ana.analysis_id] ?? 0;
+  return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion)));
+}
+
+const chart = new SeriesChart($("graph"), (key) => {
+  ui.graphGroup = key;
+});
+let shownMotion = null; // { motion, ana, tau } of the last frame, for the bar's handlers
+
+function renderMotion(s, chain, motion) {
+  const bar = $("animbar");
+  viewport.classList.toggle("has-anim", !!motion);
+  if (!motion) {
+    bar.hidden = true;
+    $("graph").hidden = true;
+    $("limitnote").hidden = true;
+    shownMotion = null;
+    return;
+  }
+  const ana = chain.shown;
+  const tau = animTau(s, ana, motion);
+  if (bench.frame?.t !== tau) bench.setFrame(motion.frame(tau));
+  shownMotion = { motion, ana, tau };
+
+  bar.hidden = false;
+  const tool = s.tools[ana.tool]?.title ?? ana.tool;
+  $("ab-title").textContent = `${chain.loadCase?.test_id ?? ""} ${String(tool).replace(/\s*[（(].*$/, "")}`;
+  const f = motion.duration > 0 ? (tau - motion.t0) / motion.duration : 1;
+  $("ab-fill").style.width = `${f * 100}%`;
+  const lim = $("ab-lim");
+  lim.hidden = motion.liftT === null;
+  if (motion.liftT !== null) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
+  $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${animRate(motion) > 1 ? ` (×${fmt(animRate(motion), 2)})` : ""}`;
+  $("ab-play").textContent = ui.anim.local && ui.anim.playing ? "❚❚" : "▶";
+  const notes = [];
+  const table = motion.channels.get("table_angle");
+  if (table) notes.push(`台 ${fmt(nearestAt(table, tau), 3)} ${unitLabel(table.unit) === "deg" ? "°" : unitLabel(table.unit)}`);
+  const speed = motion.channels.get("speed");
+  if (speed) notes.push(`${fmt(nearestAt(speed, tau), 3)} ${unitLabel(speed.unit)}`);
+  $("ab-note").textContent = notes.join("・");
+
+  const note = $("limitnote");
+  note.hidden = motion.liftT === null || !ui.toggles.limit;
+  if (!note.hidden) {
+    const lifted = Object.entries(motion.liftAt)
+      .filter(([, t]) => t <= tau)
+      .sort((a, b) => a[1] - b[1]);
+    const now = lifted.length ? `<br><b>${lifted.map(([id]) => esc(wheelName(id))).join("・")} が浮いた</b> (t = ${fmt(lifted[0][1], 4)} s)` : "";
+    note.innerHTML = `半透明の赤 = 限界を超えたあとの姿勢 (輪が浮く)${now}`;
+  }
+
+  const graph = $("graph");
+  graph.hidden = !ui.toggles.graph;
+  if (!graph.hidden) {
+    const marks = motion.liftT !== null ? [{ t: motion.liftT, label: "浮いた" }] : [];
+    ui.graphGroup = chart.set(motion, ui.graphGroup, marks);
+    chart.cursor(tau);
+  }
+}
+
+function animSeekFromPointer(ev) {
+  if (!shownMotion) return;
+  const { motion, ana } = shownMotion;
+  const rect = $("ab-track").getBoundingClientRect();
+  const f = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+  ui.anim = { key: ana.analysis_id, local: true, playing: false, tau: motion.t0 + f * motion.duration };
+}
+
+const board = new TileBoard($("grid-head"), $("tiles"));
+
+// A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
-  const v = s.currentVersion;
-  const reds = DOMAINS.filter((d) => judgementState(s, d).state === "red").length;
-  const flow = s.versions
-    .map((ver) => {
-      const r = DOMAINS.filter((d) => s.judgements[`${ver}|${d}`]?.state === "red").length;
-      return `<span class="pill">版 ${ver} 赤 ${r}</span>`;
-    })
-    .join(" → ");
-  $("grid-head").innerHTML = `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds}</span>${flow}`;
-  const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
-  $("tiles").innerHTML = DOMAINS.map((d) => {
-    const j = judgementState(s, d);
-    const word = { green: "緑 ✓", red: "赤 — 直す", pending: "まだ", off: "選んでいない" }[j.state];
-    const body = j.judgement?.summary ?? picks[d]?.reason ?? "";
-    const nv = j.judgement?.verdict_ids?.length ?? 0;
-    return `<div class="tile ${j.state}"><h3>${esc(DOMAIN_JA[d])}</h3><div class="state">${word}</div><div>${esc(body)}</div>${nv ? `<div class="sub">判定 ${nv} 件</div>` : ""}</div>`;
-  }).join("");
+  const { reds, atLimit } = board.render(s);
+  const banner = $("grid-banner");
+  banner.hidden = !(atLimit && reds.length);
+  if (!banner.hidden) {
+    const known = { round_limit: `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した`, cost_limit: "費用の上限に達した" };
+    const why = s.stopReason ? known[s.stopReason] ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
+    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>続けるか・上限を変えるか・ここで報告を書くかは、実行を操作する入口ができてから選べる</span>`;
+  }
 }
 
 function renderStatus(s) {
@@ -384,6 +518,7 @@ function draw() {
   const tab = currentTab(s);
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
+  const motion = motionFor(chain.shown);
   if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
     renderTop(s);
     renderChips(s, lcId);
@@ -392,34 +527,48 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles();
+    renderToggles(motion);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
+    $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
+    bench.setMotion(motion);
     const ct = buildContour(chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
     renderLegend(contour);
-    bench.setVectors(chain.shown?.status === "ok" ? chain.shown.vectors ?? null : null);
+    // With a motion the arrows come from the series, frame by frame.
+    bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
   }
+  renderMotion(s, chain, motion);
   renderTransient(s, player.playhead, chain);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") bench.render();
+  else if (tab === "grid") board.tick(player.playhead);
 }
 
 let lastTs = null;
+let lastPlayhead = null;
 function loop(ts) {
   const dt = lastTs === null ? 0 : Math.min(0.25, (ts - lastTs) / 1000);
   lastTs = ts;
   if (!ui.frozen) player.tick(dt);
+  // Moving the replay hands the test's motion back to the replay clock.
+  if (lastPlayhead !== null && player.playhead !== lastPlayhead) ui.anim.local = false;
+  lastPlayhead = player.playhead;
+  if (ui.anim.local && ui.anim.playing && shownMotion) {
+    const { motion } = shownMotion;
+    ui.anim.tau = Math.min(motion.t1, ui.anim.tau + dt * animRate(motion));
+    if (ui.anim.tau >= motion.t1) ui.anim.playing = false;
+  }
   draw();
   requestAnimationFrame(loop);
 }
@@ -450,7 +599,7 @@ window.hiraku = {
   load: (events, t = 0) => {
     feed?.stop();
     resetPlayer();
-    player.append(events);
+    addEvents(events);
     return seekAndDraw(t);
   },
 };
@@ -473,10 +622,33 @@ $("pb-track").addEventListener("pointerdown", (ev) => {
   track.addEventListener("pointermove", move);
   track.addEventListener("pointerup", () => track.removeEventListener("pointermove", move), { once: true });
 });
+$("ab-play").addEventListener("click", () => {
+  if (!shownMotion) return;
+  const { motion, ana, tau } = shownMotion;
+  if (ui.anim.local && ui.anim.key === ana.analysis_id) {
+    ui.anim.playing = !ui.anim.playing;
+    if (ui.anim.playing && ui.anim.tau >= motion.t1) ui.anim.tau = motion.t0;
+  } else {
+    ui.anim = { key: ana.analysis_id, local: true, playing: true, tau: tau >= motion.t1 ? motion.t0 : tau };
+  }
+});
+$("ab-track").addEventListener("pointerdown", (ev) => {
+  const track = ev.currentTarget;
+  track.setPointerCapture(ev.pointerId);
+  animSeekFromPointer(ev);
+  track.addEventListener("pointermove", animSeekFromPointer);
+  track.addEventListener("pointerup", () => track.removeEventListener("pointermove", animSeekFromPointer), { once: true });
+});
 $("tests").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-lc]");
   if (!b) return;
   ui.pinnedLc = b.dataset.lc || null;
+  drawn.rev = -2;
+});
+$("legend").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-field]");
+  if (!b) return;
+  ui.fieldKind = b.dataset.field;
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {
@@ -522,10 +694,13 @@ window.addEventListener("drop", async (ev) => {
 
 // ---- loading ------------------------------------------------------------------
 function resetPlayer() {
-  player.events = [];
+  player.clear();
+  motionSpans.clear();
   player.live = false;
   player.liveAttached = false;
   player.playhead = 0;
+  player.minEnd = 0;
+  ui.anim = { key: null, local: false, playing: false, tau: 0 };
   player.rebuild();
   drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
   $("runlist").hidden = true;
@@ -542,16 +717,28 @@ function startPlayback() {
   readyResolve(player.playhead);
 }
 
+// Add events to the player; a test's motion lengthens the replay so it can play
+// to its end (in display time: the player's copy of the event).
+function addEvents(events) {
+  const from = player.events.length;
+  player.append(events);
+  for (const ev of player.events.slice(from)) {
+    if (ev.kind !== "analysis.finished") continue;
+    const span = motionSpanOf(ev);
+    if (span !== null) player.minEnd = Math.max(player.minEnd, ev.t + Math.min(span, ANIM_MAX_S));
+  }
+}
+
 function loadEvents(events, { live }) {
   resetPlayer();
-  player.append(events);
+  addEvents(events);
   player.live = live;
   startPlayback();
 }
 
 async function openRun(runId) {
   resetPlayer();
-  feed = new EventFeed(runId, (evs) => player.append(evs));
+  feed = new EventFeed(runId, addEvents);
   try {
     await feed.readAll();
   } catch (e) {

@@ -54,6 +54,18 @@
         <div class="bubble" id="bubble"></div>
         <div class="hookflash" id="hookflash"></div>
         <div class="running" id="running"></div>
+        <div class="graph" id="graph" hidden></div>
+        <div class="limitnote" id="limitnote" hidden></div>
+        <div class="animbar" id="animbar" hidden>
+          <span class="ab-title" id="ab-title"></span>
+          <button class="ab-play" id="ab-play" title="この試験の動きだけを再生">▶</button>
+          <div class="ab-track" id="ab-track">
+            <div class="ab-fill" id="ab-fill"></div>
+            <i class="ab-lim" id="ab-lim" title="輪が浮いた時刻"></i>
+          </div>
+          <span class="ab-time" id="ab-time"></span>
+          <span class="ab-note" id="ab-note"></span>
+        </div>
         <div class="playbar" id="playbar">
           <button class="pb-play" id="pb-play" title="再生 / 一時停止 (Space)">▶</button>
           <div class="pb-track" id="pb-track">
@@ -72,6 +84,7 @@
     <section class="col-center grid-view" id="view-grid" hidden>
       <div class="grid-head" id="grid-head"></div>
       <div class="tiles" id="tiles"></div>
+      <div class="grid-banner" id="grid-banner" hidden></div>
     </section>
 
     <section class="col-right">
