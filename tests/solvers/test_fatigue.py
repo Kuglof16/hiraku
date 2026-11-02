@@ -55,6 +55,25 @@ class RainflowTest(unittest.TestCase):
         self.assertAlmostEqual(o["outputs"]["D"]["value"], 1000 / (2e6 * 0.71**3), places=12)
 
 
+class RoadDamageFormulaTest(unittest.TestCase):
+    BASE = dict(sigma_w=q(22.0, "MPa"), W=q(1700.0, "N"), m_u=q(22.0, "kg"), k_s=q(20.0, "N/mm"), zeta=q(0.3, "1"),
+                k_t=q(150.0, "N/mm"), G_d=q(256e-6 * 1e9, "mm^3"), v=q(40.0, "km/h"), d=q(5000.0, "km"),
+                FAT=q(71.0, "MPa"), m=q(3.0, "1"), N_knee=q(1e7, "1"), m2=q(22.0, "1"))
+
+    def ev(self, **over):
+        return {k: v["value"] for k, v in solvers.formula_registry().evaluate(
+            "fatigue.road_damage_quarter_car", {**self.BASE, **over})["outputs"].items()}
+
+    def test_linear_system_and_counting(self):
+        a = self.ev()
+        rougher = self.ev(G_d=q(4 * 256e-6 * 1e9, "mm^3"))  # one ISO class rougher: 4 times the PSD
+        self.assertAlmostEqual(rougher["sigma_F"] / a["sigma_F"], 2.0, places=9)
+        self.assertAlmostEqual(a["sigma_s"], 22.0 / 1700.0 * a["sigma_F"], places=9)
+        self.assertAlmostEqual(self.ev(d=q(10000.0, "km"))["D"], 2 * a["D"], delta=a["D"] * 1e-9)
+        self.assertAlmostEqual(a["n"], a["nu0"] * 5000e3 / (40 / 3.6), delta=1e-6 * a["n"])
+        self.assertGreater(rougher["D"], a["D"])
+
+
 class InfluenceTest(unittest.TestCase):
     def test_superposition_reproduces_the_static_stress(self):
         S, cols, pts = influence(DESIGN, "z")
