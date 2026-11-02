@@ -26,6 +26,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from hiraku.designgen.kit.frame import Frame
+from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
+from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
+from hiraku.designgen.kit.sections import rect_tube
+
 Record = dict[str, Any]
 
 MATERIALS = Path(__file__).resolve().parents[2] / "data" / "materials" / "materials.json"
@@ -214,8 +219,29 @@ def _q(v: float, unit: str) -> Record:
     return {"value": v, "unit": unit}
 
 
-def _tube(b: float, h: float, t: float) -> tuple[str, Record]:
-    return f"rt{b:g}x{h:g}x{t:g}", {"shape": "rect_tube", "dims_mm": {"b": b, "h": h, "t": t}}
+# Layout clearances and offsets (design choices, assumptions), used against the frame and the parts:
+ON_RAILS_MM = 10.0  # floors, deck, front body and suspension tops sit this far above the rail top (brackets)
+DECK_GAP_MM = 150.0  # the deck starts this far behind the rear seat cross member
+MOTOR_GAP_MM = 25.0  # the motor's back face this far ahead of the rear axle station
+CONTROLLER_LEAD_MM = 15.0  # the controller's front face this far ahead of the rear seat cross member
+AUX_DROP_MM = 10.0  # the wiring box's top this far above the rail bottom
+STEERING_LIFT_MM = 50.0  # the steering and pedal box starts this far above the footwell floor
+STEERING_INBOARD_MM = 100.0  # its centre this far inboard of the driver's seat centre
+OCCUPANT_BACK_MM = 55.0  # the occupant's mass box centre this far behind the seat centre
+CARGO_SHORT_MM = 50.0  # the cargo box is this much shorter than the deck
+TITLE = "2 人乗り 4 輪のはしご形フレームの電動車 (前輪で操舵、後輪で駆動、右ハンドル)"
+DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive"
+CHOICES: dict[str, list[str]] = {}  # nothing to choose yet beyond the variables
+
+
+def applies(flags: dict) -> bool:
+    """For products that move by themselves and carry people or cargo."""
+    return bool(flags.get("self_propelled")) and bool(flags.get("ride") or flags.get("cargo"))
+
+
+# Part list order of v1 (the rest after them as placed: each wheel, then its suspension)
+PART_ORDER = ["battery", "motor", "controller", "aux", "floor_front", "floor", "deck", "front_body", "steering", "seat_R",
+              "seat_L", "occupant_R", "occupant_L", "cargo"]
 
 
 def build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
@@ -237,91 +263,65 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if rail_y + v["rail_b"] / 2.0 >= track / 2.0 - ww / 2.0:
         raise DesignGenError("the rails reach the wheels: rail_spacing + rail_b must be less than track - wheel_width")
 
-    def node(side, st):
-        return f"{side}{st}"
+    # frame: two rails through the stations, a cross member at each
+    frame = Frame("stkr400")
+    rail = frame.section(*rect_tube(v["rail_b"], v["rail_h"], v["rail_t"]))
+    cross = frame.section(*rect_tube(v["cross_b"], v["cross_h"], v["cross_t"]))
+    frame.ladder(stations, rail_y, rail_z, rail, cross)
 
-    nodes = [{"id": node(side, st), "xyz_mm": [x, y, rail_z]} for side, y in (("L", rail_y), ("R", -rail_y))
-             for st, x in stations.items()]
-    rail_key, rail_sec = _tube(v["rail_b"], v["rail_h"], v["rail_t"])
-    cross_key, cross_sec = _tube(v["cross_b"], v["cross_h"], v["cross_t"])
-    order = list(stations)
-    members = [{"id": f"rail_{side}_{a}{b}", "node_a": node(side, a), "node_b": node(side, b),
-                "section": rail_key, "material": "stkr400", "part": "frame"}
-               for side in "LR" for a, b in zip(order, order[1:])]
-    members += [{"id": f"cross_{st}", "node_a": node("L", st), "node_b": node("R", st),
-                 "section": cross_key, "material": "stkr400", "part": "frame"} for st in order]
+    # running gear: front steer, rear drive, coil springs
+    def spring(rate: float) -> Suspension:
+        return Suspension("spring", rate, 1.2, v["suspension_travel"])
 
-    def wheel(sid, x, y, front):
-        rate = v["front_spring_rate"] if front else v["rear_spring_rate"]
-        return {
-            "id": sid, "kind": "wheel", "position_mm": [x, y, r], "radius_mm": r, "width_mm": ww,
-            "suspension": {"type": "spring", "stiffness_N_per_mm": rate, "damping_Ns_per_mm": 1.2,
-                           "travel_mm": v["suspension_travel"]},
-            "actuation": {"drive": not front, "brake": True, "steer": front},
-            "frame_node": node("L" if y > 0 else "R", "A" if front else "B"),
-        }
+    supports = four_wheels(wb, track, r, ww, spring(v["front_spring_rate"]), spring(v["rear_spring_rate"]))
 
-    supports = [wheel("FL", 0.0, track / 2, True), wheel("FR", 0.0, -track / 2, True),
-                wheel("RL", -wb, track / 2, False), wheel("RR", -wb, -track / 2, False)]
-
-    def part(pid, label, kind, center, size, mass, carried_by=None):
-        p = {"id": pid, "name": label, "kind": kind, "box": {"center_mm": center, "size_mm": size}, "mass_kg": mass}
-        if carried_by:
-            p["carried_by"] = carried_by
-        return p
-
-    def between(x):
-        """The frame nodes of the two stations either side of x (both rails)."""
-        ahead = min((st for st in order if stations[st] >= x), key=lambda st: stations[st], default=order[0])
-        behind = max((st for st in order if stations[st] < x), key=lambda st: stations[st], default=order[-1])
-        return [node("L", ahead), node("R", ahead), node("L", behind), node("R", behind)]
-
-    S1, S2, E, F = stations["S1"], stations["S2"], stations["E"], stations["F"]
+    # parts, each against the frame or a part already placed
+    lay = Layout({**frame.part(), "supports": supports, "parts": []})
+    on_rails = lay.rail_top() + ON_RAILS_MM
+    S1, S2, E = (lay.station_x(k) for k in ("S1", "S2", "E"))
     seat_x, seat_y = v["seat_x"], v["seat_y"]
-    # the battery fits between the rails; its volume and mass go with the capacity
+    lay.put(Item("floor_front", "足元の床", "body", (lay.station_x("A") - S1, 600.0, 20.0), 6.0),
+            x=lay.between("A", "S1"), y=0.0, z=bottom_at(on_rails))
+    lay.put(Item("floor", "座席の下の床", "body", (S1 - S2, track, 20.0), 8.0), x=lay.between("S1", "S2"), y=0.0,
+            z=bottom_at(on_rails))
+    deck_len = S2 - DECK_GAP_MM - E
+    lay.put(Item("deck", "荷台の床", "body", (deck_len, 880.0, 20.0), 18.0), x=rear_at(E), y=0.0, z=bottom_at(on_rails),
+            carried_by=lay.at("S2", "B", "E"))
+    lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, 600.0, 280.0), 15.0), x=front_at(lay.station_x("F")),
+            y=0.0, z=bottom_at(on_rails))
+    # the battery fits between the rails under the floor; its volume and mass go with the capacity
     scale = v["battery_capacity"] / BATTERY_V1["capacity"]
-    b_w = min(BATTERY_V1["width"], v["rail_spacing"] - v["rail_b"] - 20.0)
+    b_w = min(BATTERY_V1["width"], lay.rail_inner_gap() - 20.0)
     b_l = BATTERY_V1["length"] * BATTERY_V1["width"] / b_w * scale
-    deck_front = S2 - 150.0
-    parts = [
-        part("battery", f"電池 (LiFePO4 {v['battery_voltage']:g} V {v['battery_capacity']:g} Ah)", "battery",
-             [v["battery_x"], 0.0, 330.0], [b_l, b_w, BATTERY_V1["height"]], BATTERY_V1["mass"] * scale, between(v["battery_x"])),
-        part("motor", "モーターと減速機", "motor", [-wb + 150.0, 0.0, 310.0], [250.0, 300.0, 220.0],
-             MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"]),
-             [node("L", "B"), node("R", "B")]),
-        part("controller", "モーターの制御器", "controller", [S2 - 110.0, 0.0, 300.0], [250.0, 200.0, 80.0], 4.0,
-             [node("L", "S2"), node("R", "S2")]),
-        part("aux", "配線と 12 V の補機", "electrical", [S1 + 150.0, 0.0, 300.0], [300.0, 300.0, 100.0], 6.0,
-             [node("L", "A"), node("R", "A"), node("L", "S1"), node("R", "S1")]),
-        part("floor_front", "足元の床", "body", [S1 / 2.0, 0.0, 440.0], [-S1, 600.0, 20.0], 6.0,
-             [node("L", "A"), node("R", "A"), node("L", "S1"), node("R", "S1")]),
-        part("floor", "座席の下の床", "body", [(S1 + S2) / 2.0, 0.0, 440.0], [S1 - S2, track, 20.0], 8.0,
-             [node("L", "S1"), node("R", "S1"), node("L", "S2"), node("R", "S2")]),
-        part("deck", "荷台の床", "body", [(E + deck_front) / 2.0, 0.0, 440.0], [deck_front - E, 880.0, 20.0], 18.0,
-             [node("L", "S2"), node("R", "S2"), node("L", "B"), node("R", "B"), node("L", "E"), node("R", "E")]),
-        part("front_body", "前の外板とバンパー", "body", [F - 180.0, 0.0, 570.0], [360.0, 600.0, 280.0], 15.0,
-             [node("L", "F"), node("R", "F"), node("L", "A"), node("R", "A")]),
-        part("steering", "ハンドルとペダル", "steering", [v["steering_x"], -seat_y + 100.0, 750.0], [300.0, 200.0, 500.0], 12.0,
-             [node("R", "A"), node("R", "S1")]),
-        part("seat_R", "運転席", "seat", [seat_x, -seat_y, 580.0], [500.0, 500.0, 260.0], 12.0,
-             [node("R", "S1"), node("R", "S2")]),
-        part("seat_L", "助手席", "seat", [seat_x, seat_y, 580.0], [500.0, 500.0, 260.0], 12.0,
-             [node("L", "S1"), node("L", "S2")]),
-        part("occupant_R", "運転者 (体重は強さの不利側)", "occupant", [seat_x - 55.0, -seat_y, 970.0], [450.0, 450.0, 520.0],
-             v["occupant_mass"], [node("R", "S1"), node("R", "S2")]),
-        part("occupant_L", "同乗者 (体重は強さの不利側)", "occupant", [seat_x - 55.0, seat_y, 970.0], [450.0, 450.0, 520.0],
-             v["occupant_mass"], [node("L", "S1"), node("L", "S2")]),
-        part("cargo", "荷", "cargo", [(E + deck_front) / 2.0, 0.0, 600.0], [deck_front - E - 50.0, 880.0, 300.0], v["cargo_mass"],
-             [node("L", "S2"), node("R", "S2"), node("L", "B"), node("R", "B"), node("L", "E"), node("R", "E")]),
-    ]
-    for s in supports:
+    lay.put(Item("battery", f"電池 (LiFePO4 {v['battery_voltage']:g} V {v['battery_capacity']:g} Ah)", "battery",
+                 (b_l, b_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale),
+            x=v["battery_x"], y=0.0, z=top_at(lay.bottom_of("floor")))
+    motor_mass = MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"])
+    lay.put(Item("motor", "モーターと減速機", "motor", (250.0, 300.0, 220.0), motor_mass),
+            x=rear_at(lay.station_x("B") + MOTOR_GAP_MM), y=0.0, z=top_at(lay.rail_top()), carried_by=lay.at("B"))
+    lay.put(Item("controller", "モーターの制御器", "controller", (250.0, 200.0, 80.0), 4.0),
+            x=front_at(S2 + CONTROLLER_LEAD_MM), y=0.0, z=top_at(lay.rail_bottom()), carried_by=lay.at("S2"))
+    lay.put(Item("aux", "配線と 12 V の補機", "electrical", (300.0, 300.0, 100.0), 6.0),
+            x=rear_at(S1), y=0.0, z=top_at(lay.rail_bottom() + AUX_DROP_MM))
+    lay.put(Item("steering", "ハンドルとペダル", "steering", (300.0, 200.0, 500.0), 12.0),
+            x=v["steering_x"], y=-seat_y + STEERING_INBOARD_MM, z=bottom_at(lay.top_of("floor_front") + STEERING_LIFT_MM))
+    for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
+        lay.put(Item(pid, label, "seat", (500.0, 500.0, 260.0), 12.0), x=seat_x, y=y, z=bottom_at(lay.top_of("floor")))
+    for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
+        sy = lay.part(seat)["box"]["center_mm"][1]
+        lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
+                x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
+    lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, 880.0, 300.0), v["cargo_mass"]),
+            x=lay.part("deck")["box"]["center_mm"][0], y=0.0, z=bottom_at(lay.top_of("deck")), carried_by=lay.at("S2", "B", "E"))
+    for s in supports:  # each wheel (unsprung) and its arms, their tops level with the floors, inner face on the rail
         x, y, z = s["position_mm"]
-        side = "左" if y > 0 else "右"
-        end = "前" if x > -wb / 2 else "後"
-        parts.append(part(f"wheel_{s['id']}", f"{end}{side}の車輪 (タイヤ・ホイール・ハブ・ブレーキ)", "wheel",
-                          [x, y, z], [2 * r, ww, 2 * r], WHEEL_MASS_KG))
-        parts.append(part(f"susp_{s['id']}", f"{end}{side}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
-                          [x, (rail_y + 60.0) * (1 if y > 0 else -1), 330.0], [250.0, 120.0, 200.0], 8.0))
+        corner = corner_name(s, supports)
+        lay.put(Item(f"wheel_{s['id']}", f"{corner}の車輪 (タイヤ・ホイール・ハブ・ブレーキ)", "wheel", (2 * r, ww, 2 * r),
+                     WHEEL_MASS_KG), x=x, y=y, z=z, carried_by=None)
+        lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
+                     (250.0, 120.0, 200.0), 8.0),
+                x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
+    lay.reorder(PART_ORDER)
 
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
     variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items() if k not in variables})
@@ -330,13 +330,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     return {
         "design_version": version,
         "parent_version": parent,
-        "name": name or f"offroad-4w v{version}: 2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive",
+        "name": name or f"offroad-4w v{version}: {DESCRIPTION}",
         "change_reason": reason or "first version (fixed demo design)",
         "variables": variables,
         "supports": supports,
-        "parts": parts,
-        "nodes": nodes,
-        "members": members,
-        "sections": {rail_key: rail_sec, cross_key: cross_sec},
+        "parts": lay.parts,
+        **frame.part(),
         "materials": {"stkr400": json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]},
     }

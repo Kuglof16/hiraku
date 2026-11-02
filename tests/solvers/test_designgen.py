@@ -105,6 +105,29 @@ class DesignGenTest(unittest.TestCase):
         self.assertEqual(d["variables"]["seat_x"]["value"], -725.0)
         self.assertEqual(d["variables"]["track"]["value"], 1220.0)
 
+    def test_archetypes_and_propose(self):
+        from hiraku.catalog import load_requirements
+        from hiraku.catalog.build import check_design_loading
+        req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
+        kinds = designgen.archetypes(req["flags"])
+        self.assertEqual([k["name"] for k in kinds], ["ladder_4w"])
+        self.assertEqual(kinds[0]["choices"], {})
+        self.assertEqual(designgen.archetypes({"self_propelled": False, "ride": True}), [])
+        d = designgen.propose("ladder_4w", {}, {}, req)
+        self.assertEqual({k: v for k, v in d.items() if k != "change_reason"},
+                         {k: v for k, v in V1.items() if k != "change_reason"})  # the demo requirements give v1
+        check_design_loading(req, d, "two_cargo")
+        heavy = dict(req, requirements=[dict(r, value=90) if r["key"] == "Q33" else r for r in req["requirements"]])
+        d2 = designgen.propose("ladder_4w", {}, {"track": mm(1220)}, heavy)
+        self.assertEqual({p["mass_kg"] for p in d2["parts"] if p["kind"] == "occupant"}, {90.0})
+        self.assertEqual(d2["variables"]["track"]["value"], 1220.0)
+        with self.assertRaisesRegex(ValueError, "comes from requirement Q33"):
+            designgen.propose("ladder_4w", {}, {"occupant_mass": {"value": 70, "unit": "kg"}}, req)
+        with self.assertRaisesRegex(ValueError, "no choice"):
+            designgen.propose("ladder_4w", {"drive": "front"}, {}, req)
+        with self.assertRaisesRegex(ValueError, "no kind of design"):
+            designgen.propose("monocoque", {}, {}, req)
+
     def test_variables_listing(self):
         got = {v["name"]: v for v in designgen.variables(V1)}
         self.assertEqual(got["track"]["value"], 1100.0)
