@@ -14,7 +14,7 @@ from hiraku.contract import layout
 
 def _cmd_run(a: argparse.Namespace) -> int:
     from hiraku.agent.scripted import SCRIPTED_SLUG_SUFFIX, run_scripted
-    from hiraku.agent.session import start_run
+    from hiraku.agent.session import STOPPED_BY_USER, start_run
     from hiraku.catalog import load_requirements
 
     if not a.scripted:
@@ -35,19 +35,40 @@ def _cmd_run(a: argparse.Namespace) -> int:
     except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:  # start_run has marked the folder stopped, if it was made
+        print(f"{STOPPED_BY_USER} while the run was starting", file=sys.stderr)
+        return 130
     print(f"run folder: {ctx.store.path}")
-    if a.scripted:
-        status = run_scripted(ctx)
-    else:
-        from hiraku.agent.runner import run_with_claude
+    try:
+        if a.scripted:
+            run_scripted(ctx)
+        else:
+            from hiraku.agent.runner import run_with_claude
 
-        status = asyncio.run(run_with_claude(ctx, model=a.model, effort=a.effort, max_budget_usd=a.budget,
-                                             max_turns=a.max_turns))
+            asyncio.run(run_with_claude(ctx, model=a.model, effort=a.effort, max_budget_usd=a.budget,
+                                        max_turns=a.max_turns))
+    except KeyboardInterrupt:
+        if ctx.store.project["status"] == "running":  # stopped between the run's own handlers
+            ctx.store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        _print_end(ctx, scripted=a.scripted)
+        return 130
+    _print_end(ctx, scripted=a.scripted)
+    return 0 if ctx.store.project["status"] == "done" else 1
+
+
+def _print_end(ctx, *, scripted: bool) -> None:
+    """run_id, status, cost and the judgement tiles."""
     p = ctx.store.project
-    print(f"status: {status}" + (f" ({p['stop_reason']})" if p.get("stop_reason") else ""))
+    print(f"run_id: {p['run_id']}")
+    print(f"status: {p['status']}" + (f" ({p['stop_reason']})" if p.get("stop_reason") else ""))
+    if scripted:
+        print("cost_usd: 0 (scripted: Claude is not called)")
+    elif any(e["kind"] == "cost.updated" for e in ctx.store.events()):
+        print(f"cost_usd: {p['cost_usd']:.4f}")
+    else:
+        print("cost_usd: not reported (Claude reports the cost when it finishes; this run stopped before that)")
     for j in ctx.store.judgements():
         print(f"  {contract.DOMAIN_NAMES_JA[j['domain']]}: {j['state']}  {j['summary']}")
-    return 0 if status == "done" else 1
 
 
 def _cmd_check(a: argparse.Namespace) -> int:

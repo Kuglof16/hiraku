@@ -14,6 +14,8 @@ from hiraku.tools.judge import init_judgements
 
 Record = dict[str, Any]
 
+STOPPED_BY_USER = "stopped by the user (Ctrl+C)"
+
 
 def resolve_design_path(req: Record, design_path: Path | str | None) -> Path:
     if design_path is not None:
@@ -36,8 +38,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     path = resolve_design_path(req, design_path)
     if not path.exists():
         raise FileNotFoundError(
-            f"design file {path} does not exist. The analysis department writes data/designs/ "
-            f"(occupants and cargo as parts); pass --design to use another file"
+            f"design file {path} does not exist (designs are in data/designs/, with occupants and cargo "
+            f"as parts); pass --design to use another file"
         )
     design = dict(read_data(path))
     design["design_version"] = 1
@@ -52,7 +54,11 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     load_cases = build_load_cases(catalog, req, design, test_ids)
     store = RunStore.create(project_fields(catalog, req, load_cases), root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools))
-    store.write_design(design)
-    check_shelf(ctx)
-    init_judgements(ctx)
+    try:
+        store.write_design(design)
+        check_shelf(ctx)
+        init_judgements(ctx)
+    except KeyboardInterrupt:  # the tool checks take a while; do not leave the folder "running"
+        store.finish("stopped", stop_reason=STOPPED_BY_USER)
+        raise
     return ctx

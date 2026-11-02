@@ -23,3 +23,6 @@ node_modules/
 Thumbs.db
 .DS_Store
 .vscode/
+
+# Local preview settings for the desktop app
+.claude/launch.json

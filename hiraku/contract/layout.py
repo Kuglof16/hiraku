@@ -105,6 +105,8 @@ OWNERS = {
     ],
     "analysis": [  # 解析部: K0 hand calc and K1..K5 solvers (K2 team inside)
         "hiraku/solvers/",
+        "hiraku/catalog/builders/",  # load-case builders per test (k2_*.py by the K2 team)
+        "hiraku/designgen/",  # design from its variables (for revise_design)
         "data/designs/",
         "data/materials/",
         "tests/solvers/",

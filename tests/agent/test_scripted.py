@@ -57,7 +57,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         denied = next(e for e in self.ctx.store.events() if e["kind"] == "hook.denied")
         self.assertTrue(denied["data"]["scripted"])
 
-        # P1: the lever rule mismatches, H3 stops the next compare, the plan's cause is written,
+        # P1: the lever rule mismatches, HK3 stops the next compare, the plan's cause is written,
         # the pushed-wheel formula matches and resolves the cause
         p1 = comparisons(self.ctx, "P1-step100")
         self.assertEqual([(c["quantity"], c["status"]) for c in p1],
@@ -239,7 +239,7 @@ class ScriptedUnexpectedMismatchTest(RunCase, unittest.TestCase):
 class ScriptedUnusableToolTest(RunCase, unittest.TestCase):
     frame_checks_pass = False
 
-    def test_h2_stops_the_script(self):
+    def test_hk2_stops_the_script(self):
         self.assertEqual(run_scripted(self.ctx), "stopped")
         self.assertEqual(denied_rules(self.ctx), ["HK1_prediction_first", "HK3_cause_before_continue", "HK2_tool_usable"])
         self.assert_events_fit()

@@ -1,8 +1,11 @@
 # Fixed requirements for the MVP run (the demo vehicle).
 # Shape: hiraku.contract "requirements_file". Sources are written in `basis`.
-# "not checked in this repository" = the value was taken from the cited page
-# during planning and has not been re-read for this repository yet.
+# "not checked in this repository" = the value is taken from the cited page,
+# and that page has not been read again for this repository.
 # "assumption" = an engineering assumption with no public source (trust 3).
+# trust and "not checked" are different things: trust is the kind of source
+# (1 primary, 2 secondary, 3 assumption); "not checked" says whether the value
+# has been read again against that source.
 
 want: 林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)
 product: offroad-4w
