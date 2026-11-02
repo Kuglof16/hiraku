@@ -4,6 +4,10 @@ masses are added (parts, and each frame member as density * area * length),
 weight is mass times standard gravity, the centre of mass is the
 mass-weighted centre, lengths are distances.
 
+Per loading, rail_joint holds the inputs of frame_static.rail_joint_stress
+other than F and W, read off the design by the solvers' rail_joint_inputs
+(statics about the rear axle joint), and `support`, the wheel whose load is W.
+
 Axes are ISO 8855 with the origin under the front axle: x points forward,
 so the front axle is the wheel row with the largest x and the rear axle sits
 at x = -wheelbase.
@@ -20,7 +24,7 @@ from hiraku.contract.protocols import LOADINGS
 
 Record = dict[str, Any]
 
-G = 9.80665  # standard gravity in m/s^2 (exact by definition, 3rd CGPM 1901)
+G = 9.80665  # standard gravity, m/s^2. Source: 3rd CGPM (1901), a defined value (exact)
 
 
 def _q(value: float, unit: str) -> Record:
@@ -101,9 +105,24 @@ def rail_section(design: Record) -> Record | None:
     return out
 
 
+def rail_joint(design: Record, loading: str) -> Record | None:
+    """Inputs of frame_static.rail_joint_stress but F and W, and the wheel W belongs to;
+    None when the design has no rear axle joint the formula fits (or no solvers)."""
+    try:
+        from hiraku.solvers.k0_handcalc.frame_inputs import rail_joint_inputs
+        from hiraku.solvers.k0_handcalc.vehicle import DesignError
+    except ImportError:
+        return None
+    try:
+        got = rail_joint_inputs(design, loading=loading)
+    except (DesignError, KeyError, ValueError, TypeError):
+        return None
+    return {**got["inputs"], "support": got["support"]}
+
+
 def design_summary(design: Record) -> Record:
     """Geometry, member lengths and, per loading, the mass and centre of mass of
-    the frame plus the parts on board."""
+    the frame plus the parts on board (and the rail-joint inputs when they apply)."""
     out: Record = {}
     front_x = None
     wheels = [s for s in design.get("supports", []) if s["kind"] == "wheel"]
@@ -135,9 +154,12 @@ def design_summary(design: Record) -> Record:
     frame = frame_masses(design)
     out["frame_mass"] = _q(sum(m for _, m, _ in frame), "kg")
     frame_items = [(m, c) for _, m, c in frame]
-    out["loadings"] = {
-        name: mass_summary(frame_items + [(p["mass_kg"], p["box"]["center_mm"]) for p in parts_on_board(design, name)],
-                           front_x)
-        for name in LOADINGS
-    }
+    out["loadings"] = {}
+    for name in LOADINGS:
+        load = mass_summary(frame_items + [(p["mass_kg"], p["box"]["center_mm"]) for p in parts_on_board(design, name)],
+                            front_x)
+        joint = rail_joint(design, name)
+        if joint is not None:
+            load["rail_joint"] = joint
+        out["loadings"][name] = load
     return out

@@ -4,10 +4,15 @@ The screen is opened in headless Chromium with a 1920x1080 layout at device
 scale 2 (3840x2160 pixels), moved to each frame time, and captured as PNG.
 A screen is a promo page (``window.promo.seek(t)``, see screens/timeline.js)
 or the app's replay at an http URL (``window.hiraku.seek(t)``, web/js/app.js).
+The export runs from 0 to the screen's own length (``window.promo.duration``
+or ``window.hiraku.player.duration``) unless --end is given. The app replays on
+paced display time by default (short gaps stretched, long ones cut); add
+``&pace=0`` to its URL to export on the recorded times instead.
 
     py promo/export.py stills promo/screens/n18.html OUT_DIR --at 0.5 3 8
     py promo/export.py frames promo/screens/n18.html OUT_DIR --fps 30
     py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" OUT_DIR --gpu
+    py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1&pace=0" OUT_DIR --gpu
     py promo/export.py encode OUT_DIR clip.mp4 --fps 30 --height 1080
     py promo/export.py clip   promo/screens/n18.html clip.mp4 --frames-dir OUT_DIR
 
@@ -163,6 +168,7 @@ def export_frames(screen: str | Path, out_dir: Path, fps: int, scale: float, sta
     try:
         stop = cap.duration if end is None else end
         times = frame_times(start, stop, fps)
+        print(f"{screen_name(screen)}: lasts {cap.duration:.2f} s; exporting {start:.2f}-{stop:.2f} s", flush=True)
         began = time.perf_counter()
         for i, t in enumerate(times):
             cap.shoot(t, out_dir / frame_name(i))
