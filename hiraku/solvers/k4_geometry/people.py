@@ -1,9 +1,11 @@
 """Occupant fit against body-size statistics (H3).
 
-Values (mm) are the AIST anthropometric database 1991-92 statistics as quoted
-in the requirements catalog (H3 row): the catalog marks stature, weight and
-sitting height as checked there; the other values are not checked in this
-repository. Only statistics are used (no individual data).
+Values (mm) are percentiles of the young adults (18-29 years) in the AIST
+anthropometric database 1991-92 (Makiko Kouchi and Masaaki Mochimaru, 2005:
+AIST Anthropometric Database, National Institute of Advanced Industrial Science
+and Technology, H16PRO 287), read from the item tables at
+https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03 (item ID
+and name as in that list). Only statistics are used (no individual data).
 """
 
 from __future__ import annotations
@@ -11,14 +13,14 @@ from __future__ import annotations
 import numpy as np
 
 AIST = {
-    "sitting_height_m95": 985.0,  # young male 95th percentile (checked in the catalog)
-    "sitting_height_f5": 824.0,  # young female 5th percentile (checked in the catalog)
-    "shoulder_breadth_m95": 495.0,  # not checked here
-    "hip_breadth_seated_f95": 391.0,  # not checked here
-    "buttock_knee_m95": 616.0,  # not checked here
+    "sitting_height_m95": 985.2,  # I1 Sitting height, male 95th percentile
+    "sitting_height_f5": 824.1,  # I1 Sitting height, female 5th percentile
+    "shoulder_breadth_m95": 495.3,  # D2 Bideltoid breadth, male 95th percentile
+    "hip_breadth_seated_f95": 391.0,  # J2 Hip breadth, sitting, feet supported, female 95th percentile
+    "buttock_knee_m95": 616.4,  # J5 Buttock-knee length, sitting, male 95th percentile
 }
-SOURCE = ("AIST anthropometric database 1991-92 (Kouchi & Mochimaru 2005, AIST H16PRO 287), statistics as quoted in the "
-          "requirements catalog; sitting height checked there, the others not checked in this repository")
+SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items I1, D2, "
+          "J2, J5 read from https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03")
 
 
 def _box(p):

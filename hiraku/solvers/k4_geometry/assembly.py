@@ -22,9 +22,11 @@ DIRECTIONS = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 
 NOT_ASSEMBLED = ("occupant", "cargo")
 NUDGE_MM = 20.0
 # Access for each step, from the side the part comes in. The opening for two hands
-# (200 x 125 mm) is MIL-STD-1472H figure 57 and the reach (606 mm, grip reach,
-# young female 5th percentile) is the AIST 1991-92 statistic, both as quoted in the
-# requirements catalog and not checked in this repository.
+# (200 x 125 mm) is from MIL-STD-1472H (Department of Defense Design Criteria
+# Standard: Human Engineering), figure 57, not checked in this repository. The reach
+# (606 mm) is item C3 Grip reach from back, young adult female 5th percentile, of the
+# AIST anthropometric database 1991-92 (see people.py), read from
+# https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03.
 TOOL_OPENING_MM = (200.0, 125.0)
 TOOL_DEPTH_MM = 300.0
 REACH_MM = 606.0

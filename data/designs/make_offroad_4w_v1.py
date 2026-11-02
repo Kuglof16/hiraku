@@ -4,10 +4,12 @@ Run from the repository root:  python data/designs/make_offroad_4w_v1.py
 
 A small two-seat electric off-road vehicle for forest roads: ladder frame of
 rectangular steel tube, four wheels (front steer, rear drive), up to 40 km/h.
-Dimensions and masses here are design choices (assumptions), not catalogue
-values. Occupant mass uses the strength-side value from the requirements
-(Q33: 76.6 kg, AIST anthropometric database 1991-92, young male 95th
-percentile, not checked in this repository); cargo is Q40 (150 kg).
+Dimensions and masses here are design choices (assumptions), not taken from
+product catalogues. Occupant mass uses the strength-side value from the requirements
+(Q33: 76.6 kg, AIST anthropometric database 1991-92, item N1 Weight, young
+adult male 95th percentile, read from
+https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03); cargo
+is Q40 (150 kg).
 Right-hand drive: the driver sits on the right and is the first occupant in
 the parts list (a load case's params.loading boards occupants in list order).
 Part boxes are mass-equivalent boxes centred at each part's estimated centre
@@ -72,9 +74,9 @@ THERMAL = {
     "controller_heat_capacity": q(3600.0, "J/K"),
     "controller_thermal_resistance": q(0.1, "K/W"),
 }
-# Aerodynamics (design assumptions; the drag coefficient is set above the 0.512
-# reported for a golf cart because the occupants sit in the open). Air density
-# is the ICAO standard atmosphere at sea level, not checked in this repository.
+# Aerodynamics (design assumptions; the drag coefficient is set high because the
+# seats are open). Air density is the ICAO standard atmosphere at sea level, not
+# checked in this repository.
 AERO = {
     "drag_coefficient": q(0.8, "1"),
     "frontal_area": q(1.6, "m^2"),
@@ -97,10 +99,10 @@ CRASH = {
     "crush_stiffness": q(600.0, "N/mm"),
 }
 # Fatigue of the welded frame joints. The S-N form (slope 3, knee at 1e7
-# cycles) follows the IIW recommendations as quoted in the requirements
-# catalog (secondary source, not checked here); the catalog's example is FAT
-# 112 for a ground butt weld. FAT 71 for the frame's fillet-welded tube joints
-# and the slope 22 beyond the knee are assumptions, not checked against IIW.
+# cycles) follows A. F. Hobbacher, Recommendations for Fatigue Design of Welded
+# Joints and Components, 2nd ed., Springer 2016 (IIW), not checked in this
+# repository. FAT 71 for the frame's fillet-welded tube joints and the slope 22
+# beyond the knee are assumptions, not checked against IIW.
 FATIGUE = {
     "fatigue_fat_class": q(71.0, "MPa"),
     "fatigue_slope": q(3.0, "1"),
