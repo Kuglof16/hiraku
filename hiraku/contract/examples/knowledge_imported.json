@@ -1,0 +1,31 @@
+{
+  "doc": {
+    "doc_id": "builtin-sheet-metal",
+    "filename": "sheet_metal.md",
+    "origin": "builtin",
+    "skipped": [
+      {
+        "text": "見た目を良くする",
+        "reason": "部品の値で確かめられない"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "SM-01",
+      "doc_id": "builtin-sheet-metal",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "applies_to": {
+        "kinds": [
+          "bracket"
+        ]
+      },
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "check_by": "code",
+      "trust": 3,
+      "basis": "not checked"
+    }
+  ]
+}

@@ -21,6 +21,20 @@ EXAMPLES = {
     "verdict": "verdict.json",
     "judgement": "judgement.json",
     "project": "project.json",
+    "domains_picked": "domains_picked.json",
+    "hearing_asked": "hearing_asked.json",
+    "hearing_answered": "hearing_answered.json",
+    "knowledge_imported": "knowledge_imported.json",
+    "rule_check": "rule_check.json",
+}
+
+# intake event kind -> its data shape (docs/contract.md, 分野を選ぶ・ヒアリング・ナレッジ)
+INTAKE_EVENTS = {
+    "domains.picked": "domains_picked",
+    "hearing.asked": "hearing_asked",
+    "hearing.answered": "hearing_answered",
+    "knowledge.imported": "knowledge_imported",
+    "rule_check.recorded": "rule_check",
 }
 
 
@@ -119,8 +133,52 @@ class SchemaTest(unittest.TestCase):
     def test_python_lists_come_from_the_schema(self):
         self.assertIn("prediction.recorded", contract.EVENT_KINDS)
         self.assertEqual(set(contract.DOMAINS), set(contract.DOMAIN_NAMES_JA))
+        self.assertEqual(set(contract.RULE_CATEGORIES), set(contract.RULE_CATEGORY_NAMES_JA))
         self.assertIn("MPa", contract.UNITS)
         self.assertEqual(contract.mcp_name("analyze"), "mcp__hiraku__analyze")
+
+
+class IntakeTest(unittest.TestCase):
+    ev = {"seq": 1, "ts": "2026-11-03T09:00:00+09:00", "t": 0.1, "run_id": "20261103-090000-offroad-4w", "agent": "lead"}
+
+    def test_intake_events_carry_their_shapes(self):
+        for kind, shape in INTAKE_EVENTS.items():
+            with self.subTest(kind=kind):
+                self.assertIn(kind, contract.EVENT_KINDS)
+                data = load(EXAMPLES[shape])
+                self.assertEqual(contract.errors("event", {**self.ev, "kind": kind, "data": data}), [])
+                self.assertNotEqual(contract.errors("event", {**self.ev, "kind": kind, "data": load("cause.json")}), [])
+
+    def test_domain_pick_may_list_its_tests(self):
+        pick = load("domains_picked.json")["picks"][0]
+        self.assertEqual(contract.errors("domain_pick", pick), [])
+        self.assertNotEqual(contract.errors("domain_pick", {**pick, "test_ids": ["not a test"]}), [])
+        del pick["test_ids"]
+        self.assertEqual(contract.errors("domain_pick", pick), [])
+
+    def test_flag_reasons_use_flag_names(self):
+        d = load("domains_picked.json")
+        d["flag_reasons"]["made_up"] = "no such flag"
+        self.assertNotEqual(contract.errors("domains_picked", d), [])
+
+    def test_hearing_answers_come_from_hearing_or_default(self):
+        a = load("hearing_answered.json")
+        a["answers"][0]["source"] = "hearing"
+        self.assertEqual(contract.errors("hearing_answered", a), [])
+        a["answers"][0]["source"] = "user"
+        self.assertNotEqual(contract.errors("hearing_answered", a), [])
+
+    def test_rule_check_passes_only_without_hits(self):
+        r = load("rule_check.json")
+        self.assertNotEqual(contract.errors("rule_check", {**r, "pass": True}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**r, "hits": [], "pass": False}), [])
+        self.assertEqual(contract.errors("rule_check", {**r, "hits": [], "pass": True}), [])
+
+    def test_rule_needs_a_known_category_and_a_basis(self):
+        rule = load("knowledge_imported.json")["rules"][0]
+        self.assertNotEqual(contract.errors("rule", {**rule, "category": "paint"}), [])
+        del rule["basis"]
+        self.assertNotEqual(contract.errors("rule", rule), [])
 
 
 class LayoutTest(unittest.TestCase):
@@ -135,6 +193,11 @@ class LayoutTest(unittest.TestCase):
                          Path("runs/20261102-203000-offroad-4w/v001/predictions/pred-0001.json"))
         with self.assertRaises(ValueError):
             layout.run_dir("../etc")
+        self.assertEqual(layout.record_path(rd, 2, "rule_check", layout.format_id("rule_check", 3)),
+                         Path("runs/20261102-203000-offroad-4w/v002/rule_checks/rchk-0003.json"))
+
+    def test_record_kinds_agree(self):
+        self.assertEqual(set(layout.RECORD_DIRS), set(layout.ID_PREFIX))
 
     def test_ids_fit_the_schema_patterns(self):
         for kind in layout.ID_PREFIX:
