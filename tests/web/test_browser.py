@@ -13,6 +13,7 @@ import unittest
 
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
+from tests.web.domains_fixture import domain_events
 from tests.web.k2_fixture import tilt_events
 
 try:
@@ -230,6 +231,64 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["nearest"], "FL")
         self.assertTrue(got["frontLeftOfRear"])
         self.assertTrue(got["upIsUp"])
+        page.close()
+
+    def test_all_domains_tiles(self):
+        events = domain_events()
+        for ev in events:
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const tiles = [...document.querySelectorAll("#tiles .tile")];
+              const out = {
+                order: tiles.map((t) => t.dataset.domain),
+                red: tiles.filter((t) => t.classList.contains("red")).map((t) => t.dataset.domain),
+                flow: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.textContent),
+                banner: document.getElementById("grid-banner").hidden ? "" : document.getElementById("grid-banner").textContent,
+                assembly: document.querySelector('#tiles .tile[data-domain="assembly"] .cap').textContent,
+                thermal: document.querySelector('#tiles svg.side[data-domain="thermal"]').textContent,
+                wide: document.getElementById("main").classList.contains("wide"),
+              };
+              // the last quarter second is after every event (run.finished waits 0.3 s after screen.focus)
+              // the first member runs from the front axle (which does not move in this mode) backward
+              const nvhLine = () => document.querySelector('#tiles svg.side[data-domain="nvh"] line[data-a]').getAttribute("y2");
+              const p = window.hiraku.player.playhead;
+              const y1a = nvhLine();
+              await window.hiraku.seek(p - 0.25);
+              out.swing = [y1a, nvhLine()];
+              return out;
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["order"], ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"])
+        self.assertEqual(sorted(got["red"]), ["assembly", "crash"])
+        self.assertEqual(got["flow"], ["版 1 赤 4", "版 2 赤 2"])
+        self.assertIn("繰り返しの上限", got["banner"])
+        self.assertIn("電池 × cross1 8 mm 干渉", got["assembly"])
+        self.assertIn("電池 43 ℃", got["thermal"])
+        self.assertTrue(got["wide"])
+        self.assertNotEqual(got["swing"][0], got["swing"][1])  # the mode shape swings with the replay clock
+        page.close()
+
+    def test_temperature_contour_on_the_workbench(self):
+        page, errors = self.open("run=sample&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", domain_events())
+        page.click("button[data-tab=bench]")
+        page.click('#tests button[data-lc="T1-v"]')
+        got = page.evaluate(
+            """async () => {
+              await window.hiraku.seek(window.hiraku.player.playhead);
+              const ct = window.hiraku.bench.keys.contour;
+              return { kind: ct && ct.kind, min: ct && ct.min, max: ct && ct.max, legend: document.getElementById("legend").textContent };
+            }"""
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["kind"], "temperature")
+        self.assertEqual((got["min"], got["max"]), (31.0, 60.0))  # coldest part up to the criterion limit
+        self.assertIn("許容 60 ℃", got["legend"])
         page.close()
 
     def test_pacing_spreads_and_cuts_gaps(self):

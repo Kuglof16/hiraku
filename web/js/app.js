@@ -16,7 +16,9 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, judgementState, roundsUsed } from "./state.js";
 import { SeriesChart } from "./chart.js";
+import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
+import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +40,7 @@ const ui = {
   // until the replay playhead moves again.
   anim: { key: null, local: false, playing: false, tau: 0 },
   graphGroup: null,
+  fieldKind: null, // contour field picked in the legend (null: the first one)
 };
 
 if (params.get("video") === "1") document.body.classList.add("video");
@@ -277,43 +280,41 @@ function renderChain(s, chain) {
   }
 }
 
+// The contour of the shown analysis: the field the viewer picked (ui.fieldKind)
+// or the first of stress, damage, temperature, mode shape, displacement.
 function buildContour(chain) {
-  const ana = chain.shown;
-  if (!ana || ana.status !== "ok") return null;
-  const field = (ana.fields ?? []).find((f) => f.kind === "stress");
-  if (!field) return null;
-  const values = field.per_member ?? {};
-  const nodes = Object.fromEntries(Object.entries(field.per_node ?? {}).filter(([, v]) => typeof v === "number"));
-  const all = [...Object.values(values), ...Object.values(nodes)].filter(Number.isFinite);
-  if (!all.length) return null;
-  const crit = chain.loadCase?.criterion;
-  const limitKnown = !!crit && crit.limit?.unit === field.unit && crit.limit.value > 0;
-  const fieldMax = Math.max(...all);
-  const max = limitKnown ? crit.limit.value : fieldMax;
-  const result = (ana.results ?? []).find((r) => r.where && r.unit === field.unit) ?? null;
-  return { key: `${ana.analysis_id}|${field.label}`, values, nodes, max, limitKnown, field, crit, fieldMax, where: result?.where, result, analysisId: ana.analysis_id };
+  const fields = fieldsOf(chain.shown);
+  const field = fields.find((f) => f.kind === ui.fieldKind) ?? fields[0];
+  const ct = field ? contourOf(chain.shown, field, chain.loadCase?.criterion) : null;
+  return ct ? { ...ct, kinds: fields.map((f) => f.kind) } : null;
 }
 
 function renderLegend(ct) {
   const el = $("legend");
-  if (!ct || !ui.toggles.contour) {
+  if (!ct?.key || !ui.toggles.contour) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
   const unit = unitLabel(ct.field.unit);
+  const relative = ct.kind === "mode_shape";
   const rows = [];
   for (let i = BANDS - 1; i >= 0; i -= 1) {
-    const top = (ct.max * (i + 1)) / BANDS;
-    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 ? fmt(top, 3) : ""}</span>`);
+    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
-  rows.push(`<span></span><span class="tk">0</span>`);
+  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた</div>` : "";
+  const chips = ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "";
+  const title = relative
+    ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
+    : `${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
   el.innerHTML =
-    `<div class="ttl">${esc(ct.field.label ?? "応力")} [${esc(unit)}]</div>` +
+    chips +
+    `<div class="ttl">${title}</div>` +
     `<div class="bar">${rows.join("")}</div>` +
     over +
-    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : "・上端 = 最大値"}</div>`;
+    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
 }
 
 function renderToggles(motion) {
@@ -412,24 +413,18 @@ function animSeekFromPointer(ev) {
   ui.anim = { key: ana.analysis_id, local: true, playing: false, tau: motion.t0 + f * motion.duration };
 }
 
+const board = new TileBoard($("grid-head"), $("tiles"));
+
+// A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
-  const v = s.currentVersion;
-  const reds = DOMAINS.filter((d) => judgementState(s, d).state === "red").length;
-  const flow = s.versions
-    .map((ver) => {
-      const r = DOMAINS.filter((d) => s.judgements[`${ver}|${d}`]?.state === "red").length;
-      return `<span class="pill">版 ${ver} 赤 ${r}</span>`;
-    })
-    .join(" → ");
-  $("grid-head").innerHTML = `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds}</span>${flow}`;
-  const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
-  $("tiles").innerHTML = DOMAINS.map((d) => {
-    const j = judgementState(s, d);
-    const word = { green: "緑 ✓", red: "赤 — 直す", pending: "まだ", off: "選んでいない" }[j.state];
-    const body = j.judgement?.summary ?? picks[d]?.reason ?? "";
-    const nv = j.judgement?.verdict_ids?.length ?? 0;
-    return `<div class="tile ${j.state}"><h3>${esc(DOMAIN_JA[d])}</h3><div class="state">${word}</div><div>${esc(body)}</div>${nv ? `<div class="sub">判定 ${nv} 件</div>` : ""}</div>`;
-  }).join("");
+  const { reds, atLimit } = board.render(s);
+  const banner = $("grid-banner");
+  banner.hidden = !(atLimit && reds.length);
+  if (!banner.hidden) {
+    const known = { round_limit: `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した`, cost_limit: "費用の上限に達した" };
+    const why = s.stopReason ? known[s.stopReason] ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
+    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>続けるか・上限を変えるか・ここで報告を書くかは、実行を操作する入口ができてから選べる</span>`;
+  }
 }
 
 function renderStatus(s) {
@@ -535,6 +530,7 @@ function draw() {
     renderToggles(motion);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
+    $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
 
@@ -556,6 +552,7 @@ function draw() {
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") bench.render();
+  else if (tab === "grid") board.tick(player.playhead);
 }
 
 let lastTs = null;
@@ -646,6 +643,12 @@ $("tests").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-lc]");
   if (!b) return;
   ui.pinnedLc = b.dataset.lc || null;
+  drawn.rev = -2;
+});
+$("legend").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-field]");
+  if (!b) return;
+  ui.fieldKind = b.dataset.field;
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {

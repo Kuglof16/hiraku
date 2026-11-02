@@ -298,8 +298,11 @@ export class Workbench3D {
       mesh.matrix.copy(g.matrix);
       mesh.userData = { id: m.id };
       this.model.add(mesh);
+      // Edges in the member's own frame, so a mode shape can move them with it.
+      const localEdges = [];
+      pushEdges(localEdges, g.geo, null, g.round ? 40 : 20);
       pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
-      this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, ...g };
+      this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
       const tag = label(esc(m.id), "lbl-id");
       tag.position.copy(g.mid);
@@ -310,7 +313,11 @@ export class Workbench3D {
       tag.position.copy(p);
       this.names.add(tag);
     }
-    if (ink.length) this.model.add(new LineSegments2(new LineSegmentsGeometry().setPositions(ink), this.inkMat));
+    this.restInk = ink;
+    this.inkLines = new LineSegments2(new LineSegmentsGeometry().setPositions(ink.length ? ink : [0, 0, 0, 0, 0, 0]), this.inkMat);
+    this.inkLines.visible = ink.length > 0;
+    this.model.add(this.inkLines);
+    this.modeShape = null;
 
     for (const s of design.supports ?? []) {
       const c = v3(s.position_mm);
@@ -367,6 +374,7 @@ export class Workbench3D {
         const geo = new THREE.BoxGeometry(sz[0], sz[1], sz[2]);
         const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false });
         mat.userData.baseOpacity = 0.32;
+        mat.userData.baseColor = color;
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
@@ -385,7 +393,7 @@ export class Workbench3D {
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       g.add(tag);
       this.parts.add(g);
-      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true };
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
     }
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
@@ -411,14 +419,32 @@ export class Workbench3D {
     const cargo = (loading ?? "two_cargo") === "two_cargo";
     for (const o of Object.values(this.partObjs)) {
       o.onBoard = o.kind === "occupant" ? o.seat < seats : o.kind === "cargo" ? cargo : true;
-      o.group.traverse((x) => {
-        if (x.isMesh && x.material.userData.baseOpacity !== undefined) x.material.opacity = o.onBoard ? x.material.userData.baseOpacity : 0.07;
-      });
       if (o.edges) o.edges.visible = o.onBoard;
       o.tag.element.classList.toggle("off", !o.onBoard);
     }
+    this.applyPartLook();
     this.cgDesign = this.design ? this.displayCg(this.design) : null;
     this.placeCg();
+  }
+
+  // A part's colour and opacity: off board is faint; a part with a contour value
+  // (e.g. its temperature) takes the contour colour; otherwise its own colour.
+  applyPartLook() {
+    const ct = this.keys.contour;
+    for (const [id, o] of Object.entries(this.partObjs)) {
+      const v = ct?.parts?.[id];
+      o.group.traverse((x) => {
+        const m = x.isMesh ? x.material : null;
+        if (!m || m.userData.baseOpacity === undefined) return;
+        if (typeof v === "number") {
+          m.color.set(colorOf(v, ct.max, ct.min));
+          m.opacity = o.onBoard ? 0.85 : 0.07;
+        } else {
+          if (m.userData.baseColor) m.color.set(m.userData.baseColor);
+          m.opacity = o.onBoard ? m.userData.baseOpacity : 0.07;
+        }
+      });
+    }
   }
 
   // Centre of gravity used only to place the mark when the analysis gives none:
@@ -515,11 +541,14 @@ export class Workbench3D {
     this.followApplied = null;
   }
 
-  // contour: { values: {memberId: v}, nodes: {nodeId: v}, max, where, result } or null for gray.
+  // contour (fields.js contourOf): values per member / node / part on [min, max],
+  // modes (node displacement vectors) for a mode shape; null for plain gray.
   setContour(contour) {
     if (contour === this.keys.contour) return;
     this.keys.contour = contour;
     disposeTree(this.overGhosts);
+    this.setModeShape(contour?.modes ? contour : null);
+    this.applyPartLook();
     for (const [id, info] of Object.entries(this.members)) {
       const mat = info.mesh.material;
       const geo = info.mesh.geometry;
@@ -533,14 +562,14 @@ export class Workbench3D {
       const va = contour.nodes?.[info.node_a];
       const vb = contour.nodes?.[info.node_b];
       if (typeof v === "number") {
-        mat.color.set(colorOf(v, contour.max));
+        mat.color.set(colorOf(v, contour.max, contour.min));
       } else if (typeof va === "number" && typeof vb === "number") {
         const pos = geo.getAttribute("position");
         const cols = new Float32Array(pos.count * 3);
         const c = new THREE.Color();
         for (let i = 0; i < pos.count; i += 1) {
           const u = pos.getX(i) / info.length + 0.5;
-          c.set(colorOf(va + (vb - va) * u, contour.max));
+          c.set(colorOf(va + (vb - va) * u, contour.max, contour.min));
           cols.set([c.r, c.g, c.b], i * 3);
         }
         geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
@@ -562,10 +591,72 @@ export class Workbench3D {
         this.overGhosts.add(ghost);
       }
     }
+    // Parts with a value (temperatures): the recorded value on a tag, and red when over the limit.
+    for (const [id, v] of Object.entries(contour?.parts ?? {})) {
+      const o = this.partObjs[id];
+      if (!o) continue;
+      const over = contour.limitKnown && v > contour.max;
+      const tag = label(`${esc(o.short)}<small>${esc(fmtVU(v, contour.field.unit))}</small>`, `lbl-val${over ? " lbl-over" : ""}`);
+      tag.position.copy(o.center).add(new THREE.Vector3(0, 0, o.size[2] / 2 + 40));
+      this.overGhosts.add(tag);
+      if (over) {
+        const ghost = new THREE.Mesh(
+          new THREE.BoxGeometry(o.size[0] * 1.15, o.size[1] * 1.15, o.size[2] * 1.15),
+          new THREE.MeshBasicMaterial({ color: LIMIT_RED, transparent: true, opacity: 0.22, depthWrite: false }),
+        );
+        ghost.position.copy(o.center);
+        this.overGhosts.add(ghost);
+      }
+    }
     if (contour?.where && this.members[contour.where] && contour.result) {
       const tag = label(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
       tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
       this.overGhosts.add(tag);
+    }
+  }
+
+  // A mode shape: each node moves along its recorded vector, scaled so the
+  // largest one is 8 % of the design's size (the shape, not its amplitude, is
+  // the result). It swings once a second of replay, so a frame at a given ?t=
+  // is always the same.
+  setModeShape(contour) {
+    this.modeShape = null;
+    this.poseMembers(0);
+    if (!contour?.modes || !this.bboxIso) return;
+    const dmax = Math.max(...Object.values(contour.modes).map((d) => Math.hypot(...d)));
+    if (!(dmax > 0)) return;
+    const size = this.bboxIso.getSize(new THREE.Vector3()).length();
+    this.modeShape = { modes: contour.modes, scale: (0.08 * size) / dmax };
+  }
+
+  poseMembers(k) {
+    const ms = this.modeShape;
+    const ink = [];
+    const p = new THREE.Vector3();
+    for (const info of Object.values(this.members)) {
+      let m = info.matrix;
+      if (ms && k !== 0) {
+        const at = (id) => {
+          const d = ms.modes[id] ?? [0, 0, 0];
+          return this.nodes[id].clone().add(new THREE.Vector3(...d).multiplyScalar(k * ms.scale));
+        };
+        const a = at(info.node_a);
+        const b = at(info.node_b);
+        m = memberBasis(a, b)
+          .scale(new THREE.Vector3(a.distanceTo(b) / info.length, 1, 1))
+          .setPosition(a.clone().add(b).multiplyScalar(0.5));
+      }
+      info.mesh.matrix.copy(m);
+      info.mesh.matrixWorldNeedsUpdate = true;
+      const e = info.localEdges;
+      for (let i = 0; i < e.length; i += 3) {
+        p.set(e[i], e[i + 1], e[i + 2]).applyMatrix4(m);
+        ink.push(p.x, p.y, p.z);
+      }
+    }
+    if (this.inkLines && ink.length) {
+      this.inkLines.geometry.dispose();
+      this.inkLines.geometry = new LineSegmentsGeometry().setPositions(ink);
     }
   }
 
@@ -762,6 +853,7 @@ export class Workbench3D {
   animate(playhead, running) {
     const k = running ? 0.18 * (1 + Math.sin(playhead * Math.PI * 2)) : 0;
     for (const info of Object.values(this.members)) info.mesh.material.emissive?.setScalar(k * 0.5);
+    if (this.modeShape) this.poseMembers(Math.sin(playhead * Math.PI * 2));
   }
 
   render() {
