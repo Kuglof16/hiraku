@@ -28,7 +28,6 @@ from ._solvers import tool_or_skip
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = sorted((ROOT / "data" / "requirements").glob("*.yaml"))
-SHOWCASE_DIR = "showcase"  # committed example runs (docs/contract.md); runs/ stays local
 
 
 def _errors(run: Path, recompute: bool = True) -> list[str]:
@@ -143,9 +142,9 @@ class SavedRuns(unittest.TestCase):
     committed, so it is not checked here (python -m qa.check_run --all does that by hand)."""
 
     def test_showcase_runs_follow_the_contract(self):
-        runs = sorted(p for p in (ROOT / SHOWCASE_DIR).glob("*/") if p.is_dir())
+        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir())
         if not runs:
-            self.skipTest(f"no runs under {SHOWCASE_DIR}/ yet")
+            self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
             with self.subTest(run=run.name):
                 self.assertEqual(_errors(run), [])

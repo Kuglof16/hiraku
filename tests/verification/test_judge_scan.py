@@ -118,6 +118,7 @@ class JudgeScan(unittest.TestCase):
                 "        raise NotImplementedError",
                 "",
                 "OCCUPANT_KG = 76.6  # Q33",
+                "SCENE_POINTS = 801",
             ]) + "\n",
             "hiraku/designgen/d.py": 'V = {"seat_x": Var("mm", -725.0, -1100.0, -500.0, "seat centre")}\n',
             "data/designs/d.json": '{\n  "variables": {\n    "air_density": {\n      "value": 1.225\n    }\n  }\n}\n',
@@ -133,6 +134,20 @@ class JudgeScan(unittest.TestCase):
         found = {f.where for f in self.scan() if f.rule in ("number.source", "stub")}
         self.assertEqual(found, {"hiraku/solvers/e.py:1", "hiraku/solvers/e.py:5", "hiraku/designgen/e.py:1",
                                  "data/materials/e.json:3"})
+
+    def test_unverified_data_named_in_the_readme_list(self):
+        unverified = '{"E_MPa": 69000.0, "source": "handbook", "verified": false}\n'
+        self.commit({"data/materials/m.json": unverified, "data/designs/d.json": unverified})
+        self.assertEqual({f.where for f in self.scan() if f.rule == "unverified"},
+                         {"data/materials/m.json", "data/designs/d.json"})
+        self.commit({"README.md": "# x\n\n## 確かめていない値\n\n| 値 | 場所 |\n|---|---|\n"
+                                  "| E | `data/materials/m.json` |\n| 寸法 | `hiraku/designgen/g.py` |\n\n## License\n"})
+        self.assertEqual([f.where for f in self.scan() if f.rule == "unverified"], [])
+
+    def test_unverified_named_outside_the_list_still_counts(self):
+        self.commit({"data/materials/m.json": '{"source": "handbook", "verified": false}\n',
+                     "README.md": "# x\n\n`data/materials/m.json` holds the materials.\n\n## 確かめていない値\n\nなし\n"})
+        self.assertIn("unverified", self.rules("review"))
 
     def test_significant_digits(self):
         self.assertEqual([js._significant(t) for t in ("205000.0", "0.15", "900.0", "1341.64", "7")], [3, 2, 1, 6, 1])
