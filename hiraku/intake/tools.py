@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hiraku import contract
-from hiraku.catalog import REPO_ROOT, read_data
+from hiraku.catalog import REPO_ROOT
+from hiraku.contract import layout
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
 from hiraku.intake.domains import ANALYSIS_DOMAINS, IntakeError, pick_domains, reasons_missing
@@ -210,7 +211,7 @@ def _read_dropped(ctx: Any, args: Record) -> tuple[str, str]:
     store = _store(ctx)
     if not rel or store is None:
         raise IntakeError("読むファイルを text (中身) と filename で渡すか、実行のフォルダの中の path で渡してください")
-    base = (Path(store.path) / "knowledge").resolve()
+    base = (Path(store.path) / layout.KNOWLEDGE_DIR).resolve()
     p = (Path(store.path) / rel).resolve()
     if not p.is_relative_to(base) or not p.is_file():
         raise IntakeError(f"path は実行のフォルダの knowledge/ の中のファイルだけです ({rel!r})")

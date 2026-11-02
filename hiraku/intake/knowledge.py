@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from hiraku import contract
 from hiraku.catalog import REPO_ROOT, read_data
 from hiraku.intake import expression, facts
 from hiraku.intake.domains import IntakeError
@@ -28,17 +29,7 @@ Record = dict[str, Any]
 
 KNOWLEDGE_DIR = REPO_ROOT / "data" / "knowledge"
 
-CATEGORIES: dict[str, str] = {
-    "sheet_metal": "板金",
-    "fastener": "締結",
-    "weld": "溶接",
-    "tolerance": "公差",
-    "human": "人",
-    "battery": "電池",
-    "assembly": "組み立て",
-    "suspension": "サス",
-    "manufacturing": "製造",
-}
+CATEGORIES: dict[str, str] = dict(contract.RULE_CATEGORY_NAMES_JA)  # the contract's, in its order
 # Who turned a sentence into the formula (the contract's check_by): the code's patterns or Claude. None when
 # nobody did: the formula came with the data (a built-in file, or a table with a formula column).
 CHECK_BY = (None, "code", "claude")

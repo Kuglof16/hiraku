@@ -23,6 +23,7 @@ import yaml
 
 from hiraku import contract
 from hiraku.catalog import applies, read_data
+from hiraku.contract import layout
 from hiraku.intake.domains import IntakeError, normalize_flags
 
 Record = dict[str, Any]
@@ -232,8 +233,8 @@ def prepare(
 # reads it. The shape is the one of A2's "answer" button: {answers, note, use_defaults}.
 # (A file in the run folder, like stop.request: the run and the screen are different processes.)
 
-REQUEST_FILE = "hearing.request.json"
-ANSWER_FILE = "hearing.answer.json"
+REQUEST_FILE = layout.HEARING_REQUEST_FILE
+ANSWER_FILE = layout.HEARING_ANSWER_FILE
 
 
 def write_request(run_path: Path, asked: Record) -> Path:
