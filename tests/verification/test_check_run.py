@@ -309,6 +309,18 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "judgement.updated")["data"].update(state="red", red_count=1)
         return ev
 
+    def test_tile_state_follows_the_load_cases(self):
+        # red when a verdict fails, even with a load case left without one
+        self.assertNotIn("judgement.state", self.rules(self._unjudged_case(self._red(sample_events()))))
+        # else pending while a load case has no verdict, and green only when every one has
+        self.assertIn("judgement.state", self.rules(self._unjudged_case(sample_events())))  # the sample says green
+        ev = self._unjudged_case(sample_events())
+        by_kind(ev, "judgement.updated")["data"]["state"] = "pending"
+        self.assertNotIn("judgement.state", self.rules(ev))
+        ev = sample_events()
+        by_kind(ev, "judgement.updated")["data"]["state"] = "pending"  # its only load case passed
+        self.assertIn("judgement.state", self.rules(ev))
+
     def test_h4_counts_load_cases_not_tiles(self):
         # a red tile does not end the domain while another of its load cases has no verdict
         self.assertEqual(self.rules(self._red(sample_events())), set())

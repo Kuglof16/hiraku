@@ -38,7 +38,9 @@ their basis. What it looks at:
   value; pass, margin_pct (null when the limit is 0) and margin (in the limit's
   unit; a warning when the limit is 0 and there is none) recomputed; limit and op
   from the load case criterion
-- judgements: red_count and state follow the listed verdicts
+- judgements: red_count and state follow the listed verdicts: red when one fails
+  (even with load cases left without a verdict), else pending while a load case
+  with a criterion has no verdict, else green
 - HK4: a run that finished as done has no picked domain still pending: every load
   case with a criterion has a verdict in the last version (a red tile alone does
   not end a domain), and no tile is left pending
@@ -846,13 +848,17 @@ class RunChecker:
             self.error("verdict.math", w, f"{vid} margin {m.get('value')} {unit} but {room} {unit}")
 
     def check_judgements(self) -> None:
+        """A tile is red when a listed verdict fails (even with load cases left without one),
+        else pending while a load case with a criterion has no verdict, else green."""
         for i, j in self.judgements:
             w = self.where_of[i]
             fails = 0
+            judged = set()
             for vid in j.get("verdict_ids", []):
                 v = self._before("verdict", vid, i, w, "judgement.verdicts", "verdict")
                 if v is None:
                     continue
+                judged.add(v.get("load_case_id"))
                 if v.get("domain") != j.get("domain"):
                     self.error("judgement.verdicts", w, f"{vid} is {v.get('domain')}, judgement is {j.get('domain')}")
                 if self.version_of("verdict", v) not in (None, j.get("design_version")):
@@ -865,6 +871,13 @@ class RunChecker:
                 self.error("judgement.state", w, f"state {state} with {fails} failing verdicts")
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
+            missing = [lc_id for lc_id, lc in self.load_cases.items()
+                       if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
+            if state == "green" and missing:
+                self.error("judgement.state", w, f"green while {', '.join(missing)} have no verdict (pending)")
+            if state == "pending" and not fails and judged and not missing:
+                self.error("judgement.state", w, "pending but every load case with a criterion has a passing "
+                                                 "verdict (green)")
 
     def check_report(self) -> None:
         """report.json is the last report.written; what code fills in each report is the records'."""
