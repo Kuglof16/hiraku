@@ -207,6 +207,9 @@ UNIT_TO_SI: dict[str, tuple[str, float, float]] = {
     "1": ("ratio", 1.0, 0.0),
     "%": ("ratio", 0.01, 0.0),
     "mm": ("length", sc.milli, 0.0),
+    "mm^2": ("area", sc.milli**2, 0.0),
+    "mm^3": ("length^3", sc.milli**3, 0.0),  # volume or section modulus
+    "mm^4": ("length^4", sc.milli**4, 0.0),  # second moment of area
     "m": ("length", 1.0, 0.0),
     "km": ("length", sc.kilo, 0.0),
     "kg": ("mass", 1.0, 0.0),

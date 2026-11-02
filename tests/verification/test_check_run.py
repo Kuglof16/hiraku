@@ -247,6 +247,33 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "judgement.updated")["data"]["red_count"] = 1
         self.assertFlags(ev, "judgement.state")
 
+    # --- record updates (same id re-sent, last event wins) ---------------------------
+    def _resent(self, ev, kind, **changes):
+        again = copy.deepcopy(by_kind(ev, kind))
+        again["data"].update(changes)
+        again["t"], again["ts"] = ev[-2]["t"], ev[-2]["ts"]
+        ev.insert(len(ev) - 1, again)  # before run.finished
+        return renumber(ev)
+
+    def test_comparison_gets_its_cause_id_by_an_update(self):
+        ev = sample_events()
+        cause = {"seq": 0, "ts": ev[-2]["ts"], "t": ev[-2]["t"], "run_id": RUN_ID, "kind": "cause.recorded",
+                 "agent": "cae.strength", "data": {"cause_id": "cause-0001", "comparison_id": "cmp-0001",
+                                                   "cause": "qa check", "fix": "none", "resolved": False}}
+        ev.insert(len(ev) - 1, cause)
+        ev = self._resent(ev, "comparison.recorded", cause_id="cause-0001")
+        found = self.findings(ev)
+        self.assertEqual([str(f) for f in found if f.level == "error"], [])
+
+    def test_update_may_not_change_a_recorded_number(self):
+        ev = self._resent(sample_events(), "prediction.recorded", value=130.0)
+        self.assertFlags(ev, "record.changed")
+
+    def test_comparison_update_may_not_change_its_values(self):
+        ev = sample_events()
+        ev = self._resent(ev, "comparison.recorded", status="mismatch")
+        self.assertFlags(ev, "record.changed")
+
     def test_ids_numbered_without_gaps(self):
         ev = sample_events()
         for e in ev:

@@ -86,15 +86,15 @@ class JudgeScan(unittest.TestCase):
 
     def test_review_items(self):
         self.commit({
-            "hiraku/c.py": "def f():\n    pass\n\n\nYIELD = 235.0\nE = 205000.0  # source: check input\n# TODO later\n",
+            "hiraku/solvers/c.py": "def f():\n    pass\n\n\nYIELD = 235.0\nE = 205000.0  # source: check input\n# TODO later\n",
             "data/m.json": '{"E_MPa": 69000.0, "verified": false}\n',
         }, message="今日は本人と話して決めた")
         review = [f for f in self.scan() if f.level == "review"]
         rules = {f.rule for f in review}
         self.assertTrue({"stub", "number.source", "unverified", "data.source", "speech.diary"} <= rules, review)
         numbered = [f.where for f in review if f.rule == "number.source"]
-        self.assertIn("hiraku/c.py:5", numbered)
-        self.assertNotIn("hiraku/c.py:6", numbered)  # has a source note
+        self.assertIn("hiraku/solvers/c.py:5", numbered)
+        self.assertNotIn("hiraku/solvers/c.py:6", numbered)  # has a source note
 
     def test_significant_digits(self):
         self.assertEqual([js._significant(t) for t in ("205000.0", "0.15", "900.0", "1341.64", "7")], [3, 2, 1, 6, 1])

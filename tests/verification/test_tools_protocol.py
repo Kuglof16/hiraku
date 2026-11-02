@@ -26,7 +26,7 @@ class ToolProtocol(unittest.TestCase):
     def setUpClass(cls):
         cls.tools = analysis_tools()
         if not cls.tools:
-            raise unittest.SkipTest("hiraku.solvers has no AnalysisTool objects yet")
+            raise unittest.SkipTest("builtin_tools() returns no tools yet")
 
     def test_spec_fits_the_contract(self):
         for name, tool in self.tools.items():

@@ -20,8 +20,8 @@ errors (must be fixed before publishing):
 review (a person decides):
 - words that suggest quoted speech or a diary (devlog) in commit messages and docs
 - stubs: TODO, FIXME, NotImplementedError, functions whose body is only `pass`
-- numbers with three or more significant digits in code and data (outside
-  string literals and the contract's shape examples), without a source note
+- numbers with three or more significant digits in the solvers, catalog, tools
+  and data (outside string literals), without a source note
   (source, 出典, closed form, ...) on the line or the four lines above it
   (code) or within six lines either side (data)
 - records with verified=false, and data files with no `source`
@@ -44,6 +44,9 @@ TEXT_SUFFIXES = {".py", ".md", ".json", ".jsonl", ".txt", ".yaml", ".yml", ".tom
                  ".js", ".mjs", ".cjs", ".ts", ".html", ".css", ".sh", ".ps1", ""}
 CODE_DIRS = ("hiraku/", "data/", "web/", "plugins/", "promo/")
 NOT_CODE = ("hiraku/contract/examples/", "hiraku/contract/hiraku.schema.json")
+# where values taken from outside (material data, catalog limits, constants) live;
+# screen sizes, ports and buffer sizes elsewhere are not such values
+NUMBER_DIRS = ("hiraku/solvers/", "hiraku/catalog/", "hiraku/tools/", "data/")
 SELF = "qa/judge_scan.py"  # holds the patterns themselves
 NO_SPEECH_CHECK = ("CLAUDE.md",)  # states the rule against quoting
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -176,7 +179,7 @@ class Scan:
             prev = next((lines[k] for k in range(n - 2, -1, -1) if lines[k].strip()), "")
             if re.match(r"\s*def\s", prev) or prev.rstrip().endswith('"""'):
                 self.add("review", "stub", where, "function body is only pass")
-        if suffix in (".py", ".json", ".js", ".mjs"):
+        if suffix in (".py", ".json", ".yaml", ".yml") and name.startswith(NUMBER_DIRS) and "/tests/" not in f"/{name}":
             bare = STRING_RE.sub('""', line.split("#")[0] if suffix == ".py" else line)
             if any(_significant(m.group(0)) >= 3 for m in NUMBER_RE.finditer(bare)):
                 # code: the line and the comment lines above it; data: the surrounding object

@@ -49,7 +49,7 @@ def ladder_design():
         "supports": [wheel("FL", "L0", 0.0, TRACK / 2), wheel("FR", "R0", 0.0, -TRACK / 2),
                      wheel("RL", "L2", -L_RAIL, TRACK / 2), wheel("RR", "R2", -L_RAIL, -TRACK / 2)],
         "parts": [
-            {"id": f"mass_{s}", "name": f"mass {s}", "kind": "cargo",
+            {"id": f"mass_{s}", "name": f"mass {s}", "kind": "battery",  # not occupant/cargo: on board in every loading
              "box": {"center_mm": [-L_RAIL / 2, y, 400.0], "size_mm": [100.0, 100.0, 100.0]},
              "mass_kg": MASS, "carried_by": [f"{s}1"]}
             for s, y in (("L", TRACK / 2), ("R", -TRACK / 2))

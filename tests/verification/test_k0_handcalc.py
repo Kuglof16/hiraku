@@ -1,4 +1,4 @@
-"""K0 hand calculation (hiraku.solvers.k0_handcalc) against closed forms.
+"""K0 hand calculation (hiraku.solvers.formula_registry()) against closed forms.
 
 The registry shape is FormulaRegistry in hiraku/contract/protocols.py:
 list_formulas() -> [formula], evaluate(formula_id, {name: quantity}) ->
@@ -14,7 +14,7 @@ from hiraku import contract
 from qa import known_answers as ka
 from qa.frame2d import Frame2D
 
-from ._solvers import formula_registry, import_or_skip
+from ._solvers import formula_registry
 
 STEP_ID = "step_climb.wheel_force_rigid"  # the id used in hiraku/contract/examples/formula.json
 TUBE = {"b": 40.0, "h": 80.0, "t": 2.0}
@@ -32,8 +32,7 @@ def tube_inputs():
 class K0Case(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        mod = import_or_skip("hiraku.solvers.k0_handcalc", "FormulaRegistry (list_formulas, evaluate)")
-        cls.reg = formula_registry(mod)
+        cls.reg = formula_registry()
         cls.formulas = {f["formula_id"]: f for f in cls.reg.list_formulas()}
 
     def formula_or_skip(self, formula_id):

@@ -22,7 +22,7 @@ there is an error (or a warning with --strict). What it looks at:
 - judgements: red_count and state follow the listed verdicts
 - H4: a run that finished as done has no picked domain still pending
 - --recompute: each prediction value is reproduced by K0 from its formula and
-  inputs (needs hiraku.solvers.k0_handcalc)
+  inputs (needs hiraku.solvers.formula_registry())
 """
 
 from __future__ import annotations
@@ -50,8 +50,10 @@ RECORD_EVENTS = {
     "cause.recorded": ("cause", "cause_id"),
     "verdict.recorded": ("verdict", "verdict_id"),
 }
-# Records that may be re-emitted with new content; the file holds the latest.
-REWRITABLE = {"cause"}
+# A record is updated by emitting its event again with the same id and the whole
+# new record; the last event wins and the file equals it (layout.py). Only these
+# fields may change in an update; any other change rewrites a recorded result.
+UPDATABLE_FIELDS = {"comparison": {"cause_id"}, "cause": {"resolved", "resolved_by"}}
 # project.json fields the contract lets change after run.started.
 PROJECT_MUTABLE = {"status", "stop_reason", "requirements", "cost_usd", "design_versions"}
 OPS = {"<=": operator.le, ">=": operator.ge, "<": operator.lt, ">": operator.gt}
@@ -209,9 +211,17 @@ class RunChecker:
             if kind in RECORD_EVENTS:
                 rkind, idf = RECORD_EVENTS[kind]
                 rid = data.get(idf)
-                if rid in self.recs[rkind] and rkind not in REWRITABLE:
-                    self.error("ids.duplicate", w, f"{rid} recorded twice")
-                self.recs[rkind][rid] = (i, data)
+                if rid in self.recs[rkind]:
+                    first, old = self.recs[rkind][rid]
+                    changed = sorted(k for k in set(old) | set(data) if old.get(k) != data.get(k))
+                    bad = [k for k in changed if k not in UPDATABLE_FIELDS.get(rkind, set())]
+                    if bad:
+                        self.error("record.changed", w, f"{rid} re-sent with {', '.join(bad)} changed "
+                                                        f"(an update may change only "
+                                                        f"{', '.join(sorted(UPDATABLE_FIELDS.get(rkind, ()))) or 'nothing'})")
+                    self.recs[rkind][rid] = (first, data)  # first appearance, latest content
+                else:
+                    self.recs[rkind][rid] = (i, data)
             elif kind == "design.created":
                 v = data.get("design_version")
                 if v in self.designs:
@@ -593,6 +603,8 @@ class RunChecker:
                     self.error("H3_cause_before_continue", w,
                                f"analysis in {dom} while {sorted(open_mismatch[dom])} have no cause")
             elif kind == "comparison.recorded":
+                if self.recs["comparison"].get(data.get("comparison_id"), (i,))[0] != i:
+                    continue  # an update of an earlier comparison, not a new one
                 p = self.recs["prediction"].get(data.get("prediction_id"))
                 dom = p[1].get("domain") if p else None
                 if open_mismatch.get(dom):
@@ -645,18 +657,14 @@ class RunChecker:
 
     def check_recompute(self) -> None:
         try:
-            from hiraku.solvers import k0_handcalc
+            from hiraku import solvers
         except ModuleNotFoundError:
-            self.warn("recompute", "-", "hiraku.solvers.k0_handcalc not available; predictions not recomputed")
+            self.warn("recompute", "-", "hiraku.solvers not available; predictions not recomputed")
             return
-        reg = k0_handcalc
-        if not callable(getattr(reg, "evaluate", None)) and callable(getattr(reg, "registry", None)):
-            reg = reg.registry()
-        if not callable(getattr(reg, "evaluate", None)):
-            reg = next((o for o in vars(k0_handcalc).values() if callable(getattr(o, "evaluate", None))), None)
-        if reg is None:
-            self.error("recompute", "-", "k0_handcalc has no evaluate()")
+        if not callable(getattr(solvers, "formula_registry", None)):
+            self.error("recompute", "-", "hiraku.solvers has no formula_registry() (protocols.py)")
             return
+        reg = solvers.formula_registry()
         for pid, (i, p) in self.recs["prediction"].items():
             w = self.where_of[i]
             try:
