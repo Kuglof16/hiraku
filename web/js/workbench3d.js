@@ -188,6 +188,7 @@ export class Workbench3D {
     this.design = design;
     for (const g of [this.model, this.parts, this.names, this.overGhosts, this.markers]) disposeTree(g);
     this.members = {};
+    this.partObjs = {};
     this.keys.contour = null;
     if (!design) return;
 
@@ -249,39 +250,61 @@ export class Workbench3D {
       this.names.add(tag);
     }
 
+    // Wheels listed as parts are drawn from the supports instead.
+    const wheelAt = (c) => (design.supports ?? []).some((sp) => v3(sp.position_mm).distanceTo(c) < 50);
+    this.partObjs = {};
+    let seat = 0;
     for (const p of design.parts ?? []) {
       const c = v3(p.box.center_mm);
       const sz = p.box.size_mm;
-      const geo = new THREE.BoxGeometry(sz[0], sz[1], sz[2]);
-      const mat = new THREE.MeshLambertMaterial({
-        color: PART_COLORS[p.kind] ?? "#c9c3b6",
-        transparent: true,
-        opacity: 0.32,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(c);
-      const rpy = p.box.rpy_deg ?? [0, 0, 0];
-      mesh.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-      mesh.updateMatrix();
-      mesh.renderOrder = 2;
-      this.parts.add(mesh);
-      const lines = [];
-      pushEdges(lines, geo, mesh.matrix);
-      const lg = new LineSegmentsGeometry().setPositions(lines);
-      this.parts.add(new LineSegments2(lg, this.mutedMat));
-      const tag = label(`${esc(p.name)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
-      tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
-      this.parts.add(tag);
       box.expandByPoint(c.clone().add(v3(sz).multiplyScalar(0.5))).expandByPoint(c.clone().sub(v3(sz).multiplyScalar(0.5)));
+      if (p.kind === "wheel" && wheelAt(c)) continue;
+      const g = new THREE.Group();
+      const color = PART_COLORS[p.kind] ?? "#c9c3b6";
+      let edges = null;
+      if (p.kind === "occupant") {
+        const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false });
+        mat.userData.baseOpacity = 0.8;
+        const r = Math.min(sz[0], sz[1]) * 0.26;
+        const head = Math.min(sz[0], sz[1]) * 0.2;
+        const torsoLen = Math.max(10, sz[2] - 2 * head - 2 * r);
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(r, torsoLen, 6, 16), mat);
+        torso.rotation.x = Math.PI / 2; // capsule axis (local y) -> ISO z
+        torso.position.set(c.x, c.y, c.z - sz[2] / 2 + r + torsoLen / 2);
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(head, 20, 14), mat);
+        ball.position.set(c.x, c.y, c.z + sz[2] / 2 - head);
+        g.add(torso, ball);
+      } else {
+        const geo = new THREE.BoxGeometry(sz[0], sz[1], sz[2]);
+        const mat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false });
+        mat.userData.baseOpacity = 0.32;
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(c);
+        const rpy = p.box.rpy_deg ?? [0, 0, 0];
+        mesh.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
+        mesh.updateMatrix();
+        mesh.renderOrder = 2;
+        const lines = [];
+        pushEdges(lines, geo, mesh.matrix);
+        edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.mutedMat);
+        g.add(mesh, edges);
+      }
+      // Short name on the tag (the part before a bracket); the full name is the tooltip.
+      const short = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
+      const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
+      tag.element.title = p.name ?? p.id;
+      tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
+      g.add(tag);
+      this.parts.add(g);
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true };
     }
 
     if (ink.length) this.model.add(new LineSegments2(new LineSegmentsGeometry().setPositions(ink), this.inkMat));
     if (muted.length) this.model.add(new LineSegments2(new LineSegmentsGeometry().setPositions(muted), this.mutedMat));
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
-    this.cgIso = this.displayCg(design);
-    this.cg.position.copy(this.cgIso ?? new THREE.Vector3());
+    this.loading = undefined;
+    this.setLoading(null);
     this.buildGround();
     this.buildAxes();
     if (!this.fitted) {
@@ -290,18 +313,42 @@ export class Workbench3D {
     }
   }
 
+  // Who is on board for a load case's params.loading (empty / driver / two /
+  // two_cargo; none means two_cargo). Occupants board in the order they are
+  // listed and cargo rides only with two_cargo, as the solvers do. Parts that
+  // stay off are drawn faint and left out of the centre of gravity.
+  setLoading(loading) {
+    if (loading === this.loading) return;
+    this.loading = loading;
+    const seats = { empty: 0, driver: 1, two: 2, two_cargo: 2 }[loading ?? "two_cargo"] ?? 2;
+    const cargo = (loading ?? "two_cargo") === "two_cargo";
+    for (const o of Object.values(this.partObjs ?? {})) {
+      o.onBoard = o.kind === "occupant" ? o.seat < seats : o.kind === "cargo" ? cargo : true;
+      o.group.traverse((x) => {
+        if (x.isMesh && x.material.userData.baseOpacity !== undefined) x.material.opacity = o.onBoard ? x.material.userData.baseOpacity : 0.07;
+      });
+      if (o.edges) o.edges.visible = o.onBoard;
+      o.tag.element.classList.toggle("off", !o.onBoard);
+    }
+    this.cgIso = this.design ? this.displayCg(this.design) : null;
+    this.cg.position.copy(this.cgIso ?? new THREE.Vector3());
+    this.cg.visible = this.cg.visible && !!this.cgIso;
+  }
+
   // Centre of gravity used only to place the mark: mass-weighted centre of the
-  // part boxes and the frame members (density x section area x length).
+  // parts on board and the frame members (density x section area x length).
+  // Members are left out when the design lists the frame as a part with a mass.
   displayCg(design) {
     let m = 0;
     const sum = new THREE.Vector3();
     for (const p of design.parts ?? []) {
-      if (!(p.mass_kg > 0)) continue;
+      if (!(p.mass_kg > 0) || this.partObjs?.[p.id]?.onBoard === false) continue;
       sum.addScaledVector(v3(p.box.center_mm), p.mass_kg);
       m += p.mass_kg;
     }
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
-    for (const mem of design.members ?? []) {
+    const frameAsPart = (design.parts ?? []).some((p) => p.kind === "frame" && p.mass_kg > 0);
+    for (const mem of frameAsPart ? [] : design.members ?? []) {
       const a = nodes[mem.node_a];
       const b = nodes[mem.node_b];
       const sec = design.sections?.[mem.section];
@@ -461,6 +508,7 @@ export class Workbench3D {
     this.cg.visible = !!t.cg && !!this.cgIso;
     this.names.visible = !!t.names;
     this.markers.visible = !!t.names;
+    for (const o of Object.values(this.partObjs ?? {})) o.tag.visible = !!t.names;
     this.overGhosts.visible = !!t.contour;
   }
 

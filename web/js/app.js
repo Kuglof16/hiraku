@@ -64,7 +64,7 @@ if (params.has("speed")) player.speed = Number(params.get("speed")) || 1;
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
-let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null };
+let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
 let contour = null;
 
 function selectedLc(s) {
@@ -121,13 +121,14 @@ function rank(id) {
 function logItem(e) {
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
-  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm">${fmtTime(e.t)}s</span>${note}</li>`;
+  const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
+  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm">${fmtTime(e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s) {
   const ol = $("log");
   const first = s.log[0]?.seq ?? null;
-  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq) {
+  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev) {
     ol.innerHTML = "";
     drawn.logLen = 0;
   }
@@ -137,6 +138,7 @@ function renderLog(s) {
   }
   drawn.logLen = s.log.length;
   drawn.logFirstSeq = first;
+  drawn.logRev = s.logRev;
 }
 
 function renderTests(s, lcId) {
@@ -398,6 +400,7 @@ function draw() {
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
+    bench.setLoading(chain.loadCase?.params?.loading ?? null);
     const ct = buildContour(chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
@@ -524,7 +527,7 @@ function resetPlayer() {
   player.liveAttached = false;
   player.playhead = 0;
   player.rebuild();
-  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null };
+  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
   $("runlist").hidden = true;
 }
 

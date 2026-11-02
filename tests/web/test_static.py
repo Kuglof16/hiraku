@@ -38,7 +38,7 @@ class ContractCoverageTest(unittest.TestCase):
 
     def test_every_unit_label_is_a_contract_unit(self):
         src = read(JS / "labels.js")
-        block = re.search(r"const UNIT_LABEL = \{(.*?)\};", src).group(1)
+        block = re.search(r"const UNIT_LABEL = \{(.*?)\};", src, re.S).group(1)
         keys = [k.strip().strip('"') for k in re.findall(r'("?[^,:{}]+"?)\s*:', block)]
         self.assertTrue(keys)
         self.assertEqual([k for k in keys if k not in contract.UNITS], [])

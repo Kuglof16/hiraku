@@ -144,7 +144,8 @@ class BrowserReplayTest(unittest.TestCase):
                 cmpCard: document.getElementById("card-cmp").className,
                 causeBox: document.querySelector("#card-cmp .cause")?.textContent ?? "",
                 hookLines: document.querySelectorAll("#log li.hook").length,
-                updateLines: [...document.querySelectorAll("#log li.muted")].filter((li) => li.textContent.includes("cmp-0001")).length,
+                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("照合:")).map((li) => li.textContent),
+                logLen: s.log.length,
                 status: s.status,
                 stopReason: s.stopReason,
                 hooksRow: document.getElementById("hooks").textContent,
@@ -158,11 +159,40 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn("bad", got["cmpCard"])
         self.assertIn("unit mix-up", got["causeBox"])
         self.assertEqual(got["hookLines"], 2)
-        self.assertEqual(got["updateLines"], 1)
+        # the comparison sent again with its cause_id rewrites its own line
+        self.assertEqual(len(got["cmpLines"]), 1)
+        self.assertIn("cause-0001", got["cmpLines"][0])
+        self.assertIn("更新", got["cmpLines"][0])
+        self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
         self.assertIn("H3", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
+        page.close()
+
+    def test_loading_picks_who_is_on_board(self):
+        src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        run, design_ev = copy.deepcopy(src[0]), copy.deepcopy(src[1])
+        run["data"]["load_cases"][0]["params"]["loading"] = "driver"
+        box = lambda x, y, z: {"center_mm": [x, y, z], "size_mm": [400.0, 400.0, 500.0]}
+        design_ev["data"]["parts"] += [
+            {"id": "occ_1", "name": "driver (shape example)", "kind": "occupant", "box": box(900.0, -250.0, 900.0), "mass_kg": 70.0},
+            {"id": "occ_2", "name": "passenger (shape example)", "kind": "occupant", "box": box(900.0, 250.0, 900.0), "mass_kg": 70.0},
+            {"id": "load", "name": "cargo (shape example)", "kind": "cargo", "box": box(1500.0, 0.0, 600.0), "mass_kg": 100.0},
+        ]
+        for ev in (run, design_ev):
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1);
+              const objs = window.hiraku.bench.partObjs;
+              return Object.fromEntries(Object.entries(objs).map(([id, o]) => [id, o.onBoard]));
+            }""",
+            [run, design_ev],
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got, {"battery": True, "seat": True, "occ_1": True, "occ_2": False, "load": False})
         page.close()
 
     def test_video_layout_keeps_the_subtitle_band_empty(self):
