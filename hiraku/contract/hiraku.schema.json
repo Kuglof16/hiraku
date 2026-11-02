@@ -2759,7 +2759,8 @@
       "additionalProperties": false,
       "properties": {
         "code": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "reason": {
           "type": "string",
@@ -2768,14 +2769,16 @@
       }
     },
     "tool_input.check_tool": {
+      "description": "Try a tool's own known-answer checks in the restricted process without putting it on the shelf.",
       "type": "object",
       "required": [
-        "name"
+        "code"
       ],
       "additionalProperties": false,
       "properties": {
-        "name": {
-          "type": "string"
+        "code": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }
