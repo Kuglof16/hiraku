@@ -187,7 +187,11 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
 
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")
-        self.assertEqual([s["load_case"] for s in plan["steps"]], ["P1-step100", "R1-step100"])
+        self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],
+                         [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
+                          ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
+                          ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
+                          ("P1-step250-beyond", "step_climb_dynamic")])
         refs, chain = [], []
         for step in plan["steps"]:
             node = step
@@ -197,10 +201,10 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                 if em:
                     chain.append(em)
                 node = em.get("retry") if em else None
-        self.assertIn("ana.P1-step100.wheel_load_{load.rail_joint.support}", refs)
+        self.assertIn("ana.P1.wheel_load_{load.rail_joint.support}", refs)
         for r in refs:
             self.assertFalse(r.startswith(("design.section.", "summary.member_length.", "design.support.")), r)
-        self.assertEqual(len(chain), 3)  # P1 once, R1 twice
+        self.assertEqual(len(chain), 6)  # at each step height: P1 once, R1 twice
         for em in chain:
             self.assertTrue(em["source"] and em["cause"] and em["fix"])
 

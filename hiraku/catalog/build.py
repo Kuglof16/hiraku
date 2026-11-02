@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import pkgutil
 from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
@@ -103,15 +104,39 @@ def min_frame_yield(design: Record) -> tuple[float, list[str], bool]:
     return y, weakest, all(m["verified"] for m in mats)
 
 
-def _p1_step(spec: Record, req: Record, design: Record) -> Record:
+# Past the limit (requirements_file `beyond`): the catalog spec carries variant "beyond", the
+# load case id ends in BEYOND_SUFFIX and its title starts with BEYOND_TITLE.
+BEYOND = "beyond"
+BEYOND_SUFFIX = "-beyond"
+BEYOND_TITLE = "限界の外"
+# P1 and R1 past the limit: a step of this height. HIRAKU's choice for the video (an assumption,
+# no outside source); on the demo vehicle it puts the R1 frame stress past its limit.
+BEYOND_STEP_MM = 250.0
+
+
+def is_beyond(load_case: Record) -> bool:
+    return load_case["load_case_id"].endswith(BEYOND_SUFFIX)
+
+
+def _step(spec: Record, req: Record) -> tuple[float, str, str]:
+    """(step height mm, id suffix, title prefix): Q15, or BEYOND_STEP_MM for the case past the limit."""
     h = requirement(req, "Q15", "mm")["value"]
+    if spec.get("variant") != BEYOND:
+        return h, "", ""
+    if BEYOND_STEP_MM <= h:
+        raise CatalogError(f"the step past the limit ({BEYOND_STEP_MM:g} mm) must be higher than Q15 ({h:g} mm)")
+    return BEYOND_STEP_MM, BEYOND_SUFFIX, f"{BEYOND_TITLE}: "
+
+
+def _p1_step(spec: Record, req: Record, design: Record) -> Record:
+    h, suffix, prefix = _step(spec, req)
     loading, keys = _loading(req, design)
     speed = spec["params"]["speed"]
     return {
-        "load_case_id": f"P1-step{h:g}",
+        "load_case_id": f"P1-step{h:g}{suffix}",
         "test_id": "P1",
         "domain": spec["domain"],
-        "title": f"段差 {h:g} mm を{LOADING_JA[loading]}で越える",
+        "title": f"{prefix}段差 {h:g} mm を{LOADING_JA[loading]}で越える",
         "params": {
             "step_height": _q(h, "mm"),
             "speed": _q(speed["value"], speed["unit"]),
@@ -123,7 +148,7 @@ def _p1_step(spec: Record, req: Record, design: Record) -> Record:
 
 
 def _r1_static(spec: Record, req: Record, design: Record) -> Record:
-    h = requirement(req, "Q15", "mm")["value"]
+    h, suffix, prefix = _step(spec, req)
     sf = requirement(req, "Q61", "1")["value"]
     if sf <= 0:
         raise CatalogError(f"Q61 safety factor must be positive, got {sf}")
@@ -131,10 +156,10 @@ def _r1_static(spec: Record, req: Record, design: Record) -> Record:
     y, names, verified = min_frame_yield(design)
     note = "" if verified else ", not checked"
     return {
-        "load_case_id": f"R1-step{h:g}",
+        "load_case_id": f"R1-step{h:g}{suffix}",
         "test_id": "R1",
         "domain": spec["domain"],
-        "title": f"段差 {h:g} mm を{LOADING_JA[loading]}で越えるときの前輪の力をフレームに",
+        "title": f"{prefix}段差 {h:g} mm を{LOADING_JA[loading]}で越えるときの前輪の力をフレームに",
         "params": {"step_height": _q(h, "mm"), "loading": loading},
         "requirement_keys": ["Q15", *keys, "Q61"],
         "criterion": {
@@ -185,6 +210,21 @@ def external_builders() -> tuple[dict[str, Builder], dict[str, list[str]], dict[
     return dict(getattr(mod, "BUILDERS", {})), dict(getattr(mod, "FEEDS", {})), dict(getattr(mod, "PLANS", {}))
 
 
+def beyond_plans() -> dict[str, Record]:
+    """PLANS_BEYOND of hiraku.catalog.builders: the scripted steps of the cases past the limit that
+    differ from PLANS (a test without one predicts as in PLANS). While the package does not
+    gather them, they are read from its modules."""
+    mod = _builders_module()
+    if mod is None:
+        return {}
+    if hasattr(mod, "PLANS_BEYOND"):
+        return dict(mod.PLANS_BEYOND)
+    out: dict[str, Record] = {}
+    for info in pkgutil.iter_modules(getattr(mod, "__path__", [])):
+        out.update(getattr(importlib.import_module(f"{BUILDERS_MODULE}.{info.name}"), "PLANS_BEYOND", {}))
+    return out
+
+
 def builder_for(catalog: Catalog, test_id: str) -> Builder | None:
     """The catalog's own builder (`build:` in tests.yaml) first, then hiraku.catalog.builders."""
     spec = catalog.test(test_id)
@@ -201,27 +241,38 @@ def feeds_map() -> dict[str, list[str]]:
     return out
 
 
+def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: bool) -> Record:
+    build = builder_for(catalog, tid)
+    if build is None:
+        raise CatalogError(f"test {tid} has {NO_BUILDER}")
+    spec = dict(catalog.test(tid), variant=BEYOND) if beyond else catalog.test(tid)
+    lc = build(spec, req, design)
+    if beyond and not (is_beyond(lc) and lc["title"].startswith(BEYOND_TITLE)):
+        raise CatalogError(f"the case past the limit of {tid} ({lc['load_case_id']}) must have an id ending "
+                           f"{BEYOND_SUFFIX} and a title starting {BEYOND_TITLE}")
+    return lc
+
+
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
-                     skipped: list[tuple[str, str]] | None = None) -> list[Record]:
-    """One load case per test. A test without a builder, or whose builder cannot
+                     skipped: list[tuple[str, str]] | None = None, beyond: list[str] = ()) -> list[Record]:
+    """One load case per test, then one past the limit for each test in `beyond` (the
+    catalog spec with variant "beyond"). A test without a builder, or whose builder cannot
     build from these requirements and this design (CatalogError, or the
     builders' BuildError: both ValueError), raises; with `skipped` given it is
-    left out and (test id, reason) is appended there."""
+    left out and (test id, reason) is appended there. Feeds join load cases of
+    the same kind: a case past the limit feeds the downstream case past the limit."""
     out = []
-    for tid in test_ids:
-        build = builder_for(catalog, tid)
+    for tid, past in [(t, False) for t in test_ids] + [(t, True) for t in beyond]:
         try:
-            if build is None:
-                raise CatalogError(f"test {tid} has {NO_BUILDER}")
-            out.append(build(catalog.test(tid), req, design))
+            out.append(_build_one(catalog, req, design, tid, past))
         except ValueError as e:
             if skipped is None:
                 raise
-            skipped.append((tid, str(e)))
-    by_test = {lc["test_id"]: lc["load_case_id"] for lc in out}
+            skipped.append((tid, f"{BEYOND_TITLE}: {e}" if past else str(e)))
+    by_test = {(lc["test_id"], is_beyond(lc)): lc["load_case_id"] for lc in out}
     feeds_of = feeds_map()
     for lc in out:
-        feeds = [by_test[t] for t in feeds_of.get(lc["test_id"], []) if t in by_test]
+        feeds = [by_test[t, is_beyond(lc)] for t in feeds_of.get(lc["test_id"], []) if (t, is_beyond(lc)) in by_test]
         if feeds:
             lc["feeds"] = feeds
     return out

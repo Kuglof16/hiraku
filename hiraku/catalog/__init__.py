@@ -1,7 +1,7 @@
 """The catalog (tests, roles) and the code that turns requirements into load cases."""
 
-from hiraku.catalog.build import (CatalogError, build_load_cases, builder_for, external_builders, feeds_map, loading_for,
-                                  min_frame_yield, quantity, requirement)
+from hiraku.catalog.build import (CatalogError, beyond_plans, build_load_cases, builder_for, external_builders, feeds_map,
+                                  is_beyond, loading_for, min_frame_yield, quantity, requirement)
 from hiraku.catalog.expr import applies
 from hiraku.catalog.loading import LOADING_JA, loading_of, parts_on_board
 from hiraku.catalog.loader import CATALOG_DIR, REPO_ROOT, Catalog, load_catalog, load_requirements, read_data
@@ -16,12 +16,14 @@ __all__ = [
     "LOADING_JA",
     "agents_for",
     "applies",
+    "beyond_plans",
     "build_load_cases",
     "build_tests",
     "builder_for",
     "external_builders",
     "feeds_map",
     "fixed_domain_picks",
+    "is_beyond",
     "judged_domains",
     "load_catalog",
     "load_requirements",

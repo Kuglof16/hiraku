@@ -21,7 +21,7 @@ from typing import Any
 
 from hiraku import contract
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
-from hiraku.catalog import CATALOG_DIR, external_builders, loading_of, read_data
+from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, trusted_analysis, write_report)
@@ -44,19 +44,23 @@ def load_plan(product: str) -> Record:
 
 
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
-    """The product's plan plus a step from the builders' PLANS for each load case it lacks,
-    ordered upstream first. `missing` lists the load cases nobody gave a step for.
-    A product step whose load case this run did not build (another step height,
-    say) is left out: its causes were written for that load case."""
+    """The product's plan plus a step from the builders' PLANS for each load case it lacks
+    (PLANS_BEYOND first for a case past the limit), ordered upstream first. `missing` lists
+    the load cases nobody gave a step for. A product step whose load case this run did not
+    build (another step height, say) is left out: its causes were written for that load case.
+    So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
     out = copy.deepcopy(plan if plan is not None else load_plan(ctx.project["product"]))
-    out["steps"] = [s for s in out["steps"] if ctx.has_load_case(s["load_case"])]
+    # each step its own copy: steps may share parts through YAML aliases
+    built = [copy.deepcopy(s) for s in out["steps"] if ctx.has_load_case(s["load_case"])]
+    out["steps"] = [s for s in built if s["tool"] in ctx.tools]
+    out["unshelved"] = [(s["load_case"], s["tool"]) for s in built if s["tool"] not in ctx.tools]
     have = {s["load_case"] for s in out["steps"]}
-    recipes = external_builders()[2]
+    recipes, past = external_builders()[2], beyond_plans()
     out["missing"] = []
     for lc in ctx.load_cases:
         if lc["load_case_id"] in have:
             continue
-        recipe = recipes.get(lc["test_id"])
+        recipe = (is_beyond(lc) and past.get(lc["test_id"])) or recipes.get(lc["test_id"])
         if recipe is None:
             out["missing"].append(lc["load_case_id"])
         else:
@@ -79,11 +83,14 @@ _SUFFIX_UNITS = {"mm": "mm", "kg": "kg", "MPa": "MPa", "N": "N", "deg": "deg"}
 _NAME_REF = re.compile(r"\{([^{}]+)\}")
 
 
-def _load_case_of(ctx: RunContext, ref: str) -> str:
-    """A load case id, or the id of the run's load case for a test id (ana.P1.x)."""
+def _load_case_of(ctx: RunContext, ref: str, load_case: Record) -> str:
+    """A load case id, or for a test id (ana.P1.x) the run's load case of that test that feeds
+    this one (a case past the limit is fed by the upstream case past the limit), else the first."""
     if ctx.has_load_case(ref):
         return ref
-    return next(lc["load_case_id"] for lc in ctx.load_cases if lc["test_id"] == ref)
+    of_test = [lc for lc in ctx.load_cases if lc["test_id"] == ref]
+    feeding = [lc for lc in of_test if load_case["load_case_id"] in lc.get("feeds", [])]
+    return (feeding or of_test)[0]["load_case_id"]
 
 
 def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None = None) -> Any:
@@ -120,7 +127,8 @@ def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None =
         return [p for p in ctx.store.records("prediction", ctx.version) if p["quantity"] == rest][-1]
     if head == "ana":
         lc_id, quantity = rest.rsplit(".", 1)
-        return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id))["results"] if r["quantity"] == quantity)
+        return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id, load_case))["results"]
+                    if r["quantity"] == quantity)
     raise ScriptError(f"unknown input ref {ref!r}")
 
 
@@ -313,6 +321,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     revisions = list(plan.get("revise") or [])
     if plan["missing"]:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
+    if plan["unshelved"]:
+        s.emit("agent.said", agent="lead", text="道具が棚に無いので回さない手順: "
+               + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
     status, reason, code, interrupted = "done", None, "done", False
