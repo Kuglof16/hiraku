@@ -96,6 +96,25 @@ class MessageLog:
                 self.ctx.store.set_cost(msg.total_cost_usd)
 
 
+def error_text(ctx: RunContext, result: Any) -> str:
+    """Why a Claude run failed, in the words it came with: the result message's text, else its
+    errors, else the last thing an agent said, else the subtype. (An API failure can come as
+    is_error with subtype "success" and the reason only in the text.)"""
+    status = getattr(result, "api_error_status", None)
+    tail = f" (API status {status})" if status else ""
+    errors = "; ".join(str(e) for e in (getattr(result, "errors", None) or []))
+    for text in (getattr(result, "result", None), errors):
+        if text and str(text).strip():
+            return str(text).strip() + tail
+    said = [e["text"] for e in ctx.store.events()
+            if e["kind"] == "agent.said" and e.get("agent") != "system" and e.get("text")]
+    if said:
+        return said[-1] + tail
+    if result is None:
+        return "no result message from Claude"
+    return (getattr(result, "subtype", None) or "error") + tail
+
+
 def final_status(ctx: RunContext, result: Any) -> tuple[str, str | None]:
     subtype = getattr(result, "subtype", None)
     if subtype == "error_max_budget_usd":
@@ -103,8 +122,7 @@ def final_status(ctx: RunContext, result: Any) -> tuple[str, str | None]:
     if subtype == "error_max_turns":
         return "stopped", "turn limit reached"
     if result is None or getattr(result, "is_error", False):
-        errs = getattr(result, "errors", None) or [subtype or "no result message"]
-        return "failed", "; ".join(str(e) for e in errs)
+        return "failed", error_text(ctx, result)
     left = rules.stop_reason(ctx)
     if left:
         return "stopped", left
