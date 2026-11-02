@@ -3,11 +3,16 @@
 Two ways to hold the frame:
 - at rest ("wheels"): the frame stands on its supports (rigid, or the
   suspension spring to the ground); the FE model decides the wheel loads
-- with self-balanced loads ("free"): the ground forces come from K0 rigid-body
-  statics (e.g. a wheel climbing a step) or from an upstream analysis, and are
-  applied as loads; six
-  restraints only stop rigid-body motion and should carry nothing (their
-  residual is reported as a check)
+- with given ground forces ("free"): the forces come from K0 rigid-body
+  statics (e.g. a wheel climbing a step) or from an upstream analysis (K2),
+  and are applied as loads. Whatever they leave unbalanced against the weight
+  is taken by the masses as d'Alembert inertia (inertia relief: the rigid-body
+  linear and angular acceleration that the imbalance gives). Six restraints
+  only stop rigid-body motion and should carry nothing (their residual is
+  reported as a check).
+
+Ground forces are reported as vectors of kind "reaction" (normal) and "grip"
+(along the ground); the two together are the whole force at a support.
 """
 
 from __future__ import annotations
@@ -17,46 +22,59 @@ import math
 import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
-from ..k0_handcalc.vehicle import DesignError, mass_summary, resultant, support_contact, support_loads
+from ..k0_handcalc.vehicle import (DesignError, inertia_tensor, mass_summary, resultant, support_contact,
+                                   support_loads)
 from .model import FrameModel, build
 
+BALANCE_TOL = 0.01  # given ground forces must balance the weight (and given inertia) to this fraction; another
+#                     loading or design version is far outside it, small bookkeeping differences go to inertia relief
 
-BALANCE_TOL = 1e-3  # given ground forces must balance the weight to this fraction
+
+def _split(point, force, contact: str) -> list[tuple[str, np.ndarray, np.ndarray]]:
+    """Vectors for one ground force: on flat ground the vertical part is the reaction and the
+    horizontal part the grip; at a step corner the rigid wheel's push is all reaction."""
+    p, f = np.asarray(point, float), np.asarray(force, float)
+    if contact == "step_corner":
+        return [("reaction", p, f)]
+    out = [("reaction", p, np.array([0.0, 0.0, f[2]]))]
+    if abs(f[0]) + abs(f[1]) > 1e-9:
+        out.append(("grip", p, np.array([f[0], f[1], 0.0])))
+    return out
 
 
 def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
-            step_supports: list[str] | None = None, ground_forces: dict | None = None) -> dict:
+            step_supports: list[str] | None = None, ground_forces: dict | None = None,
+            inertia_N: np.ndarray | None = None) -> dict:
     """Solve the frame.
 
-    ground_forces: {support id: {"point_mm", "force_N"}} from elsewhere (an
-    upstream analysis); they must balance the weight of the design as loaded.
-    Otherwise step_mm makes K0 compute the step forces, and without either the
-    frame stands at rest on its supports.
+    ground_forces: {support id: [(kind, point_mm, force_N), ...]} from an
+    upstream analysis. With inertia_N (the upstream's d'Alembert force -m a at
+    the centre of gravity) the imbalance must agree with it; without it the
+    forces must balance the weight (quasi-static). Otherwise step_mm makes K0
+    compute the step forces, and without either the frame stands at rest.
     """
     summ = mass_summary(design)
     items = summ["items"]
     fm = build(design)
     weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
+    cg = summ["cg_mm"]
     ground: dict[str, dict] = {}
     statics = None
+    accel = np.zeros(3)
+    alpha = np.zeros(3)
     if ground_forces is not None:
         missing = [s["id"] for s in design["supports"] if s["id"] not in ground_forces]
         if missing:
             raise DesignError(f"the given ground forces have no entry for support(s) {', '.join(missing)}")
-        forces = [(np.asarray(g["point_mm"], float), np.asarray(g["force_N"], float)) for g in ground_forces.values()]
-        forces += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in items]
-        F, M = resultant(forces)
-        span = max(float(np.ptp([s["position_mm"][0] for s in design["supports"]])), 1.0)
-        off = (float(np.linalg.norm(F)) + float(np.linalg.norm(M)) / span) / weight
-        if off > BALANCE_TOL:
-            raise DesignError(
-                f"the ground forces passed in do not balance this design's weight (off by {off:.1%} of the weight); "
-                f"they were probably computed for another loading or design version, so analyse them with the same loading")
-        statics = {"supports": {sid: dict(g, point_mm=np.asarray(g["point_mm"], float), force_N=np.asarray(g["force_N"], float))
-                                for sid, g in ground_forces.items()}}
+        ground = {sid: {"point_mm": np.asarray(vs[0][1], float), "force_N": sum(np.asarray(v[2], float) for v in vs),
+                        "vectors": [(k, np.asarray(p, float), np.asarray(f, float)) for k, p, f in vs]}
+                  for sid, vs in ground_forces.items()}
     elif step_mm is not None:
         statics = support_loads(design, g_factor, step_mm, step_supports, summary=summ)
-    if statics is None:
+        for sid, sl in statics["supports"].items():
+            ground[sid] = dict(sl, vectors=_split(sl.get("contact_point", sl["point_mm"]), sl["force_N"], sl["contact"]))
+
+    if not ground:
         fm.add_gravity(items, g_factor)
         fm.restrain_on_wheels()
         fm.solve()
@@ -64,18 +82,36 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             node = fm.wheel_nodes[s["id"]]
             f, _ = fm.reaction(node)
             f = f + fm.spring_force(s["id"])
-            ground[s["id"]] = {"point_mm": support_contact(s), "force_N": f, "contact": "ground"}
-        restrained = [fm.wheel_nodes[s["id"]] for s in design["supports"]]
+            p = support_contact(s)
+            ground[s["id"]] = {"point_mm": p, "force_N": f, "contact": "ground", "vectors": _split(p, f, "ground")}
         residual = 0.0
     else:
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        weights = [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in items]
+        F, M = resultant(pairs + weights)
+        M_cg = M - np.cross(cg, F)
+        span = max(float(np.ptp([s["position_mm"][0] for s in design["supports"]])), 1.0)
+        if inertia_N is None:
+            off = (float(np.linalg.norm(F)) + float(np.linalg.norm(M_cg)) / span) / weight
+            what = "the weight"
+        else:
+            off = float(np.linalg.norm(F + np.asarray(inertia_N, float))) / weight
+            what = "the weight and the inertia force passed with them"
+        if off > BALANCE_TOL:
+            raise DesignError(
+                f"the ground forces passed in do not balance {what} of this design (off by {off:.1%} of the weight); "
+                f"they were probably computed for another loading or design version, so analyse them with the same loading")
+        accel = F / summ["mass_kg"]  # m/s^2
+        alpha = np.linalg.solve(inertia_tensor(items, cg), M_cg) * 1e3  # (N*mm)/(kg*mm^2) -> rad/s^2
         fm.add_gravity(items, g_factor)
-        for sid, sl in statics["supports"].items():
-            fm.add_force_at(fm.wheel_nodes[sid], sl["point_mm"], sl["force_N"])
-            ground[sid] = sl
+        for sid, g in ground.items():
+            for _, p, f in g["vectors"]:
+                fm.add_force_at(fm.wheel_nodes[sid], p, f)
+        if np.any(accel != 0) or np.any(alpha != 0):
+            fm.add_body_loads(items, -accel, -alpha, cg)
         held = fm.restrain_free_body()
         fm.solve()
-        restrained = [fm.wheel_nodes[s] for s in held]
-        residual = max(float(np.linalg.norm(fm.reaction(n)[0])) for n in restrained) / weight
+        residual = max(float(np.linalg.norm(fm.reaction(fm.wheel_nodes[s])[0])) for s in held) / weight
 
     stresses = {mid: fm.member_stress(mid) for mid in fm.props}
     worst = max(stresses, key=lambda k: stresses[k]["max"])
@@ -98,6 +134,8 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
         "ground": ground,
         "ground_total_N": total_ground,
         "residual_ratio": residual,
+        "inertia_accel": accel,
+        "inertia_alpha": alpha,
         "stresses": stresses,
         "worst_member": worst,
         "displacements": disp,

@@ -116,8 +116,4 @@ class StepClimb(BuiltinTool):
             result("required_mu_push", st["required_mu_push"], "1"),
         ]
         out["results"] = climb + out["results"]
-        for sid, g in st["supports"].items():
-            if g["contact"] == "ground" and g["force_N"][0] > 0:
-                out["vectors"].append({"kind": "grip", "at": sid, "origin_mm": [float(v) for v in g["point_mm"]],
-                                       "vector_N": [float(g["force_N"][0]), float(g["force_N"][1]), 0.0]})
         return out

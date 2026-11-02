@@ -5,6 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 from hiraku import contract, solvers
 from hiraku.contract.protocols import LOADINGS, SOLVER_ENTRY_POINTS, AnalysisTool
 from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
@@ -205,6 +207,47 @@ class FrameStaticTest(unittest.TestCase):
         rec = self.run_case({"upstream_analyses": {"P1-step100": p1}}, loading="empty")
         self.assertEqual(rec["status"], "failed")
         self.assertIn("do not balance", rec["error"])
+
+    def test_vectors_balance(self):
+        """reaction + grip + weight (+ inertia) add up to zero, as K2's vectors do."""
+        for rec in (TOOLS["step_climb"].run(DESIGN, load_case("P1", "P1", "powertrain", step_height=q(100, "mm")), PRED, {}),
+                    self.run_case()):
+            total = np.sum([v["vector_N"] for v in rec["vectors"]], axis=0)
+            self.assertLess(float(np.linalg.norm(total)), 1e-6 * results(rec)["vehicle_mass"]["value"] * STANDARD_GRAVITY)
+        kinds = {v["kind"] for v in TOOLS["step_climb"].run(
+            DESIGN, load_case("P1", "P1", "powertrain", step_height=q(100, "mm")), PRED, {})["vectors"]}
+        self.assertEqual(kinds, {"reaction", "grip", "load"})
+
+    def test_accelerating_upstream_takes_inertia_relief(self):
+        """A K2-style upstream whose ground forces leave a net force, with the matching inertia vector."""
+        p1 = TOOLS["step_climb"].run(DESIGN, load_case("P1-step100", "P1", "powertrain", step_height=q(100, "mm")), PRED, {})
+        up = copy.deepcopy(p1)
+        extra = np.array([300.0, 0.0, 0.0])
+        for v in up["vectors"]:
+            if v["kind"] == "grip" and v["at"] == "RL":
+                v["vector_N"] = [a + b for a, b in zip(v["vector_N"], extra)]
+        refused = self.run_case({"upstream_analyses": {"P1-step100": up}})
+        self.assertEqual(refused["status"], "failed")
+        up["vectors"].append({"kind": "inertia", "at": "cg", "origin_mm": [0.0, 0.0, 0.0], "vector_N": list(-extra)})
+        rec = self.run_case({"upstream_analyses": {"P1-step100": up}})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        r = results(rec)
+        m = r["vehicle_mass"]["value"]
+        self.assertAlmostEqual(r["inertia_acceleration"]["value"], 300.0 / m, places=9)
+        total = np.sum([v["vector_N"] for v in rec["vectors"]], axis=0)
+        self.assertLess(float(np.linalg.norm(total)), 1e-6 * m * STANDARD_GRAVITY)
+
+    def test_inertia_relief_holds_an_unbalanced_moment(self):
+        from hiraku.solvers.k1_frame import analyze
+        from hiraku.solvers.shelf import fixtures
+        lad = fixtures.ladder_design()
+        rest = analyze(lad)
+        forces = {sid: [("reaction", g["point_mm"], g["force_N"])] for sid, g in rest["ground"].items()}
+        bump = np.array([0.0, 0.0, 500.0])  # an extra upward push under one wheel: force and moment
+        forces["FL"] = forces["FL"] + [("reaction", rest["ground"]["FL"]["point_mm"], bump)]
+        res = analyze(lad, ground_forces=forces, inertia_N=-bump)
+        self.assertLess(res["residual_ratio"], 1e-6)
+        self.assertGreater(float(np.linalg.norm(res["inertia_alpha"])), 0.0)
 
     def test_upstream_without_wheel_forces_is_ignored(self):
         rec = self.run_case({"upstream_analyses": {"X": {"status": "ok", "vectors": []}}})

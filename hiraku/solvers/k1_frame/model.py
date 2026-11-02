@@ -87,21 +87,48 @@ class FrameModel:
 
     def add_gravity(self, items: list[MassItem], g_factor: float = 1.0) -> None:
         """Weight of members (PyNite self-weight) and parts (node loads with transfer moments)."""
-        self.model.add_member_self_weight(f"F{_P_DOF['z']}", -G_MM_S2 * g_factor, CASE)
+        self.add_body_loads(items, np.array([0.0, 0.0, -STANDARD_GRAVITY * g_factor]))
+
+    def add_body_loads(self, items: list[MassItem], accel_field, alpha=(0.0, 0.0, 0.0), center=(0.0, 0.0, 0.0)) -> None:
+        """Body forces m * b on every mass, with b = accel_field + alpha x (r - center).
+
+        accel_field (m/s^2) is uniform: gravity is (0, 0, -g), a d'Alembert
+        inertia load of a vehicle accelerating at a is -a. alpha (rad/s^2) adds
+        the d'Alembert load of an angular acceleration: pass -alpha_vehicle;
+        parts also get the moment of their own inertia. Members take the
+        uniform part as PyNite self-weight (distributed) and the rotational
+        part lumped at their ends.
+        """
+        b0 = np.asarray(accel_field, float)
+        al = np.asarray(alpha, float)
+        c = np.asarray(center, float)
+        for axis, comp in zip("xyz", b0):
+            if comp != 0.0:
+                p = to_pynite(np.eye(3)["xyz".index(axis)])  # design axis in PyNite axes
+                k = int(np.argmax(np.abs(p)))
+                self.model.add_member_self_weight(f"F{'XYZ'[k]}", float(np.sign(p[k]) * comp * 1000.0), CASE)
+        rotating = bool(np.any(al != 0.0))
         for it in items:
-            w = np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])
+            b_rot = np.cross(al, it.cg_mm - c) * 1e-3 if rotating else np.zeros(3)  # m/s^2
+            f = it.mass_kg * (b0 + b_rot)
+            m_own = (it.inertia_kg_mm2 @ al) * 1e-6 if rotating and it.inertia_kg_mm2 is not None else np.zeros(3)  # N*m
+            m_own = m_own * 1000.0  # N*mm
             if it.carrier == "member":
-                pass  # carried by PyNite's self-weight above
+                if rotating:  # only the rotational part; the uniform part is the self-weight above
+                    fr = it.mass_kg * b_rot
+                    mp = self.props[it.carried_by[0]]["member"]
+                    for n in (mp["node_a"], mp["node_b"]):
+                        self.add_force(n, fr / 2.0, m_own / 2.0)
             elif it.carrier == "support":
                 node = self.wheel_nodes[it.carried_by[0]]
-                self.add_force(node, w, np.cross(it.cg_mm - self.node_xyz(node), w))
+                self.add_force(node, f, np.cross(it.cg_mm - self.node_xyz(node), f) + m_own)
             else:
                 nodes = it.carried_by
                 centroid = sum(self.node_xyz(n) for n in nodes) / len(nodes)
-                moment = np.cross(it.cg_mm - centroid, w)
+                moment = np.cross(it.cg_mm - centroid, f) + m_own
                 for n in nodes:
-                    self.add_force(n, w / len(nodes), moment / len(nodes))
-            self.applied.append((it.cg_mm, w, "weight"))
+                    self.add_force(n, f / len(nodes), moment / len(nodes))
+            self.applied.append((it.cg_mm, f, "body"))
 
     # ------------------------------------------------------------ supports
 

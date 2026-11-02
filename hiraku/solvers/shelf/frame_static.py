@@ -37,10 +37,15 @@ def frame_outputs(res: dict) -> Record:
         {"kind": "displacement", "label": "frame deflection (wheel-centre rigid motion removed)", "unit": "mm",
          "per_node": {n: [float(v) for v in d] for n, d in res["displacements"].items()}},
     ]
-    vectors = [{"kind": "reaction", "at": sid, "origin_mm": [float(v) for v in g["point_mm"]],
-                "vector_N": [float(v) for v in g["force_N"]]} for sid, g in res["ground"].items()]
-    vectors.append({"kind": "load", "at": "cg", "origin_mm": [float(v) for v in res["mass"]["cg_mm"]],
-                    "vector_N": [0.0, 0.0, -float(res["weight_N"])]})
+    vectors = [{"kind": kind, "at": sid, "origin_mm": [float(v) for v in p], "vector_N": [float(v) for v in f]}
+               for sid, g in res["ground"].items() for kind, p, f in g["vectors"]]
+    cg = [float(v) for v in res["mass"]["cg_mm"]]
+    vectors.append({"kind": "load", "at": "cg", "origin_mm": cg, "vector_N": [0.0, 0.0, -float(res["weight_N"])]})
+    a = res["inertia_accel"]
+    if float(np.linalg.norm(a)) * res["mass"]["mass_kg"] > 1e-6 * res["weight_N"]:
+        vectors.append({"kind": "inertia", "at": "cg", "origin_mm": cg,
+                        "vector_N": [float(v) for v in -res["mass"]["mass_kg"] * a]})
+        results.append(result("inertia_acceleration", float(np.linalg.norm(a)), "m/s^2", "cg"))
     return {"results": results, "fields": fields, "vectors": vectors, "effects": stress_terms(res)}
 
 
@@ -158,8 +163,10 @@ class FrameStatic(BuiltinTool):
         step_height (length): add the forces of the step_supports climbing a step
         step_supports (string, e.g. "FL,FR"; default: the front-most supports)
         Run params: upstream_analyses {load case id: analysis}; when one of them
-        carries a ground force (reaction vector) for every support, those forces
-        load the frame instead of being worked out here.
+        carries ground forces (reaction and grip vectors) at every support, those
+        forces load the frame instead of being worked out here, and an
+        "inertia" vector at "cg" in it is checked against what the forces leave
+        unbalanced (inertia relief takes that part).
         """
         design = on_board(design, load_case)
         g = g_factor(load_case)
@@ -169,21 +176,26 @@ class FrameStatic(BuiltinTool):
         if up is None and step is not None:
             sup = param_list(load_case, "step_supports") or front_supports(design)
         res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
-                      ground_forces=up[1] if up else None)
+                      ground_forces=up[1] if up else None, inertia_N=up[2] if up else None)
         return frame_outputs(res)
 
 
-def upstream_ground_forces(upstream: dict | None, design: Record) -> tuple[str, dict] | None:
-    """(load case id, {support id: {point_mm, force_N}}) from the first upstream
-    analysis that has a reaction vector at every support of the design."""
+def upstream_ground_forces(upstream: dict | None, design: Record):
+    """(load case id, {support id: [(kind, point, force), ...]}, inertia force or None) from the first
+    upstream analysis that has a reaction vector at every support of the design."""
     ids = [s["id"] for s in design.get("supports", [])]
     for lc_id, ana in (upstream or {}).items():
         if not isinstance(ana, dict) or ana.get("status") != "ok":
             continue
-        got = {v["at"]: {"point_mm": v["origin_mm"], "force_N": v["vector_N"]}
-               for v in ana.get("vectors", []) if v.get("kind") == "reaction" and v.get("at") in ids}
-        if len(got) == len(ids):
-            return lc_id, got
+        got: dict[str, list] = {}
+        inertia = None
+        for v in ana.get("vectors", []):
+            if v.get("kind") in ("reaction", "grip") and v.get("at") in ids:
+                got.setdefault(v["at"], []).append((v["kind"], v["origin_mm"], v["vector_N"]))
+            elif v.get("kind") == "inertia" and v.get("at") == "cg":
+                inertia = np.asarray(v["vector_N"], float)
+        if set(got) == set(ids) and all(any(k == "reaction" for k, _, _ in vs) for vs in got.values()):
+            return lc_id, got, inertia
     return None
 
 

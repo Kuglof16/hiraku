@@ -33,6 +33,40 @@ class MassItem:
     cg_mm: np.ndarray
     carrier: str  # "member", "nodes" or "support"
     carried_by: list[str]  # member id, frame node ids, or [support id]
+    inertia_kg_mm2: np.ndarray | None = None  # own inertia about its centre of gravity (3 x 3)
+
+
+def box_inertia(mass: float, size_mm, rpy_deg=None) -> np.ndarray:
+    """Inertia (kg*mm^2) of a solid box about its centre, rotated by roll-pitch-yaw (fixed axes x, y, z)."""
+    a, b, c = (float(s) for s in size_mm)
+    local = mass / 12.0 * np.diag([b * b + c * c, a * a + c * c, a * a + b * b])
+    if not rpy_deg or not any(rpy_deg):
+        return local
+    r, p, y = np.radians(rpy_deg)
+    Rx = np.array([[1, 0, 0], [0, np.cos(r), -np.sin(r)], [0, np.sin(r), np.cos(r)]])
+    Ry = np.array([[np.cos(p), 0, np.sin(p)], [0, 1, 0], [-np.sin(p), 0, np.cos(p)]])
+    Rz = np.array([[np.cos(y), -np.sin(y), 0], [np.sin(y), np.cos(y), 0], [0, 0, 1]])
+    R = Rz @ Ry @ Rx
+    return R @ local @ R.T
+
+
+def rod_inertia(mass: float, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Inertia (kg*mm^2) of a slender rod from a to b about its middle."""
+    d = b - a
+    L = float(np.linalg.norm(d))
+    u = d / L
+    return mass * L * L / 12.0 * (np.eye(3) - np.outer(u, u))
+
+
+def inertia_tensor(items: list[MassItem], about: np.ndarray) -> np.ndarray:
+    """Inertia (kg*mm^2) of all items about a point (parallel-axis theorem)."""
+    J = np.zeros((3, 3))
+    for it in items:
+        d = it.cg_mm - about
+        J += it.mass_kg * (float(d @ d) * np.eye(3) - np.outer(d, d))
+        if it.inertia_kg_mm2 is not None:
+            J += it.inertia_kg_mm2
+    return J
 
 
 def node_table(design: dict) -> dict[str, np.ndarray]:
@@ -85,23 +119,25 @@ def mass_items(design: dict) -> list[MassItem]:
     for mid, mp in member_props(design).items():
         rho = float(mp["material"]["density_kg_m3"])
         mass = rho * mp["section"]["A"] * mp["length"] * 1e-9
-        items.append(MassItem(f"member:{mid}", mass, (mp["a"] + mp["b"]) / 2.0, "member", [mid]))
+        items.append(MassItem(f"member:{mid}", mass, (mp["a"] + mp["b"]) / 2.0, "member", [mid],
+                              rod_inertia(mass, mp["a"], mp["b"])))
     for part in design.get("parts", []):
         pid = part["id"]
         mass = float(part["mass_kg"])
         cg = np.asarray(part["box"]["center_mm"], dtype=float)
+        J = box_inertia(mass, part["box"]["size_mm"], part["box"].get("rpy_deg"))
         carried = list(part.get("carried_by") or [])
         if carried:
             bad = [n for n in carried if n not in nodes]
             if bad:
                 raise DesignError(f"part {pid!r} is carried by node(s) {', '.join(bad)} that are not in design.nodes")
-            items.append(MassItem(f"part:{pid}", mass, cg, "nodes", carried))
+            items.append(MassItem(f"part:{pid}", mass, cg, "nodes", carried, J))
         else:
             if not supports:
                 raise DesignError(f"part {pid!r} has no carried_by nodes and the design has no supports")
             dist = [np.linalg.norm(np.asarray(s["position_mm"], float) - cg) for s in supports]
             sid = supports[int(np.argmin(dist))]["id"]
-            items.append(MassItem(f"part:{pid}", mass, cg, "support", [sid]))
+            items.append(MassItem(f"part:{pid}", mass, cg, "support", [sid], J))
     return items
 
 
@@ -193,9 +229,14 @@ def support_loads(design: dict, g_factor: float = 1.0, step_mm: float | None = N
                 f"Drive a support that stays on the ground, or lower the step")
 
     # Unknowns u = [W_1..W_n, Fy_1..Fy_n] (vertical and side force at each
-    # support's point of action). x forces follow from W: -k W on the step,
-    # and their sum shared equally by the pushers.
-    pts = np.where(on_step[:, None], centers, contacts)
+    # support's point of action: the step corner or the ground contact). x
+    # forces follow from W: -k W on the step, and their sum shared equally by
+    # the pushers. The corner push points at the wheel centre.
+    pts = contacts.copy()
+    for i, s in enumerate(supports):
+        if on_step[i]:
+            d, _ = step_geometry(s["radius_mm"], step_mm)
+            pts[i] = centers[i] + np.array([d, 0.0, -(float(s["radius_mm"]) - step_mm)])
     ybar_push = float(np.mean(pts[pushers, 1])) if pushers else 0.0
     zbar_push = float(np.mean(pts[pushers, 2])) if pushers else 0.0
     A = np.zeros((5, 2 * n))
@@ -222,7 +263,7 @@ def support_loads(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     out = {}
     for i, s in enumerate(supports):
         if on_step[i]:
-            out[s["id"]] = {"point_mm": centers[i], "force_N": np.array([fx[i], fy[i], W[i]]),
+            out[s["id"]] = {"point_mm": pts[i], "force_N": np.array([fx[i], fy[i], W[i]]),
                             "contact": "step_corner", "k": float(ks[i])}
         else:
             out[s["id"]] = {"point_mm": contacts[i], "force_N": np.array([fx[i], fy[i], W[i]]),
