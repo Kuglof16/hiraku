@@ -13,7 +13,8 @@
     "_note": "night: ground of the title screens; ink: black ink on paper; tile_*: the N05 test tiles"
   },
   "n00": {
-    "duration_s": 7.0,
+    "duration_s": 6.5,
+    "_duration_note": "6.5 s is N00's slot in the narration script (draft 5: 0:00-0:06.5, the silent tail after the voice cut by 0.5 s)",
     "name": { "y": 172, "size_px": 210 },
     "rule": { "y": 430, "w": 400, "h": 2, "_note": "centred" },
     "row": { "y": 500, "gap_px": 34 },
@@ -64,7 +65,7 @@
     },
     "hero": { "x": 210, "y": 60, "w": 1500, "h": 750, "_note": "centred; h follows the drawing (viewBox 600 x 300)" },
     "hero_motion": { "push_scale": 1.04, "burst_scale": 1.7, "burst_dur_s": 0.4, "ease": [0.5, 0, 0.9, 0.4],
-                     "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier)" },
+                     "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier). The app's render (web/js/cut.js) uses all of these; the stand-in in promo n05.html uses push_scale only, and opens like a pair of doors (door) instead of bursting" },
     "ease": { "tile": [0.2, 0.9, 0.3, 1.15], "_note": "cubic-bezier of a tile's flight" },
     "title": {
       "name": { "y": 62, "size_px": 124 },
@@ -77,7 +78,18 @@
       "tile_stagger_s": 0.05,
       "name_s": 1.45,
       "tag_s": 2.0,
-      "_note": "burst: the vehicle bursts open; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first"
+      "door_open_s": 0.3,
+      "_note": "burst: the vehicle bursts open; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the vehicle starts to part down its middle and swing open towards the viewer (it is fully open at door_open_s + door.open_dur_s, by burst_s)"
+    },
+    "door": {
+      "open_dur_s": 0.65,
+      "angle_deg": 105,
+      "perspective_px": 2400,
+      "ease": [0.35, 0, 0.65, 0.75],
+      "seam_w_px": 4,
+      "seam_glow_w_px": 220,
+      "spill_dur_s": 0.9,
+      "_note": "the vehicle itself opens like a pair of doors (kannon-biraki): it parts at the stage's middle (x 960) into a left and a right half, each hinged on its own outer end, and both swing towards the viewer (rotateY, perspective_px from the vehicle's centre) by angle_deg over open_dur_s from times.door_open_s (ease: cubic-bezier; slow at first so the swing is seen, then fast). A half is drawn from its front side only, so it is gone once it turns edge-on to the eye (near 77 deg here). seam_w_px / seam_glow_w_px: the warm light in the parting line and its halo, before and as it opens; spill_dur_s: the light that spills out of the widening gap towards the viewer fades out over it (from times.door_open_s)"
     },
     "fly_from": { "x": 960, "y": 470 },
     "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"]
@@ -126,7 +138,7 @@
   "check": {
     "times": {
       "n00": [0.6, 1.8, 3.5, 6.5],
-      "n05": [0.5, 2.6, 4.5],
+      "n05": [0, 0.45, 0.6, 0.75, 0.95, 2.6, 4.5],
       "n08b": [1.5, 5.2, 5.8, 7.5, 9.8],
       "n18": [1.0, 3.2, 5.0, 8.5],
       "app": [2, 8, 15]
