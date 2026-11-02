@@ -18,6 +18,8 @@ import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from ".
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
+import { lookFromParams } from "./look.js";
+import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
 
@@ -43,6 +45,9 @@ const ui = {
   fieldKind: null, // contour field picked in the legend (null: the first one)
 };
 
+// ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
+for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
 
@@ -59,7 +64,9 @@ function fitStage() {
 
 // ---- 3D -------------------------------------------------------------------
 const viewport = $("viewport");
-const bench = new Workbench3D(viewport);
+const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
+document.body.classList.add(`look-${look}`);
+const bench = new Workbench3D(viewport, look);
 function resize3d() {
   const w = viewport.clientWidth;
   const h = viewport.clientHeight;
@@ -265,13 +272,14 @@ function renderChain(s, chain) {
       const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
-        `<br><span class="sub">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
-    const safeWhy = cause?.safe_side ? `<div class="safe-why"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
+    // Long words are cut to a few lines here; the log keeps them whole.
+    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(cause.safe_side_reason ?? "")}"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
     const cz = cause
-      ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}${safeWhy}</div>`
+      ? `<div class="cause"><div class="clamp" title="${esc(cause.cause)}">原因: ${esc(cause.cause)}</div><div class="clamp c2" title="${esc(cause.fix)}">直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
@@ -330,7 +338,10 @@ function renderLegend(ct) {
     `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
 }
 
-function renderToggles(motion) {
+// A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
+const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
+
+function renderToggles(motion, lc) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
@@ -340,7 +351,7 @@ function renderToggles(motion) {
     btn("cg", "重心", t.cg) +
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
-    (motion?.liftT != null ? btn("limit", "限界の重ね", t.limit) : "") +
+    (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion ? btn("graph", "グラフ", t.graph) : "");
 }
 
@@ -388,8 +399,9 @@ function renderMotion(s, chain, motion) {
   const f = motion.duration > 0 ? (tau - motion.t0) / motion.duration : 1;
   $("ab-fill").style.width = `${f * 100}%`;
   const lim = $("ab-lim");
-  lim.hidden = motion.liftT === null;
-  if (motion.liftT !== null) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
+  const limit = liftLimit(motion, chain.loadCase);
+  lim.hidden = !limit;
+  if (limit) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
   $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${animRate(motion) > 1 ? ` (×${fmt(animRate(motion), 2)})` : ""}`;
   $("ab-play").textContent = ui.anim.local && ui.anim.playing ? "❚❚" : "▶";
   const notes = [];
@@ -400,7 +412,7 @@ function renderMotion(s, chain, motion) {
   $("ab-note").textContent = notes.join("・");
 
   const note = $("limitnote");
-  note.hidden = motion.liftT === null || !ui.toggles.limit;
+  note.hidden = !limit || !ui.toggles.limit;
   if (!note.hidden) {
     const lifted = Object.entries(motion.liftAt)
       .filter(([, t]) => t <= tau)
@@ -542,7 +554,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion);
+    renderToggles(motion, chain.loadCase);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
@@ -553,6 +565,7 @@ function draw() {
     bench.setDesign(design);
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
+    bench.setScene(chain.loadCase, chain.shown);
     const ct = buildContour(chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);

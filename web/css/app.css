@@ -235,6 +235,8 @@ body.video .hint { display: none; }
   background-size: 32px 32px;
 }
 .viewport canvas.gl { position: absolute; inset: 0; display: block; }
+/* the real look: a soft sky over the earth instead of the ruled paper */
+body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #eceee9 58%, #e3dccd 100%); }
 .gl-labels { position: absolute; left: 0; top: 0; pointer-events: none; }
 .lbl {
   font-size: 13px;
@@ -516,6 +518,10 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .safe-mark { display: inline-block; margin-right: 8px; padding: 0 10px; border: 2px solid var(--blue); border-radius: 999px; color: var(--blue); font-size: 13px; font-weight: 700; }
 .verdict.safe { padding: 6px 10px; border: 1.5px dashed var(--blue); border-radius: 8px; }
 .safe-why { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); color: var(--blue); }
+.cause .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cause .clamp.c2 { -webkit-line-clamp: 2; }
+.verdict .sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+#card-pred { min-height: 170px; }
 
 /* bottom status row */
 .statusrow {

@@ -295,6 +295,97 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertTrue(got["many"])
         page.close()
 
+    def test_step_scene_from_the_reaction_on_its_corner(self):
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        # shape example: the front wheel pushes on the step's corner, 223.6 mm ahead at the step's height
+        ana["vectors"] = [{"kind": "reaction", "at": "FL", "origin_mm": [223.6, 650.0, 100.0], "vector_N": [-1100.0, 0.0, 1000.0]}]
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const b = window.hiraku.bench;
+              return { step: b.sceneDesc.step, view: b.view, props: b.props.world.children.length };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["step"]["h"], 100.0)  # params.step_height
+        self.assertAlmostEqual(got["step"]["x0"], 223.6)  # the corner the reaction pushes on
+        self.assertEqual(got["view"], "side")
+        self.assertGreater(got["props"], 0)
+        page.close()
+
+    def test_tilt_table_turns_the_world(self):
+        events, info = tilt_events()
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const b = window.hiraku.bench;
+              return { table: b.sceneDesc.table, frameTable: b.frame?.table ?? null, world: b.world.rotation.x,
+                       fixed: b.props.fixed.children.length };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertTrue(got["table"])
+        self.assertAlmostEqual(got["world"], got["frameTable"])
+        self.assertGreater(got["fixed"], 0)  # the post and floor that stay level
+        page.close()
+
+    def test_real_tools_scenes_in_both_looks(self):
+        """The real K2 step tool's record on the screen. The run is built here when this Python
+        has the solvers; else HIRAKU_WEB_DEV_RUNS names a folder made by tests.web.dev_k2_run."""
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        tmp = None
+        if given:
+            runs = Path(given)
+            run = sorted(p for p in runs.iterdir() if p.is_dir())[-1]
+        else:
+            try:
+                from tests.web.dev_k2_run import build
+
+                runs = tmp = Path(tempfile.mkdtemp())
+                run = build(tmp, ["P1-step100", "S4-brake"], log=lambda *_: None)
+            except ImportError as e:
+                if tmp:
+                    shutil.rmtree(tmp)
+                self.skipTest(f"the solvers do not import in this Python ({e}); set HIRAKU_WEB_DEV_RUNS")
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            for look in ("zu", "real"):
+                page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}")
+                page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+                page.evaluate("window.hiraku.ready")
+                page.click('#tests button[data-lc="P1-step100"]')
+                got = page.evaluate(
+                    """async () => {
+                      await window.hiraku.seek(window.hiraku.player.playhead);
+                      const b = window.hiraku.bench;
+                      return { step: b.sceneDesc?.step ?? null, shadows: b.renderer.shadowMap.enabled,
+                               limitButton: !!document.querySelector('#toggles [data-toggle="limit"]'),
+                               standard: b.members[Object.keys(b.members)[0]].mesh.material.type };
+                    }"""
+                )
+                self.assertEqual(errors, [], look)
+                self.assertEqual(got["step"]["h"], 100.0)
+                self.assertGreater(got["step"]["x0"], 1000.0)  # the step stands ahead of the front wheels
+                self.assertFalse(got["limitButton"])  # climbing lifts a wheel: not a limit on a step
+                self.assertEqual(got["shadows"], look == "real")
+                self.assertEqual(got["standard"], "MeshStandardMaterial" if look == "real" else "MeshLambertMaterial")
+                page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if tmp:
+                shutil.rmtree(tmp)
+
     def test_opens_the_saved_run_without_run_in_the_url(self):
         tmp = Path(tempfile.mkdtemp())
         run_id = "20261106-100000-offroad-4w"
