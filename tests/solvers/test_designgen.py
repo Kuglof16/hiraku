@@ -128,6 +128,17 @@ class DesignGenTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no kind of design"):
             designgen.propose("monocoque", {}, {}, req)
 
+    def test_cargo_height_is_set_by_the_load_not_the_designer(self):
+        from hiraku.catalog import load_requirements
+        req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
+        d = designgen.propose("ladder_4w", {}, {"cargo_height": mm(1240)}, req)
+        cargo = next(p for p in d["parts"] if p["kind"] == "cargo")
+        deck = next(p for p in d["parts"] if p["id"] == "deck")
+        deck_top = deck["box"]["center_mm"][2] + deck["box"]["size_mm"][2] / 2
+        self.assertAlmostEqual(cargo["box"]["center_mm"][2] - deck_top, 620.0, places=9)
+        with self.assertRaisesRegex(ValueError, "cannot be changed"):
+            designgen.regenerate(d, {"cargo_height": mm(300)})
+
     def test_variables_listing(self):
         got = {v["name"]: v for v in designgen.variables(V1)}
         self.assertEqual(got["track"]["value"], 1100.0)

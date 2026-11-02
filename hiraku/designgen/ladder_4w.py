@@ -87,6 +87,8 @@ VARIABLES: dict[str, Var] = {
     "occupants": Var("1", 2.0, meaning="seats"),
     "occupant_mass": Var("kg", 76.6, meaning="Q33; source: AIST item N1 Weight, male 95th percentile (see the docstring)"),
     "cargo_mass": Var("kg", 150.0, meaning="Q40"),
+    "cargo_height": Var("mm", 300.0, meaning="height of the load stacked on the deck (its centre of gravity half of it "
+                        "above the deck); describes the load, so the designer does not change it"),
     # powertrain and battery: a 51.2 V LiFePO4 pack (16 cells at 3.2 V, taken as the nominal
     # voltage of a LiFePO4 cell, not checked against a cell data sheet in this repository),
     # a 10 kW peak motor driving the rear axle through a reduction
@@ -311,7 +313,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
                 x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
-    lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, 880.0, 300.0), v["cargo_mass"]),
+    lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, 880.0, v["cargo_height"]), v["cargo_mass"]),
             x=lay.part("deck")["box"]["center_mm"][0], y=0.0, z=bottom_at(lay.top_of("deck")), carried_by=lay.at("S2", "B", "E"))
     for s in supports:  # each wheel (unsprung) and its arms, their tops level with the floors, inner face on the rail
         x, y, z = s["position_mm"]
