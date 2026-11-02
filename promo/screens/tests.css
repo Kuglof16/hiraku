@@ -1,0 +1,235 @@
+/* Motion of the N05 test tiles (parts drawn by tests.js).
+   Every loop starts once its tile has landed: --t0 is set on .tile.
+   The 0% frame of each loop is its resting picture, shown while the tile
+   flies in. Lengths are in the tile's 400x170 SVG units. */
+
+.tile .lp {
+  transform-box: view-box;
+  animation-delay: var(--t0);
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+}
+
+.tile .ink       { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
+.tile .ink-thin  { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.tile .solid-ink { fill: var(--ink); stroke: none; }
+.tile .cone      { fill: var(--s5); stroke: none; }
+.tile .hot       { stroke: none; fill: var(--s1); }
+.tile .spark     { fill: none; stroke: var(--s5); stroke-width: 4; stroke-linecap: round; }
+
+/* 段差越え: drives right, the front wheel climbs the step */
+.t-step .car { transform-origin: 118px 152px; animation-name: step-car; animation-duration: 2.2s; }
+@keyframes step-car {
+  0%    { transform: translate(-40px, 0) rotate(0deg); opacity: 1; }
+  45%   { transform: translate(9px, 0) rotate(0deg); animation-timing-function: ease-out; }
+  60%   { transform: translate(24px, 0) rotate(-7.5deg); }
+  86%   { transform: translate(44px, 0) rotate(-7.5deg); opacity: 1; }
+  93%   { transform: translate(48px, 0) rotate(-7.5deg); opacity: 0; }
+  93.5% { transform: translate(-40px, 0) rotate(0deg); opacity: 0; }
+  100%  { transform: translate(-40px, 0) rotate(0deg); opacity: 1; }
+}
+
+/* 傾斜台: the deck tilts slowly with the vehicle on it, then comes back */
+.t-tilt .deck { transform-origin: 50px 148px; animation-name: tilt; animation-duration: 2.4s; }
+@keyframes tilt {
+  0%   { transform: rotate(0deg); animation-timing-function: ease-in-out; }
+  65%  { transform: rotate(-12deg); }
+  82%  { transform: rotate(-12deg); animation-timing-function: ease-in-out; }
+  100% { transform: rotate(0deg); }
+}
+
+/* 横風: wind streaks from the left, the vehicle leans away in gusts */
+.t-wind .gust {
+  fill: none; stroke: var(--ink-soft); stroke-width: 3.5; stroke-linecap: round;
+  stroke-dasharray: 48 52;
+  animation-name: gust; animation-duration: 0.6s;
+}
+@keyframes gust { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+.t-wind .car { transform-origin: 382px 152px; animation-name: lean; animation-duration: 1.8s; animation-timing-function: ease-in-out; }
+@keyframes lean {
+  0%, 100% { transform: rotate(0deg); }
+  30%      { transform: rotate(4deg); }
+  50%      { transform: rotate(1.5deg); }
+  72%      { transform: rotate(3.5deg); }
+}
+
+/* オフロード走行: bumps stream past, the vehicle pitches and bobs */
+.t-rough .terrain { animation-name: terrain; animation-duration: 1.6s; }
+@keyframes terrain { from { transform: translateX(0); } to { transform: translateX(-160px); } }
+.t-rough .car { transform-origin: 216px 146px; animation-name: bob; animation-duration: 0.8s; animation-timing-function: ease-in-out; }
+@keyframes bob {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25%      { transform: translate(0, -7px) rotate(-3deg); }
+  50%      { transform: translate(0, 0) rotate(0deg); }
+  75%      { transform: translate(0, -4px) rotate(3deg); }
+}
+
+/* DLC (top view): through the cones, over to the other lane and back */
+.t-dlc .car { transform-origin: 0 0; animation-name: dlc; animation-duration: 2.2s; }
+@keyframes dlc {
+  0%    { transform: translate(40px, 128px) rotate(0deg); opacity: 1; }
+  20%   { transform: translate(110px, 128px) rotate(0deg); }
+  30%   { transform: translate(150px, 102px) rotate(-30deg); }
+  40%   { transform: translate(195px, 77px) rotate(0deg); }
+  52%   { transform: translate(235px, 77px) rotate(0deg); }
+  62%   { transform: translate(275px, 102px) rotate(30deg); }
+  72%   { transform: translate(320px, 128px) rotate(0deg); }
+  86%   { transform: translate(362px, 128px) rotate(0deg); opacity: 1; }
+  93%   { transform: translate(380px, 128px) rotate(0deg); opacity: 0; }
+  93.5% { transform: translate(40px, 128px) rotate(0deg); opacity: 0; }
+  100%  { transform: translate(40px, 128px) rotate(0deg); opacity: 1; }
+}
+
+/* 急ブレーキ: runs in, brakes to a stop, the nose dips, skid marks */
+.t-brake .car { transform-origin: 158px 152px; animation-name: brake; animation-duration: 2.0s; }
+@keyframes brake {
+  0%    { transform: translate(-110px, 0) rotate(0deg); opacity: 1; }
+  28%   { transform: translate(-40px, 0) rotate(0deg); animation-timing-function: cubic-bezier(.4, .6, .5, 1); }
+  60%   { transform: translate(30px, 0) rotate(3.5deg); animation-timing-function: ease-in-out; }
+  70%   { transform: translate(30px, 0) rotate(0.6deg); }
+  78%   { transform: translate(30px, 0) rotate(1.4deg); opacity: 1; }
+  92%   { transform: translate(30px, 0) rotate(1.4deg); opacity: 1; }
+  96%   { transform: translate(30px, 0) rotate(1.4deg); opacity: 0; }
+  96.5% { transform: translate(-110px, 0) rotate(0deg); opacity: 0; }
+  100%  { transform: translate(-110px, 0) rotate(0deg); opacity: 1; }
+}
+.t-brake .skid {
+  fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  animation-name: skid; animation-duration: 2.0s;
+}
+@keyframes skid {
+  0%, 28% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: cubic-bezier(.4, .6, .5, 1); }
+  60%     { stroke-dashoffset: 0; }
+  92%     { stroke-dashoffset: 0; opacity: 1; }
+  96%     { stroke-dashoffset: 0; opacity: 0; }
+  100%    { stroke-dashoffset: 1; opacity: 0; }
+}
+
+/* 長時間: the road keeps passing, a turning arrow, the battery warms up */
+.t-long .road {
+  fill: none; stroke: var(--ink-soft); stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 26 14;
+  animation-name: road; animation-duration: 0.4s;
+}
+@keyframes road { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 40; } }
+.t-long .spin { transform-origin: 350px 62px; animation-name: spin; animation-duration: 1.2s; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.t-long .hot {
+  animation: warm 2.4s linear var(--t0) infinite both;
+}
+@keyframes warm {
+  0%   { fill: var(--s1); }
+  30%  { fill: var(--s2); }
+  55%  { fill: var(--s3); }
+  92%  { fill: var(--s4); }
+  100% { fill: var(--s1); }
+}
+
+/* 発進: waits, then pulls away faster and faster, streaks behind */
+.t-launch .car { animation-name: launch; animation-duration: 2.0s; }
+@keyframes launch {
+  0%    { transform: translateX(0); opacity: 1; }
+  22%   { transform: translateX(0); animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  82%   { transform: translateX(130px); opacity: 1; }
+  90%   { transform: translateX(170px); opacity: 0; }
+  90.5% { transform: translateX(0); opacity: 0; }
+  100%  { transform: translateX(0); opacity: 1; }
+}
+.t-launch .squat { transform-origin: 98px 152px; animation-name: squat; animation-duration: 2.0s; }
+@keyframes squat {
+  0%, 22% { transform: rotate(0deg); animation-timing-function: ease-out; }
+  36%     { transform: rotate(-3deg); }
+  82%     { transform: rotate(-1.5deg); }
+  100%    { transform: rotate(0deg); }
+}
+.t-launch .streaks { transform-origin: 70px 116px; animation-name: streaks; animation-duration: 2.0s; }
+@keyframes streaks {
+  0%, 30% { transform: scaleX(0.2); opacity: 0; }
+  70%     { transform: scaleX(1.3); opacity: 1; }
+  100%    { transform: scaleX(1.3); opacity: 1; }
+}
+
+/* 衝突: drives into the wall, stops dead, the rear kicks up */
+.t-crash .car { transform-origin: 325px 152px; animation-name: crash; animation-duration: 2.0s; }
+@keyframes crash {
+  0%    { transform: translate(-150px, 0) rotate(0deg); opacity: 1; }
+  50%   { transform: translate(0, 0) rotate(0deg); animation-timing-function: ease-out; }
+  56%   { transform: translate(-5px, 0) rotate(4deg); animation-timing-function: ease-in-out; }
+  68%   { transform: translate(-8px, 0) rotate(0deg); }
+  88%   { transform: translate(-8px, 0) rotate(0deg); opacity: 1; }
+  94%   { transform: translate(-8px, 0) rotate(0deg); opacity: 0; }
+  94.5% { transform: translate(-150px, 0) rotate(0deg); opacity: 0; }
+  100%  { transform: translate(-150px, 0) rotate(0deg); opacity: 1; }
+}
+.t-crash .burst { transform-origin: 352px 104px; animation-name: burst-mark; animation-duration: 2.0s; }
+@keyframes burst-mark {
+  0%, 49.9% { transform: scale(0.4); opacity: 0; }
+  50%       { transform: scale(0.4); opacity: 1; animation-timing-function: ease-out; }
+  62%       { transform: scale(1.25); opacity: 1; }
+  74%       { transform: scale(1.3); opacity: 0; }
+  100%      { transform: scale(1.3); opacity: 0; }
+}
+
+/* 音振: wheels and suspension shake fast, the body less, waves run */
+.t-nvh .shake-wheel { animation-name: shake-wheel; animation-duration: 0.2s; }
+@keyframes shake-wheel {
+  0%, 100% { transform: translateY(0); }
+  25%      { transform: translateY(-3.5px); }
+  75%      { transform: translateY(2.5px); }
+}
+.t-nvh .shake-body { animation-name: shake-body; animation-duration: 0.2s; }
+@keyframes shake-body {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.5px); }
+}
+.t-nvh .hum {
+  fill: none; stroke: var(--s2); stroke-width: 3; stroke-linecap: round;
+  animation-name: hum; animation-duration: 0.4s;
+}
+@keyframes hum { from { transform: translateX(0); } to { transform: translateX(24px); } }
+
+/* 疲労: the same load again and again, the S-N line is traced */
+.t-fatigue .arm { transform-origin: 44px 105px; animation-name: arm; animation-duration: 0.5s; animation-timing-function: ease-in-out; }
+@keyframes arm {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(6deg); }
+}
+.t-fatigue .push { animation-name: push; animation-duration: 0.5s; animation-timing-function: ease-in-out; }
+@keyframes push {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(15px); }
+}
+.t-fatigue .sn {
+  fill: none; stroke: var(--s1); stroke-width: 3.5; stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  animation-name: sn; animation-duration: 2.0s;
+}
+@keyframes sn {
+  0%   { stroke-dashoffset: 1; opacity: 1; animation-timing-function: ease-in-out; }
+  80%  { stroke-dashoffset: 0; opacity: 1; }
+  92%  { stroke-dashoffset: 0; opacity: 1; }
+  98%  { stroke-dashoffset: 0; opacity: 0; }
+  100% { stroke-dashoffset: 1; opacity: 0; }
+}
+
+/* 熱: heat rises from the battery box, which glows hotter */
+.t-heat .hot { animation: glow-hot 2.2s ease-in-out var(--t0) infinite both; }
+@keyframes glow-hot {
+  /* step through the neighbouring colours so the blend never turns muddy */
+  0%, 100% { fill: var(--s3); }
+  30%, 80% { fill: var(--s4); }
+  55%      { fill: var(--s5); }
+}
+.t-heat .rise {
+  fill: none; stroke: var(--s5); stroke-width: 3; stroke-linecap: round;
+  animation-name: rise; animation-duration: 1.1s; animation-timing-function: ease-out;
+}
+.t-heat .r2 { animation-delay: calc(var(--t0) + 0.37s); }
+.t-heat .r3 { animation-delay: calc(var(--t0) + 0.73s); }
+@keyframes rise {
+  0%   { transform: translateY(0); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateY(-58px); opacity: 0; }
+}

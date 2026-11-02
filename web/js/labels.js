@@ -266,3 +266,18 @@ const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 }
+
+// What an agent said, as plain text: Markdown marks (bold, headings, code,
+// links, list bullets) taken off, line breaks kept (blank lines dropped).
+export function plainText(md) {
+  return String(md ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/^```[^\n]*\n?/gm, "")
+    .replace(/`([^`\n]*)`/g, "$1")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "・")
+    .replace(/\[([^\]\n]+)\]\([^)\n]*\)/g, "$1")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim();
+}

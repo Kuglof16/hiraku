@@ -4,10 +4,16 @@ Standard library only. Routes:
 
     GET /                               web/index.html
     GET /<path>                         a file under web/
-    GET /api/runs                       list of runs (newest first) plus the contract sample
+    GET /api/runs                       list of runs: saved runs, then runs/ (newest first),
+                                        then the contract sample; one may be marked default
     GET /api/runs/<run_id>/events?offset=N
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
+
+Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
+same layout as runs/) so a fresh checkout has something to replay. The screen
+opens the default run when the URL names none: the run given as default_run,
+else the newest saved run.
 
 The screen draws only from events, so the server never interprets them beyond
 parsing JSON lines. A line still being written (no trailing newline) is left
@@ -30,7 +36,9 @@ from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+REPO_DIR = Path(__file__).resolve().parents[2]
+WEB_DIR = REPO_DIR / "web"
+SAVED_DIR = REPO_DIR / "showcase"  # saved runs kept in the repository
 SAMPLE_ID = "sample"
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
@@ -52,13 +60,17 @@ _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
 
 
-def events_path(runs_dir: Path, run_id: str) -> Path | None:
-    """Path of a run's events.jsonl, or None when the id is not a run id."""
+def events_path(runs_dir: Path, run_id: str, saved_dir: Path | None = None) -> Path | None:
+    """Path of a run's events.jsonl (runs/ first, then the saved runs), or None when
+    the id is not a run id."""
     if run_id == SAMPLE_ID:
         return SAMPLE_EVENTS
     if not RUN_ID_RE.match(run_id):
         return None
-    return Path(runs_dir) / run_id / EVENTS_FILE
+    path = Path(runs_dir) / run_id / EVENTS_FILE
+    if not path.exists() and saved_dir is not None and (Path(saved_dir) / run_id / EVENTS_FILE).exists():
+        return Path(saved_dir) / run_id / EVENTS_FILE
+    return path
 
 
 def read_events(path: Path, offset: int) -> dict[str, Any]:
@@ -152,19 +164,40 @@ def _run_summary(run_id: str, events_file: Path, project_file: Path | None) -> d
         "events_bytes": stat.st_size if stat else 0,
         "mtime": stat.st_mtime if stat else 0,
         "sample": run_id == SAMPLE_ID,
+        "saved": False,
+        "default": False,
     }
 
 
-def list_runs(runs_dir: Path) -> list[dict[str, Any]]:
-    """Runs under runs_dir (newest id first), then the contract sample."""
+def _run_dirs(root: Path) -> list[Path]:
+    """Run folders under root (newest id first)."""
+    if not root.is_dir():
+        return []
+    return [d for d in sorted(root.iterdir(), key=lambda p: p.name, reverse=True)
+            if d.is_dir() and RUN_ID_RE.match(d.name) and (d / EVENTS_FILE).exists()]
+
+
+def list_runs(runs_dir: Path, saved_dir: Path | None = None, default_run: str | None = None) -> list[dict[str, Any]]:
+    """Saved runs, then runs under runs_dir (both newest id first), then the contract sample.
+
+    A run in both places is listed once, from runs_dir (the same id is the same run).
+    The default (what the screen opens when the URL names no run) is default_run when
+    it is listed, else the newest saved run, else none.
+    """
+    local = _run_dirs(Path(runs_dir))
+    local_ids = {d.name for d in local}
+    saved = [d for d in _run_dirs(Path(saved_dir)) if d.name not in local_ids] if saved_dir is not None else []
     out = []
-    root = Path(runs_dir)
-    if root.is_dir():
-        for d in sorted(root.iterdir(), key=lambda p: p.name, reverse=True):
-            if d.is_dir() and RUN_ID_RE.match(d.name) and (d / EVENTS_FILE).exists():
-                out.append(_run_summary(d.name, d / EVENTS_FILE, d / PROJECT_FILE))
+    for d in saved:
+        out.append({**_run_summary(d.name, d / EVENTS_FILE, d / PROJECT_FILE), "saved": True})
+    for d in local:
+        out.append(_run_summary(d.name, d / EVENTS_FILE, d / PROJECT_FILE))
     if SAMPLE_EVENTS.exists():
         out.append(_run_summary(SAMPLE_ID, SAMPLE_EVENTS, None))
+    pick = next((r for r in out if r["run_id"] == default_run), None) if default_run else None
+    pick = pick or next((r for r in out if r["saved"]), None)
+    if pick is not None:
+        pick["default"] = True
     return out
 
 
@@ -189,6 +222,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "HirakuWebserve/0.1"
     web_dir: Path = WEB_DIR
     runs_dir: Path = Path("runs")
+    saved_dir: Path | None = SAVED_DIR
+    default_run: str | None = None
     quiet: bool = False
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
@@ -200,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(parts.path)
         query = parse_qs(parts.query)
         if path == "/api/runs":
-            self._send_json(list_runs(self.runs_dir))
+            self._send_json(list_runs(self.runs_dir, self.saved_dir, self.default_run))
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:
@@ -217,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def _send_events(self, run_id: str, query: dict[str, list[str]]) -> None:
-        path = events_path(self.runs_dir, run_id)
+        path = events_path(self.runs_dir, run_id, self.saved_dir)
         if path is None:
             self._send_json({"error": f"bad run id {run_id!r}"}, HTTPStatus.BAD_REQUEST)
             return
@@ -267,11 +302,19 @@ def make_server(
     runs_dir: Path | str = "runs",
     web_dir: Path | str = WEB_DIR,
     quiet: bool = False,
+    saved_dir: Path | str | None = SAVED_DIR,
+    default_run: str | None = None,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port."""
     handler = type(
         "BoundHandler",
         (Handler,),
-        {"runs_dir": Path(runs_dir), "web_dir": Path(web_dir), "quiet": quiet},
+        {
+            "runs_dir": Path(runs_dir),
+            "web_dir": Path(web_dir),
+            "saved_dir": Path(saved_dir) if saved_dir is not None else None,
+            "default_run": default_run,
+            "quiet": quiet,
+        },
     )
     return ThreadingHTTPServer((host, port), handler)

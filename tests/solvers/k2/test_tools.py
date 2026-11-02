@@ -4,12 +4,13 @@ import json
 import time
 import unittest
 
-from hiraku import contract
-from hiraku.contract.protocols import AnalysisTool
+from hiraku import contract, solvers
+from hiraku.contract.protocols import LOADINGS, AnalysisTool
 from hiraku.solvers.k2_vehicle import tools
 from hiraku.solvers.k2_vehicle.drive import on_board
 from hiraku.solvers.k2_vehicle.model import box_design, build_vehicle
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
+from hiraku.solvers.k2_vehicle.units import SI_OF
 
 
 def q(v, u):
@@ -54,7 +55,7 @@ def frame_mass():
 CASES = {
     "tilt": {"loading": "two_cargo"},
     "crosswind": {"loading": "empty", "wind_speed": q(30.0, "m/s"), "speed": q(40.0, "km/h")},
-    "braking": {"loading": "two_cargo", "speed": q(35.0, "km/h"), "mu": q(0.6, "1")},
+    "braking": {"loading": "two_cargo", "speed": q(35.0, "km/h"), "mu": q(0.6, "1"), "parking_slope": q(20.0, "%")},
     "launch": {"loading": "two_cargo", "target_speed": q(40.0, "km/h")},
     "lane_change": {"loading": "two", "speed": q(40.0, "km/h"), "mu": q(0.8, "1"), "find_limit": False},
     "offroad_roll": {"loading": "two_cargo", "speed": q(20.0, "km/h"), "side_slope": q(15.0, "deg"), "length": q(40.0, "m")},
@@ -84,6 +85,85 @@ class EntryPoint(unittest.TestCase):
         self.assertAlmostEqual(masses["two_cargo"], base + 2 * 76.6 + 150.0)
         drv = on_board(d, "driver")
         self.assertEqual([p["id"] for p in drv["parts"] if p["kind"] == "occupant"], ["occupant_R"])
+
+
+def k0_formulas():
+    return {f["formula_id"]: f for f in solvers.formula_registry().list_formulas()}
+
+
+class Declarations(unittest.TestCase):
+    """The load-case params and the K0 pairs that the load-case builders and the agents use."""
+
+    def test_describe_params(self):
+        for name, tool in TOOLS.items():
+            with self.subTest(tool=name):
+                desc = tool.describe()
+                self.assertEqual(desc["name"], name)
+                self.assertEqual(desc["tests"], tool.tests)
+                recs = desc["params"]
+                names = [p["name"] for p in recs]
+                self.assertEqual(len(names), len(set(names)))
+                self.assertEqual(recs[0]["name"], "loading")
+                self.assertEqual(recs[0]["choices"], list(LOADINGS))
+                for p in recs:
+                    self.assertIn(p["kind"], ("quantity", "string", "boolean"))
+                    self.assertTrue(p["meaning"])
+                    if p["kind"] == "quantity":
+                        self.assertIn(p["unit"], contract.UNITS)
+                        if "default" in p:
+                            self.assertEqual(contract.errors("quantity", p["default"]), [])
+                            self.assertEqual(p["default"]["unit"], p["unit"])
+                json.dumps(desc)
+
+    def test_predicts_name_k0_outputs_and_declared_params(self):
+        formulas = k0_formulas()
+        for name, tool in TOOLS.items():
+            desc = tool.describe()
+            declared = {p["name"]: p for p in desc["params"]}
+            self.assertTrue(desc["predicts"], name)
+            self.assertEqual(tool.spec()["formulas"], desc["formulas"])
+            for pair in desc["predicts"]:
+                with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
+                    f = formulas[pair["formula_id"]]
+                    self.assertIn(pair["output"], f["outputs"])
+                    for inp, lc_name in pair.get("inputs_from_load_case", {}).items():
+                        self.assertIn(inp, f["inputs"])
+                        self.assertIn(lc_name, declared)
+                        # the registry converts units of the same dimension
+                        self.assertEqual(SI_OF[declared[lc_name]["unit"]], SI_OF[f["inputs"][inp]["unit"]])
+
+    def test_design_variables_fill_absent_params(self):
+        from hiraku.solvers.k2_vehicle.shelf import CrosswindTool
+        d = demo_design()
+        d["variables"].update({"side_area": q(2.4, "m^2"), "centre_of_pressure_height": q(800.0, "mm"),
+                               "side_force_coefficient": q(1.1, "1"), "rolling_resistance": q(0.03, "1"),
+                               "tyre_stiffness": q(120.0, "N/mm")})
+        tool = CrosswindTool()
+        tool._vars = d["variables"]
+        self.assertAlmostEqual(tool.q({}, "side_area", "m^2"), 2.4)
+        self.assertAlmostEqual(tool.q({"side_area": q(2.0, "m^2")}, "side_area", "m^2"), 2.0)  # the load case first
+        self.assertAlmostEqual(tool.q({}, "cy", "1"), 1.1)
+        self.assertTrue(tool.given({}, "cy"))
+        self.assertFalse(tool.given({}, "drift_time"))
+        veh = build_vehicle(on_board(d, "two_cargo"))
+        aero = tool.aero(veh, {})
+        ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
+        self.assertAlmostEqual(aero.side_area, 2.4)
+        self.assertAlmostEqual(aero.side_cp[2] + float(veh.cg_s[2]) - ground, 0.8)
+        self.assertEqual({c.c_rr for c in veh.corners}, {0.03})
+        self.assertEqual({c.k_z for c in veh.corners}, {120e3})
+
+    def test_unread_params_are_named_and_bad_choices_fail(self):
+        d = demo_design()
+        lc = {"load_case_id": "x", "params": {"stepheight": q(100.0, "mm")}}
+        rec = TOOLS["step_climb_dynamic"].run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "failed")
+        self.assertIn("stepheight", rec["effects"][0]["name"])
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        lc = {"load_case_id": "x", "params": {"direction": "up"}}
+        rec = TOOLS["lane_change"].run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "failed")
+        self.assertIn("direction", rec["error"])
 
 
 class KcChannels(unittest.TestCase):
@@ -130,6 +210,16 @@ class Runs(unittest.TestCase):
                 self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
                 self.assertTrue(rec["series"])
                 json.dumps(rec)
+
+    def test_paired_results_carry_the_formula_unit(self):
+        formulas = k0_formulas()
+        for name, rec in self.recs.items():
+            units = {r["quantity"]: r["unit"] for r in rec["results"]}
+            for pair in TOOLS[name].describe()["predicts"]:
+                with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
+                    self.assertIn(pair["quantity"], units)
+                    self.assertEqual(units[pair["quantity"]],
+                                     formulas[pair["formula_id"]]["outputs"][pair["output"]]["unit"])
 
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")
