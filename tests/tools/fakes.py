@@ -15,7 +15,7 @@ from hiraku import contract
 from hiraku.catalog import loading_of
 from hiraku.tools.summary import design_summary
 
-G = 9.80665  # standard gravity, m/s^2 (exact by definition)
+G = 9.80665  # standard gravity, m/s^2. Source: 3rd CGPM (1901), a defined value (exact)
 
 Record = dict[str, Any]
 

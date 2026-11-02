@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 from hiraku import contract
+from hiraku.agent.session import STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import analyze, compare, record_cause, record_prediction, trusted_analysis
@@ -204,8 +205,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 
     A mismatch stops the run unless the plan names it in expected_mismatch;
-    then the plan's cause (written in the plan with its source) is recorded and the step predicts again with the plan's retry, or,
-    with no retry, the run stops there.
+    then the plan's cause (written in the plan with its source) is recorded and
+    the step predicts again with the plan's retry, or, with no retry, the run
+    stops there. Ctrl+C finishes the run as stopped and is raised again.
     """
     s = ctx.store
     plan = plan or load_plan(ctx.project["product"])
@@ -213,7 +215,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
-    status, reason = "done", None
+    status, reason, interrupted = "done", None, False
 
     for step in plan["steps"]:
         lc = ctx.load_case(step["load_case"])
@@ -234,6 +236,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             _say(ctx, agent, lc, f"止まりました: {e}")
             status, reason = "stopped", str(e)
             break
+        except KeyboardInterrupt:
+            status, reason, interrupted = "stopped", STOPPED_BY_USER, True
+            break
 
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
@@ -243,4 +248,6 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         if left:
             status, reason = "stopped", left
     s.finish(status, stop_reason=reason)
+    if interrupted:
+        raise KeyboardInterrupt
     return status
