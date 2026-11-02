@@ -7,8 +7,12 @@ chunks shown one after another; the chunk boundaries are placed at pauses
 found in the sentence's audio (or by text length when no pause is near).
 The English line stays up for the whole sentence.
 
-    py promo/subs.py layout VOICE_DIR OUT_DIR [--cuts N00,N01] [--hot "99 %"]
+    py promo/subs.py layout VOICE_DIR OUT_DIR [--cuts N00,N01] [--hot "99 %"] [--script SCRIPT]
     py promo/subs.py burn VIDEO OUT_DIR/subs.ass OUT.mp4 --audio OUT_DIR/narration.wav
+
+``--script`` takes the slots and the text from the script instead of from
+``voice.json``, so slots can be changed without synthesizing again; it names
+the sentences whose text changed since they were synthesized.
 
 Look (fixed, 1920x1080 coordinates, scaled by libass for 4K): an ink band
 over the bottom 170 px for the whole video, Japanese 48 px bold with its bottom
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import array
+import itertools
 import json
 import math
 import subprocess
@@ -29,8 +34,10 @@ from pathlib import Path
 
 try:
     from promo.export import ffmpeg_path
+    from promo.voice import Line, parse_script
 except ImportError:  # run as a script: promo/ is on sys.path
     from export import ffmpeg_path
+    from voice import Line, parse_script
 
 BAND_TOP, BAND_H = 910, 170
 JA_Y, EN_Y = 995, 1040
@@ -60,19 +67,26 @@ def split_at_commas(text: str) -> list[str]:
 
 
 def chunk_sentence(text: str, max_em: float = JA_MAX_EM) -> list[str]:
-    """Pack comma-separated parts into as few one-line chunks as fit."""
+    """Split at 「、」 into as few one-line chunks as fit, as even in width as possible.
+
+    A part wider than one line on its own stays whole (it is not cut mid-phrase).
+    """
     if em_width(text) <= max_em:
         return [text]
-    chunks, cur = [], ""
-    for part in split_at_commas(text):
-        if cur and em_width(cur + part) > max_em:
-            chunks.append(cur)
-            cur = part
-        else:
-            cur += part
-    if cur:
-        chunks.append(cur)
-    return chunks
+    parts = split_at_commas(text)
+    widths = [em_width(p) for p in parts]
+    limit = max(max_em, max(widths))
+    for k in range(2, len(parts) + 1):
+        best = None
+        for cuts in itertools.combinations(range(1, len(parts)), k - 1):
+            bounds = (0, *cuts, len(parts))
+            groups = [sum(widths[a:b]) for a, b in zip(bounds, bounds[1:])]
+            if max(groups) <= limit and (best is None or max(groups) < best[0]):
+                best = (max(groups), bounds)
+        if best:
+            bounds = best[1]
+            return ["".join(parts[a:b]) for a, b in zip(bounds, bounds[1:])]
+    return parts
 
 
 def speech_weight(text: str) -> float:
@@ -284,10 +298,44 @@ def mix_voice(placed: list[dict], voice_dir: Path, out: Path, total_s: float) ->
 
 # --- commands -----------------------------------------------------------------
 
+def apply_script(lines: list[dict], script: list[Line]) -> tuple[list[dict], list[str]]:
+    """Slots and text from the script, audio as measured.
+
+    Sentences are matched by cut and order within the cut. Returns the lines
+    and the audio files whose sentence text has changed (to synthesize again).
+    """
+    def keyed(items, cut_of):
+        seen: dict[str, int] = {}
+        out = {}
+        for it in items:
+            c = cut_of(it)
+            seen[c] = seen.get(c, 0) + 1
+            out[(c, seen[c])] = it
+        return out
+
+    voiced = keyed(lines, lambda ln: ln["cut"])
+    scripted = keyed(script, lambda ln: ln.cut)
+    if voiced.keys() != scripted.keys():
+        raise ValueError("the script and the voice files have different sentences: "
+                         + ", ".join(f"{c}#{k}" for c, k in sorted(voiced.keys() ^ scripted.keys())))
+    out, stale = [], []
+    for key, ln in voiced.items():
+        s = scripted[key]
+        if s.ja != ln["ja"]:
+            stale.append(ln["file"])
+        out.append({**ln, "start": s.start, "end": s.end, "ja": s.ja, "en": s.en})
+    return out, stale
+
+
 def cmd_layout(voice_dir: Path, out_dir: Path, cuts: list[str] | None, hot: list[str],
-               lead: float) -> None:
+               lead: float, script: Path | None = None) -> None:
     meta = json.loads((voice_dir / "voice.json").read_text(encoding="utf-8"))
-    lines = [ln for ln in meta["lines"] if not cuts or ln["cut"] in cuts]
+    lines = meta["lines"]
+    if script:
+        lines, stale = apply_script(lines, parse_script(script.read_text(encoding="utf-8")))
+        for f in stale:
+            print(f"  {f}: the script's text differs from what was synthesized; synthesize again")
+    lines = [ln for ln in lines if not cuts or ln["cut"] in cuts]
     if not lines:
         raise SystemExit("no sentences for those cuts")
     origin = lines[0]["start"]
@@ -358,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cuts", help="comma-separated cuts; time 0 is the first cut's start")
     p.add_argument("--hot", action="append", default=[], help="text shown in the warm colour")
     p.add_argument("--lead", type=float, default=LEAD_S)
+    p.add_argument("--script", type=Path, help="take slots and text from this script")
     p = sub.add_parser("burn")
     p.add_argument("video", type=Path)
     p.add_argument("ass", type=Path)
@@ -366,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "layout":
         cuts = a.cuts.split(",") if a.cuts else None
-        cmd_layout(a.voice_dir, a.out_dir, cuts, a.hot, a.lead)
+        cmd_layout(a.voice_dir, a.out_dir, cuts, a.hot, a.lead, a.script)
     elif a.cmd == "burn":
         cmd_burn(a.video, a.ass, a.out, a.audio)
     return 0
