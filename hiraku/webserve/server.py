@@ -168,6 +168,23 @@ def list_runs(runs_dir: Path) -> list[dict[str, Any]]:
     return out
 
 
+class _NullWriter:
+    """Passes headers through but drops the body (for HEAD)."""
+
+    def __init__(self, raw):
+        self._raw = raw
+        self._headers_done = False
+
+    def write(self, data: bytes) -> int:
+        if not self._headers_done:
+            self._headers_done = True
+            return self._raw.write(data)
+        return len(data)
+
+    def flush(self) -> None:
+        self._raw.flush()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "HirakuWebserve/0.1"
     web_dir: Path = WEB_DIR
@@ -193,6 +210,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         self._send_static(path)
+
+    def do_HEAD(self) -> None:  # noqa: N802 (stdlib name)
+        # Answer like GET without a body (used by tools that probe the server).
+        self.wfile = _NullWriter(self.wfile)
+        self.do_GET()
 
     def _send_events(self, run_id: str, query: dict[str, list[str]]) -> None:
         path = events_path(self.runs_dir, run_id)

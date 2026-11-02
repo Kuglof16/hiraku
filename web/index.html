@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIRAKU</title>
+<link rel="stylesheet" href="css/app.css">
+<!-- three.js r170 (0.170.0) from jsDelivr; the version is pinned here and nowhere else. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="stage" class="stage">
+  <header class="topbar">
+    <div class="brand"><span class="wordmark">HIRAKU</span><span class="want" id="want"></span></div>
+    <div class="pills">
+      <span class="pill" id="pill-version">版 —</span>
+      <span class="pill" id="pill-cost">費用 —</span>
+    </div>
+    <div class="mode" id="mode"></div>
+  </header>
+
+  <nav class="tabsrow">
+    <div class="tabs" id="tabs">
+      <button class="tab" data-tab="bench">作業台</button>
+      <button class="tab" data-tab="grid">全分野</button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </nav>
+
+  <main class="main" id="main">
+    <section class="col-left">
+      <div class="panel agents">
+        <h2>エージェント</h2>
+        <ul id="agents"></ul>
+      </div>
+      <div class="panel logpanel">
+        <h2>記録</h2>
+        <ol id="log"></ol>
+      </div>
+    </section>
+
+    <section class="col-center" id="view-bench">
+      <div class="tests" id="tests"></div>
+      <div class="viewport" id="viewport">
+        <div class="toggles" id="toggles"></div>
+        <div class="legend" id="legend"></div>
+        <div class="bubble" id="bubble"></div>
+        <div class="hookflash" id="hookflash"></div>
+        <div class="running" id="running"></div>
+        <div class="playbar" id="playbar">
+          <button class="pb-play" id="pb-play" title="再生 / 一時停止 (Space)">▶</button>
+          <div class="pb-track" id="pb-track">
+            <div class="pb-fill" id="pb-fill"></div>
+            <div class="pb-ticks" id="pb-ticks"></div>
+            <div class="pb-knob" id="pb-knob"></div>
+          </div>
+          <span class="pb-time" id="pb-time">0.0 / 0.0 秒</span>
+          <button class="pb-speed" id="pb-speed" title="速さ">1×</button>
+          <button class="pb-live" id="pb-live" title="実行中の最新に戻る">LIVE</button>
+        </div>
+      </div>
+      <p class="hint" id="hint">カメラ: ドラッグで回す・右ドラッグで動かす・ホイールで寄る ／ Space 再生・← → 前後の記録</p>
+    </section>
+
+    <section class="col-center grid-view" id="view-grid" hidden>
+      <div class="grid-head" id="grid-head"></div>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="col-right">
+      <div class="panel chain">
+        <h2>予測 → 解析 → 照合</h2>
+        <div class="card" id="card-pred"></div>
+        <div class="card" id="card-ana"></div>
+        <div class="card" id="card-cmp"></div>
+        <p class="foot">食い違ったときは、原因が書かれるまでその分野は先に進めない (hooks)</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusrow" id="statusrow">
+    <div class="activity" id="activity"></div>
+    <div class="hooks" id="hooks"></div>
+  </footer>
+  <div class="subband" id="subband"></div>
+
+  <div class="runlist" id="runlist" hidden></div>
+  <div class="dropzone" id="dropzone" hidden>events.jsonl をここに落とすと再生します</div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
