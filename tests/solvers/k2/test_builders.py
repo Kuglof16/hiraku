@@ -13,7 +13,8 @@ from hiraku import contract, solvers
 from hiraku.catalog import REPO_ROOT, load_requirements
 from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
 from hiraku.catalog.builders.common import BuildError
-from hiraku.catalog.builders.k2_tests import BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND
+from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND,
+                                              PREDICTION_ONLY_PARAMS)
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
 from hiraku.tools.summary import design_summary
@@ -60,6 +61,9 @@ class Builders(unittest.TestCase):
         self.assertEqual(set(PLANS), set(BUILDERS))
         for tid, fn in BUILDERS.items():  # the package collects this module
             self.assertIs(ALL_BUILDERS[tid], fn)
+        from hiraku.catalog.builders import PLANS_BEYOND as ALL_PLANS_BEYOND
+        for tid, step in PLANS_BEYOND.items():
+            self.assertIs(ALL_PLANS_BEYOND[tid], step)
 
     def test_load_cases_fit_the_contract(self):
         for tid, lc in self.cases.items():
@@ -71,6 +75,8 @@ class Builders(unittest.TestCase):
         for tid, lc in self.cases.items():
             declared = {p["name"]: p for p in TOOLS[TOOL_OF[tid]].describe()["params"]}
             for name, value in lc["params"].items():
+                if name in PREDICTION_ONLY_PARAMS:  # read by the step's inputs_from, not the tool
+                    continue
                 with self.subTest(test=tid, param=name):
                     self.assertIn(name, declared)
                     p = declared[name]
@@ -116,7 +122,7 @@ class Builders(unittest.TestCase):
             with self.subTest(test=tid):
                 lc = BUILDERS[tid]({"id": tid, "variant": "beyond"}, self.req, self.design)
                 self.assertEqual(contract.errors("load_case", lc), [])
-                self.assertIn("beyond", lc["load_case_id"])
+                self.assertTrue(lc["load_case_id"].endswith("-beyond"), lc["load_case_id"])
                 self.assertTrue(lc["title"].startswith("限界の外"))
                 declared = {p["name"] for p in TOOLS[TOOL_OF[tid]].describe()["params"]}
                 self.assertEqual(set(lc["params"]) - declared, set())
