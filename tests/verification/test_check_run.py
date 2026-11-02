@@ -487,6 +487,30 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "verdict.recorded")["data"]["value"] = {"value": 123.60000000000001, "unit": "MPa"}
         self.assertFlags(ev, "verdict.values")
 
+    # --- the listing of what the hooks did (--effects) -------------------------------
+    def effects(self, events):
+        return "\n".join(cr.run_effects(write_run(self.root / f"r{len(list(self.root.iterdir()))}", events)))
+
+    def test_effects_of_the_sample(self):
+        text = self.effects(sample_events())
+        self.assertIn("HK1_prediction_first cae.strength strength analyze (live); "
+                      "then prediction.recorded pred-0001 (seq=6)", text)
+        self.assertIn("mismatches: 0", text)
+        self.assertIn("ver-0001 R1 max_stress 123.6 MPa <= 156.7 MPa: pass, margin 21.1 %; match "
+                      "(value from the analysis, cmp-0001)", text)
+        self.assertIn("judgement v1 strength: green", text)
+
+    def test_effects_of_a_safe_side_verdict(self):
+        text = self.effects(self.safe_side_flow())
+        self.assertIn("cmp-0001 R1 max_stress: predicted 150 MPa, analyzed 123.6 MPa, diff -17.6 % (tolerance 15 %)", text)
+        self.assertIn("safe side: pinned joints give the larger rail moment", text)
+        self.assertIn("explained_safe_side (value from the prediction, cause-0001, cmp-0001)", text)
+
+    def test_effects_name_a_denial_not_followed_as_asked(self):
+        ev = sample_events()
+        by_kind(ev, "hook.denied")["data"]["rule"] = "HK3_cause_before_continue"  # next is a prediction, not a cause
+        self.assertIn("not the cause.recorded the rule asks for", self.effects(ev))
+
     def test_match_verdict_takes_the_analysis(self):
         ev = sample_events()
         by_kind(ev, "verdict.recorded")["data"]["value_from"] = "prediction"

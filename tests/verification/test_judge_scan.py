@@ -96,6 +96,41 @@ class JudgeScan(unittest.TestCase):
         self.assertIn("hiraku/solvers/c.py:5", numbered)
         self.assertNotIn("hiraku/solvers/c.py:6", numbered)  # has a source note
 
+    def test_numbers_that_are_not_values_from_outside(self):
+        self.commit({
+            "hiraku/solvers/d.py": "\n".join([
+                '"""The quarter car of the check gives 1.891 Hz.',
+                '"""',
+                "G = 9.80665",
+                "",
+                "def deflection(w, L, E, I):",
+                "    return 5 * w * L**4 / (384 * E * I)",
+                "",
+                "def known_answers():",
+                "    return [(150.0, 1.732)]",
+                "",
+                "def settled(h):",
+                "    return h[-1001] * 0.999",
+                "",
+                "class Base:",
+                "    def run(self):",
+                '        """Subclasses do it."""',
+                "        raise NotImplementedError",
+                "",
+                "OCCUPANT_KG = 76.6  # Q33",
+            ]) + "\n",
+            "data/designs/d.json": '{\n  "box": {\n    "center_mm": [\n      -725.0,\n      0.0,\n      330.0\n    ]\n  }\n}\n',
+        })
+        self.assertEqual([str(f) for f in self.scan() if f.rule in ("number.source", "stub")], [])
+
+    def test_values_from_outside_are_still_listed(self):
+        self.commit({
+            "hiraku/solvers/e.py": "RHO = 1.225\n\n\ndef unfinished():\n    raise NotImplementedError\n",
+            "data/designs/e.json": '{\n  "air_density": {\n    "value": 1.225,\n    "unit": "kg/m^3"\n  }\n}\n',
+        })
+        found = {f.where for f in self.scan() if f.rule in ("number.source", "stub")}
+        self.assertEqual(found, {"hiraku/solvers/e.py:1", "hiraku/solvers/e.py:5", "data/designs/e.json:3"})
+
     def test_significant_digits(self):
         self.assertEqual([js._significant(t) for t in ("205000.0", "0.15", "900.0", "1341.64", "7")], [3, 2, 1, 6, 1])
 

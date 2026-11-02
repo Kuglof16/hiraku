@@ -19,11 +19,17 @@ errors (must be fixed before publishing):
 
 review (a person decides):
 - words that suggest quoted speech or a diary (devlog) in commit messages and docs
-- stubs: TODO, FIXME, NotImplementedError, functions whose body is only `pass`
+- stubs: TODO, FIXME, NotImplementedError (not a method whose whole body raises it,
+  which a base class leaves to its subclasses), functions whose body is only `pass`
 - numbers with three or more significant digits in the solvers, catalog, tools
   and data (outside string literals), without a source note
-  (source, 出典, closed form, ...) on the line or the four lines above it
-  (code) or within six lines either side (data)
+  (source, 出典, closed form, a requirement key such as Q33, ...) on the line or
+  the four lines above it (code) or within six lines either side (data).
+  Not counted, as they are not values taken from outside: docstrings, a tool's
+  own known-answer cases (functions named *known_answer*, *check*, test*),
+  constants exact by definition (9.80665, 273.15, ...), guards such as 0.999,
+  integer coefficients of a closed form (384 in 5 w L^4 / (384 E I)),
+  subscripts, and a design's coordinates and sizes in mm (data/designs/)
 - records with verified=false, and data files with no `source`
 - whether README says which values were not checked (確かめていない)
 - binary files (rights of images and other material)
@@ -32,9 +38,11 @@ review (a person decides):
 from __future__ import annotations
 
 import argparse
+import io
 import re
 import subprocess
 import sys
+import tokenize
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -61,7 +69,20 @@ NUMBER_RE = re.compile(r"(?<![\w.])\d+(\.\d+)?(e[-+]?\d+)?(?![\w.])", re.I)
 STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"' + r"|'(?:[^'\\]|\\.)*'")
 VERIFIED_FALSE = re.compile(r'"verified"\s*:\s*false')
 SOURCE_HINT = re.compile(r"(?i)source|basis|出典|closed[- ]form|閉じた式|教科書|textbook|derived|導出|"
-                         r"確かめていない|not (yet )?checked|unverified|assum|仮定|scipy\.constants|CODATA|ISO|JIS|SI\b")
+                         r"確かめていない|checked|unverified|assum|仮定|scipy\.constants|CODATA|ISO|JIS|SI\b|"
+                         r"\bISA\b|defin(ed|ition)|CGPM|"
+                         r"(?-i:\bQ[0-9]{2,}\b)")  # a requirement key: its basis is in the requirements file
+# Numbers that are not values taken from outside, so they need no source note:
+# - inside a tool's own known-answer cases (inputs and expected results of its checks)
+SELF_CHECK_FN = re.compile(r"(?i)known_answer|check|^_?test")
+# - exact by definition (SI or the unit's definition)
+DEFINED = {"9.80665", "273.15", "101325", "101325.0", "25.4", "0.0254", "0.3048", "0.45359237", "1.609344"}
+# - numerical guards just below or above 1 (0.999, 1.001)
+GUARD_RE = re.compile(r"^(0\.9{3,}|1\.0{2,}1)$")
+# - in a design file, coordinates and sizes in mm: the design chooses them
+DESIGN_DIR = "data/designs/"
+TRIPLE_RE = re.compile(r"\[\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\]")
+JSON_LIST_KEY = re.compile(r'"(\w+)"\s*:\s*\[\s*$')
 
 
 @dataclass(frozen=True)
@@ -79,6 +100,85 @@ def _significant(token: str) -> int:
     """Significant digits of a number literal: 205000.0 -> 3, 0.15 -> 2, 900.0 -> 1."""
     mantissa = re.split(r"[eE]", token)[0].replace(".", "").lstrip("0").rstrip("0")
     return len(mantissa)
+
+
+def _text_lines(source: str) -> set[int]:
+    """Line numbers inside multi-line string literals (docstrings, long texts) of Python source."""
+    kinds = {tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
+    out: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type in kinds and tok.end[0] > tok.start[0]:
+                out.update(range(tok.start[0], tok.end[0] + 1))
+    except (tokenize.TokenError, SyntaxError):
+        pass
+    return out
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _enclosing_def(lines: list[str], n: int) -> str | None:
+    """Name of the function that line n (1-based) is in, or None at module or class level."""
+    ind = _indent(lines[n - 1])
+    for k in range(n - 2, -1, -1):
+        s = lines[k]
+        if not s.strip() or s.lstrip().startswith(("#", "@")) or _indent(s) >= ind:
+            continue
+        m = re.match(r"\s*(?:async\s+)?def\s+(\w+)", s)
+        if m:
+            return m.group(1)
+        if _indent(s) == 0:
+            return None
+        ind = _indent(s)  # inside some other block: keep looking outward
+    return None
+
+
+def _abstract_method(lines: list[str], n: int, texts: set[int]) -> bool:
+    """Line n is `raise NotImplementedError` as the whole body of a method: a base class
+    leaving it to its subclasses, not unfinished work."""
+    if not re.match(r"\s*raise NotImplementedError\b", lines[n - 1]):
+        return False
+    for k in range(n - 2, -1, -1):
+        s = lines[k]
+        if not s.strip() or (k + 1) in texts or re.fullmatch(r'\s*[rRuUbB]?("""|\'\'\'|"|\').*\1\s*', s):
+            continue  # blank or the docstring
+        for j in range(k, max(-1, k - 6), -1):  # the def line, maybe above a signature spread over lines
+            m = re.match(r"(\s*)(?:async\s+)?def\s", lines[j])
+            if m:
+                return len(m.group(1)) > 0 and (j == k or s.rstrip().endswith(":"))
+        return False
+    return False
+
+
+def _value_numbers(bare: str) -> list[str]:
+    """Number literals with three or more significant digits that could be values from
+    outside: not defined constants, numerical guards, integer coefficients of a closed
+    form (next to * or /) or subscripts."""
+    out = []
+    for m in NUMBER_RE.finditer(bare):
+        tok = m.group(0)
+        if _significant(tok) < 3 or tok in DEFINED or GUARD_RE.match(tok):
+            continue
+        before, after = bare[:m.start()].rstrip(), bare[m.end():].lstrip()
+        if tok.isdigit() and (before.endswith(("*", "/")) or after.startswith(("*", "/"))):
+            continue  # 5 * w * L**4 / (384 * E * I)
+        if tok.isdigit() and re.search(r"[\w\])]\[-?$", before) and after.startswith("]"):
+            continue  # hist[-1001]
+        out.append(tok)
+    return out
+
+
+def _design_geometry(lines: list[str], n: int) -> bool:
+    """In a design JSON file, line n is an element of a list whose key ends in _mm."""
+    if not re.fullmatch(r"\s*-?[\d.eE+-]+,?\s*", lines[n - 1]):
+        return False
+    for k in range(n - 2, max(-1, n - 6), -1):
+        m = JSON_LIST_KEY.search(lines[k])
+        if m:
+            return m.group(1).endswith("_mm")
+    return False
 
 
 def git(*args: str, cwd: Path) -> str:
@@ -158,10 +258,11 @@ class Scan:
             doc = (suffix in (".md", ".txt") or name.startswith(("docs/", "promo/"))) and name not in NO_SPEECH_CHECK
             code = name.startswith(CODE_DIRS) and not name.startswith(NOT_CODE)
             lines = text.splitlines()
+            texts = _text_lines(text) if suffix == ".py" else set()
             for n, line in enumerate(lines, start=1):
                 self.check_line(f"{name}:{n}", line, doc)
                 if code:
-                    self.check_code_line(name, n, line, lines, suffix)
+                    self.check_code_line(name, n, line, lines, suffix, texts)
             if name == "README.md" and "確かめていない" in text:
                 readme_has_unchecked = True
             if suffix == ".json" and name.startswith("data/"):
@@ -171,17 +272,24 @@ class Scan:
         if "LICENSE" not in names:
             self.add("error", "license", "LICENSE", "missing")
 
-    def check_code_line(self, name: str, n: int, line: str, lines: list[str], suffix: str) -> None:
+    def check_code_line(self, name: str, n: int, line: str, lines: list[str], suffix: str,
+                        texts: set[int] = frozenset()) -> None:
         where = f"{name}:{n}"
-        if STUB_RE.search(line):
+        if STUB_RE.search(line) and not (suffix == ".py" and _abstract_method(lines, n, texts)):
             self.add("review", "stub", where, line.strip())
         if suffix == ".py" and re.match(r"\s*pass\s*(#.*)?$", line):
             prev = next((lines[k] for k in range(n - 2, -1, -1) if lines[k].strip()), "")
             if re.match(r"\s*def\s", prev) or prev.rstrip().endswith('"""'):
                 self.add("review", "stub", where, "function body is only pass")
         if suffix in (".py", ".json", ".yaml", ".yml") and name.startswith(NUMBER_DIRS) and "/tests/" not in f"/{name}":
+            if n in texts or (suffix == ".py" and SELF_CHECK_FN.search(_enclosing_def(lines, n) or "")):
+                return  # a docstring, or a tool's own known-answer cases
+            if suffix == ".json" and name.startswith(DESIGN_DIR) and _design_geometry(lines, n):
+                return
             bare = STRING_RE.sub('""', line.split("#")[0] if suffix == ".py" else line)
-            if any(_significant(m.group(0)) >= 3 for m in NUMBER_RE.finditer(bare)):
+            if name.startswith(DESIGN_DIR):
+                bare = TRIPLE_RE.sub("[]", bare)  # coordinates and box sizes in mm
+            if _value_numbers(bare):
                 # code: the line and the comment lines above it; data: the surrounding object
                 above, below = (4, 0) if suffix == ".py" else (6, 6)
                 near = "\n".join(lines[max(0, n - 1 - above):n + below])
