@@ -42,7 +42,14 @@
         "A",
         "degC",
         "K",
-        "K/W"
+        "K/W",
+        "m^2",
+        "kg/m^3",
+        "kg*m^2",
+        "N/rad",
+        "ohm",
+        "Ah",
+        "J/K"
       ]
     },
     "quantity": {
@@ -542,7 +549,7 @@
       }
     },
     "design": {
-      "description": "One design version. Coordinates in mm, ISO 8855 axes (x forward, y left, z up), origin on the ground below the middle of the front axle. Versions are never rewritten; a change makes a new version.",
+      "description": "One design version. Coordinates in mm, ISO 8855 axes (x forward, y left, z up), origin on the ground below the middle of the front axle, so everything behind the front axle has negative x (the rear axle is at x = -wheelbase). Versions are never rewritten; a change makes a new version.",
       "type": "object",
       "required": [
         "design_version",

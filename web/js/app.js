@@ -1,0 +1,595 @@
+// HIRAKU screen: wires events (live or replay) to the workbench panels and the 3D view.
+//
+// URL parameters
+//   ?run=<run_id>   read runs/<run_id>/events.jsonl from the server (run=sample: the contract sample)
+//   ?src=<url>      read an events.jsonl from any URL instead
+//   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export)
+//   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
+//   ?status=0       hide the bottom status row only
+//   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
+//   ?tab=grid       open on the all-domains grid instead of the workbench
+// window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
+// window.hiraku.load(events, t) shows other events (already parsed) the same way.
+
+import { DOMAINS, DOMAIN_JA, RULES, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
+import { EventFeed, Player, parseJsonl } from "./player.js";
+import { chainFor, judgementState, roundsUsed } from "./state.js";
+import { Workbench3D } from "./workbench3d.js";
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const STAGE_W = 1920;
+const STAGE_H = 1080;
+const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
+
+const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
+const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
+
+const ui = {
+  pinnedLc: null,
+  pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false },
+  frozen: params.has("t"),
+};
+
+if (params.get("video") === "1") document.body.classList.add("video");
+if (params.get("status") === "0") document.body.classList.add("no-status");
+
+// ---- stage scaling -------------------------------------------------------
+const stage = $("stage");
+let stageScale = 1;
+function fitStage() {
+  stageScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+  const left = (window.innerWidth - STAGE_W * stageScale) / 2;
+  const top = (window.innerHeight - STAGE_H * stageScale) / 2;
+  stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  resize3d();
+}
+
+// ---- 3D -------------------------------------------------------------------
+const viewport = $("viewport");
+const bench = new Workbench3D(viewport);
+function resize3d() {
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  if (w > 0 && h > 0) bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+}
+new ResizeObserver(resize3d).observe(viewport);
+window.addEventListener("resize", fitStage);
+
+// ---- player ---------------------------------------------------------------
+const player = new Player();
+if (params.has("speed")) player.speed = Number(params.get("speed")) || 1;
+let feed = null;
+
+// ---- panels ---------------------------------------------------------------
+let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null };
+let contour = null;
+
+function selectedLc(s) {
+  const cases = s.project?.load_cases ?? [];
+  const id = ui.pinnedLc ?? s.focus.loadCaseId ?? cases[0]?.load_case_id ?? null;
+  return id;
+}
+
+function currentTab(s) {
+  if (ui.pinnedTab) return ui.pinnedTab;
+  return s.focus.screen === "A6" ? "grid" : "bench";
+}
+
+function renderTop(s) {
+  $("want").textContent = s.project?.want ?? "";
+  const v = s.currentVersion;
+  const limit = s.project?.round_limit;
+  $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
+  $("pill-cost").textContent = `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  const live = player.live;
+  const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
+  $("mode").innerHTML =
+    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    `<span class="runid">${esc(s.runId ?? "")}</span>`;
+}
+
+function renderChips(s, lcId) {
+  const focusDomain = (s.project?.load_cases ?? []).find((c) => c.load_case_id === lcId)?.domain;
+  $("chips").innerHTML = DOMAINS.map((d) => {
+    const j = judgementState(s, d);
+    const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : "この実行では選んでいない");
+    return `<span class="chip ${j.state} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
+  }).join("");
+}
+
+function renderAgents(s) {
+  const order = [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
+  $("agents").innerHTML = order
+    .map((id) => {
+      const a = s.agents[id];
+      const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
+      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
+    })
+    .join("");
+}
+
+function rank(id) {
+  const fixed = ["lead", "designer", "packager"];
+  if (fixed.includes(id)) return fixed.indexOf(id);
+  if (id.startsWith("cae.")) return 3 + DOMAINS.indexOf(id.slice(4));
+  return 20;
+}
+
+function logItem(e) {
+  const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
+  const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
+  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm">${fmtTime(e.t)}s</span>${note}</li>`;
+}
+
+function renderLog(s) {
+  const ol = $("log");
+  const first = s.log[0]?.seq ?? null;
+  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq) {
+    ol.innerHTML = "";
+    drawn.logLen = 0;
+  }
+  if (s.log.length > drawn.logLen) {
+    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map(logItem).join(""));
+    ol.scrollTop = ol.scrollHeight;
+  }
+  drawn.logLen = s.log.length;
+  drawn.logFirstSeq = first;
+}
+
+function renderTests(s, lcId) {
+  const cases = s.project?.load_cases ?? [];
+  const auto = `<button class="auto ${ui.pinnedLc ? "" : "on"}" data-lc="">自動</button>`;
+  $("tests").innerHTML =
+    auto +
+    cases
+      .map((c) => `<button class="test ${c.load_case_id === lcId ? "on" : ""}" data-lc="${esc(c.load_case_id)}" title="${esc(c.load_case_id)}: ${esc(c.title)}"><span class="tid">${esc(c.test_id)}</span>${esc(c.title)}</button>`)
+      .join("");
+}
+
+function renderChain(s, chain) {
+  const { loadCase, pred, ana, running, cmp, verdict, cause } = chain;
+  // 1. prediction
+  const p = $("card-pred");
+  if (pred) {
+    const inputs = Object.entries(pred.inputs ?? {})
+      .slice(0, 5)
+      .map(([k, q]) => `<span>${esc(k)}</span><span>${esc(fmtQ(q))}</span>`)
+      .join("");
+    const terms = (pred.terms ?? []).filter((t) => typeof t.share === "number");
+    const termsHtml = terms.length
+      ? `<div class="terms">${terms
+          .slice(0, 4)
+          .map((t) => `<span>${esc(t.name)}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${fmtPct(t.share, 0)}</span>`)
+          .join("")}</div>`
+      : "";
+    const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
+    p.className = "card";
+    p.innerHTML =
+      `<h3>1. 予測<small>手計算の段 (K0)・${esc(agentLongName(pred.agent))}</small></h3>` +
+      `<div class="sub">${esc(quantityName(pred.quantity))}・${esc(pred.formula_id)}</div>` +
+      `<div class="expr">${esc(pred.expression)}</div>` +
+      `<div class="kv">${inputs}</div>` +
+      `<div class="big">= ${esc(fmtVU(pred.value, pred.unit))}</div>` +
+      termsHtml +
+      (asm ? `<ul class="asm">${asm}</ul>` : "");
+  } else {
+    p.className = "card wait";
+    p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (H1)` : "試験がまだ無い"}</div>`;
+  }
+  // 2. analysis
+  const a = $("card-ana");
+  if (ana) {
+    const res = (ana.results ?? []).slice(0, 3).map((r) => `<tr><td>${esc(quantityName(r.quantity))}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    a.className = ana.status === "failed" ? "card bad" : "card";
+    a.innerHTML =
+      `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
+      `<div class="sub">${esc(ana.tool)}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
+      (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`);
+  } else if (running) {
+    a.className = "card busy";
+    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${esc(running.tool)} で解析中…</div>`;
+  } else {
+    a.className = "card wait";
+    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${pred ? "予測を受けて解析を待っている" : "予測のあとに走る"}</div>`;
+  }
+  // 3. comparison (+ verdict)
+  const c = $("card-cmp");
+  if (cmp) {
+    const ok = cmp.status === "match";
+    c.className = `card ${ok ? "ok" : "bad"}`;
+    let v = "";
+    if (verdict) {
+      v = `<div class="verdict ${verdict.pass ? "ok" : "bad"}">判定: ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}<br><span class="sub">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+    } else if (ok && loadCase?.criterion) {
+      v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
+    }
+    const cz = cause
+      ? `<div class="cause">原因: ${esc(cause.cause)}<br>直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>`
+      : ok
+        ? ""
+        : `<div class="cause">原因が書かれるまで、この分野は先に進めない (H3)</div>`;
+    c.innerHTML =
+      `<h3>3. 照合</h3>` +
+      `<table><tr><td>予測</td><td>${esc(fmtQ(cmp.predicted))}</td></tr><tr><td>解析</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
+      `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
+      `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
+      v +
+      cz;
+  } else {
+    c.className = "card wait";
+    const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
+    c.innerHTML = `<h3>3. 照合</h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>`;
+  }
+}
+
+function buildContour(chain) {
+  const ana = chain.shown;
+  if (!ana || ana.status !== "ok") return null;
+  const field = (ana.fields ?? []).find((f) => f.kind === "stress");
+  if (!field) return null;
+  const values = field.per_member ?? {};
+  const nodes = Object.fromEntries(Object.entries(field.per_node ?? {}).filter(([, v]) => typeof v === "number"));
+  const all = [...Object.values(values), ...Object.values(nodes)].filter(Number.isFinite);
+  if (!all.length) return null;
+  const crit = chain.loadCase?.criterion;
+  const limitKnown = !!crit && crit.limit?.unit === field.unit && crit.limit.value > 0;
+  const fieldMax = Math.max(...all);
+  const max = limitKnown ? crit.limit.value : fieldMax;
+  const result = (ana.results ?? []).find((r) => r.where && r.unit === field.unit) ?? null;
+  return { key: `${ana.analysis_id}|${field.label}`, values, nodes, max, limitKnown, field, crit, fieldMax, where: result?.where, result, analysisId: ana.analysis_id };
+}
+
+function renderLegend(ct) {
+  const el = $("legend");
+  if (!ct || !ui.toggles.contour) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const unit = unitLabel(ct.field.unit);
+  const rows = [];
+  for (let i = BANDS - 1; i >= 0; i -= 1) {
+    const top = (ct.max * (i + 1)) / BANDS;
+    rows.push(`<span class="sw" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 ? fmt(top, 3) : ""}</span>`);
+  }
+  rows.push(`<span></span><span class="tk">0</span>`);
+  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた</div>` : "";
+  el.innerHTML =
+    `<div class="ttl">${esc(ct.field.label ?? "応力")} [${esc(unit)}]</div>` +
+    `<div class="bar">${rows.join("")}</div>` +
+    over +
+    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : "・上端 = 最大値"}</div>`;
+}
+
+function renderToggles() {
+  const t = ui.toggles;
+  const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
+  $("toggles").innerHTML =
+    btn("shape", "形状", !t.contour) + btn("contour", "コンター", t.contour) + btn("arrows", "力の矢印", t.arrows) + btn("cg", "重心", t.cg) + btn("parts", "部品", t.parts) + btn("names", "名前", t.names);
+}
+
+function renderGrid(s) {
+  const v = s.currentVersion;
+  const reds = DOMAINS.filter((d) => judgementState(s, d).state === "red").length;
+  const flow = s.versions
+    .map((ver) => {
+      const r = DOMAINS.filter((d) => s.judgements[`${ver}|${d}`]?.state === "red").length;
+      return `<span class="pill">版 ${ver} 赤 ${r}</span>`;
+    })
+    .join(" → ");
+  $("grid-head").innerHTML = `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds}</span>${flow}`;
+  const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
+  $("tiles").innerHTML = DOMAINS.map((d) => {
+    const j = judgementState(s, d);
+    const word = { green: "緑 ✓", red: "赤 — 直す", pending: "まだ", off: "選んでいない" }[j.state];
+    const body = j.judgement?.summary ?? picks[d]?.reason ?? "";
+    const nv = j.judgement?.verdict_ids?.length ?? 0;
+    return `<div class="tile ${j.state}"><h3>${esc(DOMAIN_JA[d])}</h3><div class="state">${word}</div><div>${esc(body)}</div>${nv ? `<div class="sub">判定 ${nv} 件</div>` : ""}</div>`;
+  }).join("");
+}
+
+function renderStatus(s) {
+  const act = s.activity;
+  $("activity").innerHTML = act ? `<span class="dot"></span>${esc(agentLongName(act.agent) || "HIRAKU")}: ${esc(act.text)}` : "";
+}
+
+function renderHooks(s, playhead) {
+  const counts = {};
+  const recent = {};
+  for (const d of s.hooks.denied) {
+    counts[d.rule] = (counts[d.rule] ?? 0) + 1;
+    if (playhead - d.t < SHOW_S) recent[d.rule] = true;
+  }
+  for (const b of s.hooks.blockedStops) {
+    counts[b.rule] = (counts[b.rule] ?? 0) + 1;
+    if (playhead - b.t < SHOW_S) recent[b.rule] = true;
+  }
+  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}">${r.id} ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
+  if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
+}
+let hooksHtml = "";
+
+function fade(dt) {
+  if (dt < 0 || dt > SHOW_S) return 0;
+  return Math.min(1, dt / 0.25, (SHOW_S - dt) / 0.6);
+}
+
+function renderTransient(s, playhead, chain) {
+  const said = s.said;
+  const b = $("bubble");
+  const sa = said ? fade(playhead - said.t) : 0;
+  b.style.opacity = sa;
+  if (said && b.dataset.seq !== String(said.seq)) {
+    b.dataset.seq = String(said.seq);
+    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div>${esc(said.text)}`;
+  }
+  const den = s.denied;
+  const h = $("hookflash");
+  h.style.opacity = den ? fade(playhead - den.t) : 0;
+  if (den && h.dataset.seq !== String(den.seq)) {
+    h.dataset.seq = String(den.seq);
+    h.innerHTML = `<b>hooks が止めた (${esc(den.rule)} ${esc(den.ruleJa ?? "")})</b>${esc(den.text)}`;
+  }
+  const run = chain.running ?? Object.values(s.running)[0] ?? null;
+  const r = $("running");
+  r.style.opacity = run ? 1 : 0;
+  if (run) {
+    const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
+    r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
+  }
+  renderHooks(s, playhead);
+}
+
+// ---- play bar ----------------------------------------------------------------
+let tickKey = "";
+function renderPlaybar() {
+  const dur = Math.max(player.duration, 1e-6);
+  const f = Math.max(0, Math.min(1, player.playhead / dur));
+  $("pb-fill").style.width = `${f * 100}%`;
+  $("pb-knob").style.left = `${f * 100}%`;
+  $("pb-time").textContent = `${fmtTime(player.playhead)} / ${fmtTime(player.duration)} 秒`;
+  $("pb-play").textContent = player.playing ? "❚❚" : "▶";
+  $("pb-speed").textContent = `${player.speed}×`;
+  const live = $("pb-live");
+  live.classList.toggle("show", player.live);
+  live.classList.toggle("on", player.live && player.liveAttached);
+  const key = `${player.events.length}|${player.duration.toFixed(1)}`;
+  if (key !== tickKey) {
+    tickKey = key;
+    $("pb-ticks").innerHTML = player.events
+      .filter((e) => e.kind !== "cost.updated")
+      .map((e) => {
+        const cls = e.kind.startsWith("hook.") ? "hook" : e.kind === "verdict.recorded" || e.kind === "judgement.updated" ? "ok" : "";
+        return `<i class="${cls}" style="left:${(e.t / dur) * 100}%"></i>`;
+      })
+      .join("");
+  }
+}
+
+function seekFromPointer(ev) {
+  const rect = $("pb-track").getBoundingClientRect();
+  const f = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+  player.seek(f * player.duration);
+}
+
+// ---- frame ----------------------------------------------------------------
+function draw() {
+  const s = player.state;
+  const lcId = selectedLc(s);
+  const tab = currentTab(s);
+  const togglesKey = JSON.stringify(ui.toggles);
+  const chain = chainFor(s, lcId, s.currentVersion);
+  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
+    renderTop(s);
+    renderChips(s, lcId);
+    renderAgents(s);
+    renderLog(s);
+    renderTests(s, lcId);
+    renderChain(s, chain);
+    renderStatus(s);
+    renderToggles();
+    $("view-bench").hidden = tab !== "bench";
+    $("view-grid").hidden = tab !== "grid";
+    for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
+    if (tab === "grid") renderGrid(s);
+
+    const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
+    bench.setDesign(design);
+    const ct = buildContour(chain);
+    if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
+    bench.setContour(ui.toggles.contour ? contour : null);
+    renderLegend(contour);
+    bench.setVectors(chain.shown?.status === "ok" ? chain.shown.vectors ?? null : null);
+    bench.setToggles(ui.toggles);
+    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
+  }
+  renderTransient(s, player.playhead, chain);
+  renderPlaybar();
+  bench.animate(player.playhead, !!chain.running);
+  if (tab === "bench") bench.render();
+}
+
+let lastTs = null;
+function loop(ts) {
+  const dt = lastTs === null ? 0 : Math.min(0.25, (ts - lastTs) / 1000);
+  lastTs = ts;
+  if (!ui.frozen) player.tick(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+async function seekAndDraw(t) {
+  ui.frozen = true;
+  player.pause();
+  player.seek(t);
+  draw();
+  await nextFrame();
+  draw();
+  await nextFrame();
+  document.documentElement.dataset.t = String(player.playhead);
+  return player.playhead;
+}
+
+let readyResolve;
+const ready = new Promise((r) => (readyResolve = r));
+window.hiraku = {
+  player,
+  ready,
+  seek: seekAndDraw,
+  state: () => player.state,
+  bench,
+  // Replace what is shown with these events (parsed objects) and stop at t.
+  load: (events, t = 0) => {
+    feed?.stop();
+    resetPlayer();
+    player.append(events);
+    return seekAndDraw(t);
+  },
+};
+
+// ---- input ------------------------------------------------------------------
+$("pb-play").addEventListener("click", () => {
+  ui.frozen = false;
+  player.toggle();
+});
+$("pb-speed").addEventListener("click", () => player.cycleSpeed());
+$("pb-live").addEventListener("click", () => {
+  ui.frozen = false;
+  player.attachLive();
+});
+$("pb-track").addEventListener("pointerdown", (ev) => {
+  const track = ev.currentTarget;
+  track.setPointerCapture(ev.pointerId);
+  seekFromPointer(ev);
+  const move = (e) => seekFromPointer(e);
+  track.addEventListener("pointermove", move);
+  track.addEventListener("pointerup", () => track.removeEventListener("pointermove", move), { once: true });
+});
+$("tests").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-lc]");
+  if (!b) return;
+  ui.pinnedLc = b.dataset.lc || null;
+  drawn.rev = -2;
+});
+$("toggles").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-toggle]");
+  if (!b) return;
+  const k = b.dataset.toggle;
+  if (k === "shape") ui.toggles.contour = false;
+  else ui.toggles[k] = !ui.toggles[k];
+});
+$("tabs").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-tab]");
+  if (!b) return;
+  ui.pinnedTab = b.dataset.tab;
+});
+window.addEventListener("keydown", (ev) => {
+  if (ev.target.closest("input, textarea")) return;
+  if (ev.code === "Space") {
+    ev.preventDefault();
+    ui.frozen = false;
+    player.toggle();
+  } else if (ev.code === "ArrowRight") player.step(1);
+  else if (ev.code === "ArrowLeft") player.step(-1);
+  else if (ev.code === "Home") player.seek(0);
+  else if (ev.code === "End") player.seek(player.duration);
+});
+
+// Drop an events.jsonl onto the page to replay it.
+window.addEventListener("dragover", (ev) => {
+  ev.preventDefault();
+  $("dropzone").hidden = false;
+});
+window.addEventListener("dragleave", (ev) => {
+  if (ev.target === $("dropzone")) $("dropzone").hidden = true;
+});
+window.addEventListener("drop", async (ev) => {
+  ev.preventDefault();
+  $("dropzone").hidden = true;
+  const file = ev.dataTransfer?.files?.[0];
+  if (!file) return;
+  feed?.stop();
+  loadEvents(parseJsonl(await file.text()), { live: false });
+});
+
+// ---- loading ------------------------------------------------------------------
+function resetPlayer() {
+  player.events = [];
+  player.live = false;
+  player.liveAttached = false;
+  player.playhead = 0;
+  player.rebuild();
+  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null };
+  $("runlist").hidden = true;
+}
+
+function startPlayback() {
+  if (params.has("t")) {
+    seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
+    return;
+  }
+  ui.frozen = false;
+  if (player.live) player.attachLive();
+  else if (params.get("autoplay") !== "0") player.play();
+  readyResolve(player.playhead);
+}
+
+function loadEvents(events, { live }) {
+  resetPlayer();
+  player.append(events);
+  player.live = live;
+  startPlayback();
+}
+
+async function openRun(runId) {
+  resetPlayer();
+  feed = new EventFeed(runId, (evs) => player.append(evs));
+  try {
+    await feed.readAll();
+  } catch (e) {
+    showRunList(`読めなかった: ${e}`);
+    return;
+  }
+  const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
+  player.live = follow;
+  if (follow) feed.follow(() => player.finished);
+  startPlayback();
+}
+
+async function showRunList(message = "") {
+  const box = $("runlist");
+  box.hidden = false;
+  let runs = [];
+  try {
+    runs = await (await fetch("/api/runs", { cache: "no-store" })).json();
+  } catch (e) {
+    message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
+  }
+  const rows = runs
+    .map((r) => {
+      const st = r.sample ? "見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
+      const open = `<a href="?run=${encodeURIComponent(r.run_id)}">再生</a>`;
+      const live = !r.finished ? `<a href="?run=${encodeURIComponent(r.run_id)}">追いかける</a>` : `<a href="?run=${encodeURIComponent(r.run_id)}&video=1">動画の配置で</a>`;
+      return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}</td><td>${r.finished ? open : live}</td></tr>`;
+    })
+    .join("");
+  box.innerHTML =
+    `<h2>実行の一覧</h2>${message ? `<p class="err">${esc(message)}</p>` : ""}` +
+    `<table><tr><th>依頼</th><th>状態</th><th></th></tr>${rows}</table>` +
+    `<p class="note">events.jsonl をこの画面に落としても再生できます。</p>`;
+}
+
+fitStage();
+requestAnimationFrame(loop);
+if (params.get("run")) openRun(params.get("run"));
+else if (params.get("src")) {
+  fetch(params.get("src"), { cache: "no-store" })
+    .then((r) => r.text())
+    .then((text) => loadEvents(parseJsonl(text), { live: false }))
+    .catch((e) => showRunList(`読めなかった: ${e}`));
+} else showRunList();

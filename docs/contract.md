@@ -26,7 +26,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 ## 座標と単位
 
-- 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面
+- 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面。だから前の車軸より後ろは x が負で、後ろの車軸は x = −ホイールベース。前後は x の大小で決め (大きいほど前)、「x が最小 = 前」としない
 - design の数値は欄の名前に単位を付ける (`position_mm`、`mass_kg`、`E_MPa`)
 - それ以外の数値は `{"value": 数, "unit": "単位"}`。単位は schema の `unit` の一覧だけ。照合は同じ単位の文字どうしでしかしない (変換は K0 の道具でしてから)
 
