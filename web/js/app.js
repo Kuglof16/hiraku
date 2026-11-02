@@ -253,7 +253,7 @@ function renderLegend(ct) {
   const rows = [];
   for (let i = BANDS - 1; i >= 0; i -= 1) {
     const top = (ct.max * (i + 1)) / BANDS;
-    rows.push(`<span class="sw" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 ? fmt(top, 3) : ""}</span>`);
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 ? fmt(top, 3) : ""}</span>`);
   }
   rows.push(`<span></span><span class="tk">0</span>`);
   const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた</div>` : "";

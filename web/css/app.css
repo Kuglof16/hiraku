@@ -278,8 +278,10 @@ body.video .hint { display: none; }
 .legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; }
 .legend .sw { height: 16px; border-left: 1.5px solid var(--ink); border-right: 1.5px solid var(--ink); }
 .legend .sw:first-child { border-top: 1.5px solid var(--ink); }
-.legend .sw:last-of-type { border-bottom: 1.5px solid var(--ink); }
+.legend .sw.end { border-bottom: 1.5px solid var(--ink); }
 .legend .tk { font-size: 12px; font-variant-numeric: tabular-nums; line-height: 16px; transform: translateY(-8px); }
+body.video .legend .sw { height: 13px; }
+body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .legend .lim { color: var(--red); font-weight: 600; margin-top: 6px; }
 .legend .src { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
