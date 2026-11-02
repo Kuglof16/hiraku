@@ -1362,11 +1362,38 @@
           "type": "string",
           "pattern": "^cmp-[0-9]{4,}$",
           "description": "A later matching comparison."
+        },
+        "safe_side": {
+          "type": "boolean",
+          "description": "The CAE role judged that the comparison, though a mismatch, is seen from the safe side: the cause explains the gap and the unfavourable one of the two values bounds the true value. Then a verdict may be made from that value."
+        },
+        "safe_side_reason": {
+          "type": "string",
+          "description": "Why the unfavourable value bounds the true one (required when safe_side is true)."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "safe_side": {
+                "const": true
+              }
+            },
+            "required": [
+              "safe_side"
+            ]
+          },
+          "then": {
+            "required": [
+              "safe_side_reason"
+            ]
+          }
+        }
+      ]
     },
     "verdict": {
-      "description": "Pass or fail of one test. Made only from a matching comparison, inside the compare tool.",
+      "description": "Pass or fail of one test. Made inside the tools only: from a matching comparison (compare), or from an explained safe-side mismatch (record_cause with safe_side true).",
       "type": "object",
       "required": [
         "verdict_id",
@@ -1429,6 +1456,23 @@
           "items": {
             "$ref": "#/$defs/req_key"
           }
+        },
+        "basis": {
+          "enum": [
+            "match",
+            "explained_safe_side"
+          ],
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match."
+        },
+        "value_from": {
+          "enum": [
+            "analysis",
+            "prediction"
+          ]
+        },
+        "cause_id": {
+          "type": "string",
+          "pattern": "^cause-[0-9]{4,}$"
         }
       }
     },
@@ -2101,6 +2145,12 @@
           "type": "string"
         },
         "fix": {
+          "type": "string"
+        },
+        "safe_side": {
+          "type": "boolean"
+        },
+        "safe_side_reason": {
           "type": "string"
         }
       }

@@ -35,8 +35,10 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 1. `record_prediction` — Claude は式 (`formula_id`) と入力と前提を選ぶだけ。値は K0 が計算して `prediction` にする
 2. `analyze` — 道具の名前・荷重条件・予測の ID を渡す。全部の解析の道具をこの 1 つの入口から呼ぶ (実行の途中で Claude が作った道具も、MCP の道具を足し直さずに呼べるように)
 3. `compare` — 予測と解析の結果から `comparison`。差は符号つき: `diff_abs` = 解析 − 予測、`diff_rel` = (解析 − 予測) / |予測|。|`diff_rel`| ≤ `tolerance_rel` なら一致。許す幅 `tolerance_rel` は荷重条件に入っていて、モデルは決めない。一致して基準があれば、同じ道具の中で `verdict` も作る
-4. `record_cause` — 食い違いの原因と直し方。書くまでその分野は先に進めない
+4. `record_cause` — 食い違いの原因と直し方。書くまでその分野は先に進めない。原因が説明でき、CAE 役が「安全側で見られている」と判断したときは `safe_side: true` と理由 `safe_side_reason` を付ける。道具は数字の向きを確かめ (基準が `<=` なら予測 ≥ 解析、`>=` なら予測 ≤ 解析。不利な方が予測の側にあること)、合っていれば不利な方の値で `verdict` を作る (`basis: "explained_safe_side"`、`value_from: "prediction"`、`cause_id`)。向きが逆なら断る
 5. 判定 `judgement` — 分野 (7 分野 + 組み立て) ごとに合否をまとめたもの。A6 のタイル
+
+合否 (`verdict`) は道具の中でだけ作る: 一致した照合から (`compare`、`basis: "match"`、値は解析) か、説明された安全側の食い違いから (`record_cause`、上の 4)。`basis` が無いものは `match`。
 
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
