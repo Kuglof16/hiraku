@@ -31,20 +31,27 @@ def generator(product: str) -> ModuleType:
 
 
 def generator_of(design: Record) -> ModuleType:
-    """The generator that made a design: the one whose variables the design carries."""
+    """The generator that made a design: the one whose signature variables the design carries."""
     have = set(design.get("variables", {}))
     for gen in GENERATORS.values():
-        if set(gen.VARIABLES) <= have:
+        if set(gen.SIGNATURE) <= have:
             return gen
     raise DesignGenError("this design was not built from variables here: its variables match no design generator")
 
 
 def variables(design: Record) -> list[Record]:
-    """Every variable of the design's generator with its current value in the design: name,
-    unit, value, default, min and max (revisable ones), revisable, meaning."""
+    """Every variable of the design's generator with its current value in the design (the
+    default for one the design predates): name, unit, value, default, min and max (revisable
+    ones), revisable, meaning."""
     gen = generator_of(design)
     now = design["variables"]
-    return [dict(v, value=now[v["name"]]["value"]) for v in gen.spec() if v["name"] in now]
+    out = []
+    for v in gen.spec():
+        if v["name"] in now:
+            out.append(dict(v, value=now[v["name"]]["value"]))
+        elif not v.get("derived"):
+            out.append(dict(v, value=v["default"]))
+    return out
 
 
 def regenerate(design: Record, changes: dict[str, Record]) -> Record:

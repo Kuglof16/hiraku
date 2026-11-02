@@ -163,6 +163,10 @@ _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing"
              "centre_of_pressure_height", "air_density", "front_cornering_stiffness", "rear_cornering_stiffness",
              "max_steer_angle", "bumper_stiffness", "bumper_stroke", "crush_stiffness", "fatigue_fat_class", "fatigue_slope",
              "fatigue_knee_cycles", "fatigue_slope_after_knee", "tyre_stiffness"]
+# A design built here carries these from the first version on; variables added since
+# take their defaults (which build v1) when an older design lacks them.
+SIGNATURE = ("wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing", "rail_height", "front_overhang",
+             "rear_overhang")
 SEAT_HALF_MM = 275.0  # seat cross members ahead and behind the seat centre (assumption)
 BATTERY_V1 = {"length": 500.0, "width": 600.0, "height": 200.0, "mass": 50.0, "capacity": 100.0}  # the v1 pack (assumption)
 # The v1 motor and reducer (assumption): a bigger motor weighs more, in proportion to

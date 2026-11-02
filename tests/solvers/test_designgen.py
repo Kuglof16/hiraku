@@ -93,6 +93,18 @@ class DesignGenTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "match no design generator"):
             designgen.regenerate({"variables": {}}, {})
 
+    def test_older_design_without_newer_variables(self):
+        """A design saved before some variables existed can still be listed and revised."""
+        old = json.loads(json.dumps(V1))
+        for k in ("tyre_damping_ratio", "seat_x", "wheel_inertia"):
+            del old["variables"][k]
+        got = {v["name"]: v for v in designgen.variables(old)}
+        self.assertEqual(got["seat_x"]["value"], -725.0)  # the default
+        self.assertNotIn("wheel_inertia", got)
+        d = designgen.regenerate(old, {"track": mm(1220)})
+        self.assertEqual(d["variables"]["seat_x"]["value"], -725.0)
+        self.assertEqual(d["variables"]["track"]["value"], 1220.0)
+
     def test_variables_listing(self):
         got = {v["name"]: v for v in designgen.variables(V1)}
         self.assertEqual(got["track"]["value"], 1100.0)
