@@ -133,9 +133,11 @@ def step(x_step: float, height: float, y_range=None) -> BlockRoad:
     return BlockRoad([x_step], [0.0, height], y_range)
 
 
-# ISO 8608 road classes: displacement PSD at n0 = 0.1 cycle/m (geometric mean of
-# each class band), waviness w = 2. NOT checked against the ISO 8608 text; class
-# C agrees with the 128-512 x 1e-6 m^3 band in the requirements catalog.
+# Source: ISO 8608 (road surface profiles), its table of road classes A-H:
+# displacement PSD G_d(n0) at n0 = 0.1 cycle/m (the geometric mean of each class
+# band; class C band 128-512 x 1e-6 m^3) and waviness w = 2. Not checked in this
+# repository: the ISO 8608 text was not read here, so these values are not
+# verified against it.
 ISO8608_GD_N0 = {"A": 16e-6, "B": 64e-6, "C": 256e-6, "D": 1024e-6, "E": 4096e-6,
                  "F": 16384e-6, "G": 65536e-6, "H": 262144e-6}
 ISO8608_N0 = 0.1
