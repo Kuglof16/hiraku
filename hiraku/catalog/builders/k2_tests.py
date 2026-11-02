@@ -35,8 +35,8 @@ import math
 from typing import Any, Callable
 
 from hiraku.catalog.build import CatalogError, check_design_loading
-from hiraku.catalog.builders.common import BuildError, loading, number, q, text, tolerance
-from hiraku.catalog.loading import LOADING_JA
+from hiraku.catalog.builders.common import BuildError, entry, loading, number, q, text, tolerance
+from hiraku.catalog.loading import CARGO, LOADING_JA
 
 Record = dict[str, Any]
 
@@ -149,8 +149,14 @@ def _cg_y(design: Record, on: str) -> float:
 def _s1_tilt(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
     lim = number(req, "Q60", "deg")
-    return _case(spec, "S1", "handling", f"S1-tilt-{on}", f"傾斜台で倒れない ({LOADING_JA[on]})",
-                 {"loading": on, "direction": "both"}, keys + ["Q60"],
+    params = {"loading": on, "direction": "both"}
+    keys = keys + ["Q60"]
+    if entry(req, "Q41") is not None and CARGO[on]:
+        # the cargo's CG height above its floor as the requirement has it: the prediction places
+        # the cargo there; the tool solves the cargo where the design puts it (and does not read it)
+        params["cargo_cg_above_deck"] = q(number(req, "Q41", "mm"), "mm")
+        keys.append("Q41")
+    return _case(spec, "S1", "handling", f"S1-tilt-{on}", f"傾斜台で倒れない ({LOADING_JA[on]})", params, keys,
                  _crit("tilt_angle", ">=", q(lim, "deg"), f"Q60 {lim:g} deg (for the loading of Q30)", ["Q60"]))
 
 
@@ -317,9 +323,23 @@ BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
 
 # ------------------------------------------------------------------ inputs read off the design
 def _vehicle(design: Record, load_case: Record):
+    """The K2 model of the design for the load case's loading. With params
+    cargo_cg_above_deck (the requirement Q41), the cargo parts' centres are put that high
+    above the floor they stand on (the bottom of their boxes) first."""
+    import copy
+
     from hiraku.solvers.k2_vehicle.drive import on_board
     from hiraku.solvers.k2_vehicle.model import build_vehicle
-    veh = build_vehicle(on_board(design, load_case.get("params", {}).get("loading")))
+    from hiraku.solvers.k2_vehicle.units import si
+    lp = load_case.get("params", {})
+    if "cargo_cg_above_deck" in lp:
+        above = si(lp["cargo_cg_above_deck"], "m") * 1000.0
+        design = copy.deepcopy(design)
+        for p in design.get("parts", []):
+            if p.get("kind") == "cargo":
+                box = p["box"]
+                box["center_mm"][2] = box["center_mm"][2] - box["size_mm"][2] / 2.0 + above
+    veh = build_vehicle(on_board(design, lp.get("loading")))
     ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
     return veh, ground
 
@@ -331,7 +351,8 @@ def _height(veh, ground: float) -> Record:
 def tilt_inputs(design: Record, load_case: Record) -> Record:
     """h, e (toward the side it tips to first) of the whole vehicle; m_s, h_s (above the
     ground: the roll axis of vertical supports) of the sprung part; k, the mean wheel rate;
-    n, the number of axles."""
+    n, the number of axles. With params cargo_cg_above_deck the cargo is placed as the
+    requirement says (see _vehicle)."""
     veh, ground = _vehicle(design, load_case)
     sprung = [c for c in veh.corners if c.dof]
     return {"h": _height(veh, ground), "e": q(abs(float(veh.cg_total[1])) * 1000.0, "mm"),
