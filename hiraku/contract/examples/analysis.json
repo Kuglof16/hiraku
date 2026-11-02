@@ -1,0 +1,55 @@
+{
+  "analysis_id": "ana-0001",
+  "tool": "frame_static",
+  "base": "K1",
+  "design_version": 1,
+  "load_case_id": "R1-step100",
+  "prediction_ids": [
+    "pred-0001"
+  ],
+  "status": "ok",
+  "results": [
+    {
+      "quantity": "max_stress",
+      "value": 123.60000000000001,
+      "unit": "MPa",
+      "where": "rail_L0"
+    }
+  ],
+  "fields": [
+    {
+      "kind": "stress",
+      "label": "von Mises",
+      "unit": "MPa",
+      "per_member": {
+        "rail_L0": 123.60000000000001,
+        "rail_R0": 49.440000000000005,
+        "rail_L1": 49.440000000000005,
+        "rail_R1": 49.440000000000005,
+        "cross0": 49.440000000000005,
+        "cross1": 49.440000000000005,
+        "cross2": 49.440000000000005
+      }
+    }
+  ],
+  "vectors": [
+    {
+      "kind": "reaction",
+      "at": "FL",
+      "origin_mm": [
+        0.0,
+        650.0,
+        0.0
+      ],
+      "vector_N": [
+        -1341.6407864998737,
+        0.0,
+        1200.0
+      ]
+    }
+  ],
+  "inputs_from": [
+    "pred-0001"
+  ],
+  "wall_time_s": 0.2
+}

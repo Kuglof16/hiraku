@@ -1,0 +1,19 @@
+{
+  "comparison_id": "cmp-0001",
+  "prediction_id": "pred-0001",
+  "analysis_id": "ana-0001",
+  "quantity": "max_stress",
+  "predicted": {
+    "value": 120.0,
+    "unit": "MPa"
+  },
+  "analyzed": {
+    "value": 123.60000000000001,
+    "unit": "MPa"
+  },
+  "diff_abs": 3.6000000000000085,
+  "diff_rel": 0.030000000000000072,
+  "tolerance_rel": 0.15,
+  "status": "match",
+  "cause_id": null
+}

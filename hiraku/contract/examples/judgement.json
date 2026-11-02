@@ -1,0 +1,10 @@
+{
+  "design_version": 1,
+  "domain": "strength",
+  "state": "green",
+  "red_count": 0,
+  "verdict_ids": [
+    "ver-0001"
+  ],
+  "summary": "段差の力で降伏しない (shape example)"
+}

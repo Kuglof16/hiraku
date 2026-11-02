@@ -1,0 +1,26 @@
+{
+  "name": "frame_static",
+  "title": "フレームの静的 (3D の梁)",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+    "R1"
+  ],
+  "origin": "builtin",
+  "usable": true,
+  "checks": [
+    {
+      "case": "simply supported beam, centre load",
+      "quantity": "deflection",
+      "expected": 1.0,
+      "got": 1.0,
+      "unit": "mm",
+      "tolerance_rel": 0.01,
+      "pass": true,
+      "source": "P L^3 / (48 E I) (shape example)"
+    }
+  ],
+  "formulas": [
+    "frame_static.rail_bending"
+  ]
+}

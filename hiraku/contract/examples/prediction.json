@@ -1,0 +1,31 @@
+{
+  "prediction_id": "pred-0001",
+  "design_version": 1,
+  "load_case_id": "R1-step100",
+  "test_id": "R1",
+  "domain": "strength",
+  "agent": "cae.strength",
+  "quantity": "max_stress",
+  "value": 120.0,
+  "unit": "MPa",
+  "formula_id": "frame_static.rail_bending",
+  "expression": "sigma = M / Z",
+  "inputs": {
+    "F": {
+      "value": 1341.6407864998737,
+      "unit": "N"
+    }
+  },
+  "terms": [
+    {
+      "name": "M",
+      "value": 1.0,
+      "unit": "N*mm",
+      "share": 1.0
+    }
+  ],
+  "assumptions": [
+    "rail as a simply supported beam (shape example)"
+  ],
+  "created_at": "2026-11-02T20:30:05.000+09:00"
+}

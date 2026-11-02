@@ -1,0 +1,39 @@
+{
+  "formula_id": "step_climb.wheel_force_rigid",
+  "title": "剛い輪が段の角に当たったときの力の比",
+  "domain": "powertrain",
+  "expression": "d = sqrt(2 r h - h^2); F/W = d / (r - h)",
+  "inputs": {
+    "r": {
+      "unit": "mm",
+      "description": "wheel radius",
+      "min": 0
+    },
+    "h": {
+      "unit": "mm",
+      "description": "step height",
+      "min": 0
+    },
+    "W": {
+      "unit": "N",
+      "description": "load on the wheel",
+      "min": 0
+    }
+  },
+  "outputs": {
+    "F": {
+      "unit": "N",
+      "description": "horizontal push needed at the axle"
+    },
+    "d": {
+      "unit": "mm",
+      "description": "horizontal distance to the step corner"
+    }
+  },
+  "assumptions": [
+    "rigid wheel",
+    "quasi-static",
+    "h < r"
+  ],
+  "source": "static equilibrium of a wheel on a step corner"
+}

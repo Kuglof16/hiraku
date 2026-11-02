@@ -1,0 +1,33 @@
+{
+  "load_case_id": "R1-step100",
+  "test_id": "R1",
+  "domain": "strength",
+  "title": "段差 100 mm を越えるときの前輪の力をフレームに",
+  "params": {
+    "step_height": {
+      "value": 100.0,
+      "unit": "mm"
+    },
+    "speed": {
+      "value": 10.0,
+      "unit": "km/h"
+    }
+  },
+  "requirement_keys": [
+    "Q15",
+    "Q61"
+  ],
+  "criterion": {
+    "quantity": "max_stress",
+    "op": "<=",
+    "limit": {
+      "value": 156.66666666666666,
+      "unit": "MPa"
+    },
+    "basis": "yield 235 MPa / Q61 1.5",
+    "requirement_keys": [
+      "Q61"
+    ]
+  },
+  "tolerance_rel": 0.15
+}

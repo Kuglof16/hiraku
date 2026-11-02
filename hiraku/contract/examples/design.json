@@ -1,0 +1,293 @@
+{
+  "design_version": 1,
+  "parent_version": null,
+  "name": "shape example: ladder frame 4 wheels",
+  "change_reason": "first version",
+  "variables": {
+    "wheelbase": {
+      "value": 1800.0,
+      "unit": "mm"
+    },
+    "track": {
+      "value": 1300.0,
+      "unit": "mm"
+    },
+    "wheel_radius": {
+      "value": 300.0,
+      "unit": "mm"
+    }
+  },
+  "supports": [
+    {
+      "id": "FL",
+      "kind": "wheel",
+      "position_mm": [
+        0.0,
+        650.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "spring",
+        "stiffness_N_per_mm": 20.0,
+        "travel_mm": 150.0
+      },
+      "actuation": {
+        "drive": false,
+        "brake": true,
+        "steer": true
+      },
+      "frame_node": "L0"
+    },
+    {
+      "id": "FR",
+      "kind": "wheel",
+      "position_mm": [
+        0.0,
+        -650.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "spring",
+        "stiffness_N_per_mm": 20.0,
+        "travel_mm": 150.0
+      },
+      "actuation": {
+        "drive": false,
+        "brake": true,
+        "steer": true
+      },
+      "frame_node": "R0"
+    },
+    {
+      "id": "RL",
+      "kind": "wheel",
+      "position_mm": [
+        1800.0,
+        650.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "spring",
+        "stiffness_N_per_mm": 20.0,
+        "travel_mm": 150.0
+      },
+      "actuation": {
+        "drive": true,
+        "brake": true,
+        "steer": false
+      },
+      "frame_node": "L2"
+    },
+    {
+      "id": "RR",
+      "kind": "wheel",
+      "position_mm": [
+        1800.0,
+        -650.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "spring",
+        "stiffness_N_per_mm": 20.0,
+        "travel_mm": 150.0
+      },
+      "actuation": {
+        "drive": true,
+        "brake": true,
+        "steer": false
+      },
+      "frame_node": "R2"
+    }
+  ],
+  "parts": [
+    {
+      "id": "battery",
+      "name": "電池",
+      "kind": "battery",
+      "box": {
+        "center_mm": [
+          900.0,
+          0.0,
+          300.0
+        ],
+        "size_mm": [
+          500.0,
+          400.0,
+          200.0
+        ]
+      },
+      "mass_kg": 40.0,
+      "carried_by": [
+        "L1",
+        "R1"
+      ]
+    },
+    {
+      "id": "seat",
+      "name": "座席",
+      "kind": "seat",
+      "box": {
+        "center_mm": [
+          900.0,
+          0.0,
+          600.0
+        ],
+        "size_mm": [
+          500.0,
+          1000.0,
+          500.0
+        ]
+      },
+      "mass_kg": 20.0,
+      "carried_by": [
+        "L1",
+        "R1"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "L0",
+      "xyz_mm": [
+        0.0,
+        400.0,
+        350.0
+      ]
+    },
+    {
+      "id": "R0",
+      "xyz_mm": [
+        0.0,
+        -400.0,
+        350.0
+      ]
+    },
+    {
+      "id": "L1",
+      "xyz_mm": [
+        900.0,
+        400.0,
+        350.0
+      ]
+    },
+    {
+      "id": "R1",
+      "xyz_mm": [
+        900.0,
+        -400.0,
+        350.0
+      ]
+    },
+    {
+      "id": "L2",
+      "xyz_mm": [
+        1800.0,
+        400.0,
+        350.0
+      ]
+    },
+    {
+      "id": "R2",
+      "xyz_mm": [
+        1800.0,
+        -400.0,
+        350.0
+      ]
+    }
+  ],
+  "members": [
+    {
+      "id": "rail_L0",
+      "node_a": "L0",
+      "node_b": "L1",
+      "section": "rt40x80x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R0",
+      "node_a": "R0",
+      "node_b": "R1",
+      "section": "rt40x80x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L1",
+      "node_a": "L1",
+      "node_b": "L2",
+      "section": "rt40x80x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R1",
+      "node_a": "R1",
+      "node_b": "R2",
+      "section": "rt40x80x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "cross0",
+      "node_a": "L0",
+      "node_b": "R0",
+      "section": "rt40x40x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "cross1",
+      "node_a": "L1",
+      "node_b": "R1",
+      "section": "rt40x40x2",
+      "material": "steel",
+      "part": "frame"
+    },
+    {
+      "id": "cross2",
+      "node_a": "L2",
+      "node_b": "R2",
+      "section": "rt40x40x2",
+      "material": "steel",
+      "part": "frame"
+    }
+  ],
+  "sections": {
+    "rt40x80x2": {
+      "shape": "rect_tube",
+      "dims_mm": {
+        "b": 40.0,
+        "h": 80.0,
+        "t": 2.0
+      }
+    },
+    "rt40x40x2": {
+      "shape": "rect_tube",
+      "dims_mm": {
+        "b": 40.0,
+        "h": 40.0,
+        "t": 2.0
+      }
+    }
+  },
+  "materials": {
+    "steel": {
+      "name": "structural steel (shape example)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 235.0,
+      "source": "not checked",
+      "verified": false
+    }
+  }
+}

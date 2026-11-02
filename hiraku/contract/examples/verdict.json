@@ -1,0 +1,22 @@
+{
+  "verdict_id": "ver-0001",
+  "comparison_id": "cmp-0001",
+  "load_case_id": "R1-step100",
+  "test_id": "R1",
+  "domain": "strength",
+  "quantity": "max_stress",
+  "value": {
+    "value": 123.60000000000001,
+    "unit": "MPa"
+  },
+  "op": "<=",
+  "limit": {
+    "value": 156.66666666666666,
+    "unit": "MPa"
+  },
+  "pass": true,
+  "margin_pct": 21.106382978723396,
+  "requirement_keys": [
+    "Q61"
+  ]
+}

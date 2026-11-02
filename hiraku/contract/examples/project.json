@@ -1,0 +1,122 @@
+{
+  "run_id": "20261102-203000-offroad-4w",
+  "created_at": "2026-11-02T20:30:00.000+09:00",
+  "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで)",
+  "product": "offroad-4w",
+  "flags": {
+    "ride": true,
+    "lean": true,
+    "self_propelled": true,
+    "outdoor": true,
+    "rough": true,
+    "battery": true,
+    "electric": true,
+    "pinch": true,
+    "cargo": true,
+    "standing": true,
+    "vibration": true,
+    "continuous": true,
+    "assembly": true
+  },
+  "speed_class": "vehicle",
+  "status": "running",
+  "round_limit": 1,
+  "cost_limit_usd": 2.0,
+  "cost_usd": 0.0,
+  "requirements": [
+    {
+      "key": "Q15",
+      "name": "段差",
+      "value": 100,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q33",
+      "name": "体重 (強さの不利側)",
+      "value": 76.6,
+      "unit": "kg",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 若年男性 95 パーセンタイル (not yet checked in this repository)"
+    },
+    {
+      "key": "Q40",
+      "name": "積載",
+      "value": 150,
+      "unit": "kg",
+      "source": "user",
+      "trust": 1,
+      "basis": "request"
+    },
+    {
+      "key": "Q61",
+      "name": "安全率",
+      "value": 1.5,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    }
+  ],
+  "domain_picks": [
+    {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "人と荷を載せて段差を越える"
+    }
+  ],
+  "load_cases": [
+    {
+      "load_case_id": "R1-step100",
+      "test_id": "R1",
+      "domain": "strength",
+      "title": "段差 100 mm を越えるときの前輪の力をフレームに",
+      "params": {
+        "step_height": {
+          "value": 100.0,
+          "unit": "mm"
+        },
+        "speed": {
+          "value": 10.0,
+          "unit": "km/h"
+        }
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 156.66666666666666,
+          "unit": "MPa"
+        },
+        "basis": "yield 235 MPa / Q61 1.5",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.15
+    }
+  ],
+  "agents": [
+    {
+      "agent_id": "lead",
+      "role": "lead",
+      "prop": "binder"
+    },
+    {
+      "agent_id": "cae.strength",
+      "role": "cae",
+      "domain": "strength",
+      "prop": "i_beam"
+    }
+  ],
+  "design_versions": [
+    1
+  ]
+}

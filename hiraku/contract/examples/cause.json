@@ -1,0 +1,7 @@
+{
+  "cause_id": "cause-0001",
+  "comparison_id": "cmp-0001",
+  "cause": "shape example: centre of gravity height entered as 62 mm instead of 62 cm",
+  "fix": "convert the requirement to mm before predicting",
+  "resolved": false
+}

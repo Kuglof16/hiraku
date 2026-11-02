@@ -1,0 +1,2082 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kuglof16/hiraku/hiraku.schema.json",
+  "title": "HIRAKU contract",
+  "description": "Shapes shared by every part of HIRAKU: the requirements file, the design, load cases, predictions, analyses, comparisons, causes, verdicts, judgements, tools, the project file and the events.jsonl line. Validate with hiraku.contract.validate(kind, obj), where kind is a key of $defs.",
+  "$defs": {
+    "unit": {
+      "description": "Unit strings. A comparison is only made between equal unit strings; convert before comparing.",
+      "enum": [
+        "1",
+        "%",
+        "mm",
+        "m",
+        "km",
+        "kg",
+        "N",
+        "kN",
+        "N*m",
+        "N*mm",
+        "N/mm",
+        "MPa",
+        "Pa",
+        "deg",
+        "rad",
+        "s",
+        "h",
+        "m/s",
+        "km/h",
+        "m/s^2",
+        "g",
+        "Hz",
+        "rpm",
+        "W",
+        "kW",
+        "J",
+        "Wh",
+        "kWh",
+        "V",
+        "A",
+        "degC",
+        "K",
+        "K/W"
+      ]
+    },
+    "quantity": {
+      "type": "object",
+      "required": [
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        }
+      }
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "domain": {
+      "description": "Seven analysis domains plus assembly. Japanese names: handling 操安, powertrain 動力, aero 空力, crash 衝突, strength 強度信頼性, nvh 音振, thermal 熱, assembly 組み立て.",
+      "enum": [
+        "handling",
+        "powertrain",
+        "aero",
+        "crash",
+        "strength",
+        "nvh",
+        "thermal",
+        "assembly"
+      ]
+    },
+    "agent_id": {
+      "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person.",
+      "type": "string",
+      "pattern": "^(lead|designer|packager|system|user|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
+    },
+    "base": {
+      "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
+      "enum": [
+        "K0",
+        "K1",
+        "K2",
+        "K3",
+        "K4",
+        "K5"
+      ]
+    },
+    "test_id": {
+      "description": "Catalog test id, e.g. S1, P1, R1, R4.",
+      "type": "string",
+      "pattern": "^[A-Z][0-9]+[a-z']*$"
+    },
+    "req_key": {
+      "description": "Catalog requirement key, Q01..Q99.",
+      "type": "string",
+      "pattern": "^Q[0-9]{2}$"
+    },
+    "trust": {
+      "description": "1 primary source, 2 secondary source, 3 assumption.",
+      "enum": [
+        1,
+        2,
+        3
+      ]
+    },
+    "flags": {
+      "description": "Product property flags (catalog section 1). ride 乗, lean 預, self_propelled 走, outdoor 外, rough 悪, public_road 公, battery 池, electric 電, pinch 挟, cargo 荷, standing 置, near_people 近, liquid 液, vibration 振, continuous 続, assembly 組, preload 張, sound 音, handheld 持. The speed range 速 is speed_class.",
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "ride",
+          "lean",
+          "self_propelled",
+          "outdoor",
+          "rough",
+          "public_road",
+          "battery",
+          "electric",
+          "pinch",
+          "cargo",
+          "standing",
+          "near_people",
+          "liquid",
+          "vibration",
+          "continuous",
+          "assembly",
+          "preload",
+          "sound",
+          "handheld"
+        ]
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "speed_class": {
+      "description": "速: static 静, walk 歩 (<= 2 m/s), vehicle 車 (<= 40 km/h).",
+      "enum": [
+        "static",
+        "walk",
+        "vehicle"
+      ]
+    },
+    "requirement": {
+      "type": "object",
+      "required": [
+        "key",
+        "name",
+        "source",
+        "trust"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/req_key"
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "number",
+            "string",
+            "boolean"
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "source": {
+          "enum": [
+            "user",
+            "hearing",
+            "default"
+          ]
+        },
+        "trust": {
+          "$ref": "#/$defs/trust"
+        },
+        "basis": {
+          "type": "string",
+          "description": "Where the value comes from (citation or 'assumption')."
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "requirements_file": {
+      "description": "Input file given to HIRAKU (YAML or JSON). In the MVP the design is fixed and named by design_file.",
+      "type": "object",
+      "required": [
+        "want",
+        "product",
+        "flags",
+        "requirements"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "want": {
+          "type": "string",
+          "description": "What the person wants to make, in their words."
+        },
+        "product": {
+          "type": "string",
+          "description": "Short product slug, e.g. offroad-4w."
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "speed_class": {
+          "$ref": "#/$defs/speed_class"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirement"
+          }
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Optional: run only these tests. When absent, tests are chosen from the catalog by flags."
+        },
+        "design_file": {
+          "type": "string",
+          "description": "Optional: path (relative to the repository) of a fixed design JSON."
+        },
+        "round_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1
+        },
+        "cost_limit_usd": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.0
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "required": [
+        "shape",
+        "dims_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "enum": [
+            "rect_tube",
+            "round_tube",
+            "rect_solid",
+            "round_solid",
+            "angle",
+            "channel",
+            "i_beam",
+            "custom"
+          ]
+        },
+        "dims_mm": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "e.g. rect_tube: {b, h, t}; round_tube: {d, t}."
+        },
+        "A_mm2": {
+          "type": "number"
+        },
+        "Iy_mm4": {
+          "type": "number"
+        },
+        "Iz_mm4": {
+          "type": "number"
+        },
+        "J_mm4": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "required": [
+        "name",
+        "E_MPa",
+        "nu",
+        "density_kg_m3",
+        "yield_MPa",
+        "source",
+        "verified"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "E_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "G_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "nu": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "density_kg_m3": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "yield_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "source": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "false until the value is checked against the cited source."
+        }
+      }
+    },
+    "support": {
+      "description": "Something that touches the ground: a wheel, caster or leg. K2 builds the vehicle from this list.",
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "position_mm",
+        "radius_mm",
+        "suspension",
+        "actuation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "e.g. FL, FR, RL, RR."
+        },
+        "kind": {
+          "enum": [
+            "wheel",
+            "caster",
+            "leg"
+          ]
+        },
+        "position_mm": {
+          "$ref": "#/$defs/vec3",
+          "description": "Wheel centre (leg: foot point)."
+        },
+        "radius_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "width_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "suspension": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "rigid",
+                "spring",
+                "kc_table"
+              ]
+            },
+            "stiffness_N_per_mm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "damping_Ns_per_mm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "travel_mm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "kc_table": {
+              "type": "string",
+              "description": "Path of a K&C table file."
+            }
+          }
+        },
+        "actuation": {
+          "type": "object",
+          "required": [
+            "drive",
+            "brake",
+            "steer"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "drive": {
+              "type": "boolean"
+            },
+            "brake": {
+              "type": "boolean"
+            },
+            "steer": {
+              "type": "boolean"
+            }
+          }
+        },
+        "frame_node": {
+          "type": "string",
+          "description": "Frame node that carries this support's load into the frame."
+        }
+      }
+    },
+    "part": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "box",
+        "mass_kg"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "frame, suspension, wheel, battery, motor, controller, seat, occupant, cargo, body, rollbar, ..."
+        },
+        "box": {
+          "type": "object",
+          "required": [
+            "center_mm",
+            "size_mm"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "center_mm": {
+              "$ref": "#/$defs/vec3"
+            },
+            "size_mm": {
+              "$ref": "#/$defs/vec3"
+            },
+            "rpy_deg": {
+              "$ref": "#/$defs/vec3",
+              "description": "Roll, pitch, yaw of the box."
+            }
+          }
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0
+        },
+        "carried_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Frame nodes that carry this part's weight (split equally unless the solver says otherwise)."
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "xyz_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "xyz_mm": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "member": {
+      "type": "object",
+      "required": [
+        "id",
+        "node_a",
+        "node_b",
+        "section",
+        "material"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "node_a": {
+          "type": "string"
+        },
+        "node_b": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string",
+          "description": "Key into design.sections."
+        },
+        "material": {
+          "type": "string",
+          "description": "Key into design.materials."
+        },
+        "part": {
+          "type": "string",
+          "description": "Part id this member belongs to."
+        }
+      }
+    },
+    "design": {
+      "description": "One design version. Coordinates in mm, ISO 8855 axes (x forward, y left, z up), origin on the ground below the middle of the front axle. Versions are never rewritten; a change makes a new version.",
+      "type": "object",
+      "required": [
+        "design_version",
+        "name",
+        "variables",
+        "supports",
+        "parts",
+        "nodes",
+        "members",
+        "sections",
+        "materials"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_version": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "change_reason": {
+          "type": "string"
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          },
+          "description": "Named design variables, e.g. wheelbase, track, cg_height."
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/support"
+          },
+          "minItems": 1
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/part"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/member"
+          }
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/section"
+          }
+        },
+        "materials": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/material"
+          }
+        }
+      }
+    },
+    "criterion": {
+      "description": "Pass condition of a load case. The limit is computed by code from requirements (and materials) when the load case is built.",
+      "type": "object",
+      "required": [
+        "quantity",
+        "op",
+        "limit",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "quantity": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "<=",
+            ">=",
+            "<",
+            ">"
+          ]
+        },
+        "limit": {
+          "$ref": "#/$defs/quantity"
+        },
+        "basis": {
+          "type": "string",
+          "description": "How the limit was made, e.g. 'yield 235 MPa / Q61 1.5'."
+        },
+        "requirement_keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/req_key"
+          }
+        }
+      }
+    },
+    "load_case": {
+      "type": "object",
+      "required": [
+        "load_case_id",
+        "test_id",
+        "domain",
+        "title",
+        "params",
+        "tolerance_rel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "load_case_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.'-]+$",
+          "description": "e.g. P1-step100."
+        },
+        "test_id": {
+          "$ref": "#/$defs/test_id"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "title": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/quantity"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        },
+        "requirement_keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/req_key"
+          }
+        },
+        "criterion": {
+          "$ref": "#/$defs/criterion"
+        },
+        "tolerance_rel": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Allowed |analyzed - predicted| / |predicted| for a match. Set by code from the catalog or tool spec, never by the model."
+        },
+        "feeds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Load cases that take this case's results as input (e.g. P1 wheel force feeds R1)."
+        }
+      }
+    },
+    "formula": {
+      "description": "A K0 hand-calculation formula as listed on the tool shelf.",
+      "type": "object",
+      "required": [
+        "formula_id",
+        "title",
+        "domain",
+        "expression",
+        "inputs",
+        "outputs",
+        "assumptions",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "formula_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+          "description": "<tool>.<name>, e.g. step_climb.wheel_force_rigid."
+        },
+        "title": {
+          "type": "string"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "unit",
+              "description"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "unit": {
+                "$ref": "#/$defs/unit"
+              },
+              "description": {
+                "type": "string"
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "unit"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "unit": {
+                "$ref": "#/$defs/unit"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "term": {
+      "description": "One term of a formula or one effect, used for contribution and explanation.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "share": {
+          "type": "number",
+          "description": "Fraction of the total, or elasticity for sensitivities."
+        }
+      }
+    },
+    "prediction": {
+      "description": "A hand-calculated prediction. The value is computed by K0 from formula_id and inputs, never typed by the model.",
+      "type": "object",
+      "required": [
+        "prediction_id",
+        "design_version",
+        "load_case_id",
+        "test_id",
+        "domain",
+        "agent",
+        "quantity",
+        "value",
+        "unit",
+        "formula_id",
+        "expression",
+        "inputs",
+        "assumptions",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "prediction_id": {
+          "type": "string",
+          "pattern": "^pred-[0-9]{4,}$"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_case_id": {
+          "type": "string"
+        },
+        "test_id": {
+          "$ref": "#/$defs/test_id"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "agent": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "quantity": {
+          "type": "string",
+          "description": "Name of the predicted quantity, e.g. front_wheel_force, max_stress."
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "formula_id": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term"
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "tool_check": {
+      "description": "One known-answer case a tool must reproduce before it is usable.",
+      "type": "object",
+      "required": [
+        "case",
+        "quantity",
+        "expected",
+        "got",
+        "unit",
+        "tolerance_rel",
+        "pass",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "number"
+        },
+        "got": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "tolerance_rel": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pass": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string",
+          "description": "Where the expected value comes from (closed form, textbook, ...)."
+        }
+      }
+    },
+    "tool_spec": {
+      "description": "An analysis tool on the shelf (A4). A tool with usable=false must not be run.",
+      "type": "object",
+      "required": [
+        "name",
+        "title",
+        "domain",
+        "base",
+        "tests",
+        "origin",
+        "usable",
+        "checks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "base": {
+          "$ref": "#/$defs/base"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          }
+        },
+        "origin": {
+          "enum": [
+            "builtin",
+            "claude"
+          ]
+        },
+        "usable": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool_check"
+          }
+        },
+        "formulas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "K0 formula ids that predict this tool's quantities."
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "quantity",
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "quantity": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "where": {
+          "type": "string",
+          "description": "Member, node, support or part id where the value occurs."
+        }
+      }
+    },
+    "field": {
+      "description": "A field to draw as a contour or mode shape.",
+      "type": "object",
+      "required": [
+        "kind",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "stress",
+            "displacement",
+            "temperature",
+            "mode_shape",
+            "damage"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "per_member": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "per_node": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/$defs/vec3"
+              }
+            ]
+          }
+        },
+        "per_part": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "frequency_Hz": {
+          "type": "number",
+          "description": "For mode_shape."
+        }
+      }
+    },
+    "vector": {
+      "description": "An arrow to draw: a reaction, grip force or applied load.",
+      "type": "object",
+      "required": [
+        "kind",
+        "origin_mm",
+        "vector_N"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "reaction",
+            "grip",
+            "load",
+            "wind",
+            "inertia"
+          ]
+        },
+        "at": {
+          "type": "string",
+          "description": "Node, support or part id."
+        },
+        "origin_mm": {
+          "$ref": "#/$defs/vec3"
+        },
+        "vector_N": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "series": {
+      "type": "object",
+      "required": [
+        "channel",
+        "unit",
+        "t_s",
+        "values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "e.g. speed, soc, temp.battery, wheel_load.FL."
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "t_s": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "analysis": {
+      "description": "One analysis run (RUN in the ER diagram). It cannot exist without at least one prediction.",
+      "type": "object",
+      "required": [
+        "analysis_id",
+        "tool",
+        "base",
+        "design_version",
+        "load_case_id",
+        "prediction_ids",
+        "status",
+        "results"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^ana-[0-9]{4,}$"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "base": {
+          "$ref": "#/$defs/base"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_case_id": {
+          "type": "string"
+        },
+        "prediction_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^pred-[0-9]{4,}$"
+          },
+          "minItems": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "failed"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/result"
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "vectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vector"
+          }
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/series"
+          }
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term"
+          }
+        },
+        "inputs_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Analysis or prediction ids whose values were used as inputs (e.g. the wheel force passed from P1 to R1)."
+        },
+        "wall_time_s": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "comparison": {
+      "description": "Prediction vs analysis. A mismatch blocks the domain until a cause is recorded.",
+      "type": "object",
+      "required": [
+        "comparison_id",
+        "prediction_id",
+        "analysis_id",
+        "quantity",
+        "predicted",
+        "analyzed",
+        "diff_abs",
+        "diff_rel",
+        "tolerance_rel",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "comparison_id": {
+          "type": "string",
+          "pattern": "^cmp-[0-9]{4,}$"
+        },
+        "prediction_id": {
+          "type": "string",
+          "pattern": "^pred-[0-9]{4,}$"
+        },
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^ana-[0-9]{4,}$"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "predicted": {
+          "$ref": "#/$defs/quantity"
+        },
+        "analyzed": {
+          "$ref": "#/$defs/quantity"
+        },
+        "diff_abs": {
+          "type": "number"
+        },
+        "diff_rel": {
+          "type": "number"
+        },
+        "tolerance_rel": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "match",
+            "mismatch"
+          ]
+        },
+        "cause_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "cause": {
+      "type": "object",
+      "required": [
+        "cause_id",
+        "comparison_id",
+        "cause",
+        "fix",
+        "resolved"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cause_id": {
+          "type": "string",
+          "pattern": "^cause-[0-9]{4,}$"
+        },
+        "comparison_id": {
+          "type": "string",
+          "pattern": "^cmp-[0-9]{4,}$"
+        },
+        "cause": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "resolved": {
+          "type": "boolean"
+        },
+        "resolved_by": {
+          "type": "string",
+          "pattern": "^cmp-[0-9]{4,}$",
+          "description": "A later matching comparison."
+        }
+      }
+    },
+    "verdict": {
+      "description": "Pass or fail of one test. Made only from a matching comparison, inside the compare tool.",
+      "type": "object",
+      "required": [
+        "verdict_id",
+        "comparison_id",
+        "load_case_id",
+        "test_id",
+        "domain",
+        "quantity",
+        "value",
+        "op",
+        "limit",
+        "pass",
+        "margin_pct"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verdict_id": {
+          "type": "string",
+          "pattern": "^ver-[0-9]{4,}$"
+        },
+        "comparison_id": {
+          "type": "string",
+          "pattern": "^cmp-[0-9]{4,}$"
+        },
+        "load_case_id": {
+          "type": "string"
+        },
+        "test_id": {
+          "$ref": "#/$defs/test_id"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/quantity"
+        },
+        "op": {
+          "enum": [
+            "<=",
+            ">=",
+            "<",
+            ">"
+          ]
+        },
+        "limit": {
+          "$ref": "#/$defs/quantity"
+        },
+        "pass": {
+          "type": "boolean"
+        },
+        "margin_pct": {
+          "type": "number",
+          "description": "Positive when passing: how far the value is from the limit, as % of the limit."
+        },
+        "requirement_keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/req_key"
+          }
+        }
+      }
+    },
+    "judgement": {
+      "description": "Verdicts of one domain for one design version (one tile of A6).",
+      "type": "object",
+      "required": [
+        "design_version",
+        "domain",
+        "state",
+        "red_count",
+        "verdict_ids",
+        "summary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "state": {
+          "enum": [
+            "green",
+            "red",
+            "pending"
+          ]
+        },
+        "red_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verdict_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "domain_pick": {
+      "type": "object",
+      "required": [
+        "domain",
+        "shown_name",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "shown_name": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "required": [
+        "agent_id",
+        "role",
+        "prop"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "role": {
+          "enum": [
+            "lead",
+            "designer",
+            "packager",
+            "cae"
+          ]
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "prop": {
+          "type": "string",
+          "description": "The pet's prop: binder, pencil, spanner, steering_wheel, battery, windsock, crash_target, i_beam, tuning_fork, thermometer."
+        }
+      }
+    },
+    "project": {
+      "description": "runs/<run_id>/project.json. Written at the start of a run; status and requirements are updated in place, everything else is append-only elsewhere.",
+      "type": "object",
+      "required": [
+        "run_id",
+        "created_at",
+        "want",
+        "product",
+        "flags",
+        "status",
+        "round_limit",
+        "cost_limit_usd",
+        "requirements",
+        "domain_picks",
+        "load_cases",
+        "agents"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[0-9]{8}-[0-9]{6}-[a-z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "want": {
+          "type": "string"
+        },
+        "product": {
+          "type": "string"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "speed_class": {
+          "$ref": "#/$defs/speed_class"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "stopped",
+            "done",
+            "failed"
+          ]
+        },
+        "stop_reason": {
+          "type": "string"
+        },
+        "round_limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cost_limit_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirement"
+          }
+        },
+        "domain_picks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/domain_pick"
+          }
+        },
+        "load_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/load_case"
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/agent"
+          }
+        },
+        "design_versions": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "event_kind": {
+      "description": "Closed list. Ask the lead (統括部) to add a kind; do not invent one locally.",
+      "enum": [
+        "run.started",
+        "run.finished",
+        "agent.started",
+        "agent.stopped",
+        "agent.said",
+        "user.said",
+        "design.created",
+        "prediction.recorded",
+        "analysis.started",
+        "analysis.finished",
+        "comparison.recorded",
+        "cause.recorded",
+        "verdict.recorded",
+        "judgement.updated",
+        "tool.checked",
+        "hook.denied",
+        "hook.blocked_stop",
+        "screen.focus",
+        "cost.updated"
+      ]
+    },
+    "event": {
+      "description": "One line of runs/<run_id>/events.jsonl. The screen draws only from these lines (live and replay). For *.recorded / *.created / analysis.finished / judgement.updated / tool.checked, data is the full record, identical to the record file.",
+      "type": "object",
+      "required": [
+        "seq",
+        "ts",
+        "t",
+        "run_id",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0, 1, 2, ... with no gaps within a run."
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Wall clock with offset, e.g. 2026-11-02T20:30:01.250+09:00."
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds since run.started; replay timing uses this."
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/event_kind"
+        },
+        "agent": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "text": {
+          "type": "string",
+          "description": "Speech bubble or log line, shown as is."
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "run.started"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/project"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "design.created"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/design"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "prediction.recorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/prediction"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "analysis.started"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "analysis_id",
+                  "tool",
+                  "load_case_id",
+                  "prediction_ids"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "analysis.finished"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/analysis"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "comparison.recorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/comparison"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cause.recorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/cause"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "verdict.recorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/verdict"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "judgement.updated"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/judgement"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "tool.checked"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/tool_spec"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "hook.denied"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data",
+              "text"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "hook",
+                  "tool",
+                  "rule"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "run.finished"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "screen.focus"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "screen"
+                ],
+                "properties": {
+                  "screen": {
+                    "enum": [
+                      "A0",
+                      "A1",
+                      "A2",
+                      "A3",
+                      "A4",
+                      "A5",
+                      "A6",
+                      "A7",
+                      "A8",
+                      "A9"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cost.updated"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "cost_usd"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tool_input.record_prediction": {
+      "description": "Agent-facing MCP tool. K0 evaluates formula_id with inputs; the model never supplies the value.",
+      "type": "object",
+      "required": [
+        "load_case_id",
+        "quantity",
+        "formula_id",
+        "inputs",
+        "assumptions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "load_case_id": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "string"
+        },
+        "formula_id": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string",
+          "description": "Which formula output is the predicted quantity, when the formula has more than one."
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tool_input.analyze": {
+      "description": "Agent-facing MCP tool. One entry point for every analysis tool, so tools made during a run (N13) are callable without re-registering MCP tools.",
+      "type": "object",
+      "required": [
+        "tool",
+        "load_case_id",
+        "prediction_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "load_case_id": {
+          "type": "string"
+        },
+        "prediction_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "tool_input.compare": {
+      "type": "object",
+      "required": [
+        "prediction_id",
+        "analysis_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "prediction_id": {
+          "type": "string"
+        },
+        "analysis_id": {
+          "type": "string"
+        },
+        "result_quantity": {
+          "type": "string",
+          "description": "Which analysis result to compare, when its name differs from the prediction's quantity."
+        }
+      }
+    },
+    "tool_input.record_cause": {
+      "type": "object",
+      "required": [
+        "comparison_id",
+        "cause",
+        "fix"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "comparison_id": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
