@@ -1,0 +1,125 @@
+/* Shared look for the video-only screens.
+ *
+ * The stage is laid out in a 1920x1080 design space. Every length is
+ * written as `calc(N * var(--u))`, where --u is one design pixel, so the
+ * same page fills a 1920x1080 window, a 1920x1080 window at device scale 2,
+ * or a 3840x2160 window without changing its layout.
+ *
+ * The bottom 170 design px are the subtitle band. Nothing is placed there;
+ * content goes inside .safe (the top 910 px).
+ */
+
+:root {
+  --u: min(calc(100vw / 1920), calc(100vh / 1080));
+
+  --paper: #f4f1ea;      /* unbleached paper ground */
+  --ink: #1b1a17;        /* black ink */
+  --ink-soft: #5c5a54;
+  --ink-faint: #a8a49a;
+  --grid: rgba(27, 26, 23, 0.055);
+  --night: #131311;      /* ground of the title screens */
+  --night-2: #1d1c19;
+  --glow: #f6ead0;       /* warm vertical light */
+  --on-night: #f1ece0;
+  --on-night-soft: #b9b3a5;
+
+  /* stress colours, low to high (5 steps) */
+  --s1: #3461c8;
+  --s2: #2fa2c3;
+  --s3: #45b07a;
+  --s4: #e2b13d;
+  --s5: #d6492f;
+  --pass: #2e7d4f;       /* passed check */
+  --miss: #e0472a;       /* mismatch, vermilion */
+  --warm: #e7b36a;       /* the one highlighted figure */
+
+  /* one marker colour per CAE agent */
+  --d-handling: #3461c8;
+  --d-powertrain: #e2b13d;
+  --d-aero: #2fa2c3;
+  --d-crash: #d6492f;
+  --d-strength: #55524b;
+  --d-nvh: #8a5cc2;
+  --d-thermal: #e0682a;
+
+  --font-latin: "Bahnschrift", "Segoe UI", "Noto Sans JP", sans-serif;
+  --font-ja: "Noto Sans JP", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--page-bg, var(--paper));
+}
+
+body {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-ja);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.stage {
+  position: relative;
+  width: calc(1920 * var(--u));
+  height: calc(1080 * var(--u));
+  overflow: hidden;
+  background: var(--stage-bg, var(--paper));
+}
+
+.safe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: calc(910 * var(--u));
+}
+
+/* Paper with a faint 40 px grid, drawn with gradients (no image files). */
+.paper-grid {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) calc(1 * var(--u)), transparent calc(1 * var(--u))),
+    linear-gradient(90deg, var(--grid) calc(1 * var(--u)), transparent calc(1 * var(--u)));
+  background-size: calc(40 * var(--u)) calc(40 * var(--u));
+  background-position: calc(-1 * var(--u)) calc(-1 * var(--u));
+}
+
+/* ?layer=fg: transparent ground, for laying the page over another clip */
+html.layer-fg,
+html.layer-fg body,
+html.layer-fg .stage { background: transparent !important; }
+html.layer-fg .bg-only { display: none !important; }
+
+/* ?guides=1: show the subtitle band and the design grid while authoring */
+.guide-band {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: calc(170 * var(--u));
+  background: repeating-linear-gradient(-45deg,
+    rgba(224, 71, 42, 0.18) 0 calc(6 * var(--u)),
+    transparent calc(6 * var(--u)) calc(18 * var(--u)));
+  border-top: calc(2 * var(--u)) dashed var(--miss);
+  z-index: 100;
+}
+html.guides .guide-band { display: block; }
+
+.clock {
+  display: none;
+  position: absolute;
+  right: calc(16 * var(--u));
+  bottom: calc(16 * var(--u));
+  font: calc(22 * var(--u)) / 1 var(--font-mono);
+  color: var(--miss);
+  z-index: 101;
+}
+html.guides .clock { display: block; }
