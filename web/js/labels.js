@@ -124,6 +124,9 @@ const QUANTITY_JA = {
   mean_speed: "平均速度",
   // vehicle motion (K2)
   tilt_angle: "転倒する傾き",
+  tilt_angle_right: "右へ転倒する傾き",
+  tilt_angle_left: "左へ転倒する傾き",
+  min_side_load: "軽い側の輪の荷重の和 (最小)",
   static_stability_factor: "静的安定係数",
   body_roll_at_tip: "転倒のときの車体のロール",
   cg_shift_at_tip: "転倒のときの重心のずれ",
@@ -209,6 +212,7 @@ export function ruleOf(rule) {
 const UNIT_LABEL = {
   1: "",
   degC: "℃",
+  deg: "°",
   "m/s^2": "m/s²",
   "N*mm": "N·mm",
   "N*m": "N·m",

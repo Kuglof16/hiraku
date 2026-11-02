@@ -31,7 +31,7 @@ import { GRAY, colorOf } from "./colormap.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
-import { wheelName } from "./series.js";
+import { ANGLE, lerpAt, wheelName } from "./series.js";
 import { partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
@@ -893,9 +893,13 @@ export class Workbench3D {
     }
   }
 
-  // The world's turn about x: the tilt table's angle at the frame, else the road's side slope.
+  // The world's turn about x: the tilt table's angle at the frame, else the angle channel
+  // the scene names (a slope tilted in time), else the road's side slope.
   worldAngle(frame) {
-    return frame?.table ?? this.sceneDesc?.slope ?? 0;
+    if (frame?.table != null) return frame.table;
+    const ch = this.sceneDesc?.angleChannel ? this.motion?.channels.get(this.sceneDesc.angleChannel) : null;
+    if (ch && frame && ANGLE[ch.unit]) return lerpAt(ch, frame.t) * ANGLE[ch.unit];
+    return this.sceneDesc?.slope ?? 0;
   }
 
   // Where a frame's centre of mass (or body origin) is on screen space, in three.js metres.
