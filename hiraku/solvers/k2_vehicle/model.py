@@ -427,7 +427,9 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     side_area, side_c = _projected(boxes, discs, (0, 2), None)
     front_area, front_c = _projected(boxes, [(c.pos, c.radius) for c in corners if c.kind != "leg"], (1, 2),
                                      max([c.width for c in corners] + [0.0]) or 0.1)
-    notes.append("aerodynamic areas from the part boxes and wheels projected on the side and front planes; centre of pressure at the area centroid (assumed)")
+    notes.append("centres of pressure at the centroids of the part boxes and wheels projected on the side and front "
+                 "planes (along x always; the areas and the side centre's height only where the design does not give "
+                 "them) (assumed)")
     side_cp = np.array([side_c[0], 0.0, side_c[1]])
     front_cp = np.array([0.0, front_c[0], front_c[1]])
     if symmetric:
