@@ -28,8 +28,11 @@
 # expected_mismatch: then its cause and fix (worked out beforehand; `source`
 # says by whom) are recorded with record_cause, compare in that domain is
 # denied by H3 until then, and the step predicts again with `retry`, which is
-# itself a step and may expect a mismatch of its own. With no retry the run
-# says `stop` and stops.
+# itself a step and may expect a mismatch of its own. With safe_side true (and
+# safe_side_reason, also worked out beforehand) the cause is recorded as seen
+# from the safe side: record_cause checks that the prediction is the
+# unfavourable value and makes the verdict from it, and the step ends. With
+# neither the run says `stop` and stops.
 
 offroad-4w:
   show_h1: true   # call analyze once without a prediction, so the H1 denial is recorded
@@ -126,12 +129,15 @@ offroad-4w:
             quantity: max_stress
             source: >-
               the analysis department's check of the demo vehicle (rail_joint_stress 77.09 MPa against
-              frame_static 61.15 MPa, -20.7 %), 2026-11-03
+              frame_static 61.15 MPa, -20.7 %), 2026-11-03; the safe-side judgement is the project's decision on R1,
+              2026-11-03
             cause: >-
               今度は手計算が大きい。鉛直の曲げは 1 % で合い、横の曲げとねじりが倍に出る。
               式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
             fix: >-
-              次の手 (隣の継ぎ手も回るとみた 3 つ目の式で予測し直す / 安全側の食い違いとして不利な方の値で合否を出す /
-              ここで止める) はまだ決まっていない
-            stop: 2 つ目の食い違いのあとどうするかは、まだ決まっていません。原因を記録して、ここで止めます
-            # retry: add when it is decided what follows the second mismatch
+              合否は安全側の手計算の値で出す。もっと近い値が要るときは、隣の継ぎ手も回るとみた式で予測し直す
+            safe_side: true
+            safe_side_reason: >-
+              鉛直の曲げは解析と 1 % で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
+              継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
+              大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている

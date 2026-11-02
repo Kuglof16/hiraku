@@ -42,8 +42,8 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 ## 5. 照合する
 
 - `compare(prediction_id, analysis_id)`。結果の名前が予測と違うときだけ `result_quantity` を付ける
-- 一致して `criterion` があれば、合否 (`verdict`) と分野の判定が付く
-- 食い違ったら、その分野は `record_cause` を書くまで止まる。手順は skill `hiraku:find-the-cause`
+- 一致して `criterion` があれば、合否 (`verdict`、値は解析) と分野の判定が付く
+- 食い違ったら、その分野は `record_cause` を書くまで止まる。手順は skill `hiraku:find-the-cause`。原因で差が説明でき、予測が安全側から押さえていると判断できるときだけ、`safe_side` を付けて予測の値で合否を出せる (同じ skill の 5)
 
 ## 6. 報告する
 

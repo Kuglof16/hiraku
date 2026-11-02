@@ -23,14 +23,21 @@ def r1_second(plan):
     return plan["steps"][1]["expected_mismatch"]["retry"]
 
 
-def plan_with_third_r1_prediction():
-    """The offroad plan with a third R1 prediction the stand-in frame tool agrees with."""
+# a third R1 prediction: the beam formula, which the stand-in frame tool agrees with
+BEAM_R1 = {"predictions": [{
+    "quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma", "assumptions": [],
+    "inputs": {"F": "ana.P1-step100.front_wheel_force", "L": "summary.wheelbase", "b": "summary.rail_section.b",
+               "h": "summary.rail_section.h", "t": "summary.rail_section.t"},
+}]}
+
+
+def plan_without_safe_side(third_prediction=False):
+    """The offroad plan with the second R1 cause not judged safe side; optionally a third R1 prediction."""
     plan = copy.deepcopy(load_plan("offroad-4w"))
-    r1_second(plan)["expected_mismatch"]["retry"] = {"predictions": [{
-        "quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma", "assumptions": [],
-        "inputs": {"F": "ana.P1-step100.front_wheel_force", "L": "summary.wheelbase", "b": "summary.rail_section.b",
-                   "h": "summary.rail_section.h", "t": "summary.rail_section.t"},
-    }]}
+    em = r1_second(plan)["expected_mismatch"]
+    del em["safe_side"], em["safe_side_reason"]
+    if third_prediction:
+        em["retry"] = copy.deepcopy(BEAM_R1)
     return plan
 
 
@@ -41,7 +48,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
     frame_factor = (1.5, 1.8, 1.03)
 
     def test_offroad_plan(self):
-        self.assertEqual(run_scripted(self.ctx), "stopped")
+        self.assertEqual(run_scripted(self.ctx), "done")
         kinds = self.kinds()
         self.assertEqual(kinds[0], "run.started")
         self.assertEqual(kinds[-1], "run.finished")
@@ -63,8 +70,8 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.get("comparison", p1[0]["comparison_id"])["cause_id"], cause["cause_id"])
 
         # R1: rail_step_bending mismatches (analysis larger), the plan's cause is written; the
-        # rail-joint formula mismatches the other way, its cause is written, and with nothing
-        # decided after that the run stops with R1 unjudged
+        # rail-joint formula mismatches the other way (hand calculation larger), its cause is
+        # written as safe side, and the verdict comes from that prediction
         r1 = comparisons(self.ctx, "R1-step100")
         self.assertEqual([self.ctx.prediction(c["prediction_id"])["formula_id"] for c in r1],
                          ["frame_static.rail_step_bending", "frame_static.rail_joint_stress"])
@@ -75,11 +82,19 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual([c["resolved"] for c in causes], [False, False])
         self.assertIn("張り出し", causes[0]["cause"])
         self.assertIn("rail_joint_stress", causes[0]["fix"])
+        self.assertNotIn("safe_side", causes[0])
         self.assertIn("隣の継ぎ手", causes[1]["cause"])
-        self.assertIn(f"no next prediction after {r1[1]['comparison_id']}", self.ctx.project["stop_reason"])
+        self.assertTrue(causes[1]["safe_side"])
+        self.assertIn("上から押さえている", causes[1]["safe_side_reason"])
+        (ver,) = self.ctx.store.records("verdict")
+        self.assertEqual((ver["basis"], ver["value_from"], ver["cause_id"], ver["comparison_id"]),
+                         ("explained_safe_side", "prediction", causes[1]["cause_id"], r1[1]["comparison_id"]))
+        self.assertEqual(ver["value"], r1[1]["predicted"])
+        self.assertTrue(ver["pass"])
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "green")
+        self.assertIsNone(self.ctx.project.get("stop_reason"))
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn(r1_second(load_plan("offroad-4w"))["expected_mismatch"]["stop"], said)
-        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
+        self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
 
     def test_rail_joint_inputs_come_from_the_design(self):
@@ -93,14 +108,48 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         for name in ("M_oh", "z", "e", "L1", "L_c", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c"):
             self.assertEqual(pred["inputs"][name], joint[name], name)
 
+    def test_without_safe_side_or_retry_the_run_stops(self):
+        self.assertEqual(run_scripted(self.ctx, plan_without_safe_side()), "stopped")
+        r1 = comparisons(self.ctx, "R1-step100")
+        self.assertEqual([c["status"] for c in r1], ["mismatch", "mismatch"])
+        self.assertNotIn("safe_side", cause_of(self.ctx, r1[1]))
+        self.assertIn(f"no next prediction after {r1[1]['comparison_id']}", self.ctx.project["stop_reason"])
+        self.assertEqual(self.ctx.store.records("verdict"), [])
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
+        self.assert_events_fit()
+
     def test_third_r1_prediction_reaches_a_verdict(self):
-        self.assertEqual(run_scripted(self.ctx, plan_with_third_r1_prediction()), "done")
+        self.assertEqual(run_scripted(self.ctx, plan_without_safe_side(third_prediction=True)), "done")
         r1 = comparisons(self.ctx, "R1-step100")
         self.assertEqual([c["status"] for c in r1], ["mismatch", "mismatch", "match"])
         self.assertEqual([cause_of(self.ctx, c)["resolved_by"] for c in r1[:2]], [r1[2]["comparison_id"]] * 2)
-        self.assertEqual(self.kinds().count("verdict.recorded"), 1)
+        (ver,) = self.ctx.store.records("verdict")
+        self.assertEqual((ver["basis"], ver["comparison_id"]), ("match", r1[2]["comparison_id"]))
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "green")
         self.assertEqual(self.ctx.project["status"], "done")
+        self.assert_events_fit()
+
+    def test_safe_side_and_retry_together_are_a_plan_error(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        r1_second(plan)["expected_mismatch"]["retry"] = copy.deepcopy(BEAM_R1)
+        self.assertEqual(run_scripted(self.ctx, plan), "stopped")
+        self.assertIn("both safe_side and a retry", self.ctx.project["stop_reason"])
+
+
+class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
+    # The second R1 analysis comes out 2.7 x the beam formula: above the rail-joint prediction
+    # (+21 %), so the plan's safe-side judgement does not fit the numbers and the tool refuses it.
+    frame_factor = (1.5, 2.7)
+
+    def test_tool_refuses_and_the_run_stops(self):
+        self.assertEqual(run_scripted(self.ctx), "stopped")
+        r1 = comparisons(self.ctx, "R1-step100")
+        self.assertEqual([c["status"] for c in r1], ["mismatch", "mismatch"])
+        self.assertGreater(r1[1]["diff_rel"], 0.15)
+        self.assertIsNone(cause_of(self.ctx, r1[1]))  # refused, so nothing written
+        self.assertIn("安全側とはみなせません", self.ctx.project["stop_reason"])
+        self.assertEqual(self.ctx.store.records("verdict"), [])
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
         self.assert_events_fit()
 
     def test_resolve_refs(self):

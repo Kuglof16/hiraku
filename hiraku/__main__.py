@@ -96,4 +96,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # a piped stdout on Windows defaults to the locale code page (cp932 here), which cannot
+    # write the summaries' "≤"; write UTF-8 so pipes and files get every character
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

@@ -5,6 +5,8 @@ from K0 (record_prediction) and the analysis tools; the plan only says which
 formula and which inputs to use. A script cannot investigate a cause: it
 writes one only for a mismatch its plan names (expected_mismatch, with the
 cause worked out beforehand and its source); any other mismatch stops the run.
+Likewise the safe-side judgement of a mismatch is the plan's (worked out
+beforehand); record_cause still checks the direction of the numbers.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from hiraku import contract
 from hiraku.catalog import CATALOG_DIR, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import analyze, compare, record_cause, record_prediction, trusted_analysis
+from hiraku.tools.judge import verdict_line
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -168,8 +171,10 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
 
 
 def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) -> None:
-    """Predict, analyze, compare. On the expected mismatch, record its cause and go on
-    with its retry (itself a step, which may expect a mismatch of its own)."""
+    """Predict, analyze, compare. On the expected mismatch, record its cause; then the
+    verdict comes from the prediction when the plan judges it safe side (the tool checks
+    the numbers), else the step goes on with its retry (itself a step, which may expect
+    a mismatch of its own), else the run stops."""
     if step.get("say"):
         _say(ctx, agent, lc, step["say"])
     expected = step.get("expected_mismatch")
@@ -178,8 +183,17 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         return  # matched; the plan's retry is not needed
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
-    record_cause(ctx, {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}, agent)
+    args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
+    if expected.get("safe_side"):
+        args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
+    ver = record_cause(ctx, args, agent)["verdict"]
     retry = expected.get("retry")
+    if ver is not None:
+        if retry is not None:
+            raise ScriptError(f"the plan gives {hit['comparison_id']} both safe_side and a retry")
+        _say(ctx, agent, lc, f"安全側の食い違いとして、不利な方の値 (予測) で合否を出しました: "
+                             f"{'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
+        return
     if retry is None:
         _say(ctx, agent, lc, expected.get("stop") or "この先の予測は台本にありません。ここで止めます")
         raise Stop(f"the plan has no next prediction after {hit['comparison_id']}")
