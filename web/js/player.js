@@ -1,7 +1,14 @@
 // Timeline over events: replay (play, pause, speed, seek) and live follow.
-// Both modes move one playhead (seconds since run.started, the events' `t`)
-// and the state is always "every event with t <= playhead, applied in seq
-// order", so live and replay draw the same way.
+// Both modes move one playhead and the state is always "every event whose
+// time <= playhead, applied in seq order", so live and replay draw the same way.
+//
+// The playhead runs on display time. With pacing (the default) each gap
+// between two events is stretched to at least the time the earlier one needs
+// on screen (pacer) and cut to at most maxGap, so a scripted run that wrote
+// everything in a fraction of a second and a real run that thought for
+// minutes both replay at a watchable pace. Without pacing, display time is
+// the recorded `t`. Either way the recorded value stays in `t_rec`, the seek
+// bar, ?t= and window.hiraku.seek all use display time.
 
 import { applyEvent, initialState } from "./state.js";
 
@@ -9,7 +16,8 @@ export const SPEEDS = [0.5, 1, 2, 4, 8];
 
 export class Player {
   constructor() {
-    this.events = [];
+    this.raw = []; // events as recorded, in seq order
+    this.events = []; // the same events with t = display time and t_rec = recorded t
     this.state = initialState();
     this.applied = 0; // number of events applied to state
     this.playhead = 0;
@@ -19,6 +27,9 @@ export class Player {
     this.liveAttached = false; // playhead glued to the live edge
     this.startWallMs = null;
     this.minEnd = 0; // the replay lasts at least this long (a test's motion may play past the last event)
+    this.pacing = true;
+    this.pacer = () => 0; // seconds an event needs on screen before the next one
+    this.maxGap = 3; // a longer recorded gap is cut to this
   }
 
   get duration() {
@@ -33,22 +44,55 @@ export class Player {
 
   // Add events (any order, duplicates by seq are dropped). Returns how many were new.
   append(evs) {
-    const seen = new Set(this.events.map((e) => e.seq));
+    const seen = new Set(this.raw.map((e) => e.seq));
+    const from = this.raw.length;
     let added = 0;
     let outOfOrder = false;
     for (const e of evs) {
       if (typeof e?.seq !== "number" || typeof e?.t !== "number" || seen.has(e.seq)) continue;
       seen.add(e.seq);
-      if (this.events.length && e.seq < this.events.at(-1).seq) outOfOrder = true;
-      this.events.push(e);
+      if (this.raw.length && e.seq < this.raw.at(-1).seq) outOfOrder = true;
+      this.raw.push(e);
       added += 1;
       if (e.kind === "run.started" && e.ts) this.startWallMs = Date.parse(e.ts);
     }
     if (outOfOrder) {
-      this.events.sort((a, b) => a.seq - b.seq);
+      this.raw.sort((a, b) => a.seq - b.seq);
+      this.retime(0);
       this.rebuild();
+    } else {
+      this.retime(from);
     }
     return added;
+  }
+
+  // Display times from index i on (earlier ones are already on screen).
+  retime(i) {
+    this.events.length = i;
+    for (let k = i; k < this.raw.length; k += 1) {
+      const e = this.raw[k];
+      let t = e.t;
+      if (k > 0) {
+        let gap = e.t - this.raw[k - 1].t;
+        if (this.pacing) {
+          const lo = this.pacer(this.raw[k - 1]) ?? 0;
+          gap = Math.min(Math.max(gap, lo), Math.max(this.maxGap, lo));
+        }
+        t = this.events[k - 1].t + Math.max(0, gap);
+      }
+      this.events.push({ ...e, t, t_rec: e.t });
+    }
+  }
+
+  setPacing(on) {
+    this.pacing = on;
+    this.retime(0);
+    this.rebuild();
+  }
+
+  clear() {
+    this.raw = [];
+    this.events = [];
   }
 
   rebuild() {
@@ -105,10 +149,13 @@ export class Player {
     this.playing ? this.pause() : this.play();
   }
 
+  // Follow the live edge: jump to the newest event, then move on in real time.
   attachLive() {
     if (!this.live) return;
     this.liveAttached = true;
     this.playing = true;
+    this.playhead = Math.max(this.playhead, this.events.at(-1)?.t ?? 0);
+    this.sync();
   }
 
   cycleSpeed() {
@@ -120,16 +167,23 @@ export class Player {
   tick(dt, nowMs = Date.now()) {
     const before = this.playhead;
     if (this.live && this.finished) {
-      // The run ended while we followed it: from here on it is a replay.
+      // The run ended while we followed it: from here on it is a replay that
+      // plays out what is left (paced events may still be ahead).
       this.live = false;
       this.liveAttached = false;
-      this.playing = false;
-      this.playhead = this.events.at(-1)?.t ?? 0;
+      this.playing = this.playhead < this.duration;
     } else if (this.live && this.liveAttached) {
       const lastT = this.events.at(-1)?.t ?? 0;
-      const wall = this.startWallMs ? (nowMs - this.startWallMs) / 1000 : lastT;
-      this.playhead = Math.max(lastT, wall, this.playhead);
-    } else if (this.playing) {
+      if (this.pacing) {
+        // Real time, but wait at most maxGap past the newest event, so the next
+        // one (placed at most maxGap later) is never already behind the playhead.
+        this.playhead = Math.max(this.playhead, Math.min(this.playhead + dt, lastT + this.maxGap));
+      } else {
+        const wall = this.startWallMs ? (nowMs - this.startWallMs) / 1000 : lastT;
+        this.playhead = Math.max(lastT, wall, this.playhead);
+      }
+    }
+    if (!(this.live && this.liveAttached) && this.playing) {
       this.playhead = Math.min(this.playhead + dt * this.speed, this.duration);
       if (this.playhead >= this.duration) this.playing = false;
     }

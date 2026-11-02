@@ -68,6 +68,49 @@ window.addEventListener("resize", fitStage);
 // ---- player ---------------------------------------------------------------
 const player = new Player();
 if (params.has("speed")) player.speed = Number(params.get("speed")) || 1;
+
+// Pacing (?pace=0 turns it off, ?gapmax=3 sets the longest gap). Seconds each
+// kind of event stays on screen before the next one at least.
+const PACE_MIN = {
+  "run.started": 1.2,
+  "design.created": 1.6,
+  "agent.said": 2.2,
+  "user.said": 2.2,
+  "hook.denied": 2.5,
+  "hook.blocked_stop": 2.0,
+  "prediction.recorded": 1.6,
+  "analysis.started": 1.0,
+  "analysis.finished": 1.6,
+  "comparison.recorded": 1.6,
+  "cause.recorded": 2.0,
+  "verdict.recorded": 1.4,
+  "judgement.updated": 0.8,
+  "tool.checked": 0.4,
+  "agent.started": 0.4,
+  "agent.stopped": 0.3,
+  "screen.focus": 0.3,
+  "cost.updated": 0.1,
+  "run.finished": 0.5,
+};
+const motionSpans = new Map(); // analysis_id -> seconds of motion (or null)
+function motionSpanOf(ev) {
+  const id = ev.data?.analysis_id;
+  if (!motionSpans.has(id)) motionSpans.set(id, ev.data?.series ? motionSpan(ev.data) : null);
+  return motionSpans.get(id);
+}
+function paceAfter(ev) {
+  let s = PACE_MIN[ev.kind] ?? 0.5;
+  if (ev.kind === "agent.said" || ev.kind === "user.said") s = Math.min(4.5, Math.max(s, 0.8 + (ev.text?.length ?? 0) * 0.07));
+  if (ev.kind === "hook.denied") s = Math.min(5, Math.max(s, 1 + (ev.text?.length ?? 0) * 0.05));
+  if (ev.kind === "analysis.finished") {
+    const span = motionSpanOf(ev);
+    if (span !== null) s = Math.max(s, Math.min(span, ANIM_MAX_S)); // let the test's motion play out
+  }
+  return s;
+}
+player.pacer = paceAfter;
+player.pacing = params.get("pace") !== "0";
+if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapmax")) || 3);
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
@@ -129,7 +172,7 @@ function logItem(e) {
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
-  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm">${fmtTime(e.t)}s</span>${upd}${note}</li>`;
+  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s) {
@@ -648,7 +691,8 @@ window.addEventListener("drop", async (ev) => {
 
 // ---- loading ------------------------------------------------------------------
 function resetPlayer() {
-  player.events = [];
+  player.clear();
+  motionSpans.clear();
   player.live = false;
   player.liveAttached = false;
   player.playhead = 0;
@@ -670,12 +714,14 @@ function startPlayback() {
   readyResolve(player.playhead);
 }
 
-// Add events to the player; a test's motion lengthens the replay so it can play to its end.
+// Add events to the player; a test's motion lengthens the replay so it can play
+// to its end (in display time: the player's copy of the event).
 function addEvents(events) {
+  const from = player.events.length;
   player.append(events);
-  for (const ev of events) {
-    if (ev?.kind !== "analysis.finished" || !ev.data?.series) continue;
-    const span = motionSpan(ev.data);
+  for (const ev of player.events.slice(from)) {
+    if (ev.kind !== "analysis.finished") continue;
+    const span = motionSpanOf(ev);
     if (span !== null) player.minEnd = Math.max(player.minEnd, ev.t + Math.min(span, ANIM_MAX_S));
   }
 }
