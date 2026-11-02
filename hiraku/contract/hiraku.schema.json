@@ -2239,6 +2239,29 @@
           "description": "Where in the motion, e.g. 'steer 30 deg, bump 80 mm'."
         }
       }
+    },
+    "tool_input.revise_design": {
+      "description": "Agent-facing MCP tool for the designer only. hiraku.designgen rebuilds the design from the changed variables; the store makes the next version with parent_version and change_reason.",
+      "type": "object",
+      "required": [
+        "changes",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "design variable name -> new value in the variable's own unit",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "which test failed and what the change does about it"
+        }
+      }
     }
   }
 }

@@ -78,7 +78,8 @@ DOMAIN_NAMES_JA = {
 # Agent-facing MCP tools (served by create_sdk_mcp_server under the name "hiraku").
 MCP_SERVER = "hiraku"
 MCP_TOOLS_MVP = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
-MCP_TOOLS_LATER = ("pick_domains", "ask_user", "revise_design", "check_package", "make_tool", "check_tool", "import_knowledge", "write_report")
+MCP_TOOLS_DESIGNER = ("revise_design",)
+MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "make_tool", "check_tool", "import_knowledge", "write_report")
 
 
 def mcp_name(tool: str) -> str:
