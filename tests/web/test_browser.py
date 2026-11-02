@@ -8,8 +8,11 @@ this test also needs the network).
 import copy
 import json
 import os
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
@@ -54,6 +57,33 @@ def mismatch_events():
          "data": {"hook": "Stop", "rule": "HK4_no_stop_before_judged", "count": 1, "limit": 3}},
         {"kind": "run.finished", "agent": "system", "data": {"status": "stopped", "stop_reason": "round_limit"}},
     ]
+    t = out[-1]["t"]
+    for ev in more:
+        t += 0.5
+        out.append({"seq": 0, "t": t, **base, **ev})
+    for i, ev in enumerate(out):
+        ev["seq"] = i
+    return out
+
+
+LONG_SPEECH = (
+    "## 次にやること\n\n"
+    "**R1 の食い違い**は、梁の式が後ろの張り出しを見ていないためです。\n"
+    "- `frame_static.rail_step_bending` で張り出しの曲げを入れて予測し直す\n"
+    "- そのあと `analyze` → `compare`\n\n"
+    + "前の車軸から後ろの車軸までの曲げと、後ろに張り出した荷とモーターの重さによる曲げを足し合わせます。" * 6
+)
+
+
+def claude_like_events():
+    """The sample run with what a Claude run brings: every role started (ten agents)
+    and a long Markdown speech. Shape example: the words are made up."""
+    src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+    out = [copy.deepcopy(e) for e in src[:4]]
+    base = {"run_id": out[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00"}
+    roles = ["lead", "designer", "packager"] + [f"cae.{d}" for d in contract.DOMAINS if d != "assembly"]
+    more = [{"kind": "agent.started", "agent": a, "data": {"agent_id": a}} for a in roles if a != "cae.strength"]
+    more.append({"kind": "agent.said", "agent": "cae.strength", "domain": "strength", "text": LONG_SPEECH})
     t = out[-1]["t"]
     for ev in more:
         t += 0.5
@@ -230,6 +260,72 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(tile["safe"], "安全側 1")
         self.assertIn("うち安全側 1 件", tile["sum"])
         page.close()
+
+    def test_long_speech_and_many_agents(self):
+        events = claude_like_events()
+        for ev in events:
+            self.assertEqual(contract.errors("event", ev), [])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, events.at(-1).t + 0.5);
+              const b = document.querySelector("#bubble .tx");
+              const li = [...document.querySelectorAll("#log li.said .tx")].at(-1);
+              const lineH = (el) => parseFloat(getComputedStyle(el).lineHeight);
+              return {
+                bubble: b.textContent,
+                bubbleLines: Math.round(b.getBoundingClientRect().height / lineH(b) / (window.innerWidth / 1920)),
+                logLines: Math.round(li.getBoundingClientRect().height / lineH(li) / (window.innerWidth / 1920)),
+                fullInTitle: li.title.length,
+                agents: document.querySelectorAll("#agents li").length,
+                many: document.getElementById("agents").classList.contains("many"),
+              };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertNotIn("**", got["bubble"])
+        self.assertNotIn("##", got["bubble"])
+        self.assertNotIn("`", got["bubble"])
+        self.assertIn("・frame_static.rail_step_bending", got["bubble"])
+        self.assertLessEqual(got["bubbleLines"], 7)
+        self.assertLessEqual(got["logLines"], 5)
+        self.assertGreater(got["fullInTitle"], 300)  # the whole speech stays on the line (as its title)
+        self.assertEqual(got["agents"], 10)
+        self.assertTrue(got["many"])
+        page.close()
+
+    def test_opens_the_saved_run_without_run_in_the_url(self):
+        tmp = Path(tempfile.mkdtemp())
+        run_id = "20261106-100000-offroad-4w"
+        (tmp / "showcase" / run_id).mkdir(parents=True)
+        shutil.copyfile(SAMPLE_EVENTS, tmp / "showcase" / run_id / "events.jsonl")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=tmp / "showcase")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"{base}/?pace=0&t=9")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.evaluate("window.hiraku.ready")
+            got = page.evaluate(
+                """() => ({ applied: window.hiraku.player.applied, list: !document.getElementById("runlist").hidden,
+                           link: document.querySelector("#mode a.runid").getAttribute("href") })"""
+            )
+            self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#runlist h3")
+            listing = page.evaluate(
+                """() => ({ heads: [...document.querySelectorAll("#runlist h3")].map((h) => h.textContent),
+                           def: document.querySelector("#runlist .def")?.closest("tr").querySelector(".rid").textContent })"""
+            )
+            self.assertEqual(listing["heads"], ["保存した実行", "契約の形の見本"])
+            self.assertEqual(listing["def"], run_id)
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
 
     def test_loading_picks_who_is_on_board(self):
         src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]

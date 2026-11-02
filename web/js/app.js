@@ -141,7 +141,7 @@ function renderTop(s) {
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    `<span class="runid">${esc(s.runId ?? "")}</span>`;
+    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>`;
 }
 
 function renderChips(s, lcId) {
@@ -155,6 +155,7 @@ function renderChips(s, lcId) {
 
 function renderAgents(s) {
   const order = [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
+  $("agents").classList.toggle("many", order.length > 6);
   $("agents").innerHTML = order
     .map((id) => {
       const a = s.agents[id];
@@ -175,7 +176,9 @@ function logItem(e) {
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
-  return `<li class="${e.level}">${who}${esc(e.text)}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
+  // What an agent said can run long: the line shows its first lines, the record keeps all of it.
+  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${esc(e.text)}</span>` : esc(e.text);
+  return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
 function renderLog(s) {
@@ -432,7 +435,9 @@ function renderGrid(s) {
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
     const known = { round_limit: `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した`, cost_limit: "費用の上限に達した" };
-    const why = s.stopReason ? known[s.stopReason] ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
+    // The Claude runner writes these in English (hiraku/agent/runner.py final_status).
+    const said = /^cost limit\b/.test(s.stopReason ?? "") ? "費用の上限に達した" : /^turn limit\b/.test(s.stopReason ?? "") ? "ターン数の上限に達した" : null;
+    const why = s.stopReason ? known[s.stopReason] ?? said ?? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`;
     banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>続けるか・上限を変えるか・ここで報告を書くかは、実行を操作する入口ができてから選べる</span>`;
   }
 }
@@ -470,7 +475,7 @@ function renderTransient(s, playhead, chain) {
   b.style.opacity = sa;
   if (said && b.dataset.seq !== String(said.seq)) {
     b.dataset.seq = String(said.seq);
-    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div>${esc(said.text)}`;
+    b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div><div class="tx">${esc(said.text)}</div>`;
   }
   const den = s.denied;
   const h = $("hookflash");
@@ -761,27 +766,49 @@ async function openRun(runId) {
   startPlayback();
 }
 
-async function showRunList(message = "") {
+async function fetchRuns() {
+  return (await fetch("/api/runs", { cache: "no-store" })).json();
+}
+
+async function showRunList(message = "", runs = null) {
   const box = $("runlist");
   box.hidden = false;
-  let runs = [];
-  try {
-    runs = await (await fetch("/api/runs", { cache: "no-store" })).json();
-  } catch (e) {
-    message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
+  if (!runs) {
+    try {
+      runs = await fetchRuns();
+    } catch (e) {
+      runs = [];
+      message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
+    }
   }
-  const rows = runs
-    .map((r) => {
-      const st = r.sample ? "見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
-      const open = `<a href="?run=${encodeURIComponent(r.run_id)}">再生</a>`;
-      const live = !r.finished ? `<a href="?run=${encodeURIComponent(r.run_id)}">追いかける</a>` : `<a href="?run=${encodeURIComponent(r.run_id)}&video=1">動画の配置で</a>`;
-      return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}</td><td>${r.finished ? open : live}</td></tr>`;
-    })
-    .join("");
+  const row = (r) => {
+    const st = r.sample ? "形の見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
+    const href = `?run=${encodeURIComponent(r.run_id)}`;
+    const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
+    const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
+    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+  };
+  const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
     `<h2>実行の一覧</h2>${message ? `<p class="err">${esc(message)}</p>` : ""}` +
-    `<table><tr><th>依頼</th><th>状態</th><th></th></tr>${rows}</table>` +
+    table("保存した実行", runs.filter((r) => r.saved)) +
+    table("この PC の実行 (runs/)", runs.filter((r) => !r.saved && !r.sample)) +
+    table("契約の形の見本", runs.filter((r) => r.sample)) +
     `<p class="note">events.jsonl をこの画面に落としても再生できます。</p>`;
+}
+
+// No run in the URL: open the server's default run (a saved run), else the run list.
+async function openDefault() {
+  let runs;
+  try {
+    runs = await fetchRuns();
+  } catch (e) {
+    showRunList();
+    return;
+  }
+  const def = runs.find((r) => r.default);
+  if (def) openRun(def.run_id);
+  else showRunList("", runs);
 }
 
 fitStage();
@@ -792,4 +819,5 @@ else if (params.get("src")) {
     .then((r) => r.text())
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
-} else showRunList();
+} else if (params.get("list")) showRunList();
+else openDefault();
