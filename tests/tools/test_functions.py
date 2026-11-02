@@ -21,7 +21,7 @@ class StartTest(RunCase, unittest.TestCase):
 
     def test_list_filters(self):
         self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})],
-                         ["step_climb.wheel_force_rigid"])
+                         ["step_climb.pushed_wheel_load", "step_climb.wheel_force_rigid"])
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"domain": "strength"})], ["frame_static"])
         self.assertTrue(all(t["usable"] for t in list_tools(self.ctx)))
 
@@ -29,11 +29,11 @@ class StartTest(RunCase, unittest.TestCase):
 class PredictionTest(RunCase, unittest.TestCase):
     def test_value_comes_from_k0(self):
         load, force = self.predict_p1(agent="cae.strength")
-        self.assertEqual(self.formulas.calls[-1][0], "step_climb.wheel_force_rigid")
+        self.assertEqual(self.formulas.calls[-1][0], "step_climb.pushed_wheel_load")
         self.assertEqual(force["unit"], "N")
         self.assertEqual(force["agent"], "cae.strength")
         self.assertEqual(force["domain"], "powertrain")  # the load case's domain
-        self.assertIn("rigid wheel", force["assumptions"])  # the formula's assumptions are kept
+        self.assertIn("rear wheels push at the ground, the step pushes back at axle height", force["assumptions"])
         ev = self.ctx.store.events()[-1]
         self.assertEqual((ev["kind"], ev["data"]), ("prediction.recorded", force))
 
@@ -117,6 +117,16 @@ class LoopTest(RunCase, unittest.TestCase):
         self.assertIn("boom", ana["error"])
         with self.assertRaises(ToolError):
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
+
+
+class LeverRuleTest(RunCase, unittest.TestCase):
+    def test_lever_rule_at_rest_overestimates_the_climbing_wheel(self):
+        load, force = self.predict_p1(formula_id="mass_props.front_wheel_load")
+        ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
+                                 "prediction_ids": [load["prediction_id"], force["prediction_id"]]})
+        cmp = compare(self.ctx, {"prediction_id": load["prediction_id"], "analysis_id": ana["analysis_id"]})["comparison"]
+        self.assertEqual(cmp["status"], "mismatch")
+        self.assertLess(cmp["diff_rel"], -0.10)  # the push couple moves load rearward
 
 
 class MismatchTest(RunCase, unittest.TestCase):

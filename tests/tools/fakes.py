@@ -12,7 +12,8 @@ import math
 from typing import Any
 
 from hiraku import contract
-from hiraku.catalog import loading_of, parts_on_board
+from hiraku.catalog import loading_of
+from hiraku.tools.summary import design_summary
 
 G = 9.80665  # standard gravity, m/s^2 (exact by definition)
 
@@ -32,6 +33,13 @@ def _f(formula_id, title, domain, expression, inputs, outputs, assumptions):
     }
 
 
+def pushed(m, a, L, n, r, h):
+    """Front wheel load and push when the rear wheels push it onto a step (moment balance)."""
+    k = math.sqrt(2 * r * h - h * h) / (r - h)
+    w = m * G * (L - a) / (L * n) / (1 + k * r / L)
+    return w, k * w
+
+
 def _rect_tube_Z(b, h, t):
     i = (b * h ** 3 - (b - 2 * t) * (h - 2 * t) ** 3) / 12.0
     return i / (h / 2.0)
@@ -45,11 +53,16 @@ class FakeFormulas:
         return [
             _f("mass_props.front_wheel_load", "前輪 1 輪の静的な荷重", "handling", "W = m g (L - a) / (L n)",
                {"m": "kg", "a": "mm", "L": "mm", "n": "1"}, {"W": "N"}, ["static"]),
+            _f("step_climb.pushed_wheel_load", "押されて段を登る前輪の荷重と力", "powertrain",
+               "k = sqrt(2 r h - h^2)/(r - h); W = m g (L - a)/(L n)/(1 + k r/L); F = k W",
+               {"m": "kg", "a": "mm", "L": "mm", "n": "1", "r": "mm", "h": "mm"}, {"W": "N", "F": "N"},
+               ["rear wheels push at the ground, the step pushes back at axle height"]),
             _f("step_climb.wheel_force_rigid", "剛い輪が段の角に当たったときの力", "powertrain",
                "d = sqrt(2 r h - h^2); F = W d / (r - h)", {"r": "mm", "h": "mm", "W": "N"},
                {"F": "N", "d": "mm"}, ["rigid wheel", "h < r"]),
             _f("frame_static.rail_bending", "レールの曲げ応力", "strength", "sigma = (F L / 4) / Z",
-               {"F": "N", "L": "mm", "b": "mm", "h": "mm", "t": "mm"}, {"sigma": "MPa"}, ["simply supported"]),
+               {"F": "N", "L": "mm", "b": "mm", "h": "mm", "t": "mm"}, {"sigma": "MPa", "M": "N*mm", "Z": "mm^3"},
+               ["simply supported"]),
         ]
 
     def evaluate(self, formula_id, inputs):
@@ -65,6 +78,10 @@ class FakeFormulas:
         if formula_id == "mass_props.front_wheel_load":
             w = x["m"] * G * (x["L"] - x["a"]) / x["L"] / x["n"]
             return {"outputs": {"W": {"value": w, "unit": "N"}}, "terms": [], "expression": spec["expression"]}
+        if formula_id == "step_climb.pushed_wheel_load":
+            w, f = pushed(x["m"], x["a"], x["L"], x["n"], x["r"], x["h"])
+            return {"outputs": {"W": {"value": w, "unit": "N"}, "F": {"value": f, "unit": "N"}}, "terms": [],
+                    "expression": spec["expression"]}
         if formula_id == "step_climb.wheel_force_rigid":
             r, h, w = x["r"], x["h"], x["W"]
             if h >= r:
@@ -75,7 +92,8 @@ class FakeFormulas:
         if formula_id == "frame_static.rail_bending":
             z = _rect_tube_Z(x["b"], x["h"], x["t"])
             m = x["F"] * x["L"] / 4.0
-            return {"outputs": {"sigma": {"value": m / z, "unit": "MPa"}},
+            return {"outputs": {"sigma": {"value": m / z, "unit": "MPa"}, "M": {"value": m, "unit": "N*mm"},
+                                "Z": {"value": z, "unit": "mm^3"}},
                     "terms": [{"name": "M", "value": m, "unit": "N*mm", "share": 1.0}], "expression": spec["expression"]}
         raise KeyError(formula_id)
 
@@ -110,25 +128,20 @@ class FakeStepClimb(FakeTool):
 
     def run(self, design, load_case, predictions, params):
         self.runs.append((design, load_case, predictions, params))
-        parts = parts_on_board(design, loading_of(load_case))
-        m = sum(p["mass_kg"] for p in parts)
-        a = sum(p["mass_kg"] * p["box"]["center_mm"][0] for p in parts) / m
-        wheels = [s for s in design["supports"] if s["kind"] == "wheel"]
-        xs = [s["position_mm"][0] for s in wheels]
-        L = max(xs) - min(xs)
-        front = [s for s in wheels if s["position_mm"][0] == min(xs)]
-        w = m * G * (L - a) / L / len(front)
-        r = front[0]["radius_mm"]
+        s = design_summary(design)
+        load = s["loadings"][loading_of(load_case)]
+        r = s["front_wheel_radius"]["value"]
         h = load_case["params"]["step_height"]["value"]
         if h >= r:
             return {"status": "failed", "error": f"step {h} mm is not below the wheel radius {r} mm; use bigger wheels",
                     "results": []}
-        d = math.sqrt(2 * r * h - h * h)
-        f = w * d / (r - h) * self.factor
+        w, f = pushed(load["mass"]["value"], load["cg_from_front_axle"]["value"], s["wheelbase"]["value"],
+                      s["front_wheels"]["value"], r, h)
+        w, f = w * self.factor, f * self.factor
         return {"status": "ok", "base": self.base, "results": [
-            {"quantity": "front_wheel_load", "value": w * self.factor, "unit": "N", "where": front[0]["id"]},
-            {"quantity": "front_wheel_force", "value": f, "unit": "N", "where": front[0]["id"]},
-        ], "vectors": [{"kind": "reaction", "at": front[0]["id"], "origin_mm": [0.0, 0.0, 0.0], "vector_N": [-f, 0.0, w]}]}
+            {"quantity": "front_wheel_load", "value": w, "unit": "N", "where": "FL"},
+            {"quantity": "front_wheel_force", "value": f, "unit": "N", "where": "FL"},
+        ], "vectors": [{"kind": "reaction", "at": "FL", "origin_mm": [0.0, 0.0, 0.0], "vector_N": [-f, 0.0, w]}]}
 
 
 class FakeFrameStatic(FakeTool):
@@ -139,11 +152,10 @@ class FakeFrameStatic(FakeTool):
         self.runs.append((design, load_case, predictions, params))
         up = params["upstream_analyses"]["P1-step100"]
         f = next(r["value"] for r in up["results"] if r["quantity"] == "front_wheel_force")
-        nodes = {n["id"]: n["xyz_mm"] for n in design["nodes"]}
-        mem = next(m for m in design["members"] if m["id"] == "rail_L0")
-        L = math.dist(nodes[mem["node_a"]], nodes[mem["node_b"]])
-        dims = design["sections"][mem["section"]]["dims_mm"]
-        sigma = f * L / 4.0 / _rect_tube_Z(dims["b"], dims["h"], dims["t"]) * self.factor
+        summ = design_summary(design)
+        L = summ["wheelbase"]["value"]
+        rail = summ["rail_section"]
+        sigma = f * L / 4.0 / _rect_tube_Z(rail["b"]["value"], rail["h"]["value"], rail["t"]["value"]) * self.factor
         return {"status": "ok", "base": "K1",
                 "results": [{"quantity": "max_stress", "value": sigma, "unit": "MPa", "where": "rail_L0"}],
                 "fields": [{"kind": "stress", "label": "von Mises", "unit": "MPa", "per_member": {"rail_L0": sigma}}],
@@ -164,9 +176,9 @@ def loaded_design(person_kg=76.6, cargo_kg=150.0) -> Record:
     """The contract's shape example plus two occupants (driver first) and cargo, as the contract asks."""
     d = example_design()
     d["parts"] += [
-        _part("driver", "occupant", [900.0, 250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
-        _part("passenger", "occupant", [900.0, -250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
-        _part("cargo", "cargo", [1500.0, 0.0, 550.0], [500.0, 800.0, 300.0], cargo_kg),
+        _part("driver", "occupant", [-900.0, 250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
+        _part("passenger", "occupant", [-900.0, -250.0, 800.0], [400.0, 450.0, 900.0], person_kg),
+        _part("cargo", "cargo", [-1500.0, 0.0, 550.0], [500.0, 800.0, 300.0], cargo_kg),
     ]
     return d
 

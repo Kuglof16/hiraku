@@ -116,10 +116,20 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(ids["two_cargo"], ["battery", "seat", "driver", "passenger", "cargo"])
         with self.assertRaises(ValueError):
             parts_on_board(d, "three")
-        s = design_summary(d)["loadings"]
-        self.assertAlmostEqual(s["empty"]["mass"]["value"], 60.0)
-        self.assertAlmostEqual(s["two_cargo"]["mass"]["value"], 60.0 + 2 * 76.6 + 150.0)
-        self.assertGreater(s["two_cargo"]["cg_x"]["value"], s["two"]["cg_x"]["value"])  # cargo sits behind
+        summ = design_summary(d)
+        s = summ["loadings"]
+        # frame: 4 rails 40x80x2 (464 mm^2) x 900 mm + 3 cross members 40x40x2 (304 mm^2) x 800 mm, steel 7850 kg/m^3
+        frame = (4 * 464 * 900 + 3 * 304 * 800) * 7850e-9
+        self.assertAlmostEqual(summ["frame_mass"]["value"], frame)
+        self.assertAlmostEqual(s["empty"]["mass"]["value"], 60.0 + frame)
+        self.assertAlmostEqual(s["two_cargo"]["mass"]["value"], 60.0 + frame + 2 * 76.6 + 150.0)
+        # x points forward and the rear axle is at -wheelbase: cargo behind pulls the CG back
+        self.assertLess(s["two_cargo"]["cg_x"]["value"], s["two"]["cg_x"]["value"])
+        self.assertGreater(s["two_cargo"]["cg_from_front_axle"]["value"], s["two"]["cg_from_front_axle"]["value"])
+        self.assertEqual(summ["front_axle_x"]["value"], 0.0)
+        self.assertEqual(summ["wheelbase"]["value"], 1800.0)
+        self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
+        self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
     def test_project_fields(self):
         lcs = build_load_cases(self.catalog, self.req, design(), ["P1", "R1"])

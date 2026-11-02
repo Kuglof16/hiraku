@@ -46,23 +46,27 @@ class RunCase:
 
     # the P1 -> R1 chain with the fake formulas -----------------------------
 
-    def predict_p1(self, agent=None):
-        from hiraku.tools.functions import record_prediction
+    def p1_inputs(self):
         from hiraku.tools.summary import design_summary
 
         s = design_summary(self.ctx.store.design())
+        load = s["loadings"]["two_cargo"]
+        return {"m": load["mass"], "a": load["cg_from_front_axle"], "L": s["wheelbase"], "n": s["front_wheels"],
+                "r": s["front_wheel_radius"], "h": {"value": 100.0, "unit": "mm"}}
+
+    def predict_p1(self, agent=None, formula_id="step_climb.pushed_wheel_load"):
+        from hiraku.tools.functions import record_prediction
+
+        ins = self.p1_inputs()
+        if formula_id == "mass_props.front_wheel_load":  # the lever rule, at rest
+            ins = {k: ins[k] for k in ("m", "a", "L", "n")}
         load = record_prediction(self.ctx, {
-            "load_case_id": "P1-step100", "quantity": "front_wheel_load", "formula_id": "mass_props.front_wheel_load",
-            "inputs": {"m": s["loadings"]["two_cargo"]["mass"], "a": s["loadings"]["two_cargo"]["cg_x"],
-                       "L": s["wheelbase"], "n": s["front_wheels"]},
-            "assumptions": ["test"],
+            "load_case_id": "P1-step100", "quantity": "front_wheel_load", "formula_id": formula_id, "output": "W",
+            "inputs": ins, "assumptions": ["test"],
         }, agent)
         force = record_prediction(self.ctx, {
-            "load_case_id": "P1-step100", "quantity": "front_wheel_force", "formula_id": "step_climb.wheel_force_rigid",
-            "output": "F",
-            "inputs": {"r": {"value": 300.0, "unit": "mm"}, "h": {"value": 100.0, "unit": "mm"},
-                       "W": {"value": load["value"], "unit": load["unit"]}},
-            "assumptions": [],
+            "load_case_id": "P1-step100", "quantity": "front_wheel_force", "formula_id": "step_climb.pushed_wheel_load",
+            "output": "F", "inputs": self.p1_inputs(), "assumptions": [],
         }, agent)
         return load, force
 
@@ -81,7 +85,8 @@ class RunCase:
 
         return record_prediction(self.ctx, {
             "load_case_id": "R1-step100", "quantity": "max_stress", "formula_id": "frame_static.rail_bending",
-            "inputs": {"F": F, "L": {"value": 900.0, "unit": "mm"}, "b": {"value": 40.0, "unit": "mm"},
+            "output": "sigma",
+            "inputs": {"F": F, "L": {"value": 1800.0, "unit": "mm"}, "b": {"value": 40.0, "unit": "mm"},
                        "h": {"value": 80.0, "unit": "mm"}, "t": {"value": 2.0, "unit": "mm"}},
             "assumptions": ["test"],
         })
