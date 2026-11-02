@@ -19,7 +19,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 |---|---|
 | 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`README.md`、`CLAUDE.md`、`requirements.txt`、`.gitignore` |
 | 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP の道具)、`hiraku/store/` (runs の読み書き)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
-| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`data/designs/`、`data/materials/`、`tests/solvers/` |
+| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`tests/solvers/` |
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier の照合は `qa/rapier/`、Node はここだけ) |
 | 広報部 | `promo/` |
