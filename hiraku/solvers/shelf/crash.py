@@ -22,7 +22,7 @@ from ..k0_handcalc.vehicle import DesignError, mass_summary, support_loads
 from ..k1_frame import analyze
 from ..k1_frame.impact import Front, impact
 from . import fixtures
-from .base import BuiltinTool, LoadCaseError, Record, check_record, on_board, param_value, result
+from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 from .frame_static import frame_outputs
 
 FRONT_VARS = {"bumper_stiffness": "N/mm", "bumper_stroke": "mm", "crush_stiffness": "N/mm"}
@@ -71,6 +71,16 @@ class Crash(BuiltinTool):
     base = "K1"
     tests = ["C1"]
     formulas = ["crash.linear_spring", "crash.mean_deceleration"]
+    load_case_params = (Param("speed", "km/h", "speed when the front meets the wall", required=True), LOADING)
+    predicts = (
+        Predicts("peak_deceleration", "crash.linear_spring", "a_max",
+                 "one spring: the bumper alone, or the crush zone if the bumper bottoms out"),
+        Predicts("max_crush", "crash.linear_spring", "x_max"),
+        Predicts("stop_time", "crash.linear_spring", "t_stop"),
+        Predicts("crash_energy", "crash.linear_spring", "E"),
+        Predicts("crash_energy", "crash.mean_deceleration", "E"),
+        Predicts("mean_deceleration", "crash.mean_deceleration", "a_mean", "s = max_crush"),
+    )
 
     def known_answers(self) -> list[Record]:
         out = []
@@ -98,7 +108,7 @@ class Crash(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: speed (km/h, required), loading (default two_cargo)."""
+        """Load case params: load_case_params."""
         design = on_board(design, load_case)
         v = param_value(load_case, "speed", "m/s")
         if v is None or v <= 0:
