@@ -96,8 +96,8 @@ class CheckRun(unittest.TestCase):
     def test_sample_run_has_no_errors(self):
         found = self.findings(sample_events())
         self.assertEqual([str(f) for f in found if f.level == "error"], [])
-        # the sample never records tool.checked, so H2 can only be a warning
-        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"H2_tool_usable"})
+        # the sample never records tool.checked, so HK2 can only be a warning
+        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"HK2_tool_usable"})
 
     def test_command_line_exit_codes(self):
         good = write_run(self.root / "good", sample_events())
@@ -107,7 +107,7 @@ class CheckRun(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(cr.main([str(good)]), 0)
             self.assertEqual(cr.main([str(bad)]), 1)
-            self.assertEqual(cr.main([str(good), "--strict"]), 1)  # the H2 warning counts
+            self.assertEqual(cr.main([str(good), "--strict"]), 1)  # the HK2 warning counts
 
     # --- shape and sequence ----------------------------------------------------------
     def test_seq_gap(self):
@@ -151,7 +151,7 @@ class CheckRun(unittest.TestCase):
         ev = sample_events()
         for kind in ("analysis.started", "analysis.finished"):
             by_kind(ev, kind)["data"]["prediction_ids"] = ["pred-0002"]
-        self.assertFlags(ev, "H1_prediction_first")
+        self.assertFlags(ev, "HK1_prediction_first")
 
     def test_h1_prediction_recorded_after_the_analysis(self):
         ev = sample_events()
@@ -160,7 +160,7 @@ class CheckRun(unittest.TestCase):
         t = [e["t"] for e in ev]
         for i, e in enumerate(ev):
             e["t"] = sorted(t)[i]
-        self.assertFlags(renumber(ev), "H1_prediction_first")
+        self.assertFlags(renumber(ev), "HK1_prediction_first")
 
     def test_h2_tool_used_while_not_usable(self):
         ev = sample_events()
@@ -171,7 +171,7 @@ class CheckRun(unittest.TestCase):
         checked = {"seq": 0, "ts": ev[1]["ts"], "t": ev[1]["t"], "run_id": RUN_ID, "kind": "tool.checked",
                    "agent": "system", "data": spec}
         ev.insert(2, checked)
-        self.assertFlags(renumber(ev), "H2_tool_usable")
+        self.assertFlags(renumber(ev), "HK2_tool_usable")
 
     def test_tool_check_that_lies_about_pass(self):
         ev = sample_events()
@@ -192,13 +192,13 @@ class CheckRun(unittest.TestCase):
         ev[i:i] = [bad, later]
         for e in ev[i:]:
             e["t"] = max(e["t"], cmp_ev["t"])
-        self.assertFlags(renumber(ev), "H3_cause_before_continue")
+        self.assertFlags(renumber(ev), "HK3_cause_before_continue")
 
     def test_h4_done_while_a_picked_domain_is_pending(self):
         ev = sample_events()
         j = by_kind(ev, "judgement.updated")["data"]
         j.update(state="pending")
-        self.assertFlags(ev, "H4_no_stop_before_judged")
+        self.assertFlags(ev, "HK4_no_stop_before_judged")
 
     def test_unknown_hook_rule(self):
         ev = sample_events()
@@ -398,7 +398,7 @@ class CheckRun(unittest.TestCase):
     def test_mismatch_resolved_by_a_revised_prediction(self):
         found = self.findings(self.resolved_flow())
         self.assertEqual([str(f) for f in found if f.level == "error"], [])
-        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"H2_tool_usable"})
+        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"HK2_tool_usable"})
 
     def test_revised_prediction_without_a_cause_is_flagged(self):
         ev = [e for e in self.resolved_flow() if not (e["kind"] == "cause.recorded")]
@@ -406,7 +406,7 @@ class CheckRun(unittest.TestCase):
             if e["kind"] == "comparison.recorded":
                 e["data"].pop("cause_id", None)
         rules = self.rules(renumber(ev))
-        self.assertIn("H3_cause_before_continue", rules)
+        self.assertIn("HK3_cause_before_continue", rules)
 
     def test_resolved_by_must_be_a_later_match_of_the_same_quantity(self):
         ev = self.resolved_flow()
@@ -442,7 +442,7 @@ class CheckRun(unittest.TestCase):
     def test_safe_side_verdict_from_an_explained_mismatch(self):
         found = self.findings(self.safe_side_flow())
         self.assertEqual([str(f) for f in found if f.level == "error"], [])
-        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"H2_tool_usable"})
+        self.assertEqual({f.rule for f in found if f.level == "warn"}, {"HK2_tool_usable"})
 
     def test_safe_side_verdict_for_a_lower_limit(self):
         # criterion >= 90 MPa: the prediction 100 is below the analysis 123.6, the unfavourable side

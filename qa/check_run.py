@@ -10,11 +10,11 @@ there is an error (or a warning with --strict). What it looks at:
 - files and events: each record file has exactly one event whose data is the
   same object, and each record event has its file (layout.py)
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
-- H1: every analysis names predictions of the same version and load case that
+- HK1: every analysis names predictions of the same version and load case that
   were recorded before it
-- H2: a tool is used only after a tool.checked that says usable (warning when
+- HK2: a tool is used only after a tool.checked that says usable (warning when
   the run has no tool.checked for it at all)
-- H3: after a mismatch, no analysis or comparison in that domain until a cause
+- HK3: after a mismatch, no analysis or comparison in that domain until a cause
 - assembly and interferences in an analysis: steps numbered 1..n, each part
   once, dependencies go in earlier, blocked_by only when no_interference is false;
   no part interferes with itself; the tool's interference counts and deepest
@@ -26,7 +26,7 @@ there is an error (or a warning with --strict). What it looks at:
   reason, the prediction on the unfavourable side of the criterion and taken as the
   value; pass and margin recomputed; limit and op from the load case criterion
 - judgements: red_count and state follow the listed verdicts
-- H4: a run that finished as done has no picked domain still pending
+- HK4: a run that finished as done has no picked domain still pending
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
 """
@@ -428,7 +428,7 @@ class RunChecker:
         for i, e in enumerate(self.events):
             if e.get("kind") == "analysis.started" and isinstance(e.get("data"), dict):
                 for pid in e["data"].get("prediction_ids", []):
-                    self._before("prediction", pid, i, self.where_of[i], "H1_prediction_first", "prediction")
+                    self._before("prediction", pid, i, self.where_of[i], "HK1_prediction_first", "prediction")
         for aid, (i, a) in self.recs["analysis"].items():
             w = self.where_of[i]
             if aid not in self.started:
@@ -436,14 +436,14 @@ class RunChecker:
             elif self.started[aid] > i:
                 self.error("analysis.started", w, f"{aid} started after it finished")
             if not a.get("prediction_ids"):
-                self.error("H1_prediction_first", w, f"{aid} has no prediction")
+                self.error("HK1_prediction_first", w, f"{aid} has no prediction")
             for pid in a.get("prediction_ids", []):
-                p = self._before("prediction", pid, self.started.get(aid, i), w, "H1_prediction_first", "prediction")
+                p = self._before("prediction", pid, self.started.get(aid, i), w, "HK1_prediction_first", "prediction")
                 if p is None:
                     continue
                 for f in ("design_version", "load_case_id"):
                     if p.get(f) != a.get(f):
-                        self.error("H1_prediction_first", w, f"{aid} {f} {a.get(f)} but {pid} has {p.get(f)}")
+                        self.error("HK1_prediction_first", w, f"{aid} {f} {a.get(f)} but {pid} has {p.get(f)}")
             self._check_tool_usable(a, self.started.get(aid, i), w)
             if a.get("status") == "failed" and not str(a.get("error", "")).strip():
                 self.error("analysis.error", w, f"{aid} failed without saying why")
@@ -453,12 +453,12 @@ class RunChecker:
         checks = [(j, s) for j, s in self.tool_checks.get(name, []) if j < i]
         if not checks:
             if name in self.tool_checks:
-                self.error("H2_tool_usable", w, f"tool {name} was used before its tool.checked")
+                self.error("HK2_tool_usable", w, f"tool {name} was used before its tool.checked")
             else:
-                self.warn("H2_tool_usable", w, f"no tool.checked for {name} in this run")
+                self.warn("HK2_tool_usable", w, f"no tool.checked for {name} in this run")
             return
         if not checks[-1][1].get("usable"):
-            self.error("H2_tool_usable", w, f"tool {name} used while its last check says usable=false")
+            self.error("HK2_tool_usable", w, f"tool {name} used while its last check says usable=false")
 
     def _design_ids(self, version: int) -> set[str] | None:
         d = self.designs.get(version)
@@ -749,7 +749,7 @@ class RunChecker:
             if kind == "analysis.started" or (kind == "analysis.finished" and data.get("analysis_id") not in self.started):
                 dom = self.domain_of_analysis(data)
                 if open_mismatch.get(dom):
-                    self.error("H3_cause_before_continue", w,
+                    self.error("HK3_cause_before_continue", w,
                                f"analysis in {dom} while {sorted(open_mismatch[dom])} have no cause")
             elif kind == "comparison.recorded":
                 if self.recs["comparison"].get(data.get("comparison_id"), (i,))[0] != i:
@@ -757,7 +757,7 @@ class RunChecker:
                 p = self.recs["prediction"].get(data.get("prediction_id"))
                 dom = p[1].get("domain") if p else None
                 if open_mismatch.get(dom):
-                    self.error("H3_cause_before_continue", w,
+                    self.error("HK3_cause_before_continue", w,
                                f"comparison in {dom} while {sorted(open_mismatch[dom])} have no cause")
                 if data.get("status") == "mismatch":
                     open_mismatch.setdefault(dom, set()).add(data.get("comparison_id"))
@@ -792,7 +792,7 @@ class RunChecker:
         if fstatus != "done" or not self.project:
             return
         if not self.designs:
-            self.error("H4_no_stop_before_judged", w, "done without any design version")
+            self.error("HK4_no_stop_before_judged", w, "done without any design version")
             return
         last = max(self.designs)
         latest = self.latest_judgements(last)
@@ -800,9 +800,9 @@ class RunChecker:
             dom = pick.get("domain")
             j = latest.get(dom)
             if j is None or j.get("state") == "pending":
-                self.error("H4_no_stop_before_judged", w, f"done while {dom} is not judged for version {last}")
+                self.error("HK4_no_stop_before_judged", w, f"done while {dom} is not judged for version {last}")
             elif j.get("state") == "red":
-                self.warn("H4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
+                self.warn("HK4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
 
     def check_recompute(self) -> None:
         try:

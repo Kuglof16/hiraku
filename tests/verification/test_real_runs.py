@@ -5,7 +5,7 @@
 2. The scripted plan driven with the design dept's fake solvers
    (tests/tools/fakes.py), so the store's output is checked before the real
    solvers land: a run that ends done, one stopped by a mismatch, one stopped
-   by H2.
+   by HK2.
 3. The assembly tool's assembly and interferences on the demo design, through
    check_run's rules for them (no run needed).
 4. Every folder already under runs/ in this checkout. runs/ is not committed,
