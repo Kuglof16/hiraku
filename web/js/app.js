@@ -307,9 +307,9 @@ function renderHooks(s, playhead) {
     if (playhead - b.t < SHOW_S) recent.H4 = true;
   }
   const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}">${r.id} ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
-  const el = $("hooks");
-  if (el.innerHTML !== html) el.innerHTML = html;
+  if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
+let hooksHtml = "";
 
 function fade(dt) {
   if (dt < 0 || dt > SHOW_S) return 0;
