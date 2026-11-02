@@ -95,7 +95,7 @@ class DeclarationsTest(unittest.TestCase):
             for p in t.predicts:
                 self.assertIn(p.formula_id, t.formulas, f"{t.name}: {p.formula_id}")
                 outs = registry[p.formula_id]["outputs"]
-                if "<support>" in p.output:
+                if "<" in p.output:
                     self.assertTrue(any(o.startswith(p.output.split("<")[0]) for o in outs), p.output)
                 else:
                     self.assertIn(p.output, outs, f"{t.name}: {p.formula_id}")

@@ -70,7 +70,7 @@ class Crash(BuiltinTool):
     domain = "crash"
     base = "K1"
     tests = ["C1"]
-    formulas = ["crash.linear_spring", "crash.mean_deceleration"]
+    formulas = ["crash.linear_spring", "crash.occupant_space_margin", "crash.mean_deceleration"]
     load_case_params = (Param("speed", "km/h", "speed when the front meets the wall", required=True), LOADING)
     predicts = (
         Predicts("peak_deceleration", "crash.linear_spring", "a_max",
@@ -79,6 +79,8 @@ class Crash(BuiltinTool):
         Predicts("stop_time", "crash.linear_spring", "t_stop"),
         Predicts("crash_energy", "crash.linear_spring", "E"),
         Predicts("crash_energy", "crash.mean_deceleration", "E"),
+        Predicts("occupant_space_margin", "crash.occupant_space_margin", "margin",
+                 "s from hiraku.solvers.shelf.crash.occupant_space(design)"),
     )  # the result mean_deceleration is speed / stop time; crash.mean_deceleration's a_mean is over the crush distance
 
     def known_answers(self) -> list[Record]:
