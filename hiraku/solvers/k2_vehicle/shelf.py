@@ -58,7 +58,8 @@ class P:
     unit: the contract unit of a quantity (None for a string or a boolean); default:
     in that unit, None when the parameter is optional or its default comes from the
     design (text says which). var: design variables read, in order, when the load case
-    does not give the parameter (before the default).
+    does not give the parameter (before the default). assumed: the default stands in for
+    a property of the design, so using it is written down as an assumption.
     """
 
     name: str
@@ -68,6 +69,7 @@ class P:
     required: bool = False
     choices: tuple = ()
     var: tuple = ()
+    assumed: bool = False
 
     def describe(self) -> dict:
         """The shape of hiraku.solvers.shelf.base.Param.describe(), plus kind "boolean" and
@@ -114,7 +116,7 @@ DRIVELINE_EFFICIENCY = 0.9  # assumed when neither the load case nor the design 
 LOADING = P("loading", None, DEFAULT_LOADING, "who and what is on board (catalog Q30)", choices=LOADINGS)
 MU = P("mu", "1", None, "tyre-road friction (default: design variable tire_mu, else 0.8 assumed)")
 RHO = P("rho", "kg/m^3", RHO_AIR, "air density (default: ISO 2533 sea level; not checked against the text)",
-        var=("air_density",))
+        var=("air_density",), assumed=True)
 FRONT_AREA = P("front_area", "m^2", None, "frontal area (default: front projection of the part boxes)",
                var=("frontal_area", "front_area"))
 SIDE_AREA = P("side_area", "m^2", None, "side area (default: side projection of the part boxes)", var=("side_area",))
@@ -122,13 +124,13 @@ SIDE_CP_HEIGHT = P("side_cp_height", "mm", None, "height of the side centre of p
                    "(default: from the side projection of the part boxes)",
                    var=("centre_of_pressure_height", "center_of_pressure_height"))
 CD = P("cd", "1", 0.8, "drag coefficient (0.8 assumed when neither the load case nor the design gives it)",
-       var=("drag_coefficient",))
-MOTOR = (P("motor_torque", "N*m", None, "peak torque at the motor", var=("motor_torque", "motor_peak_torque")),
+       var=("drag_coefficient",), assumed=True)
+MOTOR = (P("motor_torque", "N*m", None, "peak torque at the motor", var=("motor_peak_torque", "motor_torque")),
          P("motor_power", "kW", None, "motor power, the limit above the corner speed (default: none)",
-           var=("motor_power", "motor_peak_power")),
+           var=("motor_peak_power", "motor_power")),
          P("gear_ratio", "1", None, "motor to wheel", var=("gear_ratio",)),
          P("efficiency", "1", DRIVELINE_EFFICIENCY, "motor shaft to wheels (0.9 assumed when not given)",
-           var=("efficiency", "driveline_efficiency", "drivetrain_efficiency")),
+           var=("drivetrain_efficiency", "efficiency", "driveline_efficiency"), assumed=True),
          P("motor_max_speed", "rpm", None, "motor speed limit (default: none)", var=("motor_max_speed",)))
 
 
@@ -178,6 +180,7 @@ class K2Tool(ABC):
         lp = dict(load_case.get("params") or {})
         self.opts = {k: v for k, v in (params or {}).items() if k != "upstream_analyses"}
         self._vars = design.get("variables") or {}
+        self._assumed = []
         try:
             design = on_board(design, self.text(lp, "loading"))
             out = self._run(design, lp)
@@ -186,20 +189,24 @@ class K2Tool(ABC):
             rec["error"] = str(e)
             out = {}
         rec["results"] = out.get("results", [])
-        if out.get("series"):
-            rec["series"] = out["series"]
-        if out.get("vectors"):
-            rec["vectors"] = out["vectors"]
-        if "assumptions" in _ANALYSIS_PROPS and out.get("assumptions"):
-            rec["assumptions"] = out["assumptions"]
+        for key in ("series", "vectors", "scene"):
+            if out.get(key):
+                rec[key] = out[key]
+        # the values the design did not give and K2 took on its own, in the record itself
+        assumptions = list(dict.fromkeys(list(out.get("assumptions", [])) + self._assumed))
+        if "assumptions" in _ANALYSIS_PROPS and assumptions:
+            rec["assumptions"] = assumptions
+        effects = [{"name": "assumption: " + a} for a in assumptions]
         unread = sorted(set(lp) - {p.name for p in (LOADING,) + self.params})
         if unread:
-            rec["effects"] = [{"name": "load-case params this tool does not read: " + ", ".join(unread)}]
+            effects.insert(0, {"name": "load-case params this tool does not read: " + ", ".join(unread)})
+        if effects:
+            rec["effects"] = effects
         if out.get("error"):
             rec["status"] = "failed"
             rec["error"] = out["error"]
         rec["wall_time_s"] = time.perf_counter() - t0
-        self.last_assumptions = out.get("assumptions", [])
+        self.last_assumptions = assumptions
         return rec
 
     @abstractmethod
@@ -216,16 +223,25 @@ class K2Tool(ABC):
 
     _vars: dict = {}
 
+    def _note(self, text: str) -> None:
+        """Write down an assumption of this run (it goes into the record's effects)."""
+        self.__dict__.setdefault("_assumed", []).append(text)
+
     def q(self, lp: dict, name: str, want: str) -> float | None:
         """Quantity param `name` in the SI unit `want`: from the load case, else the declared
-        design variables, else the declared default."""
+        design variables, else the declared default (written down when it is an assumption)."""
         p = self._declared(name)
         if name in lp:
             return si(lp[name], want)
         for v in p.var:
             if v in self._vars:
                 return si(self._vars[v], want)
-        return None if p.default is None else si({"value": p.default, "unit": p.unit}, want)
+        if p.default is None:
+            return None
+        if p.assumed:
+            names = " or ".join(p.var) if p.var else name
+            self._note(f"{name} = {p.default:g} {p.unit} (assumed; neither the load case nor the design gives {names})")
+        return si({"value": p.default, "unit": p.unit}, want)
 
     def given(self, lp: dict, name: str) -> bool:
         """The load case or a design variable gives `name` (the default is not used)."""
@@ -252,8 +268,17 @@ class K2Tool(ABC):
         def get(name, want, fallback=None):
             return self.q(lp, name, want) if name in names else fallback
 
-        return Aero.of(veh, get("rho", "kg/m^3", RHO_AIR), get("cd", "1", 0.0), get("cy", "1", 0.0),
+        aero = Aero.of(veh, get("rho", "kg/m^3", RHO_AIR), get("cd", "1", 0.0), get("cy", "1", 0.0),
                        get("front_area", "m^2"), get("side_area", "m^2"), get("side_cp_height", "m"))
+        ground = min(float(c.pos[2]) - c.radius for c in veh.corners)
+        for name, used, value in (("front_area", aero.cd > 0.0, f"{aero.front_area:.3g} m^2"),
+                                  ("side_area", aero.cy > 0.0, f"{aero.side_area:.3g} m^2"),
+                                  ("side_cp_height", aero.cy > 0.0,
+                                   f"{(aero.side_cp[2] + float(veh.cg_s[2]) - ground) * 1000.0:.0f} mm")):
+            if used and name in names and not self.given(lp, name):
+                self._note(f"{name} = {value} from the projection of the part boxes (neither the load case nor "
+                           f"the design gives {' or '.join(self._declared(name).var)})")
+        return aero
 
     def motor(self, lp: dict) -> Motor:
         """The motor from the MOTOR params (load case, else design variables)."""
@@ -262,6 +287,10 @@ class K2Tool(ABC):
             raise DesignError("give motor_torque (N*m at the motor), gear_ratio (1) and motor_power (kW) "
                               "in the load case params or design.variables")
         power, vmax = self.q(lp, "motor_power", "W"), self.q(lp, "motor_max_speed", "rad/s")
+        if power is None:
+            self._note("no motor power given: the drive is limited by the torque only")
+        if vmax is None:
+            self._note("no motor speed limit given")
         return Motor(torque, math.inf if power is None else power, gear, self.q(lp, "efficiency", "1"),
                      math.inf if vmax is None else vmax)
 
@@ -333,7 +362,7 @@ class TiltTool(K2Tool):
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, k_w=20.0, wheel_mass=20.0, travel=200.0,
-                       variables={"tire_vertical_stiffness": {"value": 10000.0, "unit": "N/mm"},
+                       variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="tilt check, springs")
         veh = build_vehicle(d)
         r = tilt_sweep(veh, left_up=True)
@@ -389,7 +418,12 @@ class TiltTool(K2Tool):
         mu_road = self.q(lp, "mu", "1")
         if mu_road is not None:
             res.append(_res("slides_first", 1.0 if mu_road < demand else 0.0, "1"))
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(run["snapshot"]),
+        xs = [float(c.pos[0]) for c in veh.corners]
+        r_max = max(c.radius for c in veh.corners)
+        hw = _half_width(veh) + 0.5
+        scene = [_box("tilt_table", "傾斜台 (table_angle が + のとき左が上、x のまわりに回る)",
+                      (min(xs) - r_max - 0.5, -hw, -0.02), (max(xs) + r_max + 0.5, hw, 0.0), angle_channel="table_angle")]
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(run["snapshot"]), "scene": scene,
                 "assumptions": veh.assumptions + [f"table surface friction {table_mu:g} so the tyres do not slide"]}
 
 
@@ -403,6 +437,35 @@ def _ssf(veh) -> float:
 
 
 # ------------------------------------------------------------------ helpers
+def _half_width(veh) -> float:
+    """Half the width over the wheels (m)."""
+    return max(abs(float(c.pos[1])) + c.width / 2.0 for c in veh.corners)
+
+
+def _length(veh) -> float:
+    """Length over the wheels (m)."""
+    return max(float(c.pos[0]) + c.radius for c in veh.corners) - min(float(c.pos[0]) - c.radius for c in veh.corners)
+
+
+def _box(kind: str, label: str, lo: tuple, hi: tuple, **extra) -> dict:
+    """A scene object from its corners (m, road frame): position_mm is the box centre and
+    size_mm its edges, as a design part's box."""
+    out = {"kind": kind, "label": label,
+           "position_mm": [round((a + b) / 2.0 * 1000.0, 1) for a, b in zip(lo, hi)],
+           "size_mm": [round((b - a) * 1000.0, 1) for a, b in zip(lo, hi)]}
+    out.update(extra)
+    return out
+
+
+def _slope(label: str, veh, x0: float, x1: float, roll: float = 0.0, front_up: float = 0.0) -> dict:
+    """The road plane of a test that turns gravity instead of the road: rpy_deg is the
+    plane's rotation from level, right-handed about x then y (roll + = left side up,
+    pitch - = front up), so the record's positions are in that plane."""
+    hw = _half_width(veh) + 1.0
+    return _box("slope", label, (x0, -hw, 0.0), (x1, hw, 0.0),
+                rpy_deg=[round(math.degrees(roll), 6), round(-math.degrees(front_up), 6), 0.0])
+
+
 def _side_ids(sim, left: bool) -> list[int]:
     return [i for i, c in enumerate(sim.veh.corners) if c.side != 0 and (c.side > 0) == left]
 
@@ -472,7 +535,7 @@ class CrosswindTool(K2Tool):
     params = (P("wind_speed", "m/s", 30.0, "the gust (relative to the ground, across the vehicle)"),
               P("speed", "km/h", 0.0, "vehicle speed when the gust arrives"),
               P("cy", "1", 1.0, "side force coefficient (1.0 assumed when neither the load case nor the "
-                                "design gives it)", var=("side_force_coefficient",)),
+                                "design gives it)", var=("side_force_coefficient",), assumed=True),
               CD, RHO, SIDE_AREA, SIDE_CP_HEIGHT, FRONT_AREA,
               P("wind_from", None, "left", "side the wind comes from", choices=("left", "right")),
               P("drift_time", "s", 2.0, "time after the gust for lateral_drift"),
@@ -490,7 +553,7 @@ class CrosswindTool(K2Tool):
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, susp="rigid",
-                       variables={"tire_vertical_stiffness": {"value": 10000.0, "unit": "N/mm"},
+                       variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="crosswind check, rigid")
         veh = build_vehicle(d)
         aero = Aero.of(veh, RHO_AIR, 0.0, 1.0)
@@ -509,11 +572,6 @@ class CrosswindTool(K2Tool):
         veh = self.vehicle(design, lp)
         aero = self.aero(veh, lp)
         notes = list(veh.assumptions)
-        for k, v in (("cy", 1.0), ("cd", 0.8)):
-            if not self.given(lp, k):
-                notes.append(f"{k} = {v} (assumed)")
-        if not self.given(lp, "rho"):
-            notes.append("air density 1.225 kg/m^3 (ISO 2533 sea level; not checked against the text)")
         from_left = self.text(lp, "wind_from") == "left"
         gust = self.q(lp, "wind_speed", "m/s")
         speed = self.q(lp, "speed", "m/s")
@@ -672,7 +730,7 @@ class BrakingTool(K2Tool):
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="braking check",
                        variables={"tire_mu": {"value": 0.7, "unit": "1"},
-                                  "tire_rolling_resistance": {"value": 0.0, "unit": "1"}})
+                                  "rolling_resistance": {"value": 0.0, "unit": "1"}})
         veh = build_vehicle(d)
         v0 = 40.0 / 3.6
         r = brake_stop(veh, v0)
@@ -709,7 +767,12 @@ class BrakingTool(K2Tool):
             res.append(_res("parking_drift", park["drift"] * 1000.0, "mm"))
             res.append(_res("parking_friction_demand", park["friction_demand"], "1"))
         rec = r["recorder"]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "assumptions": notes}
+        grade = self.q(lp, "grade", "1")
+        # the recorded run is the stop (on the grade); the parking run is not recorded
+        scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
+                        r["stopping"] + v0 * 0.5 + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+                "assumptions": notes}
 
 
 # ------------------------------------------------------------------ launch
@@ -782,7 +845,7 @@ class LaunchTool(K2Tool):
                       ("C_d", "cd"), ("A", "front_area"), ("rho", "rho"))
     _launch_note = ("these inputs: the load case, else the design variables named in describe(); F_max = "
                     "motor_torque gear_ratio efficiency / loaded wheel radius; C_rr = design variable "
-                    "tire_rolling_resistance or rolling_resistance (0.015 assumed in K2 when absent); lambda = "
+                    "rolling_resistance (0.015 assumed in K2 when absent); lambda = "
                     "1 + sum(J / r^2) / m, K2 takes J = m_u r^2 / 2 per wheel (a solid disc of the unsprung mass), "
                     "not a mass_factor variable; A: K2 uses the front projection of the part boxes when neither "
                     "gives front_area")
@@ -797,7 +860,7 @@ class LaunchTool(K2Tool):
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="launch check",
                        variables={"tire_mu": {"value": 1.0, "unit": "1"},
-                                  "tire_rolling_resistance": {"value": 0.0, "unit": "1"}})
+                                  "rolling_resistance": {"value": 0.0, "unit": "1"}})
         veh = build_vehicle(d)
         motor = Motor(torque=50.0, power=math.inf, gear=8.0, efficiency=1.0)
         r = launch_run(veh, motor, 5.0, max_time=3.0)
@@ -815,8 +878,6 @@ class LaunchTool(K2Tool):
         target = self.q(lp, "target_speed", "m/s")
         grade = self.q(lp, "grade", "1")
         aero = self.aero(veh, lp)
-        if not self.given(lp, "cd"):
-            notes.append("cd = 0.8 (assumed)")
         r = launch_run(veh, motor, target, grade=grade, max_time=self.q(lp, "max_time", "s"), dt=self.dt,
                        aero=aero, rec_hz=self.record_hz, until_top=self.text(lp, "until") == "top_speed")
         res = []
@@ -831,7 +892,10 @@ class LaunchTool(K2Tool):
         rec = r["recorder"]
         if not rec.snap:
             rec.keep_snapshot()
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "assumptions": notes}
+        scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
+                        max(r["moved"], 0.0) + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+                "assumptions": notes}
 
 
 # ------------------------------------------------------------------ lane change
@@ -840,6 +904,29 @@ class LaunchTool(K2Tool):
 # ISO 3888-1 text; the course here is a smooth centre line, not the cone gates.
 DLC_SECTIONS = (15.0, 30.0, 25.0, 25.0, 15.0, 15.0)
 DLC_OFFSET = 3.5
+
+
+# Lane widths of sections 1, 3 and 5 for a vehicle of width W (m): 1.1 W + 0.25,
+# 1.2 W + 0.25, 1.3 W + 0.25. Source: ISO 3888-1:2018 (the sample pages), as the plan
+# quotes them; not checked in this repository.
+DLC_LANE_WIDTH = ((1.1, 0.25), (1.2, 0.25), (1.3, 0.25))
+
+
+def dlc_scene(width: float, sign: float, x0: float = 10.0, offset: float = DLC_OFFSET, sections=DLC_SECTIONS) -> list:
+    """Cones and gates of the course around the K2 centre line (the driver follows the
+    line, not the gates): a gate at the start and the end of sections 1, 3 and 5, a cone
+    at each end of a gate."""
+    starts = [x0 + sum(sections[:k]) for k in range(len(sections) + 1)]
+    out = []
+    for lane, (a, b) in zip((0, 2, 4), DLC_LANE_WIDTH):
+        w = a * width + b
+        yc = sign * offset if lane == 2 else 0.0
+        for x in (starts[lane], starts[lane + 1]):
+            label = f"区間 {lane + 1} の門 (幅 {w:.2f} m = {a:g} W + {b:g}、ISO 3888-1 の配置、確かめていない)"
+            out.append(_box("gate", label, (x, yc - w / 2.0, 0.0), (x, yc + w / 2.0, 0.0)))
+            out += [{"kind": "cone", "position_mm": [round(x * 1000.0, 1), round((yc + s * w / 2.0) * 1000.0, 1), 0.0]}
+                    for s in (-1.0, 1.0)]
+    return out
 
 
 def dlc_path(x0: float = 10.0, offset: float = DLC_OFFSET, sections=DLC_SECTIONS):
@@ -1017,7 +1104,10 @@ class LaneChangeTool(K2Tool):
                         lo = mid
                 res.append(_res("max_speed_no_lift", lo * 3.6, "km/h"))
         rec = st["recorder"]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "assumptions": notes}
+        scene = dlc_scene(2.0 * _half_width(veh), sign, offset=self.q(lp, "offset", "m"))
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+                "assumptions": notes + ["the cones and gates are drawn around the centre line; the driver model "
+                                        "follows the line and the gates are not judged"]}
 
 
 # ------------------------------------------------------------------ offroad roll
@@ -1064,7 +1154,7 @@ class OffroadRollTool(K2Tool):
                       1.0, ratio, "1", 0.10, "G_d(n) = G_d(n0) (n / n0)^-w, n0 = 0.1 cycle/m, w = 2, "
                       f"G_d(n0) = {ISO8608_GD_N0['C']:g} m^3 (class C, not checked against the ISO text)")]
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, susp="rigid",
-                       variables={"tire_vertical_stiffness": {"value": 10000.0, "unit": "N/mm"},
+                       variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="side slope check, rigid")
         veh = build_vehicle(d)
         sim = new_sim(veh, settle_s=1.0)
@@ -1104,19 +1194,35 @@ class OffroadRollTool(K2Tool):
                _res("max_roll", math.degrees(st["max_roll"]), "deg"),
                _res("rms_vertical_accel", float(np.sqrt(np.mean((az - az.mean()) ** 2))) if az.size else 0.0, "m/s^2")]
         rec = st["recorder"]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "assumptions": notes,
-                "road": road.describe()}
+        # the road under the two wheel tracks, every 0.1 m from behind the start to past the end
+        x = np.arange(-_length(veh) - 1.0, length + _length(veh) + 1.0, 0.1)
+        zl, _ = road.track(x, 0)
+        zr, _ = road.track(x, 1)
+        ht = road.half_track * 1000.0
+        profile = {"x_mm": [round(float(v) * 1000.0, 1) for v in x],
+                   "z_mm": {"left": [round(float(v) * 1000.0, 2) for v in zl],
+                            "right": [round(float(v) * 1000.0, 2) for v in zr]}}
+        side = "左" if left_up else "右"
+        scene = [{"kind": "road_profile", "profile": profile,
+                  "label": f"ISO 8608 クラス {cls} (seed {seed})。left は y = +{ht:.0f} mm、right は y = -{ht:.0f} mm の"
+                           "通り道の高さ。その間は直線、外は近い方の通り道と同じ"},
+                 _slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)", veh, float(x[0]), float(x[-1]),
+                        roll=beta if left_up else -beta)]
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+                "assumptions": notes}
 
 
 # ------------------------------------------------------------------ step climb
 def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=None, ramp_s: float = 4.0,
-              run_up: float = 2.0) -> dict:
+              run_up: float = 2.0, rec_hz: float = 0.0, after_s: float = 0.0) -> dict:
     """Quasi-static push: the stepping wheels stand 0.5 mm before the step corner and the
     drive torque grows slowly from zero until they leave the low ground.
 
     The forces are taken when the stepping wheel's road force is steepest (its ground
     contact has just unloaded), which is the lift-off of the rigid-wheel balance.
     run_up: the step for the dynamic run is placed this far further (m).
+    rec_hz > 0 records the push; after_s goes on that long after the lift-off with the
+    torque of the lift-off held, so the record shows the wheels rolling onto the step.
     """
     from .road import step as step_road
     xs = max(float(veh.corners[i].pos[0]) for i in stepping)
@@ -1136,13 +1242,20 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
     # lifted: the centre is 10 mm above its free radius over the low ground (the tyre
     # alone rises a few mm as its ground contact unloads, before the real lift-off)
     z_free = [veh.corners[i].radius + 0.01 for i in stepping]
+    rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
     best, snap, lifted, slip = -1.0, None, False, False
-    while sim.t < 6.0 * ramp_s:
-        total = rate * sim.t
+
+    def push(total: float) -> None:
         drive = [0.0] * sim.n
         for i in driven:
             drive[i] = total / len(driven)
         sim.step(controls(sim, 0.0, drive, [0.0] * sim.n))
+        if rec is not None:
+            rec.tick({"wheel_torque": ("N*m", total)})
+
+    while sim.t < 6.0 * ramp_s:
+        total = rate * sim.t
+        push(total)
         o = sim.out
         for i in stepping:
             fx, _, fz = o["f"][i]
@@ -1153,6 +1266,9 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
                                for k in range(sim.n)],
                         "acc": tuple(o["acc"]), "cg": sim.cg_world().tolist(), "t": sim.t, "torque": total,
                         "g": list(sim.g)}
+                if rec is not None:
+                    rec.snap = []
+                    rec.keep_snapshot()
         wc = sim.wheel_centres()
         if all(wc[i][2] > z_free[k] for k, i in enumerate(stepping)):
             lifted = True
@@ -1160,8 +1276,13 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
         if any(abs(sim.om[i]) * veh.corners[i].radius > 0.5 for i in driven) and sim.forward_speed() < 0.05:
             slip = True
             break
-    return {"ratio": best, "snap": snap, "static": static, "lifted": lifted, "slip": slip,
-            "x_step": x_step + run_up, "road": road}
+    if lifted and after_s > 0.0:
+        held = rate * sim.t
+        t_end = sim.t + after_s
+        while sim.t < t_end:
+            push(held)
+    return {"ratio": best, "snap": snap, "static": static, "lifted": lifted, "slip": slip, "x_corner": x_step,
+            "x_step": x_step + run_up, "road": road, "recorder": rec}
 
 
 class StepClimbTool(K2Tool):
@@ -1179,8 +1300,11 @@ class StepClimbTool(K2Tool):
     driven wheels' forward force), required_mu_push (1), climbed (1, run 2; where says
     "grip" or "torque" when it did not), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
-    vectors: run 1 at lift-off: each wheel's reaction and grip, and the inertia force
-    -(road forces + weight) at the CG, so the set is in balance with the weight.
+    series, vectors and scene all come from run 1: the series run from the standstill
+    against the step until 1.5 s after the lift-off (the torque of the lift-off held), the
+    vectors are that run at lift-off (each wheel's reaction and grip, and the inertia
+    force -(road forces + weight) at the CG, so the set balances the weight), and the
+    scene's step stands where that run's step is. Run 2 gives numbers only.
     """
 
     name = "step_climb_dynamic"
@@ -1205,9 +1329,9 @@ class StepClimbTool(K2Tool):
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-1.0, cg_z=0.5, wheelbase=2.0, susp="rigid", radius=0.3,
-                       variables={"tire_vertical_stiffness": {"value": 10000.0, "unit": "N/mm"},
+                       variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 1.5, "unit": "1"},
-                                  "tire_rolling_resistance": {"value": 0.0, "unit": "1"}}, name="step check, rigid")
+                                  "rolling_resistance": {"value": 0.0, "unit": "1"}}, name="step check, rigid")
         veh = build_vehicle(d)
         front = [i for i, c in enumerate(veh.corners) if c.steer]
         r = step_push(veh, 0.10, front)
@@ -1250,7 +1374,7 @@ class StepClimbTool(K2Tool):
         xmax = max(float(c.pos[0]) for c in veh.corners)
         tag = "front" if all(abs(float(veh.corners[i].pos[0]) - xmax) < 1e-9 for i in stepping) else "step"
 
-        crawl = step_push(veh, h, stepping, dt=self.dt, y_range=y_range)
+        crawl = step_push(veh, h, stepping, dt=self.dt, y_range=y_range, rec_hz=self.record_hz, after_s=1.5)
         res = []
         vectors = []
         snap = crawl["snap"]
@@ -1292,7 +1416,6 @@ class StepClimbTool(K2Tool):
             notes.append("motor not given: the driven wheels get the torque the speed controller asks for (no limit)")
         road = step_road(crawl["x_step"], h, y_range)
         sim = new_sim(veh, road=road, dt=self.dt, settle_s=1.0)
-        rec = Recorder(sim, self.record_hz)
         start_rolling(sim, speed)
         ctrl = SpeedController(sim)
         driven = [i for i, c in enumerate(veh.corners) if c.drive]
@@ -1307,14 +1430,11 @@ class StepClimbTool(K2Tool):
                 cap = motor.wheel_torque_total(wbar) / len(driven)
                 drive = [min(x, cap) for x in drive]
             sim.step(controls(sim, 0.0, drive, brake))
-            rec.tick()
             o = sim.out
             for i, c in enumerate(veh.corners):
                 fmag = math.sqrt(sum(x * x for x in o["f"][i]))
                 if fmag > peak:
                     peak, peak_id = fmag, c.id
-                    rec.snap = []
-                    rec.keep_snapshot()
                 peak_z = max(peak_z, o["f"][i][2])
             if t_climb is None and sim.design_origin()[0] > x_done:
                 t_climb = sim.t
@@ -1329,7 +1449,14 @@ class StepClimbTool(K2Tool):
                 _res("peak_wheel_force", peak, "N", peak_id), _res("peak_vertical_wheel_force", peak_z, "N")]
         if t_climb is not None:
             res.append(_res("climb_time", t_climb, "s"))
-        return {"results": res, "series": rec.series(), "vectors": vectors or rec.vectors(-1), "assumptions": notes}
+        rec = crawl["recorder"]
+        y0, y1 = (-_half_width(veh) - 0.5, _half_width(veh) + 0.5) if y_range is None else \
+            ((0.0, _half_width(veh) + 0.5) if y_range[0] >= 0.0 else (-_half_width(veh) - 0.5, 0.0))
+        x0 = crawl["x_corner"]
+        scene = [_box("step", f"段差 {h * 1000:.0f} mm (1 回目の押し上げの位置)",
+                      (x0, y0, 0.0), (x0 + _length(veh) + 3.0, y1, h))]
+        return {"results": res, "series": rec.series(), "vectors": vectors or rec.vectors(-1), "scene": scene,
+                "assumptions": notes}
 
 
 TOOLS = {t.name: t for t in (TiltTool(), CrosswindTool(), BrakingTool(), LaunchTool(), LaneChangeTool(),
