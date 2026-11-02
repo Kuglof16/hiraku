@@ -52,7 +52,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n05", "n08b", "n18", "check"})
+                                "n00", "n01", "n05", "n08b", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -61,6 +61,17 @@ class SharedShape(unittest.TestCase):
         self.assertEqual(r["min_text_px"], 18)
         for k in ("night", "ink", "tile_bg", "tile_border"):
             self.assertRegex(r["colors"][k], r"^#[0-9a-f]{6}$")
+
+    def test_n01_boxes_stay_above_the_band(self):
+        # N01 is drawn by the screens department from these values
+        n, r = self.rules["n01"], self.rules
+        for name in ("view", "pane"):
+            b = n[name]
+            self.assertLessEqual(b["y"] + b["h"], r["subtitle_band"]["y"], name)
+            self.assertLessEqual(b["x"] + b["w"], r["stage"]["w"], name)
+            self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
+        self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
+        self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
 
     def test_n05(self):
         n = self.rules["n05"]

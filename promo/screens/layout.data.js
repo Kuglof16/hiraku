@@ -63,6 +63,52 @@ window.PROMO_LAYOUT = {
       "_note": "name: first letter; row: agents and chips come in, unlit; light: first chip lights; step: gap between chips"
     }
   },
+  "n01": {
+    "duration_s": 4.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n01). 4.0 s is N01's slot in the narration script (0:07-0:11)",
+    "view": {
+      "x": 96,
+      "y": 96,
+      "w": 1200,
+      "h": 790,
+      "_note": "the 3D view; bottom 886, above the subtitle band"
+    },
+    "pane": {
+      "x": 1328,
+      "y": 96,
+      "w": 496,
+      "h": 790,
+      "_note": "result cards on the right"
+    },
+    "card": {
+      "gap": 20,
+      "pad": 20,
+      "title_px": 30,
+      "text_px": 22,
+      "radius_px": 12,
+      "border_px": 2
+    },
+    "times": {
+      "lead_s": 0.4,
+      "zoom_s": 1.6,
+      "_note": "lead: still before the motion starts; zoom: the camera has come in"
+    },
+    "zoom": {
+      "from": 1.6,
+      "to": 1.06,
+      "_note": "margin factor around the vehicle, from -> to"
+    },
+    "overlay": {
+      "color": "#c8402a",
+      "opacity": 0.22,
+      "_note": "the condition past the limit, translucent red"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
   "n05": {
     "duration_s": 5.0,
     "grid": {
