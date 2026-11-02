@@ -503,6 +503,12 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .verdict.bad { color: var(--red); }
 .cause { margin-top: 6px; padding: 6px 10px; background: var(--orange-pale); border-radius: 8px; font-size: 14px; }
 .err { color: var(--red); }
+/* a verdict made from an explained safe-side mismatch (not from a match) */
+.card tr.used td { font-weight: 700; }
+.card small.used { margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--rule); color: var(--ink); font-size: 11px; font-weight: 600; }
+.safe-mark { display: inline-block; margin-right: 8px; padding: 0 10px; border: 2px solid var(--blue); border-radius: 999px; color: var(--blue); font-size: 13px; font-weight: 700; }
+.verdict.safe { padding: 6px 10px; border: 1.5px dashed var(--blue); border-radius: 8px; }
+.safe-why { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); color: var(--blue); }
 
 /* bottom status row */
 .statusrow {
@@ -520,6 +526,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .hooks { display: flex; gap: 10px; color: var(--muted); white-space: nowrap; }
 .hooks .rule { border-radius: 6px; padding: 0 6px; }
 .hooks .rule.hit { color: var(--red); background: var(--red-pale); font-weight: 600; }
+.hooks .hk { font-family: var(--mono); font-weight: 700; }
 
 /* all-domains grid (A6): the whole width, 4 x 2 tiles */
 .main.wide { grid-template-columns: minmax(0, 1fr); }
@@ -561,6 +568,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .tile .tb { border-radius: 999px; padding: 1px 12px; font-weight: 700; border: 2px solid; }
 .tile .tb.ok { color: var(--green); border-color: var(--green); }
 .tile .tb.fix { color: var(--red); border-color: var(--red); }
+.tile .tb.safe { color: var(--blue); border-color: var(--blue); font-size: 13px; padding: 1px 8px; white-space: nowrap; }
 .grid-banner { display: flex; flex-direction: column; gap: 2px; border: 1.5px solid #e9b872; background: var(--orange-pale); border-radius: 12px; padding: 8px 16px; font-size: 16px; }
 .grid-banner span { color: var(--muted); font-size: 14px; }
 

@@ -65,7 +65,7 @@ class JudgeScan(unittest.TestCase):
         self.assertIn("private.word", self.rules())
 
     def test_private_word_in_a_commit_message(self):
-        self.commit({"a.txt": "x\n"}, message=f"Copy the plan from {WORD}")
+        self.commit({"a.txt": "x\n"}, message=f"private.word fixture: {WORD}")
         self.assertIn("private.word", self.rules())
 
     def test_email_home_path_and_key(self):
@@ -88,7 +88,7 @@ class JudgeScan(unittest.TestCase):
         self.commit({
             "hiraku/solvers/c.py": "def f():\n    pass\n\n\nYIELD = 235.0\nE = 205000.0  # source: check input\n# TODO later\n",
             "data/m.json": '{"E_MPa": 69000.0, "verified": false}\n',
-        }, message="今日は本人と話して決めた")
+        }, message="speech.diary fixture: devlog entry")
         review = [f for f in self.scan() if f.level == "review"]
         rules = {f.rule for f in review}
         self.assertTrue({"stub", "number.source", "unverified", "data.source", "speech.diary"} <= rules, review)

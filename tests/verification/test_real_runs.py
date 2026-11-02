@@ -5,7 +5,7 @@
 2. The scripted plan driven with the design dept's fake solvers
    (tests/tools/fakes.py), so the store's output is checked before the real
    solvers land: a run that ends done, one stopped by a mismatch, one stopped
-   by H2.
+   by HK2.
 3. The assembly tool's assembly and interferences on the demo design, through
    check_run's rules for them (no run needed).
 4. Every folder already under runs/ in this checkout. runs/ is not committed,
@@ -70,7 +70,7 @@ class ScriptedRunCommand(unittest.TestCase):
                 self.assertEqual(_errors(run), [], run.name)
 
     def test_mvp_scripted_run_goes_through(self):
-        # the MVP of 11/2: fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement
+        # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done
         for name, (run, proc) in self.runs.items():
             with self.subTest(requirements=name):
                 self.assertMadeRun(run, proc)
