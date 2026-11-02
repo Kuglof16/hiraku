@@ -200,8 +200,8 @@ window.PROMO_LAYOUT = {
       "y": 60,
       "w": 1500,
       "h": 750,
-      "src": "",
-      "_note": "centred; h follows the drawing (viewBox 600 x 300). src: picture of the vehicle alone on a transparent ground (a PNG, path relative to the page), fitted into the box (contain); empty: the line drawing of vehicle.js. ?hero=<path> in the page's URL wins over src"
+      "src": "media/n05_hero_2x.png",
+      "_note": "centred; h follows the drawing (viewBox 600 x 300). src: picture of the vehicle alone on a transparent ground (a PNG, path relative to the page), fitted into the box (contain); empty: the line drawing of vehicle.js. ?hero=<path> in the page's URL wins over src. media/n05_hero_2x.png: the app's own drawing of the vehicle (web/cut.html?cut=n05&only=hero&t=0, device scale 2, 3000 x 1500) from the video run 20261103-041110-offroad-4w-scripted"
     },
     "hero_motion": {
       "push_scale": 1.04,
