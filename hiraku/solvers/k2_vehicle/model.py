@@ -1,0 +1,456 @@
+"""The vehicle K2 simulates, built from a contract `design`.
+
+Supports (wheels, casters, legs) come from design.supports; masses from the
+part boxes in design.parts. Parts of a wheel kind are the unsprung mass of
+the nearest sprung corner; everything else is the sprung body. Every number
+the builder had to assume is listed in Vehicle.assumptions.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from . import kinematics
+from .mass import combine, items_symmetric, member_items, part_items
+from .units import G0, si
+
+UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
+HALF_UNSPRUNG_KINDS = {"suspension"}
+
+# Defaults used when the design does not say. They are modelling choices,
+# not values from a source; each one used is reported in Vehicle.assumptions.
+DEFAULTS = {
+    "tire_vertical_stiffness": (150e3, "N/m", "tyre vertical stiffness 150 N/mm (assumed)"),
+    "tire_vertical_damping_ratio": (0.05, "1", "tyre vertical damping ratio 0.05 (assumed)"),
+    "tire_cornering_coeff": (8.0, "1/rad", "cornering stiffness 8 x static wheel load per rad (assumed)"),
+    "tire_long_slip_coeff": (10.0, "1", "longitudinal slip stiffness 10 x static wheel load (assumed)"),
+    "tire_relaxation_length": (None, "m", "relaxation length = wheel radius (assumed)"),
+    "tire_mu": (0.8, "1", "friction coefficient 0.8 (assumed; the load case usually gives mu)"),
+    "tire_rolling_resistance": (0.015, "1", "rolling resistance coefficient 0.015 (assumed)"),
+    "damping_ratio": (0.3, "1", "suspension damping ratio 0.3 of the corner (assumed)"),
+    "travel": (0.10, "m", "suspension travel 100 mm, half bump half rebound (assumed)"),
+    "bump_stop_factor": (10.0, "1", "bump and rebound stops 10 x wheel rate (assumed)"),
+    "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
+    "max_steer": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed)"),
+}
+
+
+class DesignError(ValueError):
+    """The design cannot be simulated; the message says what to change."""
+
+
+@dataclass(eq=False)
+class Corner:
+    id: str
+    kind: str            # wheel | caster | leg
+    side: float          # +1 left, -1 right, 0 on the centreline
+    pos: np.ndarray      # wheel centre at design (design frame, m)
+    radius: float
+    width: float
+    susp: str            # rigid | spring | kc_table
+    k_w: float = 0.0     # wheel rate N/m
+    c_w: float = 0.0     # damper at the wheel N s/m
+    preload: float = 0.0 # spring force at design travel (N)
+    s_min: float = -0.05
+    s_max: float = 0.05
+    k_stop: float = 0.0
+    m_u: float = 0.0
+    j_w: float = 0.0
+    drive: bool = False
+    brake: bool = False
+    steer: bool = False
+    path: kinematics.PathPoly | None = None
+    k_z: float = 150e3
+    c_z: float = 0.0
+    c_long: float = 0.0  # N per unit slip
+    c_lat: float = 0.0   # N per rad
+    sigma: float = 0.3
+    mu: float = 0.8
+    c_rr: float = 0.015
+    static_load: float = 0.0
+    mirror: int = -1
+
+    @property
+    def dof(self) -> bool:
+        return self.susp != "rigid"
+
+
+@dataclass(eq=False)
+class Vehicle:
+    name: str
+    corners: list[Corner]
+    m_total: float
+    cg_total: np.ndarray
+    m_s: float
+    cg_s: np.ndarray         # sprung CG, design frame (m)
+    i_s: np.ndarray          # sprung inertia about cg_s
+    symmetric: bool
+    side_area: float
+    side_cp: np.ndarray      # design frame (m)
+    front_area: float
+    front_cp: np.ndarray
+    x_ref: float             # x of the non-steered axle (Ackermann reference)
+    l_steer: float           # x distance steered axle - reference
+    max_steer: float
+    assumptions: list[str] = field(default_factory=list)
+
+    @property
+    def n(self) -> int:
+        return len(self.corners)
+
+    def ids(self) -> list[str]:
+        return [c.id for c in self.corners]
+
+    def wheel_steer(self, delta: float) -> np.ndarray:
+        """Per-corner steer angles (rad) for a bicycle-model angle delta (Ackermann)."""
+        out = np.zeros(self.n)
+        if delta == 0.0:
+            return out
+        t = math.tan(delta)
+        for i, c in enumerate(self.corners):
+            if c.steer and c.kind == "wheel":
+                lx = float(c.pos[0]) - self.x_ref
+                out[i] = math.atan(lx * t / (self.l_steer - float(c.pos[1]) * t))
+        return out
+
+
+def _mirror_pairs(sups: list[dict]) -> list[int]:
+    """Index of the mirror partner of each support (-1 if none, itself if on the centreline)."""
+    def key(s):
+        a = s["actuation"]
+        return (s["kind"], round(float(s["radius_mm"]), 9), s["suspension"]["type"],
+                round(float(s["suspension"].get("stiffness_N_per_mm", 0.0)), 9), a["drive"], a["brake"], a["steer"])
+
+    out = [-1] * len(sups)
+    for i, s in enumerate(sups):
+        x, y, z = (float(v) for v in s["position_mm"])
+        if abs(y) < 1e-9:
+            out[i] = i
+            continue
+        for j, t in enumerate(sups):
+            if j == i:
+                continue
+            xj, yj, zj = (float(v) for v in t["position_mm"])
+            if abs(x - xj) < 1e-9 and abs(y + yj) < 1e-9 and abs(z - zj) < 1e-9 and key(s) == key(t):
+                out[i] = j
+                break
+    return out
+
+
+def _projected(boxes: list[tuple[np.ndarray, np.ndarray]], discs: list[tuple[np.ndarray, float]],
+               axes: tuple[int, int], disc_box_width: float | None, cell: float = 0.01) -> tuple[float, np.ndarray]:
+    """Area and centroid of the union of boxes (AABBs) and discs projected on two axes."""
+    if not boxes and not discs:
+        return 0.0, np.zeros(2)
+    a0, a1 = axes
+    lo = np.array([np.inf, np.inf])
+    hi = -lo
+    for c, h in boxes:
+        lo = np.minimum(lo, [c[a0] - h[a0], c[a1] - h[a1]])
+        hi = np.maximum(hi, [c[a0] + h[a0], c[a1] + h[a1]])
+    for c, r in discs:
+        lo = np.minimum(lo, [c[a0] - r, c[a1] - r])
+        hi = np.maximum(hi, [c[a0] + r, c[a1] + r])
+    u = np.arange(lo[0] + cell / 2, hi[0], cell)
+    v = np.arange(lo[1] + cell / 2, hi[1], cell)
+    uu, vv = np.meshgrid(u, v, indexing="ij")
+    mask = np.zeros(uu.shape, dtype=bool)
+    for c, h in boxes:
+        mask |= (np.abs(uu - c[a0]) <= h[a0]) & (np.abs(vv - c[a1]) <= h[a1])
+    for c, r in discs:
+        if disc_box_width is None:
+            mask |= (uu - c[a0]) ** 2 + (vv - c[a1]) ** 2 <= r * r
+        else:
+            mask |= (np.abs(uu - c[a0]) <= disc_box_width / 2) & (np.abs(vv - c[a1]) <= r)
+    n = int(mask.sum())
+    if n == 0:
+        return 0.0, np.zeros(2)
+    return n * cell * cell, np.array([uu[mask].mean(), vv[mask].mean()])
+
+
+def _var(design: dict, name: str, want: str, notes: list[str], default_key: str | None = None):
+    var = design.get("variables", {}) or {}
+    if name in var:
+        return si(var[name], want)
+    key = default_key or name
+    value, _, text = DEFAULTS[key]
+    if text not in notes:
+        notes.append(text)
+    return value
+
+
+def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
+    """Build the simulation model. Raises DesignError with what to change."""
+    overrides = overrides or {}
+    notes: list[str] = []
+    sups = design.get("supports") or []
+    if not sups:
+        raise DesignError("the design has no supports (wheels, casters or legs); add design.supports")
+    parts = design.get("parts") or []
+    items = part_items(parts)
+    try:
+        members = member_items(design)
+    except ValueError as e:
+        raise DesignError(str(e))
+    if members:
+        items += members
+        notes.append("frame members weighed as thin rods: density x area x length at the member centre")
+    if not items:
+        raise DesignError("the design has no parts with mass; add design.parts with mass_kg")
+
+    m_all = sum(it[0] for it in items)
+    mirror = _mirror_pairs(sups)
+    symmetric = all(j >= 0 for j in mirror) and items_symmetric(items)
+
+    # Order corners in mirror pairs (left, right), then centreline and unpaired ones.
+    order: list[int] = []
+    for i, s in enumerate(sups):
+        if i in order:
+            continue
+        j = mirror[i]
+        if j >= 0 and j != i and j not in order:
+            left, right = (i, j) if float(s["position_mm"][1]) > 0 else (j, i)
+            order += [left, right]
+        elif j == i or j < 0:
+            pass
+    order += [i for i in range(len(sups)) if i not in order]
+    sups = [sups[i] for i in order]
+    mirror_new = [-1] * len(sups)
+    for k in range(0, len(sups) - 1):
+        a, b = sups[k], sups[k + 1]
+        if (k % 2 == 0 and float(a["position_mm"][1]) > 0 and abs(float(a["position_mm"][1]) + float(b["position_mm"][1])) < 1e-9
+                and abs(float(a["position_mm"][0]) - float(b["position_mm"][0])) < 1e-9):
+            mirror_new[k], mirror_new[k + 1] = k + 1, k
+
+    k_z = overrides.get("tire_vertical_stiffness")
+    if k_z is None:
+        k_z = _var(design, "tire_vertical_stiffness", "N/m", notes)
+    zeta_z = _var(design, "tire_vertical_damping_ratio", "1", notes)
+    c_alpha = _var(design, "tire_cornering_coeff", "1", notes)
+    c_kappa = _var(design, "tire_long_slip_coeff", "1", notes)
+    mu = overrides.get("mu")
+    if mu is None:
+        mu = _var(design, "tire_mu", "1", notes)
+    c_rr = overrides.get("c_rr")
+    if c_rr is None:
+        c_rr = _var(design, "tire_rolling_resistance", "1", notes)
+    zeta_s = _var(design, "damping_ratio", "1", [])
+    max_steer = _var(design, "max_steer", "rad", notes)
+
+    corners: list[Corner] = []
+    for k, s in enumerate(sups):
+        pos = np.asarray(s["position_mm"], dtype=float) / 1000.0
+        kind = s["kind"]
+        radius = float(s["radius_mm"]) / 1000.0
+        if kind == "leg" and radius <= 0.0:
+            radius = 0.01
+        if radius <= 0.0:
+            raise DesignError(f"support {s['id']}: radius_mm must be > 0 for a {kind}")
+        width = float(s.get("width_mm", 0.0)) / 1000.0
+        sus = s["suspension"]
+        typ = sus["type"]
+        if typ == "kc_table" and not sus.get("kc_table"):
+            raise DesignError(f"support {s['id']}: suspension type kc_table needs suspension.kc_table (a table path or 'builtin:double_wishbone')")
+        if typ in ("spring", "kc_table") and not sus.get("stiffness_N_per_mm"):
+            raise DesignError(f"support {s['id']}: suspension.stiffness_N_per_mm (wheel rate) is missing or zero; give the wheel rate or use type 'rigid'")
+        side = 1.0 if pos[1] > 1e-12 else (-1.0 if pos[1] < -1e-12 else 0.0)
+        act = s["actuation"]
+        c = Corner(id=s["id"], kind=kind, side=side, pos=pos, radius=radius, width=width, susp=typ,
+                   drive=bool(act["drive"]) and kind == "wheel", brake=bool(act["brake"]) and kind == "wheel",
+                   steer=bool(act["steer"]) and kind == "wheel", mirror=mirror_new[k])
+        c.k_z = k_z
+        c.mu = mu
+        c.c_rr = c_rr
+        if typ != "rigid":
+            c.k_w = float(sus["stiffness_N_per_mm"]) * 1000.0
+            if "travel_mm" in sus:
+                travel = float(sus["travel_mm"]) / 1000.0
+            else:
+                travel = DEFAULTS["travel"][0]
+                if DEFAULTS["travel"][2] not in notes:
+                    notes.append(DEFAULTS["travel"][2])
+            c.s_min, c.s_max = -travel / 2.0, travel / 2.0
+            c.k_stop = DEFAULTS["bump_stop_factor"][0] * c.k_w
+            if DEFAULTS["bump_stop_factor"][2] not in notes:
+                notes.append(DEFAULTS["bump_stop_factor"][2])
+            if typ == "kc_table":
+                ref = sus["kc_table"]
+                if ref.startswith("builtin:"):
+                    hp_pos = pos.copy()
+                    hp_pos[1] = abs(hp_pos[1])
+                    table = kinematics.build_table(kinematics.generic_sla(hp_pos, radius), max(travel, 0.02) * 0.6)
+                    note = "K&C table from the generic short-long-arm layout (builtin, not a real vehicle)"
+                    if note not in notes:
+                        notes.append(note)
+                else:
+                    table = kinematics.load_table(ref)
+                c.path = kinematics.PathPoly.from_table(table)
+            else:
+                c.path = kinematics.PathPoly.vertical()
+        corners.append(c)
+
+    # Unsprung masses from wheel parts, assigned to the nearest corner.
+    sprung_items = []
+    wheel_mass = np.zeros(len(corners))
+    for m, centre, inertia, p in items:
+        kind = str(p.get("kind", "")).lower()
+        if kind in UNSPRUNG_KINDS or kind in HALF_UNSPRUNG_KINDS:
+            d = [float(np.linalg.norm(centre - c.pos)) for c in corners]
+            i = int(np.argmin(d))
+            share = m if kind in UNSPRUNG_KINDS else 0.5 * m
+            wheel_mass[i] += share
+            if corners[i].dof:
+                if share < m:
+                    sprung_items.append((m - share, centre, inertia * ((m - share) / m)))
+                continue
+        sprung_items.append((m, centre, inertia))
+    frac = DEFAULTS["unsprung_fraction"][0]
+    for i, c in enumerate(corners):
+        mw = wheel_mass[i]
+        if mw <= 0.0:
+            mw = max(1.0, frac * m_all / len(corners))
+            if c.dof or c.kind == "wheel":
+                if DEFAULTS["unsprung_fraction"][2] not in notes:
+                    notes.append(DEFAULTS["unsprung_fraction"][2])
+            if c.dof:
+                sprung_items.append((-mw, c.pos, np.zeros((3, 3))))
+        if c.dof:
+            c.m_u = mw
+        c.j_w = 0.5 * mw * c.radius ** 2
+    note = "wheel spin inertia as a solid disc of the unsprung mass, J = m r^2 / 2 (assumed)"
+    if any(c.kind == "wheel" for c in corners):
+        notes.append(note)
+    if any(c.kind == "caster" for c in corners):
+        notes.append("casters swivel freely: no side force, rolling resistance only")
+
+    m_total, cg_total, _ = combine([(m, c, i) for m, c, i, _ in items])
+    try:
+        m_s, cg_s, i_s = combine(sprung_items)
+    except ValueError:
+        raise DesignError("all the mass is unsprung; the body needs mass")
+    if m_s <= 0.0:
+        raise DesignError("the unsprung mass is larger than the vehicle mass; list the wheel parts with their mass")
+    if symmetric:
+        cg_s[1] = 0.0
+        cg_total[1] = 0.0
+        i_s[0, 1] = i_s[1, 0] = i_s[1, 2] = i_s[2, 1] = 0.0
+    if np.any(np.linalg.eigvalsh(i_s) <= 0.0):
+        raise DesignError("the body inertia is not positive; check the part boxes and masses")
+
+    # Static loads: rigid body on elastic supports (series spring + tyre).
+    xs = np.array([c.pos[0] for c in corners])
+    ys = np.array([c.pos[1] for c in corners])
+    keff = np.array([(c.k_w * c.k_z / (c.k_w + c.k_z)) if c.dof else c.k_z for c in corners])
+    a = np.array([
+        [keff.sum(), (keff * xs).sum(), (keff * ys).sum()],
+        [(keff * xs).sum(), (keff * xs * xs).sum(), (keff * xs * ys).sum()],
+        [(keff * ys).sum(), (keff * xs * ys).sum(), (keff * ys * ys).sum()],
+    ])
+    if symmetric:
+        a[0, 2] = a[2, 0] = a[1, 2] = a[2, 1] = 0.0
+    w = m_total * G0
+    rhs = np.array([w, w * cg_total[0], w * cg_total[1]])
+    if abs(np.linalg.det(a)) < 1e-12 * max(1.0, abs(a).max()) ** 3:
+        raise DesignError("the supports are in a line, so the vehicle cannot stand; spread the wheels to make a support area")
+    sol = np.linalg.solve(a, rhs)
+    loads = keff * (sol[0] + sol[1] * xs + sol[2] * ys)
+    if np.any(loads <= 0.0):
+        bad = [c.id for c, f in zip(corners, loads) if f <= 0]
+        raise DesignError(f"the centre of gravity is outside the support area (support {', '.join(bad)} would lift at rest); move the mass or the supports")
+    for i, (c, f) in enumerate(zip(corners, loads)):
+        c.static_load = float(f)
+        if c.dof:
+            c.preload = float(f) - c.m_u * G0
+            m_corner = max(c.preload / G0, 1.0)
+            if c.preload <= 0.0:
+                raise DesignError(f"support {c.id}: the unsprung mass is heavier than the wheel load; the spring would have no load")
+            sus_i = sups[i]["suspension"]
+            if "damping_Ns_per_mm" in sus_i:
+                c.c_w = float(sus_i["damping_Ns_per_mm"]) * 1000.0
+            else:
+                c.c_w = 2.0 * zeta_s * math.sqrt(c.k_w * m_corner)
+                if "damping_ratio" not in (design.get("variables") or {}) and DEFAULTS["damping_ratio"][2] not in notes:
+                    notes.append(DEFAULTS["damping_ratio"][2])
+        m_vert = c.m_u if c.dof else f / G0
+        c.c_z = 2.0 * zeta_z * math.sqrt(c.k_z * m_vert)
+        sigma = (si(design["variables"]["tire_relaxation_length"], "m")
+                 if "tire_relaxation_length" in (design.get("variables") or {}) else c.radius)
+        c.sigma = sigma
+        if c.kind == "caster":
+            c.c_long = c.c_lat = 0.0
+        else:
+            c.c_long = c_kappa * f
+            c.c_lat = c_alpha * f
+    if "tire_relaxation_length" not in (design.get("variables") or {}):
+        notes.append(DEFAULTS["tire_relaxation_length"][2])
+
+    # Aerodynamic projections: part boxes and wheels.
+    boxes = []
+    for m, centre, inertia, p in items:
+        if "box" not in p:
+            continue  # frame members: thin, left out of the projected areas
+        size = np.asarray(p["box"]["size_mm"], dtype=float) / 1000.0
+        boxes.append((centre, size / 2.0))
+    discs = [(c.pos, c.radius) for c in corners if c.kind != "leg"]
+    side_area, side_c = _projected(boxes, discs, (0, 2), None)
+    front_area, front_c = _projected(boxes, [(c.pos, c.radius) for c in corners if c.kind != "leg"], (1, 2),
+                                     max([c.width for c in corners] + [0.0]) or 0.1)
+    notes.append("aerodynamic areas from the part boxes and wheels projected on the side and front planes; centre of pressure at the area centroid (assumed)")
+    side_cp = np.array([side_c[0], 0.0, side_c[1]])
+    front_cp = np.array([0.0, front_c[0], front_c[1]])
+    if symmetric:
+        front_cp[1] = 0.0
+
+    steered = [c for c in corners if c.steer]
+    fixed = [c for c in corners if c.kind == "wheel" and not c.steer]
+    x_ref = float(np.mean([c.pos[0] for c in fixed])) if fixed else float(cg_total[0])
+    l_steer = float(np.mean([c.pos[0] for c in steered])) - x_ref if steered else 1.0
+    if steered and abs(l_steer) < 1e-6:
+        l_steer = 1.0
+
+    return Vehicle(
+        name=design.get("name", "design"), corners=corners, m_total=m_total, cg_total=cg_total,
+        m_s=m_s, cg_s=cg_s, i_s=i_s, symmetric=symmetric, side_area=side_area, side_cp=side_cp,
+        front_area=front_area, front_cp=front_cp, x_ref=x_ref, l_steer=l_steer, max_steer=max_steer,
+        assumptions=notes,
+    )
+
+
+def box_design(*, mass: float = 500.0, cg_x: float = -0.9, cg_z: float = 0.5, track: float = 1.2,
+               wheelbase: float = 1.8, radius: float = 0.3, susp: str = "spring", k_w: float = 20.0,
+               c_w: float | None = None, travel: float = 150.0, front_drive: bool = False, rear_drive: bool = True,
+               box_size=(2.0, 1.0, 0.3), wheel_mass: float = 0.0, variables: dict | None = None,
+               kc_table: str | None = None, name: str = "check vehicle") -> dict:
+    """A plain 4-wheel design (one body box) for the known-answer checks.
+
+    Front axle at x = 0, rear axle at x = -wheelbase (x forward). Units: kg, m, N/mm, mm.
+    """
+    t2 = track / 2.0 * 1000.0
+    sups = []
+    for sid, x, y, steer, drive in (
+        ("FL", 0.0, t2, True, front_drive), ("FR", 0.0, -t2, True, front_drive),
+        ("RL", -wheelbase * 1000.0, t2, False, rear_drive), ("RR", -wheelbase * 1000.0, -t2, False, rear_drive),
+    ):
+        sus = {"type": susp}
+        if susp != "rigid":
+            sus["stiffness_N_per_mm"] = k_w
+            sus["travel_mm"] = travel
+            if c_w is not None:
+                sus["damping_Ns_per_mm"] = c_w
+            if susp == "kc_table":
+                sus["kc_table"] = kc_table or "builtin:double_wishbone"
+        sups.append({"id": sid, "kind": "wheel", "position_mm": [x, y, radius * 1000.0], "radius_mm": radius * 1000.0,
+                     "width_mm": 200.0, "suspension": sus, "actuation": {"drive": drive, "brake": True, "steer": steer}})
+    parts = [{"id": "body", "name": "body", "kind": "body",
+              "box": {"center_mm": [cg_x * 1000.0, 0.0, cg_z * 1000.0], "size_mm": [s * 1000.0 for s in box_size]},
+              "mass_kg": mass}]
+    if wheel_mass > 0.0:
+        for s in sups:
+            parts.append({"id": f"wheel_{s['id']}", "name": "wheel", "kind": "wheel",
+                          "box": {"center_mm": list(s["position_mm"]), "size_mm": [2 * radius * 1000.0, 200.0, 2 * radius * 1000.0]},
+                          "mass_kg": wheel_mass})
+    return {"design_version": 1, "parent_version": None, "name": name, "variables": variables or {},
+            "supports": sups, "parts": parts, "nodes": [], "members": [], "sections": {}, "materials": {}}
