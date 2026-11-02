@@ -152,10 +152,11 @@ class BuildersTest(unittest.TestCase):
                 else:
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
 
-    def test_r3_misses_on_the_unsafe_side_and_stops(self):
+    def test_r3_misses_on_the_unsafe_side_and_ends_without_a_verdict(self):
         plan = PLANS["R3"]
         self.assertNotIn("retry", plan["expected_mismatch"])
         self.assertNotIn("safe_side", plan["expected_mismatch"])
+        self.assertTrue(plan["expected_mismatch"]["end"])  # the cause is recorded and the run goes on
         damage = {r["quantity"]: r["value"] for r in self.runs["R3"]["results"]}["fatigue_damage"]
         self.assertGreater(damage, 0.0)  # the analysis is what the hand value falls short of
 
