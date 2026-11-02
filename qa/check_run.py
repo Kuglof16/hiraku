@@ -21,8 +21,10 @@ there is an error (or a warning with --strict). What it looks at:
   overlap agree with its list
 - comparisons: values copied from the prediction and the analysis, signed diffs
   (analyzed - predicted) and status recomputed, tolerance taken from the load case
-- verdicts: only from a matching comparison; pass and margin recomputed; limit
-  and op from the load case criterion
+- verdicts: from a matching comparison with the analysis value, or (basis
+  explained_safe_side) from a mismatch whose own earlier cause says safe_side with a
+  reason, the prediction on the unfavourable side of the criterion and taken as the
+  value; pass and margin recomputed; limit and op from the load case criterion
 - judgements: red_count and state follow the listed verdicts
 - H4: a run that finished as done has no picked domain still pending
 - --recompute: each prediction value is reproduced by K0 from its formula and
@@ -647,16 +649,22 @@ class RunChecker:
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
                 continue
-            if c.get("status") != "match":
-                self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
-            if v.get("value") != c.get("analyzed"):
-                self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
+            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
+            if v.get("basis", "match") == "explained_safe_side":
+                self._check_safe_side_verdict(vid, v, c, crit, i, w)
+            else:
+                if c.get("status") != "match":
+                    self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
+                if v.get("value_from", "analysis") != "analysis":
+                    self.error("verdict.values", w, f"{vid} from a match has value_from {v.get('value_from')!r}, "
+                                                    f"not 'analysis'")
+                if v.get("value") != c.get("analyzed"):
+                    self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
             p = self.recs["prediction"].get(c.get("prediction_id"))
             if p:
                 for f in ("load_case_id", "test_id", "domain"):
                     if v.get(f) != p[1].get(f):
                         self.error("verdict.values", w, f"{vid} {f} {v.get(f)} but the prediction says {p[1].get(f)}")
-            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
             if crit is None:
                 self.error("verdict.criterion", w, f"{vid}: load case {v.get('load_case_id')} has no criterion")
             else:
@@ -664,6 +672,39 @@ class RunChecker:
                     if v.get(f) != crit.get(f):
                         self.error("verdict.criterion", w, f"{vid} {f} {v.get(f)} but the criterion says {crit.get(f)}")
             self._check_verdict_math(vid, v, w)
+
+    def _check_safe_side_verdict(self, vid: str, v: dict, c: dict, crit: dict | None, i: int, w: str) -> None:
+        """basis explained_safe_side (contract, record_cause): a mismatch whose own cause,
+        recorded before the verdict, says safe_side with a reason; the prediction is the
+        unfavourable value under the criterion and the verdict takes it."""
+        cid = v.get("comparison_id")
+        if c.get("status") != "mismatch":
+            self.error("verdict.safe_side", w, f"{vid} is explained_safe_side but {cid} is a {c.get('status')}")
+        if not v.get("cause_id"):
+            self.error("verdict.safe_side", w, f"{vid} is explained_safe_side but names no cause")
+        else:
+            k = self._before("cause", v["cause_id"], i, w, "verdict.safe_side", "cause")
+            if k is not None:
+                if k.get("comparison_id") != cid:
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} explains {k.get('comparison_id')}, not {cid}")
+                if k.get("safe_side") is not True:
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} does not say safe_side true")
+                elif not str(k.get("safe_side_reason") or "").strip():
+                    self.error("verdict.safe_side", w, f"{vid}: {v['cause_id']} gives no safe_side_reason")
+        if v.get("value_from") != "prediction":
+            self.error("verdict.values", w, f"{vid} is explained_safe_side but value_from is {v.get('value_from')!r}, "
+                                            f"not 'prediction'")
+        if v.get("value") != c.get("predicted"):
+            self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared prediction value")
+        try:
+            pv, av = float(c["predicted"]["value"]), float(c["analyzed"]["value"])
+        except (KeyError, TypeError, ValueError):
+            return
+        op = (crit or {}).get("op", v.get("op"))
+        # an upper limit (<=, <) needs prediction >= analysis; a lower limit (>=, >) needs prediction <= analysis
+        if (op in ("<=", "<") and pv < av) or (op in (">=", ">") and pv > av):
+            self.error("verdict.safe_side", w, f"{vid}: criterion {op} but the prediction {pv} is on the favourable "
+                                               f"side of the analysis {av}")
 
     def _check_verdict_math(self, vid: str, v: dict, w: str) -> None:
         try:
