@@ -34,13 +34,16 @@ def picked_event(record: Record) -> Record:
     return {"kind": DOMAINS_PICKED, "agent": "lead", "text": domains_line(record), "data": record}
 
 
+def asked_event(asked: Record) -> Record:
+    n = len(asked["questions"])
+    return {"kind": HEARING_ASKED, "agent": "lead", "text": f"足りない要件が {n} 件あります。まとめて聞きます", "data": asked}
+
+
 def hearing_events(prepared: Prepared) -> list[Record]:
     """hearing.asked (when anything was asked) then hearing.answered."""
     out: list[Record] = []
-    n = len(prepared.asked["questions"])
-    if n:
-        out.append({"kind": HEARING_ASKED, "agent": "lead",
-                    "text": f"足りない要件が {n} 件あります。まとめて聞きます", "data": prepared.asked})
+    if prepared.asked["questions"]:
+        out.append(asked_event(prepared.asked))
     out.append({"kind": HEARING_ANSWERED, "agent": "lead", "text": hearing_text(prepared), "data": prepared.answered})
     return out
 

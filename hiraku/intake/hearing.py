@@ -12,10 +12,12 @@ later and uses the same plan and the same answers.
 from __future__ import annotations
 
 import copy
+import json
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -222,6 +224,65 @@ def prepare(
         answered["note"] = note.strip()
     return Prepared(out, {"questions": plan.questions}, answered, unresolved,
                     [k for k in plan.unfilled if k not in {r["key"] for r in settled}])
+
+
+# ------------------------------------------------------------------- waiting for a person in a run
+# The same plan and the same answers, but the answers arrive while the run waits: ask_user writes
+# hearing.request.json into the run folder, the screen (A2) writes hearing.answer.json, and ask_user
+# reads it. The shape is the one of A2's "answer" button: {answers, note, use_defaults}.
+# (A file in the run folder, like stop.request: the run and the screen are different processes.)
+
+REQUEST_FILE = "hearing.request.json"
+ANSWER_FILE = "hearing.answer.json"
+
+
+def write_request(run_path: Path, asked: Record) -> Path:
+    path = Path(run_path) / REQUEST_FILE
+    path.write_text(json.dumps(asked, ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
+
+
+def save_answer(run_path: Path, body: Record) -> Path:
+    """What the screen's server calls with the body of A2's answer: checks it and writes hearing.answer.json."""
+    unknown = [k for k in body if k not in ("answers", "note", "use_defaults")]
+    if unknown:
+        raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults だけ)")
+    answers = body.get("answers", {})
+    if not isinstance(answers, dict):
+        raise IntakeError("answers は {要件の番号: 値} の形で渡してください")
+    for key, answer in answers.items():
+        _answer_requirement(item(key), answer)  # the same checks as when it is applied
+    clean = {"answers": answers, "note": str(body.get("note") or ""), "use_defaults": bool(body.get("use_defaults", True))}
+    path = Path(run_path) / ANSWER_FILE
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)  # the reader never sees half a file
+    return path
+
+
+def read_answer(run_path: Path) -> Record | None:
+    path = Path(run_path) / ANSWER_FILE
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def wait_for_answer(run_path: Path, timeout_s: float, *, poll_s: float = 0.5,
+                    sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> Record | None:
+    """Wait up to timeout_s for hearing.answer.json. None when it did not come."""
+    deadline = clock() + timeout_s
+    while True:
+        got = read_answer(run_path)
+        if got is not None:
+            return got
+        if clock() >= deadline:
+            return None
+        sleep(poll_s)
+
+
+def clear_mailbox(run_path: Path) -> None:
+    for name in (REQUEST_FILE, ANSWER_FILE):
+        (Path(run_path) / name).unlink(missing_ok=True)
 
 
 def hearing_text(prepared: Prepared) -> str:

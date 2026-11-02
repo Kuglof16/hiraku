@@ -109,9 +109,29 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         answers = {**file_answers, **answers}
         note = note or file_note
     req = _requirements_file(ctx)
-    prepared = hearing.prepare(req, answers, note, product_defaults=_product_defaults(req["product"], req),
-                               wording=args.get("wording"), choices=args.get("choices"))
-    problems = [p for e in ev.hearing_events(prepared) if (p := _emit(ctx, e))]
+    defaults = _product_defaults(req["product"], req)
+    wording, choices = args.get("wording"), args.get("choices")
+    problems: list[str] = []
+    asked_early = False
+    wait = float(args.get("wait_seconds") or 0)
+    run_path = getattr(_store(ctx), "path", None)
+    if wait > 0 and not answers and run_path is not None:
+        # wait for a person: show the questions now (A2), then take what the screen writes into the run folder
+        plan = hearing.plan_hearing(req, product_defaults=defaults, wording=wording, choices=choices)
+        if plan.questions:
+            hearing.clear_mailbox(run_path)
+            if (p := _emit(ctx, ev.asked_event({"questions": plan.questions}))):
+                problems.append(p)
+            asked_early = True
+            hearing.write_request(run_path, {"questions": plan.questions})
+            got = hearing.wait_for_answer(run_path, wait)
+            hearing.clear_mailbox(run_path)
+            if got:
+                answers = dict(got.get("answers") or {})
+                note = note or got.get("note")
+    prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
+    to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
+    problems += [p for e in to_emit if (p := _emit(ctx, e))]
     new = prepared.answered["answers"]
     recorded_req = False
     add = getattr(_store(ctx), "add_requirements", None)
@@ -311,7 +331,8 @@ TOOLS: dict[str, Record] = {
             "項目の表から作る。答えが無い確認の質問は、出どころつきの既定値を使う。必須の質問は答えが無いと進めない。"
             "answers には、人が実際に言ったことだけを {要件の番号: 値 か {value, unit, basis}} で入れる (推測で埋めない)。"
             "answers_file は data/requirements/products/ の答えのファイル。質問を製品に合わせて言い換えたいときは wording "
-            "({番号: 文})、選択肢を変えたいときは choices。"
+            "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
+            "答えが来るか時間が切れるまで待つ)。"
         ),
         "input_schema": {
             "type": "object", "additionalProperties": False,
@@ -319,6 +340,8 @@ TOOLS: dict[str, Record] = {
                 "answers": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"},
                             "description": "人の答え。値か {value, unit?, trust?, basis?}"},
                 "note": {"type": "string", "description": "「ほかに伝えること」の文"},
+                "wait_seconds": {"type": "number", "minimum": 0, "maximum": 900,
+                                 "description": "答えが無いとき、画面の人の答えを最大この秒数だけ待つ。0 (既定) なら待たず、確認の質問は既定値で進む"},
                 "answers_file": {"type": "string", "description": "答えのファイル (data/requirements/products/ の中)"},
                 "wording": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"}, "additionalProperties": {"type": "string"},
                             "description": "質問の言い換え {番号: 文}"},
