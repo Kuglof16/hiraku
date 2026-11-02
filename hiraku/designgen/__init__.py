@@ -43,8 +43,8 @@ def variables(design: Record) -> list[Record]:
     """Every variable of the design's generator with its current value in the design: name,
     unit, value, default, min and max (revisable ones), revisable, meaning."""
     gen = generator_of(design)
-    now = gen.values_of(design)
-    return [dict(v, value=now[v["name"]]["value"]) for v in gen.spec()]
+    now = design["variables"]
+    return [dict(v, value=now[v["name"]]["value"]) for v in gen.spec() if v["name"] in now]
 
 
 def regenerate(design: Record, changes: dict[str, Record]) -> Record:

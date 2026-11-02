@@ -100,6 +100,15 @@ class DesignGenTest(unittest.TestCase):
         self.assertFalse(got["occupant_mass"]["revisable"])
         json.dumps(list(got.values()), allow_nan=False)
 
+    def test_derived_variables_follow_the_wheel(self):
+        d = designgen.regenerate(V1, {"wheel_radius": mm(340)})
+        self.assertEqual(d["variables"]["tyre_relaxation_length"], {"value": 340.0, "unit": "mm"})
+        wheel = next(p for p in d["parts"] if p["kind"] == "wheel")
+        self.assertAlmostEqual(d["variables"]["wheel_inertia"]["value"], wheel["mass_kg"] * 0.34**2 / 2, places=12)
+        self.assertNotIn("wheel_inertia", GEN.values_of(d))  # not an input: rebuilt every time
+        with self.assertRaisesRegex(ValueError, "unknown variable"):
+            designgen.regenerate(V1, {"wheel_inertia": {"value": 1.0, "unit": "kg*m^2"}})
+
     def test_motor_mass_follows_its_rating(self):
         def motor(**ch):
             return next(p for p in GEN.build(ch)["parts"] if p["id"] == "motor")["mass_kg"]
