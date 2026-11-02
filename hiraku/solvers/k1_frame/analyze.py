@@ -44,7 +44,7 @@ def _split(point, force, contact: str) -> list[tuple[str, np.ndarray, np.ndarray
 
 def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             step_supports: list[str] | None = None, ground_forces: dict | None = None,
-            inertia_N: np.ndarray | None = None) -> dict:
+            inertia_N: np.ndarray | None = None, node_loads: list | None = None) -> dict:
     """Solve the frame.
 
     ground_forces: {support id: [(kind, point_mm, force_N), ...]} from an
@@ -52,6 +52,8 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
     the centre of gravity) the imbalance must agree with it; without it the
     forces must balance the weight (quasi-static). Otherwise step_mm makes K0
     compute the step forces, and without either the frame stands at rest.
+    node_loads: [(frame node, point_mm, force_N), ...] other external forces
+    (e.g. a wall); they are part of the balance, so give inertia_N with them.
     """
     summ = mass_summary(design)
     items = summ["items"]
@@ -86,7 +88,11 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             ground[s["id"]] = {"point_mm": p, "force_N": f, "contact": "ground", "vectors": _split(p, f, "ground")}
         residual = 0.0
     else:
-        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        extra = [(n, np.asarray(p, float), np.asarray(f, float)) for n, p, f in (node_loads or [])]
+        for n, _, _ in extra:
+            if n not in fm.model.nodes:
+                raise DesignError(f"a load is put on node {n!r}, which is not in the frame")
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]] + [(p, f) for _, p, f in extra]
         weights = [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in items]
         F, M = resultant(pairs + weights)
         M_cg = M - np.cross(cg, F)
@@ -107,6 +113,8 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
         for sid, g in ground.items():
             for _, p, f in g["vectors"]:
                 fm.add_force_at(fm.wheel_nodes[sid], p, f)
+        for n, p, f in extra:
+            fm.add_force_at(n, p, f)
         if np.any(accel != 0) or np.any(alpha != 0):
             fm.add_body_loads(items, -accel, -alpha, cg)
         held = fm.restrain_free_body()

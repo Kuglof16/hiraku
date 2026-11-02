@@ -88,6 +88,13 @@ HANDLING = {
     "front_cornering_stiffness": q(25000.0, "N/rad"),
     "rear_cornering_stiffness": q(30000.0, "N/rad"),
 }
+# Front against a rigid wall (design assumption): a rubber bumper, then a crush
+# zone in the front overhang once the bumper bottoms out.
+CRASH = {
+    "bumper_stiffness": q(100.0, "N/mm"),
+    "bumper_stroke": q(80.0, "mm"),
+    "crush_stiffness": q(600.0, "N/mm"),
+}
 
 
 def node(side, st):
@@ -180,6 +187,7 @@ def build() -> dict:
             **THERMAL,
             **AERO,
             **HANDLING,
+            **CRASH,
         },
         "supports": supports,
         "parts": parts,

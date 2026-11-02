@@ -163,6 +163,18 @@
     "rear_cornering_stiffness": {
       "value": 30000.0,
       "unit": "N/rad"
+    },
+    "bumper_stiffness": {
+      "value": 100.0,
+      "unit": "N/mm"
+    },
+    "bumper_stroke": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "crush_stiffness": {
+      "value": 600.0,
+      "unit": "N/mm"
     }
   },
   "supports": [
