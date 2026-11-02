@@ -52,16 +52,18 @@
   to   { opacity: 1; }
 }
 
-/* --- the name, letter by letter --- */
-/* --name-top, --name-size, --tag-top, --tag-size: layout.json (cuts.<cut>.name, .tag) */
+/* --- the name, letter by letter (--t-name, --t-tag, --t-line, --t-open,
+       --t-draw: layout.json <cut>.times) --- */
+/* --title-name-y, --title-name-size-px, --title-tag-y, --title-tag-size-px:
+   layout.json (<cut>.title.name, .tag) */
 .name {
   position: absolute;
   left: 0;
   right: 0;
-  top: var(--name-top);
+  top: var(--title-name-y);
   margin: 0;
   text-align: center;
-  font: 400 var(--name-size) / 1 var(--font-latin);
+  font: 400 var(--title-name-size-px) / 1 var(--font-latin);
   letter-spacing: 0.3em;
   padding-left: 0.3em;
   color: var(--on-night);
@@ -80,10 +82,10 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: var(--tag-top);
+  top: var(--title-tag-y);
   margin: 0;
   text-align: center;
-  font: 400 var(--tag-size) / 1.2 var(--font-ja);
+  font: 400 var(--title-tag-size-px) / 1.2 var(--font-ja);
   letter-spacing: 0.04em;
   color: var(--on-night);
   animation: fade-up 0.7s ease-out both;

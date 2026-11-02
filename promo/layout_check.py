@@ -2,14 +2,17 @@
 
 Opens a screen with export.Capture, moves it to each time, and collects the
 boxes (getBoundingClientRect, in 1920x1080 design px) of the named elements
-(``data-check="name"``) and of every visible element that holds text. Then
-lists:
+(``data-box="n05.title.name"``, dotted names) and of every visible element that
+holds text. Then lists:
 
-    band      a box reaches into the subtitle band (y >= band.top)
+    band      a box reaches into the subtitle band (y >= subtitle_band.y)
     outside   a box sticks out of the screen (0..1920 x 0..1080)
+    escape    a named box sticks out of the box of its nearest named ancestor
+              (n08b.bars.large.value out of n08b.bars.large; layout.json
+              allow_escape lets a box out by up to max_px, with a reason)
     overlap   two named elements overlap (pairs allowed in layout.json skipped)
     overflow  text overflows its box (scrollWidth > clientWidth + 1, or height)
-    small     text smaller than the minimum size at 1080p (layout.json min_text)
+    small     text smaller than the minimum size at 1080p (layout.json min_text_px)
 
 An element counts as visible unless its opacity (with its ancestors') is below
 0.05, it is visibility: hidden, it has no size, or an ancestor that clips
@@ -58,7 +61,6 @@ COLLECT = r"""(cfg) => {
   const ox = (innerWidth - W * u) / 2, oy = (innerHeight - H * u) / 2;
   const design = (r) => ({ x: (r.left - ox) / u, y: (r.top - oy) / u, w: r.width / u, h: r.height / u });
   const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "TITLE", "defs", "clipPath", "mask", "title"]);
-  const JA = /[぀-ヿ㐀-鿿豈-﫿＀-￯]/;
 
   const ownText = (el) => [...el.childNodes].filter((n) => n.nodeType === 3)
     .map((n) => n.textContent).join("").replace(/\s+/g, " ").trim();
@@ -119,7 +121,7 @@ COLLECT = r"""(cfg) => {
   const items = [];
   for (const el of document.body.querySelectorAll("*")) {
     if (SKIP.has(el.tagName)) continue;
-    const name = el.getAttribute("data-check");
+    const name = el.getAttribute("data-box");
     const text = ownText(el);
     if (!name && !text) continue;
     const cs = getComputedStyle(el);
@@ -131,7 +133,7 @@ COLLECT = r"""(cfg) => {
     if (name && !text && !paints(el, 1)) continue;
     const inside = [];
     for (let e = el.parentElement; e; e = e.parentElement) {
-      const n = e.getAttribute && e.getAttribute("data-check");
+      const n = e.getAttribute && e.getAttribute("data-box");
       if (n) inside.push(n);
     }
     const block = el.clientWidth > 0 || el.clientHeight > 0;
@@ -142,7 +144,6 @@ COLLECT = r"""(cfg) => {
       text: text.slice(0, 60),
       box: design(r),
       font: text ? fontPx(el, cs) : null,
-      script: text ? (JA.test(text) ? "ja" : "latin") : null,
       scroll: text && block ? { sw: el.scrollWidth / u, cw: el.clientWidth / u,
                                 sh: el.scrollHeight / u, ch: el.clientHeight / u } : null,
       band_exempt: cfg.bandExempt.some((s) => el.closest(s)),
@@ -209,11 +210,26 @@ def overflows(scroll: dict | None, font: float | None = None, allow: list[dict] 
     return left
 
 
-def too_small(font: float | None, script: str | None, min_text: dict) -> bool:
-    """Font size (design px) below the minimum for its script ("ja" or "latin")."""
-    if font is None or script is None:
+def too_small(font: float | None, min_px: float) -> bool:
+    """Font size (design px) below the minimum."""
+    if font is None:
         return False
-    return font < min_text[script] - 1e-6
+    return font < min_px - 1e-6
+
+
+def escapes(box: dict, outer: dict, tol: float = TOL) -> dict:
+    """How far a box sticks out of an outer box, by side ({"right": px, ...}; empty when inside)."""
+    out = {"left": outer["x"] - box["x"], "top": outer["y"] - box["y"],
+           "right": right(box) - right(outer), "bottom": bottom(box) - bottom(outer)}
+    return {k: v for k, v in out.items() if v > tol}
+
+
+def escape_room(cut: str, name: str, allow: list[dict]) -> float:
+    """How far (design px) a named box may stick out of its parent: the largest
+    max_px of the rules of this cut ("*" for any) whose box pattern (glob) matches."""
+    return max((r["max_px"] for r in allow
+                if fnmatch.fnmatchcase(cut, r.get("cut", "*")) and fnmatch.fnmatchcase(name, r["box"])),
+               default=0.0)
 
 
 def overlap_allowed(cut: str, a: str, b: str, allow: list[dict]) -> bool:
@@ -230,9 +246,9 @@ def overlap_allowed(cut: str, a: str, b: str, allow: list[dict]) -> bool:
 
 def judge(items: list[dict], layout: dict, cut: str) -> list[dict]:
     """All problems among the collected items of one frame."""
-    w, h = layout["design"]["w"], layout["design"]["h"]
-    band_top = layout["band"]["top"]
-    min_text = layout["min_text"]
+    w, h = layout["stage"]["w"], layout["stage"]["h"]
+    band_top = layout["subtitle_band"]["y"]
+    min_px = layout["min_text_px"]
     allow = layout["check"].get("allow_overlap", [])
     out = []
 
@@ -251,10 +267,21 @@ def judge(items: list[dict], layout: dict, cut: str) -> list[dict]:
             s = it["scroll"]
             problem("overflow", it, box, f"scroll {s['sw']:.0f}x{s['sh']:.0f} > client {s['cw']:.0f}x{s['ch']:.0f} "
                     f"(" + ", ".join(f"{k} +{v:.1f}" for k, v in over.items()) + ")")
-        if too_small(it.get("font"), it.get("script"), min_text):
-            problem("small", it, box, f"{it['font']:.1f} px < {min_text[it['script']]} px ({it['script']})")
+        if too_small(it.get("font"), min_px):
+            problem("small", it, box, f"{it['font']:.1f} px < {min_px} px")
 
     named = [it for it in items if it.get("name")]
+    boxes = {it["name"]: it["box"] for it in named}
+    allow_escape = layout["check"].get("allow_escape", [])
+    for it in named:
+        parent = next((n for n in it.get("inside", []) if n in boxes), None)
+        if parent is None:
+            continue
+        sides = escapes(it["box"], boxes[parent])
+        room = escape_room(cut, it["name"], allow_escape)
+        sides = {k: v for k, v in sides.items() if v > room + TOL}
+        if sides:
+            problem("escape", it, it["box"], f"out of {parent}: " + ", ".join(f"{k} +{v:.1f}" for k, v in sides.items()))
     for i, a in enumerate(named):
         for b in named[i + 1:]:
             if a["name"] in b.get("inside", []) or b["name"] in a.get("inside", []):
@@ -344,7 +371,7 @@ def check_screen(screen: str | Path, out_dir: Path, layout: dict, at: list[float
     cut = export.screen_name(screen)
     times = times_for(cut, layout, at)
     chk = layout["check"]
-    cfg = {"w": layout["design"]["w"], "h": layout["design"]["h"],
+    cfg = {"w": layout["stage"]["w"], "h": layout["stage"]["h"],
            "bandExempt": [e["selector"] for e in chk.get("band_exempt", [])],
            "overflowAllow": [{"selector": a["selector"], "axis": a["axis"], "max_em": a["max_em"]}
                              for a in chk.get("allow_overflow", [])

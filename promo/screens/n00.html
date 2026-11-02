@@ -8,22 +8,17 @@
 <script src="layout.js" data-cut="n00"></script>
 <style>
   /* N00: the name, then the seven CAE agents light up one by one.
-     Placement: layout.json cuts.n00 (CSS variables from layout.js). */
-  :root {
-    --t-name: 0.25s;   /* first letter of the name */
-    --t-row: 1.1s;     /* agents and chips come in, unlit */
-    --t-light: 2.0s;   /* first chip lights */
-    --t-step: 0.42s;   /* gap between chips */
-  }
+     Placement and times: layout.json n00 (CSS variables from layout.js;
+     --t-name, --t-row, --t-light, --t-step from n00.times). */
 
   .name {
     position: absolute;
     left: 0;
     right: 0;
-    top: var(--name-top);
+    top: var(--name-y);
     margin: 0;
     text-align: center;
-    font: 400 var(--name-size) / 1 var(--font-latin);
+    font: 400 var(--name-size-px) / 1 var(--font-latin);
     letter-spacing: 0.3em;
     padding-left: 0.3em; /* balance the tracking after the last letter */
     color: var(--ink);
@@ -40,9 +35,9 @@
 
   .rule {
     position: absolute;
-    left: var(--rule-left);
+    left: var(--rule-x);
     width: var(--rule-w);
-    top: var(--rule-top);
+    top: var(--rule-y);
     height: var(--rule-h);
     background: var(--ink);
     transform-origin: 50% 50%;
@@ -58,10 +53,10 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: var(--row-top);
+    top: var(--row-y);
     display: flex;
     justify-content: center;
-    gap: var(--row-gap);
+    gap: var(--row-gap-px);
   }
   .agent {
     width: var(--agent-w);
@@ -77,9 +72,9 @@
   }
 
   .pet {
-    width: var(--pet-size);
-    height: var(--pet-size);
-    margin-left: var(--pet-shift); /* body sits left of the box; centre it on the chip */
+    width: var(--pet-size-px);
+    height: var(--pet-size-px);
+    margin-left: var(--pet-shift-px); /* body sits left of the box; centre it on the chip */
     animation:
       pet-wake 0.5s ease-out both,
       pet-hop 0.45s cubic-bezier(.3, 0, .3, 1) both;
@@ -102,7 +97,7 @@
   .pet .fill-paper { fill: var(--paper); }
 
   .chip {
-    margin-top: var(--chip-gap-above);
+    margin-top: var(--chip-gap-above-px);
     display: inline-flex;
     align-items: center;
     gap: calc(10 * var(--u));
@@ -111,7 +106,7 @@
     border-radius: calc(26 * var(--u));
     border: calc(2.5 * var(--u)) solid var(--ink-faint);
     background: var(--paper);
-    font: 700 var(--chip-size) / 1 var(--font-ja);
+    font: 700 var(--chip-size-px) / 1 var(--font-ja);
     color: var(--ink-faint);
     white-space: nowrap;
     animation: chip-on 0.35s ease-out both;
@@ -139,8 +134,8 @@
 <body data-duration="7">
 <div class="stage paper-grid">
   <div class="safe">
-    <h1 class="name" aria-label="HIRAKU" data-check="name"></h1>
-    <div class="rule" data-check="rule"></div>
+    <h1 class="name" aria-label="HIRAKU" data-box="n00.name"></h1>
+    <div class="rule" data-box="n00.rule"></div>
     <div class="row"></div>
   </div>
   <div class="guide-band"></div>
@@ -161,7 +156,7 @@
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
   document.querySelector(".row").innerHTML = AGENTS
-    .map(([key, label], i) => `<div class="agent" style="--i:${i}" data-check="agent:${key}">
+    .map(([key, label], i) => `<div class="agent" style="--i:${i}" data-box="n00.agent.${key}">
         <div class="pet" style="--i:${i}">${drawPet(key)}</div>
         <div class="chip" style="--i:${i}"><i></i>${label}</div>
       </div>`).join("");

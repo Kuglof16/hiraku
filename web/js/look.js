@@ -9,6 +9,8 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { GRAY } from "./colormap.js";
 
+const ENV = new WeakMap(); // renderer -> environment texture
+
 export function lookFromParams(params) {
   return params.get("look") === "real" ? "real" : "zu";
 }
@@ -205,10 +207,14 @@ export class Look {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // one environment per renderer, shared by every view drawn through it
+    if (!ENV.has(renderer)) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      ENV.set(renderer, pmrem.fromScene(new RoomEnvironment(), 0.04).texture);
+      pmrem.dispose();
+    }
+    scene.environment = ENV.get(renderer);
     scene.environmentIntensity = 0.55;
-    pmrem.dispose();
     scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x6b5b45, 1.1));
     const sun = new THREE.DirectionalLight(0xfff4e5, 2.6);
     sun.castShadow = true;
@@ -265,6 +271,14 @@ export class Look {
     m.userData.baseOpacity = opacity;
     m.userData.baseColor = color;
     return m;
+  }
+
+  // A ground that shows only the shadow falling on it (the page's background shows through).
+  shadowCatcher(x0, x1, y0, y1) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.ShadowMaterial({ opacity: 0.45 }));
+    mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, -1);
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   // The ground plane of the real look (earth), spanning the box [x0, x1] x [y0, y1] in ISO mm.
