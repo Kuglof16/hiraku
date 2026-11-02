@@ -57,7 +57,7 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables")
+                    "design_variables", "archetypes")
 DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
 
 
@@ -93,6 +93,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
         "design": lambda: s.design() if ctx.version else None,
         "design_variables": lambda: design_variables(ctx),
+        "archetypes": lambda: archetypes(ctx),
     }
     for name in wanted:
         out[name] = parts[name]()
@@ -469,6 +470,67 @@ def design_variables(ctx: RunContext) -> list[Record] | None:
              "value": {"value": s["value"], "unit": s["unit"]}} for s in found if s.get("revisable")]
 
 
+def archetypes(ctx: RunContext) -> list[Record] | None:
+    """The kinds of design hiraku.designgen can make for this product's flags (propose_design)."""
+    if ctx.designgen is None or not hasattr(ctx.designgen, "archetypes"):
+        return None
+    return ctx.designgen.archetypes(ctx.project["flags"])
+
+
+def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The designer's first version: an archetype, its choices and variables (the kit computes
+    every coordinate; the requirements give the occupants, cargo and top speed). Then the load
+    cases are built on it and the project gets them, with the picks and the roles
+    (project.updated), and the new version gets pending tiles."""
+    from hiraku.catalog import build_tests, load_catalog, project_fields, skipped_text
+
+    _check_input("propose_design", args)
+    agent = agent or "designer"
+    if agent != "designer":
+        raise ToolError("最初の版を作るのは設計役 (designer) です。まとめ役は設計役に、要件と型を伝えて頼んでください")
+    if ctx.version:
+        raise ToolError(f"設計の版 {ctx.version} がもうあります。変えるなら revise_design で次の版を作ってください")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、なぜこの型・選択肢・変数にしたかを書いてください")
+    kinds = archetypes(ctx)
+    if kinds is None:
+        raise ToolError("設計を型から組む関数 (hiraku.designgen.propose) が無いので、最初の版は作れません")
+    names = [k["name"] for k in kinds]
+    if args["archetype"] not in names:
+        raise ToolError(f"型 {args['archetype']!r} はありません。この製品に使えるのは {', '.join(names) or 'なし'} です "
+                        f"(get_context の archetypes)")
+    req = ctx.requirements_file
+    try:
+        design = dict(ctx.designgen.propose(args["archetype"], dict(args.get("choices") or {}),
+                                            dict(args.get("variables") or {}), req))
+    except ValueError as e:
+        raise ToolError(f"この型・選択肢・変数では設計を組めません: {e}。直して propose_design を呼び直してください") from None
+    design.update(design_version=1, parent_version=None, change_reason=reason)
+    errs = contract.errors("design", design)
+    if errs:
+        raise ToolError("組んだ設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
+    catalog = load_catalog()
+    try:
+        load_cases, skipped = build_tests(catalog, req, design)
+    except ValueError as e:
+        raise ToolError(f"この設計では試験の荷重条件を組めません: {e}") from None
+    ctx.store.write_design(design, agent=agent)
+    fields = project_fields(catalog, req, load_cases)
+    ctx.store.update_project({k: fields[k] for k in ("domain_picks", "load_cases", "agents")}, agent=agent,
+                             text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
+    if skipped:
+        ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
+    init_judgements(ctx)
+    return {
+        "design_version": 1,
+        "archetype": args["archetype"],
+        "change_reason": reason,
+        "load_cases": [{"load_case_id": lc["load_case_id"], "owner": ctx.owner(lc["load_case_id"])} for lc in load_cases],
+        "domain_picks": [p["domain"] for p in ctx.project["domain_picks"]],
+    }
+
+
 def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """The designer changes design variables; hiraku.designgen builds the next version from them.
 
@@ -532,23 +594,31 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     }
 
 
+# ---------------------------------------------------------------------------- the report (N17)
+
+
+def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The lead's report: the summary and the next changes are its words; everything else is put
+    together by code from the records (hiraku.tools.report). A number with a unit in the words
+    that matches no recorded value of that unit is refused. Writes report.json, report.written."""
+    from hiraku.tools.report import build_report
+
+    _check_input("write_report", args)
+    agent = agent or "lead"
+    if agent != "lead":
+        raise ToolError("報告を書くのはまとめ役 (lead) です。役の結果はまとめ役に返してください")
+    if not args["summary"].strip():
+        raise ToolError("summary に、分野ごとの結果を記録の ID と一緒に短く書いてください")
+    return ctx.store.write_report(build_report(ctx, args, agent), agent=agent)
+
+
 # ---------------------------------------------------------------------------- tools made in the run (N13)
 
-# Input of make_tool and check_tool (not in the contract's tool_input yet).
-TOOL_CODE_INPUT: Record = {
-    "type": "object",
-    "required": ["code"],
-    "additionalProperties": False,
-    "properties": {"code": {"type": "string", "minLength": 1,
-                            "description": "Python: one subclass of hiraku.solvers.shelf.base.BuiltinTool, or TOOL = an instance"}},
-}
-
-
 def _check_code_input(name: str, args: dict[str, Any]) -> str:
-    code = args.get("code") if isinstance(args, dict) else None
-    if not isinstance(code, str) or not code.strip() or set(args) != {"code"}:
-        raise ToolError(f"{name} の入力は {{\"code\": 道具の Python の文}} だけです")
-    return code
+    _check_input(name, args)
+    if not args["code"].strip():
+        raise ToolError(f"{name} の code が空です。道具の Python の文を書いてください")
+    return args["code"]
 
 
 def _made_answer(made: Any) -> Record:
@@ -597,9 +667,13 @@ FUNCTIONS = {
     "compare": compare,
     "record_cause": record_cause,
     "revise_design": revise_design,
+    "propose_design": propose_design,
     "make_tool": make_tool,
     "check_tool": check_tool,
+    "write_report": write_report,
 }
 
-# The MCP tools of a run: the contract's MVP set, the designer's (revise_design) and the tool making.
-RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "make_tool", "check_tool")
+# The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
+# making and the report.
+RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "propose_design", "make_tool", "check_tool",
+             "write_report")

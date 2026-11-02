@@ -41,11 +41,12 @@ tests:
     title: 航続・稼働時間
     applies_if: self_propelled and battery
     requirement_keys: [Q54]
-    # The forest loop's gentle end; its steep end is Q13 and Q50 (林道規程,
-    # https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf,
-    # not checked in this repository). T1 and T2 drive the same loop.
+    # The forest loop: grades from gentle to the sustained steepest (林道規程: 縦断勾配は続けて
+    # 12 % まで, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf,
+    # not checked in this repository; Q13 is the short 14 %), speeds up to Q50. T1 and T2 drive the same loop.
     params: &forest_loop
       grade_low: {value: 7, unit: "%", basis: assumption}
+      grade_high: {value: 12, unit: "%", basis: "林道規程, sustained grade (not checked in this repository)"}
       speed_low: {value: 20, unit: km/h, basis: assumption}
   - {id: P5, domain: powertrain, title: アクチュエータの力と速さ, applies_if: electric and not self_propelled, requirement_keys: [Q40, Q56]}
   - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}

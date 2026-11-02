@@ -6,15 +6,18 @@ Contract ids use a dot (cae.strength); SDK agent names use a hyphen (cae-strengt
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.catalog import REPO_ROOT
 from hiraku.tools.context import RunContext
 
+Record = dict[str, Any]
+
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
              "check_tool", "make_tool")
-DESIGNER_TOOLS = ("get_context", "list_tools", "revise_design")
+DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).
 CAE_EFFORT = "medium"
@@ -44,14 +47,34 @@ def agent_id_from_sdk(agent_type: str | None) -> str | None:
     return None
 
 
+def possible_roles(ctx: RunContext) -> list[Record]:
+    """The roles of project.agents; before the first version (no load cases yet) also every
+    role the product's catalog tests could need, since the SDK takes its subagents at the start."""
+    agents = list(ctx.project["agents"])
+    if ctx.load_cases:
+        return agents
+    from hiraku.catalog import load_catalog
+
+    catalog = load_catalog()
+    have = {a["agent_id"] for a in agents}
+    for tid in catalog.select_tests(ctx.project["flags"], ctx.project.get("speed_class")):
+        domain = catalog.test(tid)["domain"]
+        a = ({"agent_id": "packager", "role": "packager"} if domain == "assembly"
+             else {"agent_id": f"cae.{domain}", "role": "cae", "domain": domain})
+        if a["agent_id"] not in have:
+            agents.append(a)
+            have.add(a["agent_id"])
+    return agents
+
+
 def subagents(ctx: RunContext) -> dict:
-    """AgentDefinition per role of this run (project.agents) but the lead: CAE roles,
+    """AgentDefinition per role of this run (possible_roles) but the lead: CAE roles,
     the packager (the CAE steps on the assembly load cases) and the designer. All run in
     the foreground (background=False), so the lead waits for their results."""
     from claude_agent_sdk import AgentDefinition
 
     out = {}
-    for a in ctx.project["agents"]:
+    for a in possible_roles(ctx):
         if a["role"] in ("cae", "packager"):
             domain = a.get("domain", "assembly")
             out[sdk_name(a["agent_id"])] = AgentDefinition(

@@ -23,13 +23,15 @@ from hiraku import contract
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, external_builders, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
-from hiraku.tools.functions import analyze, compare, record_cause, record_prediction, revise_design, trusted_analysis
+from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
+                                    revise_design, trusted_analysis, write_report)
 from hiraku.tools.judge import verdict_line
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
+REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
 
 
 class ScriptError(RuntimeError):
@@ -278,12 +280,34 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     new version. Ctrl+C finishes the run as stopped and is raised again.
     run.finished carries stop_code: done, round_limit (judged, but a tile is
     red and no revision is left: status stopped), not_judged or user_stop.
+    A run that starts without a design (version 0) begins with the designer's
+    propose_design: the plan's `propose` entry, else the first archetype with
+    its defaults.
     """
     s = ctx.store
-    plan = compose_plan(ctx, plan)
-    revisions = list(plan.get("revise") or [])
     s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
+    if not ctx.version:
+        first = (plan if plan is not None else load_plan(ctx.project["product"])).get("propose") or {}
+        s.emit("agent.started", agent="designer", data={"agent_id": "designer"})
+        s.emit("agent.said", agent="designer", text=first.get("say") or "要件から、最初の版を作ります")
+        kinds = archetypes(ctx) or [{"name": ""}]
+        try:
+            out = propose_design(ctx, {"archetype": first.get("archetype") or kinds[0]["name"],
+                                       "choices": dict(first.get("choices") or {}),
+                                       "variables": dict(first.get("variables") or {}),
+                                       "reason": first.get("reason") or "要件に合う型を、既定の変数で組んだ"}, "designer")
+        except ToolError as e:
+            s.emit("agent.said", agent="designer", text=f"最初の版を作れませんでした: {e}")
+            s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
+            s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+            s.finish("stopped", stop_reason=f"propose_design refused: {e}", stop_code="not_judged")
+            return "stopped"
+        s.emit("agent.said", agent="designer", text=f"版 1 ができました。試験: "
+                                                    + "、".join(lc["load_case_id"] for lc in out["load_cases"]))
+        s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
+    plan = compose_plan(ctx, plan)
+    revisions = list(plan.get("revise") or [])
     if plan["missing"]:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
     started: list[str] = []
@@ -333,6 +357,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     except KeyboardInterrupt:
         status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
+    if status == "done" and not rules.stop_reason(ctx):  # every picked domain judged: the lead's report
+        rep = plan.get("report") or {}
+        write_report(ctx, {"summary": rep.get("summary") or REPORT_SUMMARY, "next": list(rep.get("next") or [])}, "lead")
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
     s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})

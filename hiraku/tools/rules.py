@@ -128,6 +128,9 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
 
 def stop_reason(ctx: RunContext) -> str | None:
     """HK4: why the run may not stop yet (None when every picked domain is judged)."""
+    if not ctx.version:
+        return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
+                "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
     left = pending(ctx)
     if not left:
         return None

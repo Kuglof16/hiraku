@@ -19,7 +19,8 @@ def has_ref(node):
 
 class SchemaTest(unittest.TestCase):
     def test_every_run_tool_has_a_standalone_schema(self):
-        self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design", "make_tool", "check_tool"})
+        self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design", "propose_design",
+                                              "make_tool", "check_tool", "write_report"})
         self.assertEqual(set(INPUT_SCHEMAS), set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
             with self.subTest(name=name):
