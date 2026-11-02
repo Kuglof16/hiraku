@@ -119,6 +119,8 @@ class Plans(unittest.TestCase):
             return frm[rest]
         if head == "pred":
             return preds[rest]
+        if head == "design" and rest.startswith("var."):
+            return self.design["variables"][rest[4:]]
         self.fail(f"unexpected ref {ref}")
 
     def test_steps_predict_with_paired_formulas(self):
