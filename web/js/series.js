@@ -15,9 +15,10 @@
 //   reaction_{x,y,z}.<ID>, grip_{x,y,z}.<ID> (N)  force vectors on the tyre
 // All positions are in the road frame (x along the road, y left, z up).
 
-const LENGTH = { mm: 1, m: 1000, km: 1e6 };
-const ANGLE = { deg: Math.PI / 180, rad: 1 };
-const FORCE = { N: 1, kN: 1000 };
+// Factors to mm, rad and N.
+export const LENGTH = { mm: 1, m: 1000, km: 1e6 };
+export const ANGLE = { deg: Math.PI / 180, rad: 1 };
+export const FORCE = { N: 1, kN: 1000 };
 
 export function channelsOf(analysis) {
   const out = new Map();
