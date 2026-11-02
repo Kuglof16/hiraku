@@ -119,17 +119,20 @@ class JudgeScan(unittest.TestCase):
                 "",
                 "OCCUPANT_KG = 76.6  # Q33",
             ]) + "\n",
-            "data/designs/d.json": '{\n  "box": {\n    "center_mm": [\n      -725.0,\n      0.0,\n      330.0\n    ]\n  }\n}\n',
+            "hiraku/designgen/d.py": 'V = {"seat_x": Var("mm", -725.0, -1100.0, -500.0, "seat centre")}\n',
+            "data/designs/d.json": '{\n  "variables": {\n    "air_density": {\n      "value": 1.225\n    }\n  }\n}\n',
         })
         self.assertEqual([str(f) for f in self.scan() if f.rule in ("number.source", "stub")], [])
 
     def test_values_from_outside_are_still_listed(self):
         self.commit({
             "hiraku/solvers/e.py": "RHO = 1.225\n\n\ndef unfinished():\n    raise NotImplementedError\n",
-            "data/designs/e.json": '{\n  "air_density": {\n    "value": 1.225,\n    "unit": "kg/m^3"\n  }\n}\n',
+            "hiraku/designgen/e.py": 'V = {"air_density": Var("kg/m^3", 1.225, meaning="")}\n',
+            "data/materials/e.json": '{\n  "air_density": {\n    "value": 1.225,\n    "unit": "kg/m^3"\n  }\n}\n',
         })
         found = {f.where for f in self.scan() if f.rule in ("number.source", "stub")}
-        self.assertEqual(found, {"hiraku/solvers/e.py:1", "hiraku/solvers/e.py:5", "data/designs/e.json:3"})
+        self.assertEqual(found, {"hiraku/solvers/e.py:1", "hiraku/solvers/e.py:5", "hiraku/designgen/e.py:1",
+                                 "data/materials/e.json:3"})
 
     def test_significant_digits(self):
         self.assertEqual([js._significant(t) for t in ("205000.0", "0.15", "900.0", "1341.64", "7")], [3, 2, 1, 6, 1])
