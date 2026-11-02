@@ -152,12 +152,16 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertIn("R1-step100", self.ctx.project["stop_reason"])
         self.assert_events_fit()
 
-    def test_end_is_refused_on_a_judged_quantity_or_with_a_retry(self):
+    def test_end_on_a_judged_quantity_leaves_the_test_without_a_verdict(self):
         plan = plan_without_safe_side()
         r1_second(plan)["expected_mismatch"]["end"] = True  # max_stress is R1's criterion
         self.assertEqual(run_scripted(self.ctx, plan), "stopped")
-        self.assertIn("is judged by its criterion", self.ctx.project["stop_reason"])
         self.assertEqual(self.ctx.store.records("verdict"), [])
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["stop_code"], "not_judged")  # HK4 at the end
+        self.assertNotIn("no next prediction", self.ctx.project["stop_reason"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("判定の無いまま次へ進みます" in t for t in said))
 
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))

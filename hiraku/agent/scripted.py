@@ -248,8 +248,8 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     """Predict, analyze, compare. On the expected mismatch, record its cause; then the
     verdict comes from the prediction when the plan judges it safe side (the tool checks
     the numbers), else the step goes on with its retry (itself a step, which may expect
-    a mismatch of its own), else with `end` the step ends there (only for a quantity no
-    criterion of the load case judges: there is no verdict to leave open), else the run stops."""
+    a mismatch of its own), else with `end` the step ends there (when the criterion judges that
+    quantity, the load case stays without a verdict and its tile shows it), else the run stops."""
     if step.get("say"):
         _say(ctx, agent, lc, step["say"])
     expected = step.get("expected_mismatch")
@@ -272,10 +272,10 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if expected.get("end"):
         if retry is not None:
             raise ScriptError(f"the plan gives {hit['comparison_id']} both end and a retry")
-        if (lc.get("criterion") or {}).get("quantity") == hit["quantity"]:
-            raise ScriptError(f"{hit['quantity']} of {lc['load_case_id']} is judged by its criterion: "
-                              f"the plan cannot end the step on {hit['comparison_id']}")
-        _say(ctx, agent, lc, expected.get("end_say") or "原因を記録して、この手順はここで終えます")
+        judged = (lc.get("criterion") or {}).get("quantity") == hit["quantity"]
+        default = ("原因を記録しました。手計算では合否を出せないので、この試験は判定の無いまま次へ進みます" if judged
+                   else "原因を記録して、この手順はここで終えます")
+        _say(ctx, agent, lc, expected.get("end_say") or default)
         return
     if retry is None:
         _say(ctx, agent, lc, expected.get("stop") or "この先の予測は台本にありません。ここで止めます")

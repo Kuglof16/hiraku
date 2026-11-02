@@ -101,8 +101,10 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     got = [verdicts[lc["load_case_id"]] for lc in cases if lc["load_case_id"] in verdicts]
     missing = [lc["load_case_id"] for lc in cases if lc["load_case_id"] not in verdicts]
     reds = [x for x in got if not x["pass"]]
-    if reds:
+    if reds:  # red even with tests left without a verdict; they are counted in the line
         state, summary = "red", f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)
+        if missing:
+            summary += f"。判定の無い試験 {len(missing)}: " + "、".join(missing)
     elif got and not missing:
         state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
     else:

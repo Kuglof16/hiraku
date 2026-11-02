@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import importlib
 import math
-import pkgutil
 from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
@@ -212,17 +211,9 @@ def external_builders() -> tuple[dict[str, Builder], dict[str, list[str]], dict[
 
 def beyond_plans() -> dict[str, Record]:
     """PLANS_BEYOND of hiraku.catalog.builders: the scripted steps of the cases past the limit that
-    differ from PLANS (a test without one predicts as in PLANS). While the package does not
-    gather them, they are read from its modules."""
+    differ from PLANS (a test without one predicts as in PLANS)."""
     mod = _builders_module()
-    if mod is None:
-        return {}
-    if hasattr(mod, "PLANS_BEYOND"):
-        return dict(mod.PLANS_BEYOND)
-    out: dict[str, Record] = {}
-    for info in pkgutil.iter_modules(getattr(mod, "__path__", [])):
-        out.update(getattr(importlib.import_module(f"{BUILDERS_MODULE}.{info.name}"), "PLANS_BEYOND", {}))
-    return out
+    return dict(getattr(mod, "PLANS_BEYOND", {})) if mod is not None else {}
 
 
 def builder_for(catalog: Catalog, test_id: str) -> Builder | None:

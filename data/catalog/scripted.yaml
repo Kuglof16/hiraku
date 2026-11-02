@@ -39,9 +39,9 @@
 # mismatch of its own. With safe_side true (and safe_side_reason, also written
 # in the plan) the cause is recorded as seen from the safe side: record_cause
 # checks that the prediction is the unfavourable value and makes the verdict
-# from it, and the step ends. With `end` true (for a quantity no criterion of the load case
-# judges) the cause is recorded and the step ends there (`end_say`). With none of these the
-# run says `stop` and stops.
+# from it, and the step ends. With `end` true the cause is recorded and the step ends there
+# (`end_say`); when the load case's criterion judges that quantity, the test stays without a
+# verdict and the run goes on. With none of these the run says `stop` and stops.
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded

@@ -2,6 +2,7 @@ import unittest
 
 from hiraku.tools import ToolError, rules
 from hiraku.tools.functions import analyze, compare, get_context, list_formulas, list_tools, record_cause, record_prediction
+from hiraku.tools.judge import compute_judgement
 from tests.tools.helpers import RunCase
 
 
@@ -331,6 +332,13 @@ class RedVerdictTest(RunCase, unittest.TestCase):
         tile = self.ctx.store.judgements()[0]
         self.assertEqual((tile["state"], tile["red_count"]), ("red", 1))
         self.assertIsNone(rules.stop_reason(self.ctx))  # judged (red), so the run may stop
+        # a second test of the domain without a verdict: the tile stays red and counts it,
+        # but the run is not judged until that test has a verdict too (HK4 goes by load case)
+        self.ctx.load_cases.append(dict(self.ctx.load_case("R1-step100"), load_case_id="R1-step250-beyond"))
+        tile = compute_judgement(self.ctx, "strength")
+        self.assertEqual(tile["state"], "red")
+        self.assertTrue(tile["summary"].endswith("。判定の無い試験 1: R1-step250-beyond"), tile["summary"])
+        self.assertIn("R1-step250-beyond", rules.stop_reason(self.ctx))
 
 
 if __name__ == "__main__":
