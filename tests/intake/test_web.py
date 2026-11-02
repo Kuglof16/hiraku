@@ -77,7 +77,7 @@ const after = buildModel(upTo('hearing.answered'));
 const start = buildModel(ev.slice(0, 1));
 console.log(JSON.stringify({{
   startLit: domainCards(start).filter((c) => c.state === 'lit').length,
-  startWait: domainCards(start).filter((c) => c.state === 'wait' || c.state === 'off').length,
+  startWait: domainCards(start).filter((c) => c.state === 'wait').length,
   beforeStates: [...new Set(hearingRows(before).map((r) => r.state))],
   beforeReqs: before.requirements.length,
   afterStates: [...new Set(hearingRows(after).map((r) => r.state))].sort(),
@@ -86,6 +86,7 @@ console.log(JSON.stringify({{
 }}));
 """)
         self.assertEqual(got["startLit"], 0)  # before the pick, the project holds no domain picks
+        self.assertEqual(got["startWait"], 7)  # and the cards say "not decided yet", not "off"
         self.assertEqual(got["beforeStates"], ["asking"])
         self.assertEqual(got["beforeReqs"], 0)
         self.assertIn("answered", got["afterStates"])

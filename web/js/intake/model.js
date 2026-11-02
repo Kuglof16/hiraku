@@ -118,7 +118,8 @@ export function domainCards(m) {
     }
     const o = off.get(name);
     if (o) return { domain: name, ja, state: "off", shownName: ja, reason: o.reason, testIds: [], testCount: 0 };
-    return { domain: name, ja, state: m.domains ? "off" : "wait", shownName: ja, reason: "", testIds: [], testCount: 0 };
+    const decided = m.domains && !(m.domainsFromProject && !m.domains.picks.length); // a project with no picks has not decided yet
+    return { domain: name, ja, state: decided ? "off" : "wait", shownName: ja, reason: "", testIds: [], testCount: 0 };
   });
 }
 

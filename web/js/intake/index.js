@@ -35,7 +35,7 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: "", note: "", answers: {},
+    draft: "", note: "", answers: {}, litSeen: new Set(),
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };
@@ -44,7 +44,8 @@ export function mountIntake(host, api, options = {}) {
   const root = h("div", { class: "in-root-host", dataset: { intake: "1" } }, nav, ...Object.values(panes));
   fill(host, root);
 
-  let model = buildModel(api.events());
+  let seen = api.events();
+  let model = buildModel(seen);
   let pending = false;
 
   function draw(opts = {}) {
@@ -71,7 +72,10 @@ export function mountIntake(host, api, options = {}) {
   }
 
   function update() {
-    model = buildModel(api.events());
+    const events = api.events();
+    if (events.length < seen.length) ui.litSeen.clear(); // a rewind or another run: let the cards glow again
+    seen = events;
+    model = buildModel(events);
     draw();
   }
 

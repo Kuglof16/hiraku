@@ -47,9 +47,11 @@ function speedChips(m) {
     h("span", { class: `in-chip speed ${m.speedClass === s.name ? "on" : "off"}`, title: s.meaning }, h("b", {}, s.symbol), h("span", {}, s.meaning.split(" (")[0])));
 }
 
-function card(c, api) {
+function card(c, api, ui) {
   const lit = c.state === "lit";
-  return h("article", { class: `in-card ${c.state}`, dataset: { domain: c.domain } },
+  const just = lit && !ui.litSeen.has(c.domain); // the glow plays once, not at every redraw
+  if (lit) ui.litSeen.add(c.domain);
+  return h("article", { class: `in-card ${c.state}${just ? " just" : ""}`, dataset: { domain: c.domain } },
     h("header", {},
       h("h3", {}, c.shownName),
       c.renamed ? h("small", { class: "in-was" }, `← ${c.ja}`) : null,
@@ -82,7 +84,7 @@ export function renderA1(el, m, api, ui) {
           : null),
       h("div", { class: "in-block" },
         h("h2", {}, "分野", h("small", {}, m.domains && !m.domainsFromProject ? `${lit} / 7 が灯りました` : m.domains ? `${lit} / 7 (要件のファイルから)` : "")),
-        h("div", { class: "in-cards" }, cards.map((c) => card(c, api))),
+        h("div", { class: "in-cards" }, cards.map((c) => card(c, api, ui))),
         assembly.length ? h("p", { class: "in-foot" }, "組み立て・人 (分野には数えない): ", assembly.map((t) => h("code", {}, t))) : null),
       h("div", { class: "in-block limits" },
         h("span", { class: "in-pill" }, `繰り返し ${m.limits.round ?? "—"} 回まで`),
