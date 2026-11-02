@@ -96,6 +96,27 @@ window.PROMO_LAYOUT = {
       "h": 750,
       "_note": "centred; h follows the drawing (viewBox 600 x 300)"
     },
+    "hero_motion": {
+      "push_scale": 1.04,
+      "burst_scale": 1.7,
+      "burst_dur_s": 0.4,
+      "ease": [
+        0.5,
+        0,
+        0.9,
+        0.4
+      ],
+      "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier)"
+    },
+    "ease": {
+      "tile": [
+        0.2,
+        0.9,
+        0.3,
+        1.15
+      ],
+      "_note": "cubic-bezier of a tile's flight"
+    },
     "title": {
       "name": {
         "y": 62,

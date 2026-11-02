@@ -27,19 +27,20 @@
     top: var(--hero-y);
     width: var(--hero-w);
     transform-origin: 50% 55%;
+    /* layout.json n05.hero_motion: grows until the burst, then bursts and fades */
     animation:
-      hero-push 0.95s linear both,
-      hero-burst 0.4s cubic-bezier(.5, 0, .9, .4) both;
+      hero-push var(--t-burst) linear both,
+      hero-burst var(--hero-motion-burst-dur) var(--hero-motion-ease) both;
     animation-delay: 0s, var(--t-burst);
   }
   .hero .v-line { stroke: var(--on-night); }
   @keyframes hero-push {
     from { transform: scale(1); }
-    to   { transform: scale(1.04); }
+    to   { transform: scale(var(--hero-motion-push-scale)); }
   }
   @keyframes hero-burst {
-    from { transform: scale(1.04); opacity: 1; }
-    to   { transform: scale(1.7); opacity: 0; }
+    from { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
+    to   { transform: scale(var(--hero-motion-burst-scale)); opacity: 0; }
   }
 
   .burst {
@@ -70,7 +71,7 @@
     border: var(--tile-border-px) solid var(--tile-border);
     border-radius: var(--tile-radius-px);
     overflow: hidden;
-    animation: tile-in var(--t-tile-in) cubic-bezier(.2, .9, .3, 1.15) both;
+    animation: tile-in var(--t-tile-in) var(--ease-tile) both;
     animation-delay: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger));
     /* the test loop inside starts once the tile has landed (tests.css) */
     --t0: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger) + var(--t-tile-in));

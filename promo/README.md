@@ -51,7 +51,7 @@ CSS のアニメーションは Web Animations API で止めて `currentTime` �
 | `screens/layout.json` | 決まりの元。最上位のキーは `stage` (1920×1080)、`subtitle_band` (字幕の帯 y 910・高さ 170)、`safe` (余白の内側 x 96・y 60・1728×850)、`min_text_px` (文字の最小 18 px、日本語・英数字とも)、`colors` (`night`・`ink`・`tile_bg`・`tile_border`)、カットごとの `n00`・`n05`・`n08b`・`n18` (要素の位置と大きさ、長さ `duration_s`、時刻 `times`)、`check` (点検する時刻と、点検で許すもの。理由つき)。単位は名前で示す: `x`・`y`・`w`・`h` は設計の px、ほかの長さは `_px`、秒は `_s` |
 | `layout_build.py` | `layout.json` から `screens/layout.data.js` (`window.PROMO_LAYOUT`) を書く。画面は `file://` で開くので JSON を読み込めず、スクリプトにして渡す |
 | `screens/layout.data.js` | 生成物。手で直さない。`layout.json` と違うと試験が落ちる |
-| `screens/layout.js` | 決まりから座標を計算する。`<script src="layout.js" data-cut="n05">` で、そのカットの値を CSS 変数にして入れる (長さ `n05.title.name.y` → `--title-name-y: calc(62 * var(--u))`、`n05.tile.label.size_px` → `--tile-label-size-px`、時刻 `n05.times.burst_s` → `--t-burst: 0.95s`、色 `colors.tile_bg` → `--tile-bg`)。`gridCells(n05.grid)` は格子の各マス (`x + 列 × (tile_w + gap_x)`、`y + 行 × (tile_h + gap_y)`) を返し、N05 の 12 枚のタイルは `n05.tests` の順にこれで置く |
+| `screens/layout.js` | 決まりから座標を計算する。`<script src="layout.js" data-cut="n05">` で、そのカットの値を CSS 変数にして入れる (長さ `n05.title.name.y` → `--title-name-y: calc(62 * var(--u))`、`n05.tile.label.size_px` → `--tile-label-size-px`、時刻 `n05.times.burst_s` → `--t-burst: 0.95s`、色 `colors.tile_bg` → `--tile-bg`、動きの値は倍率 `n05.hero_motion.push_scale` → `--hero-motion-push-scale: 1.04` (単位なし)・長さ `burst_dur_s` → `--hero-motion-burst-dur: 0.4s`・緩急 `n05.ease.tile` → `--ease-tile: cubic-bezier(0.2, 0.9, 0.3, 1.15)`)。`gridCells(n05.grid)` は格子の各マス (`x + 列 × (tile_w + gap_x)`、`y + 行 × (tile_h + gap_y)`) を返し、N05 の 12 枚のタイルは `n05.tests` の順にこれで置く |
 
 ```
 py promo/layout_build.py

@@ -10,7 +10,11 @@
 //            n05.tile.label.size_px -> --tile-label-size-px (the path, _ -> -)
 //   times    n05.times.burst_s -> --t-burst: 0.95s
 // Keys starting with "_", keys ending in "_s" outside "times", arrays and
-// strings are skipped. Values the rules only imply (a centred box's left
+// strings are skipped as lengths; motion values have their own forms:
+//            n05.hero_motion.push_scale -> --hero-motion-push-scale: 1.04 (no unit)
+//            n05.hero_motion.burst_dur_s -> --hero-motion-burst-dur: 0.4s
+//            n05.ease.tile [a, b, c, d] -> --ease-tile: cubic-bezier(a, b, c, d)
+// Values the rules only imply (a centred box's left
 // edge, ...) come from DERIVED below. Every page also gets --u, --stage-w,
 // --stage-h, --band-y, --band-h, --safe-x, --safe-y, --safe-w, --safe-h and
 // the colours (colors.tile_bg -> --tile-bg).
@@ -57,12 +61,29 @@
     n18: (c) => ({ "light-x": centred(c.light.w), "vehicle-x": centred(c.vehicle.w) }),
   };
 
+  const isScale = (k) => k.endsWith("_scale");
+  const isEase = (k, v, prefix) => Array.isArray(v) && v.length === 4 && (k === "ease" || prefix.endsWith("ease-"));
+
   function flatten(obj, prefix, out) {
     for (const [k, v] of Object.entries(obj)) {
-      if (k.startsWith("_") || k === "times" || k.endsWith("_s")) continue;
+      if (k.startsWith("_") || k === "times" || k.endsWith("_s") || isScale(k)) continue;
       const key = prefix + cssName(k);
       if (typeof v === "number") out[key] = v;
       else if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key + "-", out);
+    }
+    return out;
+  }
+
+  // Motion values of a cut as {name: CSS text}: scales (no unit), durations
+  // ending in _dur_s (seconds) and easing curves (cubic-bezier).
+  function motion(obj, prefix, out) {
+    for (const [k, v] of Object.entries(obj)) {
+      if (k.startsWith("_") || k === "times") continue;
+      const key = prefix + cssName(k);
+      if (typeof v === "number" && isScale(k)) out[key] = String(v);
+      else if (typeof v === "number" && k.endsWith("_dur_s")) out[prefix + cssName(k.slice(0, -2))] = `${v}s`;
+      else if (isEase(k, v, prefix)) out[key] = `cubic-bezier(${v.join(", ")})`;
+      else if (v && typeof v === "object" && !Array.isArray(v)) motion(v, key + "-", out);
     }
     return out;
   }
@@ -107,11 +128,12 @@
     for (const [k, v] of Object.entries(L.colors)) if (!k.startsWith("_")) style.setProperty(`--${cssName(k)}`, v);
     for (const [k, v] of Object.entries(vars(cut))) style.setProperty(`--${k}`, px(v));
     for (const [k, v] of Object.entries(times(cut))) style.setProperty(`--${k}`, `${v}s`);
+    for (const [k, v] of Object.entries(motion(rulesOf(cut), "", {}))) style.setProperty(`--${k}`, v);
   }
 
   const script = document.currentScript;
   const cut = script && script.dataset.cut;
-  window.promoLayout = { rules: L, cut, px, centred, gridCells, boxStyle, vars, times, apply,
+  window.promoLayout = { rules: L, cut, px, centred, gridCells, boxStyle, vars, times, motion, apply,
                          cutRules: cut ? rulesOf(cut) : null };
   if (cut) apply(cut);
 })();
