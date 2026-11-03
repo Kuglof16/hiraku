@@ -24,6 +24,15 @@
 // part is marked in the list and the part turns red in the view with a tag (its name and the
 // value the rule read); at ask_s the question comes in. The vehicle turns slowly all along.
 //
+// The vehicle's size (layout.json n14.view.fill): at every frame the camera stands so that
+// the vehicle on screen (the box round the projected points of view.contentPoints(): the frame,
+// the parts' boxes, the wheels) takes `fill` of the view in the direction that binds (the
+// larger of its shares of the view's width and height), with that box's middle at the view's
+// middle (fillView). Measured on the demo vehicle from the default view: it stands about as
+// tall as it is wide on screen, so `fill` of the view's long side (its width, 1000 px) would
+// make it about 860 px tall in a view 556 px high, its roll bar and near wheel cut off; the
+// binding direction is its height.
+//
 // Positions, sizes, colours, the length and the times come from layout.json n14; a missing
 // key is named on the page.
 
@@ -31,7 +40,7 @@ import * as THREE from "three";
 import { OVER_COLOR } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { esc, fmt, plainSentence } from "./labels.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
@@ -44,7 +53,7 @@ const FAINT = 0.12; // the other parts' opacity once one is caught
 const N14_KEYS = [
   "duration_s",
   "knowledge.x", "knowledge.y", "knowledge.w", "knowledge.h", "knowledge.title_px", "knowledge.text_px",
-  "view.x", "view.y", "view.w", "view.h",
+  "view.x", "view.y", "view.w", "view.h", "view.fill",
   "ask.x", "ask.y", "ask.w", "ask.h", "ask.text_px",
   "times.lead_s", "times.drop_s", "times.rule_s", "times.hit_s", "times.ask_s",
   "colors.bg", "colors.panel", "colors.rule",
@@ -199,6 +208,8 @@ export class CutN14 {
     v.fitPoints(v.contentPoints(), VIEWS.default, 1.1);
     this.view = v;
     this.orbit = v.cameraView();
+    this.points = v.contentPoints().map((q) => isoToThree(q.toArray()));
+    this.span = new THREE.Box3().setFromPoints(this.points).getSize(new THREE.Vector3()).length();
     // each part mesh gets its own material, so one part can turn red and the rest faint
     this.meshes = [];
     for (const [id, o] of Object.entries(v.partObjs)) {
@@ -278,6 +289,50 @@ export class CutN14 {
     }
   }
 
+  // Where the vehicle is on screen with the camera as it stands: the box round its projected
+  // points in normalised device coordinates (-1..1).
+  extentNdc() {
+    const cam = this.view.camera;
+    cam.updateMatrixWorld();
+    const e = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+    for (const p of this.points) {
+      const q = p.clone().project(cam);
+      e.x0 = Math.min(e.x0, q.x);
+      e.x1 = Math.max(e.x1, q.x);
+      e.y0 = Math.min(e.y0, q.y);
+      e.y1 = Math.max(e.y1, q.y);
+    }
+    return e;
+  }
+
+  // The camera looking along -off (from target + off) at the distance and the aim where the
+  // vehicle takes `fill` of the view in the binding direction, its box centred (see the top).
+  // A few steps of moving the aim by the box's offset and scaling the distance by its share;
+  // each step starts from the same place, so the frame at t is always the same.
+  fillView(target0, off, fill) {
+    const v = this.view;
+    const cam = v.camera;
+    const dir = off.clone().normalize();
+    let target = target0.clone();
+    let dist = off.length();
+    const tv = Math.tan((cam.fov * Math.PI) / 360);
+    for (let i = 0; i < 8; i += 1) {
+      v.lookFrom({ target, position: target.clone().addScaledVector(dir, dist), near: dist / 50, far: dist + this.span * 3 });
+      const e = this.extentNdc();
+      const share = Math.max((e.x1 - e.x0) / 2, (e.y1 - e.y0) / 2);
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+      target = target.clone()
+        .addScaledVector(right, ((e.x0 + e.x1) / 2) * dist * tv * cam.aspect)
+        .addScaledVector(up, ((e.y0 + e.y1) / 2) * dist * tv);
+      dist *= share / fill;
+    }
+    v.lookFrom({ target, position: target.clone().addScaledVector(dir, dist), near: dist / 50, far: dist + this.span * 3 });
+    // the box in the view's own pixels (for the tests: its share and its middle)
+    const e = this.extentNdc();
+    this.extent = { x0: ((e.x0 + 1) / 2) * this.inner.w, x1: ((e.x1 + 1) / 2) * this.inner.w, y0: ((1 - e.y1) / 2) * this.inner.h, y1: ((1 - e.y0) / 2) * this.inner.h, w: this.inner.w, h: this.inner.h };
+  }
+
   draw(t) {
     const sp = this.spec;
     const T = sp.times;
@@ -303,7 +358,7 @@ export class CutN14 {
     const o = this.orbit;
     const ang = ((TURN_DEG * (0.5 - 0.5 * Math.cos(Math.PI * p))) * Math.PI) / 180;
     const off = o.position.clone().sub(o.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
-    this.view.lookFrom({ target: o.target.clone(), position: o.target.clone().add(off), near: o.near, far: o.far });
+    this.fillView(o.target, off, this.spec.view.fill);
     this.view.renderInto(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, this.scale);
     if (this.tag) {
       this.tag.style.visibility = hit ? "visible" : "hidden";

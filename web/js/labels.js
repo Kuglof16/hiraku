@@ -26,23 +26,6 @@ export const DOMAIN_PLAIN_JA = {
   assembly: "組み立て",
 };
 
-// The catalog's tests (data/catalog/tests.yaml ids) in the viewers' words. A test not here
-// has no plain name (null), and a page leaves it out rather than show its id.
-const TEST_PLAIN_JA = {
-  S1: "傾けても倒れない", S2: "曲がっても倒れない", S3: "よける", S4: "急ブレーキ", S5: "でこぼこの斜面",
-  F1: "横風", F2: "空気の抵抗", F3: "こぼれ",
-  P1: "段差", P2: "坂道", P3: "加速と速さ", P4: "走れる距離", P5: "動かす力と速さ",
-  C1: "壁にぶつかる", C2: "人に当たる",
-  R1: "重さに耐える", R1s: "管のつなぎ目", R2: "落としたとき", R3: "くり返しの力", R4: "横転したときの枠", R5: "たわみ", R6: "電池の揺れ",
-  N1: "揺れ", N2: "乗り心地", N3: "音",
-  T1: "電池の熱", T2: "モーターの熱", T3: "使い続けたときの熱",
-  H1: "部品どうしの当たり", H2: "手と工具が入るか", H3: "手が届くか", H4: "挟まれないか", H5: "組み立ての順番",
-  G1: "決まりの寸法", G2: "規格",
-};
-
-export function testPlainName(id) {
-  return TEST_PLAIN_JA[id] ?? null;
-}
 
 // The trade's words in the record's sentences, and what the video's pages say instead.
 const SENTENCE_PLAIN = [

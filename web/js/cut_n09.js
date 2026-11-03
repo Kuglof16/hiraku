@@ -10,26 +10,28 @@
 // is the first design of the run named by ?design_run= (a run of the same product); without
 // one the view says it has none.
 //
+// A chip's words: the domain's name as the other cuts give it (labels.js DOMAIN_JA, as the
+// N00 chips and the N04 / N15 tiles), and on the line under it the domain in the viewers'
+// words (DOMAIN_PLAIN_JA). The tests that apply are not listed (a third line would crowd the
+// chip; the eight rows of the box leave room for two lines).
+//
 // The chips light one at a time from times.chips_from_s, every times.chip_step_s, in the
 // order of the record: the picks as listed, then the domains left off (off), then assembly.
-// A pick with tests that apply (test_ids) lights, with the tests in the viewers' words on one
-// line under its name (labels.js testPlainName); assembly lights when the record lists
-// assembly_test_ids. A pick with no test to apply, or a domain left off, stays pale and
-// at its turn shows the record's reason in one line (labels.js plainReason: the sentence
-// that says why, without ids). Until its turn a chip is pale with its name only.
+// A pick with tests that apply (test_ids) lights; assembly lights when the record lists
+// assembly_test_ids. A pick with no test to apply, or a domain left off, stays pale and at
+// its turn adds the record's reason to its second line (labels.js plainReason: the sentence
+// that says why, without ids). Until its turn a chip is pale.
 //
-// Story (layout.json story.cuts.n09): label 7, "the seven domains light up". The names of
-// the seven domains are the labels; assembly's chip is the eighth row the chips box asks for,
-// but it is not a domain (docs/contract.md: assembly_test_ids are not counted as domains) and
-// carries no data-kind, so the labels stay at 7. The reason lines are notes (data-kind note,
-// text_px x 0.7, at least min_text_px, as the chips box says).
+// Story (layout.json story.cuts.n09): label 8, the seven domains and assembly. The eight
+// names are the labels; the second lines are notes (data-kind note, text_px x 0.7, at least
+// min_text_px, as the chips box says).
 //
 // Positions, sizes, colours, the length and the times come from layout.json n09; a missing
 // key is named on the page.
 
 import * as THREE from "three";
 import { clearOfBand } from "./compose.js";
-import { DOMAINS, DOMAIN_PLAIN_JA, esc, plainReason, testPlainName } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, DOMAIN_PLAIN_JA, esc, plainReason } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { applyEvent, initialState } from "./state.js";
@@ -61,23 +63,20 @@ function pickedOf(events) {
   return (events ?? []).filter((e) => e.kind === "domains.picked").at(-1)?.data ?? null;
 }
 
-// The eight chips in the order they light (see the top): { domain, lit, line, kind }.
+// The eight chips in the order they light (see the top): { domain, lit, reason, kind }.
 // kind: "pick" (tests apply), "none" (picked, no test to apply), "off", "assembly", "absent".
+// reason: the record's reason for a pale chip ("" when lit or when the record gives none).
 export function chipsOf(picked) {
   const out = [];
   for (const p of picked?.picks ?? []) {
-    const ids = p.test_ids ?? [];
-    if (ids.length) {
-      const names = ids.map(testPlainName).filter(Boolean);
-      out.push({ domain: p.domain, lit: true, kind: "pick", line: names.length ? names.join("・") : `当てはまる試験 ${ids.length} つ` });
-    } else out.push({ domain: p.domain, lit: false, kind: "none", line: plainReason(p.reason) });
+    if ((p.test_ids ?? []).length) out.push({ domain: p.domain, lit: true, kind: "pick", reason: "" });
+    else out.push({ domain: p.domain, lit: false, kind: "none", reason: plainReason(p.reason) });
   }
-  for (const o of picked?.off ?? []) out.push({ domain: o.domain, lit: false, kind: "off", line: plainReason(o.reason) });
+  for (const o of picked?.off ?? []) out.push({ domain: o.domain, lit: false, kind: "off", reason: plainReason(o.reason) });
   const asm = picked?.assembly_test_ids ?? [];
-  const asmNames = asm.map(testPlainName).filter(Boolean);
-  out.push(asm.length ? { domain: "assembly", lit: true, kind: "assembly", line: asmNames.length ? asmNames.join("・") : `当てはまる試験 ${asm.length} つ` } : { domain: "assembly", lit: false, kind: "absent", line: "" });
+  out.push({ domain: "assembly", lit: asm.length > 0, kind: asm.length ? "assembly" : "absent", reason: "" });
   // a domain the record names nowhere: pale, no reason (the record gives none)
-  for (const d of DOMAINS) if (!out.some((c) => c.domain === d)) out.push({ domain: d, lit: false, kind: "absent", line: "" });
+  for (const d of DOMAINS) if (!out.some((c) => c.domain === d)) out.push({ domain: d, lit: false, kind: "absent", reason: "" });
   return out.filter((c) => DOMAINS.includes(c.domain));
 }
 
@@ -167,32 +166,33 @@ export class CutN09 {
       row.dataset.domain = d;
       row.dataset.kindOf = c.kind;
       Object.assign(row.style, { top: `${i * (rowH + C.row_gap)}px`, height: `${rowH}px`, borderColor: this.spec.colors.rule, background: this.spec.colors.panel });
-      // the seven domains' names are the story's labels; assembly's is not a domain (see the top)
-      const kind = d === "assembly" ? "" : ` data-kind="label"`;
+      // the eight names are the story's labels (the seven domains and assembly)
       row.innerHTML =
-        `<b class="name"${kind} style="font-size:${namePx}px">${esc(DOMAIN_PLAIN_JA[d])}</b>` +
-        `<span class="line" data-kind="note" style="font-size:${linePx}px">${esc(c.line)}</span>`;
+        `<b class="name" data-kind="label" style="font-size:${namePx}px">${esc(DOMAIN_JA[d])}</b>` +
+        `<span class="line" data-kind="note" style="font-size:${linePx}px"><span class="plain">${esc(DOMAIN_PLAIN_JA[d])}</span><span class="why"></span></span>`;
       box.append(row);
-      this.rows[d] = { row, chip: c, line: row.querySelector(".line") };
+      this.rows[d] = { row, chip: c, line: row.querySelector(".line"), why: row.querySelector(".why") };
     });
     this.linePx = linePx;
     this.lineRoom = C.w - 2 * BORDER_PX - 2 * PAD_PX;
   }
 
-  // A reason line in one line: a pixel at a time down to min_text_px; one that still does not
-  // fit drops its subject (the tests' names before " は"; the chip names the domain), and only
-  // then is it cut short with an ellipsis. Done at each frame (measured once the page's font
-  // is in), from the record's words each time, so the frame at t is always the same.
-  fitLine({ chip, line }) {
-    const shrink = (text) => {
-      line.textContent = text;
+  // The second line in one line: the plain name, and on a pale chip at its turn the record's
+  // reason after it; a pixel at a time down to min_text_px; a reason that still does not fit
+  // drops its subject (the tests' names before " は"; the chip names the domain), and only then
+  // is it cut short with an ellipsis. Done at each frame (measured once the page's font is
+  // in), from the record's words each time, so the frame at t is always the same.
+  fitLine({ chip, line, why }, on) {
+    const shrink = (reason) => {
+      why.textContent = reason ? `：${reason}` : "";
       let lp = this.linePx;
       line.style.fontSize = `${lp}px`;
       while (line.scrollWidth > this.lineRoom && lp > this.layout.min_text_px) line.style.fontSize = `${(lp -= 1)}px`;
     };
-    shrink(chip.line);
-    const cut = chip.line.indexOf(" は");
-    if (line.scrollWidth > this.lineRoom && !chip.lit && cut > 0) shrink(chip.line.slice(cut + 2).trim());
+    const reason = on && !chip.lit ? chip.reason : "";
+    shrink(reason);
+    const cut = reason.indexOf(" は");
+    if (line.scrollWidth > this.lineRoom && cut > 0) shrink(reason.slice(cut + 2).trim());
   }
 
   async loadDesign() {
@@ -237,12 +237,11 @@ export class CutN09 {
     const sp = this.spec;
     let lit = 0;
     for (const r of Object.values(this.rows)) {
-      const { row, chip, line } = r;
+      const { row, chip } = r;
       const on = t >= chip.at;
       // at its turn a chip lights (tests apply) or stays pale with its reason
       row.dataset.state = !on ? "wait" : chip.lit ? "lit" : "pale";
-      line.style.visibility = on && chip.line ? "visible" : "hidden";
-      if (on && chip.line) this.fitLine(r);
+      this.fitLine(r, on);
       if (on && chip.lit) lit += 1;
     }
     document.documentElement.dataset.n09Lit = String(lit);

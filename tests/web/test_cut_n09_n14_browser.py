@@ -8,8 +8,8 @@ data-kind, text sizes); a missing layout key is named on the page.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
 The records are intake_cut_fixture's (shape examples). The layout is the story test's copy
-with n09 and n14 as in the promo department's layout.json at their commit cce1262 (the
-sections the pages read, without the notes).
+with n09 and n14 as in the promo department's layout.json in their working tree on
+2026-11-03 (the sections the pages read, without the notes).
 """
 
 import copy
@@ -26,18 +26,19 @@ from tests.web.intake_cut_fixture import ASK_PLAIN, BATTERY_KG, BUILTIN, DROPPED
 from tests.web.test_browser import ENABLED, sync_playwright
 from tests.web.test_cut_story_browser import FIT, READ, limits_of, story_layout
 
-# layout.json n09 / n14 at the promo department's commit cce1262, without the notes
+# layout.json n09 / n14 as in the promo department's working tree on 2026-11-03 (cce1262 with
+# n14.view.fill and n09's label limit 8; not committed yet), without the notes
 N09_N14 = {
     "n09": {"duration_s": 5.6, "request": {"x": 96, "y": 96, "w": 1728, "h": 120, "title_px": 22, "text_px": 30},
             "view": {"x": 96, "y": 240, "w": 1100, "h": 646}, "chips": {"x": 1220, "y": 240, "w": 604, "h": 646, "text_px": 30, "row_gap": 16},
             "times": {"lead_s": 0.3, "request_s": 0.3, "chips_from_s": 2.2, "chip_step_s": 0.35},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
     "n14": {"duration_s": 9.7, "knowledge": {"x": 96, "y": 96, "w": 700, "h": 790, "title_px": 30, "text_px": 24},
-            "view": {"x": 820, "y": 96, "w": 1004, "h": 560}, "ask": {"x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28},
+            "view": {"x": 820, "y": 96, "w": 1004, "h": 560, "fill": 0.8}, "ask": {"x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28},
             "times": {"lead_s": 0.3, "drop_s": 2.2, "rule_s": 3.6, "hit_s": 5.0, "ask_s": 6.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
 }
-STORY = {"n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 7}},
+STORY = {"n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 8}},
          "n14": {"message": "渡したノウハウが、設計のチェックの規則になる"}}
 
 
@@ -50,7 +51,8 @@ def n09_n14_layout():
 
 # a test id or a rule id, as labels.js ID_RE
 ID_RE = re.compile(r"(?<![A-Za-z0-9])(?:[A-Z]{1,3}\d*-\d+|[A-Z]\d+[a-z]?)(?![A-Za-z0-9-])")
-N09_WORDS = ["荷重条件", "操安", "音振", "強度信頼性", "ROPS", "∧", "handling", "powertrain", "assembly"]
+# the domains' names (操安, 音振, ...) are shown as in the other cuts (the promo department, 2026-11-03)
+N09_WORDS = ["荷重条件", "ROPS", "∧", "handling", "powertrain", "assembly"]
 N14_WORDS = ["battery", "rule", "doc", "check", "mass_kg"]
 
 WANT = "林道を走れる 2 人乗りの小さな車両 (4 輪、積載 150 kg)"
@@ -67,17 +69,29 @@ OFF = [{"domain": "aero", "reason": "この製品の性質では当てはまる�
 ASM = ["H1", "H5"]
 # the order the chips light in: the picks, the domains left off, assembly
 ORDER = [p["domain"] for p in PICKS] + [o["domain"] for o in OFF] + ["assembly"]
-LIT = {p["domain"]: len(p["test_ids"]) for p in PICKS if p["test_ids"]} | {"assembly": len(ASM)}
-PALE = {"powertrain": ["試し方がまだ無いので、この実行では見ない"],  # the whole sentence does not fit at 18 px: its subject goes
-        "nvh": ["騒音 は試し方がまだ無いので、この実行では見ない"],
-        "aero": ["この製品の性質では当てはまる試験が無い"], "crash": ["この製品の性質では当てはまる試験が無い"]}
+LIT = {p["domain"] for p in PICKS if p["test_ids"]} | {"assembly"}
+# the chips' words: the domain's name as the other cuts (labels.js DOMAIN_JA), and under it the
+# domain in the viewers' words (DOMAIN_PLAIN_JA)
+NAME = {"handling": "操安", "powertrain": "動力", "aero": "空力", "crash": "衝突", "strength": "強度信頼性", "nvh": "音振", "thermal": "熱", "assembly": "組み立て"}
+PLAIN = {"handling": "倒れない・よけられる", "powertrain": "走る力", "aero": "風", "crash": "ぶつかったとき", "strength": "壊れない", "nvh": "揺れ・音", "thermal": "熱", "assembly": "組み立て"}
+# a pale chip's reason after its plain name: the record's sentence (ids out, 荷重条件の作り方 -> 試し方),
+# or, when that does not fit the line at 18 px, without its subject (the words before " は")
+PALE = {"powertrain": "アクチュエータの力と速さ は試し方がまだ無いので、この実行では見ない",
+        "nvh": "騒音 は試し方がまだ無いので、この実行では見ない",
+        "aero": "この製品の性質では当てはまる試験が無い", "crash": "この製品の性質では当てはまる試験が無い"}
+
+
+def pale_lines(d):
+    full = PALE[d]
+    short = full.split(" は", 1)[1].strip() if " は" in full else full
+    return [f"{PLAIN[d]}：{full}", f"{PLAIN[d]}：{short}"]
 
 N09_STATE = """() => {
   const rows = {};
   for (const el of document.querySelectorAll(".n09-chip")) {
     const line = el.querySelector(".line");
     rows[el.dataset.domain] = { state: el.dataset.state, name: el.querySelector(".name").textContent, nameKind: el.querySelector(".name").dataset.kind ?? null,
-      line: line.style.visibility === "visible" ? line.textContent : null };
+      line: line.textContent };
   }
   return { rows, want: document.querySelector(".n09-request .want")?.textContent ?? null, text: document.getElementById("stage").innerText,
            none: document.querySelector(".n09-view .none")?.textContent ?? null };
@@ -100,6 +114,7 @@ N14_STATE = """() => {
       return a.left >= v.left && a.right <= v.right && a.top >= v.top && a.bottom <= v.bottom; })(),
     ask: shown(document.querySelector(".n14-ask .q")) ? document.querySelector(".n14-ask .q").textContent : null,
     painted: window.hiraku.cut.painted ?? null,
+    extent: window.hiraku.cut.extent ?? null,
     text: document.getElementById("stage").innerText,
   };
 }"""
@@ -191,20 +206,21 @@ class CutN09N14Test(unittest.TestCase):
             # the request is the record's want, from the start
             self.assertEqual(c["want"], WANT, t)
             self.assertIsNone(c["none"], t)
-            # the seven domains' names are labels; assembly's chip is not a domain
-            self.assertEqual(sorted(d for d, r in c["rows"].items() if r["nameKind"] == "label"), sorted(set(ORDER) - {"assembly"}), t)
+            # the eight names are labels (story limit 8), as the other cuts name the domains
+            self.assertEqual({d: (r["name"], r["nameKind"]) for d, r in c["rows"].items()}, {d: (NAME[d], "label") for d in ORDER}, t)
             # the chips whose turn has come: lit (tests apply) or pale; the rest wait
             due = [d for k, d in enumerate(ORDER) if t >= T["chips_from_s"] + k * T["chip_step_s"]]
             for d, r in c["rows"].items():
                 if d not in due:
-                    self.assertEqual((r["state"], r["line"]), ("wait", None), (t, d))
+                    self.assertEqual((r["state"], r["line"]), ("wait", PLAIN[d]), (t, d))
                 elif d in LIT:
-                    self.assertEqual(r["state"], "lit", (t, d))
-                    # one name for each test the record lists
-                    self.assertEqual(len(r["line"].split("・")), LIT[d], (t, d, r["line"]))
+                    # lit: the plain name only (the tests are not listed)
+                    self.assertEqual((r["state"], r["line"]), ("lit", PLAIN[d]), (t, d))
                 else:
                     self.assertEqual(r["state"], "pale", (t, d))
-                    self.assertIn(r["line"], PALE[d], (t, d))
+                    self.assertIn(r["line"], pale_lines(d), (t, d))
+            # the lit chips are the record's picks with tests, and assembly with its tests
+            self.assertEqual(sorted(d for d, r in c["rows"].items() if r["state"] == "lit"), sorted(d for d in due if d in LIT), t)
         self.assertEqual(seen[0.0]["counts"].get("moving"), 1)  # the vehicle turning
 
     def test_n09_without_a_design_says_so(self):
@@ -247,6 +263,16 @@ class CutN09N14Test(unittest.TestCase):
             if hit:
                 self.assertTrue(c["tagInside"], t)
             self.assertEqual(c["ask"], ASK_PLAIN if t >= T["ask_s"] else None, t)
+            # the vehicle takes view.fill of the view in the binding direction (the larger of its
+            # shares of the width and the height), centred, inside the view
+            e, fill = c["extent"], self.layout["n14"]["view"]["fill"]
+            self.assertAlmostEqual(max((e["x1"] - e["x0"]) / e["w"], (e["y1"] - e["y0"]) / e["h"]), fill, delta=0.01, msg=t)
+            self.assertGreaterEqual(e["x0"], 0, t)
+            self.assertLessEqual(e["x1"], e["w"], t)
+            self.assertAlmostEqual((e["x0"] + e["x1"]) / 2, e["w"] / 2, delta=2, msg=t)
+            self.assertAlmostEqual((e["y0"] + e["y1"]) / 2, e["h"] / 2, delta=2, msg=t)
+            self.assertGreaterEqual(e["y0"], 0, t)
+            self.assertLessEqual(e["y1"], e["h"], t)
         file_text = seen[T["drop_s"] + 0.6]["cut"]["file"]
         self.assertIn(SAID, file_text)
 
@@ -254,9 +280,10 @@ class CutN09N14Test(unittest.TestCase):
         layout = n09_n14_layout()
         del layout["n14"]["times"]["hit_s"]
         del layout["n14"]["ask"]["text_px"]
+        del layout["n14"]["view"]["fill"]
         self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
         got = self.read("n14", f"run={self.n14}", [1.0], None, [])[1.0]
-        self.assertIn("layout.json の n14 に無い: ask.text_px, times.hit_s", got["err"])
+        self.assertIn("layout.json の n14 に無い: view.fill, ask.text_px, times.hit_s", got["err"])
 
 
 if __name__ == "__main__":
