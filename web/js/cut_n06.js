@@ -271,7 +271,13 @@ export class CutN06 {
       const why = document.createElement("span");
       why.className = "why";
       why.style.color = sp.overlay.color;
-      why.textContent = words.join("・");
+      // a line breaks only between phrases (after が, を and ・), never inside a word ("超え|る")
+      for (const part of words.join("・").split(/(?<=[がを・])/)) {
+        const ph = document.createElement("span");
+        ph.style.display = "inline-block";
+        ph.textContent = part;
+        why.append(ph);
+      }
       label.append(mark, " ", why);
     } else label.textContent = name;
     tile.el.append(label);
