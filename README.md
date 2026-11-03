@@ -1,8 +1,8 @@
 # HIRAKU
 
-作りたいものの要件を渡すと、Claude のエージェントたちが分野ごとに結果を手計算で予測してから CAE で解析し、予測と照らし合わせながら設計を直していくアプリです。(作成中)
+作りたいものの要件を渡すと、Claude のエージェントたちが分野ごとに結果を手計算で予測してから CAE で解析し、予測と照らし合わせながら設計を直していくアプリです。
 
-HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design. Work in progress.
+HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design.
 
 Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作っています。
 
@@ -94,7 +94,12 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 
 ### hooks
 
-hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK_RULES`、`docs/contract.md`)。中身は `hiraku/tools/rules.py`、SDK への組み込みは `hiraku/agent/hooks.py`。
+hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK_RULES`、`docs/contract.md`)。中身は `hiraku/tools/rules.py`、SDK への組み込みは `hiraku/agent/hooks.py`、Claude Code のプラグインでのつなぎは [plugins/hiraku/hooks/hooks.json](plugins/hiraku/hooks/hooks.json)。
+
+なぜ要ったか:
+- 予測を解析のあとに書けば、結果に合わせた予測になる。手計算で先に予測し、それと照らし合わせるのが確かめの芯なので、順番をプロンプトに頼まずに止める (HK1)。
+- 判定がそろう前に終わらせない (HK4)。ただし数え方も要った: 2026-11-03 01:31 の本物の運転 (API キー) で、まとめ役が役を後ろで走らせたまま「報告を待ちます」と番を終えるたびに HK4 が数え、3 回で上限に達して、役がまだ動いている 71 秒で打ち切られた。役が走っている間は数えないようにした。
+- レイアウトや軽い計算で直しが要る版に重い有限要素を回すと、時間が無駄になり、数も動く。軽い段から確かめ、赤が出たらそこで設計を直す順番にした (HK5、作者の決まり)。
 
 | ID | hook | 止めるもの・守らせるもの |
 |---|---|---|
@@ -102,6 +107,7 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 | HK2 | PreToolUse | 答えの分かっている例に通っていない道具の `analyze` を止める (同) |
 | HK3 | PreToolUse | 原因の書かれていない食い違いがある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
 | HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (まとめ役 3 回、役ごとに 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
+| HK5 | PreToolUse | 軽い計算から確かめる。その版で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) の道具で確かめる荷重条件に赤か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
 
 - 止めたときは `hook.denied` か `hook.blocked_stop` の event を出す。理由の文には「足りないもの」と「次に呼ぶもの」を書き、それが Claude に返る (`hooks.py`、`rules.py` の冒頭)。
 - 道具の関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
@@ -205,7 +211,7 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `tests/` の下で `def test_` を数えると、103 ファイルに 1,315 個ある (このブランチ lead-merge-trial、2fb6f9b の時点)。
+  - `tests/` の下の試験の関数 (`def test_`) は、149 ファイルに 1,909 個ある (全部の部署を合わせた試しの取り込み fdc7948 の時点。文字列の中にある 1 つ、`tests/verification/test_run_tests.py` が一時の試験を書くための見本は数えない)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
@@ -268,7 +274,9 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 
 - 空の HDRI「Kloofendal 48d Partly Cloudy (Pure Sky)」1k (https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky)
 - 地面の質感「Dirt Floor」と「Brushed Concrete」の 1k の JPG (diff・nor_gl・arm) (https://polyhaven.com/a/dirt_floor、https://polyhaven.com/a/brushed_concrete)
-- 置き場所は `web/assets/polyhaven/`。一覧はそのフォルダの `NOTES.md`
+- 地平の見える空の HDRI「Kloofendal 48d Partly Cloudy」1k (https://polyhaven.com/a/kloofendal_48d_partly_cloudy)
+- 砂利道の質感「Gravel Road」の 1k の JPG 3 枚 (https://polyhaven.com/a/gravel_road)
+- 置き場所は `web/assets/polyhaven/` (合計 10.3 MB、1 ファイルの最大 1.64 MB)。一覧はそのフォルダの `NOTES.md`
 
 ### 出典の本文を確かめた値
 
@@ -277,6 +285,8 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 | 角パイプ・丸パイプの規格の寸法 (角 112 種・丸 128 種) | JIS G 3466 の表 5・6、JIS G 3444 の表 6 (2015 年版と改正)。行の数と 29 の寸法を表の本文で確かめた (品質保証部、2026-11-03)。2021 年と 2025 年の版は読んでいない | `data/sections/standard_tubes.json` |
 | 電池の電圧 51.2 V (LiFePO4 16 直列 × 3.2 V) | EVE LF50K の仕様書 (LF50K-73103 Ver. D) の 3 節の表の 2 行目、セルの公称電圧 3.2 V (https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf、2026-11-03 に本文を確認)。16 直列はこの車の設計 | `hiraku/designgen/ladder_4w.py` |
 | ダブルレーンチェンジのコース (区間 15・30・25・25・15・15 m、横 3.5 m、車線の幅 1.1 W + 0.25 m・1.2 W + 0.25 m・1.3 W + 0.25 m。W はミラーを除く車幅) | ISO 3888-1:2018 の表 1 (iTeh の公開見本 https://cdn.standards.iteh.ai/samples/67973/daa839ed4aca420788d9b4a51cd6cc95/ISO-3888-1-2018.pdf、2026-11-03 に本文を確認) | `hiraku/solvers/k2_vehicle/shelf/lane_change.py` |
+| 製造業の企業のうち中小企業の割合 99 % (動画の N08b) | 中小企業庁「2025 年版 中小企業白書」付属統計資料 1 表 (産業別規模別企業数、2021 年 6 月時点) の製造業の行。企業 337,490 のうち中小企業 335,552 (99.4 %)。https://www.chusho.meti.go.jp/pamflet/hakusyo/2025/chusho/excel/f1.xlsx (2026-11-02 に表で確かめた) | `promo/screens/n08b.html` |
+| 自社に CAE ツールを導入している技術者の割合: 従業員 100 人以内 16.0 %・1 万人超 67.9 % (動画の N08b) | 株式会社メイテックの発表「CAEツールの導入率は43.4％。1万人超の企業では67.9％が導入済み」(2017-09-26、「fabcross for エンジニア」調べ、製造系エンジニア 500 人のインターネットリサーチ、2017-08-25)。日刊工業新聞の企業リリース https://www.nikkan.co.jp/releases/view/1612 (2026-11-03 に原文で確かめた)。会社の数の割合ではなく、答えた技術者の割合 | `promo/screens/n08b.html` |
 | 静的な安定の基準 T/2h ≥ 1.0 (空車) | 79 FR 68981「The value of Kst for a vehicle at curb weight (without occupants) is required to be no less than 1.0.」。68982 で ROHVA 1-2011・B71.9-2012 の値とし、68968 で SSF = T/2H と定める (https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm、2026-11-03 に本文を確認) | `hiraku/catalog/builders/k2_tests.py` |
 | 横転の保護枠 (R4) の荷重: 横 1.75 M J・後ろ 1.4 M J・上から 20 M N、後ろの力は上の梁の幅の 1/6 の所 (M = 500 kg を入れて 875 J・700 J・10 kN)。トラクターの規格を借りたもので、この車の認証ではない | OECD Code 4 (トラクターの保護枠の静的試験、2026 年 2 月版) の 3.5.2・3.5.3・3.6 (https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf、2026-11-03 に本文を確認)。M = 500 kg はカタログの値から逆に出した仮定 | `hiraku/catalog/builders/analysis.py` |
 

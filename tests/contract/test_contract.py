@@ -234,6 +234,37 @@ class IntakeTest(unittest.TestCase):
         bad = {**part, "finish": "shiny"}
         self.assertNotEqual(contract.errors("design", {**des, "parts": [bad, *des["parts"][1:]]}), [])
 
+    def test_unsupported_load_verdict(self):
+        ver = load("verdict.json")
+        base = {k: v for k, v in ver.items() if k not in ("comparison_id", "basis", "margin")}
+        ok = {**base, "analysis_id": "ana-0001", "basis": "unsupported_load", "quantity": "unsupported_load",
+              "value": {"value": 2, "unit": "1"}, "op": "<=", "limit": {"value": 0, "unit": "1"}, "pass": False, "margin_pct": None}
+        self.assertEqual(contract.errors("verdict", ok), [])
+        self.assertNotEqual(contract.errors("verdict", {k: v for k, v in ok.items() if k != "analysis_id"}), [])
+        self.assertNotEqual(contract.errors("verdict", {**ok, "pass": True}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: v for k, v in ver.items() if k != "comparison_id"}), [])
+
+    def test_requirements_stop_after(self):
+        req = load("requirements_file.json")
+        self.assertEqual(contract.errors("requirements_file", {**req, "stop_after": "picks"}), [])
+        self.assertNotEqual(contract.errors("requirements_file", {**req, "stop_after": "design"}), [])
+        ev = next(e for e in events() if e["kind"] == "run.started")
+        self.assertEqual(contract.errors("project", {**ev["data"], "stop_after": "picks"}), [])
+
+    def test_hearing_by_claude(self):
+        req = load("requirements_file.json")
+        self.assertEqual(contract.errors("requirements_file", {**req, "hearing": "claude"}), [])
+        self.assertNotEqual(contract.errors("requirements_file", {**req, "hearing": "person"}), [])
+        ev = next(e for e in events() if e["kind"] == "run.started")
+        self.assertEqual(contract.errors("project", {**ev["data"], "hearing": "claude"}), [])
+
+    def test_rule_questions_in_the_hearing(self):
+        q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
+        self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {}), [])
+        self.assertEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "revise_design"}]}), [])
+        self.assertNotEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "ignore"}]}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
