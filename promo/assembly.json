@@ -103,8 +103,7 @@
    "cuts": [
     "N07"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N07.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n07_app_1080p.mp4"
   },
   {
    "cuts": [
@@ -179,15 +178,13 @@
    "cuts": [
     "N15"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N15.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n15_app_1080p.mp4"
   },
   {
    "cuts": [
     "N16"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N16.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n16_app_1080p.mp4"
   },
   {
    "cuts": [
