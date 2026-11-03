@@ -49,6 +49,7 @@ class Net:
         self.supports: dict[str, Record] = {s["id"]: s for s in design.get("supports", [])}
         self.frame: set[str] = {m["id"] for m in design.get("members", [])} | {n["id"] for n in design.get("nodes", [])}
         self.frame |= {pid for pid, p in self.parts.items() if p.get("kind") == "frame"}
+        self.member_part: dict[str, str | None] = {m["id"]: m.get("part") for m in design.get("members", [])}
         self.adj: dict[str, list[tuple[str, str | None]]] = {}
         self.linked = False  # does any part say what it is joined to
         for p in self.parts.values():
@@ -89,8 +90,8 @@ class Net:
                     queue.append(m)
         return seen
 
-    def reaches_frame(self, node: str, avoid: set[str] | None = None) -> bool:
-        return bool(self.reach([node], avoid=avoid) & self.frame)
+    def reaches_frame(self, node: str, avoid: set[str] | None = None, frame: set[str] | None = None) -> bool:
+        return bool(self.reach([node], avoid=avoid) & (self.frame if frame is None else frame))
 
 
 def _hit(part_id: str, message: str, **values: float) -> Record:
@@ -200,8 +201,10 @@ def rops(net: Net) -> Result:
         return [], [_hit(WHOLE, "乗員を囲む転倒保護の枠 (ROPS。system が rops の部品) がありません。足して、骨組みにつないでください", rops=0)], []
     if not net.linked:
         return bars, [], _missing_links(*bars)
-    hits = [_hit(r, f"転倒保護の枠 {r} が骨組みにつながっていません。骨組みまで connects_to でつないでください", attached=0)
-            for r in bars if not net.reaches_frame(r)]
+    own = {m for m, p in net.member_part.items() if p in bars}  # the bar's own tubes are not the frame it stands on
+    hits = [_hit(r, f"転倒保護の枠 {r} が骨組みにつながっていません。枠の部材 ({_ends(own)}) ではなく、枠が立つ骨組みの部材か節まで "
+                    "connects_to でつないでください", attached=0)
+            for r in bars if not net.reaches_frame(r, frame=net.frame - own)]
     return bars, hits, []
 
 

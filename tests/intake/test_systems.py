@@ -149,6 +149,13 @@ class MissingPartsTest(unittest.TestCase):
         self.assertEqual((hit_ids(rec), rec["targets"]), (["design"], []))
         self.assertIn("ROPS", rec["hits"][0]["message"])
         self.assertEqual(hit_ids(check("SY-06", unlink(vehicle(), "rops", "rail_R"))), ["rops"])  # there, not joined
+        d = vehicle()  # a bar made of members of its own: joined to its own tubes is not joined to the frame
+        d["members"].append({"id": "hoop", "part": "rops"})
+        bar = next(p for p in d["parts"] if p["id"] == "rops")
+        bar["connects_to"] = [link("hoop", "load", "weld")]
+        self.assertEqual(hit_ids(check("SY-06", d)), ["rops"])
+        bar["connects_to"].append(link("rail_L", "load", "weld"))
+        self.assertEqual(check("SY-06", d)["hits"], [])
 
     def test_restraints(self):
         self.assertEqual(hit_ids(check("SY-05", without(vehicle(), "belt_L"))), ["seat_L"])
