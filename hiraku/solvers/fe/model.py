@@ -102,12 +102,21 @@ class Equation:
 
 @dataclass
 class Constraint:
-    """A named group of equations and the nodes that must carry rotations for it."""
+    """A named group of equations and the nodes that must carry rotations for it.
+
+    `maker` (optional) makes the equations once the DOF counts are known: maker(counts) -> [Equation]
+    (e.g. a rigid link ties a slave's rotations only when the slave has them). Such a constraint lists
+    every node it touches in `nodes` and the ones that need rotations in `needs_rotation`.
+    """
 
     name: str
-    equations: list
+    equations: list = field(default_factory=list)
     needs_rotation: tuple = ()
     nodes: tuple = ()  # every node the constraint touches (for connectivity checks)
+    maker: object = None
+
+    def make(self, counts: np.ndarray) -> list:
+        return list(self.equations) + (list(self.maker(counts)) if self.maker is not None else [])
 
 
 # ------------------------------------------------------------------ the model
@@ -241,12 +250,13 @@ class FEModel:
             out[lay.dof(n, k)] = v
         return out
 
-    def equations(self) -> list:
-        return [eq for c in self.constraints for eq in c.equations]
+    def equations(self, counts: np.ndarray | None = None) -> list:
+        counts = self.dof_counts() if counts is None else counts
+        return [eq for c in self.constraints for eq in c.make(counts)]
 
     def constraint_matrix(self, lay: "Layout") -> tuple[sp.csr_matrix, np.ndarray]:
         """C (m x n_dof) and g (m,) of every constraint equation (fixed DOFs not included)."""
-        eqs = self.equations()
+        eqs = self.equations(lay.counts)
         r, c, v = [], [], []
         for i, eq in enumerate(eqs):
             for node, comp, coef in eq.terms:
@@ -283,7 +293,7 @@ class FEModel:
         for c in self.constraints:
             for eq in c.equations:
                 join([t[0] for t in eq.terms])
-            join(list(c.nodes))
+            join(list(c.nodes))  # lazy constraints list their nodes here
         used = self.dof_counts() > 0
         roots = np.array([find(i) for i in range(n)])
         labels = -np.ones(n, int)
@@ -511,7 +521,7 @@ class StaticSolver:
         self.layout = lay = model.layout()
         self.K = model.stiffness(lay)
         self.fixed = model.fixed_dofs(lay)
-        eqs = model.equations()
+        eqs = model.equations(lay.counts)
         t0 = time.perf_counter()
         if check_rigid:
             from .precheck import rigid_body_check  # local import: precheck uses this module
