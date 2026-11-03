@@ -35,6 +35,10 @@ Load case params.load_kind picks the loads:
   (point R), on the first thing outboard of that point (a member or a part); occupant_push_deflection
   along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open.
 
+Every load kind that solves gives, next to max_stress (the largest von Mises stress, whatever the member's
+material), max_utilisation: the largest over the members of stress / (that member's own material yield /
+params.safety_factor), where = that member, and allowable_stress (MPa) of that member. At most 1 is within.
+
 Units: N, mm, MPa, kg.
 """
 
@@ -101,6 +105,7 @@ ASSUMPTIONS = [
     "体の当たる物 (座席・荷台) に掛ける",
     "フレームは各支持の frame_node で上下を止め、前後・横は 2 点で止める (タイヤは硬い)",
     "線形の静的解析。弾性の変形を、永久の変形の上限の見積もりとして使う (降伏しない範囲)",
+    "max_utilisation = 各部材の応力 / (その部材の材料の降伏 / params.safety_factor) の最大。部材ごとに自分の材料で見る",
 ]
 
 
@@ -678,7 +683,7 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
             top = max(defl, key=defl.get)
             results.append(result("grip_deflection", defl[top], "mm", hid))
             results += [result(f"grip_deflection.{n}", v, "mm", hid) for n, v in defl.items()]
-            results += _stress_results(lp, Us, lay)
+            results += _stress_results(lp, Us, lay, safety_factor=float(values.get("safety_factor") or 1.0))
             effects.append({"name": f"握る点のいちばん大きな動きは {top} の向き", "value": defl[top], "unit": "mm"})
         vectors += [{"kind": "load", "at": hid, "origin_mm": [float(v) for v in point],
                      "vector_N": [float(v) for v in F_hand * d]} for d in dirs.values()]
@@ -707,7 +712,7 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
             top = max(defl, key=defl.get)
             results.append(result("pedal_deflection", defl[top], "mm", top))
             results += [result(f"pedal_deflection.{pid}", v, "mm", pid) for pid, v in defl.items()]
-            results += _stress_results(lp, Us, lay)
+            results += _stress_results(lp, Us, lay, safety_factor=float(values.get("safety_factor") or 1.0))
     elif kind == "inertia":
         loads, names = _inertia_loads(design, lp, values, on_part, vectors)
         Us, lay = solve_cases(lp, loads)
@@ -730,7 +735,7 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         if where is not None:
             results.append(result("max_part_deflection", worst, "mm", where))
             effects.append({"name": f"部品のいちばん大きな動きは {where} ({combo})", "value": worst, "unit": "mm"})
-        results += _stress_results(lp, Us, lay, names)
+        results += _stress_results(lp, Us, lay, names, float(values.get("safety_factor") or 1.0), effects)
     elif kind == "push":
         results += _push(design, lp, values, on_part, vectors, effects)
     else:
@@ -760,13 +765,38 @@ def _where(ids: list[str]) -> str | None:
     return ", ".join(ids[:MAX_WHERE]) + (f" (ほか {len(ids) - MAX_WHERE})" if len(ids) > MAX_WHERE else "")
 
 
-def _stress_results(lp: LoadPathModel, Us: list[np.ndarray], lay, names: list[str] | None = None) -> list[Record]:
+def utilisations(lp: LoadPathModel, stress: dict[str, float], safety_factor: float) -> dict[str, tuple[float, float]]:
+    """{member: (utilisation, allowable MPa)}: von Mises stress / (the member's own material yield / safety_factor).
+    Members whose material has no yield_MPa are left out."""
+    out = {}
+    for mid, s in stress.items():
+        y = lp.props[mid]["material"].get("yield_MPa")
+        if y is None or float(y) <= 0.0:
+            continue
+        allow = float(y) / safety_factor
+        out[mid] = (s / allow, allow)
+    return out
+
+
+def _stress_results(lp: LoadPathModel, Us: list[np.ndarray], lay, names: list[str] | None = None,
+                    safety_factor: float = 1.0, effects: list | None = None) -> list[Record]:
     worst: dict[str, float] = {}
     for U in Us:
         for mid, v in member_stresses(lp, U, lay).items():
             worst[mid] = max(worst.get(mid, 0.0), v)
     top = max(worst, key=worst.get)
-    return [result("max_stress", worst[top], "MPa", top)]
+    out = [result("max_stress", worst[top], "MPa", top)]
+    util = utilisations(lp, worst, safety_factor)
+    if util:
+        u = max(util, key=lambda m: util[m][0])
+        out += [result("max_utilisation", util[u][0], "1", u), result("allowable_stress", util[u][1], "MPa", u)]
+        if effects is not None:
+            mat = lp.props[u]["material"]
+            effects.append({"name": f"許しにいちばん近い部材は {u}: 応力 {worst[u]:.1f} MPa / 許し {util[u][1]:.1f} MPa "
+                                    f"({mat.get('name', '?')} の降伏 {float(mat['yield_MPa']):g} MPa / 安全率 "
+                                    f"{safety_factor:g}{'' if mat.get('verified') else '、降伏は確かめていない'})",
+                            "value": util[u][0], "unit": "1"})
+    return out
 
 
 def _inertia_loads(design: Record, lp: LoadPathModel, values: dict, on_part, vectors: list) -> tuple[list, list[str]]:
@@ -876,7 +906,7 @@ def _push(design: Record, lp: LoadPathModel, values: dict, on_part, vectors: lis
         top = max(defl, key=defl.get)
         out_results.append(result("occupant_push_deflection", defl[top], "mm", top))
         out_results += [result(f"occupant_push_deflection.{k}", v, "mm", k) for k, v in defl.items()]
-        out_results += _stress_results(lp, Us, lay)
+        out_results += _stress_results(lp, Us, lay, safety_factor=float(values.get("safety_factor") or 1.0))
     return out_results
 
 
@@ -984,7 +1014,38 @@ def load_path_known_answers() -> list[Record]:
                                 "(r the tube's radius of gyration, 15.5 mm)"))
 
     out.append(plate_strip_known_answer())
+    out += utilisation_known_answers()
     return out
+
+
+def utilisation_known_answers() -> list[Record]:
+    """A cantilever of two members of different materials: the stronger root has the larger stress, the weaker tip
+    the larger utilisation."""
+    L, P, sf, y_root, y_tip = 1000.0, 100.0, 1.5, 400.0, 100.0
+    sq = {"shape": "rect_tube", "dims_mm": {"b": 40.0, "h": 40.0, "t": 2.0}}
+    sec = sections.properties(sq)
+    d = _bare({"A": (0.0, 0.0, 0.0), "M": (L / 2, 0.0, 0.0), "B": (L, 0.0, 0.0)}, [("root", "A", "M"), ("tip", "M", "B")],
+              [], sq)
+    d["materials"] = {"strong": dict(_steel(), yield_MPa=y_root, name="strong"),
+                      "weak": dict(_steel(), yield_MPa=y_tip, name="weak")}
+    d["members"][0]["material"], d["members"][1]["material"] = "strong", "weak"
+    lp = build(d, [], holds={"A": "all"})
+    F = np.zeros((len(lp.model.nodes), 6))
+    F[lp.node_of["B"], 2] = -P
+    (U,), lay = solve_cases(lp, [F])
+    r = {x["quantity"]: x for x in _stress_results(lp, [U], lay, safety_factor=sf)}
+    Z = sec["Iz"] / 20.0  # the square tube's section modulus (corner 20 mm from the axis)
+    s_root, s_tip = P * L / Z, P * (L / 2) / Z  # the bending moment at each member's root, over Z
+    case = (f"a 1 m cantilever of a square tube 40x40x2, root half yield {y_root:g} MPa, tip half {y_tip:g} MPa, "
+            f"{P:g} N at the tip, safety factor {sf:g}")
+    src = ("utilisation = M / Z / (yield / sf) at each member's root (M = P x from the tip); the root has twice the "
+           "stress, the tip a quarter of the yield")
+    return [check_record(case, "max_stress", s_root, r["max_stress"]["value"], "MPa", 1e-6, "sigma = P L / Z at the root"),
+            check_record(case, "max_utilisation", s_tip * sf / y_tip, r["max_utilisation"]["value"], "1", 1e-6, src),
+            check_record(case, "max_utilisation_is_the_tip", 1.0, float(r["max_utilisation"]["where"] == "tip"), "1",
+                         0.0, "the tip member, not the root (where the stress is largest), governs"),
+            check_record(case, "allowable_stress", y_tip / sf, r["allowable_stress"]["value"], "MPa", 1e-9,
+                         "the tip's own yield / sf")]
 
 
 def plate_strip_known_answer() -> Record:
@@ -1041,6 +1102,8 @@ PUSH_FORCE = Param("push_force", "N", "outward push at each occupant's hip and s
 HAND_PART = Param("hand_part", None, "the hand control's part id (without it: the first part of a hand control kind)")
 FOOT_PARTS = Param("foot_parts", None, "comma-separated pedal part ids (without it: every part of a pedal kind)")
 TOUCH = Param("touch", "mm", "a part touches what is at most this far from its box", default=TOUCH_MM)
+SAFETY_FACTOR = Param("safety_factor", "1", "each member's allowable stress is its own material's yield over this "
+                      "(max_utilisation) (Q61)", default=1.0)
 
 
 class LoadPath(BuiltinTool):
@@ -1051,7 +1114,7 @@ class LoadPath(BuiltinTool):
     tests = ["R7", "R8"]
     formulas = ["load_path.control_deflection", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
-                        PUSH_FORCE, HAND_PART, FOOT_PARTS, LOADING)
+                        PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH,)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
     # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
