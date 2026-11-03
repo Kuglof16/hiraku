@@ -51,28 +51,38 @@ offroad-4w:
   # The designer's revisions, one per round, used when a tile comes out red
   # (revise_design: the variables of hiraku.designgen, absolute values). With `fit: driver` the seat,
   # steering and pedals are searched by code on the design with the entry's changes
-  # (hiraku.designgen.driver_fit, `fit_time_s` its time limit) and added to them.
+  # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
   revise:
     # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
+      fit_evals: 150  # designs the fit builds and measures: a fixed count, so every machine finds the same place
+      # R8 and R7: the parts and the controls get a load path (the analysis department's set, load_path)
+      choices: {part_mounts: brackets, pedal_mount: post, side_guard: bars_net}
       changes:
         track: {value: 1220, unit: mm}
+        # the side guard's posts stand at rollbar_width / 2 and must clear the floor of the wider track: the smallest
+        # width designgen builds, in 5 mm steps from 1200 (1200 refused: side_post_LS2_1 21.4 mm into the floor)
+        rollbar_width: {value: 1265, unit: mm}
+        # the side guard's foot arm needs its own section, or the shell mesh joins it with cross_S1 into one tube
+        # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246)
+        rollbar_foot_h: {value: 60, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
         H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す
       source: >-
-        the demo scripted run 20261104-061935-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002
-        (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_slide 158.5 mm):
-        H1 ver-0004 (30 deg), H3 ver-0005 (knee_room 10.0 mm), ver-0006 (knee_angle_room 28.26 mm)
+        the demo scripted run 20261104-084022-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002
+        (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_height 233.5 mm,
+        steering_column_angle 20 deg and seat_slide 300 mm, the last two on a bound of their range): H1 ver-0004 (30 deg),
+        H3 ver-0005 (knee_room 2.06 mm), ver-0006 (knee_angle_room 60.57 mm); R8 ver-0009..0011 and R7 ver-0012..0013 pass
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 13, unit: kW}
+        motor_peak_power: {value: 15, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: >-
-        the demo scripted run 20261104-061935-offroad-4w-scripted, version 2: P3 ver-0009 (time_to_speed 7.004 s against 6 s); version 3 with this change
-        (13 kW): P3 ver-0015 (5.935 s). Before the plates' catalogue mass, 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
+        the demo scripted run 20261104-084022-offroad-4w-scripted, version 2: P3 ver-0014 (time_to_speed 7.315 s against 6 s); version 3 with this change
+        (15 kW): P3 ver-0025 (5.842 s). On version 3 of run 20261104-080230 the launch tool gave 6.184 s at 13 kW and 5.986 s at 14 kW
   steps:
     - &p1_step
       load_case: P1-step100

@@ -302,7 +302,7 @@ requirements:
     basis: >-
       the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this
       arc counts too (assumption)
-tests: [P1, R1, N1, H1, H3, P3]
+tests: [P1, R1, N1, R8, R7, H1, H3, P3]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 2  # HK5: the layout first, then the motor (data/catalog/scripted.yaml)
 cost_limit_usd: 2.0
