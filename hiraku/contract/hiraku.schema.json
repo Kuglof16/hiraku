@@ -695,6 +695,21 @@
             }
           },
           "description": "What this part is joined to, so code can follow a chain end to end (motor to driven wheels, steering wheel to knuckles)."
+        },
+        "material": {
+          "type": "string",
+          "description": "Key into design.materials (as for members): what the part is made of, for its mass, strength and look."
+        },
+        "finish": {
+          "enum": [
+            "painted",
+            "powder_coat",
+            "bare",
+            "anodized",
+            "galvanized",
+            "molded"
+          ],
+          "description": "Surface of the part as made (for the look and for corrosion notes); missing: as its material comes."
         }
       }
     },
