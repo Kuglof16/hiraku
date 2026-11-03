@@ -34,6 +34,8 @@ SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # tests that add whole script
 # every requirements file with HIRAKU_SLOW_TESTS=1; otherwise the video requirements only (one run)
 REQUIREMENTS = [r for r in sorted((ROOT / "data" / "requirements").glob("*.yaml"))
                 if SLOW or r.name == "offroad-4w-video.yaml"]
+CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted way to predict a load case)
+NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 
 
 def _errors(run: Path, recompute: bool = True) -> list[str]:
@@ -86,16 +88,22 @@ class ScriptedRunCommand(unittest.TestCase):
         # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done.
         # A run with load cases past the limit (load_case_id ending -beyond, whose verdicts are meant to
         # fail) does not end done: it stops at round_limit, or not_judged while a load case is left
-        # without a verdict.
+        # without a verdict. A *.claude.yaml file is a scene only Claude can run (no tool or scripted
+        # step for its load cases): the scripted run says so and stops not_judged.
         for name, (run, proc) in self.runs.items():
             with self.subTest(requirements=name):
                 self.assertMadeRun(run, proc)
                 project = json.loads((run / layout.PROJECT_FILE).read_text(encoding="utf-8"))
                 with (run / layout.EVENTS_FILE).open(encoding="utf-8") as f:
-                    fin = [e for e in map(json.loads, f) if e["kind"] == "run.finished"]
+                    events = [json.loads(s) for s in f if s.strip()]
+                fin = [e for e in events if e["kind"] == "run.finished"]
                 self.assertEqual(len(fin), 1, f"stdout: {proc.stdout[-800:]}")
                 why = f"{project.get('stop_reason')}; stdout: {proc.stdout[-800:]}"
-                if any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
+                if name.endswith(CLAUDE_ONLY):
+                    self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                    said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
+                    self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+                elif any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
                     self.assertEqual(project["status"], "stopped", why)
                     self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
                 else:
@@ -120,7 +128,8 @@ class ScriptedRunCommand(unittest.TestCase):
                 self.assertMadeRun(run, proc)
                 lines = cr.run_effects(run)
                 denials = [s for s in lines if "_prediction_first" in s or "_cause_before_continue" in s]
-                self.assertTrue(denials, "\n".join(lines))
+                if not name.endswith(CLAUDE_ONLY):  # the scripted plan stages denials; a Claude-only file stops first
+                    self.assertTrue(denials, "\n".join(lines))
                 self.assertEqual([s for s in denials if "not the" in s or "nothing recorded" in s], [], "\n".join(lines))
 
 
