@@ -88,10 +88,17 @@ ZU_FINGERPRINT = """async (events) => {
   for (const [id, info] of Object.entries(b.members)) out["member:" + id] = mesh(info.mesh);
   return out;
 }"""
+# Taken again with the merge of claude/screen-cut-real (shapes.js: shapes the design does not
+# list are not drawn — pedals and column inside the steering box, battery terminals, the
+# reducer box beside the motor, the nose's bumper bar; the suspension from its mounting
+# points; rods as cylinders in their boxes; a part's pieces of one material merged). Against
+# claude/dept-screen-812e37 at 2454b0c only those parts differ (aux, battery, cargo,
+# controller, driveshafts, front_body, motor, seats, steering parts, suspensions, tie rods);
+# no part is left out.
 ZU_PRINT = {
-    "offroad-4w-v1": "85a522669957dcaa482d0c8617a509f6a6e125552a4ac980cee3c95e2e7dab20",
-    "offroad-4w-nodriveshaft": "73df093e3aef3b2b79df5e824c7ec458b64c21c6a1ed8d552298807b4e9e08e8",
-    "offroad-4w-tallcargo": "1c5cd4ef2bd913c86679e9dfd0c13844e1b5ad5ac60c14001a4d2a2d5b208508",
+    "offroad-4w-v1": "9657a802938e0093608e3deb3c30bb9835c9ee8eac69ec5755195e9c21c248c0",
+    "offroad-4w-nodriveshaft": "93866f9833ad978ca494f371b1b4b5bb72501ef53bfecfedd509afa479816b7e",
+    "offroad-4w-tallcargo": "88cb5d481bdb88b21b014587765257ae42053a2b9048267ddac09f7daf56a747",
 }
 
 

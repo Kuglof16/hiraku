@@ -26,7 +26,7 @@ import { GREEN, PANEL_BORDER_PX, RED, panel, requestedSetting, showFrom, spread,
 import { esc, fmtVU, formulaInputName, quantityName, ruleOf } from "./labels.js";
 import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 import { motionOf } from "./series.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 
 const BOX = ["x", "y", "w", "h", "title_px", "text_px"];
 export const N11_KEYS = [
@@ -113,7 +113,7 @@ export class CutN11 {
   }
 
   makeView() {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n11");
     v.setDesign(this.s.designs[this.ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(this.lc?.params?.loading ?? null);
     this.motion = motionOf(this.ana);
