@@ -58,7 +58,7 @@ class RainflowTest(unittest.TestCase):
 class RoadDamageFormulaTest(unittest.TestCase):
     BASE = dict(sigma_w=q(22.0, "MPa"), W=q(1700.0, "N"), m_u=q(22.0, "kg"), k_s=q(20.0, "N/mm"), zeta=q(0.3, "1"),
                 k_t=q(150.0, "N/mm"), G_d=q(256e-6 * 1e9, "mm^3"), v=q(40.0, "km/h"), d=q(5000.0, "km"),
-                FAT=q(71.0, "MPa"), m=q(3.0, "1"), N_knee=q(1e7, "1"), m2=q(22.0, "1"))
+                FAT=q(71.0, "MPa"), m=q(3.0, "1"), N_knee=q(1e7, "1"))
 
     def ev(self, **over):
         return {k: v["value"] for k, v in solvers.formula_registry().evaluate(
@@ -83,7 +83,7 @@ class FourWheelFormulaTest(unittest.TestCase):
                     sigma_fa=q(0.0, "MPa"), sigma_fb=q(0.0, "MPa"),
                     W_f=b["W"], m_uf=b["m_u"], k_sf=b["k_s"], zeta_f=b["zeta"], W_r=b["W"], m_ur=b["m_u"], k_sr=b["k_s"],
                     zeta_r=b["zeta"], k_t=b["k_t"], L=q(1700.0, "mm"), G_d=b["G_d"], v=b["v"], d=b["d"], FAT=b["FAT"],
-                    m=b["m"], N_knee=b["N_knee"], m2=b["m2"])
+                    m=b["m"], N_knee=b["N_knee"])
         return {k: v["value"] for k, v in solvers.formula_registry().evaluate(
             "fatigue.road_damage_four_wheels", {**base, **over})["outputs"].items()}
 
