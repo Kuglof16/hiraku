@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 
 from hiraku.solvers.fe import FEModel, StaticSolver, precheck, resultant
-from hiraku.solvers.fe.connect import distributing_link, rbe3_forces, rigid_link
+from hiraku.solvers.fe.connect import Spring, distributing_link, rbe3_forces, rigid_link
 from hiraku.solvers.fe.shell import MITC4
 from hiraku.solvers.k1_shell.checks import grid
 from hiraku.solvers.k1_shell.solve import spread_load
@@ -95,6 +95,59 @@ class LinkTest(unittest.TestCase):
         self.assertGreater(out["rbe3"][0], 1e-4 * np.abs(out["rbe3"][2][:3]).max())  # the footprint deforms
         self.assertGreater(out["rbe3"][1], out["rbe2"][1])  # more flexible: more energy under the same load
         self.stats = out
+
+
+class SpringTest(unittest.TestCase):
+    def line_model(self, n_nodes):
+        return FEModel(np.c_[np.arange(n_nodes) * 100.0, np.zeros(n_nodes), np.zeros(n_nodes)])
+
+    def test_series_and_parallel(self):
+        k1, k2, P = 300.0, 700.0, 50.0
+        m = self.line_model(2)
+        m.add(Spring([[0, -1], [0, 1]], [[k1, k1, k1, 0, 0, 0], [k2, k2, k2, 0, 0, 0]]))
+        F = np.zeros((2, 6))
+        F[1, 0] = P
+        sol = StaticSolver(m).solve(F)
+        self.assertAlmostEqual(sol.displacements[1, 0], P / k1 + P / k2, places=12)  # series
+        m = self.line_model(1)
+        m.add(Spring([[0, -1], [0, -1]], [[k1] * 3 + [0] * 3, [k2] * 3 + [0] * 3]))
+        F = np.zeros((1, 6))
+        F[0, 1] = P
+        sol = StaticSolver(m).solve(F)
+        self.assertAlmostEqual(sol.displacements[0, 1], P / (k1 + k2), places=12)  # parallel
+
+
+    def test_rotational_spring(self):
+        kr, M = 2.0e6, 3.0e4
+        m = self.line_model(2)
+        m.add(Spring([[0, 1]], [1e5, 1e5, 1e5, kr, kr, 3 * kr]))
+        m.fix(0, "all")
+        F = np.zeros((2, 6))
+        F[1, 3] = M
+        F[1, 5] = M
+        sol = StaticSolver(m).solve(F)
+        self.assertAlmostEqual(sol.displacements[1, 3], M / kr, delta=1e-12)
+        self.assertAlmostEqual(sol.displacements[1, 5], M / (3 * kr), delta=1e-12)
+
+    def test_rotated_spring(self):
+        a = np.radians(30.0)
+        R = np.array([[np.cos(a), np.sin(a), 0.0], [-np.sin(a), np.cos(a), 0.0], [0.0, 0.0, 1.0]])  # rows: axes
+        k = np.array([100.0, 400.0, 900.0])
+        m = self.line_model(1)
+        m.add(Spring([[0, -1]], np.r_[k, 0, 0, 0], frames=R))
+        F = np.zeros((1, 6))
+        F[0, 0] = 10.0
+        sol = StaticSolver(m).solve(F)
+        expect = R.T @ np.diag(1.0 / k) @ R @ F[0, :3]
+        self.assertLess(np.abs(sol.displacements[0, :3] - expect).max(), 1e-14)
+        self.assertGreater(abs(sol.displacements[0, 1]), 1e-3)  # the spring's axes make y move too
+
+    def test_offset_bushing_has_no_rigid_energy(self):
+        m = FEModel(np.array([[0.0, 0.0, 0.0], [30.0, 40.0, -20.0]]))
+        R = np.linalg.qr(np.array([[1.0, 2.0, 0.5], [0.3, -1.0, 2.0], [1.0, 0.0, 1.0]]))[0].T
+        m.add(Spring([[0, 1]], [1e3, 2e3, 3e3, 1e5, 2e5, 3e5], frames=R))
+        r = precheck.rigid_body_energy(m)
+        self.assertLess(r["energy_ratio"], 1e-14)
 
 
 if __name__ == "__main__":

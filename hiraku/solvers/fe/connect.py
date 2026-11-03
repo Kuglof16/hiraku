@@ -47,6 +47,80 @@ def rigid_link(master: int, slaves, nodes: np.ndarray, name: str = "rbe2", comps
     return Constraint(name, needs_rotation=(master,), nodes=tuple([master] + slaves), maker=make)
 
 
+# ------------------------------------------------------------------ springs and bushings
+
+
+class Spring(ElementGroup):
+    """Springs and bushings between two nodes (or a node and the ground: b = -1).
+
+    k (E, 6) or (6,): stiffness along the spring's local axes, (kx, ky, kz) in N/mm and (krx, kry, krz) in
+    N*mm/rad. frames (E, 3, 3) or (3, 3): rows are the local axes in global coordinates (identity when not
+    given). The relative motion is taken at the point p (the mid-point of the two nodes unless given),
+    each node carried to p rigidly:
+        du = (u_b + theta_b x (p - x_b)) - (u_a + theta_a x (p - x_a)),  dtheta = theta_b - theta_a,
+    K = B^T R6^T diag(k) R6 B with R6 = diag(R, R). So a rigid motion of both nodes stretches nothing, also
+    when the nodes are apart (a bushing with offsets, as Nastran's CBUSH is commonly described; the program's
+    documentation not checked here). With only translational stiffness (rotations=False) the group uses
+    3 DOFs per node and no offsets: then the nodes should coincide, or the stiffness lie along the line
+    between them, for a rigid rotation to stay free of energy.
+    """
+
+    kind = "spring"
+
+    def __init__(self, conn, k, frames=None, points=None, rotations: bool | None = None, name: str = "spring"):
+        self.conn = np.asarray(conn, int).reshape(-1, 2)
+        ne = len(self.conn)
+        self.k = np.broadcast_to(np.asarray(k, float), (ne, 6)).copy()
+        self.frames = np.broadcast_to(np.eye(3) if frames is None else np.asarray(frames, float), (ne, 3, 3)).copy()
+        self.points = None if points is None else np.broadcast_to(np.asarray(points, float), (ne, 3)).copy()
+        if rotations is None:
+            rotations = bool(np.any(self.k[:, 3:] != 0.0))
+        if not rotations and np.any(self.k[:, 3:] != 0.0):
+            raise ValueError("rotational stiffness needs rotations=True (6 DOFs per node)")
+        self.n_comp = 6 if rotations else 3
+        self.name = name
+
+    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+        ne = len(self.conn)
+        a, b = self.conn[:, 0], self.conn[:, 1]
+        xa = nodes[a]
+        xb = np.where((b >= 0)[:, None], nodes[np.where(b >= 0, b, 0)], xa)
+        p = 0.5 * (xa + xb) if self.points is None else self.points
+        nc = self.n_comp
+        K = np.zeros((ne, 2 * nc, 2 * nc))
+        for e in range(ne):
+            R = self.frames[e]
+            if nc == 6:
+                Bm = np.zeros((6, 12))
+                Bm[:3, 0:3] = -np.eye(3)
+                Bm[:3, 3:6] = skew(p[e] - xa[e])  # -(-[p - xa]x)
+                Bm[3:, 3:6] = -np.eye(3)
+                Bm[:3, 6:9] = np.eye(3)
+                Bm[:3, 9:12] = -skew(p[e] - xb[e])
+                Bm[3:, 9:12] = np.eye(3)
+                R6 = np.zeros((6, 6))
+                R6[:3, :3] = R
+                R6[3:, 3:] = R
+                L = R6 @ Bm
+                K[e] = L.T @ np.diag(self.k[e]) @ L
+            else:
+                Bm = np.hstack([-np.eye(3), np.eye(3)])
+                L = R @ Bm
+                K[e] = L.T @ np.diag(self.k[e, :3]) @ L
+        return K
+
+    def forces(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
+        """Spring forces and moments in local axes (E, 6) (or (E, 3)): k times the local relative motion."""
+        Ke = self.stiffness(nodes)
+        f = np.einsum("eij,ej->ei", Ke, ue)  # nodal forces; node b's part is +k * relative motion in global axes
+        nc = self.n_comp
+        fb = f[:, nc:]
+        if nc == 6:
+            return np.concatenate([np.einsum("eij,ej->ei", self.frames, fb[:, :3]),
+                                   np.einsum("eij,ej->ei", self.frames, fb[:, 3:])], axis=1)
+        return np.einsum("eij,ej->ei", self.frames, fb)
+
+
 # ------------------------------------------------------------------ RBE3
 
 
