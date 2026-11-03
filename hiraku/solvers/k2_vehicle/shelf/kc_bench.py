@@ -35,6 +35,35 @@ def k0_inputs(table: dict) -> dict:
     return {"kc.roll_center_height": rc, "kc.aligning_steer": steer}
 
 
+def _mount_checks() -> list[dict]:
+    """Mount forces of kinematics.mount_forces on a layout with a closed-form answer: arms level and
+    parallel in front view (lower arm 400 mm, its damper 300 mm out, both vertical), the kingpin
+    upright with the ball joints 300 mm apart, the contact 200 mm below the lower one."""
+    a = np.array
+    hp = kinematics.Hardpoints(a([0.1, 0.2, 0.2]), a([-0.1, 0.2, 0.2]), a([0.0, 0.6, 0.2]),
+                               a([0.1, 0.3, 0.5]), a([-0.1, 0.3, 0.5]), a([0.0, 0.6, 0.5]),
+                               a([-0.12, 0.25, 0.35]), a([-0.12, 0.6, 0.35]), a([0.0, 0.65, 0.3]),
+                               a([0.0, 1.0, 0.0]), 0.3, a([0.0, 0.5, 0.2]), a([0.0, 0.5, 0.6]))
+    sol = dict(kinematics.DoubleWishboneBench(hp).solve(0.0), contact=a([0.0, 0.6, 0.0]))
+    up = kinematics.mount_forces(hp, sol, a([0.0, 0.0, 2000.0]))
+    side = kinematics.mount_forces(hp, sol, a([0.0, 800.0, 0.0]))
+    gen = kinematics.generic_sla(a([0.0, 0.55, 0.3]), 0.3)
+    f = a([300.0, -900.0, 2500.0])
+    r = kinematics.mount_forces(gen, kinematics.solve_at_travel(gen, 0.03), f)
+    total = sum(r[m] for m in kinematics.MOUNTS)
+    return [
+        _check("vertical 2 kN at the contact, level parallel arms: the damper carries it by the lever", "damper_force",
+               -2000.0 * 0.4 / 0.3, up["damper_tension"], "N", 1e-9,
+               "moment about the lower arm's axis: F_z L = D a (L = 400 mm to the ball joint, a = 300 mm to the damper)"),
+        _check("lateral 800 N at the contact 200 mm below the lower ball joint: the upper arm's pull", "upper_arm_force",
+               800.0 * 0.2 / 0.3, float(side["ball_joint_upper"][1]), "N", 1e-9,
+               "moment about the lower ball joint: F_y c = F_u h (c = 200 mm, h = 300 mm between the ball joints)"),
+        _check("generic layout at 30 mm bump, tyre force (300, -900, 2500) N: the forces on the body add up to it",
+               "mount_force_sum_error", 0.0, float(np.linalg.norm(total - f)), "N", 1e-6,
+               "balance of the whole corner: the body takes what the road gives"),
+    ]
+
+
 def _series(channel: str, unit: str, x_name: str, x_unit: str, xs, ys) -> dict:
     return {"channel": channel, "unit": unit, "x": {"quantity": x_name, "unit": x_unit, "values": [float(v) for v in xs]},
             "values": [float(v) for v in ys]}
@@ -110,6 +139,7 @@ class KcBenchTool(K2Tool):
         worst = max(abs(c2[k] / c1[k] - 0.5) for k in kinematics.COMPLIANCE_KEYS if abs(c1[k]) > 0.0)
         out.append(_check("all joint stiffnesses doubled: compliance halves", "compliance_ratio_error", 0.0, worst, "1",
                           2e-3, "linear springs; the stiff ball joints and wheel pad stay the same, so a little off"))
+        out += _mount_checks()
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:

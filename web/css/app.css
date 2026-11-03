@@ -626,6 +626,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .runlist button.go { color: var(--panel); background: var(--ink); }
 .runlist .why { color: var(--muted); font-size: 13px; }
 .runlist .confirm { color: var(--red); font-size: 14px; font-weight: 600; }
+.runlist .keyless { margin: 4px 0 8px; padding: 8px 12px; font-size: 15px; background: var(--card, #fffdf8); border: 1.5px solid var(--line); border-radius: 10px; }
 .mode .launch-link { margin-left: 10px; font-size: 13px; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 1px 10px; text-decoration: none; white-space: nowrap; }
 body.video .mode .launch-link { display: none; }
 .mode .stop-btn { margin-left: 10px; font: inherit; font-size: 13px; color: var(--red); background: var(--panel); border: 1.5px solid var(--red); border-radius: 999px; padding: 1px 10px; cursor: pointer; white-space: nowrap; }

@@ -1185,6 +1185,52 @@
             "max"
           ],
           "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
+        },
+        "frames": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "t_s"
+          ],
+          "description": "The same field at chosen moments of a time history (e.g. the frame stress solved at each kept step of a K2 run). Each list has one entry per t_s. The screen colours by the entry nearest to the replay time.",
+          "properties": {
+            "t_s": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "source_analysis_id": {
+              "type": "string",
+              "description": "The analysis whose time history gave the loads."
+            },
+            "per_element": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "description": "With mesh_id: one per_element list per moment."
+            },
+            "per_member": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "max": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "The largest value at each moment."
+            }
+          }
         }
       },
       "dependentRequired": {
@@ -1270,6 +1316,95 @@
         "notes": {
           "type": "string",
           "description": "How the joints, welds and load points were modelled."
+        },
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "verdict",
+            "metrics"
+          ],
+          "description": "Mesh check made by code before the solve (pre-processing). Limits are the solver's stated rules of thumb (assumption unless a source is given in notes).",
+          "properties": {
+            "verdict": {
+              "enum": [
+                "ok",
+                "warn",
+                "fail"
+              ],
+              "description": "fail: the solver refuses the mesh; warn: solved, but the listed metrics are past their limits."
+            },
+            "metrics": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "worst"
+                ],
+                "properties": {
+                  "worst": {
+                    "type": "number"
+                  },
+                  "p95": {
+                    "type": "number"
+                  },
+                  "limit": {
+                    "type": "number"
+                  },
+                  "over_limit": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Elements beyond the limit."
+                  },
+                  "worst_element": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "description": "e.g. aspect_ratio, warp_deg, skew_deg, min_angle_deg, max_angle_deg, jacobian_ratio, taper."
+            },
+            "per_element": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "description": "Optional: one value per element for a metric, in element order (for drawing)."
+            },
+            "topology": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "free_edges": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "coincident_nodes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "unconnected_groups": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "flipped_normals": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "negative_volume": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -1487,6 +1622,107 @@
             "type": "string"
           },
           "description": "Values the tool had to assume because neither the load case nor the design gives them (e.g. a default side-force coefficient)."
+        },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "What the solver put on the model for this load case (pre-processing), for drawing and checking. Node numbers are indices into nodes_mm of the analysis's mesh (mesh_id).",
+          "properties": {
+            "mesh_id": {
+              "type": "string",
+              "pattern": "^mesh-[0-9]{4,}$"
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "node",
+                  "dofs"
+                ],
+                "properties": {
+                  "node": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "dofs": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "ux",
+                        "uy",
+                        "uz",
+                        "rx",
+                        "ry",
+                        "rz"
+                      ]
+                    }
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "loads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "origin_mm",
+                  "vector_N"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "origin_mm": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "vector_N": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "moment_Nmm": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "spread_to": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "node",
+                        "weight"
+                      ],
+                      "properties": {
+                        "node": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "weight": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "description": "How a point load was distributed (RBE3-like): mesh nodes and weights."
+                  }
+                }
+              }
+            },
+            "inertia_relief": {
+              "type": "boolean",
+              "description": "Unbalanced load taken by inertia instead of supports."
+            },
+            "checks": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/quantity"
+              },
+              "description": "Pre-processing checks: e.g. equilibrium_residual, model_mass, design_mass."
+            }
+          }
         }
       }
     },

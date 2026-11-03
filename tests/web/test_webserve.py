@@ -1,3 +1,4 @@
+import io
 import json
 import shutil
 import tempfile
@@ -228,6 +229,38 @@ class LayoutTest(unittest.TestCase):
                 s.shutdown()
                 s.server_close()
             shutil.rmtree(tmp)
+
+
+class OpenTest(unittest.TestCase):
+    """python -m hiraku.webserve --open (what HIRAKU.cmd runs): the browser opens on the server's page."""
+
+    def test_open_starts_the_browser_on_the_page(self):
+        from unittest import mock
+
+        from hiraku.webserve import __main__ as entry
+
+        class Fake:
+            server_address = ("127.0.0.1", 8765)
+            RequestHandlerClass = type("H", (), {"launcher": None})
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            with mock.patch.object(entry, "make_server", return_value=Fake()), mock.patch.object(entry.webbrowser, "open") as opened, \
+                    mock.patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(entry.main(["--open", "--runs", str(tmp), "--saved", str(tmp)]), 0)
+                opened.assert_called_once_with("http://127.0.0.1:8765/")
+            with mock.patch.object(entry, "make_server", return_value=Fake()), mock.patch.object(entry.webbrowser, "open") as opened, \
+                    mock.patch("sys.stdout", new_callable=io.StringIO):
+                entry.main(["--runs", str(tmp), "--saved", str(tmp)])
+                opened.assert_not_called()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class ShelfTest(unittest.TestCase):

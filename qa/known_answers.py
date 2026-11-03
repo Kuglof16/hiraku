@@ -319,6 +319,55 @@ def bredt_torsion(T: float, L: float, G: float, b: float, h: float, t: float) ->
             "J_open": J_open, "twist_rate_walls": T / (G * (J + J_open)), "shear_stress_walls": share * q / t}
 
 
+# --- element quality [geom] -----------------------------------------------------------------
+# Single elements whose measures follow from their shape (qa.mesh_quality must give them), and
+# bad ones a mesh check must catch. Points in mm.
+
+def rectangle_quad(a: float, b: float) -> list[list[float]]:
+    """a x b rectangle, counter-clockwise seen from +z: aspect a/b (a >= b), every angle 90 deg,
+    jacobian ratio 1, warp 0, area a b."""
+    return [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]
+
+
+def rhombus_quad(s: float, alpha_deg: float) -> list[list[float]]:
+    """Rhombus of side s with corner angle alpha at node 0: angles alpha and 180 - alpha, aspect 1,
+    jacobian ratio 1 (a parallelogram), area s^2 sin(alpha)."""
+    c, d = math.cos(math.radians(alpha_deg)), math.sin(math.radians(alpha_deg))
+    return [[0, 0, 0], [s, 0, 0], [s + s * c, s * d, 0], [s * c, s * d, 0]]
+
+
+def folded_quad(theta_deg: float) -> list[list[float]]:
+    """Square of diagonal 2 folded along its diagonal 0-2 (on the x axis) by theta: the two
+    triangles of that diagonal meet at theta, so warp is at least theta."""
+    t = math.radians(theta_deg)
+    return [[-1, 0, 0], [0, -1, 0], [1, 0, 0], [0, math.cos(t), math.sin(t)]]
+
+
+BAD_ELEMENTS = {
+    # node 3 moved onto node 0: a quad collapsed into a triangle (an edge of length 0)
+    "collapsed_quad": [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 0, 0]],
+    # nodes 2 and 3 swapped: the edges cross (a bow-tie); two corners turn the other way
+    "bowtie_quad": [[0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0]],
+    # node 2 pulled in past the diagonal 1-3: a re-entrant (arrow-head) quad
+    "reentrant_quad": [[0, 0, 0], [10, 0, 0], [2, 2, 0], [0, 10, 0]],
+}
+
+
+def unit_hex(size: float = 1.0) -> list[list[float]]:
+    """Cube: 0-3 the bottom counter-clockwise seen from above, node i + 4 above node i. Every
+    corner jacobian is size^3, the volume size^3."""
+    s = size
+    bottom = [[0, 0, 0], [s, 0, 0], [s, s, 0], [0, s, 0]]
+    return bottom + [[x, y, s] for x, y, _ in bottom]
+
+
+def inverted_hex(size: float = 1.0) -> list[list[float]]:
+    """The cube with its top and bottom faces swapped: inside out, every corner jacobian and the
+    volume are -size^3."""
+    h = unit_hex(size)
+    return h[4:] + h[:4]
+
+
 # --- units [SI] --------------------------------------------------------------------------
 
 # Factor to the SI base of each unit in the contract's unit list, plus offset for
