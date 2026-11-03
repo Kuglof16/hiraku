@@ -1479,7 +1479,7 @@ window.PROMO_LAYOUT = {
       "w": 1004,
       "h": 560,
       "fill": 0.8,
-      "_note": "the part the new rule catches, in 3D; fill: the vehicle fills this share of the view (the larger of width and height), centred"
+      "_note": "the part the new rule catches, in 3D; fill: the vehicle fills this share of the view along the side it meets first (width or height, whichever fits the box), centred"
     },
     "ask": {
       "x": 820,
