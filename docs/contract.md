@@ -27,6 +27,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 機械で引く表は `hiraku/contract/layout.py` の `OWNERS` (`owner_of(path)`)。
 
+パッケージの層 (下の層は上の層を import しない。`tests/contract/test_layers.py` が見る): `contract` < `solvers` < `designgen` < `store` < `catalog` < `intake` < `tools` < `agent` < `webserve`・`__main__`。上の層の関数が要るときは、上の層から渡してもらう (引数か登録)
+
 ## 座標と単位
 
 - 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面。だから前の車軸より後ろは x が負で、後ろの車軸は x = −ホイールベース。前後は x の大小で決め (大きいほど前)、「x が最小 = 前」としない
