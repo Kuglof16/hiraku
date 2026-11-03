@@ -88,7 +88,8 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(crit["R7-hand-300N"]["limit"], {"value": 5.0, "unit": "mm"})
         self.assertEqual(crit["R7-foot-500N"]["quantity"], "pedal_deflection")
         self.assertEqual(crit["R8-free"]["quantity"], "free_parts")
-        self.assertEqual(crit["R8-stress"]["quantity"], "max_stress")
+        self.assertEqual(crit["R8-stress"]["quantity"], "max_utilisation")
+        self.assertEqual(crit["R8-stress"]["limit"], {"value": 1.0, "unit": "1"})
         self.assertEqual(crit["R8-push-725N"]["limit"], {"value": 25.0, "unit": "mm"})
         self.assertEqual(r7[0]["tolerance_rel"], R7_TOL)
 
@@ -181,16 +182,22 @@ class DemoV1Test(unittest.TestCase):
         self.assertTrue({"steering_column", "steering_wheel"} <= free)
         self.assertEqual(predict(PLANS["R7"], d, lc)["free_parts"], r["free_parts"]["value"])
 
-    def test_pedals_moved_to_touch_pass(self):
+    def test_pedals_moved_to_touch_are_held(self):
+        """Both pedals are held once they touch. The accelerator on a tower post passes; the brake pedal on the
+        bulkhead, a 2.3 mm sheet (designgen.ladder_4w.PLATE_T_MM) and not the 20 mm solid box it was, moves more
+        than Q69. The K0 prediction with the plate strip (load_path.plate_strip) against the tool is in
+        test_load_path_plate_k0."""
         d = touch_nearest(V1, "pedal_brake", "part:bulkhead")
         d = touch_nearest(d, "pedal_accel", "member:tower_post_RA2")
         lc = self.cases["R7-foot-500N"]
         rec = LoadPath().run(d, lc, PRED, {})
-        self.assertTrue(judged(lc, rec))
-        self.assertNotIn("pedal_brake", results(rec)["free_parts"]["where"])
-        pred = predict(PLANS["R7"], d, lc)["pedal_deflection"]
-        got = results(rec)["pedal_deflection"]["value"]
-        self.assertLessEqual(abs(got - pred) / pred, lc["tolerance_rel"])
+        r = results(rec)
+        self.assertNotIn("pedal_brake", r["free_parts"]["where"])
+        self.assertNotIn("pedal_accel", r["free_parts"]["where"])
+        lim = lc["criterion"]["limit"]["value"]
+        self.assertLessEqual(r["pedal_deflection.pedal_accel"]["value"], lim)
+        self.assertGreater(r["pedal_deflection.pedal_brake"]["value"], lim)
+        self.assertFalse(judged(lc, rec))
 
 
 if __name__ == "__main__":

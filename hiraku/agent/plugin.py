@@ -214,9 +214,10 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
         out = hooks.decide(event, input_data)
         new_state = {**state, **hooks.state(), **({END_KEY: True} if ended else {})}
         write_state(run_dir, new_state)
-        if ended and not server_alive(run_dir):
-            # the lead's stop is let through and no server serves the run (Claude Code stopped it first):
-            # the hook command is the only one left to write, so it ends the run itself, under the lock
+        if ended:
+            # the lead's stop is let through: the hook command ends the run itself, under the lock, whether or
+            # not a server still serves it (a server may go without its shutdown, e.g. when claude -p exits;
+            # it then finds the run finished on disk and writes nothing more: PluginServer.finished_on_disk)
             finish_without_server(run_dir, ctx, new_state, notes)
         else:
             put_notes(run_dir, notes)
@@ -342,7 +343,7 @@ class PluginServer:
         if name not in HANDLERS:
             return {"content": [{"type": "text", "text": f"ツール {name!r} はありません"}], "is_error": True}
         ctx = self.ctx
-        if ctx is None or ctx.project["status"] != "running":
+        if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk():
             return {"content": [{"type": "text", "text": NO_RUN}], "is_error": True}
         out = await make_handler(ctx, self.attribution, name, HANDLERS[name])(args)
         await asyncio.to_thread(self.note_unpredictable, ctx)  # a version, a prediction or a verdict changes it
@@ -438,6 +439,8 @@ class PluginServer:
         server lets go of it (its alive file goes)."""
         with self._lock:
             ctx = self.ctx
+            if self.finished_on_disk():  # the Stop hook's command ended it: nothing to add
+                return
             self.let_go(ctx)
             if ctx is None or ctx.project["status"] != "running":
                 return
@@ -492,11 +495,29 @@ class PluginServer:
 
     # ------------------------------------------------------------------ notes, inbox, stop button
 
+    def finished_on_disk(self) -> bool:
+        """The current run was finished by another process (the Stop hook's command): its project.json no
+        longer says running. The server then takes that status and lets the run go, writing nothing more
+        (each process numbers the events from its own count)."""
+        ctx = self.ctx
+        if ctx is None or ctx.project["status"] != "running":
+            return False
+        try:
+            with locked(ctx.store.path):
+                on_disk = json.loads((ctx.store.path / layout.PROJECT_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if on_disk.get("status") == "running":
+            return False
+        ctx.project.update({k: on_disk[k] for k in ("status", "stop_reason", "cost_usd") if k in on_disk})
+        self.let_go(ctx)
+        return True
+
     def drain(self) -> None:
         """Turn the hook commands' notes into events (and the callers' agents into Attribution)."""
         with self._lock:
             ctx = self.ctx
-            if ctx is None or ctx.project["status"] != "running":
+            if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk():
                 return
             with locked(ctx.store.path):
                 notes = take_notes(ctx.store.path)

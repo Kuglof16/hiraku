@@ -239,6 +239,37 @@ def _report_before_a_design(ctx: RunContext, args: Record, agent: str) -> Record
     }
 
 
+# A clause that gives the person's decision (人が…選んだ / 人の答え / revise_design・drop_rule を選んだ ...)
+PERSON_CHOSE = re.compile(r"(人|利用者|画面)(が|は|の)[^。]{0,40}?(選|答)|(revise_design|drop_rule)\s*を選|人の(判断|答え|選択)")
+_RULE_ID = re.compile(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9]{0,3}-\d{2}(?![0-9])")  # HU-02, U1-04 (next to Japanese too)
+
+
+def answered_rules(ctx: RunContext) -> set[str]:
+    """The rule ids the person answered in this run (hearing.answered data.rule_answers, ask_user's rule_hits)."""
+    out: set[str] = set()
+    for e in ctx.store.events():
+        if e["kind"] == "hearing.answered":
+            out |= {a["rule_id"] for a in (e.get("data") or {}).get("rule_answers") or [] if a.get("rule_id")}
+    return out
+
+
+def _clauses(text: str) -> list[str]:
+    """The sentences of a text, each parenthesised part apart from the sentence around it."""
+    inner = re.findall(r"[(（]([^()（）]*)[)）]", text)
+    outer = re.sub(r"[(（][^()（）]*[)）]", " ", text)
+    return [c for part in [outer, *inner] for c in re.split(r"[。\n]", part) if c.strip()]
+
+
+def unanswered_choices(ctx: RunContext, texts: list[str]) -> list[str]:
+    """Rule ids a text says the person chose for, though the person was not asked (not in answered_rules)."""
+    answered, out = answered_rules(ctx), []
+    for t in texts:
+        for c in _clauses(t):
+            if PERSON_CHOSE.search(c):
+                out += [r for r in _RULE_ID.findall(c) if r not in answered and r not in out]
+    return out
+
+
 def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Record] | None = None) -> Record:
     """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
     and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
@@ -255,6 +286,11 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     if bad:
         raise ToolError("報告の文に、記録に無い数があります: " + "、".join(bad)
                         + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
+    claimed = unanswered_choices(ctx, texts)
+    if claimed:
+        raise ToolError(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"
+                        f"人の答えは ask_user の rule_hits で聞いて答えがあった規則 ({', '.join(sorted(answered_rules(ctx))) or 'なし'}) "
+                        "だけです。ほかの当たりは、聞いていないとそのまま書いてください")
     parts = domain_parts(ctx)
     domains = {d["domain"] for d in parts}
     hit = rule_hits(ctx)
