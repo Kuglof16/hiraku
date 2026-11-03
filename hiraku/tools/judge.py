@@ -185,15 +185,24 @@ def _amount(x: float, unit: str) -> str:
     return f"{x:.4g}" if unit == "1" else f"{x:.4g} {unit}"
 
 
+NOT_OP = {"<=": ">", "<": ">=", ">=": "<", ">": "<="}  # the relation that holds when a criterion fails
+
+
 def verdict_line(v: Record) -> str:
+    """The verdict in one line. The sign between the numbers is the relation that holds: the
+    criterion's when it passes; when it fails, the opposite, with the criterion beside it."""
     safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
     value, limit = v["value"]["value"], v["limit"]["value"]
     if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
         room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])
     else:
         room = f"{v['margin_pct']:.0f} %"
+    lim = _amount(limit, v["limit"]["unit"])
+    if v["pass"]:
+        return (f"{v['test_id']} {v['quantity']} {_amount(value, v['value']['unit'])} "
+                f"{OP_JA[v['op']]} {lim} (余裕 {room}{safe})")
     return (f"{v['test_id']} {v['quantity']} {_amount(value, v['value']['unit'])} "
-            f"{OP_JA[v['op']]} {_amount(limit, v['limit']['unit'])} (余裕 {room}{safe})")
+            f"{OP_JA[NOT_OP[v['op']]]} {lim} (基準 {OP_JA[v['op']]} {lim} に届かない、余裕 {room}{safe})")
 
 
 SYSTEM_CATEGORY = "system"  # knowledge rules that a product's systems are there and connected end to end

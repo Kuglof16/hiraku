@@ -23,6 +23,18 @@ class NumberCheckTest(unittest.TestCase):
         self.assertEqual(unknown_numbers("P1 と R1 を 2 回、版 2 で cmp-0004 を見た", allowed), [])
 
 
+class VerdictLineTest(unittest.TestCase):
+    def test_the_sign_is_the_relation_that_holds(self):
+        from hiraku.tools.judge import verdict_line
+
+        v = {"test_id": "S5", "quantity": "tip_slope_angle", "value": {"value": 41.85, "unit": "deg"}, "op": ">",
+             "limit": {"value": 43.31, "unit": "deg"}, "pass": False, "margin_pct": -3.37}
+        self.assertEqual(verdict_line(v), "S5 tip_slope_angle 41.85 deg ≤ 43.31 deg (基準 > 43.31 deg に届かない、余裕 -3 %)")
+        ok = dict(v, value={"value": 50.0, "unit": "deg"}, pass_=None, margin_pct=15.4)
+        ok["pass"] = True
+        self.assertEqual(verdict_line(ok), "S5 tip_slope_angle 50 deg > 43.31 deg (余裕 15 %)")
+
+
 class ReportTest(RunCase, unittest.TestCase):
     frame_factor = (1.5, 1.8, 1.03)  # R1: rail_step_bending mismatches, then the rail joint is judged safe side
 
@@ -106,6 +118,10 @@ class ReportTest(RunCase, unittest.TestCase):
         self.add_rule_check("HU-02", hit=False)  # the latest rule_check of HU-02 passes: no hit to answer
         with self.assertRaisesRegex(ToolError, "HU-02"):
             build_report(self.ctx, {"summary": "x", "next": [item]}, "lead")
+
+    def test_the_scripted_runs_summary_is_for_the_reader(self):
+        rep = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(rep["summary"], "台本の運転で、設計の版 1 は選んだ 1 分野 (強度信頼性) がすべて合格")
 
     def test_the_scripted_run_fills_next_by_code(self):
         rep = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))

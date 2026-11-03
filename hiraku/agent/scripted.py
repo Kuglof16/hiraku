@@ -39,6 +39,26 @@ NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: n
 REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
 
 
+def scripted_summary(ctx: RunContext) -> str:
+    """The report's one line for a scripted run, for the person who reads it: from the last version's
+    tiles, which picked domains passed, failed or have no verdict (contract.DOMAIN_NAMES_JA). It says
+    the run is scripted (no Claude); the parts behind it are in the report's domains."""
+    tiles = {j["domain"]: j["state"] for j in ctx.store.judgements()}
+
+    def names(ds: list[str]) -> str:
+        return "・".join(contract.DOMAIN_NAMES_JA[d] for d in ds)
+
+    green = [d for d in ctx.picked if tiles.get(d) == "green"]
+    red = [d for d in ctx.picked if tiles.get(d) == "red"]
+    rest = [d for d in ctx.picked if d not in green and d not in red]
+    head = f"台本の運転で、設計の版 {ctx.version} は"
+    if green and not red and not rest:
+        return f"{head}選んだ {len(green)} 分野 ({names(green)}) がすべて合格"
+    parts = ([f"{names(green)} が合格"] if green else []) + ([f"{names(red)} が不合格"] if red else []) \
+        + ([f"{names(rest)} は判定が付いていない"] if rest else [])
+    return head + "、".join(parts)
+
+
 
 def _deny(ctx: RunContext, agent: str, tool: str, args: Record) -> bool:
     """Run the same PreToolUse rules the SDK hook runs; record a denial like the hook does."""
@@ -350,7 +370,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         nxt, computed = list(rep.get("next") or []), []
         if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
             nxt, computed = scripted_next(ctx)
-        write_report(ctx, {"summary": rep.get("summary") or REPORT_SUMMARY, "next": nxt}, "lead", computed=computed)
+        write_report(ctx, {"summary": rep.get("summary") or scripted_summary(ctx), "next": nxt}, "lead",
+                     computed=computed)
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
     s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
