@@ -20,9 +20,13 @@ Node order (corner signs of (xi, eta, zeta)):
 (the order commonly used for 20-node bricks, e.g. by VTK; not checked against any program here).
 Corners 0-3 go counter-clockwise seen from +zeta, so a right-handed element has det J > 0.
 
-Integration (chosen from the checks, see tests/solvers/test_fe_solid.py and the report): HEX20 uses
-3 x 3 x 3 points by default. 2 x 2 x 2 (reduced) is available as integration=2; a single reduced HEX20 has
-spurious zero-energy modes (counted in the tests).
+Integration (chosen from the checks in tests/solvers/test_fe_solid.py): HEX20 uses 3 x 3 x 3 points by
+default. On the 2 x 2 x 20 cantilever the two rules differ by 0.1 % in tip deflection (-1.04 % and -0.94 %
+from Timoshenko) and not at all in the mid-span bending stress, but a lone reduced (2 x 2 x 2) HEX20 has
+6 spurious zero-energy modes besides the 6 rigid motions (they vanish once bricks are joined, but a brick
+held at a few nodes only - a corner of a part, a brick joined through a tie - keeps them). Full integration
+costs about 3 times the element time, which is small next to the factorisation. integration=2 stays
+available.
 """
 
 from __future__ import annotations

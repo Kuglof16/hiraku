@@ -51,9 +51,8 @@ class IntegrationChoiceTest(unittest.TestCase):
 
     def test_reduced_integration_has_spurious_modes(self):
         self.assertEqual(self.zero_modes(2), 12)  # 6 spurious modes in a single reduced HEX20
-        # one layer of 2 x 2 reduced bricks: the spurious modes do not all vanish when elements are joined
-        n = self.zero_modes(2, ((0, 0, 0), (20, 20, 10)), 10.0)
-        self.assertGreaterEqual(n, 6)
+        # joined bricks (one layer of 2 x 2) do not share them: only the 6 rigid motions remain
+        self.assertEqual(self.zero_modes(2, ((0, 0, 0), (20, 20, 10)), 10.0), 6)
 
 
 class PatchTest(unittest.TestCase):
