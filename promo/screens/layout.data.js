@@ -187,7 +187,7 @@ window.PROMO_LAYOUT = {
   },
   "n04": {
     "duration_s": 4.0,
-    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 5 (0:22.5-0:26.5). The same grid of eight tiles as N15",
+    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 6 (0:24.6-0:28.6). The same grid of eight tiles as N15",
     "header": {
       "x": 96,
       "y": 96,
@@ -224,6 +224,13 @@ window.PROMO_LAYOUT = {
       "gap_x": 24,
       "gap_y": 24,
       "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)"
+    },
+    "assembly": {
+      "x": 96,
+      "y": 160,
+      "w": 1728,
+      "h": 726,
+      "_note": "the box of the assembly fast-forward from times.assembly_s: the grid's own box, so nothing jumps up or leaves the right side empty (it borrowed n16.view before)"
     },
     "tests": [
       "handling",
@@ -269,7 +276,7 @@ window.PROMO_LAYOUT = {
       "crash_s": 0.5,
       "nvh_s": 1.2,
       "assembly_s": 2.0,
-      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
+      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), set from the synthesized voice's pauses; the maker's recording runs 0.41-3.52 s with 組み立て from about 2.08 s, so the times stand. Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
     },
     "overlay": {
       "color": "#c8402a",
@@ -365,7 +372,7 @@ window.PROMO_LAYOUT = {
       "lead_s": 0.3,
       "rounds_from_s": 0.4,
       "all_green_s": 4.0,
-      "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice runs 0.54-4.32 s"
+      "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice (the maker's recording) runs 0.42-4.11 s"
     },
     "colors": {
       "bg": "#f4f1ea",
@@ -406,7 +413,7 @@ window.PROMO_LAYOUT = {
       "steps_to_s": 4.2,
       "scrub_s": 4.4,
       "scrub_to_s": 5.8,
-      "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice runs 0.6-5.7 s; 組み立て手順を starts at 2.93 s"
+      "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice (the maker's recording) runs 0.42-5.53 s; 組み立て手順を starts at about 2.72 s"
     },
     "colors": {
       "bg": "#f4f1ea",
@@ -768,13 +775,14 @@ window.PROMO_LAYOUT = {
       "title_px": 30,
       "text_px": 22,
       "reading_of_title": 2,
-      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)"
+      "ok_of_reading": 0.55,
+      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width); ok_of_reading: the size of the tick line under it (✓ 上限より下), a share of the reading's size"
     },
     "times": {
       "lead_s": 0.3,
-      "loop_to_s": 2.8,
+      "loop_to_s": 2.0,
       "accel_s": 2.9,
-      "_note": "0.3-2.8 s the long loop (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
+      "_note": "0.3-2.0 s the long loop, then the tick (below the limit) holds to 2.9 s while the voice says オーバーヒートしないか (1.44-2.56 s in the maker's recording) (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
     },
     "overlay": {
       "color": "#c8402a",
@@ -841,7 +849,7 @@ window.PROMO_LAYOUT = {
       "tiles_s": 0.6,
       "tile_in_s": 0.5,
       "tile_stagger_s": 0.55,
-      "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.30-2.79, 3.14-5.93 s)"
+      "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.41-2.79, 3.35-5.61 s in the maker's recording)"
     },
     "overlay": {
       "color": "#c8402a",
@@ -1283,14 +1291,15 @@ window.PROMO_LAYOUT = {
       "title_px": 34,
       "text_px": 22,
       "change_of_title": 1.5,
-      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)"
+      "domain_of_title": 1.4,
+      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page); domain_of_title: the size of the domain cards (pass / fail), a multiple of title_px"
     },
     "dim_opacity": 0.3,
     "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
     "times": {
       "lead_s": 0.3,
       "light_s": 5.8,
-      "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 runs 3.83-8.52 s)"
+      "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 of the maker's recording runs 4.10-8.21 s)"
     },
     "colors": {
       "bg": "#f4f1ea",

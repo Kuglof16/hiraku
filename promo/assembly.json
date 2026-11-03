@@ -48,8 +48,7 @@
    "cuts": [
     "N03"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N03.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n03_app_1080p.mp4",
    "overlay": [
     {
      "frames": "${WORK}/frames/labels_n03",
@@ -65,8 +64,7 @@
    "cuts": [
     "N04"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N04.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n04_app_1080p.mp4",
    "overlay": [
     {
      "frames": "${WORK}/frames/labels_n04",
@@ -96,15 +94,13 @@
    "cuts": [
     "N06"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N06.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n06_app_1080p.mp4"
   },
   {
    "cuts": [
     "N07"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N07.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n07_app_1080p.mp4"
   },
   {
    "cuts": [
@@ -179,22 +175,19 @@
    "cuts": [
     "N15"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N15.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n15_app_1080p.mp4"
   },
   {
    "cuts": [
     "N16"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N16.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n16_app_1080p.mp4"
   },
   {
    "cuts": [
     "N17"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N17.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n17_app_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
