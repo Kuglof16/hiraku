@@ -238,6 +238,105 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption (no public basis found)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "value": 300,
+      "unit": "N",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the range where the feel and position of the control do not change; no source)"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力 (踏む面、踏む向き)",
+      "value": 500,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (small against the control's travel; no source)"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "value": 0.7,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own peak from its dynamics tests counts instead when it is larger"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "value": 0.9,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on 2026-11-03). The vehicle's own peak counts instead when it is larger"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "value": 725,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "value": 25,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "value": 500,
+      "unit": "kg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "value": 30,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "value": 50,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
      }
     ],
     "domain_picks": [],
@@ -313,7 +412,7 @@ export const DEMOS = {
      {
       "domain": "crash",
       "shown_name": "衝突",
-      "reason": "乗・走 に当てはまるので、C1 壁への正面衝突 を当てる",
+      "reason": "乗・走・悪 に当てはまるので、C1 壁への正面衝突 を当てる。C3 横転したときの乗員の空間 (横・後ろ・上から押す) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "C1"
       ]
@@ -321,7 +420,7 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
@@ -1060,7 +1159,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 13 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
    "data": {
     "answers": [
      {
@@ -1079,105 +1178,6 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
-     },
-     {
-      "key": "Q66",
-      "name": "手の操作部に掛かる力",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
-      "value": 300,
-      "unit": "N"
-     },
-     {
-      "key": "Q67",
-      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
-      "value": 5,
-      "unit": "mm"
-     },
-     {
-      "key": "Q68",
-      "name": "足の操作部に掛かる力",
-      "source": "default",
-      "trust": 1,
-      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
-      "value": 500,
-      "unit": "N"
-     },
-     {
-      "key": "Q69",
-      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: small against the control's travel; no source",
-      "value": 5,
-      "unit": "mm"
-     },
-     {
-      "key": "Q75",
-      "name": "乗員と部品に掛かる横の加速度",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
-      "value": 0.7,
-      "unit": "g"
-     },
-     {
-      "key": "Q76",
-      "name": "乗員と部品に掛かる前後の加速度",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
-      "value": 0.9,
-      "unit": "g"
-     },
-     {
-      "key": "Q77",
-      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
-      "value": 725,
-      "unit": "N"
-     },
-     {
-      "key": "Q78",
-      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
-      "value": 25,
-      "unit": "mm"
-     },
-     {
-      "key": "Q86",
-      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
-      "value": 500,
-      "unit": "kg"
-     },
-     {
-      "key": "Q87",
-      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
-      "value": 30,
-      "unit": "deg"
-     },
-     {
-      "key": "Q88",
-      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
-      "value": 50,
-      "unit": "deg"
      },
      {
       "key": "Q34",
@@ -9299,6 +9299,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "steering_column",
      "steering_shaft",
@@ -9327,26 +9328,28 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
      "rollbar"
     ],
-    "hits": [
-     {
-      "part_id": "steering_wheel",
-      "values": {
-       "gap_mm": 651.1029946543966
-      },
-      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
-     },
-     {
-      "part_id": "steering_column",
-      "values": {
-       "gap_mm": 708.0182995285636
-      },
-      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
-     }
-    ],
+    "hits": [],
     "not_evaluable": [],
-    "pass": false
+    "pass": true
    }
   },
   {
@@ -9518,7 +9521,7 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ を当てる。R2 衝撃 (落錘・落下・段差) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ を当てる。R2 衝撃 (落錘・落下・段差)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
@@ -9547,7 +9550,7 @@ export const DEMOS = {
      },
      {
       "domain": "crash",
-      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)"
+      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)・C3 横転したときの乗員の空間 (横・後ろ・上から押す) (乗∧悪)"
      }
     ],
     "assembly_test_ids": [
@@ -10573,7 +10576,7 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度 (弦の張力)",
-      "reason": "R1 静的強度・R3 疲労・耐久 を当てる",
+      "reason": "R1 静的強度・R3 疲労・耐久 を当てる。R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3"
@@ -10603,7 +10606,7 @@ export const DEMOS = {
      },
      {
       "domain": "crash",
-      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)"
+      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)・C3 横転したときの乗員の空間 (横・後ろ・上から押す) (乗∧悪)"
      },
      {
       "domain": "thermal",
@@ -11420,7 +11423,7 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久 を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久 を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3"
@@ -12704,39 +12707,39 @@ export const DEMOS = {
      },
      {
       "key": "Q66",
-      "name": "手の操作部に掛かる力",
+      "name": "手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "value": 300,
+      "unit": "N",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
-      "value": 300,
-      "unit": "N"
+      "basis": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
      },
      {
       "key": "Q67",
       "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "value": 5,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
-      "value": 5,
-      "unit": "mm"
+      "basis": "assumption (the range where the feel and position of the control do not change; no source)"
      },
      {
       "key": "Q68",
-      "name": "足の操作部に掛かる力",
+      "name": "足の操作部に掛かる力 (踏む面、踏む向き)",
+      "value": 500,
+      "unit": "N",
       "source": "default",
       "trust": 1,
-      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
-      "value": 500,
-      "unit": "N"
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)"
      },
      {
       "key": "Q69",
       "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "value": 5,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: small against the control's travel; no source",
-      "value": 5,
-      "unit": "mm"
+      "basis": "assumption (small against the control's travel; no source)"
      },
      {
       "key": "Q70",
@@ -12749,38 +12752,38 @@ export const DEMOS = {
      {
       "key": "Q75",
       "name": "乗員と部品に掛かる横の加速度",
+      "value": 0.7,
+      "unit": "g",
       "source": "default",
       "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
-      "value": 0.7,
-      "unit": "g"
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own peak from its dynamics tests counts instead when it is larger"
      },
      {
       "key": "Q76",
       "name": "乗員と部品に掛かる前後の加速度",
+      "value": 0.9,
+      "unit": "g",
       "source": "default",
       "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
-      "value": 0.9,
-      "unit": "g"
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on 2026-11-03). The vehicle's own peak counts instead when it is larger"
      },
      {
       "key": "Q77",
       "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "value": 725,
+      "unit": "N",
       "source": "default",
       "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
-      "value": 725,
-      "unit": "N"
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)"
      },
      {
       "key": "Q78",
       "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "value": 25,
+      "unit": "mm",
       "source": "default",
       "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
-      "value": 25,
-      "unit": "mm"
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)"
      },
      {
       "key": "Q82",
@@ -12792,30 +12795,30 @@ export const DEMOS = {
      },
      {
       "key": "Q86",
-      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "value": 500,
+      "unit": "kg",
       "source": "default",
       "trust": 3,
-      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
-      "value": 500,
-      "unit": "kg"
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
      },
      {
       "key": "Q87",
       "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "value": 30,
+      "unit": "deg",
       "source": "default",
       "trust": 3,
-      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
-      "value": 30,
-      "unit": "deg"
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
      },
      {
       "key": "Q88",
       "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "value": 50,
+      "unit": "deg",
       "source": "default",
       "trust": 3,
-      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
-      "value": 50,
-      "unit": "deg"
+      "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
      },
      {
       "key": "Q90",
@@ -12900,7 +12903,7 @@ export const DEMOS = {
      {
       "domain": "crash",
       "shown_name": "衝突",
-      "reason": "乗・走 に当てはまるので、C1 壁への正面衝突 を当てる",
+      "reason": "乗・走・悪 に当てはまるので、C1 壁への正面衝突 を当てる。C3 横転したときの乗員の空間 (横・後ろ・上から押す) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "C1"
       ]
@@ -12908,7 +12911,7 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
@@ -13521,7 +13524,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 13 件: Q57・Q63・Q66・Q67・Q68・Q69・Q75・Q76・Q77・Q78・Q86・Q87・Q88)",
+   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
    "data": {
     "answers": [
      {
@@ -13540,105 +13543,6 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
-     },
-     {
-      "key": "Q66",
-      "name": "手の操作部に掛かる力",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
-      "value": 300,
-      "unit": "N"
-     },
-     {
-      "key": "Q67",
-      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
-      "value": 5,
-      "unit": "mm"
-     },
-     {
-      "key": "Q68",
-      "name": "足の操作部に掛かる力",
-      "source": "default",
-      "trust": 1,
-      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
-      "value": 500,
-      "unit": "N"
-     },
-     {
-      "key": "Q69",
-      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: small against the control's travel; no source",
-      "value": 5,
-      "unit": "mm"
-     },
-     {
-      "key": "Q75",
-      "name": "乗員と部品に掛かる横の加速度",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
-      "value": 0.7,
-      "unit": "g"
-     },
-     {
-      "key": "Q76",
-      "name": "乗員と部品に掛かる前後の加速度",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
-      "value": 0.9,
-      "unit": "g"
-     },
-     {
-      "key": "Q77",
-      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
-      "value": 725,
-      "unit": "N"
-     },
-     {
-      "key": "Q78",
-      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
-      "source": "default",
-      "trust": 1,
-      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
-      "value": 25,
-      "unit": "mm"
-     },
-     {
-      "key": "Q86",
-      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
-      "value": 500,
-      "unit": "kg"
-     },
-     {
-      "key": "Q87",
-      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
-      "value": 30,
-      "unit": "deg"
-     },
-     {
-      "key": "Q88",
-      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
-      "value": 50,
-      "unit": "deg"
      }
     ]
    }
@@ -21726,6 +21630,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "steering_column",
      "steering_shaft",
@@ -21754,26 +21659,28 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
      "rollbar"
     ],
-    "hits": [
-     {
-      "part_id": "steering_wheel",
-      "values": {
-       "gap_mm": 651.1029946543966
-      },
-      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
-     },
-     {
-      "part_id": "steering_column",
-      "values": {
-       "gap_mm": 708.0182995285636
-      },
-      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
-     }
-    ],
+    "hits": [],
     "not_evaluable": [],
-    "pass": false
+    "pass": true
    }
   },
   {
