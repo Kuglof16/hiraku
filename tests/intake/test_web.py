@@ -303,7 +303,15 @@ events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: '
 intake.update();
 console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
 """)
-        self.assertEqual(got, [["U1-04", "asking"]])
+        self.assertEqual(got, [["U1-04", "asking"], ["SM-01", "asking"]])  # SM-01 was not answered: it stays, U1-04 is asked again
+
+    def test_the_answered_hits_go_and_the_unanswered_stay_when_others_are_asked_later(self):
+        got = self.run_body("""
+events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: 'MF-01', parts: ['m1'], text: '薄い' }] })];
+intake.update();
+console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
+""")
+        self.assertEqual(got, [["MF-01", "asking"], ["SM-01", "asking"]])  # U1-04 was answered: gone
 
 
 class StaticTest(unittest.TestCase):
