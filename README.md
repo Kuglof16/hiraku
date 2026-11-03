@@ -85,12 +85,14 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 | 値 | 出典として書いたもの | 使った所 |
 |---|---|---|
 | 材料の降伏点・ヤング率・密度 (STKR400・STKM13A・SS400・6061-T6) | JIS G 3466・G 3445・G 3101 の最小の降伏点、一般の設計値、ハンドブックの値 | `data/materials/materials.json` |
+| 角パイプ・丸パイプの規格の寸法 (角 112 種・丸 128 種。単位質量を規格の式で計算し直して全行一致) | JIS G 3466 の表 5・6、JIS G 3444 の表 6 (2015 年版と改正) | `data/sections/standard_tubes.json` |
 | 電池の電圧 51.2 V (LiFePO4 16 直列 × 3.2 V) | セルの公称電圧 | `hiraku/designgen/ladder_4w.py` |
 | 部品の温度の上限 (電池 55 ℃・制御器 85 ℃・モーター 155 ℃) | EVE LF50K の仕様書、Curtis 1236 のマニュアル、IEC 60085 の F 種 | `hiraku/designgen/ladder_4w.py` |
 | 空気の密度 1.225 kg/m³ | ICAO Doc 7488 / ISO 2533 の海面の値 | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_dynamics.py`、`hiraku/solvers/k2_vehicle/` |
 | 疲労の強さ (FAT 71・傾き 3・折れ点 1e7 回) | IIW の疲労設計の推奨 (2016) | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_fatigue.py` |
 | 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³) | ISO 8608 の表 | `hiraku/solvers/k2_vehicle/road.py`・`shelf/offroad.py`、`hiraku/solvers/shelf/fatigue.py` |
 | ダブルレーンチェンジのコース (15・30・25・25・15・15 m、横 3.5 m) | ISO 3888-1 | `hiraku/solvers/k2_vehicle/shelf/lane_change.py` |
+| 溶接のホットスポット応力 (溶接の線から板厚 t の 0.5 倍と 1.5 倍の表面の応力を、σ = 1.5σ(0.5t) − 0.5σ(1.5t) で線まで外挿) | IIW の疲労設計の推奨 (Hobbacher 2016) | `hiraku/solvers/k1_shell/stress.py`、`hiraku/solvers/shelf/frame_shell.py` |
 | タイヤの MF 6.1 の係数 (205/60R15 の例のタイヤ、98 個) | Pacejka, Tire and Vehicle Dynamics 3 版 Appendix 3 (公開の .tir から写し、写しが元と一致することは機械で確かめた。本そのものは確かめていない) | `data/tyres/pacejka_tvd3_205_60r15.json` |
 | 静的な安定の基準 T/2h ≥ 1.0 | ROHVA 1-2011・ANSI B71.9-2012 を要約した 79 FR 68964 | `hiraku/catalog/builders/k2_tests.py` |
 | 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の要約・仮定) | `data/requirements/offroad-4w.yaml` |

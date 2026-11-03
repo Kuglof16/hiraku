@@ -102,7 +102,7 @@ class SchemaTest(unittest.TestCase):
 
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
-        ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop")]
+        ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
         for status, code in ok:
             self.assertEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
         for status, code in [("done", "cost_limit"), ("failed", "done"), ("stopped", "error")]:
@@ -192,6 +192,20 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(contract.errors("field", field), [])
         self.assertNotEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_element": [1.0]}), [])
         self.assertNotEqual(contract.errors("mesh", {**m, "elements": [[0, 1]]}), [])
+
+    def test_error_estimate_and_mesh_convergence(self):
+        m = load("mesh.json")
+        est = {"kind": "error_estimate", "unit": "%", "mesh_id": m["mesh_id"], "per_element": [3.2, 18.0]}
+        self.assertEqual(contract.errors("field", est), [])
+        conv = {"quantity": "hot-spot stress", "unit": "MPa", "verdict": "converged",
+                "levels": [{"element_size_mm": 10.0, "value": 116.3, "mesh_id": m["mesh_id"]},
+                           {"element_size_mm": 5.0, "elements": 40000, "value": 118.7}],
+                "change_pct": 2.0, "limit_pct": 5.0}
+        a = load("analysis.json")
+        self.assertEqual(contract.errors("analysis", {**a, "mesh_convergence": conv}), [])
+        one = {**conv, "levels": conv["levels"][:1]}
+        self.assertNotEqual(contract.errors("analysis", {**a, "mesh_convergence": one}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "mesh_convergence": {**conv, "verdict": "ok"}}), [])
 
     def test_rule_needs_a_known_category_and_a_basis(self):
         rule = load("knowledge_imported.json")["rules"][0]
