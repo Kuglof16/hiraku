@@ -13,7 +13,9 @@
   (hook.blocked_stop); the lead's stop also while a tile is red and design revisions
   are left (rules.red_left_reason); blocks are counted and capped so a run always
   ends. The round limit ends revisions only: the latest version is still judged, so its
-  pending cases hold the stop as well (contract HOOK_RULES HK4); a run whose first version
+  pending cases hold the stop as well (contract HOOK_RULES HK4), unless what holds each of them
+  is written down (rules.excused_pending: the current version's report names it in an issue, or,
+  with the revisions used up, its mismatch has a cause); a run whose first version
   was refused (rules.design_refusal) may stop. A role's stop (the packager's: assembly) is blocked only on its own domain's
   pending cases, counted per design version, and not while a
   message for the lead waits (the role returns so the lead hears it). Load cases no K0
@@ -242,6 +244,10 @@ class Hooks:
         # the round limit ends revisions only: the latest version is still judged (HOOK_RULES HK4), so a
         # pending case still holds the stop; red_left_reason already lets a red tile go once no revision is left
         if rules.design_refusal(self.ctx) is not None:  # no first version: the designer's last try was refused
+            return self._end()
+        # what keeps each pending domain pending is written down (the report's issues name it, or, with the
+        # revisions used up, its mismatch has a cause): blocking again would only call the roles for nothing
+        if rules.excused_pending(self.ctx) is not None:
             return self._end()
         # HK4: a pending domain, or (red_left) a red tile while design revisions are left
         reason = rules.stop_reason(self.ctx) or rules.red_left_reason(self.ctx)

@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest import mock
 
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import agent_id_from_sdk, sdk_name
@@ -203,6 +204,66 @@ class HooksTest(RunCase, unittest.TestCase):
         run(self.hooks.stop({"stop_hook_active": True}, None, None))
         self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})  # the cap
         self.assertEqual(end_status(self.ctx, self.hooks.stop_blocks)[::2], ("stopped", "not_judged"))
+
+    def report(self, issues):
+        from hiraku.tools.functions import write_report
+
+        return write_report(self.ctx, {"summary": "途中で止めます", "next": [], "issues": issues}, "lead")
+
+    def stop(self):
+        return run(self.hooks.stop({"stop_hook_active": False}, None, None))
+
+    def test_after_the_report_names_every_pending_case_the_lead_may_stop(self):
+        """HK4 after write_report: the current version's report issues name what keeps each pending domain
+        pending (load case id, test id or domain); a pending case the issues do not name still blocks."""
+        from hiraku.agent.runner import end_status
+
+        self.report([{"kind": "missing_tool", "what": "段差の道具が止まる", "where": "P1-step100"}])
+        self.assertEqual(self.stop()["decision"], "block")  # strength's R1 is pending and not named
+        self.assertIn("R1-step100", self.hooks_reason())
+        self.report([{"kind": "missing_tool", "what": "段差の道具が止まる", "where": "P1-step100"},
+                     {"kind": "missing_formula", "what": "合う式が無い", "record_ids": ["cmp-0009"], "where": "R1"}])
+        self.assertIsNotNone(rules.excused_pending(self.ctx))
+        self.assertEqual(self.stop(), {})
+        status, reason, code = end_status(self.ctx, self.hooks.stop_blocks)
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        for needle in ("R1-step100", "合う式が無い"):
+            self.assertIn(needle, reason)
+        self.assertNotIn("終われません", reason)
+        # a report of an earlier version names nothing for this one; P10 is not P1
+        self.assertFalse(rules._names("P10-step100", "P1"))
+        with mock.patch.object(type(self.ctx), "version", new_callable=mock.PropertyMock, return_value=2):
+            self.assertIsNone(rules.current_report(self.ctx))
+
+    def hooks_reason(self):
+        return [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"][-1]["text"]
+
+    def test_with_the_revisions_used_up_a_mismatch_with_its_cause_lets_the_lead_stop(self):
+        """HK4 once round_limit is used up: a pending case held only by mismatches whose cause is written (no
+        formula fits) lets the lead's stop through, and stop_reason carries the cause; without the cause it blocks."""
+        from hiraku.agent.runner import end_status
+        from hiraku.tools.functions import record_cause
+
+        self.ctx.project["round_limit"] = 0
+        ana, _, _ = self.run_p1()
+        self.tools["frame_static"].factor = 2.0
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        c = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})["comparison"]
+        self.assertEqual(c["status"], "mismatch")
+        self.assertEqual(rules.holding(self.ctx), [("strength", ["R1-step100"])])
+        self.assertIsNone(rules.excused_pending(self.ctx))  # no cause yet
+        self.assertEqual(self.stop()["decision"], "block")
+        record_cause(self.ctx, {"comparison_id": c["comparison_id"], "cause": "レールの式が横の部材のねじりを入れていない",
+                                "fix": "合う式が無いので、そう報告する"}, "cae.strength")
+        self.assertEqual(self.stop(), {})
+        status, reason, code = end_status(self.ctx, self.hooks.stop_blocks)
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        for needle in ("round_limit 0", "R1-step100", c["comparison_id"], "レールの式が横の部材のねじりを入れていない"):
+            self.assertIn(needle, reason)
+        # with revisions left, a written cause alone does not let the stop through
+        self.ctx.project["round_limit"] = 1
+        self.assertIsNone(rules.excused_pending(self.ctx))
 
     def _stop_role(self, agent_type, agent_id="a1"):
         return run(self.hooks.subagent_stop({"agent_id": agent_id, "agent_type": agent_type,
