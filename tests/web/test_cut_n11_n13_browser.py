@@ -132,7 +132,7 @@ CHECK3 = {"case": "c3", "quantity": "tip_deflection", "expected": 12.0, "got": 1
           "source": "closed form delta = P L^3 / (3 E I)"}
 
 
-def tool_events(run_id, checks=CHECKS):
+def tool_events(run_id, checks=CHECKS, word="道具"):
     """The contract sample shaped like the off-road run: the system naming the shelf's tools it
     does not check, two checked builtin tools (one not usable), a tool made by Claude (attempt 1
     not usable, attempt 2 usable with `checks`, two by default), two analyses made with it in two
@@ -184,7 +184,7 @@ def tool_events(run_id, checks=CHECKS):
 
     events = [
         run, design,
-        {**sysv, "kind": "agent.said", "text": "この実行の試験 (R4) には使わないので確かめない道具: " + "、".join(UNCHECKED), "data": {}},
+        {**sysv, "kind": "agent.said", "text": f"この実行の試験 (R4) には使わないので確かめない{word}: " + "、".join(UNCHECKED), "data": {}},
         checked("tilt_table", "builtin", True), checked("broken", "builtin", False),
         {**checked(TOOL, "claude", False, [{**CHECKS[0], "got": 1.0, "pass": False}]), **st},
         made,
@@ -245,8 +245,9 @@ class CutN11N13Test(unittest.TestCase):
         cls.tool_run = "20261103-230000-n13"
         cls.nocode_run = "20261103-230000-n13nocode"
         cls.three_run = "20261103-230000-n13three"
+        cls.tsuru_run = "20261103-230000-n13tsuru"  # the system's line says ツール (runs after design's 4c700b7)
         for run, events in ((cls.hooks_run, hooks_events(cls.hooks_run)), (cls.tool_run, tool_events(cls.tool_run)), (cls.nocode_run, tool_events(cls.nocode_run)),
-                            (cls.three_run, tool_events(cls.three_run, CHECKS + [CHECK3]))):
+                            (cls.three_run, tool_events(cls.three_run, CHECKS + [CHECK3])), (cls.tsuru_run, tool_events(cls.tsuru_run, word="ツール"))):
             (cls.runs / run).mkdir(parents=True)
             (cls.runs / run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         (cls.runs / cls.tool_run / "tools").mkdir()
@@ -470,6 +471,15 @@ class CutN11N13Test(unittest.TestCase):
         self.assertEqual(e["checked"], [])
         self.assertEqual(seen[end]["counts"].get("label"), 4)
         self.assertEqual(re.findall(r"転倒の守り(?!を確かめるツール)", e["text"]), [])
+
+    def test_n13_reads_the_unchecked_tools_said_either_way(self):
+        """The system's line names the unchecked tools with 道具 (older runs) or ツール (from the
+        design department's 4c700b7): the shelf has the same cards either way."""
+        at = [self.layout["n13"]["times"]["gap_s"]]
+        old = next(iter(self.read("n13", self.tool_run, at).values()))["cut"]
+        new = next(iter(self.read("n13", self.tsuru_run, at).values()))["cut"]
+        self.assertEqual([x["isNew"] for x in new["cards"]], [False] * (len(UNCHECKED) + 1) + [True])
+        self.assertEqual([x["isNew"] for x in new["cards"]], [x["isNew"] for x in old["cards"]])
 
     def test_n13_without_the_code_file_says_so(self):
         seen = self.read("n13", self.nocode_run, [self.layout["n13"]["times"]["check_s"]])
