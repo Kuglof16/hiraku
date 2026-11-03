@@ -14,7 +14,8 @@ The links follow from the parts the kits place (their kinds and ids) and the fra
   tie_rod_<s> -> knuckle_<s> -> wheel_<s> -> support <s>, for every steered support;
 - brake (brake): brake pedal -> master cylinder -> caliper_<s> -> wheel_<s> -> support <s>, for
   every braked support;
-- power: battery -> main switch -> controller -> motor; the wiring box (12 V) from the battery,
+- power: battery -> main switch -> controller -> motor (a second battery pack wired to the first, in series:
+  ladder_4w battery_split); the wiring box (12 V) from the battery,
   the lamps from the wiring box; the accelerator pedal signals the controller;
 - the corners (load): suspension part to what holds its body-side hard points (body_mounts: the
   tower's and legs' end nodes, the brackets; else its support's frame node) and to the support,
@@ -202,6 +203,9 @@ def links(design: Record) -> dict[str, Record]:
             add(switch, _c(controller, "wire", "power"))
         else:
             add(battery, _c(controller, "wire", "power"))
+    packs = kinds.get("battery", [])
+    for later, before in zip(packs[1:], packs):  # more packs: in series, each to the one before (the first's chain)
+        add(later, _c(before, "wire", "power"))
     if controller and motor:
         add(controller, _c(motor, "wire", "power"))
     aux = first("electrical")
