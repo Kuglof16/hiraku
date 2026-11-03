@@ -11,7 +11,7 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `first_look.py` | 動画のカットとアプリの画面を、初めて見る人の目で点検する。絵を 8 枚ずつのシートにし、画像の判定器 (Codex CLI) に、何を言っている絵か・3 秒で分かるか・目が行く所・読めない札と重なり・直し方を絵ごとに聞き、直す所の一覧にする (判定器とモデルの名前も書く)。Pillow と ffmpeg が要る |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
-| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。同じ PC でほかの `qa.run_tests` が回っているときは、始めと終わりの要約に「warning: another qa.run_tests is running on this PC」を出す (システムの一時フォルダの `hiraku-run-tests/<pid>.json` で見る) |
+| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。全部の試験は PC で 1 つずつ回す: 始める前に PC 全体の鍵 (システムの一時フォルダの `hiraku-run-tests/suite.lock`。プロセスが終われば外れる) を取り、ほかが持っている間は「waiting for <pid> (<worktree>, since hh:mm)」と出して待つ。鍵を持っている間は CPU の数 − 4 (8 以上) のプロセスで回す。急ぐときだけ `--no-wait` (待たずに 8 プロセスで回し、重なりを「warning: another qa.run_tests is running on this PC」で知らせる) |
 | `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う。`run_tests` の試験のプロセスと台本の運転には、BLAS のスレッドを 1 本にして渡す (`OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`、もう決めてあればそのまま)。numpy と scipy の OpenBLAS は、使うかもしれないスレッドの数だけメモリを先に取るので、たくさん同時に回すと PC のメモリが尽きる |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 

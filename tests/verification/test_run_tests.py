@@ -163,6 +163,57 @@ class OtherSuites(unittest.TestCase):
             running.wait()
 
 
+class SuiteQueue(unittest.TestCase):
+    """One full suite at a time: the machine-wide lock in the system temp folder."""
+
+    HOLD = ("import sys, time, pathlib\n"
+            "import qa.run_tests as rt\n"
+            "rt.LOCK_DIR = pathlib.Path(sys.argv[1])\n"
+            "f = rt.take_queue(8)\n"
+            "print('held', flush=True)\n"
+            "time.sleep(float(sys.argv[2]))\n")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.saved, rt.LOCK_DIR = rt.LOCK_DIR, Path(self._tmp.name)
+
+    def tearDown(self):
+        rt.LOCK_DIR = self.saved
+        self._tmp.cleanup()
+
+    def _holder(self, seconds):
+        p = subprocess.Popen([sys.executable, "-c", self.HOLD, str(rt.LOCK_DIR), str(seconds)], cwd=rt.ROOT,
+                             stdout=subprocess.PIPE, text=True)
+        self.addCleanup(p.stdout.close)
+        self.assertEqual(p.stdout.readline().strip(), "held")
+        return p
+
+    def test_a_second_suite_does_not_get_the_lock_while_one_runs(self):
+        p = self._holder(30)
+        try:
+            self.assertIsNone(rt.take_queue(8, wait=False))
+        finally:
+            procs.kill_tree(p)
+            p.wait()
+        f = rt.take_queue(8, wait=False)  # the OS freed the lock with the process
+        self.assertIsNotNone(f)
+        f.close()
+
+    def test_a_waiting_suite_says_whom_it_waits_for_and_then_runs(self):
+        p = self._holder(3)
+        said = []
+        saved, rt.POLL_S = rt.POLL_S, 0.2
+        try:
+            f = rt.take_queue(8, say=lambda *a, **k: said.append(" ".join(map(str, a))))
+        finally:
+            rt.POLL_S = saved
+            p.wait()
+        self.assertIsNotNone(f)
+        f.close()
+        self.assertEqual(len(said), 1, said)  # said once per holder, not at every poll
+        self.assertTrue(said[0].startswith("waiting for ") and str(rt.ROOT) in said[0], said)
+
+
 class Procs(unittest.TestCase):
     """qa.procs.run stops the command and what it started when the time runs out (subprocess.run
     stops only the command itself, and a process the command started keeps running)."""
