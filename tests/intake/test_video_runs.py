@@ -59,10 +59,39 @@ class N14RealTest(unittest.TestCase):
             path = video_runs.prepare_n14_real(tmp)
             req = load_requirements(path)
         self.assertNotIn("stop_after", req)
+        self.assertEqual(req["hearing"], "claude")
+        self.assertEqual(contract.errors("requirements_file", req), [])
         have = {r["key"] for r in req["requirements"]}
         asked = {q["req_key"] for q in hearing.plan_hearing(req, product_defaults=load_product("offroad-4w")).questions}
         self.assertTrue({"Q34", "Q64", "Q74", "Q80"} <= asked)
         self.assertFalse(asked & have)  # what is asked is not in the file
+
+    def test_with_hearing_claude_the_intake_leaves_the_items_open_and_ask_user_asks_all_of_them(self):
+        from hiraku.intake import pipeline
+        from hiraku.intake.tools import TOOLS
+        from tests.intake.test_tools import make_ctx
+
+        with tempfile.TemporaryDirectory() as tmp:
+            req = load_requirements(video_runs.prepare_n14_real(tmp))
+        left = pipeline.intake(req["want"], req["flags"], req.get("speed_class"), product="offroad-4w",
+                               requirements=req["requirements"], from_file=True, hearing_mode=req["hearing"])
+        self.assertEqual([e["kind"] for e in left.events][0], "domains.picked")
+        self.assertNotIn("hearing.asked", [e["kind"] for e in left.events])
+        self.assertNotIn("hearing.answered", [e["kind"] for e in left.events])
+        self.assertEqual(left.requirements_file["requirements"], req["requirements"])  # nothing filled in
+        done = pipeline.intake(req["want"], req["flags"], req.get("speed_class"), product="offroad-4w",
+                               requirements=req["requirements"], from_file=True)  # hearing code: as before
+        self.assertIn("hearing.answered", [e["kind"] for e in done.events])
+        self.assertGreater(len(done.requirements_file["requirements"]), len(req["requirements"]))
+        with self.assertRaises(Exception):
+            pipeline.intake(req["want"], req["flags"], product="offroad-4w", requirements=[], from_file=True, hearing_mode="x")
+        with tempfile.TemporaryDirectory() as root:  # ask_user then asks the must and the confirm items the run lacks
+            ctx = make_ctx(Path(root), product="offroad-4w", flags=req["flags"], requirements=req["requirements"])
+            got = TOOLS["ask_user"]["function"](ctx, {}, "lead")
+        asked = {q["req_key"]: q["ask"] for q in got["questions"]}
+        self.assertTrue({"Q34", "Q64", "Q74", "Q80"} <= set(asked))
+        self.assertEqual({"confirm"}, {asked[k] for k in ("Q34", "Q64")})
+        self.assertIn("Q03", asked)
 
     def test_the_answers_are_written_as_the_screen_writes_them(self):
         with tempfile.TemporaryDirectory() as tmp:
