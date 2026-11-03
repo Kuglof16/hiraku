@@ -14,7 +14,8 @@ from typing import Any
 from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
-from hiraku.tools.judge import latest_verdicts
+from hiraku.tools.judge import held_cases, latest_verdicts
+from hiraku.tools.shelf import NOT_CHECKED
 
 HK1 = "HK1_prediction_first"
 HK2 = "HK2_tool_usable"
@@ -22,6 +23,8 @@ HK3 = "HK3_cause_before_continue"
 HK4 = "HK4_no_stop_before_judged"
 
 assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4}
+
+Record = dict[str, Any]
 
 
 @dataclass
@@ -62,10 +65,15 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
 
     name = args.get("tool") or ""
     spec = ctx.specs.get(name)
+    usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
+    if name in ctx.tools and spec is None:
+        return Denial(HK2, (
+            f"道具 {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
+            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+        ), domain)
     if (name in ctx.tools or spec is not None) and not (spec and spec["usable"]):
         checks = spec["checks"] if spec else []
         failed = [c["case"] for c in checks if not c["pass"]] or ["(答えの分かっている例が無い、またはまだ確かめていない)"]
-        usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
         return Denial(HK2, (
             f"道具 {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
             f"list_tools で usable が true の道具 ({usable}) を選んでください"
@@ -103,16 +111,80 @@ def check_call(ctx: RunContext, tool: str, args: dict[str, Any]) -> Denial | Non
 
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
-    """Picked domains whose judgement is still pending: [(domain, load case ids without a verdict)]."""
+    """Picked domains whose judgement is still pending: [(domain, load case ids)], the load cases
+    without a verdict and (HK4, docs/contract.md 分野が緑になる条件) those held back from passing by an
+    unresolved mismatch or a result beyond the criterion (judge.held_cases)."""
     v = version or ctx.version
     verdicts = latest_verdicts(ctx, v)
     out = []
     for d in ctx.picked:
-        missing = [lc["load_case_id"] for lc in ctx.load_cases
-                   if lc["domain"] == d and "criterion" in lc and lc["load_case_id"] not in verdicts]
-        if missing:
-            out.append((d, missing))
+        held = held_cases(ctx, d, v) if v else {}
+        left = [lc["load_case_id"] for lc in ctx.load_cases
+                if lc["domain"] == d and "criterion" in lc
+                and (lc["load_case_id"] not in verdicts or lc["load_case_id"] in held)]
+        if left:
+            out.append((d, left))
     return out
+
+
+def _shelf_quantities(ctx: RunContext) -> tuple[set[str], set[str]]:
+    """(the registry's formula ids, the quantities predicted whatever the load case: the formulas'
+    output names and the shelf tools' pairings of a result with a registry formula, describe()["predicts"])."""
+    formulas = ctx.formulas.list_formulas()
+    ids = {f["formula_id"] for f in formulas}
+    out = {o for f in formulas for o in f.get("outputs", {})}
+    for tool in ctx.tools.values():
+        describe = getattr(tool, "describe", None)
+        if not callable(describe):
+            continue
+        try:
+            pairs = describe().get("predicts") or []
+        except Exception:  # a tool made in the run may describe itself badly
+            continue
+        out |= {p["quantity"] for p in pairs if isinstance(p, dict) and p.get("formula_id") in ids}
+    return ids, out
+
+
+def predicted_quantities(ctx: RunContext, load_case: Record, shelf: tuple[set[str], set[str]] | None = None) -> set[str]:
+    """The quantities a K0 formula of the registry (ctx.formulas) can predict for this load case: an
+    output of that name, a shelf tool's pairing of a result with a formula (describe()["predicts"]),
+    a prediction in the builders' steps for it (hiraku.catalog.build.plan_steps) and the quantities
+    already predicted for it in this run. Only pairings with a formula that is in the registry count.
+    shelf: _shelf_quantities(ctx), when already worked out."""
+    from hiraku.catalog.build import plan_steps
+
+    ids, base = shelf or _shelf_quantities(ctx)
+    out = set(base)
+    for step in plan_steps(ctx.project["product"], load_case):
+        out |= {p["quantity"] for p in step.get("predictions") or [] if p.get("formula_id") in ids}
+    out |= {p["quantity"] for p in ctx.store.records("prediction") if p["load_case_id"] == load_case["load_case_id"]}
+    return out
+
+
+def unpredictable_cases(ctx: RunContext) -> dict[str, str]:
+    """Load cases of the picked domains, without a verdict of the current version, whose criterion's
+    quantity no K0 formula of the registry predicts (predicted_quantities): load case id -> quantity.
+    Without a registry (the plugin's hook command, ctx.formulas None) the run's server worked it out
+    (ctx.unpredictable)."""
+    if ctx.formulas is None:
+        return dict(getattr(ctx, "unpredictable", None) or {})
+    if not ctx.version:
+        return {}
+    verdicts = latest_verdicts(ctx, ctx.version)
+    out: dict[str, str] = {}
+    shelf = None
+    for lc in ctx.load_cases:
+        if lc["domain"] not in ctx.picked or "criterion" not in lc or lc["load_case_id"] in verdicts:
+            continue
+        shelf = shelf or _shelf_quantities(ctx)
+        q = lc["criterion"]["quantity"]
+        if q not in predicted_quantities(ctx, lc, shelf):
+            out[lc["load_case_id"]] = q
+    return out
+
+
+def _usable_tools(ctx: RunContext, test_id: str) -> list[str]:
+    return [n for n, s in ctx.specs.items() if s.get("usable") and test_id in (s.get("tests") or [])]
 
 
 def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
@@ -126,26 +198,116 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     return "done", None, "done"
 
 
-def stop_reason(ctx: RunContext) -> str | None:
-    """HK4: why the run may not stop yet (None when every picked domain is judged)."""
+def revisions_used_up(ctx: RunContext) -> bool:
+    """The design revisions are used up (version - 1 >= round_limit): HK4 lets the lead's stop through
+    (contract HOOK_RULES HK4: unless the round limit is reached). runner.end_status then ends the run
+    not_judged (a domain without a verdict) or round_limit (a red tile)."""
+    return bool(ctx.version) and ctx.version - 1 >= ctx.project["round_limit"]
+
+
+def red_left_reason(ctx: RunContext) -> str | None:
+    """Why the lead may not stop yet although every picked domain is judged: a tile is red and design
+    revisions are left (version - 1 < round_limit). Names the red domains, their failing verdicts
+    (ver-...), the revisions left and what to do next. None when no tile is red, no revision is
+    left, or a picked domain is still pending (stop_reason says that)."""
+    if not ctx.version or holding(ctx):
+        return None
+    limit = ctx.project["round_limit"]
+    left = limit - (ctx.version - 1)
+    reds = [j for j in ctx.store.judgements() if j["state"] == "red" and j["domain"] in ctx.picked]
+    if not reds or left <= 0:
+        return None
+    verdicts = latest_verdicts(ctx, ctx.version)
+    parts, ids = [], []
+    for j in reds:
+        failed = [v for v in verdicts.values() if v["domain"] == j["domain"] and not v["pass"]]
+        ids += [v["verdict_id"] for v in failed]
+        what = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in failed) or j["summary"]
+        parts.append(f"{_ja(j['domain'])}: {what}")
+    hand = f"と合否の ID ({', '.join(ids)}) " if ids else " "
+    return (f"赤の分野が残っていますが、設計の直しがあと {left} 回できます (round_limit {limit}、今の版 {ctx.version})。"
+            f"{' / '.join(parts)}。設計役 (designer) に、通らなかった試験{hand}を渡して、revise_design で"
+            f"次の版 (版 {ctx.version + 1}) を作らせてください。新しい版で全部の荷重条件をやり直します")
+
+
+def holding(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
+    """pending() without the load cases this run cannot judge (unpredictable_cases): those HK4 holds the stop for."""
+    cannot = unpredictable_cases(ctx)
+    out = []
+    for d, lcs in pending(ctx, version):
+        held = held_cases(ctx, d, version or ctx.version) if (version or ctx.version) else {}
+        left = [lc for lc in lcs if lc in held or lc not in cannot]
+        if left:
+            out.append((d, left))
+    return out
+
+
+def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
+    """HK4: why the run may not stop yet (None when every picked domain is judged, or what is left
+    is only load cases this run cannot judge: unjudged_reason names them). With domain, only that
+    domain's pending load cases and open mismatches (a role's own stop). A load case whose test has
+    no usable tool on the shelf names make_tool (and get_tool_template)."""
     if not ctx.version:
         return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
                 "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
-    left = pending(ctx)
+    left = [(d, lcs) for d, lcs in holding(ctx) if domain is None or d == domain]
     if not left:
         return None
     parts = []
     for d, lcs in left:
+        held = held_cases(ctx, d, ctx.version)
         steps = []
         for lc_id in lcs:
             lc = ctx.load_case(lc_id)
             q = lc["criterion"]["quantity"]
+            if lc_id in held:
+                steps.append(f"{lc_id} ({'、'.join(held[lc_id])}。原因を書き、その結果と一致する予測を記録し直して "
+                             f"compare で一致させると判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
+                continue
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
+            if not _usable_tools(ctx, lc["test_id"]):
+                first = (f"棚に {lc['test_id']} を解析できる使える道具がありません。get_tool_template で道具の形を見て書き、"
+                         f"check_tool で試してから make_tool で棚に入れ、{first}")
             steps.append(f"{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")
-    open_ = ctx.open_mismatches()
+    open_ = ctx.open_mismatches(domain)
     tail = ""
     if open_:
         tail = f" 原因の書かれていない食い違い {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"
-    return f"まだ判定の無い分野があるので終われません。{' / '.join(parts)}。{tail}".strip()
+    return f"まだ判定の無い (合格にできない試験の残る) 分野があるので終われません。{' / '.join(parts)}。{tail}".strip()
+
+
+def cannot_judge_text(ctx: RunContext) -> str | None:
+    """The load cases this run cannot judge (unpredictable_cases), in a sentence; None when there are none."""
+    cannot = unpredictable_cases(ctx)
+    if not cannot:
+        return None
+    named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
+    return (f"{named} は、判定の量を予測する手計算 (K0) の式が式の台帳に無いので、この実行では判定できません "
+            f"(予測が無いと解析も照合もできない)")
+
+
+def design_refusal(ctx: RunContext) -> str | None:
+    """Before the first version: the reason the designer's last propose_design was refused (an
+    agent.said of system with data.refused, hiraku.tools.mcp RECORDED_REFUSALS), or None. HK4 lets
+    the lead's stop through on it: the roles could not fix what the tool refused."""
+    if ctx.version:
+        return None
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "design.created":
+            return None
+        if e["kind"] == "agent.said" and (e.get("data") or {}).get("refused") == "propose_design":
+            return e["data"].get("reason") or e.get("text") or ""
+    return None
+
+
+def unjudged_reason(ctx: RunContext) -> str | None:
+    """Why a run that ends now ends not judged: stop_reason, and the load cases it cannot judge
+    (cannot_judge_text); before the first version, the refusal of propose_design if that is why.
+    None when every picked domain is judged."""
+    refused = design_refusal(ctx)
+    if refused is not None:
+        return f"最初の版を作れませんでした。設計役の propose_design が断られました: {refused}"
+    parts = [x for x in (stop_reason(ctx), cannot_judge_text(ctx)) if x]
+    return " ".join(parts) or None

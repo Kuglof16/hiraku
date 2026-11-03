@@ -53,8 +53,8 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual([a["agent_id"] for a in self.ctx.project["agents"]], ["lead", "designer"])
         self.assertNotIn("design.created", self.kinds())
         self.assertIn("propose_design", rules.stop_reason(self.ctx))  # HK4: nothing to judge yet is no end
-        (kind,) = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
-        self.assertEqual(kind["name"], "ladder_4w")
+        kinds = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
+        self.assertEqual(kinds[0]["name"], "ladder_4w")  # first: the scripted run's default (K2's space frame is another)
 
     def test_roles_are_defined_before_the_load_cases(self):
         att = Attribution()
@@ -97,6 +97,54 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
             propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "again"}, "designer")
         for e in events:
             self.assertEqual(contract.errors("event", e), [], e["kind"])
+
+    def test_a_refused_first_version_lets_the_run_end_with_the_refusal(self):
+        """A propose_design the tool refuses is kept in the record; HK4 then lets the lead's stop through
+        and the run ends not_judged with the refusal as its reason (the roles cannot fix it)."""
+        import asyncio
+
+        from hiraku.agent.runner import end_status
+        from hiraku.tools.mcp import HANDLERS, make_handler
+
+        hooks = Hooks(self.ctx, Attribution())
+        self.assertEqual(hooks.decide_stop({})["decision"], "block")  # nothing tried yet: HK4 asks for the design
+        args = {"archetype": "tricycle", "reason": "要件から"}
+        att = Attribution()
+        att.push(contract.mcp_name("propose_design"), args, "designer")
+        out = asyncio.run(make_handler(self.ctx, att, "propose_design", HANDLERS["propose_design"])(args))
+        self.assertTrue(out["is_error"])
+        (said,) = [e for e in self.ctx.store.events() if (e.get("data") or {}).get("refused") == "propose_design"]
+        self.assertEqual((said["agent"], said["data"]["agent"]), ("system", "designer"))
+        self.assertIn("ladder_4w", rules.design_refusal(self.ctx))
+        self.assertEqual(Hooks(self.ctx, Attribution()).decide_stop({}), {})
+        status, reason, code = end_status(self.ctx)
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        self.assertIn("propose_design が断られました", reason)
+        for e in self.ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+
+    def test_a_report_before_the_first_version(self):
+        from hiraku.tools.functions import write_report
+
+        issue = {"kind": "tool_error", "what": "最初の版を組めない", "where": "propose_design"}
+        rep = write_report(self.ctx, {"summary": "版 1 を作れずに止まった", "next": [], "issues": [issue]}, "lead")
+        self.assertEqual((rep["design_version"], rep["domains"], rep["next"], rep["issues"]), (0, [], [], [issue]))
+        self.assertEqual(contract.errors("report", rep), [])
+        last = self.ctx.store.events()[-1]
+        self.assertEqual(last["kind"], "report.written")
+        self.assertNotIn("design_version", last)  # an event's design_version is 1 or more
+        self.assertEqual(contract.errors("event", last), [])
+        with self.assertRaisesRegex(ToolError, "next"):
+            write_report(self.ctx, {"summary": "x", "next": [{"domain": "strength", "change": "x", "reason": "y"}]}, "lead")
+
+    def test_the_hearings_answers_reach_the_first_version(self):
+        """ask_user writes the answers into project.requirements; the design and its load cases are built
+        from those values, not from the file as it was at the start."""
+        reqs = [dict(r, value=120.0) if r["key"] == "Q15" else r for r in self.ctx.project["requirements"]]
+        self.ctx.store.update_project({"requirements": reqs}, agent="lead", text="ヒアリングの答えを要件に入れました")
+        self.assertEqual(next(r for r in self.ctx.requirements_file["requirements"] if r["key"] == "Q15")["value"], 100)
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "答えの段差で"}, "designer")
+        self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["P1-step120", "R1-step120"])
 
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):

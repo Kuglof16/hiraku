@@ -23,6 +23,9 @@ class RunContext:
     made_tools: Any = None  # hiraku.solvers.toolmaker.RunShelf of this run, made on the first make_tool
     requirements_file: Record | None = None  # the whole requirements file (propose_design builds from it)
     requirements_path: Path | None = None  # where it was read from (the scripted run's plan of that file)
+    # rules.unpredictable_cases as the run's server worked it out, for a context without a registry
+    # (formulas None: the plugin's hook command, hiraku.agent.plugin)
+    unpredictable: dict[str, str] | None = None
 
     # ---------------------------------------------------------------- project views
 

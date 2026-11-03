@@ -134,6 +134,17 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(last["kind"], "run.finished")
         self.assertEqual(last["data"]["status"], "stopped")
 
+    def test_the_plugin_paths_cost_is_null(self):
+        self.assertEqual(self.store.project["cost_usd"], 0.0)  # a run HIRAKU pays for (or a scripted one)
+        for driver, cost in (("claude_code_plugin", None), ("scripted", 0.0), ("agent_sdk", 0.0)):
+            with self.subTest(driver=driver):
+                s = RunStore.create(dict(project_fields(), driver=driver), root=self.root, slug=driver.replace("_", "-"))
+                self.assertEqual(s.project["cost_usd"], cost)
+                on_disk = json.loads((s.path / "project.json").read_text(encoding="utf-8"))
+                self.assertIn("cost_usd", on_disk)
+                self.assertEqual(on_disk["cost_usd"], cost)
+                self.assertEqual(contract.errors("event", s.events()[0]), [])
+
     def test_reopen_continues_seq_and_ids(self):
         self.store.write_design(example("design.json"))
         pred = example("prediction.json")

@@ -78,6 +78,108 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     return out
 
 
+# The result a tool's analysis is judged on where it is not the criterion's own quantity (docs/contract.md,
+# 判定に使う量): frame_shell judges max_stress criteria on the weld toe's structural hot-spot stress, since its
+# element max_stress keeps rising at sharp corners as the mesh is refined. The tool's spec says it
+# (judged_as); this table is for a shelf whose spec does not carry judged_as yet.
+JUDGED_QUANTITY = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
+
+
+def judged_quantity(ctx: RunContext, tool: str | None, criterion_quantity: str) -> str:
+    """The name of the tool's result that a criterion on criterion_quantity is judged on: the tool
+    spec's judged_as, else JUDGED_QUANTITY, else the criterion's own quantity."""
+    spec = ctx.specs.get(tool or "") or {}
+    return ((spec.get("judged_as") or {}).get(criterion_quantity)
+            or JUDGED_QUANTITY.get((tool, criterion_quantity), criterion_quantity))
+
+
+def failing_end(results: list[Record], op: str) -> Record:
+    """Of several results of one quantity, the one nearest failing: the largest under <= and <, the
+    smallest under >= and >."""
+    pick = max if unfavourable_side(op) == "larger" else min
+    return pick(results, key=lambda r: r["value"])
+
+
+def beyond_results(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record]]:
+    """(analysis, result) where a tool's newest ok analysis of the load case in the version has its
+    judged quantity (judged_quantity) beyond the criterion at its failing end. A later run of the
+    same tool replaces its earlier one; different tools (beam and shell) are each kept."""
+    crit = load_case.get("criterion")
+    if crit is None:
+        return []
+    newest: dict[str, Record] = {}
+    for a in ctx.store.records("analysis", version):
+        if a["load_case_id"] == load_case["load_case_id"] and a["status"] == "ok":
+            newest[a["tool"]] = a
+    out = []
+    for a in newest.values():
+        q = judged_quantity(ctx, a["tool"], crit["quantity"])
+        hits = [r for r in a.get("results", []) if r["quantity"] == q and r.get("unit") == crit["limit"]["unit"]]
+        if hits:
+            worst = failing_end(hits, crit["op"])
+            if not OPS[crit["op"]](worst["value"], crit["limit"]["value"]):
+                out.append((a, worst))
+    return out
+
+
+def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
+    """(comparison, cause or None) for the version's mismatches of the load case whose cause is not
+    written yet or is written but not resolved. A safe-side cause counts as explained: its verdict
+    stands unless a result beyond the criterion voids it (beyond_results). So does an earlier cause
+    of the quantity that the load case's latest verdict, a safe-side one, was judged on: the chain of
+    re-predictions ended in that verdict (the cause stays unresolved in the record, where resolved_by
+    names only a later match)."""
+    causes = ctx.causes_by_comparison()
+    ver = latest_verdicts(ctx, version).get(load_case["load_case_id"])
+    safe_cmp = (ctx.store.get("comparison", ver["comparison_id"])
+                if ver and ver.get("basis") == "explained_safe_side" else None)
+    out = []
+    for c in ctx.store.records("comparison", version):
+        if c["status"] != "mismatch":
+            continue
+        pred = ctx.prediction(c["prediction_id"])
+        if pred is None or pred["load_case_id"] != load_case["load_case_id"]:
+            continue
+        cause = causes.get(c["comparison_id"])
+        if cause is not None and safe_cmp is not None and c["quantity"] == safe_cmp["quantity"]:
+            continue  # settled by the later safe-side verdict on the same quantity
+        if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+            out.append((c, cause))
+    return out
+
+
+def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
+    """Why a load case without a failing verdict may not count as passed (docs/contract.md, 分野が緑に
+    なる条件): an unresolved mismatch, or an analysis result beyond the criterion (which also voids an
+    earlier safe-side verdict). Empty when nothing holds it back."""
+    out = []
+    for c, cause in unresolved_mismatches(ctx, load_case, version):
+        why = "原因がまだ書かれていない" if cause is None else f"原因 {cause['cause_id']} がまだ解けていない"
+        out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
+    crit = load_case.get("criterion")
+    for a, r in beyond_results(ctx, load_case, version):
+        out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
+                   f"基準 {OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超えている")
+    return out
+
+
+def held_cases(ctx: RunContext, domain: str, version: int) -> dict[str, list[str]]:
+    """load case id -> blockers, for the domain's load cases with a criterion that have no failing
+    verdict but are held back from passing."""
+    verdicts = latest_verdicts(ctx, version)
+    out = {}
+    for lc in ctx.load_cases:
+        if lc["domain"] != domain or "criterion" not in lc:
+            continue
+        ver = verdicts.get(lc["load_case_id"])
+        if ver is not None and not ver["pass"]:
+            continue
+        why = blockers(ctx, lc, version)
+        if why:
+            out[lc["load_case_id"]] = why
+    return out
+
+
 def _amount(x: float, unit: str) -> str:
     """A number and its unit; a dimensionless "1" is not written."""
     return f"{x:.4g}" if unit == "1" else f"{x:.4g} {unit}"
@@ -124,7 +226,8 @@ def miss_line(rule: Record, check: Record) -> str:
 
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
     """The tile of a domain: red when a verdict fails, or (assembly) when a system rule hits a part;
-    green when every load case with a criterion passed; else pending."""
+    green when every load case with a criterion passed and none is held back (held_cases: an
+    unresolved mismatch, or a result beyond the criterion); else pending."""
     v = version or ctx.version
     verdicts = latest_verdicts(ctx, v)
     cases = [lc for lc in ctx.load_cases if lc["domain"] == domain and "criterion" in lc]
@@ -132,12 +235,21 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     missing = [lc["load_case_id"] for lc in cases if lc["load_case_id"] not in verdicts]
     reds = [x for x in got if not x["pass"]]
     misses = system_misses(ctx, v) if domain == SYSTEM_DOMAIN and v else []
+    held = held_cases(ctx, domain, v) if v else {}
+    held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
                 ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
         state, summary = "red", "。".join(lines)
         if missing:
             summary += f"。判定の無い試験 {len(missing)}: " + "、".join(missing)
+        if held:
+            summary += "。" + held_line
+    elif held:
+        state, summary = "pending", held_line
+        rest = [x for x in missing if x not in held]
+        if rest:
+            summary += "。まだ判定していない試験: " + "、".join(rest)
     elif got and not missing:
         state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
     else:
@@ -153,8 +265,11 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
 
 
 def update_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
+    """Recompute the tile and store it; an unchanged tile is not written again (no judgement.updated)."""
     j = compute_judgement(ctx, domain, version)
     contract.validate("judgement", j)
+    if any(t == j for t in ctx.store.judgements(j["design_version"])):
+        return j
     return ctx.store.set_judgement(j)
 
 

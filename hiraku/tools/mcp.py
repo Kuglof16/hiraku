@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS, rule_check
+from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RUN_TOOLS, rule_check
 
 Record = dict[str, Any]
 
@@ -47,6 +47,18 @@ def contract_input_schema(name: str) -> Record:
     return schema
 
 
+COMPARE_WHERE = {"type": "string", "description": (
+    "場所 (部材・部品・支持の ID)。解析の結果が場所ごとに出ていて、予測がその場所の式 (レールの式ならレールの部材) の"
+    "ときだけ付ける。その場所の結果と照合する。合否は全部の場所のうち不合格に近い方でしか作らない")}
+
+
+def compare_input_schema() -> Record:
+    """tool_input.compare and `where` (the contract's compare input has no place yet; the tool takes it)."""
+    schema = contract_input_schema("compare")
+    schema["properties"] = {**schema["properties"], "where": COMPARE_WHERE}
+    return schema
+
+
 def _domain_filter(extra: Record | None = None) -> Record:
     props: Record = {"domain": {"enum": list(contract.DOMAINS), "description": "この分野だけ"}}
     props.update(extra or {})
@@ -57,8 +69,17 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "get_context": {"type": "object", "additionalProperties": False, "properties": {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
-                                    "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables"},
+                                    "手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design (中身は design_part で少しずつ)、設計役の変数は design_variables。"
+                                    "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
+                                    "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
+        "load_case_id": {"type": "string",
+                         "description": "formula_inputs (無ければ全部の荷重条件) と joint_wall_inputs の荷重条件"},
+        "design_part": {"enum": list(DESIGN_PARTS),
+                        "description": "design の一部だけを、offset と limit で少しずつ (無ければ design は全体の要約)"},
+        "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
+        "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
+    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
     "list_tools": _domain_filter({
         "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
@@ -66,7 +87,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     }),
     "record_prediction": contract_input_schema("record_prediction"),
     "analyze": contract_input_schema("analyze"),
-    "compare": contract_input_schema("compare"),
+    "compare": compare_input_schema(),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
     "propose_design": contract_input_schema("propose_design"),
@@ -78,10 +99,24 @@ INPUT_SCHEMAS: dict[str, Record] = {
 DESCRIPTIONS = {
     "get_context": (
         "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
-        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
-        "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む"
+        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。設計を直した版では、最初に "
+        "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
+        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
+        "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
+        "入力を、台本の運転と同じコードがこの版の設計から出した値・単位・出どころ (from) で返す。"
+        "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "
+        "sections=[\"joint_wall_inputs\"] と load_case_id で、その入力 (横の部材の端のモーメント M など、コードが設計と"
+        "荷重条件から出したもの) が返る"
     ),
-    "list_formulas": "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool でその道具の式だけにする",
+    "get_tool_template": (
+        "道具を書く (check_tool・make_tool) ときの見本。強度の試験の道具 1 つ分の通して動くコード (code) と、"
+        "決まりの説明: 定義するクラスと欄、analyse() の引数 (design・load_case・params) の中身、結果 (results) の欄、"
+        "答えの分かっている例 known_answers() と check_record の引数、使える import"
+    ),
+    "list_formulas": (
+        "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "
+        "predicts: 道具の結果の量と式の出力の対 (note つき)}"
+    ),
     "list_tools": (
         "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
         "tool を付けるとその道具の全体 (答えの分かっている例・式)"
@@ -96,7 +131,9 @@ DESCRIPTIONS = {
     ),
     "compare": (
         "予測と解析の結果を照合する。許す幅は荷重条件で決まっている。一致して基準があれば合否 (verdict、値は解析) も作る。"
-        "食い違えば record_cause を書くまでその分野は先に進めない"
+        "食い違えば record_cause を書くまでその分野は先に進めない。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の"
+        "式 (レールの式など) のときは where に部材の ID を付け、その場所の結果と比べる (付けないと全部の場所の不利な方、"
+        "別の部材の最大と比べてしまう)。合否は全部の場所のうち不合格に近い方でしか作らない"
     ),
     "record_cause": (
         "食い違った照合の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
@@ -157,14 +194,32 @@ def for_agent(name: str, result: Any) -> Any:
     return result
 
 
+# Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
+# known only from the PreToolUse hook's record (Attribution), so a call without one is refused
+# instead of reaching the function with agent None (which it would take as the allowed role).
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "write_report")
+NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
+             "見つかりません)。同じ入力でもう一度呼んでください")
+
+
+# Refusals kept in the record as an agent.said of system (data.refused, data.reason): a refused first
+# version leaves the run with nothing to judge, and HK4 lets the stop through on it (rules.design_refusal).
+RECORDED_REFUSALS = ("propose_design",)
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
     async def handler(args: dict[str, Any]) -> dict[str, Any]:
         agent = attribution.take(full, args)
+        if agent is None and name in ROLE_LIMITED_TOOLS:
+            return {"content": [{"type": "text", "text": NO_CALLER.format(tool=name)}], "is_error": True}
         try:
             result = await asyncio.to_thread(fn, ctx, args, agent)
         except ToolError as e:
+            if name in RECORDED_REFUSALS:  # HK4 reads it (rules.design_refusal): the run may end on it
+                ctx.store.emit("agent.said", agent="system", text=f"{name} は断られました: {e}",
+                               data={"refused": name, "agent": agent, "reason": str(e)})
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
         return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 
