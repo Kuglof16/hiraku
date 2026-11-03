@@ -1,7 +1,7 @@
 // A2 - hearing: the missing requirements asked once (left), the requirements and where each came from (right) (N14).
 
 import { fill, h } from "./dom.js";
-import { ITEM_HELP } from "./data.js";
+import { ITEM_CHOICES, ITEM_HELP } from "./data.js";
 import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました" };
@@ -79,7 +79,7 @@ function requirementRow(r) {
   const lowTrust = r.trust === 3;
   return h("tr", { class: `${r.fresh ? "fresh" : ""}${lowTrust ? " low" : ""}`, title: `番号 ${r.key}\n${r.basis || ""}` },
     h("td", {}, r.name),
-    h("td", { class: "val" }, showValue(r.value, r.unit)),
+    h("td", { class: "val" }, ITEM_CHOICES[r.key]?.[String(r.value)] ?? showValue(r.value, r.unit)), // the name of the choice, the value itself when there is none
     h("td", {}, h("span", { class: `in-src ${r.source}` }, SOURCE_JA[r.source] || r.source)),
     h("td", { class: "trust" }, h("span", { class: `in-dot t${r.trust}`, title: TRUST_JA[r.trust] }, r.trust)));
 }

@@ -372,6 +372,22 @@ console.log(JSON.stringify({ at, again }));
         self.assertEqual(got["again"], got["at"]["34.25"])  # the same time, the same picture
 
 
+@unittest.skipUnless(NODE, "node is not installed")
+class ChoiceNameTest(unittest.TestCase):
+    def test_the_requirements_table_shows_the_name_of_a_choice_and_the_value_when_there_is_no_name(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const row = (key, value) => ({{ key, name: key, value, source: 'user', trust: 1, basis: '' }});
+const events = [e(0, 'run.started', {{ run_id: 'r', want: 'w', flags: {{}}, requirements: [row('Q30', 'two_cargo'), row('Q30x', 'two_cargo'), row('Q34', 'いない'), row('Q50', 40)] }})];
+const el = new El('div');
+mountIntake(el, {{ events: () => events, onEvent: () => () => {{}} }}, {{ screen: 'A2' }});
+const cells = el.all('td').map((c) => c.text());
+console.log(JSON.stringify({{ named: cells.includes('2 人 + 荷'), raw: cells.includes('two_cargo'), plain: cells.includes('40') }}));
+""")
+        self.assertEqual(got, {"named": True, "raw": True, "plain": True})  # Q30 has a name for two_cargo; Q30x has none, so its value stays
+
+
 class StaticTest(unittest.TestCase):
     def test_the_files_a_screen_needs_are_there(self):
         for name in ("index.js", "model.js", "dom.js", "a1.js", "a2.js", "a5.js", "data.js", "intake.css", "demo.html", "demo-events.js"):

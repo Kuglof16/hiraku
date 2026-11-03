@@ -28,6 +28,7 @@ def tables() -> dict:
         "DOMAINS": [{"name": d, "ja": contract.DOMAIN_NAMES_JA[d]} for d in ANALYSIS_DOMAINS],
         "CATEGORIES": [{"name": n, "ja": ja} for n, ja in CATEGORIES.items()],
         "ITEM_HELP": {it["key"]: {"why": it["why"], "example": str(it["example"])} for it in hearing.load_items() if it.get("why")},
+        "ITEM_CHOICES": {it["key"]: {str(c["value"]): c["label"] for c in it["choices"]} for it in hearing.load_items() if it.get("choices")},
         "FACTS": {n: {"label": label, "unit": unit, "inDesigns": scope != "declared"}
                   for n, (label, unit, scope) in facts.FACTS.items()},
     }
