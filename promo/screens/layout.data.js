@@ -1280,6 +1280,228 @@ window.PROMO_LAYOUT = {
       "_note": "rows: first question appears, then one per row_step; answer_lag: Claude's answer after its question (all three by 2.3 s, inside sentence 1). check: HIRAKU's hand value of row 1 (sentence 2 starts at 3.53 s), one row per check_step; the analysis, the difference and the tick follow by cae_lag, diff_lag, tick_lag (last tick at 5.75 s). src: the source lines. From 6.0 s to 8.3 s the screen holds still"
     }
   },
+  "n09": {
+    "duration_s": 5.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n09) from the intake department's real run (Claude reads the request). 5.6 s is N09's slot in narration draft 6. Only the off-road vehicle, no other products",
+    "request": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 120,
+      "title_px": 22,
+      "text_px": 30,
+      "_note": "the maker's request in their own words, one or two lines"
+    },
+    "view": {
+      "x": 96,
+      "y": 240,
+      "w": 1100,
+      "h": 646,
+      "_note": "the vehicle in 3D; bottom 886"
+    },
+    "chips": {
+      "x": 1220,
+      "y": 240,
+      "w": 604,
+      "h": 646,
+      "text_px": 30,
+      "row_gap": 16,
+      "_note": "the seven domains and assembly, one chip a row; a chip lights when Claude picks it, with its reason in one short line (text_px x 0.7, at least min_text_px)"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "request_s": 0.3,
+      "chips_from_s": 2.2,
+      "chip_step_s": 0.35,
+      "_note": "the request is there from the start; the chips light one at a time from chips_from_s, in the order of the record, as the voice says 必要な解析を選びます (the maker's recording runs 0.30-5.33 s); with eight chips the last lights at 4.65 s"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n11": {
+    "duration_s": 14.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n11) from a scripted run: how HIRAKU works, not Claude making a mistake. 14.6 s is N11's slot in narration draft 6",
+    "memo": {
+      "x": 96,
+      "y": 96,
+      "w": 560,
+      "h": 790,
+      "title_px": 30,
+      "text_px": 24,
+      "_note": "the hand calculation memo (the prediction), written line by line"
+    },
+    "log": {
+      "x": 680,
+      "y": 96,
+      "w": 1144,
+      "h": 360,
+      "title_px": 30,
+      "text_px": 24,
+      "_note": "the run's log: the analysis called without a prediction is stopped (hooks), then runs once the prediction is written"
+    },
+    "result": {
+      "x": 680,
+      "y": 480,
+      "w": 1144,
+      "h": 406,
+      "title_px": 30,
+      "text_px": 24,
+      "_note": "the analysis result in 3D or a value; the settings carry the unit mistake (62 mm for 62 cm), so the value looks plausible"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "plausible_s": 1.5,
+      "memo_s": 4.9,
+      "stop_s": 9.6,
+      "run_s": 11.6,
+      "_note": "the maker's recording: sentence 1 0.30-4.56 s (a plausible wrong result shows from plausible_s), sentence 2 4.91-9.20 s (the memo is written from memo_s), sentence 3 9.55-12.81 s (the call without a prediction is stopped at stop_s; after the prediction it runs from run_s)"
+    },
+    "overlay": {
+      "color": "#c8402a",
+      "opacity": 0.22,
+      "_note": "the condition past the limit, translucent red"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n12": {
+    "duration_s": 9.2,
+    "_note": "drawn by the screens department (web cut.html?cut=n12) from the same scripted run as N11: the comparison catches the unit mistake in the settings. 9.2 s is N12's slot in narration draft 6. Numbers come from the record",
+    "table": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 560,
+      "title_px": 30,
+      "text_px": 28,
+      "value_px": 56,
+      "_note": "the comparison: the prediction and the analysis side by side, their difference; red while they disagree, green once fixed"
+    },
+    "cause": {
+      "x": 96,
+      "y": 680,
+      "w": 1728,
+      "h": 206,
+      "title_px": 30,
+      "text_px": 28,
+      "_note": "the recorded cause in one line (the centre of mass height, cm and mm), then the comparison again"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "mismatch_s": 1.0,
+      "cause_s": 5.2,
+      "fixed_s": 7.6,
+      "_note": "the maker's recording: sentence 1 0.30-4.82 s (the mismatch is red from mismatch_s), sentence 2 5.17-8.62 s (the cause from cause_s, the fixed comparison green from fixed_s)"
+    },
+    "overlay": {
+      "color": "#c8402a",
+      "opacity": 0.22,
+      "_note": "the condition past the limit, translucent red"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n13": {
+    "duration_s": 12.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n13) from the experiment department's real Claude run (Claude writes a tool and checks it against known answers). 12.0 s is N13's slot in narration draft 6",
+    "want": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 96,
+      "text_px": 30,
+      "_note": "what the maker wants, one line"
+    },
+    "shelf": {
+      "x": 96,
+      "y": 216,
+      "w": 1100,
+      "h": 670,
+      "title_px": 26,
+      "text_px": 22,
+      "_note": "the shelf of tool cards, or the analysis that uses the new tool; the missing tool is a dotted card until Claude writes it"
+    },
+    "code": {
+      "x": 1220,
+      "y": 216,
+      "w": 604,
+      "h": 300,
+      "text_px": 18,
+      "_note": "a glimpse of the code Claude writes (small, a few lines; not to be read)"
+    },
+    "check": {
+      "x": 1220,
+      "y": 540,
+      "w": 604,
+      "h": 346,
+      "title_px": 26,
+      "text_px": 24,
+      "_note": "the known-answer checks of the new tool (with their sources), ticked one by one"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "gap_s": 4.0,
+      "write_s": 4.6,
+      "check_s": 7.6,
+      "shelf_s": 10.4,
+      "_note": "the maker's recording: sentence 1 0.30-3.63 s (what the maker wants), sentence 2 3.98-7.18 s (the missing tool from gap_s, Claude writes from write_s), sentence 3 7.53-11.00 s (the checks from check_s, the tool is used from shelf_s)"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n14": {
+    "duration_s": 9.7,
+    "_note": "drawn by the screens department (web cut.html?cut=n14) from the intake department's real run (knowledge imported, a rule check, a hearing question). 9.7 s is N14's slot in narration draft 6",
+    "knowledge": {
+      "x": 96,
+      "y": 96,
+      "w": 700,
+      "h": 790,
+      "title_px": 30,
+      "text_px": 24,
+      "_note": "the list of rules: the basic constraints, then the dropped file's rules added as rows"
+    },
+    "view": {
+      "x": 820,
+      "y": 96,
+      "w": 1004,
+      "h": 560,
+      "_note": "the part the new rule catches, in 3D"
+    },
+    "ask": {
+      "x": 820,
+      "y": 680,
+      "w": 1004,
+      "h": 206,
+      "text_px": 28,
+      "_note": "HIRAKU's question back to the maker, as a speech bubble"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "drop_s": 2.2,
+      "rule_s": 3.6,
+      "hit_s": 5.0,
+      "ask_s": 6.8,
+      "_note": "the maker's recording: sentence 1 0.30-6.34 s (the file is dropped at drop_s, its rules join the list at rule_s, one catches a part at hit_s), sentence 2 6.69-8.88 s (the question from ask_s)"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
   "n17": {
     "duration_s": 8.8,
     "_note": "drawn by the screens department (web cut.html?cut=n17): the one-page report. 8.8 s is N17's slot in narration draft 6 (2:36.1-2:44.9)",
