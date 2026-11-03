@@ -816,6 +816,43 @@ def requirements_now(ctx: RunContext) -> Record:
     return base
 
 
+def claude_picks(ctx: RunContext) -> list[Record] | None:
+    """The picks of the last domains.picked (pick_domains: Claude's domains, names, reasons and tests),
+    or None when the run has none."""
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "domains.picked":
+            picks = (e.get("data") or {}).get("picks")
+            return [dict(p) for p in picks] if isinstance(picks, list) else None
+    return None
+
+
+def _has_builder(catalog: Any, test_id: str) -> bool:
+    """Whether the test has a load case builder: the intake department's has_builder when there is one,
+    else hiraku.catalog.build.builder_for. An unknown test id has none."""
+    try:
+        from hiraku.intake import has_builder  # type: ignore[attr-defined]
+    except ImportError:
+        has_builder = None
+    try:
+        if has_builder is not None:
+            try:
+                return bool(has_builder(test_id))
+            except TypeError:  # another signature than this guess: the catalog's own lookup below
+                pass
+        from hiraku.catalog.build import builder_for
+
+        return builder_for(catalog, test_id) is not None
+    except (KeyError, ValueError):
+        return False
+
+
+def _test_title(catalog: Any, test_id: str) -> str:
+    try:
+        return catalog.test(test_id)["title"]
+    except (KeyError, ValueError):
+        return ""
+
+
 def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """The designer's first version: an archetype, its choices and variables (the kit computes
     every coordinate; the requirements give the occupants, cargo and top speed). Then the load
@@ -850,14 +887,39 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     if errs:
         raise ToolError("組んだ設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     catalog = load_catalog()
+    claude = None if req.get("tests") else claude_picks(ctx)  # a file that lists its tests decides them
+    no_builder: list[str] = []
     try:
-        load_cases, skipped = build_tests(catalog, req, design)
+        if claude is not None and any(p.get("test_ids") for p in claude):
+            from hiraku.catalog.build import build_load_cases
+
+            wanted = list(dict.fromkeys(t for p in claude for t in p.get("test_ids") or []))
+            no_builder = [t for t in wanted if not _has_builder(catalog, t)]
+            skipped = []
+            load_cases = build_load_cases(catalog, req, design, [t for t in wanted if t not in no_builder], skipped,
+                                          beyond=req.get("beyond", []))
+            if not load_cases:
+                raise ValueError("no test Claude picked could be built: "
+                                 + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
+                                 f"none of {', '.join(wanted)} has a builder")
+        else:
+            load_cases, skipped = build_tests(catalog, req, design)
     except ValueError as e:
         raise ToolError(f"この設計では試験の荷重条件を組めません: {e}") from None
     ctx.store.write_design(design, agent=agent)
     fields = project_fields(catalog, req, load_cases)
+    if claude is not None:  # Claude's picks (pick_domains) as Claude wrote them: domains, names, reasons, tests
+        from hiraku.catalog import agents_for
+
+        fields["domain_picks"] = [{k: p[k] for k in ("domain", "shown_name", "reason", "test_ids") if k in p}
+                                  for p in claude]
+        fields["agents"] = agents_for(catalog, load_cases, [p["domain"] for p in claude])
     ctx.store.update_project({k: fields[k] for k in ("domain_picks", "load_cases", "agents")}, agent=agent,
                              text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
+    if no_builder:
+        named = "、".join(f"{t} {_test_title(catalog, t)}" for t in no_builder)
+        ctx.store.emit("agent.said", agent="system",
+                       text=f"選んだ試験のうち {named} は、荷重条件の作り方 (builder) がまだ無いので、この実行では見ません")
     if skipped:
         ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
     # the tools of version 1's tests that the start did not check (a run whose tests were not fixed then)
