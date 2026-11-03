@@ -4,8 +4,10 @@ The tool is the K2 team's small cantilever (tests.solvers.k2.test_toolmaker): GO
 known answer, WRONG has 2 where 3 belongs and does not.
 """
 
+import json
 import unittest
 
+from hiraku.contract import layout
 from hiraku.tools import ToolError, rules
 from hiraku.tools.functions import check_tool, list_tools, make_tool
 from tests.solvers.k2.test_toolmaker import GOOD, WRONG
@@ -58,6 +60,8 @@ class MadeToolTest(RunCase, unittest.TestCase):
         self.assertIn("import os", " ".join(out["problems"]))
         self.assertEqual(self.checked(), [])  # never ran, so nothing was checked
         self.assertTrue(make_tool(self.ctx, {"code": GOOD, "reason": "R5 has no tool"}, "cae.strength")["usable"])
+        (kept,) = (self.ctx.store.path / layout.TOOLS_DIR).glob("cantilever_tip-*.check.json")
+        self.assertEqual(json.loads(kept.read_text(encoding="utf-8"))["reason"], "R5 has no tool")
 
 
 if __name__ == "__main__":

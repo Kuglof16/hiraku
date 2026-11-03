@@ -1106,6 +1106,126 @@
         "frequency_Hz": {
           "type": "number",
           "description": "For mode_shape."
+        },
+        "mesh_id": {
+          "type": "string",
+          "pattern": "^mesh-[0-9]{4,}$",
+          "description": "With per_element / per_mesh_node: the mesh the values belong to."
+        },
+        "per_element": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "One value per element of the mesh, in its element order."
+        },
+        "per_mesh_node": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/$defs/vec3"
+              }
+            ]
+          },
+          "description": "One value per mesh node, in nodes_mm order (vec3 for displacement and mode shapes)."
+        },
+        "surface": {
+          "enum": [
+            "top",
+            "mid",
+            "bottom",
+            "max"
+          ],
+          "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
+        }
+      },
+      "dependentRequired": {
+        "per_element": [
+          "mesh_id"
+        ],
+        "per_mesh_node": [
+          "mesh_id"
+        ]
+      }
+    },
+    "mesh": {
+      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a shell mesh of the frame (mid-surfaces of the tube walls and plates), made by code from one design version. Analyses of that version name it by mesh_id in their fields.",
+      "type": "object",
+      "required": [
+        "mesh_id",
+        "design_version",
+        "element_type",
+        "nodes_mm",
+        "elements",
+        "element_member",
+        "member_thickness_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mesh_id": {
+          "type": "string",
+          "pattern": "^mesh-[0-9]{4,}$"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "element_type": {
+          "enum": [
+            "shell"
+          ],
+          "description": "Shell elements with 3 or 4 nodes on the mid-surface."
+        },
+        "formulation": {
+          "type": "string",
+          "description": "Element formulation in words, e.g. MITC4."
+        },
+        "element_size_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Target edge length."
+        },
+        "nodes_mm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/vec3"
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Node indices (into nodes_mm), counter-clockwise seen from the outer side."
+        },
+        "element_member": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For each element, the design member (or part) id it belongs to."
+        },
+        "member_thickness_mm": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "Wall thickness of each member (or part) in the mesh."
+        },
+        "notes": {
+          "type": "string",
+          "description": "How the joints, welds and load points were modelled."
         }
       }
     },
@@ -1146,7 +1266,6 @@
       "required": [
         "channel",
         "unit",
-        "t_s",
         "values"
       ],
       "additionalProperties": false,
@@ -1169,8 +1288,44 @@
           "items": {
             "type": "number"
           }
+        },
+        "x": {
+          "type": "object",
+          "required": [
+            "quantity",
+            "unit",
+            "values"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "quantity": {
+              "type": "string"
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
         }
-      }
+      },
+      "description": "Values against time (t_s) or against another quantity (x, e.g. wheel travel or lateral force on a K&C bench). Exactly one of t_s and x; its values have the same length as values.",
+      "oneOf": [
+        {
+          "required": [
+            "t_s"
+          ]
+        },
+        {
+          "required": [
+            "x"
+          ]
+        }
+      ]
     },
     "analysis": {
       "description": "One analysis run (RUN in the ER diagram). It cannot exist without at least one prediction.",
@@ -1565,8 +1720,497 @@
         },
         "reason": {
           "type": "string"
+        },
+        "test_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Optional: the tests of this domain that apply to the product's flags. The screen shows their count."
         }
       }
+    },
+    "domains_picked": {
+      "description": "data of domains.picked: the lead's choice of domains for the product (screen A1). Emitted after run.started, before design.created.",
+      "type": "object",
+      "required": [
+        "want",
+        "flags",
+        "picks",
+        "off"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "want": {
+          "type": "string"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "speed_class": {
+          "$ref": "#/$defs/speed_class"
+        },
+        "flag_reasons": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/flags/propertyNames"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Why each flag was set (or left unset), in the lead's words."
+        },
+        "picks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/domain_pick"
+          }
+        },
+        "off": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "domain",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "$ref": "#/$defs/domain"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Domains not picked and why. assembly is never listed here."
+        },
+        "assembly_test_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Assembly and human tests (H, G) that apply. Not counted as a domain."
+        }
+      }
+    },
+    "question": {
+      "description": "One question of hearing.asked: a requirement the run still needs.",
+      "type": "object",
+      "required": [
+        "req_key",
+        "name",
+        "text",
+        "ask",
+        "allow_other"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "req_key": {
+          "$ref": "#/$defs/req_key"
+        },
+        "name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ask": {
+          "enum": [
+            "must",
+            "confirm"
+          ],
+          "description": "must: no value yet; confirm: a default is proposed for the person to accept or change."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              "unit": {
+                "$ref": "#/$defs/unit"
+              }
+            }
+          }
+        },
+        "allow_other": {
+          "type": "boolean",
+          "description": "The person may write a value not in choices."
+        },
+        "default": {
+          "type": "object",
+          "required": [
+            "value",
+            "trust",
+            "basis"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": [
+                "number",
+                "string",
+                "boolean"
+              ]
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "trust": {
+              "$ref": "#/$defs/trust"
+            },
+            "basis": {
+              "type": "string"
+            }
+          },
+          "description": "Used when no answer comes. basis says where the value is from ('not checked' when unchecked)."
+        }
+      }
+    },
+    "hearing_asked": {
+      "description": "data of hearing.asked: the missing requirements, asked once together (screen A2).",
+      "type": "object",
+      "required": [
+        "questions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/question"
+          }
+        }
+      }
+    },
+    "hearing_answered": {
+      "description": "data of hearing.answered: the answers (or defaults) as requirements. They are also in project.requirements.",
+      "type": "object",
+      "required": [
+        "answers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/requirement"
+              },
+              {
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "hearing",
+                      "default"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "note": {
+          "type": "string",
+          "description": "Free text the person added."
+        }
+      }
+    },
+    "rule_category": {
+      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造.",
+      "enum": [
+        "sheet_metal",
+        "fastener",
+        "weld",
+        "tolerance",
+        "human",
+        "battery",
+        "assembly",
+        "suspension",
+        "manufacturing"
+      ]
+    },
+    "rule_id": {
+      "description": "Knowledge rule id, e.g. SM-01, FS-02, U1-03.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
+    },
+    "rule": {
+      "description": "One knowledge rule: a design rule checked against the parts of a design.",
+      "type": "object",
+      "required": [
+        "rule_id",
+        "category",
+        "text",
+        "check",
+        "origin",
+        "trust",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "$ref": "#/$defs/rule_id"
+        },
+        "doc_id": {
+          "type": "string",
+          "description": "The knowledge_imported doc it came from."
+        },
+        "category": {
+          "$ref": "#/$defs/rule_category"
+        },
+        "text": {
+          "type": "string",
+          "description": "The rule in words, as the person reads it."
+        },
+        "applies_to": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kinds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Part kinds (part.kind) the rule is checked on."
+            }
+          }
+        },
+        "check": {
+          "type": "string",
+          "description": "Expression over a part's values (a boolean subset of Python), evaluated by code, never by the model."
+        },
+        "origin": {
+          "enum": [
+            "builtin",
+            "dropped"
+          ],
+          "description": "builtin: shipped with HIRAKU; dropped: from a file the person gave."
+        },
+        "check_by": {
+          "enum": [
+            "code",
+            "claude"
+          ],
+          "description": "Who turned a sentence into check: a code pattern or Claude. Left out when the check came written with the rule (builtin rules, tables with expressions)."
+        },
+        "trust": {
+          "$ref": "#/$defs/trust"
+        },
+        "basis": {
+          "type": "string",
+          "description": "Source of the rule; 'not checked' when unchecked."
+        }
+      }
+    },
+    "knowledge_imported": {
+      "description": "data of knowledge.imported: one bundle of rules taken in (the builtin set, or a file the person dropped). Kept only in events; a dropped file itself may be kept in runs/<run_id>/knowledge/. Per doc_id the last knowledge.imported event wins (giving the same file again re-sends it, e.g. with more checks).",
+      "type": "object",
+      "required": [
+        "doc",
+        "rules"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "doc": {
+          "type": "object",
+          "required": [
+            "doc_id",
+            "filename",
+            "origin"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "doc_id": {
+              "type": "string"
+            },
+            "filename": {
+              "type": "string"
+            },
+            "origin": {
+              "enum": [
+                "builtin",
+                "dropped"
+              ]
+            },
+            "note": {
+              "type": "string"
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "text",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "description": "Lines of the file that did not become rules, and why."
+            }
+          }
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      }
+    },
+    "rule_check": {
+      "description": "runs/<run_id>/v<NNN>/rule_checks/rchk-NNNN.json: one rule checked against the parts of one design version (screen A5). pass is true exactly when hits is empty; parts in not_evaluable were not checked.",
+      "type": "object",
+      "required": [
+        "rule_check_id",
+        "design_version",
+        "rule_id",
+        "targets",
+        "hits",
+        "pass"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_check_id": {
+          "type": "string",
+          "pattern": "^rchk-[0-9]{4,}$"
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rule_id": {
+          "$ref": "#/$defs/rule_id"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the parts the rule applied to."
+        },
+        "hits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "values",
+              "message"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "The part's values the check used."
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Parts that break the rule."
+        },
+        "not_evaluable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "missing"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "missing": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "description": "Parts the check could not be evaluated on, with the values the design lacks."
+        },
+        "pass": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pass": {
+                "const": true
+              }
+            },
+            "required": [
+              "pass"
+            ]
+          },
+          "then": {
+            "properties": {
+              "hits": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pass": {
+                "const": false
+              }
+            },
+            "required": [
+              "pass"
+            ]
+          },
+          "then": {
+            "properties": {
+              "hits": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "agent": {
       "type": "object",
@@ -1721,7 +2365,13 @@
         "screen.focus",
         "cost.updated",
         "project.updated",
-        "report.written"
+        "report.written",
+        "domains.picked",
+        "hearing.asked",
+        "hearing.answered",
+        "knowledge.imported",
+        "rule_check.recorded",
+        "mesh.created"
       ]
     },
     "event": {
@@ -2204,6 +2854,120 @@
             "properties": {
               "data": {
                 "$ref": "#/$defs/report"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "domains.picked"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/domains_picked"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "hearing.asked"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/hearing_asked"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "hearing.answered"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/hearing_answered"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "knowledge.imported"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/knowledge_imported"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rule_check.recorded"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/rule_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mesh.created"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/mesh"
               }
             }
           }

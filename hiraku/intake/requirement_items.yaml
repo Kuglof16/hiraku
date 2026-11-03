@@ -1,0 +1,313 @@
+# The requirement items HIRAKU can ask about (keys Q03..Q92), the same for every product.
+# Which item a product needs, and whether the person is asked, follow from the flags:
+#   applies_if  expression over the product flags (hiraku.catalog.expr); an item that does not apply
+#               is neither shown nor asked
+#   ask         must     = nothing proceeds without an answer (no default is used)
+#               confirm  = asked once with a default, the default is used when there is no answer
+#               default  = not asked; the default is used and shown, the person can change it
+#   question    what the hearing says (must and confirm)
+#   choices     answers offered; the person can always write another (allow_other)
+#   default     {value, unit?, trust, basis}: used when nothing better is known. A product's own
+#               requirements file (data/requirements/products/) wins over it.
+# trust: 1 primary source, 2 secondary source, 3 assumption. "not checked in this repository" = the
+# value is taken from the cited page and that page has not been read again for this repository.
+# Q01 (what to make) and Q02 (the flags) are not here: they are the sentence and A1's chips.
+
+items:
+  - key: Q03
+    name: 使う頻度・年数
+    applies_if: always
+    ask: confirm
+    question: どのくらいの頻度で、何年くらい使いますか。
+
+  - key: Q11
+    name: 路面・床と摩擦係数
+    applies_if: self_propelled or standing
+    ask: confirm
+    question: 走る(置く)面は何ですか。摩擦係数が分かれば添えてください。
+    choices: [{label: 砂利, value: 砂利}, {label: 舗装路, value: 舗装路}, {label: 土, value: 土}, {label: 屋内の床, value: 床}]
+
+  - key: Q12
+    name: 路面の粗さ (ISO 8608 のクラス)
+    applies_if: self_propelled and rough
+    ask: default
+    default:
+      value: C
+      trust: 3
+      basis: >-
+        assumption: the class of a rough road taken as ISO 8608 class C (128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m,
+        table in https://link.springer.com/article/10.1007/s12544-013-0127-8) (not checked in this repository)
+
+  - key: Q13
+    name: 縦の坂
+    applies_if: self_propelled
+    ask: default
+
+  - key: Q14
+    name: 走りながらの横の傾き
+    applies_if: self_propelled and rough
+    ask: confirm
+    question: 走りながら、どのくらい横に傾いた斜面を通りますか。
+    choices: [{label: 10°, value: 10, unit: deg}, {label: 15°, value: 15, unit: deg}, {label: 20°, value: 20, unit: deg}]
+
+  - key: Q15
+    name: 段差
+    applies_if: self_propelled
+    ask: confirm
+    question: 越える段差の高さは。
+
+  - key: Q16
+    name: 通る幅
+    applies_if: self_propelled
+    ask: default
+
+  - key: Q17
+    name: 曲がり
+    applies_if: self_propelled
+    ask: default
+
+  - key: Q18
+    name: 風
+    applies_if: outdoor
+    ask: default
+    default:
+      value: 20
+      unit: m/s
+      trust: 1
+      basis: >-
+        気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https://www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf
+        (not checked in this repository)
+
+  - key: Q19
+    name: 気温 (範囲の高い端)
+    applies_if: battery or electric or outdoor
+    ask: confirm
+    question: 使う場所の気温の高い側は何度ですか。
+    default: {value: 40, unit: degC, trust: 3, basis: assumption (the hot end of the range of use)}
+
+  - key: Q20
+    name: 水・ほこり (IP)
+    applies_if: battery or electric
+    ask: confirm
+    question: 水やほこりへの強さ (IP) はどのくらい要りますか。
+    choices: [{label: 対策なし, value: IPX0}, {label: 水の飛まつ, value: IPX4}, {label: 水・ほこりに強い, value: IP54}, {label: 水に浸かっても, value: IP67}]
+
+  - key: Q30
+    name: 人数と荷重の組み合わせ
+    applies_if: ride or lean
+    ask: must
+    question: "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。"
+
+  - key: Q31
+    name: 体格の範囲
+    applies_if: ride or lean or near_people or handheld
+    ask: default
+    default:
+      value: 若年女性 5 % 〜 若年男性 95 %
+      trust: 1
+      basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+
+  - key: Q32
+    name: 体重 (法令の計算用)
+    applies_if: ride and public_road
+    ask: default
+    default:
+      value: 55
+      unit: kg
+      trust: 1
+      basis: 細目告示 第2条 (1 人 55 kg), https://www.mlit.go.jp/jidosha/content/S002.pdf (not checked in this repository)
+
+  - key: Q33
+    name: 体重 (強さの不利側)
+    applies_if: ride or lean
+    ask: default
+    default:
+      value: 76.6
+      unit: kg
+      trust: 1
+      basis: >-
+        AIST 人体寸法データベース 1991-92, 体重, 若年男性 95 パーセンタイル,
+        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+
+  - key: Q34
+    name: 弱い人がいるか
+    applies_if: always
+    ask: confirm
+    question: 子どもや高齢者など、力の弱い人が使ったり、そばにいたりしますか。
+    choices: [{label: いない, value: いない}, {label: 高齢者, value: 高齢者}, {label: 子ども, value: 子ども}, {label: 高齢者と子ども, value: 高齢者と子ども}]
+
+  - key: Q40
+    name: 積載
+    applies_if: cargo
+    ask: must
+    question: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。
+
+  - key: Q41
+    name: 荷の位置
+    applies_if: cargo
+    ask: default
+
+  - key: Q42
+    name: 液体のこぼれまでの余裕角
+    applies_if: liquid
+    ask: confirm
+    question: 運ぶ液体がこぼれるまでの傾きの余裕は何度ですか。
+
+  - key: Q43
+    name: 常にかかる内力 (弦・ばねの張力)
+    applies_if: preload
+    ask: default
+
+  - key: Q50
+    name: 最高速度
+    applies_if: self_propelled
+    ask: must
+    question: 最高速度は。
+
+  - key: Q51
+    name: 加速
+    applies_if: self_propelled
+    ask: confirm
+    question: 目標の加速 (たとえば 0 から最高速度まで何秒) はありますか。
+
+  - key: Q52
+    name: 制動
+    applies_if: self_propelled
+    ask: default
+
+  - key: Q53
+    name: 駐車
+    applies_if: self_propelled
+    ask: default
+
+  - key: Q54
+    name: 航続・稼働時間
+    applies_if: self_propelled and battery
+    ask: confirm
+    question: 充電から次の充電まで、どのくらい動かしますか (距離か時間)。
+
+  - key: Q55
+    name: 充電時間
+    applies_if: battery
+    ask: default
+
+  - key: Q56
+    name: アクチュエータの動く範囲
+    applies_if: electric and not self_propelled
+    ask: confirm
+    question: 動かす部分の範囲 (角度か長さ) は。
+
+  - key: Q57
+    name: 最低地上高
+    applies_if: self_propelled and rough
+    ask: default
+    default:
+      value: 180
+      unit: mm
+      trust: 1
+      basis: >-
+        EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https://www.legislation.gov.uk/eur/2013/168/annex/I
+        (not checked in this repository)
+
+  - key: Q60
+    name: 静的に倒れない限界
+    applies_if: standing
+    ask: default
+
+  - key: Q61
+    name: 安全率 (降伏に対して)
+    applies_if: always
+    ask: confirm
+    question: 部材の安全率 (降伏に対する余裕) はいくつにしますか。
+    default: {value: 1.5, unit: "1", trust: 3, basis: assumption}
+
+  - key: Q62
+    name: 人に当たったときの力
+    applies_if: near_people and self_propelled
+    ask: default
+
+  - key: Q63
+    name: 挟み込みの隙間
+    applies_if: pinch
+    ask: default
+    default:
+      value: ISO 13854 (指 25 mm)
+      trust: 1
+      basis: >-
+        ISO 13854:1996 の試し読み, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
+        (not checked in this repository)
+
+  - key: Q64
+    name: 横転したときの保護枠 (ROPS)
+    applies_if: ride and rough
+    ask: confirm
+    question: 横転したときの保護枠 (ROPS) をつけますか。
+    choices: [{label: つける, value: あり}, {label: つけない, value: なし}]
+
+  - key: Q65
+    name: 衝突の速さ
+    applies_if: ride and self_propelled
+    ask: default
+
+  - key: Q70
+    name: 公道を走るか
+    applies_if: ride and self_propelled
+    ask: must
+    question: 公道を走りますか (公道なら軽自動車の区分になり、寸法・35°・回転半径が付いてきます)。
+    choices: [{label: 公道を走る, value: 公道}, {label: 私有地だけ, value: 私有地だけ}]
+
+  - key: Q71
+    name: 寸法・速さの上限
+    applies_if: public_road
+    ask: default
+
+  - key: Q72
+    name: なぞる規格
+    applies_if: always
+    ask: default
+
+  - key: Q73
+    name: 電池の規則
+    applies_if: battery
+    ask: default
+
+  - key: Q74
+    name: 電池の電圧
+    applies_if: battery
+    ask: confirm
+    question: 電池の電圧は (60 V を超えると高電圧の扱いが要ります)。
+
+  - key: Q80
+    name: 材料と接合
+    applies_if: always
+    ask: confirm
+    question: 主な材料と、つなぎ方は。
+    choices: [{label: 鋼を溶接, value: 鋼の溶接}, {label: アルミ, value: アルミ}, {label: 木, value: 木}, {label: 樹脂, value: 樹脂}]
+
+  - key: Q81
+    name: 組む人と工具
+    applies_if: assembly
+    ask: default
+
+  - key: Q82
+    name: 出荷の形
+    applies_if: assembly
+    ask: default
+
+  - key: Q90
+    name: 悪路の走行距離
+    applies_if: self_propelled and rough
+    ask: confirm
+    question: 悪路を合わせて何 km 走る前提で壊れないようにしますか。
+    default: {value: 5000, unit: km, trust: 3, basis: assumption (no public basis found)}
+
+  - key: Q91
+    name: 運転時間
+    applies_if: continuous
+    ask: confirm
+    question: 1 日に何時間、何年動かしますか。
+
+  - key: Q92
+    name: 繰り返し回数
+    applies_if: (lean or electric or cargo) and not self_propelled
+    ask: default

@@ -6,6 +6,7 @@ steered wheel hitting the rail when the track is over 1200 mm.
 """
 
 import contextlib
+import copy
 import json
 import sys
 import tempfile
@@ -14,6 +15,7 @@ import unittest
 from pathlib import Path
 
 from hiraku import contract
+from hiraku.agent import scripted
 from hiraku.agent.scripted import compose_plan, load_plan, run_scripted
 from hiraku.agent.session import start_run
 from hiraku.catalog import CatalogError, build_load_cases, load_catalog, read_data
@@ -84,6 +86,73 @@ class CatalogBuildersTest(unittest.TestCase):
         # a builders module with none: only the catalog's own builders
         with builders(types.SimpleNamespace()), self.assertRaisesRegex(CatalogError, "H1 has no load-case builder"):
             build_load_cases(catalog, req, fakes.loaded_design(), ["H1"])
+
+
+class BeyondBuildTest(unittest.TestCase):
+    """Cases past the limit (requirements `beyond`): built with the catalog spec's variant "beyond"."""
+
+    def setUp(self):
+        self.catalog = load_catalog()
+        self.req = read_data(REQUIREMENTS)
+        self.enterContext(builders(fakes.builders_module()))
+
+    def test_each_test_gets_its_case_past_the_limit_fed_by_its_own_kind(self):
+        out = build_load_cases(self.catalog, self.req, fakes.loaded_design(), ["P1", "R1", "H1"], beyond=["P1", "R1", "H1"])
+        ids = [lc["load_case_id"] for lc in out]
+        self.assertEqual(ids, ["P1-step100", "R1-step100", "H1-steer30",
+                               "P1-step250-beyond", "R1-step250-beyond", "H1-steer40-beyond"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100"])
+        self.assertEqual(by_id["P1-step250-beyond"]["feeds"], ["R1-step250-beyond"])
+        for lc in out:
+            self.assertEqual(contract.errors("load_case", lc), [], lc["load_case_id"])
+            self.assertEqual(lc["title"].startswith("限界の外"), lc["load_case_id"].endswith("-beyond"))
+        self.assertEqual(by_id["R1-step250-beyond"]["params"]["step_height"], {"value": 250.0, "unit": "mm"})
+        self.assertEqual(by_id["R1-step250-beyond"]["criterion"], by_id["R1-step100"]["criterion"])
+
+    def test_refusals(self):
+        high = copy.deepcopy(self.req)
+        next(r for r in high["requirements"] if r["key"] == "Q15")["value"] = 300
+        with self.assertRaisesRegex(CatalogError, "higher than Q15"):
+            build_load_cases(self.catalog, high, fakes.loaded_design(), ["P1"], beyond=["P1"])
+        skipped = []
+        out = build_load_cases(self.catalog, high, fakes.loaded_design(), ["P1"], skipped, beyond=["P1"])
+        self.assertEqual(([lc["load_case_id"] for lc in out], [t for t, _ in skipped]), (["P1-step300"], ["P1"]))
+        self.assertTrue(skipped[0][1].startswith("限界の外: "))
+        named_badly = types.SimpleNamespace(BUILDERS={"H1": lambda spec, req, design: fakes._h1_builder({}, req, design)})
+        with builders(named_badly), self.assertRaisesRegex(CatalogError, "id ending -beyond"):
+            build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], beyond=["H1"])
+
+
+class BeyondRunTest(BuildersCase, unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.enterContext(builders(fakes.builders_module()))
+        design = self.root / "design.json"
+        design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+        self.ctx = start_run(requirements_with_tests(self.root, ["P1", "R1", "H1"], beyond=["P1", "R1", "H1"]),
+                             design_path=design, root=self.root / "runs", formulas=fakes.FakeFormulas(),
+                             tools=fakes.shelf(assembly=True), designgen=fakes.FakeDesigngen())
+
+    def test_the_plan_takes_the_steps_past_the_limit(self):
+        self.assertEqual(self.ctx.project["beyond"], ["P1", "R1", "H1"])
+        self.assertEqual(contract.errors("project", self.ctx.project), [])
+        plan = compose_plan(self.ctx)
+        steps = {s["load_case"]: s for s in plan["steps"]}
+        self.assertEqual(steps["H1-steer40-beyond"]["say"], fakes.H1_BEYOND_PLAN["say"])  # PLANS_BEYOND first
+        self.assertEqual(steps["H1-steer30"]["say"], fakes.H1_PLAN["say"])
+        self.assertEqual(steps["P1-step250-beyond"]["tool"], "step_climb")  # data/catalog/scripted.yaml
+        # the stand-in shelf has no step_climb_dynamic: those steps are left out and named
+        self.assertEqual(plan["unshelved"], [("P1-step100", "step_climb_dynamic"),
+                                             ("P1-step250-beyond", "step_climb_dynamic")])
+        order = [s["load_case"] for s in plan["steps"]]
+        if "R1-step250-beyond" in order:
+            self.assertLess(order.index("P1-step250-beyond"), order.index("R1-step250-beyond"))
+        # ana.P1.x read by a case past the limit is the P1 case past the limit
+        r1 = self.ctx.load_case("R1-step250-beyond")
+        self.assertEqual(scripted._load_case_of(self.ctx, "P1", r1), "P1-step250-beyond")
+        self.assertEqual(scripted._load_case_of(self.ctx, "P1", self.ctx.load_case("R1-step100")), "P1-step100")
 
 
 class AutoTestsTest(BuildersCase, unittest.TestCase):

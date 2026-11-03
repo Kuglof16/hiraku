@@ -9,13 +9,22 @@ runs/<run_id>/
     v001/comparisons/cmp-0001.json    COMPARISON
     v001/causes/cause-0001.json       CAUSE
     v001/verdicts/ver-0001.json       VERDICT
+    v001/rule_checks/rchk-0001.json   RULE_CHECK (a knowledge rule checked on this version's parts)
+    v001/meshes/mesh-0001.json        MESH (shell mesh of this version's frame; fields name it by mesh_id)
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
     report.json                       REPORT (later)
     stop.request                      present only while someone asks the run to stop
     tools/<name>-<n>.py               a tool Claude wrote during the run (attempt n)
     tools/<name>-<n>.check.json       its known-answer checks (tool_check records)
+    knowledge/<filename>              a knowledge file the person dropped (its rules live in events only)
+    hearing.request.json              (later) questions waiting for an answer during the run
+    hearing.answer.json               (later) the answer put by the screen; the run reads and removes both
+    inbox/<n>-<kind>.json             a request from the screen (a message for Claude, a dropped file); the run
+                                      reads it, emits the event itself and removes the file
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
+Only the run process appends to events.jsonl (seq has no gaps and one writer);
+anything else asks through stop.request, hearing.answer.json or inbox/.
 Every record written to a file is also the `data` of one event, byte-for-byte
 the same object, so replaying events.jsonl alone rebuilds the screen.
 
@@ -41,6 +50,10 @@ JUDGEMENTS_FILE = "judgements.json"
 REPORT_FILE = "report.json"
 TOOLS_DIR = "tools"  # tools written during the run and their checks
 STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
+KNOWLEDGE_DIR = "knowledge"  # knowledge files the person dropped, kept as given
+HEARING_REQUEST_FILE = "hearing.request.json"  # later: hearing during the run
+HEARING_ANSWER_FILE = "hearing.answer.json"
+INBOX_DIR = "inbox"  # requests the screen puts for a running run (the run turns them into events)
 
 RECORD_DIRS = {
     "prediction": "predictions",
@@ -48,6 +61,8 @@ RECORD_DIRS = {
     "comparison": "comparisons",
     "cause": "causes",
     "verdict": "verdicts",
+    "rule_check": "rule_checks",
+    "mesh": "meshes",
 }
 
 ID_PREFIX = {
@@ -56,7 +71,22 @@ ID_PREFIX = {
     "comparison": "cmp",
     "cause": "cause",
     "verdict": "ver",
+    "rule_check": "rchk",
+    "mesh": "mesh",
 }
+
+# Event emitted when a record of this kind is written (its data is the record;
+# the id field is f"{kind}_id"). RECORD_OF_EVENT is the same map read backwards.
+RECORD_EVENT = {
+    "prediction": "prediction.recorded",
+    "analysis": "analysis.finished",
+    "comparison": "comparison.recorded",
+    "cause": "cause.recorded",
+    "verdict": "verdict.recorded",
+    "rule_check": "rule_check.recorded",
+    "mesh": "mesh.created",
+}
+RECORD_OF_EVENT = {event: kind for kind, event in RECORD_EVENT.items()}
 
 RUN_ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[a-z0-9-]+$")
 
@@ -119,6 +149,7 @@ OWNERS = {
         "hiraku/designgen/",  # design from its variables (for revise_design)
         "data/designs/",
         "data/materials/",
+        "data/tyres/",  # tyre model coefficients (K2 team)
         "tests/solvers/",
     ],
     "screen": [  # 画面部: three.js screens and replay

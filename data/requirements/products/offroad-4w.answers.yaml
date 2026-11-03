@@ -1,0 +1,26 @@
+# Sample answers to the hearing for the demo vehicle (data/requirements/offroad-4w.yaml, which is not
+# changed). The "answer file" form of N14: key -> {value, unit?, trust?, basis?}. trust defaults to 1
+# (the person's own statement) and basis to "answered in the hearing".
+# Q03 (use), Q20 (IP) and Q91 (hours) are left unanswered on purpose: they stay open in the hearing.
+# A key the requirements file already has is not asked, so it is not answered here.
+# "not checked in this repository" = the value is taken from the cited page and that page has not
+# been read again for this repository.
+answers:
+  Q34:
+    value: いない
+    trust: 3
+    basis: assumption (a sample answer)
+  Q64:
+    value: あり
+    trust: 1
+    basis: ROHVA 1 has an item for ROPS, https://rohva.org/ansi-standard/ (not checked in this repository)
+  Q74:
+    value: 51.2
+    unit: V
+    trust: 3
+    basis: assumption (16 LiFePO4 cells in series x 3.2 V nominal)
+  Q80:
+    value: 鋼の溶接
+    trust: 3
+    basis: assumption (steel tube frame)
+note: 林道だけで使い、公道は走らない

@@ -1,0 +1,44 @@
+{
+  "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで)",
+  "flags": {
+    "ride": true,
+    "lean": true,
+    "self_propelled": true,
+    "outdoor": true,
+    "rough": true,
+    "battery": true,
+    "electric": true,
+    "pinch": true,
+    "cargo": true,
+    "standing": true,
+    "vibration": true,
+    "continuous": true,
+    "assembly": true
+  },
+  "speed_class": "vehicle",
+  "flag_reasons": {
+    "ride": "人が乗る",
+    "rough": "林道を走る",
+    "public_road": "公道は走らない"
+  },
+  "picks": [
+    {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "人と荷を載せて段差を越える",
+      "test_ids": [
+        "S1",
+        "R1"
+      ]
+    }
+  ],
+  "off": [
+    {
+      "domain": "aero",
+      "reason": "shape example: the reason the lead gives for not picking it"
+    }
+  ],
+  "assembly_test_ids": [
+    "H1"
+  ]
+}

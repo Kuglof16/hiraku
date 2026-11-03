@@ -540,6 +540,88 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(len(got["lines"]), 2)
         page.close()
 
+    @unittest.skipUnless("mesh.created" in contract.EVENT_KINDS, "contract without meshes")
+    def test_mesh_created_is_kept(self):
+        """mesh.created (the contract's example) lands in state.meshes by mesh_id with one log line."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        mesh = json.loads((contract.EXAMPLES_DIR / "mesh.json").read_text(encoding="utf-8"))
+        ev = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0, "t": events[1]["t"] + 0.05,
+              "kind": "mesh.created", "agent": "system", "design_version": 1, "data": mesh}
+        events = events[:2] + [ev] + events[2:]
+        for i, e in enumerate(events):
+            e["seq"] = i
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const s = window.hiraku.state();
+              return { ids: s.order.meshes, elements: s.meshes["mesh-0001"].elements.length,
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent).filter((x) => x.includes("メッシュを作った")) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["ids"], ["mesh-0001"])
+        self.assertEqual(got["elements"], len(mesh["elements"]))
+        self.assertEqual(len(got["lines"]), 1)
+        self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
+        page.close()
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_events_are_kept(self):
+        """domains.picked, hearing.*, knowledge.imported and rule_check.recorded (the
+        contract's examples) land in state.intake; a rule check sent again replaces its line."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported", "rule_check")}
+        passed = {**copy.deepcopy(ex["rule_check"]), "hits": [], "pass": True}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        checks = [
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": ex["rule_check"]},
+            {"kind": "rule_check.recorded", "agent": "packager", "design_version": 1, "data": passed},
+        ]
+        t0 = events[0]["t"]
+        intake = [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)]
+        t1 = events[-1]["t"]
+        checks = [{**base, "t": t1 - 0.2 + 0.1 * i, **ev} for i, ev in enumerate(checks)]
+        events = events[:1] + intake + events[1:-1] + checks + [events[-1]]
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+            self.assertEqual(contract.errors("event", ev), [], ev["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const k = window.hiraku.state().intake;
+              return { picks: k.picked.picks.map((p) => p.domain), questions: k.questions.map((q) => q.req_key),
+                       answers: k.answers.map((a) => a.key), note: k.note, docs: k.docs.map((x) => x.doc.doc_id),
+                       rules: Object.keys(k.rules), checks: Object.values(k.ruleChecks).map((c) => [c.rule_check_id, c.pass]),
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent)
+                         .filter((x) => ["分野を選んだ", "要件を", "答えがそろった", "規則の束", "規則 SM-01"].some((w) => x.includes(w))) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["picks"], ["strength"])
+        self.assertEqual(got["questions"], ["Q15"])
+        self.assertEqual(got["answers"], ["Q15"])
+        self.assertEqual(got["note"], ex["hearing_answered"]["note"])
+        self.assertEqual(got["docs"], ["builtin-sheet-metal"])
+        self.assertEqual(got["rules"], ["SM-01"])
+        self.assertEqual(got["checks"], [["rchk-0001", True]])
+        self.assertEqual(len(got["lines"]), 5, got["lines"])
+        self.assertIn("当てはまる試験 2", got["lines"][0])
+        self.assertIn("値が無くて当てられない部品 1", got["lines"][4])
+        self.assertNotIn("守れていない", got["lines"][4])
+        page.close()
+
     def test_n05_cut_is_laid_out_from_the_layout_rules(self):
         """cut.html?cut=n05: tiles where layout.json puts them, the hero before the burst and
         the grid after, nothing in the subtitle band. With HIRAKU_WEB_DEV_RUNS the tiles play
@@ -585,6 +667,75 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertEqual(t["shown"], "visible")
             if given:
                 self.assertTrue(all(t["rate"].startswith("×") for t in late["tiles"] if t["key"] not in ("n05.tile.nvh", "n05.tile.fatigue", "n05.tile.heat")))
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp)
+
+    def test_n05_without_the_hero_and_the_hero_alone(self):
+        """?hero=0: the tiles fly in as before with no big vehicle. ?only=hero: the big vehicle
+        alone on a clear page, and window.hiraku.png() gives its box as a PNG at the page's
+        scale (2 here) with clear corners."""
+        tmp = Path(tempfile.mkdtemp())
+        layout = n05_layout()
+        (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=False, layout_file=tmp / "layout.json")
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+
+        def open_cut(query, dpr=1):
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=dpr)
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            return page, errors
+
+        try:
+            page, errors = open_cut("hero=0&t=0")
+            got = page.evaluate(
+                """async () => {
+                  await window.hiraku.seek(4.9);
+                  const tiles = [...document.querySelectorAll(".tile")];
+                  return { hero: document.querySelectorAll('[data-box="n05.hero"]').length, png: window.hiraku.png(),
+                           tiles: tiles.length, shown: tiles.filter((el) => getComputedStyle(el).visibility === "visible").length };
+                }"""
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(got, {"hero": 0, "png": None, "tiles": 12, "shown": 12})
+            page.close()
+
+            page, errors = open_cut("only=hero&t=0", dpr=2)
+            got = page.evaluate(
+                """async () => {
+                  await window.hiraku.seek(0);
+                  const bg = (el) => getComputedStyle(el).backgroundColor;
+                  const img = new Image();
+                  img.src = window.hiraku.png();
+                  await img.decode();
+                  const c = document.createElement("canvas");
+                  c.width = img.width;
+                  c.height = img.height;
+                  const g = c.getContext("2d");
+                  g.drawImage(img, 0, 0);
+                  const px = g.getImageData(0, 0, c.width, c.height).data;
+                  let solid = 0;
+                  for (let i = 3; i < px.length; i += 4 * 7) if (px[i] > 200) solid += 1;
+                  const a = (x, y) => px[(y * c.width + x) * 4 + 3];
+                  return { size: [img.width, img.height], corners: [a(0, 0), a(c.width - 1, 0), a(0, c.height - 1), a(c.width - 1, c.height - 1)], solid,
+                           page: [bg(document.documentElement), bg(document.body), bg(document.getElementById("stage"))],
+                           boxes: [...document.querySelectorAll("[data-box]")].map((el) => el.dataset.box) };
+                }"""
+            )
+            self.assertEqual(errors, [])
+            hero = layout["n05"]["hero"]
+            self.assertEqual(got["size"], [hero["w"] * 2, hero["h"] * 2])
+            self.assertEqual(got["corners"], [0, 0, 0, 0])
+            self.assertGreater(got["solid"], 0)
+            self.assertEqual(got["page"], ["rgba(0, 0, 0, 0)"] * 3)
+            self.assertEqual(got["boxes"], ["n05.hero"])
             page.close()
         finally:
             server.shutdown()

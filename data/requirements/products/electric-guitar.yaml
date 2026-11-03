@@ -1,0 +1,29 @@
+# Electric guitar: a check that the shape holds up (strings, neck, body). N09 shows that only
+# two domains light up: strength (string tension) and nvh (neck/body modes against the open strings).
+# Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
+# "not checked in this repository" = the value is taken from the cited page and that page has not
+# been read again for this repository. Items without a value here are asked in the hearing.
+# The mass of the guitar itself was not researched.
+
+want: 電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい
+product: electric-guitar
+speed_class: static
+flags:
+  vibration: true   # 振: strings and body vibrate
+  preload: true     # 張: the strings pull the neck all the time
+  sound: true       # 音: the sound is the function
+  handheld: true    # 持: held and worn with a strap
+  assembly: true    # 組
+requirements:
+  - key: Q43
+    name: 常にかかる内力 (弦の張力、6 本の合計)
+    value: 456
+    unit: N
+    source: default
+    trust: 2
+    basis: >-
+      D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N.
+      足したのは調査エージェント (販売店が載せた表の写し),
+      https://www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR
+      (not checked in this repository)
+    note: 6 本の張りを足した値。弦の太さの組み合わせを変えたら聞き直す

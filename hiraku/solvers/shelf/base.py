@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from ... import contract
+from ...contract import loading
 from ...contract.protocols import DEFAULT_LOADING, LOADINGS
 from ..k0_handcalc import units
-from ..k0_handcalc.vehicle import DesignError, parts_on_board
+from ..k0_handcalc.vehicle import DesignError
 
 Record = dict[str, Any]
 
@@ -172,10 +173,10 @@ def param_text(load_case: Record, name: str, default: str | None = None) -> str 
 
 def on_board(design: Record, load_case: Record) -> Record:
     """A copy of the design with only the occupants and cargo of params.loading
-    (k0_handcalc.vehicle.parts_on_board). Without params.loading: two_cargo."""
-    loading = param_text(load_case, "loading", DEFAULT_LOADING)
+    (hiraku.contract.loading). Without params.loading: two_cargo."""
+    param_text(load_case, "loading")  # a string, if given
     try:
-        return parts_on_board(design, loading)
+        return loading.on_board(design, loading.loading_of(load_case))
     except ValueError as e:
         raise LoadCaseError(str(e)) from None
 

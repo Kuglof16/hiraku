@@ -1,0 +1,181 @@
+# Serving robot for a restaurant (walking speed, carries trays and drinks, works near guests).
+# N09 shows seven domains with two renames: aero becomes "spilling", crash becomes "contact with people".
+# Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
+# "not checked in this repository" = the value is taken from the cited page and that page has not
+# been read again for this repository. Public numbers for this kind of product are few: most values
+# are the makers' published specifications or borrowed from standards for industrial robots.
+# The required answers (Q30, Q40, Q50) are in serving-robot.answers.yaml.
+
+want: 飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい
+product: serving-robot
+speed_class: walk
+flags:
+  self_propelled: true  # 走
+  battery: true         # 池
+  electric: true        # 電
+  pinch: true           # 挟: wheels and tray columns
+  cargo: true           # 荷: trays
+  standing: true        # 置
+  near_people: true     # 近: guests, staff, children
+  liquid: true          # 液: drinks
+  vibration: true       # 振: wheel motors, tray and column
+  continuous: true      # 続: runs for hours
+  assembly: true        # 組
+requirements:
+  - key: Q03
+    name: 使う頻度・年数
+    value: 10 h/日 を 5 年
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q11
+    name: 路面・床と摩擦係数
+    value: タイル・木・カーペット
+    source: default
+    trust: 1
+    basis: >-
+      JARI のロボット安定性試験設備の走行路の路面,
+      https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf
+      (not checked in this repository)
+    note: 摩擦係数は調べていない
+  - key: Q13
+    name: 縦の坂
+    value: 8.33
+    unit: "%"
+    source: default
+    trust: 1
+    basis: >-
+      バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), https://laws.e-gov.go.jp/api/1/lawdata/418CO0000000379.
+      製品の定格は 5 度以下 (Pudu BellaBot), https://www.pudurobotics.com/en/products/bellabot
+      (not checked in this repository)
+  - key: Q15
+    name: 段差
+    value: 12.7
+    unit: mm
+    source: default
+    trust: 1
+    basis: >-
+      Bear Robotics Servi Plus の敷居, https://www.bearrobotics.ai/servi-plus
+      (not checked in this repository)
+    note: 床の凹凸は LG CLOi ServeBot の 5 mm、ISO 7176-2 の試験は 15・25 mm も
+  - key: Q16
+    name: 通る幅
+    value: 0.8
+    unit: m
+    source: default
+    trust: 1
+    basis: >-
+      各社 (Keenon T8・T9・T10 ほか) の最小通路 0.55〜0.80 m の上の端,
+      https://www.keenon.com/en/product/T9 ほか (not checked in this repository)
+    note: 建物の廊下は 1.2 m 以上 (バリアフリー法施行令)
+  - key: Q17
+    name: 曲がり
+    value: その場で旋回
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q19
+    name: 気温 (範囲の高い端)
+    value: 35
+    unit: degC
+    source: default
+    trust: 3
+    basis: assumption (indoor, 5 to 35 degC; the makers publish no operating temperature)
+  - key: Q31
+    name: 体格の範囲
+    value: 子どもを含む
+    source: default
+    trust: 1
+    basis: >-
+      ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https://www.iso.org/standard/69569.html
+      (not checked in this repository)
+  - key: Q34
+    name: 弱い人がいるか
+    value: 客の子ども
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q41
+    name: 荷の位置
+    value: 一番高い段
+    source: default
+    trust: 3
+    basis: assumption (the unfavourable side for tipping)
+  - key: Q54
+    name: 稼働時間
+    value: 10
+    unit: h
+    source: default
+    trust: 1
+    basis: >-
+      各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか
+      (not checked in this repository)
+  - key: Q55
+    name: 充電時間
+    value: 4.5
+    unit: h
+    source: default
+    trust: 1
+    basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot (not checked in this repository)
+  - key: Q60
+    name: 静的に倒れない限界
+    value: 10
+    unit: deg
+    source: default
+    trust: 3
+    basis: assumption (満載で 10 度。製品の登坂の定格は 5 度以下、JARI の走行路は 10 度)
+  - key: Q61
+    name: 安全率 (降伏に対して)
+    value: 1.5
+    unit: "1"
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q62
+    name: 人に当たったときの力
+    value: "ISO/TS 15066 の部位ごとの値 (準静的、下腿 130・大腿 220・胸 140・頭 130 N) を借用"
+    source: default
+    trust: 2
+    basis: >-
+      ISO/TS 15066 の体のモデルの表を載せた論文, https://arxiv.org/pdf/2311.13814. 産業用ロボットの値を借りる
+      (配膳ロボの規格の値ではない) (not checked in this repository)
+  - key: Q63
+    name: 挟み込みの隙間
+    value: ISO 13854 (指 25 mm)
+    source: default
+    trust: 1
+    basis: >-
+      ISO 13854:1996 の試し読み, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
+      (not checked in this repository)
+  - key: Q72
+    name: なぞる規格
+    value: ISO 13482 = JIS B 8445、JIS B 8446-1
+    source: default
+    trust: 1
+    basis: ISO 13482 の要旨 https://www.iso.org/standard/53820.html (not checked in this repository)
+  - key: Q73
+    name: 電池の規則
+    value: 輸送は UN 38.3
+    source: default
+    trust: 1
+    basis: >-
+      UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版),
+      https://certifico.com/component/attachments/download/748 (not checked in this repository)
+  - key: Q80
+    name: 材料と接合
+    value: 樹脂 + アルミ
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q82
+    name: 出荷の形
+    value: 完成品
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q91
+    name: 運転時間
+    value: 10 h/日 を 5 年
+    source: default
+    trust: 3
+    basis: assumption

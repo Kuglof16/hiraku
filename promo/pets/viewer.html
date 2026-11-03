@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIRAKU ペット 3D</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root {
+    --paper: #f4f1ea;
+    --night: #131311;
+    --ink: #1b1a17;
+    --ink-soft: #5c5a54;
+    --ink-faint: #a8a49a;
+    --on-night: #f1ece0;
+    --on-night-soft: #b9b3a5;
+    --accent: #3461c8;
+    --font-ja: "Noto Sans JP", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", sans-serif;
+    --font-mono: "Cascadia Mono", "Consolas", monospace;
+    --bg: var(--paper);
+    --fg: var(--ink);
+    --fg-soft: var(--ink-soft);
+    --rule: rgba(27, 26, 23, 0.14);
+    --panel: #ebe7dd;
+  }
+  html[data-bg="night"] {
+    --bg: var(--night);
+    --fg: var(--on-night);
+    --fg-soft: var(--on-night-soft);
+    --rule: rgba(241, 236, 224, 0.14);
+    --panel: #1d1c19;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font-ja); }
+  body { display: flex; overflow: hidden; }
+  #panel {
+    width: 248px; flex: none; height: 100%; overflow-y: auto;
+    padding: 14px 14px 40px; background: var(--panel); border-right: 1px solid var(--rule);
+  }
+  html.no-ui #panel { display: none; }
+  #panel h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: 0.04em; }
+  .grp { margin: 12px 0; }
+  .grp > .lab { font-size: 12px; color: var(--fg-soft); margin-bottom: 4px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button {
+    font: inherit; font-size: 13px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--rule); background: transparent; color: var(--fg);
+  }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  select { font: inherit; width: 100%; padding: 3px; background: var(--bg); color: var(--fg); border: 1px solid var(--rule); border-radius: 6px; }
+  label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 3px 0; cursor: pointer; }
+  input[type=range] { width: 100%; }
+  #tread { font: 12px var(--font-mono); color: var(--fg-soft); }
+  #url { font: 11px/1.4 var(--font-mono); word-break: break-all; color: var(--fg-soft); margin-top: 6px; }
+  #copy { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--fg); cursor: pointer; }
+  #stage { position: relative; flex: 1; height: 100%; overflow: hidden; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #labels { position: absolute; inset: 0; pointer-events: none; }
+  .cell-lab { position: absolute; text-align: center; font-size: 13px; line-height: 1.3; }
+  .cell-lab b { font-weight: 700; }
+  .cell-lab small { display: block; color: var(--fg-soft); font: 11px var(--font-mono); }
+  .cell-lab.sel b { text-decoration: underline; text-underline-offset: 3px; }
+  .sec-lab { position: absolute; font-size: 13px; color: var(--fg-soft); }
+  #caption { position: absolute; left: 18px; top: 14px; font-size: 15px; pointer-events: none; }
+  #caption small { display: block; color: var(--fg-soft); font: 12px var(--font-mono); }
+  /* contour legend (one-pet view), laid out like a CAE post-processor bar */
+  #legend { position: absolute; right: 16px; top: 14px; display: none; font: 11px/1 var(--font-mono); color: var(--fg); pointer-events: none; }
+  #legend .ttl { font: 12px/1.3 var(--font-ja); margin-bottom: 6px; }
+  #legend .bar { position: relative; display: flex; flex-direction: column; width: 20px; border: 1px solid var(--fg); }
+  #legend .sw { height: 19px; }
+  #legend .tk { position: absolute; left: 26px; transform: translateY(-50%); white-space: nowrap; }
+  #legend .tk::before { content: ""; position: absolute; left: -7px; top: 50%; width: 5px; border-top: 1px solid var(--fg); }
+  #legend .info { margin-top: 8px; font: 11px/1.5 var(--font-ja); color: var(--fg-soft); white-space: nowrap; }
+  #ver { position: fixed; right: 10px; bottom: 8px; font: 12px var(--font-mono); color: var(--fg-soft); pointer-events: none; }
+  #err { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); max-width: 520px; padding: 16px; background: #fff; color: #1b1a17; border: 2px solid #e0472a; display: none; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>HIRAKU ペット 3D</h1>
+  <div class="grp"><div class="lab">表示</div><div class="seg" data-key="view">
+    <button data-v="grid">並び</button><button data-v="one">1 体</button><button data-v="sizes">大きさ</button>
+  </div></div>
+  <div class="grp"><div class="lab">役</div><select id="role"></select></div>
+  <div class="grp"><div class="lab">状態</div><div class="seg" data-key="state">
+    <button data-v="idle">待機</button><button data-v="report">報告</button><button data-v="pass">合格</button>
+    <button data-v="mismatch">食い違い</button><button data-v="working">解析中</button>
+  </div></div>
+  <div class="grp"><div class="lab">地</div><div class="seg" data-key="bg">
+    <button data-v="paper">生成り</button><button data-v="night">夜</button>
+  </div></div>
+  <div class="grp"><div class="lab">メッシュ</div>
+    <label class="chk"><input type="checkbox" data-key="edges"> 要素の辺の線</label>
+    <label class="chk"><input type="checkbox" data-key="nodes"> 節点</label>
+    <div class="seg" data-key="mesh" style="margin-top:4px">
+      <button data-v="coarse">粗い</button><button data-v="fine">細かい</button>
+    </div>
+  </div>
+  <div class="grp"><div class="lab">カメラ</div><div class="seg" data-key="cam">
+    <button data-v="front">正面</button><button data-v="three">斜め</button><button data-v="side">横</button>
+  </div>
+    <label class="chk"><input type="checkbox" data-key="spin"> 自動回転</label>
+  </div>
+  <div class="grp"><div class="lab">時刻</div>
+    <label class="chk"><input type="checkbox" id="freeze"> 時刻を止める</label>
+    <input type="range" id="tslider" min="0" max="12" step="0.05" value="0">
+    <div id="tread">t = 0.00 s</div>
+  </div>
+  <div class="grp"><div class="lab">この表示の URL</div>
+    <button id="copy">URL を写す</button>
+    <div id="url"></div>
+  </div>
+</div>
+<div id="stage">
+  <div id="labels"></div>
+  <div id="caption"></div>
+  <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
+</div>
+<div id="ver">v2</div>
+<div id="err"></div>
+
+<script src="pet3d.js"></script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const HP = window.HirakuPets;
+const ROLES = HP.ROLES;
+const STATES = HP.STATES;
+
+// ---- state <-> URL ------------------------------------------------------
+const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false };
+const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"] };
+const q = new URLSearchParams(location.search);
+const S = { ...DEFAULTS };
+for (const k of Object.keys(CHOICES)) if (CHOICES[k].includes(q.get(k))) S[k] = q.get(k);
+if (ROLES.some((r) => r.id === q.get("role"))) S.role = q.get("role");
+for (const k of ["edges", "nodes", "spin"]) if (q.has(k)) S[k] = q.get(k) === "1";
+S.t = q.has("t") && isFinite(parseFloat(q.get("t"))) ? parseFloat(q.get("t")) : null;
+S.orbit = null;
+if (q.has("orbit")) {
+  const o = q.get("orbit").split(",").map(Number);
+  if (o.length === 3 && o.every(isFinite)) S.orbit = o;
+}
+const UI = q.get("ui") !== "0";
+if (!UI) document.documentElement.classList.add("no-ui");
+
+function urlNow() {
+  const p = new URLSearchParams();
+  p.set("view", S.view); p.set("role", S.role); p.set("state", S.state); p.set("bg", S.bg);
+  if (!S.edges) p.set("edges", "0");
+  if (!S.nodes) p.set("nodes", "0");
+  if (S.mesh !== "coarse") p.set("mesh", S.mesh);
+  p.set("cam", S.cam);
+  if (S.spin) p.set("spin", "1");
+  if (S.orbit && S.view === "one") p.set("orbit", S.orbit.map((v) => v.toFixed(3)).join(","));
+  if (frozen !== null) p.set("t", (+frozen.toFixed(3)).toString());
+  if (!UI) p.set("ui", "0");
+  return location.pathname + "?" + p.toString().replace(/%2C/g, ",");
+}
+function writeURL() {
+  const u = urlNow();
+  history.replaceState(null, "", u);
+  document.getElementById("url").textContent = location.href;
+}
+
+// ---- renderer, scene, light -----------------------------------------------
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const hemi = new THREE.HemisphereLight(0xfffaf0, 0xd8d2c4, 0.6);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xfff6e8, 2.1);
+key.position.set(-2.2, 8.0, 3.6);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -2.6; key.shadow.camera.right = 2.6;
+key.shadow.camera.top = 3.6; key.shadow.camera.bottom = -1.6;
+key.shadow.camera.near = 1; key.shadow.camera.far = 16;
+key.shadow.radius = 8;
+key.shadow.bias = -0.0006;
+key.shadow.normalBias = 0.02;
+key.target.position.set(0.2, 1.0, 0);
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 1.3);
+rim.position.set(3.5, 3.0, -4.5);
+scene.add(rim);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ color: 0x1b1a17, opacity: 0.16 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+function applyBg() {
+  const night = S.bg === "night";
+  document.documentElement.dataset.bg = S.bg;
+  renderer.setClearColor(night ? 0x131311 : 0xf4f1ea, 1);
+  scene.environmentIntensity = night ? 0.35 : 0.75;
+  hemi.intensity = night ? 0.25 : 0.6;
+  key.intensity = night ? 1.6 : 2.1;
+  rim.intensity = night ? 2.2 : 1.3;
+  rim.color.setHex(night ? 0xf6ead0 : 0xdfe8ff);
+  ground.material.color.setHex(night ? 0x000000 : 0x1b1a17);
+  ground.material.opacity = night ? 0.4 : 0.13;
+  for (const p of pets) p.setOptions({ theme: S.bg });
+}
+
+// ---- pets ------------------------------------------------------------------
+let pets = [];
+function buildPets() {
+  for (const p of pets) { scene.remove(p.group); p.dispose(); }
+  pets = ROLES.map((r) => {
+    const p = HP.create(THREE, { role: r.id, mesh: S.mesh, edges: S.edges, nodes: S.nodes, theme: S.bg });
+    p.group.visible = false;
+    scene.add(p.group);
+    return p;
+  });
+}
+
+// ---- cameras and layout -----------------------------------------------------
+const FOV = 24;
+const CAMS = { front: [0, 6], three: [34, 16], side: [90, 6] }; // azimuth, elevation (degrees)
+const F = HP.FRAME;
+const TARGET = new THREE.Vector3(F.cx, F.cy, 0);
+const half = Math.tan((FOV * Math.PI) / 360);
+
+function fitDistance(aspect) {
+  return Math.max(F.h / 2 / half, F.w / 2 / (half * aspect)) * 1.04 + 0.6;
+}
+function placeCamera(cam, aspect, preset, orbit) {
+  cam.fov = FOV; cam.aspect = aspect; cam.near = 0.1; cam.far = 60;
+  cam.updateProjectionMatrix();
+  let az, el, dist;
+  if (orbit) [az, el, dist] = orbit;
+  else { [az, el] = CAMS[preset].map((d) => (d * Math.PI) / 180); dist = fitDistance(aspect); }
+  cam.position.set(
+    TARGET.x + dist * Math.sin(az) * Math.cos(el),
+    TARGET.y + dist * Math.sin(el),
+    TARGET.z + dist * Math.cos(az) * Math.cos(el)
+  );
+  cam.lookAt(TARGET);
+}
+
+const oneCam = new THREE.PerspectiveCamera();
+const controls = new OrbitControls(oneCam, renderer.domElement);
+controls.enableDamping = false;
+controls.target.copy(TARGET);
+controls.minDistance = 4; controls.maxDistance = 40;
+controls.addEventListener("end", () => {
+  const off = oneCam.position.clone().sub(TARGET);
+  const dist = off.length();
+  S.orbit = [Math.atan2(off.x, off.z), Math.asin(off.y / dist), dist];
+  writeURL();
+});
+
+let cells = [];
+let W = 0, H = 0;
+const labels = document.getElementById("labels");
+const caption = document.getElementById("caption");
+
+function layout() {
+  W = stage.clientWidth; H = stage.clientHeight;
+  renderer.setSize(W, H);
+  cells = [];
+  labels.innerHTML = "";
+  caption.innerHTML = "";
+  controls.enabled = S.view === "one";
+  const ri = ROLES.findIndex((r) => r.id === S.role);
+
+  if (S.view === "grid") {
+    const labH = 40, pad = 8;
+    const cw = (W - pad * 2) / 5, ch = (H - pad * 2) / 2;
+    ROLES.forEach((r, i) => {
+      const x = pad + (i % 5) * cw, y = pad + Math.floor(i / 5) * ch;
+      const cell = { x, y, w: cw, h: ch - labH, i, cam: new THREE.PerspectiveCamera() };
+      placeCamera(cell.cam, cell.w / cell.h, S.cam, null);
+      cells.push(cell);
+      const l = document.createElement("div");
+      l.className = "cell-lab" + (i === ri ? " sel" : "");
+      Object.assign(l.style, { left: x + "px", top: y + ch - labH + "px", width: cw + "px" });
+      l.innerHTML = `<b>${r.name}</b> · ${r.propName}<small>${r.id}</small>`;
+      labels.appendChild(l);
+    });
+  } else if (S.view === "one") {
+    const cell = { x: 0, y: 0, w: W, h: H, i: ri, cam: oneCam };
+    placeCamera(oneCam, W / H, S.cam, S.orbit);
+    controls.target.copy(TARGET);
+    controls.update();
+    cells.push(cell);
+    const r = ROLES[ri], c = pets[ri].counts;
+    caption.innerHTML = `<b>${r.name}</b> · ${r.propName}<small>${r.id} · 節点 ${c.nodes} · 要素 ${c.elements}</small>`;
+  } else {
+    // sizes: the pet box at 184 px (video N00) and 48 px (app list)
+    const sec = (text, x, y) => {
+      const l = document.createElement("div");
+      l.className = "sec-lab";
+      Object.assign(l.style, { left: x + "px", top: y + "px" });
+      l.textContent = text;
+      labels.appendChild(l);
+    };
+    let y = 14;
+    const big = 184, small = 48, gap = 4;
+    const perRow = W >= 24 + 10 * (big + gap) ? 10 : 5;
+    sec("動画 N00 の大きさ (1 体 184 px)", 16, y);
+    y += 24;
+    ROLES.forEach((r, i) => {
+      const x = 16 + (i % perRow) * (big + gap), yy = y + Math.floor(i / perRow) * (big + 22);
+      const cell = { x, y: yy, w: big, h: big, i, cam: new THREE.PerspectiveCamera() };
+      placeCamera(cell.cam, 1, S.cam, null);
+      cells.push(cell);
+      const l = document.createElement("div");
+      l.className = "cell-lab";
+      Object.assign(l.style, { left: x + "px", top: yy + big + "px", width: big + "px", fontSize: "12px" });
+      l.textContent = r.name;
+      labels.appendChild(l);
+    });
+    y += Math.ceil(10 / perRow) * (big + 22) + 14;
+    sec("アプリの一覧の大きさ (1 体 48 px)", 16, y);
+    y += 24;
+    ROLES.forEach((r, i) => {
+      const x = 16 + i * (small + 10);
+      const cell = { x, y, w: small, h: small, i, cam: new THREE.PerspectiveCamera() };
+      placeCamera(cell.cam, 1, S.cam, null);
+      cells.push(cell);
+    });
+  }
+}
+
+// ---- contour legend (one-pet view) --------------------------------------------
+// 10 bands from HirakuPets.BAND_COLORS (same as web/js/colormap.js), top = highest.
+const legend = document.getElementById("legend");
+(function buildLegend() {
+  const bar = legend.querySelector(".bar");
+  const SW = 19;
+  for (let i = HP.BANDS - 1; i >= 0; i--) {
+    const s = document.createElement("div");
+    s.className = "sw";
+    s.style.background = HP.BAND_COLORS[i];
+    s.dataset.band = String(i);
+    bar.appendChild(s);
+  }
+  for (let i = 0; i <= HP.BANDS; i++) {
+    const k = document.createElement("div");
+    k.className = "tk";
+    k.style.top = (HP.BANDS - i) * SW + "px";
+    k.textContent = (i / HP.BANDS).toFixed(1);
+    bar.appendChild(k);
+  }
+})();
+let legendText = "";
+function updateLegend(t) {
+  const show = S.view === "one";
+  legend.style.display = show ? "block" : "none";
+  if (!show) return;
+  const c = pets[ROLES.findIndex((r) => r.id === S.role)].contour(t, S.state);
+  const lines = [
+    c.loadCase === "mismatch" ? "荷重: 体重が左足に偏る (食い違い)" : `荷重 ${Math.round(c.load * 100)} %` + (S.state === "working" ? " (増分)" : ""),
+    `最大 ${c.max.toFixed(2)} · 最小 ${c.min.toFixed(2)}`,
+  ];
+  if (c.max > 1) lines.push("1.0 より上も赤で塗る");
+  const text = lines.join("<br>");
+  if (text !== legendText) {
+    legend.querySelector(".info").innerHTML = text;
+    legendText = text;
+  }
+}
+
+// ---- time ------------------------------------------------------------------
+let frozen = S.t;
+let t0 = performance.now() - (frozen ?? 0) * 1000;
+const nowT = () => (frozen !== null ? frozen : (performance.now() - t0) / 1000);
+
+function render() {
+  const t = nowT();
+  renderer.setScissorTest(false);
+  renderer.clear();
+  renderer.setScissorTest(true);
+  const dpr = renderer.getPixelRatio();
+  for (const p of pets) p.group.visible = false;
+  for (const c of cells) {
+    const p = pets[c.i];
+    p.group.visible = true;
+    p.group.rotation.y = S.spin ? t * 0.6 : 0;
+    p.update(t, S.state, c.cam);
+    const dist = c.cam.position.distanceTo(TARGET);
+    p.setPixelScale((c.h * dpr) / (2 * dist * half));
+    const gy = H - c.y - c.h;
+    renderer.setViewport(c.x, gy, c.w, c.h);
+    renderer.setScissor(c.x, gy, c.w, c.h);
+    renderer.render(scene, c.cam);
+    p.group.visible = false;
+  }
+  updateLegend(t);
+  document.getElementById("tread").textContent = `t = ${t.toFixed(2)} s` + (frozen !== null ? " (止めている)" : "");
+}
+
+// ---- controls panel ---------------------------------------------------------
+const roleSel = document.getElementById("role");
+for (const r of ROLES) {
+  const o = document.createElement("option");
+  o.value = r.id;
+  o.textContent = `${r.name} (${r.id})`;
+  roleSel.appendChild(o);
+}
+const freeze = document.getElementById("freeze");
+const slider = document.getElementById("tslider");
+
+function syncPanel() {
+  document.querySelectorAll(".seg[data-key]").forEach((seg) => {
+    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(S[seg.dataset.key] === b.dataset.v)));
+  });
+  document.querySelectorAll("input[type=checkbox][data-key]").forEach((c) => (c.checked = !!S[c.dataset.key]));
+  roleSel.value = S.role;
+  freeze.checked = frozen !== null;
+  if (frozen !== null) slider.value = String(frozen);
+}
+
+function changed(k) {
+  if (k === "mesh") buildPets();
+  if (k === "bg") applyBg();
+  if (k === "edges" || k === "nodes") for (const p of pets) p.setOptions({ [k]: S[k] });
+  if (k === "cam") S.orbit = null;
+  if (["view", "role", "cam", "mesh"].includes(k)) layout();
+  syncPanel();
+  writeURL();
+}
+
+document.querySelectorAll(".seg[data-key]").forEach((seg) => {
+  seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    S[seg.dataset.key] = b.dataset.v;
+    changed(seg.dataset.key);
+  });
+});
+document.querySelectorAll("input[type=checkbox][data-key]").forEach((c) => {
+  c.addEventListener("change", () => { S[c.dataset.key] = c.checked; changed(c.dataset.key); });
+});
+roleSel.addEventListener("change", () => { S.role = roleSel.value; changed("role"); });
+freeze.addEventListener("change", () => {
+  if (freeze.checked) frozen = nowT();
+  else { t0 = performance.now() - (frozen ?? 0) * 1000; frozen = null; }
+  syncPanel(); writeURL();
+});
+slider.addEventListener("input", () => { frozen = parseFloat(slider.value); syncPanel(); writeURL(); });
+document.getElementById("copy").addEventListener("click", () => navigator.clipboard?.writeText(location.href));
+
+// click a cell in the grid -> look at that pet alone
+renderer.domElement.addEventListener("click", (e) => {
+  if (S.view !== "grid") return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const c = cells.find((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);
+  if (!c) return;
+  S.role = ROLES[c.i].id; S.view = "one";
+  changed("view");
+});
+window.addEventListener("resize", () => layout());
+
+// ---- start -------------------------------------------------------------------
+let resolveReady;
+const ready = new Promise((r) => (resolveReady = r));
+window.petViewer = {
+  ready,
+  seek(t) {
+    frozen = t;
+    syncPanel(); writeURL(); render();
+    return new Promise((r) => requestAnimationFrame(() => r(t)));
+  },
+  state: S,
+};
+
+try {
+  buildPets();
+  applyBg();
+  layout();
+  syncPanel();
+  writeURL();
+  render();
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+    render();
+    requestAnimationFrame(() => resolveReady({ roles: ROLES.length, t: nowT() }));
+  });
+  renderer.setAnimationLoop(render);
+} catch (err) {
+  const e = document.getElementById("err");
+  e.style.display = "block";
+  e.textContent = "描けませんでした: " + err.message;
+  throw err;
+}
+</script>
+</body>
+</html>

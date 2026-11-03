@@ -7,7 +7,8 @@
 //
 // N05: the vehicle in the real look fills the screen, then bursts open into the
 // grid of preset tests; each tile plays its test's record, squeezed to fit, with
-// the squeeze in its corner.
+// the squeeze in its corner. ?hero=0 leaves the vehicle out; ?only=hero draws it
+// alone on a clear ground, and window.hiraku.png() returns it as a PNG.
 
 import * as THREE from "three";
 import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
@@ -90,6 +91,11 @@ function chartSvg(s, w, h) {
 // Every value the N05 cut reads from the layout rules; a missing one is named, not guessed.
 const N05_KEYS = ["duration_s", "grid", "tile", "hero", "hero_motion", "times", "ease", "fly_from", "tests"];
 
+// ?only=hero: the big vehicle alone, at rest in its box on a clear ground (window.hiraku.png()
+// gives it as one PNG); ?hero=0: the cut without it (the promo page lays its own over the tiles).
+const ONLY_HERO = params.get("only") === "hero";
+const WITH_HERO = ONLY_HERO || params.get("hero") !== "0";
+
 class Cut {
   constructor(layout, s) {
     const missing = N05_KEYS.filter((k) => layout.n05?.[k] === undefined);
@@ -99,6 +105,7 @@ class Cut {
     this.spec = layout.n05;
     this.stage = $("stage");
     this.stage.style.background = layout.colors?.night ?? "#131311";
+    if (ONLY_HERO) for (const el of [document.documentElement, document.body, this.stage]) el.style.background = "transparent";
     this.scale = 1;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
@@ -110,19 +117,11 @@ class Cut {
     const sp = this.spec;
     const design = this.s.designs[this.s.currentVersion];
     // hero: the vehicle in the real look over the stage's own background
-    const hero = document.createElement("canvas");
-    hero.className = "hero";
-    hero.dataset.box = "n05.hero";
-    Object.assign(hero.style, { left: `${sp.hero.x}px`, top: `${sp.hero.y}px`, width: `${sp.hero.w}px`, height: `${sp.hero.h}px` });
-    this.stage.append(hero);
-    const hv = new Workbench3D(null, "real", { renderer: this.renderer, ground: "shadow" });
-    hv.setDesign(design);
-    hv.setLoading("two_cargo");
-    hv.setScene(null, null);
-    hv.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
-    hv.resize(sp.hero.w, sp.hero.h);
-    hv.fitPoints(hv.contentPoints(), [0.95, 0.8, 0.42], 1.02);
-    this.hero = { el: hero, view: hv };
+    this.hero = WITH_HERO ? this.makeHero(design) : null;
+    if (ONLY_HERO) {
+      this.tiles = [];
+      return;
+    }
 
     // tiles: the grid from the rules, opening outward from fly_from
     const rects = gridRects(sp.grid);
@@ -159,6 +158,28 @@ class Cut {
       if (!clearOfBand(r, this.layout)) el.dataset.outside = "1";
       return tile;
     });
+  }
+
+  makeHero(design) {
+    const sp = this.spec;
+    const el = document.createElement("canvas");
+    el.className = "hero";
+    el.dataset.box = "n05.hero";
+    Object.assign(el.style, { left: `${sp.hero.x}px`, top: `${sp.hero.y}px`, width: `${sp.hero.w}px`, height: `${sp.hero.h}px` });
+    this.stage.append(el);
+    const view = new Workbench3D(null, "real", { renderer: this.renderer, ground: "shadow" });
+    view.setDesign(design);
+    view.setLoading("two_cargo");
+    view.setScene(null, null);
+    view.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
+    view.resize(sp.hero.w, sp.hero.h);
+    view.fitPoints(view.contentPoints(), [0.95, 0.8, 0.42], 1.02);
+    return { el, view };
+  }
+
+  // The big vehicle as a PNG (data URL) of its box at the page's scale, as last drawn.
+  png() {
+    return this.hero ? this.hero.el.toDataURL("image/png") : null;
   }
 
   makeView(tile, design) {
@@ -202,12 +223,13 @@ class Cut {
   resize(scale) {
     this.scale = scale;
     const sp = this.spec;
+    // the hero's box is the largest drawn through the shared renderer (also without the hero)
     this.renderer.setSize(Math.ceil(sp.hero.w * scale), Math.ceil(sp.hero.h * scale), false);
     const size = (c, w, h) => {
       c.width = Math.round(w * scale);
       c.height = Math.round(h * scale);
     };
-    size(this.hero.el, sp.hero.w, sp.hero.h);
+    if (this.hero) size(this.hero.el, sp.hero.w, sp.hero.h);
     for (const t of this.tiles) size(t.canvas, t.inner.w, t.inner.h);
   }
 
@@ -215,15 +237,21 @@ class Cut {
     const sp = this.spec;
     const T = sp.times;
     const H = sp.hero_motion;
-    // hero: a slow push until the burst, then it swells and fades
-    const he = this.hero.el;
-    const burst = Math.max(0, Math.min(1, (t - T.burst_s) / H.burst_dur_s));
-    const push = 1 + (H.push_scale - 1) * Math.min(1, t / T.burst_s);
-    const k = cubicBezier(...H.ease)(burst);
-    he.style.transform = `scale(${t < T.burst_s ? push : H.push_scale + (H.burst_scale - H.push_scale) * k})`;
-    he.style.opacity = String(1 - k);
-    he.style.visibility = burst >= 1 ? "hidden" : "visible";
-    if (burst < 1) this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+    // hero: a slow push until the burst, then it swells and fades (alone, it stays at rest)
+    const he = this.hero?.el;
+    if (ONLY_HERO) {
+      this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+      return;
+    }
+    if (he) {
+      const burst = Math.max(0, Math.min(1, (t - T.burst_s) / H.burst_dur_s));
+      const push = 1 + (H.push_scale - 1) * Math.min(1, t / T.burst_s);
+      const k = cubicBezier(...H.ease)(burst);
+      he.style.transform = `scale(${t < T.burst_s ? push : H.push_scale + (H.burst_scale - H.push_scale) * k})`;
+      he.style.opacity = String(1 - k);
+      he.style.visibility = burst >= 1 ? "hidden" : "visible";
+      if (burst < 1) this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+    }
 
     for (const tile of this.tiles) {
       const f = flyIn(tile.rect, sp.fly_from, t, tile.start, T.tile_in_s, tile.ease);
@@ -528,9 +556,13 @@ class CutN02 {
       pane.view = this.makeView(ok, null, inner.w, inner.h);
       pane.ghost = over ? this.makeView(over, sp.overlay, inner.w, inner.h) : null;
       pane.span = Math.max(ok.motion.duration, over?.motion?.duration ?? 0);
+      // a case past the limit that stays within a metre of where it starts (a slope tilted under it)
+      const path = over?.motion?.path;
+      pane.overStill = !!path && Math.hypot(path.maxX - path.minX, path.maxY - path.minY) < 1000;
       // the camera takes in the vehicle at rest from the scene's own direction
       pane.view.fitPoints(pane.view.contentPoints(), VIEWS[pane.view.view ?? "default"], 1.12);
-      if (over) el.insertAdjacentHTML("beforeend", `<span class="beyond" data-box="n02.pane.${key}.beyond" style="left:${st.label.x}px;bottom:${st.label.y}px;font-size:${st.rate.size_px}px;color:${sp.overlay.color}">${esc(over.lc.title ?? "限界の外の条件")}</span>`);
+      // the pane says only that the red is the case past the limit; its conditions are in the result pane
+      if (over) el.insertAdjacentHTML("beforeend", `<span class="beyond" data-box="n02.pane.${key}.beyond" style="left:${st.label.x}px;bottom:${st.label.y}px;font-size:${st.rate.size_px}px;color:${sp.overlay.color}">限界の外の条件</span>`);
       return pane;
     });
     this.buildResult();
@@ -547,7 +579,7 @@ class CutN02 {
       [cg, "重心"],
       [arrow(C.reaction), "路面の反力 (輪ごと)"],
       [arrow(C.grip), "グリップ (タイヤの横・前後の力)"],
-      [ghost, "限界の外の条件の動き"],
+      [ghost, "限界の外の条件の動き (止まったまま傾ける試験は、車両に重ねる)"],
     ];
     return (
       `<b data-box="n02.pane.legend.label" style="left:${st.label.x}px;top:${st.label.y}px;font-size:${st.label.size_px}px">凡例</b>` +
@@ -562,11 +594,16 @@ class CutN02 {
     el.className = "n02-result";
     el.dataset.box = "n02.result";
     Object.assign(el.style, { left: `${R.x}px`, top: `${R.y}px`, width: `${R.w}px`, height: `${R.h}px` });
-    // The first results of a record, a value repeated with the same unit shown once.
-    const line = (c) => {
+    // The first results of a record, a value repeated with the same unit shown once. For the
+    // case past the limit, the results that differ from the test's own case come first (a
+    // property that does not change with the conditions says nothing new there).
+    const line = (c, base = null) => {
       const seen = new Set();
       const rows = [];
-      for (const r of c?.ana?.results ?? []) {
+      const same = (r) => (base?.ana?.results ?? []).some((b) => b.quantity === r.quantity && b.value === r.value && b.unit === r.unit);
+      const results = [...(c?.ana?.results ?? [])];
+      if (base) results.sort((a, b) => same(a) - same(b));
+      for (const r of results) {
         const key = `${r.value}|${r.unit}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -589,7 +626,7 @@ class CutN02 {
           (p) =>
             `<div class="n02-res" data-box="n02.result.${p.key}" style="margin-bottom:${R.row_gap}px;font-size:${R.text_px}px"><b>${mark(p.ok.lc)}${esc(p.def.name)}</b>` +
             `<table>${line(p.ok)}</table>` +
-            (p.over ? `<div class="over" style="color:${sp.overlay.color}">✕ ${esc(p.over.lc.title ?? "限界の外の条件")}</div><table>${line(p.over)}</table>` : "") +
+            (p.over ? `<div class="over" style="color:${sp.overlay.color}">✕ ${esc(p.over.lc.title ?? "限界の外の条件")}</div><table>${line(p.over, p.ok)}</table>` : "") +
             `</div>`,
         )
         .join("");
@@ -615,11 +652,17 @@ class CutN02 {
       const q = squeeze(t, sp.times.lead_s, sp.duration_s, 0, p.span);
       p.el.querySelector(".rate").textContent = rateLabel(q.rate);
       const m = p.ok.motion;
-      p.view.setFrame(m.frame(Math.min(m.t1, m.t0 + q.tau)));
+      const mf = m.frame(Math.min(m.t1, m.t0 + q.tau));
+      p.view.setFrame(mf);
       p.view.renderInto(p.main.getContext("2d"), p.main.width, p.main.height, this.scale);
       if (p.ghost) {
+        // The case past the limit at its own place on the road, seen through the pane's
+        // camera (it runs past or slides away: that is what happened). One that stays where
+        // it starts (a slope tilted under it) is laid over the vehicle to compare attitudes.
         const g = p.over.motion;
-        p.ghost.setFrame(g.frame(Math.min(g.t1, g.t0 + q.tau)));
+        const gf = g.frame(Math.min(g.t1, g.t0 + q.tau));
+        p.ghost.setFrame(gf);
+        if (p.overStill) p.ghost.world.position.copy(p.view.anchorOf(mf).sub(p.ghost.anchorOf(gf)));
         p.ghost.copyCamera(p.view);
         p.ghost.renderInto(p.ghostEl.getContext("2d"), p.ghostEl.width, p.ghostEl.height, this.scale);
       }
@@ -650,6 +693,7 @@ const ready = new Promise((r) => (readyResolve = r));
 const player = { duration: 5, playhead: 0 };
 
 async function drawAt(t) {
+  if (!cut) return null; // the cut could not be built; the page says why
   playhead = Math.max(0, Math.min(player.duration, Number(t) || 0));
   player.playhead = playhead;
   cut.draw(playhead);
@@ -665,6 +709,7 @@ window.hiraku = {
     await ready;
     return drawAt(t);
   },
+  png: () => cut?.png?.() ?? null,
 };
 
 async function main() {

@@ -100,6 +100,63 @@ class SharedShape(unittest.TestCase):
         for k in ("burst_s", "tiles_s", "tile_in_s", "tile_stagger_s", "name_s", "tag_s"):
             self.assertIn(k, n["times"])
 
+    def test_n05_door(self):
+        n = self.rules["n05"]
+        d = n["door"]
+        # a double door behind the vehicle: it cracks, holds, then swings wide
+        self.assertEqual(set(d) - {"_note"}, {
+            "crack_dur_s", "crack_deg", "crack_ease", "hold_dur_s", "open_dur_s", "angle_deg",
+            "perspective_px", "ease", "seam_w_px", "seam_glow_w_px", "spill_dur_s",
+            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle"})
+        self.assertEqual(len(d["ease"]), 4)
+        self.assertEqual(len(d["crack_ease"]), 4)
+        self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 180)
+        self.assertGreater(d["hold_dur_s"], 0)
+        # the door stays shut a while first (later than the first two versions' 0.3 s)
+        t = n["times"]
+        self.assertGreaterEqual(t["door_open_s"], 0.5)
+        # fully open (and hidden) when the flash comes, before the tiles fly out
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertAlmostEqual(swing + d["open_dur_s"], t["burst_s"], places=6)
+        self.assertLess(t["burst_s"], t["tiles_s"])
+        # the vehicle is gone (faded) by the flash, and grows on from push_scale
+        self.assertLessEqual(swing + d["hero_fade_dur_s"], t["burst_s"])
+        self.assertGreater(d["hero_fade_scale"], n["hero_motion"]["push_scale"])
+        # the panels fit inside a leaf (half the stage wide)
+        p, stage = d["panel"], self.rules["stage"]
+        self.assertLess(2 * p["inset_px"], stage["w"] / 2)
+        self.assertLess(2 * p["inset_px"] + p["upper_h_px"] + p["gap_px"], stage["h"])
+        # the door parts on the stage's middle, where the tiles fly out of
+        self.assertEqual(n["hero"]["x"] + n["hero"]["w"] / 2, stage["w"] / 2)
+        self.assertEqual(n["fly_from"]["x"], stage["w"] / 2)
+        # the door covers the subtitle band, and the vehicle stands over it
+        chk = self.rules["check"]
+        self.assertIn(".door", [e["selector"] for e in chk["band_exempt"]])
+        self.assertTrue([r for r in chk["allow_overlap"]
+                         if r["cut"] == "n05" and {r["a"], r["b"]} == {"n05.door", "n05.hero"}])
+        # the check looks at the door shut, opening, and open
+        at = chk["times"]["n05"]
+        self.assertTrue([x for x in at if x < t["door_open_s"]])
+        self.assertTrue([x for x in at if t["door_open_s"] < x < t["burst_s"]])
+        self.assertTrue([x for x in at if x > t["tag_s"]])
+
+    def test_n05_page_door_and_vehicle(self):
+        html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
+        self.assertIn('class="door"', html)
+        self.assertIn('class="leaf leaf-l"', html)
+        self.assertIn('class="leaf leaf-r"', html)
+        # the vehicle does not split; it is drawn in ?layer=fg too
+        for gone in ('class="half', "--hinge-l", "door-slide"):
+            self.assertNotIn(gone, html)
+        self.assertIn('<div class="hero" data-box="n05.hero">', html)
+        self.assertIn('class="grid bg-only"', html)
+        # its picture comes from ?hero= or n05.hero.src, else the line drawing
+        self.assertIn('get("hero")', html)
+        self.assertIn("cutRules.hero.src", html)
+        self.assertIn("src", self.rules["n05"]["hero"])
+        # the door is behind the vehicle (earlier in the page)
+        self.assertLess(html.index('class="door"'), html.index('class="hero"'))
+
     def test_units_in_names(self):
         def walk(obj, path):
             for k, v in obj.items():
@@ -307,6 +364,37 @@ class InBrowser(unittest.TestCase):
             self.assertFalse(lc.in_band(a, rules["subtitle_band"]["y"]))
             for b in cells[i + 1:]:
                 self.assertIsNone(lc.intersection(a, b))
+
+    def test_variable_forms(self):
+        # layout.js turns each kind of value into its CSS form
+        from promo import export
+
+        cap = export.Capture(lc.SCREENS / "n05.html", scale=0.25)
+        try:
+            got = cap.page.evaluate("""() => {
+              const L = window.promoLayout, css = getComputedStyle(document.documentElement);
+              const v = (k) => css.getPropertyValue(k).trim();
+              return { motion: L.motion(L.cutRules, "", {}), vars: L.vars("n05"),
+                       angle: v("--door-angle"), persp: v("--door-perspective-px"),
+                       open: v("--t-door-open") };
+            }""")
+        finally:
+            cap.close()
+        d = lc.load_layout()["n05"]["door"]
+        m = got["motion"]
+        self.assertEqual(m["door-angle"], f"{d['angle_deg']}deg")
+        self.assertEqual(m["door-open-dur"], f"{d['open_dur_s']}s")
+        self.assertEqual(m["door-ease"], "cubic-bezier(" + ", ".join(str(x) for x in d["ease"]) + ")")
+        self.assertEqual(m["hero-motion-push-scale"], "1.04")
+        self.assertEqual(m["door-crack"], f"{d['crack_deg']}deg")
+        self.assertEqual(m["door-hold-dur"], f"{d['hold_dur_s']}s")
+        self.assertEqual(m["door-crack-ease"], "cubic-bezier(" + ", ".join(str(x) for x in d["crack_ease"]) + ")")
+        self.assertEqual(m["door-hero-fade-scale"], str(d["hero_fade_scale"]))
+        self.assertNotIn("door-angle-deg", got["vars"])           # an angle is not a length
+        self.assertEqual(got["vars"]["door-perspective-px"], d["perspective_px"])
+        self.assertEqual(got["angle"], f"{d['angle_deg']}deg")
+        self.assertIn(str(d["perspective_px"]), got["persp"])
+        self.assertEqual(got["open"], f"{lc.load_layout()['n05']['times']['door_open_s']}s")
 
     def test_n08b_bars_to_scale_and_inside(self):
         from promo import export

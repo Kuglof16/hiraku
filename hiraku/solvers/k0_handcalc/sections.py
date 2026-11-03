@@ -103,6 +103,14 @@ def properties(section: dict) -> dict:
     raise ValueError(f"section shape {shape!r} is not supported yet; use one of {', '.join(SUPPORTED_SHAPES)}")
 
 
+def area(section: dict) -> float:
+    """Cross-section area (mm^2) of a contract `section`: its A_mm2 when given, else from dims_mm
+    (sharp corners). Raises ValueError with what to fix."""
+    if "A_mm2" in section:
+        return float(section["A_mm2"])
+    return properties(section)["A"]
+
+
 def corner_von_mises(props: dict, N: float, My: float, Mz: float, T: float) -> float:
     """Largest von Mises stress (MPa) on the section for internal forces in N and N*mm.
 

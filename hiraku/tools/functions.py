@@ -646,7 +646,7 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
         raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
-    made = ctx.made_tools.make(code, taken=tuple(ctx.tools))
+    made = ctx.made_tools.make(code, taken=tuple(ctx.tools), reason=args.get("reason"))
     spec = made.spec
     if spec is not None and not contract.errors("tool_spec", spec):
         ok = "使えます" if made.usable else "使えません (" + "; ".join(made.problems)[:300] + ")"

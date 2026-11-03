@@ -44,6 +44,8 @@ def tool_for(test_id):
 
 
 def resolve(ref, design, lc, extra, preds=None):
+    if isinstance(ref, dict):  # a quantity written in the plan
+        return ref
     head, _, rest = ref.partition(".")
     if head == "pred":
         return preds[rest]
@@ -56,7 +58,10 @@ def resolve(ref, design, lc, extra, preds=None):
         assert kind == "var", ref
         return design["variables"][name]
     if head == "load":
-        return design_summary(design)["loadings"][lc["params"].get("loading", "two_cargo")][rest]
+        node = design_summary(design)["loadings"][lc["params"].get("loading", "two_cargo")]
+        for part in rest.split("."):
+            node = node[part]
+        return node
     if head == "summary":
         return design_summary(design)[rest]
     raise AssertionError(f"unknown ref {ref}")
@@ -128,22 +133,37 @@ class BuildersTest(unittest.TestCase):
             self.assertEqual(plan["tool"], tool_for(tid).name)
             got = {r["quantity"]: r for r in self.runs[tid]["results"]}
             preds = {}
+            expected = plan.get("expected_mismatch", {}).get("quantity")
             for p in plan["predictions"]:
                 extra = p["inputs_from"](DESIGN, lc) if "inputs_from" in p else {}
-                self.assertEqual(any(ref.startswith("from.") for ref in p["inputs"].values()), "inputs_from" in p)
+                refs = [ref for ref in p["inputs"].values() if isinstance(ref, str)]
+                self.assertEqual(any(ref.startswith("from.") for ref in refs), "inputs_from" in p)
                 inputs = {k: resolve(ref, DESIGN, lc, extra, preds) for k, ref in p["inputs"].items()}
                 out = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
                 preds[p["quantity"]] = out
+                self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                if p["quantity"] not in got:  # an intermediate hand value, not compared
+                    continue
                 ana = got[p["quantity"]]
                 self.assertEqual(out["unit"], ana["unit"], f"{tid} {p['quantity']}")
                 rel = (ana["value"] - out["value"]) / abs(out["value"])
-                self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
-                self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
+                    self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
+                else:
+                    self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
+
+    def test_r3_misses_on_the_unsafe_side_and_ends_without_a_verdict(self):
+        plan = PLANS["R3"]
+        self.assertNotIn("retry", plan["expected_mismatch"])
+        self.assertNotIn("safe_side", plan["expected_mismatch"])
+        self.assertTrue(plan["expected_mismatch"]["end"])  # the cause is recorded and the run goes on
+        damage = {r["quantity"]: r["value"] for r in self.runs["R3"]["results"]}["fatigue_damage"]
+        self.assertGreater(damage, 0.0)  # the analysis is what the hand value falls short of
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
         for tid, lc in self.cases.items():
-            if "criterion" not in lc or tid == "R3":
+            if "criterion" not in lc:
                 continue
             self.assertIn(tid, PLANS)
             self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in PLANS[tid]["predictions"]], tid)

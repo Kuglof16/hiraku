@@ -1,0 +1,14 @@
+{
+  "answers": [
+    {
+      "key": "Q15",
+      "name": "段差",
+      "value": 100,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    }
+  ],
+  "note": "林道の木の根を越えたい"
+}

@@ -28,7 +28,8 @@ window.PROMO_LAYOUT = {
     "_note": "night: ground of the title screens; ink: black ink on paper; tile_*: the N05 test tiles"
   },
   "n00": {
-    "duration_s": 7.0,
+    "duration_s": 6.5,
+    "_duration_note": "6.5 s is N00's slot in the narration script (draft 5: 0:00-0:06.5, the silent tail after the voice cut by 0.5 s)",
     "name": {
       "y": 172,
       "size_px": 210
@@ -199,7 +200,8 @@ window.PROMO_LAYOUT = {
       "y": 60,
       "w": 1500,
       "h": 750,
-      "_note": "centred; h follows the drawing (viewBox 600 x 300)"
+      "src": "media/n05_hero_2x.png",
+      "_note": "centred; h follows the drawing (viewBox 600 x 300). src: picture of the vehicle alone on a transparent ground (a PNG, path relative to the page), fitted into the box (contain); empty: the line drawing of vehicle.js. ?hero=<path> in the page's URL wins over src. media/n05_hero_2x.png: the app's own drawing of the vehicle (web/cut.html?cut=n05&only=hero&t=0, device scale 2, 3000 x 1500) from the video run 20261103-041110-offroad-4w-scripted"
     },
     "hero_motion": {
       "push_scale": 1.04,
@@ -211,7 +213,7 @@ window.PROMO_LAYOUT = {
         0.9,
         0.4
       ],
-      "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier)"
+      "_note": "the vehicle grows to push_scale until times.burst_s, then to burst_scale and fades out over burst_dur_s (ease: cubic-bezier). The app's render (web/js/cut.js) uses all of these; promo n05.html uses push_scale only (the vehicle grows to it until the door swings wide, then fades out by door.hero_fade_*); burst_scale, burst_dur_s and ease are not used there"
     },
     "ease": {
       "tile": [
@@ -233,13 +235,52 @@ window.PROMO_LAYOUT = {
       }
     },
     "times": {
-      "burst_s": 0.95,
-      "tiles_s": 1.05,
+      "burst_s": 1.25,
+      "tiles_s": 1.35,
       "tile_in_s": 0.6,
       "tile_stagger_s": 0.05,
-      "name_s": 1.45,
-      "tag_s": 2.0,
-      "_note": "burst: the vehicle bursts open; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first"
+      "name_s": 1.75,
+      "tag_s": 2.3,
+      "door_open_s": 0.55,
+      "_note": "burst: flash of light as the door has swung out; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed door starts to part (door.crack_*). burst, tiles, name and tag were 0.3 s earlier until 2026-11-03; they moved to leave the door closed a while first"
+    },
+    "door": {
+      "crack_dur_s": 0.2,
+      "crack_deg": 12,
+      "crack_ease": [
+        0.25,
+        0,
+        0.3,
+        1
+      ],
+      "hold_dur_s": 0.12,
+      "open_dur_s": 0.38,
+      "angle_deg": 105,
+      "perspective_px": 2400,
+      "ease": [
+        0.45,
+        0,
+        0.8,
+        0.55
+      ],
+      "seam_w_px": 4,
+      "seam_glow_w_px": 220,
+      "spill_dur_s": 0.9,
+      "hero_fade_dur_s": 0.35,
+      "hero_fade_scale": 1.1,
+      "panel": {
+        "inset_px": 72,
+        "upper_h_px": 300,
+        "gap_px": 40,
+        "line_px": 2,
+        "bevel_px": 16
+      },
+      "handle": {
+        "w_px": 12,
+        "h_px": 200,
+        "seam_gap_px": 48
+      },
+      "_note": "double door over the whole stage behind the vehicle, two leaves of 960 x 1080 hinged on the outer edges, opening towards the viewer (kannon-biraki; rotateY, perspective_px from the stage's centre). Closed until times.door_open_s while the light in the seam grows; then the leaves part by crack_deg over crack_dur_s (crack_ease), stay there for hold_dur_s, and swing on to angle_deg over open_dur_s (ease: slow at first, then fast as the leaves pass out of the frame, near 68 deg). Fully open (and hidden) at door_open_s + crack_dur_s + hold_dur_s + open_dur_s = times.burst_s. The vehicle in front does not open: from the start of the wide swing it grows from hero_motion.push_scale to hero_fade_scale and fades out over hero_fade_dur_s. seam_w_px / seam_glow_w_px: the warm light in the seam and its halo; spill_dur_s: the light behind the door, seen through the opening, and the light that spills towards the viewer, both fade out over it from the start of the wide swing. panel: the two raised panels on each leaf (inset from the leaf's edges, upper panel height, gap between the panels, outline width, width of the raised border); handle: the pull next to the seam"
     },
     "fly_from": {
       "x": 960,
@@ -351,8 +392,13 @@ window.PROMO_LAYOUT = {
         6.5
       ],
       "n05": [
+        0,
         0.5,
-        2.6,
+        0.8,
+        1.0,
+        1.15,
+        1.4,
+        2.9,
         4.5
       ],
       "n08b": [
@@ -382,6 +428,10 @@ window.PROMO_LAYOUT = {
       {
         "selector": ".clock",
         "why": "authoring clock, drawn in the band with ?guides=1"
+      },
+      {
+        "selector": ".door",
+        "why": "N05's closed door covers the whole stage as the ground behind the vehicle until it opens (by n05.times.burst_s); it holds no text, and the subtitles are drawn over it"
       }
     ],
     "allow_overflow": [
@@ -407,6 +457,12 @@ window.PROMO_LAYOUT = {
         "a": "n18.light",
         "b": "n18.vehicle",
         "why": "the vehicle is drawn over the vertical light on purpose"
+      },
+      {
+        "cut": "n05",
+        "a": "n05.door",
+        "b": "n05.hero",
+        "why": "the vehicle stands in front of the closed door on purpose; it fades out as the door swings open"
       }
     ]
   }
