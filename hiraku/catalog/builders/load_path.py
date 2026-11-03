@@ -452,6 +452,185 @@ def pedal_inputs(design: Record, load_case: Record) -> Record:
     return best[1]
 
 
+def _post_under(design: Record, props: dict, node: str, bar: str) -> tuple[float, Record | None]:
+    """The post under a bar's end node: the chain of near-vertical members (|dz| at least 0.9 of their length) going
+    down from `node`; (its height from the lowest node it reaches up to `node`, its first member's props), or
+    (0, None) when nothing goes down from the node."""
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    cur, first, used = node, None, {bar}
+    while True:
+        nxt = None
+        for m in design["members"]:
+            if m["id"] in used or cur not in (m["node_a"], m["node_b"]):
+                continue
+            other = m["node_b"] if m["node_a"] == cur else m["node_a"]
+            d = xyz[other] - xyz[cur]
+            if d[2] < 0 and -d[2] >= 0.9 * float(np.linalg.norm(d)):
+                nxt = (m["id"], other)
+                break
+        if nxt is None:
+            break
+        used.add(nxt[0])
+        first = first or props[nxt[0]]
+        cur = nxt[1]
+    return float(xyz[node][2] - xyz[cur][2]), first
+
+
+def push_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.bar_on_posts' inputs for the point R whose hand calculation moves the most (params push_force):
+    the push lands on the first member outboard of the point (as the tool finds it, load_path.first_outboard)."""
+    from hiraku.solvers import formula_registry
+    from hiraku.solvers.k0_handcalc.vehicle import member_props
+    from hiraku.solvers.shelf.load_path import RIDER_KINDS, first_outboard, occupant_trunks, point_r
+
+    F = _force(load_case, "push_force", 725.0)
+    props = member_props(design)
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    riders = {f"part:{p['id']}" for p in design.get("parts", []) if p["kind"] in RIDER_KINDS}
+    reg = formula_registry()
+    best, others = None, []
+    for t in occupant_trunks(design):
+        for name, x, out in point_r(t):
+            hit = first_outboard(design, x, out, riders)
+            if hit is None or not hit[0].startswith("member:"):
+                others.append(f"{t['id']}.{name}: {hit[0] if hit else 'nothing'}")
+                continue
+            mid = hit[0].split(":", 1)[1]
+            m = props[mid]["member"]
+            A, B = xyz[m["node_a"]], xyz[m["node_b"]]
+            at = x + hit[1] * out
+            u = (B - A) / np.linalg.norm(B - A)
+            a = float(np.clip((at - A) @ u, 1.0, props[mid]["length"] - 1.0))
+            b = props[mid]["length"] - a
+            ins = {"F": q(F, "N"), "a": q(a, "mm"), "b": q(b, "mm"),
+                   "E": q(float(props[mid]["material"]["E_MPa"]), "MPa"),
+                   "I": q(min(props[mid]["section"]["Iy"], props[mid]["section"]["Iz"]), "mm^4")}
+            for end, nid in (("A", m["node_a"]), ("B", m["node_b"])):
+                h, post = _post_under(design, props, nid, mid)
+                post = post or props[mid]
+                ins.update({f"h_{end}": q(h, "mm"), f"E_{end}": q(float(post["material"]["E_MPa"]), "MPa"),
+                            f"I_{end}": q(min(post["section"]["Iy"], post["section"]["Iz"]), "mm^4")})
+            d = reg.evaluate("load_path.bar_on_posts", ins)["outputs"]["delta"]["value"]
+            if best is None or d > best[0]:
+                best = (d, ins)
+    if best is None:
+        raise ValueError("no point R has a member outboard of it, so the hand calculation of the push has nothing to "
+                         "bend (" + "; ".join(others) + ")")
+    return best[1]
+
+
+UNSPRUNG_KINDS = ("wheel", "suspension")  # ride on the wheels, not on the rails (R8-stress's hand calculation)
+
+
+def _beam_moment(x_r: float, x_f: float, pts, moments, grid: np.ndarray) -> np.ndarray:
+    """M(x) on grid of a beam on supports at x_r < x_f (overhangs free) under point loads (x, P) and point
+    moments (x, C) (statics)."""
+    L = x_f - x_r
+    Rf = (sum(P * (x - x_r) for x, P in pts) - sum(C for _, C in moments)) / L
+    Rr = sum(P for _, P in pts) - Rf
+    M = np.zeros_like(grid)
+    for x, P in pts:
+        M += np.where(grid > x, P * (grid - x), 0.0)
+    for x, C in moments:
+        M += np.where(grid > x, -C, 0.0)
+    M -= np.where(grid > x_r, Rr * (grid - x_r), 0.0)
+    M -= np.where(grid > x_f, Rf * (grid - x_f), 0.0)
+    return M
+
+
+def _shaft_torque(x_r: float, x_f: float, torques, grid: np.ndarray) -> np.ndarray:
+    """T(x) on grid of a shaft held against twist at x_r and x_f (a uniform shaft between them: a torque between
+    goes to each end by the other part's length; one outside goes to the nearer end)."""
+    T = np.zeros_like(grid)
+    L = x_f - x_r
+    for x, t in torques:
+        if x <= x_r:
+            T += np.where((grid > x) & (grid <= x_r), t, 0.0)
+        elif x >= x_f:
+            T += np.where((grid >= x_f) & (grid < x), -t, 0.0)
+        else:
+            T += np.where((grid > x_r) & (grid < x), t * (x_f - x) / L, 0.0)
+            T += np.where((grid >= x) & (grid < x_f), -t * (x - x_r) / L, 0.0)
+    return T
+
+
+def stress_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.rail_utilisation's inputs at the rail point and combination of the load case's accelerations
+    (params accel_vertical, accel_lateral, accel_longitudinal in g, safety_factor) that use it most. The rails are
+    the members named rail_L_* / rail_R_*, on the supports' two axle stations. Every member (its own mass at its
+    middle) and every part but the unsprung ones (UNSPRUNG_KINDS) loads them: up and down by the lever rule across
+    the rails, sideways by m a_y h / s between them, fore and aft as a pitch moment m a_x h (each rail its share)
+    and an axial force (half each); the twist of each load is its share times its offset across from the rail."""
+    from hiraku.contract.loading import on_board
+    from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
+    from hiraku.solvers.k0_handcalc.vehicle import member_props
+
+    params = load_case.get("params") or {}
+
+    def val(k, default):
+        v = params.get(k)
+        return default if v is None else float(v["value"] if isinstance(v, dict) else v)
+
+    av, al, alon = val("accel_vertical", 1.0), val("accel_lateral", 0.0), val("accel_longitudinal", 0.0)
+    sf = val("safety_factor", 1.0)
+    loading_id = params.get("loading")
+    d = on_board(design, loading_id) if loading_id else design
+    props = member_props(d)
+    rails = {side: [m for m in props if m.startswith(f"rail_{side}_")] for side in "LR"}
+    if not rails["L"] or not rails["R"]:
+        raise ValueError("the design has no rails named rail_L_* and rail_R_*, so the ladder frame's hand "
+                         "calculation does not apply")
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in d["nodes"]}
+    xs = sorted({float(xyz[s["frame_node"]][0]) for s in d.get("supports", [])})
+    if len(xs) < 2:
+        raise ValueError("the supports do not stand at two axle stations")
+    x_r, x_f = xs[0], xs[-1]
+    y = {side: float(np.mean([xyz[props[m]["member"]["node_a"]][1] for m in rails[side]])) for side in "LR"}
+    z_r = float(np.mean([xyz[props[m]["member"]["node_a"]][2] for m in rails["L"] + rails["R"]]))
+    s = y["L"] - y["R"]
+    g = STANDARD_GRAVITY
+    loads = []
+    for mid, p in props.items():
+        a, b = xyz[p["member"]["node_a"]], xyz[p["member"]["node_b"]]
+        loads.append(((a + b) / 2.0, p["section"]["A"] * p["length"] * float(p["material"]["density_kg_m3"]) * 1e-9))
+    for part in d.get("parts", []):
+        if part["kind"] not in UNSPRUNG_KINDS:
+            loads.append((np.asarray(part["box"]["center_mm"], float), float(part["mass_kg"])))
+    rail = props[rails["L"][0]]
+    dims = d["sections"][rail["member"]["section"]]["dims_mm"]
+    sec = rail["section"]
+    vertical_is_z = sec["cz"] >= sec["cy"]  # the local axis whose extreme fibre is h/2
+    I_v, I_h = (sec["Iy"], sec["Iz"]) if vertical_is_z else (sec["Iz"], sec["Iy"])
+    bw, hh, t = float(dims["b"]), float(dims["h"]), float(dims["t"])
+    A_m = (bw - t) * (hh - t)
+    grid = np.linspace(min(x[0] for x, _ in loads), max(x[0] for x, _ in loads), 3001)
+    best = None
+    for lon, lat in ((0.0, 0.0), (alon, 0.0), (0.0, al), (0.0, -al)):
+        for side, sgn in (("L", 1.0), ("R", -1.0)):
+            pts, mom, tor, side_pts = [], [], [], []
+            for x, m in loads:
+                share = (x[1] - y["R"]) / s if side == "L" else (y["L"] - x[1]) / s
+                P = m * g * (av * share + sgn * lat * (x[2] - z_r) / s)
+                pts.append((x[0], P))
+                mom.append((x[0], m * g * lon * share * (x[2] - z_r)))
+                tor.append((x[0], P * (x[1] - y[side])))
+                side_pts.append((x[0], m * g * lat))
+            N = sum(m * g * lon for _, m in loads) / 2.0
+            Mv = np.abs(_beam_moment(x_r, x_f, pts, mom, grid))
+            Mh = np.abs(_beam_moment(x_r, x_f, side_pts, [], grid))
+            T = np.abs(_shaft_torque(x_r, x_f, tor, grid))
+            sig = Mv * (hh / 2) / I_v + Mh * (s / 2 + bw / 2) / (2 * (sec["A"] * (s / 2) ** 2 + I_h)) + N / sec["A"]
+            vm = np.sqrt(sig ** 2 + 3 * (T / (2 * A_m * t)) ** 2)
+            k = int(np.argmax(vm))
+            if best is None or vm[k] > best[0]:
+                best = (float(vm[k]), float(Mv[k]), float(Mh[k]), float(T[k]), float(N))
+    _, Mv, Mh, T, N = best
+    return {"M_v": q(Mv, "N*mm"), "M_h": q(Mh, "N*mm"), "T": q(T, "N*mm"), "N": q(N, "N"), "b": q(bw, "mm"),
+            "h": q(hh, "mm"), "t": q(t, "mm"), "A": q(float(sec["A"]), "mm^2"), "I_v": q(float(I_v), "mm^4"),
+            "I_h": q(float(I_h), "mm^4"), "s": q(s, "mm"), "f_y": q(float(rail["material"]["yield_MPa"]), "MPa"),
+            "SF": q(sf, "1")}
+
+
 def free_inputs(design: Record, load_case: Record) -> Record:
     """load_path.free_parts' inputs: the parts modelled and those a chain of contacts joins to a member."""
     from hiraku.solvers.shelf.load_path import contact_groups, find_contacts, modelled_parts
@@ -482,11 +661,64 @@ R7_PLAN = {
          "inputs_from": pedal_inputs},
     ],
 }
+_PUSH = {k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
+PUSH_PREDICTION = {
+    "quantity": "occupant_push_deflection", "formula_id": "load_path.bar_on_posts", "output": "delta",
+    "assumptions": ["点 R から外へ、いちばん先に当たる部材 (横の棒) を押す。点 R が 2 つ以上あれば、手計算でいちばん動くもの",
+                    "棒は両端固定の梁、棒の両端を受ける柱は足からの片持ち (柱の足と、ほかの棒が柱をつなぐ分は入れない)"],
+    "inputs": _PUSH, "inputs_from": push_inputs}
 R8_PLAN = {
     "tool": "load_path",
-    "say": "どの部品も、触れている物をたどって枠まで繋がっているかを先に数えます",
-    "predictions": [FREE_PREDICTION],
+    "say": ("どの部品も、触れている物をたどって枠まで繋がっているかを先に数えます。乗員の肩・腰を外へ押すときは、当たる横の棒"
+            "と、その両端の柱の曲げで、動きを先に出します"),
+    "predictions": [FREE_PREDICTION, PUSH_PREDICTION],
+    # Measured (2026-11-04) on version 2 ({part_mounts: brackets, pedal_mount: post, side_guard: bars_net}): K0
+    # 11.2 mm (the post under the bar's near end, a cantilever 951 mm from its foot, 10.4 of it) against the tool's
+    # 7.0 mm. The tool's posts are held more than a free cantilever: the other bars and the top bar tie them to the
+    # far post, and the roll bar's hoop stands beside them.
+    "expected_mismatch": {
+        "quantity": "occupant_push_deflection",
+        "source": "the analysis department's run of version 2 with bars_net (K0 11.2 mm, load_path 7.0 mm), 2026-11-04",
+        "cause": "手計算は、横の棒の両端の柱を足からの片持ち (柱の先は自由) とみている。実際の枠では、ほかの棒と上の棒が柱を"
+                 "向こうの柱とつなぎ、柱の先の動きを押さえるので、動きは手計算より小さい",
+        "fix": "柱の先をつなぐ棒の硬さを入れた柱の式が要る (いまは無い)。手計算は動きを大きめに出すので、安全側の値として合否を出す",
+        "safe_side": True,
+        "safe_side_reason": ("柱を自由な片持ちとみると、つなぐ棒の分だけ柔らかくなり、動きは大きめに出る (不利な側)。"
+                             "基準は occupant_push_deflection <= Q78 なので、大きい方が不利"),
+    },
+}
+# R8-stress on its own: the tool gives max_utilisation on R8-free and R8-push too (other loads, safety factor 1 on
+# R8-free), so this prediction must not sit in R8_PLAN, which every R8 load case shares. It needs a plan looked up
+# by the load case (PLANS["R8-stress"]: tools.plan looks a load case's id up before its test id).
+_RAIL = {k: f"from.{k}" for k in ("M_v", "M_h", "T", "N", "b", "h", "t", "A", "I_v", "I_h", "s", "f_y", "SF")}
+R8_STRESS_PLAN = {
+    "tool": "load_path",
+    "say": ("部品と乗員の重さと加速度を、はしご形の枠の 2 本のレールに分けて、上下・横の曲げ、軸の力、ねじれを合わせた応力で、"
+            "許しに対する割合を先に出します"),
+    "predictions": [FREE_PREDICTION, {
+        "quantity": "max_utilisation", "formula_id": "load_path.rail_utilisation", "output": "u",
+        "assumptions": ["レールだけを見る (横の部材・柱・ロールバーの応力は手計算に入れない)",
+                        "レールは車軸の 2 点で支えた梁と軸。上下は、てこの比で 2 本に分け、横の加速度は m a_y h / s で片側へ移す。"
+                        "前後は、高さの分のモーメント m a_x h とレールの軸の力 (半分ずつ)",
+                        "ねじれは、各荷重のレールへの分を、レールの中心からの横のずれに掛けたもの (横の部材が固く付く: 大きめ)",
+                        "車輪とサスペンションの腕は車輪に乗る (レールに載せない)",
+                        "4 つの組 (下・下+前・下+左・下+右) のうち、いちばん大きい点"],
+        "inputs": _RAIL, "inputs_from": stress_inputs}],
+    # Measured (2026-11-04) on version 2 ({part_mounts: brackets, pedal_mount: post, side_guard: bars_net}, Q75
+    # 0.7 g, Q76 0.9 g, Q61 1.5): K0 0.969 (rail R, down + forward) against the tool's 0.614 (cross_B, down + left;
+    # the rails 0.597); v1 K0 0.919.
+    "expected_mismatch": {
+        "quantity": "max_utilisation",
+        "source": "the analysis department's run of version 2 with bars_net (K0 0.969, load_path 0.614), 2026-11-04",
+        "cause": "手計算は応力を大きめに出す: 上下・横・軸の応力を角で全部重ね、ねじれは横の部材が固く付くとみ、前後の力の"
+                 "モーメントを高さの分だけレールに掛ける。ツールの枠では横の部材・床・柱が荷重を分けて持つ",
+        "fix": "レールの応力を分ける枠の式は手計算に無い。手計算は大きめに出るので、安全側の値として合否を出す",
+        "safe_side": True,
+        "safe_side_reason": ("レールについては、応力を角で重ね、ねじれを固い横の部材で受けるとみる分、大きめに出る (不利な側)。"
+                             "横の部材の応力は手計算に入れていない (ツールでは cross_B がいちばん大きい) ので、横の部材が"
+                             "レールより使われる設計では、安全側とは言い切れない"),
+    },
 }
 
 BUILDERS = {"R7": r7_controls, "R8": r8_load_path}
-PLANS = {"R7": R7_PLAN, "R8": R8_PLAN}
+PLANS = {"R7": R7_PLAN, "R8": R8_PLAN, "R8-stress": R8_STRESS_PLAN}  # a load case's own plan before its test's

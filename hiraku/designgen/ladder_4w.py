@@ -1059,8 +1059,16 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         materials.setdefault(key, json.loads(MATERIALS.read_text(encoding="utf-8"))[key])
     elif v["rollbar_stays"] == 1 or v["rollbar_front_posts"] == 1:
         raise DesignGenError("rollbar_stays and rollbar_front_posts need the roll bar (rollbar = 1)")
-    columns = build_rops_extra(frame, lay, v, foot) if v["rollbar"] == 1 else {}
-    guard = build_side_guard(frame, lay, v, foot, columns) if v["side_bars"] == 1 else None
+    # The side frame's and the front posts' outriggers leave the rails at the seat cross members' nodes, in line with
+    # the cross members: in the cross members' own section they would continue them as one tube through the rail
+    # node, which the shell mesh cannot join (_check_tubes_through). Without rollbar_foot_* they are the cross
+    # members' width and wall at the rails' height (rail_h; HIRAKU's choice, not sized); the roll bar's own feet
+    # stand off the cross members' stations and keep the cross members' section.
+    side_foot = foot
+    if foot == cross and not any(v[k] for k in ZERO_OR_AT_LEAST):
+        side_foot = frame.section(*rect_tube(v["cross_b"], v["rail_h"], v["cross_t"]))
+    columns = build_rops_extra(frame, lay, v, side_foot) if v["rollbar"] == 1 else {}
+    guard = build_side_guard(frame, lay, v, side_foot, columns) if v["side_bars"] == 1 else None
     if v["side_net"] == 1 and guard is not None and len(guard["heights"]) < 2:
         raise DesignGenError("side_net with the side bars needs at least two of them (side_bar_count >= 2)")
     net = build_side_net(frame, lay, v, foot) if v["side_net"] == 1 and guard is None else None
@@ -1097,7 +1105,32 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
+    _check_tubes_through(design)
     return design
+
+
+def _check_tubes_through(design: Record) -> None:
+    """No node where two tubes both pass straight through (the shell mesh, k1_shell.mesh, cannot join them there):
+    members that continue straight with the same section are one tube for the shell mesh, read with its own rule
+    (k1_shell.mesh._runs). Else DesignGenError naming the tubes and the node. The usual case: the side frame's or
+    the front posts' outriggers (rollbar_foot_*, 0: the cross members' section) continue a seat cross member across a
+    rail node, so the rail and the cross member's run cross there."""
+    from hiraku.solvers.k1_shell import mesh as shell_mesh
+
+    try:
+        runs, ends = shell_mesh._runs(design, shell_mesh._members(design))
+    except Exception:  # noqa: BLE001 - the shell mesh's own errors are reported when it is made
+        return
+    for node in ends:
+        through = [r for r in runs if node in r.nodes_at and r.start_node != node and r.end_node != node]
+        if len(through) > 1:
+            names = ", ".join(r.members[0] for r in through)
+            hint = (" give the outriggers their own section (rollbar_foot_b / rollbar_foot_h different from cross_b / "
+                    "cross_h)" if any(m.startswith(("side_foot_", "rops_front_foot_", "rollbar_foot_"))
+                                      for r in through for m in r.members) else
+                    " give one of them another section, or move one so they meet at separate nodes")
+            raise DesignGenError(f"tubes ({names}) pass straight through each other at node {node!r}: the shell mesh "
+                                 f"needs one of them to end there;{hint}")
 
 
 BATTERY_IDS = ("battery", "battery2")  # the packs' part ids (battery_split of them)
