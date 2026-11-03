@@ -1,6 +1,7 @@
 import io
 import json
 import shutil
+import sys
 import tempfile
 import threading
 import unittest
@@ -9,6 +10,7 @@ import urllib.request
 from pathlib import Path
 
 from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
+from hiraku.webserve import server as webserver
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
@@ -69,6 +71,54 @@ class ReadEventsTest(unittest.TestCase):
         self.path.write_bytes(_line(0, "agent.said", text="先にレールを梁とみて応力を見積もります").encode("utf-8"))
         out = read_events(self.path, 0)
         self.assertEqual(out["events"][0]["text"], "先にレールを梁とみて応力を見積もります")
+
+    def _limits(self, read, line, scan=7):
+        """Small read / line limits for one test (the module's are megabytes)."""
+        saved = (webserver.MAX_READ_BYTES, webserver.MAX_LINE_BYTES, webserver._SCAN_BYTES)
+        webserver.MAX_READ_BYTES, webserver.MAX_LINE_BYTES, webserver._SCAN_BYTES = read, line, scan
+        self.addCleanup(lambda: setattr(webserver, "MAX_READ_BYTES", saved[0]) or setattr(webserver, "MAX_LINE_BYTES", saved[1])
+                        or setattr(webserver, "_SCAN_BYTES", saved[2]))
+
+    def test_a_line_longer_than_one_read_is_read_whole(self):
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        self.path.write_bytes((first + long + _line(2, "cost.updated")).encode("utf-8"))
+        self._limits(read=64, line=10_000)
+        offset, seqs = 0, []
+        for _ in range(10):  # every read moves on, so this ends
+            out = read_events(self.path, offset)
+            self.assertGreater(out["next_offset"], offset)
+            seqs += [e["seq"] for e in out["events"]]
+            offset = out["next_offset"]
+            if offset == out["size"]:
+                break
+        self.assertEqual(seqs, [0, 1, 2])
+        self.assertEqual(offset, self.path.stat().st_size)
+
+    def test_a_line_over_the_line_limit_is_skipped_as_bad(self):
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        self.path.write_bytes((first + long + _line(2, "cost.updated")).encode("utf-8"))
+        self._limits(read=64, line=200)
+        a = read_events(self.path, 0)
+        self.assertEqual(([e["seq"] for e in a["events"]], a["next_offset"]), ([0], len(first.encode())))
+        b = read_events(self.path, a["next_offset"])
+        self.assertEqual((b["events"], b["bad_lines"]), ([], 1))
+        self.assertEqual(b["next_offset"], len((first + long).encode()))
+        c = read_events(self.path, b["next_offset"])
+        self.assertEqual([e["seq"] for e in c["events"]], [2])
+
+    def test_a_long_line_still_being_written_is_left_for_later(self):
+        first = _line(0, "run.started")
+        self.path.write_bytes((first + '{"seq": 1, "kind": "agent.said", "text": "' + "x" * 300).encode("utf-8"))
+        self._limits(read=64, line=10_000)
+        a = read_events(self.path, len(first.encode()))
+        self.assertEqual((a["events"], a["bad_lines"], a["next_offset"]), ([], 0, len(first.encode())))
+        with self.path.open("ab") as f:
+            f.write(('"}' + LF).encode("utf-8"))
+        b = read_events(self.path, a["next_offset"])
+        self.assertEqual([e["seq"] for e in b["events"]], [1])
+        self.assertEqual(b["next_offset"], self.path.stat().st_size)
 
 
 class ServerTest(unittest.TestCase):
@@ -395,6 +445,34 @@ class LaunchTest(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=10) as r:
             self.assertTrue(json.loads(r.read())["stop_requested"])
         self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
+
+    def test_the_run_is_the_folder_the_child_prints_not_another_new_one(self):
+        # another run's folder appears first (newer by name), then the child's own
+        decoy = "20991231-235959-other-run"
+        base = self.serve({}, command=fake_command(SAMPLE_EVENTS, self.RUN, 3.0, decoy=decoy))
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN))
+        self.assertTrue((self.runs / decoy / "events.jsonl").exists())
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": decoy}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(cm.exception.code, 409)
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": self.RUN}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertTrue(json.loads(r.read())["stop_requested"])
+        self.assertTrue((self.runs / self.RUN / "stop.request").exists())
+        self.assertFalse((self.runs / decoy / "stop.request").exists())
+
+    def test_a_child_that_never_prints_its_folder_is_not_taken_for_a_run(self):
+        # makes a run folder but prints nothing and ends: no run_id is guessed from runs/
+        code = ("import pathlib, sys; d = pathlib.Path(sys.argv[1]) / '20261103-120000-silent'; d.mkdir(parents=True); "
+                "(d / 'events.jsonl').write_text('')")
+        base = self.serve({}, command=lambda req, mode, runs: [sys.executable, "-c", code, str(runs)])
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual(status, 500)
+        self.assertIn("ended before it started", out["error"])
 
     def test_hearing_answer_goes_to_the_started_run_only(self):
         base = self.serve({})

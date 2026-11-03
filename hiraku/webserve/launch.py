@@ -5,7 +5,8 @@
                        the run started here, if one is still going, and the demo runs
                        (data/catalog/demo_runs.yaml, see Launcher.demo_runs)
     POST /api/launch   {"requirements": "<file name>", "mode": "scripted" | "claude"}
-                       -> {"run_id": ...} once the run folder exists; the name is a file
+                       -> {"run_id": ...} once the child prints its run folder (and the
+                       folder has its events.jsonl); the name is a file
                        directly in the requirements folder, or a path under it listed as
                        `file` in the demo runs. A file in the demo runs only runs in the
                        modes listed for it there.
@@ -318,8 +319,7 @@ class Launcher:
             if self.running():
                 raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}")
             self.runs_dir.mkdir(parents=True, exist_ok=True)
-            before = {p.name for p in self.runs_dir.iterdir()}
-            env = {**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+            env ={**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             cmd = self.command(path, mode, self.runs_dir, events) if events is not None else self.command(path, mode, self.runs_dir)
             proc = subprocess.Popen(cmd, cwd=str(REPO_DIR), env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -329,21 +329,19 @@ class Launcher:
             tail: deque[str] = deque(maxlen=20)
             threading.Thread(target=self._read, args=(proc, info, tail), daemon=True).start()
             self.proc, self.current = proc, info
-        # The run folder appears when the run starts; its id is also printed (run folder: ...).
+        # The child prints its own folder (run folder: ...) once the folder and its events.jsonl
+        # exist. Only that line names the run: a new folder in runs/ may be another run's (one
+        # started at the same time from the command line or drip), and stop() writes into it.
         deadline = time.monotonic() + self.wait_s
         while time.monotonic() < deadline:
-            if info["run_id"] is None:
-                new = [p for p in self.runs_dir.iterdir()
-                       if p.name not in before and RUN_ID_RE.match(p.name) and (p / EVENTS_FILE).exists()]
-                if new:
-                    info["run_id"] = sorted(p.name for p in new)[-1]
-            if info["run_id"]:
+            rid = info["run_id"]
+            if rid and (self.runs_dir / rid / EVENTS_FILE).exists():
                 self.started.append(info)
                 return info
-            if proc.poll() is not None:
+            if "exit_code" in info:  # the child has ended and all its output was read (_read)
                 raise LaunchError(500, "the run ended before it started: " + " / ".join(tail))
             time.sleep(0.1)
-        raise LaunchError(504, "the run folder did not appear in time")
+        raise LaunchError(504, "the run did not print its run folder in time")
 
     def stop(self, run_id: Any) -> dict[str, Any]:
         """Ask the run started here to stop (only that one, and only while it runs)."""

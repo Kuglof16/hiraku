@@ -30,7 +30,7 @@ else the newest saved run.
 
 The screen draws only from events, so the server never interprets them beyond
 parsing JSON lines. A line still being written (no trailing newline) is left
-for the next read.
+for the next read. A line longer than MAX_LINE_BYTES is skipped (counted in bad_lines).
 """
 
 from __future__ import annotations
@@ -78,6 +78,10 @@ CONTENT_TYPES = {
 _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 _TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
+# One line longer than MAX_READ_BYTES is still read whole up to this size (a mesh.created or an
+# analysis.finished with per-element values of a large mesh); a longer line is skipped as bad.
+MAX_LINE_BYTES = 64 * 1024 * 1024
+_SCAN_BYTES = 1024 * 1024  # block size when looking for the end of a long line
 KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
 REQUEST_MAX_BYTES = 1_000_000  # an A1/A2 request carries its draft back
 
@@ -100,7 +104,11 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
 
     Returns events, next_offset (where the next read starts), size, reset
     (true when the file got shorter than offset, so reading restarted at 0)
-    and bad_lines (lines that were not JSON objects).
+    and bad_lines (lines that were not JSON objects, or longer than MAX_LINE_BYTES).
+
+    At most MAX_READ_BYTES are read, except when the first line is longer: then that
+    one line is read to its newline (up to MAX_LINE_BYTES; a longer one is counted
+    bad and skipped), so next_offset always moves past a finished line.
     """
     reset = False
     size = path.stat().st_size if path.exists() else 0
@@ -110,13 +118,25 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
     bad = 0
     next_offset = offset
     if size > offset:
+        complete = b""
         with path.open("rb") as f:
             f.seek(offset)
             chunk = f.read(min(size - offset, MAX_READ_BYTES))
-        end = chunk.rfind(b"\n")
-        if end >= 0:
-            complete = chunk[: end + 1]
-            next_offset = offset + len(complete)
+            end = chunk.rfind(b"\n")
+            if end >= 0:
+                complete = chunk[: end + 1]
+                next_offset = offset + len(complete)
+            elif offset + len(chunk) < size:
+                # one line longer than a read: find its newline (None while it is still being written)
+                nl = _newline_after(f, offset + len(chunk), size)
+                if nl is not None:
+                    next_offset = nl + 1
+                    if next_offset - offset <= MAX_LINE_BYTES:
+                        f.seek(offset)
+                        complete = f.read(next_offset - offset)
+                    else:
+                        bad += 1
+        if complete:
             for raw in complete.splitlines():
                 raw = raw.strip()
                 if not raw:
@@ -131,6 +151,21 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
                 else:
                     bad += 1
     return {"events": events, "next_offset": next_offset, "size": size, "reset": reset, "bad_lines": bad}
+
+
+def _newline_after(f, start: int, size: int) -> int | None:
+    """Byte position of the first newline at or after `start` (before `size`), read in blocks; None if none."""
+    pos = start
+    f.seek(pos)
+    while pos < size:
+        block = f.read(min(_SCAN_BYTES, size - pos))
+        if not block:
+            break
+        i = block.find(b"\n")
+        if i >= 0:
+            return pos + i
+        pos += len(block)
+    return None
 
 
 def _first_event(path: Path) -> dict[str, Any] | None:

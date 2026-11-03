@@ -43,6 +43,7 @@ import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { RealPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
+import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
 import { partPieces, wheelPieces } from "./shapes.js";
 
@@ -775,30 +776,32 @@ export class Workbench3D {
     this.followApplied = null;
   }
 
-  // A shell mesh (the contract's mesh record) as faces and element edges, built once
-  // per mesh_id. Each triangle corner has its own vertex (a quad a-b-c-d is a-b-c and
-  // a-c-d), so an element takes one colour; vNode / vElem say which mesh node and
-  // element each vertex is. The edges are each element side once, on the node positions.
+  // A mesh (the contract's mesh record: shells, solids or both) as faces and element edges,
+  // built once per mesh_id. What is drawn is each shell element and the outer faces of the
+  // solids (meshkind.js); each triangle corner has its own vertex, so an element takes one
+  // colour; vNode / vElem say which mesh node and element each vertex is. The edges are each
+  // shell side and each edge round a solid's outer face once, on the node positions.
   shellObj(rec) {
     const had = this.shellObjs[rec.mesh_id];
     if (had) return had;
     const P = rec.nodes_mm;
+    const seen = outerFaces(rec);
     let corners = 0;
-    for (const e of rec.elements) corners += 3 * (e.length - 2);
+    for (const f of seen) corners += 3 * f.tris.length;
     const pos = new Float32Array(corners * 3);
     const vNode = new Uint32Array(corners);
     const vElem = new Uint32Array(corners);
     let k = 0;
-    rec.elements.forEach((e, ei) => {
-      for (let t = 1; t + 1 < e.length; t += 1) {
-        for (const n of [e[0], e[t], e[t + 1]]) {
+    for (const f of seen) {
+      for (const tri of f.tris) {
+        for (const n of tri) {
           vNode[k] = n;
-          vElem[k] = ei;
+          vElem[k] = f.elem;
           pos.set(P[n], k * 3);
           k += 1;
         }
       }
-    });
+    }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(corners * 3), 3));
@@ -810,18 +813,7 @@ export class Workbench3D {
     faces.castShadow = faces.receiveShadow = this.look.real;
     const nodePos = new Float32Array(P.length * 3);
     P.forEach((p, i) => nodePos.set(p, i * 3));
-    const seen = new Set();
-    const pairs = [];
-    for (const e of rec.elements) {
-      for (let i = 0; i < e.length; i += 1) {
-        const a = e[i];
-        const b = e[(i + 1) % e.length];
-        const key = Math.min(a, b) * P.length + Math.max(a, b);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push(a, b);
-      }
-    }
+    const pairs = edgePairs(rec, seen);
     const eg = new THREE.BufferGeometry();
     eg.setAttribute("position", new THREE.BufferAttribute(nodePos, 3));
     eg.setIndex(pairs);
