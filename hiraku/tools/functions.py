@@ -604,6 +604,17 @@ def archetypes(ctx: RunContext) -> list[Record] | None:
     return ctx.designgen.archetypes(ctx.project["flags"])
 
 
+def requirements_now(ctx: RunContext) -> Record:
+    """The requirements file as the run has it now: its requirement values are the project's
+    (project.requirements, which the hearing's answers update through ask_user), its other keys
+    (tests, beyond, default_loading ...) the file's. Without the file (a run opened again), the
+    project's want, product and flags."""
+    base = ctx.requirements_file or {k: ctx.project[k] for k in ("want", "product", "flags") if k in ctx.project}
+    if ctx.project.get("requirements"):
+        return dict(base, requirements=list(ctx.project["requirements"]))
+    return base
+
+
 def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """The designer's first version: an archetype, its choices and variables (the kit computes
     every coordinate; the requirements give the occupants, cargo and top speed). Then the load
@@ -627,7 +638,7 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     if args["archetype"] not in names:
         raise ToolError(f"型 {args['archetype']!r} はありません。この製品に使えるのは {', '.join(names) or 'なし'} です "
                         f"(get_context の archetypes)")
-    req = ctx.requirements_file
+    req = requirements_now(ctx)
     try:
         design = dict(ctx.designgen.propose(args["archetype"], dict(args.get("choices") or {}),
                                             dict(args.get("variables") or {}), req))

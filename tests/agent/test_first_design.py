@@ -98,6 +98,15 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         for e in events:
             self.assertEqual(contract.errors("event", e), [], e["kind"])
 
+    def test_the_hearings_answers_reach_the_first_version(self):
+        """ask_user writes the answers into project.requirements; the design and its load cases are built
+        from those values, not from the file as it was at the start."""
+        reqs = [dict(r, value=120.0) if r["key"] == "Q15" else r for r in self.ctx.project["requirements"]]
+        self.ctx.store.update_project({"requirements": reqs}, agent="lead", text="ヒアリングの答えを要件に入れました")
+        self.assertEqual(next(r for r in self.ctx.requirements_file["requirements"] if r["key"] == "Q15")["value"], 100)
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "答えの段差で"}, "designer")
+        self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["P1-step120", "R1-step120"])
+
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
     tests = ["P1"]  # no criterion: the scripted run ends done once P1 is matched
