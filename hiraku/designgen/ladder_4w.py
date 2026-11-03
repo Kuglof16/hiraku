@@ -598,10 +598,13 @@ _OPTION_VARS: dict[str, Var] = {
                                "0: none (the parts rest where they are placed, ON_RAILS_MM and the other gaps)")
     for k in MOUNT_GROUPS}
 _OPTION_VARS["pedal_mount"] = Var(
-    "1", 0.0, 0.0, 2.0, "0: the pedals are placed without a mount; 1: a stand under each pedal from the footwell "
+    "1", 0.0, 0.0, 3.0, "0: the pedals are placed without a mount; 1: a stand under each pedal from the footwell "
     "floor up to the pedal's lowest edge (the floor must be held: mount_floor = 1); 2: a bracket from the front "
-    "bulkhead's rear face back to each pedal's front edge (a pedal box). The stands follow pedal_x (kit/attach."
-    "pedal_stands; SS400, painted)")
+    "bulkhead's rear face back to each pedal's front edge (a pedal box); 3: a beam (frame member pedal_beam, the "
+    "tower tube) out from the front tower's rear post on the pedals' side, inboard at the height of the pedals' "
+    "front edges to PEDAL_BEAM_PAST_MM past the innermost pedal's stand, and a stand from its rear face back to each "
+    "pedal's front edge (build_pedal_beam). The stands follow pedal_x (kit/attach.pedal_stands; SS400, painted)")
+PEDAL_BEAM_PAST_MM = 0.0  # the pedal beam ends at the inner side of the innermost stand (assumption)
 # - side guard (FN-05 push at point R, FN-07): a side frame each side outboard of the seats
 from hiraku.solvers.k4_geometry import people as _people  # noqa: E402
 
@@ -691,7 +694,8 @@ JOINT_VALUES = {"butt": {"gusset_leg": 0.0, "cross_members_through": 0.0},
 # stays; fenders.
 OPTION_VALUES: dict[str, dict[str, dict[str, float]]] = {
     "part_mounts": {"none": {k: 0.0 for k in MOUNT_GROUPS}, "brackets": {k: 1.0 for k in MOUNT_GROUPS}},
-    "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0}},
+    "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0},
+                    "post": {"pedal_mount": 3.0}},
     "side_guard": {"none": {"side_bars": 0.0, "side_net": 0.0}, "bars": {"side_bars": 1.0, "side_net": 0.0},
                    "bars_net": {"side_bars": 1.0, "side_net": 1.0}},
     "rops": {"hoop": {"rollbar_stays": 0.0, "rollbar_front_posts": 0.0},
@@ -931,6 +935,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     _check_rear_post(supports, post_x, v["tower_b"])
     dash = build_dash(frame, lay, post_x, dash_z, rail_y, tower, rho)
     lay.part("bulkhead")["carried_by"] = dash["bulkhead_nodes"]
+    if v["pedal_mount"] == 3:
+        root = build_pedal_beam(frame, lay, post_x, rail_y, tower, v["tower_b"])
+        # the bulkhead lies on the beam's front face as on the posts' (the same 2.3 mm into the tube's box)
+        lay.part("bulkhead")["carried_by"] = sorted(set(dash["bulkhead_nodes"]) | {root})
     rack_nodes = [lay.part(f"bracket_tie_{s['id']}")["carried_by"][0] for s in supports if s["actuation"]["steer"]]
     lay.part("steering_rack")["carried_by"] = rack_nodes  # the rack hangs on its clamps
     for pid in ("steering_column", "steering_wheel", "steering_shaft"):
@@ -1138,6 +1146,59 @@ def build_dash(frame: Frame, lay: Layout, post_x: float, dash_z: float, rail_y: 
     posts_low = [m["node_a"] for m in frame.members if m["id"].startswith("dash_post_")]
     return {"column_nodes": nodes, "bulkhead_nodes": sorted(set(posts_low) | set(nodes)) +
             sorted({m["node_a"] for m in frame.members if m["node_b"] in posts_low and m["id"].startswith("tower_post_")})}
+
+
+def pedal_beam_line(lay: Layout, post_x: float, rail_y: float, tower_b: float) -> Record:
+    """Where the pedal beam (pedal_mount = 3) goes, from the pedals and the front tower's rear post: side ("L" or
+    "R": the pedals' side of the centre line), z (the mean height of the pedals' front edges, where
+    kit/attach.pedal_stands puts the stands' middle), the root on the post's axis [post_x, +-rail_y, z] and the
+    tip, inboard along y to the inner side of the innermost pedal's stand (attach.STAND_PAD_MM / 2 past the pedal's
+    middle) plus PEDAL_BEAM_PAST_MM. Raises DesignGenError when a pedal is outboard of the post's axis or the beam
+    would be shorter than the tube is wide."""
+    from hiraku.designgen.kit import attach
+
+    pedals = [p for p in lay.parts if p["kind"] in ("accelerator_pedal", "brake_pedal")]
+    if not pedals:
+        raise DesignGenError("pedal_mount = 3 needs the pedals")
+    ys = [float(p["box"]["center_mm"][1]) for p in pedals]
+    sy = 1.0 if sum(ys) > 0 else -1.0
+    zs = []
+    for p in pedals:
+        cs = attach._corners(p)
+        x0 = float(np.max(cs[:, 0]))
+        zs.append(float(np.mean(cs[np.abs(cs[:, 0] - x0) < 1e-6][:, 2])))
+    inboard = [rail_y - sy * y for y in ys]  # each pedal's middle this far inboard of the post's axis
+    if min(inboard) < 0.0:
+        raise DesignGenError(f"a pedal is outboard of the front tower's post (y = {sy * rail_y:g} mm): no pedal beam "
+                             f"from the post reaches its stand")
+    length = max(inboard) + attach.STAND_PAD_MM / 2.0 + PEDAL_BEAM_PAST_MM
+    if length < tower_b:
+        raise DesignGenError(f"the pedal beam would be {length:.0f} mm long, shorter than the tube ({tower_b:g} mm)")
+    z = float(np.mean(zs))
+    return {"side": "L" if sy > 0 else "R", "z": z, "length": length, "root": [post_x, sy * rail_y, z],
+            "tip": [post_x, sy * (rail_y - length), z]}
+
+
+def build_pedal_beam(frame: Frame, lay: Layout, post_x: float, rail_y: float, section: str, tower_b: float) -> str:
+    """The pedal beam (pedal_mount = 3, pedal_beam_line): the front tower's rear post on the pedals' side is split at
+    the beam's height (node <side>AK; pieces tower_post_<side>A2 below and tower_post_<side>A2_up above) and the
+    member pedal_beam goes from there inboard along y to node <side>AKT, of the tower's section. Returns the root
+    node. Raises DesignGenError when the height is not on the post at least tower_b off its ends."""
+    line = pedal_beam_line(lay, post_x, rail_y, tower_b)
+    side, z = line["side"], line["z"]
+    post = next((m for m in frame.members if m["id"].startswith("tower_post_")
+                 and all(abs(frame.nodes[m[k]][0] - post_x) < 1e-6 and abs(frame.nodes[m[k]][1] - line["root"][1]) < 1e-6
+                         for k in ("node_a", "node_b"))), None)
+    if post is None:
+        raise DesignGenError(f"no front tower post at x = {post_x:.0f} mm on the {side} rail for the pedal beam")
+    lo, hi = sorted(frame.nodes[post[k]][2] for k in ("node_a", "node_b"))
+    if not lo + tower_b <= z <= hi - tower_b:
+        raise DesignGenError(f"the pedals' front edges (z = {z:.0f} mm) are not on the front tower's post ({lo:.0f} to "
+                             f"{hi:.0f} mm, {tower_b:g} mm off its ends) for the pedal beam; move pedal_x")
+    root = frame.split(post["id"], f"{side}AK", line["root"], (post["id"], post["id"] + "_up"))
+    tip = frame.node(f"{side}AKT", line["tip"])
+    frame.member("pedal_beam", root, tip, section)
+    return root
 
 
 def write_hardpoints(design: dict, rail: dict | None = None, top_half: float = 0.0) -> dict:
@@ -1367,7 +1428,7 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
             design["parts"].extend(fender_parts(s, v, float(HDPE["density_kg_m3"])))
         design["materials"]["hdpe"] = dict(HDPE)
     if v["pedal_mount"]:
-        target = "floor_front" if v["pedal_mount"] == 1 else "bulkhead"
+        target = {1.0: "floor_front", 2.0: "bulkhead", 3.0: "member:pedal_beam"}[v["pedal_mount"]]
         if target == "floor_front" and v["mount_floor"] != 1:
             raise DesignGenError("pedal_mount = 1 stands the pedals on the footwell floor, which is held only with "
                                  "mount_floor = 1")
@@ -1386,7 +1447,7 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
     _check_options_clear(design)
 
 
-OPTION_MEMBERS = ("rops_", "side_")  # the options' members
+OPTION_MEMBERS = ("rops_", "side_", "pedal_")  # the options' members
 OPTION_PARTS = ("side_net_", "fender_")  # the options' parts (the mounts and stands check themselves: kit/attach)
 
 

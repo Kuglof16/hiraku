@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 MOUNTS = {k: 1 for k in GEN.MOUNT_GROUPS}
 # the set the design department's version 2 may use (the report's table): every part held, the pedals on a
-# bracket from the bulkhead, the side frame outboard of point R
-VERSION_2 = {**MOUNTS, "pedal_mount": 2, "side_bars": 1}
+# beam out from the front tower's rear post (pedal_mount 3; on the bulkhead, a 2.3 mm sheet, the brake pedal moved
+# 49.5 mm), the side frame outboard of point R
+VERSION_2 = {**MOUNTS, "pedal_mount": 3, "side_bars": 1}
 
 
 def _touch(design, a: str, b: str) -> float:
@@ -213,22 +214,32 @@ class LoadPathTest(unittest.TestCase):
         cls.runs = {k: tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {}) for k, lc in cls.cases.items()}
 
     def test_version_2_judged(self):
-        """R8-free and R8-push pass. R7-foot does not since the bulkhead is a 2.3 mm sheet (ladder_4w.PLATE_T_MM)
-        and not a 20 mm solid box: the brake pedal's stand on it moves more than Q69; the accelerator's passes."""
+        """R8-free, R7-foot and R8-push pass, with the pedals' stands on the beam from the post (pedal_mount 3)."""
         from tests.solvers.test_builders_load_path import judged, results
 
         for k, lc in self.cases.items():
             rec = self.runs[k]
             self.assertEqual(rec["status"], "ok", rec.get("error"))
             got = results(rec).get(lc["criterion"]["quantity"])
-            self.assertEqual(judged(lc, rec), k != "R7-foot-500N", f"{k}: {got}")
+            self.assertTrue(judged(lc, rec), f"{k}: {got}")
             self.assertEqual(results(rec)["free_parts"]["value"], 0.0)
             self.assertNotIn("unsupported_load", results(rec))
-        foot = results(self.runs["R7-foot-500N"])
-        lim = self.cases["R7-foot-500N"]["criterion"]["limit"]["value"]
-        self.assertEqual(foot["pedal_deflection"]["where"], "pedal_brake")
-        self.assertLessEqual(foot["pedal_deflection.pedal_accel"]["value"], lim)
         contract.validate("design", self.d)
+
+    def test_bulkhead_stands_move_more_than_q69(self):
+        """With the stands on the bulkhead (pedal_mount 2), a 2.3 mm sheet (ladder_4w.PLATE_T_MM) and not a 20 mm
+        solid box, the brake pedal moves more than Q69; the accelerator's, near the post, passes."""
+        from hiraku.catalog.builders import BUILDERS
+        from hiraku.solvers.shelf import LoadPath
+        from tests.solvers.test_builders_load_path import REQ, SPECS, judged, results
+
+        d = GEN.build({**VERSION_2, "pedal_mount": 2})
+        lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, d) if c["load_case_id"] == "R7-foot-500N")
+        rec = LoadPath().run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        foot = results(rec)
+        self.assertFalse(judged(lc, rec))
+        self.assertEqual(foot["pedal_deflection"]["where"], "pedal_brake")
+        self.assertLessEqual(foot["pedal_deflection.pedal_accel"]["value"], lc["criterion"]["limit"]["value"])
 
 
 if __name__ == "__main__":
