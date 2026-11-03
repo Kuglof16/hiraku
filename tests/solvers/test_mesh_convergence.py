@@ -53,6 +53,8 @@ class RichardsonTest(unittest.TestCase):
     def test_verdicts(self):
         self.assertEqual(verdict_of([100.0, 103.0, 104.0])[0], "converged")  # change 0.96 %, q 1/3
         self.assertEqual(verdict_of([100.0, 120.0, 135.0])[0], "singular")  # growing, q 0.75 >= 2^-0.5
+        # change first: growing with p 0.415 (q 0.75) but only 1.4 % between the two finest -> converged
+        self.assertEqual(verdict_of([100.0, 102.0, 103.5])[0], "converged")
         self.assertEqual(verdict_of([100.0, 130.0, 145.0])[0], "not_converged")  # growing, q 0.5 (p 1), change 10 %
         self.assertEqual(verdict_of([150.0, 120.0, 100.0])[0], "not_converged")  # falling: not singular
         self.assertEqual(verdict_of([100.0, 102.0])[0], "converged")  # two levels: change only

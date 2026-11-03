@@ -233,7 +233,7 @@ class FrameShellHotSpotTest(unittest.TestCase):
         lc = {"load_case_id": "R1-rest", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
               "tolerance_rel": 0.15}
         t0 = time.perf_counter()
-        rec = t.run(copy.deepcopy(d), lc, [{"prediction_id": "pred-0001"}], {})
+        rec = t.run(copy.deepcopy(d), lc, [{"prediction_id": "pred-0001"}], {"mesh_convergence": "off"})
         print(f"  frame_shell on the small ladder: {time.perf_counter() - t0:.1f} s")
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))

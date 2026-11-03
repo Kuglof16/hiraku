@@ -20,7 +20,7 @@ from hiraku.solvers.shelf.frame_static import upstream_mount_series
 
 TIMES = [0.0, 0.1, 0.2]
 PITCH = [0.0, 5.0, 10.0]  # deg, the body nose-down in world (rpy_matrix's pitch about +y)
-SIZE = {"element_size": {"value": 20.0, "unit": "mm"}}
+SIZE = {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"}  # convergence is tested elsewhere
 
 
 def tool(name):

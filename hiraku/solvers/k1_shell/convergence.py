@@ -44,11 +44,12 @@ ZZ_SOURCE = ("Zienkiewicz-Zhu error estimate: O. C. Zienkiewicz and J. Z. Zhu, I
 
 CONVERGENCE_ASSUMPTION = (
     "メッシュの収束 (仮定、出典なし): 要素の大きさを {r:g} 倍ずつ細かくした 3 段で同じ量を解き直す (細かくする比 {r:g} は"
-    "仮定)。最も細かい 2 段の差の割合 change_pct が {lim:g} % 以下なら converged (限度 {lim:g} % は仮定)。3 段の差 "
+    "仮定)。決め方は変化を先に見る: 最も細かい 2 段の差の割合 change_pct が {lim:g} % 以下なら、次数 p に関係なく "
+    "converged (限度 {lim:g} % は仮定)。それより大きく、下の singular の条件に当たれば singular、それ以外は not_converged。3 段の差 "
     "d1 = v2 - v1、d2 = v3 - v2 (粗い順) が同じ向きで |d1| が 0 でないとき Richardson: 観測した次数 "
     "p = ln(d1/d2)/ln {r:g}、外挿 v3 + d2/({r:g}^p - 1)、最も細かい値の誤差 |v3 - 外挿|/|外挿|。差が値の {flat:g} 倍より"
     "小さいときは 0 とみなす。d1 と d2 の向きが違う (振れる) ときと d2/d1 >= 1 (縮まない) ときは外挿しない。"
-    "値の大きさが段ごとに増え続け、p <= {ps:g} (d2/d1 >= {q:.3f}) または差が縮まないときは singular (鋭い角・点の荷重の"
+    "change_pct が限度を超え、値の大きさが段ごとに増え続け、p <= {ps:g} (d2/d1 >= {q:.3f}) または差が縮まないときは singular (鋭い角・点の荷重の"
     "ように、細かくするほど上がり続ける所。境の {ps:g} は仮定)。singular の値はそのまま判定に使えない (外挿もしない)")
 ZZ_ASSUMPTION = (
     "誤差の目安 (Zienkiewicz-Zhu の考え方、仮定を含む): 外と内の面の要素の応力を全体の軸の 3 次元の応力に直し、節ごとに"
@@ -104,6 +105,8 @@ def verdict_of(values, limit_pct: float = LIMIT_PCT, ratio: float = REFINE_RATIO
     v = [float(x) for x in values]
     change = abs(v[-1] - v[-2]) / abs(v[-1]) * 100.0 if v[-1] != 0 else (0.0 if v[-2] == 0 else math.inf)
     rich = richardson(v[-3:], ratio) if len(v) >= 3 else None
+    if change <= limit_pct:  # change first: a small change is converged whatever the order
+        return "converged", change, rich
     if rich is not None:
         d1, d2 = rich["d1"], rich["d2"]
         scale = max(abs(x) for x in v[-3:])
@@ -112,7 +115,7 @@ def verdict_of(values, limit_pct: float = LIMIT_PCT, ratio: float = REFINE_RATIO
         q_singular = ratio ** (-SINGULAR_ORDER)
         if growing and rich["q"] is not None and rich["q"] >= q_singular:
             return "singular", change, rich
-    return ("converged" if change <= limit_pct else "not_converged"), change, rich
+    return "not_converged", change, rich
 
 
 def convergence_record(quantity: str, unit: str, levels: list[dict], limit_pct: float = LIMIT_PCT,
