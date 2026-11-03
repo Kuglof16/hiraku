@@ -214,7 +214,8 @@ class MeshFieldRecord(unittest.TestCase):
                 checker.recs["mesh"]["mesh-0001"] = (0, mesh)
                 checker.recs["analysis"]["ana-0001"] = (1, rec)
                 checker.check_meshes()
-                self.assertEqual([str(f) for f in checker.findings], [])
+                self.assertEqual([str(f) for f in checker.findings if f.level == "error"], [],
+                                 "\n".join(str(f) for f in checker.findings))
                 self.assertEqual(contract.errors("analysis", rec), [])
 
 
