@@ -248,6 +248,7 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 | 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³) | ISO 8608 の表 | `hiraku/solvers/k2_vehicle/road.py`・`shelf/offroad.py`、`hiraku/solvers/shelf/fatigue.py` |
 | 溶接のホットスポット応力 (溶接の線から板厚 t の 0.5 倍と 1.5 倍の表面の応力を、σ = 1.5σ(0.5t) − 0.5σ(1.5t) で線まで外挿) | IIW の疲労設計の推奨 (Hobbacher 2016) | `hiraku/solvers/k1_shell/stress.py`、`hiraku/solvers/shelf/frame_shell.py` |
 | タイヤの MF 6.1 の係数 (205/60R15 の乗用車の例のタイヤ、2.2 bar、98 個)。この車がはく 25x8-12 の UTV のタイヤではない。K2 は曲線の形だけを使い、荷重・半径・摩擦・剛さは設計の値に合わせ、空気圧の項は読まない | Pacejka, Tire and Vehicle Dynamics 3 版 Appendix 3 (公開の .tir から写した。.tir はリポジトリに無く、写しが元と一致するかは確かめていない。本そのものも確かめていない) | `data/tyres/pacejka_tvd3_205_60r15.json` |
+| サスのアームのブッシュの剛さ (径方向 3 kN/mm・軸方向 0.5 kN/mm)、タイロッド 10 kN/mm | 乗用車のアームのブッシュの論文 2 本 (表と頁は `model.py` のコメント。径方向 1.7〜5.0 kN/mm、軸方向 0.23〜0.46 kN/mm)。UTV の値は無い。タイロッドは出典なし | `hiraku/solvers/k2_vehicle/model.py` |
 | UTV のタイヤのコーナリング剛さ・前後の滑りの剛さ・緩和長 | 出典なし (設計の値か、K2 の既定の仮定) | `hiraku/solvers/k2_vehicle/` |
 | 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の職員の説明資料 (staff briefing、2016-11-22)・仮定)。確かめたのは、坂 14 % (林道規程 第 20 条 第 4 項)、風 30 m/s (気象庁「風の強さと吹き方」の表と注 2)、14 m と 20 % (細目告示 第 171 条 第 5 項 第 3 号・第 5 号)、倒れない角度 24° とその元の 33° (CPSC の 2016 年の説明資料の PDF 11 ページ)。確かめていないのは、体重 76.6 kg (AIST の統計を読めない)、路面の C 級の幅 (二次の出典だけ)。「空車で 35°」は出典が見つからない (前に「CPSC (2020)」と書いたが、その資料は見つからない) | `data/requirements/offroad-4w.yaml` |
 | 人体の寸法 (座高・肩幅・腰幅・膝) と工具の開口 | AIST 人体寸法データベース 1991-92、MIL-STD-1472H | `hiraku/solvers/k4_geometry/people.py`・`assembly.py` |
