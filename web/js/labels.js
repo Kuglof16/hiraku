@@ -189,7 +189,7 @@ const QUANTITY_JA = {
   toe_aligning: "アライニングトルクによるトー",
 };
 
-const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力" };
+const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力", joint: "取付点の力" };
 
 export function vectorName(kind) {
   return VECTOR_JA[kind] ?? kind;
