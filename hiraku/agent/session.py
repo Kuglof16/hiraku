@@ -59,6 +59,40 @@ def check_intake_events(events: Any) -> list[Record]:
     return events
 
 
+OWNERLESS_REASON = "Claude Code のセッションが終わり、実行が閉じられないまま残っていた"
+
+
+def close_ownerless_plugin_runs(root: Path) -> list[str]:
+    """docs/contract.md 持ち主のいない実行: a run of driver claude_code_plugin still running whose
+    plugin.alive is missing or older than layout.PLUGIN_ALIVE_S (no server serves it) is closed by the next
+    start_run in the same runs folder, whoever's: stopped / user_stop / OWNERLESS_REASON. Returns their run ids."""
+    from hiraku.agent.plugin import locked, server_alive
+
+    closed = []
+    if not root.is_dir():
+        return closed
+    for path in sorted(root.iterdir()):
+        if not (path / layout.PROJECT_FILE).is_file():
+            continue
+        try:
+            project = read_data(path / layout.PROJECT_FILE)
+        except (OSError, ValueError):
+            continue
+        if project.get("driver") != "claude_code_plugin" or project.get("status") != "running" or server_alive(path):
+            continue
+        try:
+            with locked(path):
+                store = RunStore.open(path)
+                if store.project["status"] != "running":
+                    continue
+                store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+                store.finish("stopped", stop_reason=OWNERLESS_REASON, stop_code="user_stop")
+        except (OSError, ValueError, TimeoutError):
+            continue  # a folder that cannot be closed now is left for the next start
+        closed.append(store.project["run_id"])
+    return closed
+
+
 def start_run(requirements_path: Path | str, *, design_path: Path | str | None = None,
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
@@ -119,6 +153,7 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     if intake and req.get("tests"):  # the intake picks from the flags; the file's tests decide the domains
         intake_events = [dict(e, data=picks_for_file_tests(e["data"], req["tests"], load_cases, fields, catalog))
                          if e["kind"] == "domains.picked" else e for e in intake_events]
+    close_ownerless_plugin_runs(Path(root))
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req,

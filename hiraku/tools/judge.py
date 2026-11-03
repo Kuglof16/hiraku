@@ -122,25 +122,38 @@ def beyond_results(ctx: RunContext, load_case: Record, version: int) -> list[tup
     return out
 
 
+STAND_IN_BELOW = 1e-6  # contract 9017d93: below this fraction of the limit, a judged value is too small to compare
+
+
 def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
     """(comparison, cause or None) holding the load case back (docs/contract.md 分野が緑になる条件 (b)):
     per judged quantity of the load case (the criterion's, the one a tool is judged on, judged_quantity,
     or a result named by result_quantity for a prediction of the criterion's quantity), the version's
     latest comparison, when it is a mismatch whose cause is missing or neither resolved nor safe side.
     Earlier comparisons of that quantity are superseded by the later one and hold nothing (their causes
-    stay as recorded); comparisons of intermediate quantities do not decide the tile."""
+    stay as recorded); comparisons of intermediate quantities do not decide the tile. With the criterion's
+    stand_in_quantity (contract 9017d93), a judged comparison whose prediction and result are both smaller
+    than STAND_IN_BELOW x the limit is replaced by the latest comparison of the stand-in quantity."""
     crit = load_case.get("criterion")
     if crit is None:
         return []
     latest: dict[str, Record] = {}
+    stand_in_name, stand_in = crit.get("stand_in_quantity"), None
     for c in ctx.store.records("comparison", version):
         pred = ctx.prediction(c["prediction_id"])
         if pred is None or pred["load_case_id"] != load_case["load_case_id"]:
             continue
         tool = (ctx.store.get("analysis", c["analysis_id"]) or {}).get("tool")
-        if c["quantity"] in (crit["quantity"], judged_quantity(ctx, tool, crit["quantity"])) \
+        if stand_in_name and c["quantity"] == stand_in_name:
+            stand_in = c  # the result compared is the stand-in quantity (comparisons come in order)
+        elif c["quantity"] in (crit["quantity"], judged_quantity(ctx, tool, crit["quantity"])) \
                 or pred["quantity"] == crit["quantity"]:
             latest[c["quantity"]] = c  # comparisons come in the order they were made
+    if stand_in is not None:
+        tiny = STAND_IN_BELOW * abs(crit["limit"]["value"])
+        for q, c in list(latest.items()):
+            if abs(c["predicted"]["value"]) < tiny and abs(c["analyzed"]["value"]) < tiny:
+                latest[q] = stand_in  # both too small to compare: the stand-in's comparison decides (b)
     causes = ctx.causes_by_comparison()
     out = []
     for c in latest.values():

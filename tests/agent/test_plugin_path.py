@@ -384,6 +384,20 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
             self.hook("Stop", {"stop_hook_active": True})
         self.server.drain()  # the server reads the blocks while it is alive
 
+    def test_the_next_start_closes_a_plugin_run_no_server_serves(self):
+        """docs/contract.md 持ち主のいない実行: a running plugin run whose plugin.alive is stale is closed by the
+        next start_run in the same runs folder; one with a fresh plugin.alive is left alone."""
+        from hiraku.agent.session import OWNERLESS_REASON, close_ownerless_plugin_runs
+        from hiraku.store import RunStore
+
+        self.assertEqual(close_ownerless_plugin_runs(self.runs), [])  # the server touched it just now
+        os.utime(self.ctx.store.path / layout.PLUGIN_ALIVE_FILE, (0, 0))
+        self.assertEqual(close_ownerless_plugin_runs(self.runs), [self.ctx.project["run_id"]])
+        store = RunStore.open(self.ctx.store.path)
+        (fin,) = [e for e in store.events() if e["kind"] == "run.finished"]
+        self.assertEqual((fin["data"]["status"], fin["data"]["stop_code"], fin["data"].get("stop_reason")),
+                         ("stopped", "user_stop", OWNERLESS_REASON))
+
     def test_the_hook_ends_the_run_itself_when_no_server_serves_it(self):
         """Claude Code may stop the MCP server before it reads the hook's "end" note: with plugin.alive
         stale, the Stop hook that lets the stop through writes run.finished itself."""

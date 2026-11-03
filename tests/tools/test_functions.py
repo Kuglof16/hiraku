@@ -1061,3 +1061,32 @@ class ToolParamsTest(RunCase, unittest.TestCase):
         self.assertEqual(whole["params_how"], PARAMS_HOW)
         (plain,) = [t for t in list_tools(self.ctx) if t["name"] == "frame_static"]
         self.assertNotIn("params", plain)
+
+
+class StandInQuantityTest(RunCase, unittest.TestCase):
+    """Contract 9017d93 criterion.stand_in_quantity: values of the judged quantity both below 1e-6 x the limit
+    are too small to compare; compare still makes the verdict, and the tile's (b) looks at the stand-in."""
+
+    def test_tiny_values_are_judged_and_the_stand_in_decides_b(self):
+        from hiraku.tools.judge import STAND_IN_BELOW, held_cases
+
+        ana, _, _ = self.run_p1()
+        lc = self.ctx.load_case("R1-step100")
+        lc["criterion"] = dict(lc["criterion"], stand_in_quantity="max_stress_range")
+        self.tools["frame_static"].factor = 1e-9  # the tool reads P1's force: its stress becomes tiny too
+        tiny_F = {"value": 1e-9, "unit": "N"}  # every stress far below 1e-6 x the limit
+        r1 = self.predict_r1(tiny_F)
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})
+        self.assertEqual(out["comparison"]["status"], "mismatch")
+        self.assertLess(out["comparison"]["analyzed"]["value"], STAND_IN_BELOW * lc["criterion"]["limit"]["value"])
+        self.assertTrue(out["verdict"]["pass"])  # (a) on the judged quantity
+        self.assertIn("R1-step100", held_cases(self.ctx, "strength", 1))  # the stand-in is not compared yet
+        # (b) comes from the stand-in's latest comparison: a match frees it, a later unexplained mismatch holds it
+        base = dict(out["comparison"], quantity="max_stress_range", predicted={"value": 10.0, "unit": "MPa"})
+        match = dict(base, comparison_id="cmp-9998", status="match", analyzed={"value": 10.2, "unit": "MPa"}, diff_rel=0.02)
+        self.ctx.store.add_record("comparison", match, design_version=1, agent="cae.strength", domain="strength")
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", 1))
+        miss = dict(base, comparison_id="cmp-9999", status="mismatch", analyzed={"value": 20.0, "unit": "MPa"}, diff_rel=1.0)
+        self.ctx.store.add_record("comparison", miss, design_version=1, agent="cae.strength", domain="strength")
+        self.assertIn("R1-step100", held_cases(self.ctx, "strength", 1))

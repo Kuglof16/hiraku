@@ -388,6 +388,38 @@ def _names(text: str, word: str) -> bool:
     return bool(word) and re.search(rf"(?<![A-Za-z0-9_]){re.escape(word)}(?![A-Za-z0-9_])", text) is not None
 
 
+def stage_blocked(ctx: RunContext) -> dict[str, str]:
+    """HK4 / HK5's dead end (docs/contract.md): once the design revisions are used up, the held load cases
+    (holding) that wait only behind a red of a lower stage (lower_stage_left) are not analysed: load case id ->
+    the text naming those reds. Empty when revisions are left or nothing waits behind a red."""
+    if not revisions_used_up(ctx):
+        return {}
+    out = {}
+    for _, lcs in holding(ctx):
+        for lc_id in lcs:
+            n = load_case_stage(ctx, ctx.load_case(lc_id))
+            if n is None:
+                continue
+            reds = [(m, lc) for m, lc, what in lower_stage_left(ctx, n, skip=lc_id) if what.startswith("赤")]
+            if reds:
+                out[lc_id] = ("低い段の赤が残るので判定していない ("
+                              + "、".join(f"{_stage_ja(m)} の {lc['load_case_id']}" for m, lc in reds) + ")")
+    return out
+
+
+def stage_blocked_end(ctx: RunContext) -> str | None:
+    """When every held load case waits behind a lower stage's red with no revision left: the round_limit
+    stop_reason (the red domains and the not judged load cases); None otherwise."""
+    left = [lc_id for _, lcs in holding(ctx) for lc_id in lcs]
+    blocked = stage_blocked(ctx)
+    if not left or any(lc_id not in blocked for lc_id in left):
+        return None
+    reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
+    names = "、".join(_ja(j["domain"]) for j in reds) or "低い段"
+    return (f"{names}が赤のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました "
+            f"(版 {ctx.version})。" + " / ".join(f"{lc_id}: {blocked[lc_id]}" for lc_id in left))
+
+
 def excused_pending(ctx: RunContext) -> str | None:
     """HK4's way out when what keeps a domain pending is written down: every load case HK4 holds the stop
     for (holding) is either named by an issue of the current version's report (write_report: its load case
@@ -404,11 +436,14 @@ def excused_pending(ctx: RunContext) -> str | None:
     issues = [(i, " ".join([str(i.get("where") or ""), str(i.get("what") or ""), *map(str, i.get("record_ids") or [])]))
               for i in (report or {}).get("issues") or []]
     used_up = revisions_used_up(ctx)
-    causes = ctx.causes_by_comparison()
+    blocked = stage_blocked(ctx)
     reasons = []
     for d, lcs in left:
         for lc_id in lcs:
             lc = ctx.load_case(lc_id)
+            if lc_id in blocked:  # HK5's dead end: no revision left and a lower stage is red
+                reasons.append(f"{lc_id}: {blocked[lc_id]}")
+                continue
             named = [i for i, text in issues if any(_names(text, w) for w in (lc_id, lc["test_id"], d))
                      or _ja(d) in text]
             if named:

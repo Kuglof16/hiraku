@@ -169,6 +169,27 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(end_status(self.ctx, self.hooks.stop_blocks)[::2], ("stopped", "not_judged"))
         self.assert_events_fit()
 
+    def test_a_case_behind_a_lower_stage_red_with_no_revision_left_ends_round_limit(self):
+        """docs/contract.md HK4 / HK5: with the revisions used up, cases that wait only behind a red of a lower
+        stage are not analysed; the stop goes through and the run ends round_limit naming them."""
+        from unittest import mock
+
+        from hiraku.agent.runner import end_status
+
+        self.run_p1()
+        self.ctx.project["round_limit"] = 0  # version 1 is the last
+        red_lc = {"load_case_id": "H1-steer", "domain": "assembly"}
+        with mock.patch.object(rules, "load_case_stage", return_value=1), \
+                mock.patch.object(rules, "lower_stage_left", return_value=[(0, red_lc, "赤、ver-0009")]):
+            blocked = rules.stage_blocked(self.ctx)
+            self.assertEqual(list(blocked), ["R1-step100"])
+            self.assertIn("H1-steer", blocked["R1-step100"])
+            self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
+            status, reason, code = end_status(self.ctx)
+        self.assertEqual((status, code), ("stopped", "round_limit"))
+        self.assertIn("低い段の赤が残るので判定していない", reason)
+        self.assertIn("H1-steer", reason)
+
     def test_red_with_no_revision_left_may_stop(self):
         from hiraku.agent.runner import end_status
 

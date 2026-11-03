@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
+from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
 
@@ -813,8 +813,13 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         if not for_verdict and crit and res["quantity"] == judged:
             out["note"] = (f"{where} の値は、全部の場所のうち不合格に近い方の値ではないので、この照合からは合否を作りません。"
                            f"合否は where を外した照合 (全部の場所の不利な方) で作ります")
-    if cmp["status"] == "match":
-        _resolve_causes(ctx, cmp, pred, agent)
+    # contract 9017d93: with the criterion's stand_in_quantity, values both below STAND_IN_BELOW x the limit
+    # are too small to compare; the verdict still comes from the analysis, and the tile's (b) from the stand-in
+    tiny = bool(crit and crit.get("stand_in_quantity")) and \
+        max(abs(predicted), abs(analyzed)) < STAND_IN_BELOW * abs(crit["limit"]["value"])
+    if cmp["status"] == "match" or (tiny and for_verdict):
+        if cmp["status"] == "match":
+            _resolve_causes(ctx, cmp, pred, agent)
         if for_verdict and crit["limit"]["unit"] == res["unit"]:
             ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc)
             ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
