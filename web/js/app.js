@@ -176,15 +176,15 @@ const intakeApi = {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
   },
-  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // Only while the watched run is going (runGoing; a replay stays read-only). The
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
     if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
-    return ownRunGoing() ? answerHearing : undefined;
+    return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
-    return ownRunGoing() ? dropFile : undefined;
+    return runGoing() ? dropFile : undefined;
   },
   // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
   get send() {
@@ -334,6 +334,13 @@ function ownRunGoing() {
   return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
 }
 
+// The run being watched is going: started here (launch), or followed live while its record says
+// running (a run started elsewhere, e.g. from a Claude Code session with the plugin). A replay
+// (?live=0, a dropped file, a finished run) is not. The server checks again (Launcher.going_dir).
+function runGoing() {
+  return ownRunGoing() || (player.live && player.state.status === "running");
+}
+
 async function postLaunch(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, ...body }) });
   const got = await res.json().catch(() => ({}));
@@ -361,8 +368,8 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
-  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
-  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  // (and when the run turns out to be going, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
     intakeApplied = now;
     const last = player.events[player.applied - 1] ?? null;

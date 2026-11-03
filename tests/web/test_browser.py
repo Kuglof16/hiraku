@@ -893,6 +893,74 @@ class BrowserReplayTest(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_a_going_run_started_elsewhere_takes_the_answer_and_the_drop(self):
+        """A run this screen did not start (a Claude Code plugin run holding its plugin.lock),
+        followed live while its record says running: A2 can answer and A5 can take a file,
+        and there is no stop button (stopping stays with the run started here)."""
+        from hiraku.webserve.launch import PLUGIN_LOCK_FILE, Launcher
+
+        tmp = Path(tempfile.mkdtemp())
+        run_id = "20261103-160000-plugin-run"
+        run = tmp / "runs" / run_id
+        run.mkdir(parents=True)
+        # the sample run under this run's id, with the hearing asked and without its run.finished: still going
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()][:-1]
+        asked = json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))
+        hearing = {"seq": 0, "ts": events[0]["ts"], "t": events[0]["t"] + 0.1, "run_id": run_id, "kind": "hearing.asked", "agent": "lead", "data": asked}
+        events = events[:1] + [hearing] + events[1:]
+        for i, e in enumerate(events):
+            e["run_id"], e["seq"] = run_id, i
+        events[0]["data"]["run_id"] = run_id
+        (run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        (run / "project.json").write_text(json.dumps({**events[0]["data"], "status": "running", "driver": "claude_code_plugin"}), encoding="utf-8")
+        (run / PLUGIN_LOCK_FILE).write_bytes(b"")
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, demo_runs_file=tmp / "no-demo-runs.yaml")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?run={run_id}&tab=A2")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
+            page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /既定値のまま進める/.test(b.textContent) && !b.disabled)")
+            self.assertEqual(page.locator(".stop-btn").count(), 0)  # not started here: no stop
+            page.locator(button, has_text="既定値のまま進める").click()
+            for _ in range(100):
+                if (run / "hearing.answer.json").exists():
+                    break
+                page.wait_for_timeout(100)
+            self.assertTrue(json.loads((run / "hearing.answer.json").read_text(encoding="utf-8"))["use_defaults"])
+            page.click('.tab[data-tab="A5"]')
+            note = tmp / "曲げの決まり.md"
+            note.write_text("曲げの内側の半径は板厚以上\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(note))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('渡しました')")
+            self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_bytes(), note.read_bytes())
+            self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+            self.assertEqual(errors, [])
+            page.close()
+            # the same run opened as a replay (?live=0) stays read-only
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.wait_for_selector(button)
+            self.assertTrue(all(page.eval_on_selector_all(button, "(bs) => bs.map((b) => b.disabled)")))
+            page.click('.tab[data-tab="A5"]')
+            other = tmp / "replay.md"
+            other.write_text("x\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(other))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('この画面では受け取れません')")
+            self.assertFalse((run / "knowledge" / "replay.md").exists())
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
     def test_intake_screens_in_their_tabs(self):
         """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;
         a replay is read-only (the hearing's buttons are off) and a rewind redraws them."""
