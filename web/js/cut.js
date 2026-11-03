@@ -7,7 +7,8 @@
 //
 // N05: the vehicle in the real look fills the screen, then bursts open into the
 // grid of preset tests; each tile plays its test's record, squeezed to fit, with
-// the squeeze in its corner.
+// the squeeze in its corner. ?hero=0 leaves the vehicle out; ?only=hero draws it
+// alone on a clear ground, and window.hiraku.png() returns it as a PNG.
 
 import * as THREE from "three";
 import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
@@ -90,6 +91,11 @@ function chartSvg(s, w, h) {
 // Every value the N05 cut reads from the layout rules; a missing one is named, not guessed.
 const N05_KEYS = ["duration_s", "grid", "tile", "hero", "hero_motion", "times", "ease", "fly_from", "tests"];
 
+// ?only=hero: the big vehicle alone, at rest in its box on a clear ground (window.hiraku.png()
+// gives it as one PNG); ?hero=0: the cut without it (the promo page lays its own over the tiles).
+const ONLY_HERO = params.get("only") === "hero";
+const WITH_HERO = ONLY_HERO || params.get("hero") !== "0";
+
 class Cut {
   constructor(layout, s) {
     const missing = N05_KEYS.filter((k) => layout.n05?.[k] === undefined);
@@ -99,6 +105,7 @@ class Cut {
     this.spec = layout.n05;
     this.stage = $("stage");
     this.stage.style.background = layout.colors?.night ?? "#131311";
+    if (ONLY_HERO) for (const el of [document.documentElement, document.body, this.stage]) el.style.background = "transparent";
     this.scale = 1;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
@@ -110,19 +117,11 @@ class Cut {
     const sp = this.spec;
     const design = this.s.designs[this.s.currentVersion];
     // hero: the vehicle in the real look over the stage's own background
-    const hero = document.createElement("canvas");
-    hero.className = "hero";
-    hero.dataset.box = "n05.hero";
-    Object.assign(hero.style, { left: `${sp.hero.x}px`, top: `${sp.hero.y}px`, width: `${sp.hero.w}px`, height: `${sp.hero.h}px` });
-    this.stage.append(hero);
-    const hv = new Workbench3D(null, "real", { renderer: this.renderer, ground: "shadow" });
-    hv.setDesign(design);
-    hv.setLoading("two_cargo");
-    hv.setScene(null, null);
-    hv.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
-    hv.resize(sp.hero.w, sp.hero.h);
-    hv.fitPoints(hv.contentPoints(), [0.95, 0.8, 0.42], 1.02);
-    this.hero = { el: hero, view: hv };
+    this.hero = WITH_HERO ? this.makeHero(design) : null;
+    if (ONLY_HERO) {
+      this.tiles = [];
+      return;
+    }
 
     // tiles: the grid from the rules, opening outward from fly_from
     const rects = gridRects(sp.grid);
@@ -159,6 +158,28 @@ class Cut {
       if (!clearOfBand(r, this.layout)) el.dataset.outside = "1";
       return tile;
     });
+  }
+
+  makeHero(design) {
+    const sp = this.spec;
+    const el = document.createElement("canvas");
+    el.className = "hero";
+    el.dataset.box = "n05.hero";
+    Object.assign(el.style, { left: `${sp.hero.x}px`, top: `${sp.hero.y}px`, width: `${sp.hero.w}px`, height: `${sp.hero.h}px` });
+    this.stage.append(el);
+    const view = new Workbench3D(null, "real", { renderer: this.renderer, ground: "shadow" });
+    view.setDesign(design);
+    view.setLoading("two_cargo");
+    view.setScene(null, null);
+    view.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
+    view.resize(sp.hero.w, sp.hero.h);
+    view.fitPoints(view.contentPoints(), [0.95, 0.8, 0.42], 1.02);
+    return { el, view };
+  }
+
+  // The big vehicle as a PNG (data URL) of its box at the page's scale, as last drawn.
+  png() {
+    return this.hero ? this.hero.el.toDataURL("image/png") : null;
   }
 
   makeView(tile, design) {
@@ -202,12 +223,13 @@ class Cut {
   resize(scale) {
     this.scale = scale;
     const sp = this.spec;
+    // the hero's box is the largest drawn through the shared renderer (also without the hero)
     this.renderer.setSize(Math.ceil(sp.hero.w * scale), Math.ceil(sp.hero.h * scale), false);
     const size = (c, w, h) => {
       c.width = Math.round(w * scale);
       c.height = Math.round(h * scale);
     };
-    size(this.hero.el, sp.hero.w, sp.hero.h);
+    if (this.hero) size(this.hero.el, sp.hero.w, sp.hero.h);
     for (const t of this.tiles) size(t.canvas, t.inner.w, t.inner.h);
   }
 
@@ -215,15 +237,21 @@ class Cut {
     const sp = this.spec;
     const T = sp.times;
     const H = sp.hero_motion;
-    // hero: a slow push until the burst, then it swells and fades
-    const he = this.hero.el;
-    const burst = Math.max(0, Math.min(1, (t - T.burst_s) / H.burst_dur_s));
-    const push = 1 + (H.push_scale - 1) * Math.min(1, t / T.burst_s);
-    const k = cubicBezier(...H.ease)(burst);
-    he.style.transform = `scale(${t < T.burst_s ? push : H.push_scale + (H.burst_scale - H.push_scale) * k})`;
-    he.style.opacity = String(1 - k);
-    he.style.visibility = burst >= 1 ? "hidden" : "visible";
-    if (burst < 1) this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+    // hero: a slow push until the burst, then it swells and fades (alone, it stays at rest)
+    const he = this.hero?.el;
+    if (ONLY_HERO) {
+      this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+      return;
+    }
+    if (he) {
+      const burst = Math.max(0, Math.min(1, (t - T.burst_s) / H.burst_dur_s));
+      const push = 1 + (H.push_scale - 1) * Math.min(1, t / T.burst_s);
+      const k = cubicBezier(...H.ease)(burst);
+      he.style.transform = `scale(${t < T.burst_s ? push : H.push_scale + (H.burst_scale - H.push_scale) * k})`;
+      he.style.opacity = String(1 - k);
+      he.style.visibility = burst >= 1 ? "hidden" : "visible";
+      if (burst < 1) this.hero.view.renderInto(he.getContext("2d"), he.width, he.height, this.scale);
+    }
 
     for (const tile of this.tiles) {
       const f = flyIn(tile.rect, sp.fly_from, t, tile.start, T.tile_in_s, tile.ease);
@@ -681,6 +709,7 @@ window.hiraku = {
     await ready;
     return drawAt(t);
   },
+  png: () => cut?.png?.() ?? null,
 };
 
 async function main() {
