@@ -1,6 +1,6 @@
 """The N04 and N15 cut pages (cut.html?cut=n04 / n15) in a headless browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The run is the A6 fixture (tests.web.domains_fixture: seven domains and assembly over two
 versions, with judgement.updated), here also with a third version; with HIRAKU_WEB_DEV_RUNS
 the newest run there is opened too. The layout values are the promo department's for
@@ -204,7 +204,7 @@ READ = """async (t) => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class GridCutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

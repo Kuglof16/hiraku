@@ -1,6 +1,6 @@
 """The assembly order in a browser: the A7 tab and the video's cut N16.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed, as test_browser.
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
 
 import copy
@@ -93,7 +93,7 @@ def n16_layout():
     }
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class AssemblyBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

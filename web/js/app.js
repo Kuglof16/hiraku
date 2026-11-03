@@ -13,7 +13,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DOMAINS, DOMAIN_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, DRIVER_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -21,7 +21,7 @@ import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
-import { lookFromParams } from "./look.js";
+import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
@@ -86,7 +86,8 @@ function fitStage() {
 const viewport = $("viewport");
 const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
 document.body.classList.add(`look-${look}`);
-const bench = new Workbench3D(viewport, look);
+const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+const bench = new Workbench3D(viewport, look, { quality });
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -175,15 +176,15 @@ const intakeApi = {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
   },
-  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // Only while the watched run is going (runGoing; a replay stays read-only). The
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
     if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
-    return ownRunGoing() ? answerHearing : undefined;
+    return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
-    return ownRunGoing() ? dropFile : undefined;
+    return runGoing() ? dropFile : undefined;
   },
   // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
   get send() {
@@ -206,7 +207,7 @@ const intakeApi = {
 // request as the person's words, and the server's warnings as the lead's). When the hearing is
 // settled the request's files are saved and 始める starts a run on them (--intake-events).
 const draft = params.has("new")
-  ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false }
+  ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false, prefill: "", demoTitle: "" }
   : null;
 
 function draftEvents() {
@@ -308,15 +309,36 @@ function renderDraft() {
   else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、既定値のまま進めてください</span>`;
   else
     body =
-      `<span>依頼のタブで、作りたいものを書いて送ってください</span>` +
+      (draft.demoTitle
+        ? `<span>デモ「${esc(draft.demoTitle)}」の依頼の文を入れました。直してもかまいません。送ると分野を選びます</span>`
+        : `<span>依頼のタブで、作りたいものを書いて送ってください</span>`) +
       (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
   bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
   intake?.update();
+  fillPrefill();
+}
+
+// A1 has no way to be given a first text, so the demo's want is typed into its box (the input
+// event keeps it in A1's own state, which it draws the box from). Once, when the box is there.
+function fillPrefill() {
+  if (!draft?.prefill) return;
+  const box = $("view-intake")?.querySelector("textarea");
+  if (!box) return;
+  box.value = draft.prefill;
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  draft.prefill = "";
 }
 
 function ownRunGoing() {
   const s = player.state;
   return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+}
+
+// The run being watched is going: started here (launch), or followed live while its record says
+// running (a run started elsewhere, e.g. from a Claude Code session with the plugin). A replay
+// (?live=0, a dropped file, a finished run) is not. The server checks again (Launcher.going_dir).
+function runGoing() {
+  return ownRunGoing() || (player.live && player.state.status === "running");
 }
 
 async function postLaunch(path, body) {
@@ -346,8 +368,8 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
-  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
-  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  // (and when the run turns out to be going, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
     intakeApplied = now;
     const last = player.events[player.applied - 1] ?? null;
@@ -367,7 +389,8 @@ function renderTop(s) {
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
-  $("pill-cost").textContent = `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0
+  $("pill-cost").textContent = `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
@@ -519,7 +542,7 @@ function renderChain(s, chain) {
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
         `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
-        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${esc(fmtMargin(verdict))}${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
@@ -781,7 +804,7 @@ function setCompare(s, chain, ct) {
       tags.className = "cmp-tags";
       viewport.prepend(el);
       viewport.append(tags);
-      cmpView = { el, tags, bench: new Workbench3D(el, look) };
+      cmpView = { el, tags, bench: new Workbench3D(el, look, { quality }) };
       window.hiraku.cmpBench = cmpView.bench;
     }
     const b = cmpView.bench;
@@ -1384,7 +1407,9 @@ async function showRunList(message = "", runs = null) {
     const href = `?run=${encodeURIComponent(r.run_id)}`;
     const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
     const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
-    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+    // what drove the run (project.driver); nothing for older records without it
+    const drv = DRIVER_JA[r.driver] ? ` <span class="drv" data-driver="${esc(r.driver)}">${DRIVER_JA[r.driver]}</span>` : "";
+    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drv}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
   };
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
@@ -1418,22 +1443,10 @@ async function renderLaunch(message = "") {
     return;
   }
   const busy = !!info.running;
-  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
   const rows = (info.requirements ?? [])
     .map((r) => {
       if (r.error) return `<div class="lreq"><div>${esc(r.file)}<div class="err">読めなかった: ${esc(r.error)}</div></div></div>`;
-      const file = esc(r.file);
-      let claude;
-      if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>`;
-      else if (launchConfirm === r.file)
-        claude =
-          `<span class="confirm">Claude を呼びます。費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。走らせますか?</span>` +
-          `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
-      else claude = `<button data-launch-ask="${file}" ${busy ? "disabled" : ""}>Claude で走らせる (費用の上限 ${usd(r.cost_limit_usd)})</button>`;
-      return (
-        `<div class="lreq"><div>${esc(r.want)}<div class="rid">${file}</div></div>` +
-        `<div class="lbtns"><button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>${claude}</div></div>`
-      );
+      return `<div class="lreq"><div>${esc(r.want)}<div class="rid">${esc(r.file)}</div></div>${runButtons(info, r, r.file, busy)}</div>`;
     })
     .join("");
   const rid = info.running?.run_id ?? "";
@@ -1444,7 +1457,75 @@ async function renderLaunch(message = "") {
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
   const fresh = `<p><a class="new-request" href="?new=1">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
-  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+  box.innerHTML =
+    demoSection(info, busy) +
+    `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+}
+
+// 台本で / Claude で走らせる for one requirements file r ({file, cost_limit_usd, round_limit}).
+// ask: what launchConfirm holds while this row's Claude confirmation is open. A Claude run
+// needs the key in the server's window, and the cost limit is shown and confirmed first.
+// r.modes (when the demo runs list the file): only those buttons. r.estimate_usd (a demo row):
+// the estimate of a real Claude run, shown with the limit; when it is over the limit, the button
+// and the confirmation say the run stops at the limit (it can still be started).
+function runButtons(info, r, ask, busy) {
+  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+  const file = esc(r.file);
+  const modes = r.modes ?? ["scripted", "claude"];
+  const demo = "estimate_usd" in r;
+  const over = demo && overLimit(r);
+  const overNote = over ? `<span class="over">見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まる</span>` : "";
+  let claude = ""; // (none when the demo runs list the file without claude)
+  if (!modes.includes("claude")) claude = "";
+  else if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>${overNote}`;
+  else if (launchConfirm === ask)
+    claude =
+      `<span class="confirm">Claude を呼びます。${demo ? `見込みは ${usd(r.estimate_usd)}、` : ""}費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。` +
+      `${over ? `見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まります。` : ""}走らせますか?</span>` +
+      `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
+  else {
+    const label = demo ? `見込み ${usd(r.estimate_usd)}・上限 ${usd(r.cost_limit_usd)}` : `費用の上限 ${usd(r.cost_limit_usd)}`;
+    claude = `<button data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>Claude で走らせる (${label})</button>${overNote}`;
+  }
+  const scripted = modes.includes("scripted")
+    ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>`
+    : "";
+  return `<div class="lbtns">${scripted}${claude}</div>`;
+}
+
+// The two values as written (no estimate or no limit: not over).
+const overLimit = (r) => typeof r.estimate_usd === "number" && typeof r.cost_limit_usd === "number" && r.estimate_usd > r.cost_limit_usd;
+
+// デモの実行: the rows of data/requirements/demo_runs.yaml (the design department's), in its order.
+// A file row runs like the files below; a request row opens A1 (?new=1&demo=<id>) with the
+// product's want written in, to be sent by the person.
+function demoSection(info, busy) {
+  if (info.demo_runs_error) return `<h3>デモの実行</h3><p class="err">デモの一覧を読めなかった: ${esc(info.demo_runs_error)}</p>`;
+  const list = info.demo_runs ?? [];
+  if (!list.length) return "";
+  const rows = list.map((d) => {
+    const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
+    const head =
+      `<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>` +
+      (d.shows ? `<div class="shows">${esc(d.shows)}</div>` : "");
+    let left, right = "";
+    if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
+    else if (d.file) {
+      // (a file row carries its requirements' product too; file is what tells the two apart)
+      const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+      left =
+        `<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}</div>` +
+        `<div class="rid">${esc(d.file)}</div>`;
+      right = runButtons(info, d, `demo:${d.id}`, busy);
+    } else {
+      left = `<div class="rid">${esc(d.want)} (products/${esc(d.product)}.yaml)</div>`;
+      right =
+        `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">A1 で依頼する</a>` +
+        `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
+    }
+    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}</div>${right}</div>`;
+  });
+  return `<h3>デモの実行</h3><div class="demo-runs">${rows.join("")}</div>`;
 }
 
 async function launch(file, mode) {
@@ -1503,6 +1584,13 @@ async function startDraft() {
   try {
     const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
     Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });
+    const demoId = params.get("demo");
+    if (demoId) {
+      // a request row of デモの実行: its product's want goes into A1 (sent only when 送る is pressed)
+      const d = (info.demo_runs ?? []).find((r) => r.id === demoId);
+      if (d && !d.file && d.product && d.want && !d.error) Object.assign(draft, { prefill: d.want, demoTitle: d.title || d.id });
+      else draft.error = `デモの実行 ${demoId} の依頼の文が見つからなかった`;
+    }
   } catch (e) {
     draft.error = `サーバーに聞けなかった: ${e.message ?? e}`;
   }

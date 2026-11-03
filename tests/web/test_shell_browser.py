@@ -2,7 +2,7 @@
 legend's fields of the beam and the shell analyses, the zoom to the largest element,
 before / after on one scale, and the N07 cut on stand-in layout rules.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (see test_browser.py).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (see test_browser.py).
 """
 
 import copy
@@ -71,7 +71,7 @@ VEHICLE_BOXES = """() => { const vp = document.getElementById("viewport");
            legend: [lg.left, lg.top, lg.right, lg.bottom], focus: at(R, rc, f.center) }; }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class ShellBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

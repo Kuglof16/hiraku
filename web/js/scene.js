@@ -14,8 +14,11 @@
 //   wind         the wind_speed channel and params.wind_from
 //   course       the path_y channel along cg_x (the line the driver model follows)
 //   wall         a crash test: the wall stands at the design's front end
-// The record does not hold cones, a stop line or the wall's own size, so they
-// are not drawn (the wall's size is only made big enough to read as a wall).
+// Cones and gates come only from a recorded `scene` (contract: a cone is a point, a gate
+// a line [0, width, 0] through position_mm, on the road). How tall and wide they are is not
+// in the record, so they get drawing-only sizes (CONE_DRAW, GATE_POST_DRAW below).
+// Without a `scene` there are no cones and no stop line; a crash wall's size is not in
+// the record either and is only made big enough to read as a wall.
 
 import * as THREE from "three";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
@@ -193,7 +196,8 @@ function fromRecord(objects, design) {
     else if (o.kind === "road_profile") out.surface = profileSurface(o, design);
     else {
       if (o.kind === "tilt_table") out.table = true;
-      if (Array.isArray(o.position_mm) && Array.isArray(o.size_mm)) out.objects.push(o);
+      // a cone is a point and needs no size; the others are boxes
+      if (Array.isArray(o.position_mm) && (Array.isArray(o.size_mm) || o.kind === "cone")) out.objects.push(o);
     }
   }
   return out;
@@ -262,29 +266,43 @@ function block(x0, x1, y0, y1, z0, z1, look, ink, realSpec) {
 }
 
 const REAL_OF = {
-  step: { color: "#9c9a92", roughness: 0.95, metalness: 0 },
-  wall: { color: "#a5a29a", roughness: 0.9, metalness: 0 },
-  ramp: { color: "#9c9a92", roughness: 0.95, metalness: 0 },
+  // steps, walls and ramps are concrete (look.js: the drawn texture, or a Poly Haven one)
+  step: { finish: "concrete" },
+  wall: { finish: "concrete" },
+  ramp: { finish: "concrete" },
   ground: { color: "#8a7a62", roughness: 1, metalness: 0 },
   tilt_table: { color: "#9aa0a6", roughness: 0.45, metalness: 0.75, bump: "plate" },
   cone: { color: "#e2682a", roughness: 0.6, metalness: 0 },
   gate: { color: "#e2682a", roughness: 0.6, metalness: 0 },
 };
 
+// Drawing-only sizes (mm) of what the record gives as a point or a line: a traffic cone's
+// base and height, and a gate's posts. Not from a standard; only so they read on screen.
+const CONE_DRAW = { base: 300, height: 450 };
+const GATE_POST_DRAW = { radius: 25, height: 1000 };
+
 // One object of the record's scene, in its own box (centre position_mm, size_mm, turned by rpy_deg).
+// A cone without a size (a point) and a gate with no height (a line) stand on position_mm.
 function recordedObject(o, look, ink) {
-  const [sx, sy, sz] = o.size_mm;
+  const [sx, sy, sz] = o.size_mm ?? [0, 0, 0];
   let geos;
   if (o.kind === "cone") {
-    geos = [new THREE.ConeGeometry(Math.min(sx, sy) / 2, sz, 24).rotateX(Math.PI / 2)];
+    const point = !(sx > 0 && sy > 0 && sz > 0);
+    const r = point ? CONE_DRAW.base / 2 : Math.min(sx, sy) / 2;
+    const h = point ? CONE_DRAW.height : sz;
+    // three's cone points along +y; turned to +z, its base on z = 0 when it is a point
+    geos = [new THREE.ConeGeometry(r, h, 24).rotateX(Math.PI / 2).translate(0, 0, point ? h / 2 : 0)];
   } else if (o.kind === "ramp") {
     // a wedge rising toward +x
     const shape = new THREE.Shape([new THREE.Vector2(-sx / 2, -sz / 2), new THREE.Vector2(sx / 2, -sz / 2), new THREE.Vector2(sx / 2, sz / 2)]);
     geos = [new THREE.ExtrudeGeometry(shape, { depth: sy, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, sy / 2, 0)];
   } else if (o.kind === "gate") {
-    // two posts at the gate's sides
-    const r = Math.max(20, Math.min(sx, 60) / 2);
-    geos = [-1, 1].map((s) => new THREE.CylinderGeometry(r, r, sz, 12).rotateX(Math.PI / 2).translate(0, (s * sy) / 2, 0));
+    // two posts at the gate's ends; a gate recorded as a line (no height) gets drawing-only
+    // posts standing on the road, else posts as tall as its box
+    const line = !(sz > 0);
+    const h = line ? GATE_POST_DRAW.height : sz;
+    const r = line ? GATE_POST_DRAW.radius : Math.max(20, Math.min(sx, 60) / 2);
+    geos = [-1, 1].map((s) => new THREE.CylinderGeometry(r, r, h, 12).rotateX(Math.PI / 2).translate(0, (s * sy) / 2, line ? h / 2 : 0));
   } else {
     geos = [new THREE.BoxGeometry(sx, sy, sz)];
   }
@@ -332,7 +350,7 @@ export class SceneProps {
     for (const o of desc.objects ?? []) this.world.add(recordedObject(o, look, this.ink));
     if (desc.step) {
       const s = desc.step;
-      this.world.add(block(s.x0, s.x1, s.y0, s.y1, 0, s.h, look, this.ink, { color: "#9c9a92", roughness: 0.95, metalness: 0 }));
+      this.world.add(block(s.x0, s.x1, s.y0, s.y1, 0, s.h, look, this.ink, REAL_OF.step));
     }
     if (desc.table && !desc.recorded) {
       const hw = desc.halfWidth + 700;
@@ -353,7 +371,7 @@ export class SceneProps {
     }
     if (desc.wall) {
       const hw = desc.halfWidth + 900;
-      this.world.add(block(desc.wall.x, desc.wall.x + 400, -hw, hw, 0, 1600, look, this.ink, { color: "#a5a29a", roughness: 0.9, metalness: 0 }));
+      this.world.add(block(desc.wall.x, desc.wall.x + 400, -hw, hw, 0, 1600, look, this.ink, REAL_OF.wall));
     }
     if (desc.wind) this.buildWind(desc, bbox);
   }
@@ -395,10 +413,8 @@ export class SceneProps {
     geo.computeVertexNormals();
     const g = new THREE.Group();
     if (look.real) {
-      const tex = look.texture("earth").clone();
-      tex.needsUpdate = true;
-      tex.repeat.set(1, 1);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
+      // uv runs 1 per 2500 mm (above): the dirt road's texture over that span
+      const mesh = new THREE.Mesh(geo, look.surfaceMaterial("dirt", [2500, 2500]));
       mesh.receiveShadow = true;
       g.add(mesh);
     } else {

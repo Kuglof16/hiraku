@@ -1,6 +1,6 @@
 """Open the screen in a headless browser and replay the contract sample.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (it is not
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (it is not
 in requirements.txt: it brings a browser, and three.js comes from the CDN, so
 this test also needs the network).
 """
@@ -135,7 +135,7 @@ def n05_layout():
     }
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -423,7 +423,8 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertGreater(got["step"]["x0"], 0.0)  # the step stands ahead of the front axle (x = 0)
                 self.assertFalse(got["limitButton"])  # climbing lifts a wheel: not a limit on a step
                 self.assertEqual(got["shadows"], look == "real")
-                self.assertEqual(got["standard"], "MeshStandardMaterial" if look == "real" else "MeshLambertMaterial")
+                # the real look's painted steel tubes have a clearcoat (look.js MATERIAL_OF)
+                self.assertEqual(got["standard"], "MeshPhysicalMaterial" if look == "real" else "MeshLambertMaterial")
                 page.close()
         finally:
             server.shutdown()
@@ -472,7 +473,8 @@ class BrowserReplayTest(unittest.TestCase):
         (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
         run_id = "20261103-120000-offroad-4w-fake"
         lau = Launcher(tmp / "runs", tmp / "requirements", env={"ANTHROPIC_API_KEY": "test-value-not-a-real-key"},
-                       command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20)
+                       command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -505,6 +507,140 @@ class BrowserReplayTest(unittest.TestCase):
                 lau.proc.kill()
                 lau.proc.wait()
             shutil.rmtree(tmp)
+
+    def _demo_server(self, env):
+        """A launcher on a requirements folder and a demo runs list: file rows under the limit (N12),
+        without an estimate and Claude only (N13), over the limit (demo); a request row (N09).
+        (fake_reader gives every file a limit of $2.)"""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        req = tmp / "requirements"
+        (req / "products").mkdir(parents=True)
+        for name in ("offroad-4w.yaml", "offroad-4w-n12.yaml", "offroad-4w-n13.claude.yaml"):
+            (req / name).write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 在宅で使う電動の介護ベッドを作りたい\n", encoding="utf-8")
+        demo = tmp / "catalog" / "demo_runs.yaml"
+        demo.parent.mkdir()
+        demo.write_text(
+            "runs:\n"
+            "  - id: n12\n    title: 要件の間違い\n    shows: 要件の誤りを見つけて直す\n    file: offroad-4w-n12.yaml\n"
+            "    modes: [claude, scripted]\n    estimate_usd: 1.1\n    cuts: [N11, N12]\n"
+            "  - id: n13\n    title: ツールを作る\n    shows: 棚に無いツールを書く\n    file: offroad-4w-n13.claude.yaml\n"
+            "    modes: [claude]\n    estimate_usd: null\n    cuts: [N13]\n"
+            "  - id: demo\n    title: デモの車\n    shows: 6 つの試験\n    file: offroad-4w.yaml\n    modes: [scripted, claude]\n    estimate_usd: 12.5\n"
+            "  - id: n09\n    title: 依頼から始める\n    shows: 依頼の文から分野を選ぶ\n    request: {product: care-bed}\n    modes: [claude]\n    cuts: [N09]\n",
+            encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        lau = Launcher(tmp / "runs", req, env=env, command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=demo)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
+        def close():
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        return f"http://127.0.0.1:{server.server_address[1]}", lau, run_id, close
+
+    def test_demo_runs_on_the_run_list(self):
+        """デモの実行 sits first in the launch box, in demo_runs.yaml's order: a file row runs
+        through the same Claude confirmation, a request row opens A1 with the product's want in."""
+        base, lau, run_id, close = self._demo_server({"ANTHROPIC_API_KEY": "test-value-not-a-real-key"})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            got = page.evaluate("""() => ({
+                first: document.querySelector('#launch h3').textContent,
+                ids: [...document.querySelectorAll('#launch .lreq.demo')].map((e) => e.dataset.demo),
+                text: document.querySelector('#launch .demo-runs').textContent,
+                files: [...document.querySelectorAll('#launch .lreq:not(.demo) .rid')].map((e) => e.textContent),
+            })""")
+            self.assertEqual(got["first"], "デモの実行")
+            self.assertEqual(got["ids"], ["n12", "n13", "demo", "n09"])
+            for words in ("要件の間違い", "要件の誤りを見つけて直す", "N11", "N12", "依頼から始める", "N09", "在宅で使う電動の介護ベッドを作りたい"):
+                self.assertIn(words, got["text"])
+            # the files below stay as they were
+            self.assertEqual(got["files"], ["offroad-4w-n12.yaml", "offroad-4w-n13.claude.yaml", "offroad-4w.yaml"])
+            self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n12'] a.demo-a1").count(), 0)  # a file row runs, not A1
+            # the estimate next to the limit, as written; over the limit only on the demo row
+            row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
+            self.assertIn("見込み $1.10・上限 $2.00", page.text_content(f"{row('n12')} .cost"))
+            self.assertIn("見込み —・上限 $2.00", page.text_content(f"{row('n13')} .cost"))
+            self.assertIn("見込み $12.50・上限 $2.00", page.text_content(f"{row('demo')} .cost"))
+            self.assertEqual([page.locator(f"{row(i)} .lbtns .over").count() for i in ("n12", "n13", "demo")], [0, 0, 1])
+            self.assertIn("見込みが上限を超えるので、上限 $2.00 で止まる", page.text_content(f"{row('demo')} .lbtns .over"))
+            # modes: N13 is Claude only, here and in the files below
+            self.assertEqual(page.locator(f"{row('n13')} button[data-launch='scripted']").count(), 0)
+            self.assertEqual(page.locator(f"{row('n13')} button[data-launch-ask]").count(), 1)
+            n13_file = page.locator("#launch .lreq:not(.demo)", has_text="offroad-4w-n13.claude.yaml")
+            self.assertEqual(n13_file.locator("button[data-launch='scripted']").count(), 0)
+            ask = page.locator(f"{row('n12')} button[data-launch-ask]")
+            self.assertIn("見込み $1.10・上限 $2.00", ask.text_content())
+            # over the limit: it can be started, and the confirmation says where it stops
+            page.click(f"{row('demo')} button[data-launch-ask]")
+            page.wait_for_selector(f"{row('demo')} .confirm")
+            confirm = page.text_content(f"{row('demo')} .confirm")
+            self.assertIn("見込みは $12.50", confirm)
+            self.assertIn("見込みが上限を超えるので、上限 $2.00 で止まります", confirm)
+            page.click("#launch button[data-launch-cancel]")
+            ask.click()
+            page.wait_for_selector(f"{row('n12')} .confirm")
+            self.assertIn("費用の上限は $2", page.text_content("#launch .confirm"))
+            self.assertNotIn("超える", page.text_content("#launch .confirm"))
+            self.assertEqual(page.locator("#launch .confirm").count(), 1)  # only the demo row asks
+            page.click("#launch button[data-launch-cancel]")
+            page.wait_for_selector("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
+            self.assertFalse(lau.started)  # nothing ran yet
+            # the request row: A1 opens with the want written in, and nothing is sent
+            posted = []
+            page.on("request", lambda r: posted.append(r.url) if r.method == "POST" else None)
+            page.click("#launch .lreq.demo[data-demo='n09'] a.demo-a1")
+            page.wait_for_url("**/?new=1&demo=n09")
+            page.wait_for_function("document.querySelector('#view-intake textarea')?.value.length > 0")
+            self.assertEqual(page.input_value("#view-intake textarea"), "在宅で使う電動の介護ベッドを作りたい")
+            self.assertIn("依頼から始める", page.text_content("#draftbar"))
+            self.assertIsNone(page.evaluate("window.hiraku.request.state.state"))
+            self.assertEqual(posted, [])
+            self.assertFalse(lau.started)
+            # the file row's Claude run, confirmed, starts on its file
+            page.goto(f"{base}/?list=1")
+            page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
+            page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch='claude']")
+            page.wait_for_url(f"**/?run={run_id}-claude", timeout=30000)
+            self.assertEqual([(s["mode"], s["requirements"]) for s in lau.started], [("claude", "offroad-4w-n12.yaml")])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
+
+    def test_demo_runs_without_the_key(self):
+        base, lau, _, close = self._demo_server({})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            row = "#launch .lreq.demo[data-demo='n12']"
+            self.assertTrue(page.is_disabled(f"{row} button:has-text('Claude で走らせる')"))
+            self.assertIn("ANTHROPIC_API_KEY", page.text_content(f"{row} .why"))
+            self.assertEqual(page.locator(f"{row} button[data-launch-ask]").count(), 0)
+            self.assertFalse(page.is_disabled(f"{row} button[data-launch='scripted']"))
+            self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n09'] a.demo-a1").count(), 1)
+            self.assertIn("上限 $2.00 で止まる", page.text_content("#launch .lreq.demo[data-demo='demo'] .lbtns .over"))
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
 
     def test_project_updated_and_report_written(self):
         events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
@@ -675,7 +811,8 @@ class BrowserReplayTest(unittest.TestCase):
             seen.append((Path(req).name, intake_events and Path(intake_events).name, mode))
             return fake(req, mode, runs)
 
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -725,7 +862,8 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         going = tmp / "going.jsonl"
         going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20)
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -752,6 +890,74 @@ class BrowserReplayTest(unittest.TestCase):
             if lau.proc and lau.proc.poll() is None:
                 lau.proc.kill()
                 lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_a_going_run_started_elsewhere_takes_the_answer_and_the_drop(self):
+        """A run this screen did not start (a Claude Code plugin run holding its plugin.lock),
+        followed live while its record says running: A2 can answer and A5 can take a file,
+        and there is no stop button (stopping stays with the run started here)."""
+        from hiraku.webserve.launch import PLUGIN_LOCK_FILE, Launcher
+
+        tmp = Path(tempfile.mkdtemp())
+        run_id = "20261103-160000-plugin-run"
+        run = tmp / "runs" / run_id
+        run.mkdir(parents=True)
+        # the sample run under this run's id, with the hearing asked and without its run.finished: still going
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()][:-1]
+        asked = json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))
+        hearing = {"seq": 0, "ts": events[0]["ts"], "t": events[0]["t"] + 0.1, "run_id": run_id, "kind": "hearing.asked", "agent": "lead", "data": asked}
+        events = events[:1] + [hearing] + events[1:]
+        for i, e in enumerate(events):
+            e["run_id"], e["seq"] = run_id, i
+        events[0]["data"]["run_id"] = run_id
+        (run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        (run / "project.json").write_text(json.dumps({**events[0]["data"], "status": "running", "driver": "claude_code_plugin"}), encoding="utf-8")
+        (run / PLUGIN_LOCK_FILE).write_bytes(b"")
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, demo_runs_file=tmp / "no-demo-runs.yaml")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?run={run_id}&tab=A2")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
+            page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /既定値のまま進める/.test(b.textContent) && !b.disabled)")
+            self.assertEqual(page.locator(".stop-btn").count(), 0)  # not started here: no stop
+            page.locator(button, has_text="既定値のまま進める").click()
+            for _ in range(100):
+                if (run / "hearing.answer.json").exists():
+                    break
+                page.wait_for_timeout(100)
+            self.assertTrue(json.loads((run / "hearing.answer.json").read_text(encoding="utf-8"))["use_defaults"])
+            page.click('.tab[data-tab="A5"]')
+            note = tmp / "曲げの決まり.md"
+            note.write_text("曲げの内側の半径は板厚以上\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(note))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('渡しました')")
+            self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_bytes(), note.read_bytes())
+            self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+            self.assertEqual(errors, [])
+            page.close()
+            # the same run opened as a replay (?live=0) stays read-only
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.wait_for_selector(button)
+            self.assertTrue(all(page.eval_on_selector_all(button, "(bs) => bs.map((b) => b.disabled)")))
+            page.click('.tab[data-tab="A5"]')
+            other = tmp / "replay.md"
+            other.write_text("x\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(other))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('この画面では受け取れません')")
+            self.assertFalse((run / "knowledge" / "replay.md").exists())
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")

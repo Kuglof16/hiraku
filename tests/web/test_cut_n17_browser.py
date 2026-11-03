@@ -1,6 +1,6 @@
 """The video's cut N17 (the report on one page) in a browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed, as test_browser.
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 The reports here are shape examples: their words and numbers are made up.
 """
 
@@ -156,7 +156,7 @@ STATE = """() => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class CutN17BrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -1,6 +1,6 @@
 """The N03 and N06 cut pages (cut.html?cut=n03 / n06) in a headless browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The run is made here from the contract sample: the drive-pattern, thermal and launch
 records N03 plays, and load cases past the limit (ids ending in -beyond) for N06. With
 HIRAKU_WEB_DEV_RUNS the newest run there is opened too.
@@ -247,7 +247,7 @@ READ = """async (t) => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class CutN03N06Test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

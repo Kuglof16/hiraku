@@ -115,7 +115,7 @@ export function contourOf(analysis, field, criterion, meshes = null) {
   const min = field.kind === "temperature" ? fieldMin : Math.min(0, fieldMin);
   let max = limit ?? fieldMax;
   if (!(max > min)) max = min + (Math.abs(min) || 1);
-  const result = (analysis.results ?? []).find((r) => r.where && r.unit === field.unit) ?? null;
+  const result = maxResult(analysis, field, [members, nodes, parts], fieldMax);
   return {
     key: `${analysis.analysis_id}|${field.kind}|${field.label ?? ""}`,
     kind: field.kind,
@@ -138,6 +138,25 @@ export function contourOf(analysis, field, criterion, meshes = null) {
     frames,
   };
 }
+
+// The field's largest value and where it is (the member, node or part holding fieldMax among
+// the values drawn), as the "最大" tag shows it. Null when the drawn values do not hold the
+// field's largest (a field with frames: it is at another moment, see atFrame). A recorded
+// result names it only when it is that value of this field: same unit, same place, same value.
+// A mode shape has none (its values are a shape relative to its largest, not a result).
+function maxResult(analysis, field, groups, fieldMax) {
+  if (field.kind === "mode_shape") return null;
+  let where;
+  for (const g of groups) {
+    where = Object.keys(g).find((k) => g[k] === fieldMax);
+    if (where !== undefined) break;
+  }
+  if (where === undefined) return null;
+  const rec = (analysis.results ?? []).find((r) => r.unit === field.unit && r.where === where && sameValue(r.value, fieldMax));
+  return { quantity: rec?.quantity ?? field.kind, value: fieldMax, unit: field.unit, where };
+}
+
+const sameValue = (a, b) => typeof a === "number" && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
 
 // Whether a part's value is over its allowable value: its own limit when the contour holds
 // one part to the criterion, else the scale's top when that is the allowable value.
