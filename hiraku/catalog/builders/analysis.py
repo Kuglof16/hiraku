@@ -356,9 +356,31 @@ P4_PLAN = {
 }
 
 
-def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
+T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculated part temperature is this far over its limit
+
+
+def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
+    """thermal.loop_steady_temperature with the plan's inputs (_LOOP_INPUTS) for this load case."""
+    from hiraku.solvers import formula_registry
+    from hiraku.tools.summary import design_summary
+
+    vals = {}
+    for name, ref in _LOOP_INPUTS.items():
+        head, _, rest = ref.partition(".")
+        if head == "load":
+            vals[name] = design_summary(design)["loadings"][load_case["params"]["loading"]][rest]
+        elif head == "lc":
+            vals[name] = load_case["params"][rest]
+        else:  # design.var.<name>
+            vals[name] = design["variables"][rest.split(".", 1)[1]]
+    return formula_registry().evaluate("thermal.loop_steady_temperature", vals)["outputs"][output]["value"]
+
+
+def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str, output: str):
     """T1 / T2: the loop at the hot end of Q19; the limit is the part's own (a design variable
-    with its source in hiraku.designgen); without it, no criterion."""
+    with its source in hiraku.designgen); without it, no criterion. Variant "beyond": the ambient
+    where the hand calculation puts the part T_BEYOND_K over its limit (the loop's losses lift the
+    part the same amount above any ambient)."""
     def build(spec: Record, req: Record, design: Record) -> Record:
         load, keys = loading(req, design)
         params, loop_keys = _loop(spec, req, "Q54")
@@ -378,13 +400,25 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
             out["criterion"] = {"quantity": quantity, "op": op, "limit": q(limit, "degC"),
                                 "basis": f"{test_id}: the design variable {limit_var} (the part's limit; its source is "
                                          f"in the design generator), against the lumped temperature of the part"}
+        if spec.get("variant") == "beyond":
+            if limit is None:
+                raise BuildError(f"{test_id} has no case past the limit without the design variable {limit_var}")
+            rise = _hand_temperature(design, out, output) - t_amb
+            hot = limit - rise + T_BEYOND_K
+            out.update({
+                "load_case_id": f"{test_id}-{hot:.0f}C-beyond",
+                "title": (f"限界の外: 気温 {hot:.1f} ℃ (仮定。{what}の温度が手計算で限界 {limit:g} ℃ を {T_BEYOND_K:g} K 超える"
+                          f"気温) で林道の周回を {d:g} km 走ったときの{what}の温度 ({LOADING_JA[load]})"),
+                "params": {**out["params"], "ambient_temperature": q(hot, "degC")},
+                "requirement_keys": [k for k in out["requirement_keys"] if k != "Q19"],
+            })
         return out
     build.__name__ = f"{test_id.lower()}_thermal"
     return build
 
 
-t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=")
-t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<")
+t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=", "T_battery")
+t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<", "T_controller")
 
 _LOOP_INPUTS = {
     "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",
