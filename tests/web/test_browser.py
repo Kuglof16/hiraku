@@ -569,6 +569,33 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    def test_field_frames_follow_the_motion(self):
+        """A field with frames (the same field at moments of the motion that gave its loads) is
+        coloured by the moment nearest to the motion's time, on one scale for every moment, and
+        the legend names the moment."""
+        events, _ = tilt_events()
+        ana = next(e for e in events if e["kind"] == "analysis.finished" and e["data"].get("series"))["data"]
+        design = next(e for e in events if e["kind"] == "design.created")["data"]
+        members = [m["id"] for m in design["members"]]
+        t = [s for s in ana["series"] if s.get("t_s")][0]["t_s"]
+        moments = [t[0], t[len(t) // 2], t[-1]]
+        # shape example: the stress grows over the moments, not a result
+        per = [{m: 10.0 * (k + 1) + i for i, m in enumerate(members)} for k in range(3)]
+        ana["fields"] = [{"kind": "stress", "label": "応力 (形の見本)", "unit": "MPa",
+                          "frames": {"t_s": moments, "per_member": per, "max": [max(p.values()) for p in per], "source_analysis_id": ana["analysis_id"]}}]
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        page.wait_for_function("document.getElementById('legend-t')?.textContent")
+        got = page.evaluate("""() => { const c = window.hiraku.bench.keys.contour;
+            return { k: c.frameIndex, max: c.max, min: c.min, top: c.frameMax, t: document.getElementById('legend-t').textContent }; }""")
+        self.assertEqual(errors, [])
+        self.assertEqual(got["k"], 2)  # the replay is at the end: the last moment
+        self.assertEqual(got["top"], max(per[2].values()))
+        self.assertEqual(got["max"], max(per[2].values()))  # the scale holds every moment
+        self.assertEqual(got["min"], 0)
+        self.assertIn(f"t = ", got["t"])
+        page.close()
+
     def test_joint_vectors_are_drawn(self):
         """A force at a suspension mounting point (vector kind joint, at "<support>.<point>")
         is drawn with its own colour and name, beside the reactions."""

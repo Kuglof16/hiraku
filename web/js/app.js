@@ -16,7 +16,7 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, FIELD_ORDER, contourOf, fieldsOf, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
+import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
@@ -463,7 +463,20 @@ function buildContour(s, chain) {
   return { ...ct, kinds, variants, tool: pick.a.tool, toolTitle: toolTitle(s, pick.a.tool), canCompare: !!prev, compare };
 }
 
-function renderLegend(ct) {
+// A contour with frames (the same field at moments of a time history) at the moment shown: the
+// one nearest to the motion's time while the analysis that gave its loads plays, else the moment
+// with the largest value. The legend says which moment.
+function framedContour() {
+  if (!contour?.frames) return contour;
+  const playing = shownMotion && contour.frames.source && shownMotion.ana?.analysis_id === contour.frames.source;
+  const k = frameIndex(contour, playing ? shownMotion.tau : null);
+  const t = $("legend-t");
+  if (t) t.textContent = `t = ${fmt(contour.frames.t_s[k], 3)} s${playing ? "" : " (いちばん大きい時刻)"}`;
+  return atFrame(contour, k);
+}
+
+// motion / shown: the test's motion and the analysis it plays (the colours may come from another).
+function renderLegend(ct, s = null, shown = null, motion = null) {
   const el = $("legend");
   if (!ct?.key || !ui.toggles.contour) {
     el.hidden = true;
@@ -506,10 +519,20 @@ function renderLegend(ct) {
       `<div>版 ${ct.compare.version} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
       `<div>版 ${ct.compare.nowVersion} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
     : "";
+  // While a motion plays, colours from another analysis (a static one of the same load case) are that
+  // analysis' one moment, pasted on the moving vehicle: the legend says so, with the model it ran on.
+  const from = s?.analyses?.[ct.analysisId];
+  const still = motion && from && from.analysis_id !== shown?.analysis_id && !from.series?.length && !ct.frames;
+  const when = ct.frames
+    ? `<div class="when">色は <span id="legend-t"></span> の値です。目盛りは全部の時刻で同じです。</div>`
+    : still
+    ? `<div class="when">色は ${esc(ct.toolTitle ?? from.tool)} (${esc(BASE_JA[from.base] ?? from.base ?? "")}) の、1 つの瞬間の値です。動きの再生の間も変わりません。</div>`
+    : "";
   el.innerHTML =
     chips +
     (acts ? `<div class="acts">${acts}</div>` : "") +
     `<div class="ttl">${title}</div>` +
+    when +
     `<div class="bar">${rows.join("")}</div>` +
     over +
     cmp +
@@ -812,9 +835,9 @@ function draw() {
     bench.setScene(chain.loadCase, chain.shown);
     const ct = buildContour(s, chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
-    bench.setContour(ui.toggles.contour ? contour : null);
+    bench.setContour(ui.toggles.contour ? framedContour() : null);
     if (!contour?.mesh) ui.zoomMax = false;
-    renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    renderLegend(contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
     setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
@@ -824,6 +847,7 @@ function draw() {
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
   }
   renderMotion(s, chain, motion);
+  if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
   renderTransient(s, player.playhead, chain);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);

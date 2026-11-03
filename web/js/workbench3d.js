@@ -768,7 +768,8 @@ export class Workbench3D {
       const where = new THREE.Vector3();
       for (const n of ids) where.add(v3(P[n]));
       where.multiplyScalar(1 / ids.length);
-      const tag = label(`最大 ${esc(fmtVU(contour.fieldMax, contour.field.unit))}`, "lbl-max");
+      // the largest value of the moment shown when the field has frames, else of the field
+      const tag = label(`最大 ${esc(fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit))}`, "lbl-max");
       tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
       this.overGhosts.add(tag);
       return;
