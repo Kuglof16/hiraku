@@ -90,7 +90,7 @@
   </div></div>
   <div class="grp"><div class="lab">役</div><select id="role"></select></div>
   <div class="grp" id="pkg-grp"><div class="lab">パッケージ役の形</div><div class="seg" data-key="pkg">
-    <button data-v="burr">組木</button><button data-v="rings">輪</button>
+    <button data-v="box">箱</button><button data-v="burr">組木</button><button data-v="rings">輪</button>
   </div></div>
   <div class="grp"><div class="lab">状態</div><div class="seg" data-key="state">
     <button data-v="idle">待機</button><button data-v="report">報告</button><button data-v="pass">合格</button>
@@ -128,7 +128,7 @@
   <div id="caption"></div>
   <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
 </div>
-<div id="ver">v7</div>
+<div id="ver">v8</div>
 <div id="err"></div>
 
 <script src="pet3d.js"></script>
@@ -142,9 +142,9 @@ const ROLES = HP.ROLES;
 const STATES = HP.STATES;
 
 // ---- state <-> URL ------------------------------------------------------
-const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false, across: false, pkg: "burr" };
-// pkg: the packager's body, burr (six-piece burr, default) or rings
-const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"], pkg: ["burr", "rings"] };
+const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false, across: false, pkg: "box" };
+// pkg: the packager's body, box (blocks packed in a clear box, default), burr (six-piece burr) or rings
+const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"], pkg: ["box", "burr", "rings"] };
 const q = new URLSearchParams(location.search);
 const S = { ...DEFAULTS };
 for (const k of Object.keys(CHOICES)) if (CHOICES[k].includes(q.get(k))) S[k] = q.get(k);
@@ -180,7 +180,7 @@ function urlNow() {
   if (!S.edges) p.set("edges", "0");
   if (!S.nodes) p.set("nodes", "0");
   if (S.mesh !== "coarse") p.set("mesh", S.mesh);
-  if (S.pkg !== "burr") p.set("pkg", S.pkg);
+  if (S.pkg !== "box") p.set("pkg", S.pkg);
   p.set("cam", S.cam);
   if (S.spin) p.set("spin", "1");
   if (S.across) p.set("run", "across");
@@ -495,7 +495,7 @@ function syncPanel() {
   });
   document.querySelectorAll("input[type=checkbox][data-key]").forEach((c) => (c.checked = !!S[c.dataset.key]));
   roleSel.value = S.role;
-  // the burr / rings switch is shown for the packager only
+  // the box / burr / rings switch is shown for the packager only
   document.getElementById("pkg-grp").style.display = S.role === "packager" ? "" : "none";
   freeze.checked = frozen !== null;
   if (frozen !== null) slider.value = String(frozen);

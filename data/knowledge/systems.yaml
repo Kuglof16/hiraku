@@ -4,7 +4,8 @@
 # rule applies (no flag, no rule). The rules say what the design must contain at least; how well it works is for
 # the analyses.
 # trust: 1 primary source, 2 secondary source, 3 assumption. Every rule here is HIRAKU's minimum (3); the
-# standards named in `basis` are what the minimum is modelled on, recalled and "not checked in this repository".
+# regulations and standards named in `basis` are what the minimum is modelled on. Each basis says what was read
+# (2026-11-03) and what was not; the minimum itself takes no value from them.
 doc_id: KN-SY
 title: 系の決まり
 category: system
@@ -24,7 +25,16 @@ rules:
     trust: 3
     basis: >-
       assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road
-      vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository
+      vehicles is regulated by UN Regulation No. 79, "Uniform provisions concerning the approval of vehicles with
+      regard to steering equipment" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering
+      equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the
+      equipment that determines the direction of movement (steering control, steering transmission, steered wheels,
+      energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely
+      hydraulic or electric at any point (except auxiliary steering equipment). Read in the
+      original text, United Nations Treaty Series vol. 1519, A-4789
+      (https://treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN
+      Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not
+      opened; the rule does not take any value from the regulation
   - id: SY-03
     text: 走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる
     check: system:brake_chain
@@ -32,8 +42,15 @@ rules:
     trust: 3
     basis: >-
       assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is
-      regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in
-      this repository
+      regulated. UN Regulation No. 13-H, "Uniform provisions concerning the approval of passenger cars with regard
+      to braking": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2
+      leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in
+      MLIT's English/Japanese text, https://www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準
+      (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems
+      (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum
+      speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov
+      法令 XML, law id 326M50000800067, https://laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule
+      checks one connected brake chain, not the number of systems or their performance
   - id: SY-04
     text: 人が乗る製品は、座席が骨組みにつながる
     check: system:seat_attach
@@ -47,9 +64,19 @@ rules:
     when: ride == 1
     trust: 3
     basis: >-
-      assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant
-      restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway
-      vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)
+      assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road
+      vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat
+      belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on
+      forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and
+      vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds
+      (read in the e-Gov 法令 XML, law id 326M50000800067, https://laws.e-gov.go.jp/law/326M50000800067).
+      Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https://rohva.org/ansi-standard/,
+      which lists an Occupant Retention System among its contents). The standard itself was not opened (sold);
+      secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at
+      least a three-point seat belt; https://www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC
+      NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS
+      zones; ORS defined as including three-point seat belts;
+      https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03
   - id: SY-06
     text: 人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる
     check: system:rops
@@ -57,8 +84,13 @@ rules:
     trust: 3
     basis: >-
       assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that
-      it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway
-      vehicles (recalled; not checked in this repository)
+      it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over
+      Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https://rohva.org/ansi-standard/);
+      the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its
+      proposed ROV definition, 16 CFR 1422.2(a) (p. 69022)
+      (https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was
+      not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the
+      NPR definition, among other features, a top speed over 30 mph)
   - id: SY-07
     text: 公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう
     check: system:lighting
@@ -66,7 +98,14 @@ rules:
     trust: 3
     basis: >-
       assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's
-      道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)
+      道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯
+      para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask
+      for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do
+      not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter
+      than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and
+      mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067
+      (https://laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per
+      rear side
   - id: SY-08
     text: 電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる
     check: system:power_chain
@@ -81,4 +120,11 @@ rules:
     trust: 3
     basis: >-
       assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain).
-      Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)
+      Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, "Electrically propelled road
+      vehicles - Safety specifications - Part 3: Electrical safety" (edition 4, published 2021-10, stage 90.92 to be
+      revised): per its abstract on the ISO catalogue page (https://www.iso.org/standard/81746.html, copy saved and
+      read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected
+      auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and
+      mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch
+      or other disconnect was not checked in this repository; the basis only says the standard covers the
+      electrical safety of the propulsion system

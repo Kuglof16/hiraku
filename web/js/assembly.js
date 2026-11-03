@@ -55,6 +55,17 @@ export function partNames(design) {
 // The name before a bracket ("後右の車輪 (タイヤ…)" -> "後右の車輪").
 export const shortName = (name) => String(name).replace(/\s*[（(].*$/, "") || String(name);
 
+// A step's part by name: the design's part, else a group built first (the contract's
+// "corner:FL" for a suspension corner) as "前左の足まわり (先に組んだ組)" — the corner's
+// position in the words the design's part names use (前 / 後, 左 / 右) — else the id.
+const CORNER_JA = { FL: "前左", FR: "前右", RL: "後左", RR: "後右" };
+export function nameOf(names, id) {
+  if (names[id]) return names[id];
+  const m = /^corner:(.+)$/.exec(String(id));
+  if (!m) return String(id);
+  return CORNER_JA[m[1]] ? `${CORNER_JA[m[1]]}の足まわり (先に組んだ組)` : `${m[1]} の角の組`;
+}
+
 // "node LB" -> "節点 LB", "member x" -> "部材 x", "part susp_RR" -> that part's name.
 export function fastenTarget(to, names) {
   const [head, ...rest] = String(to).split(" ");
@@ -258,7 +269,9 @@ export class AssemblyStage {
   }
 
   markCurrent(cur) {
-    const ok = cur ? stepOk(cur.m.step) : true;
+    // this.ngChecks (keys of CHECKS): only these failing make the outline red (N16: only a
+    // part that does not fit; a step hard for a tool or a hand stays in the current colour)
+    const ok = cur ? (this.ngChecks ? this.ngChecks.every((k) => cur.m.step[k] === true) : stepOk(cur.m.step)) : true;
     // the path from outside to the place
     const path = cur?.m.step.path_mm ?? [];
     const segs = [];
@@ -313,7 +326,7 @@ export function stepRowsHtml(rec, current, opts = {}) {
   const names = partNames(rec.design);
   return rec.steps
     .map((s) => {
-      const name = shortName(names[s.part] ?? s.part);
+      const name = shortName(nameOf(names, s.part));
       const checks = CHECKS.map((c) => `<span class="ck ck-${c.key} ${s[c.key] ? "is-ok" : "is-ng"}" title="${esc(c.title)}">${esc(c.ja)}${mark(s[c.key] === true)}</span>`).join("");
       const blocked = !stepOk(s) && (s.blocked_by ?? []).length ? `<div class="blk">止めているもの: ${esc(s.blocked_by.map((b) => shortName(names[b] ?? b)).join("・"))}</div>` : "";
       const cls = `${s.order === current ? "cur" : ""} ${stepOk(s) ? "" : "has-ng"} ${s.order < current ? "done" : ""}`;
@@ -375,10 +388,12 @@ export class AssemblySeek {
     }
   }
 
-  setSteps(steps) {
+  // ngChecks (keys of CHECKS, else all): the checks whose failing marks a step's tick red
+  setSteps(steps, ngChecks = null) {
     this.n = steps.length;
+    const ok = (s) => (ngChecks ? ngChecks.every((k) => s[k] === true) : stepOk(s));
     this.el.querySelector(".as-ticks").innerHTML = steps
-      .map((s, i) => `<i class="${stepOk(s) ? "" : "ng"}" style="left:${(this.n ? (i + 1) / this.n : 0) * 100}%" title="手順 ${s.order}"></i>`)
+      .map((s, i) => `<i class="${ok(s) ? "" : "ng"}" style="left:${(this.n ? (i + 1) / this.n : 0) * 100}%" title="手順 ${s.order}"></i>`)
       .join("");
   }
 
@@ -501,7 +516,7 @@ export class AssemblyPanel {
     const ol = this.q(".asm-steps");
     ol.innerHTML = stepRowsHtml(this.rec, current, { box: "a7.step" });
     const step = this.rec.steps[current - 1];
-    this.q(".asm-caption").innerHTML = step ? `<b>手順 ${step.order}</b> ${esc(step.text ?? shortName(partNames(this.rec.design)[step.part] ?? step.part))}` : "";
+    this.q(".asm-caption").innerHTML = step ? `<b>手順 ${step.order}</b> ${esc(step.text ?? shortName(nameOf(partNames(this.rec.design), step.part)))}` : "";
     const li = ol.querySelector("li.cur");
     if (li) {
       const top = li.offsetTop - ol.clientHeight / 2 + li.offsetHeight / 2;

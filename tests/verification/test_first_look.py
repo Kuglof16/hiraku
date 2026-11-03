@@ -38,6 +38,17 @@ class FirstLook(unittest.TestCase):
         self.assertIn("8 枚", fl.PROMPT.format(n=8))
         self.assertIn("8 個", fl.PROMPT.format(n=8))
 
+    def test_no_codex_is_a_clear_stop(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("shutil.which", return_value=None), \
+                mock.patch.dict("os.environ", {"APPDATA": tmp}):
+            self.assertIsNone(fl.codex_exe())  # no npm/codex.cmd in this APPDATA either
+            with self.assertRaisesRegex(RuntimeError, "not installed"):
+                fl.ask_codex(Path(tmp) / "sheet_01.jpg", 8)
+            (Path(tmp) / "npm").mkdir()
+            (Path(tmp) / "npm" / "codex.cmd").write_text("", encoding="utf-8")
+            self.assertEqual(fl.codex_exe(), str(Path(tmp) / "npm" / "codex.cmd"))
+
 
 if __name__ == "__main__":
     unittest.main()

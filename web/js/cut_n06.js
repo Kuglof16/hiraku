@@ -1,7 +1,8 @@
 // N06 (cut.html?cut=n06&run=<id>): designs that do not work, side by side.
 //
 // One tile per key of layout.json n06.tests. A test tile plays the
-// record of its test's load case past the limit (its id ends in -beyond), from the time
+// record of its test's load case past the limit (its id ends in -beyond; the newest version
+// whose record passes the limit, see casesOf), from the time
 // the tile lands to the end of the cut. Where the limit is passed is drawn in the same red
 // as N01 / N02: a wheel that leaves the road (its ring, and the pose at the end in
 // see-through red), members over the allowable stress (the frame coloured by the static
@@ -19,18 +20,23 @@
 // representative of the others. The cut from times.tiles_s to its end is shared equally by
 // the turns; in its turn the record plays in the large box (from tile_in_s after the turn
 // starts to its end), then holds its end there until the next turn. In the list a tile holds
-// the record's first pose until its turn is over, then its last pose; its tag is hidden while
-// the large box shows it. So two things move at most: the large picture and a tile coming in.
+// the record's first pose until its turn, plays along with the large box in its turn (so it
+// does not jump from the first pose to the last when the turn ends), then holds its last pose;
+// its tag is hidden while the large box shows it. The record is paced (pace.js) so nothing
+// turns faster than 90 deg/s on the screen (a tip-over plays slower, the rest faster). So
+// three things move at most: the large picture, its tile in the list and a tile coming in.
 //
 // Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS).
 
 import * as THREE from "three";
 import { clearOfBand, cubicBezier, squeeze } from "./compose.js";
-import { contourOf, fieldsOf, overOf } from "./fields.js";
+import { fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
+import { tileContour } from "./cut_grid.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,24 +54,26 @@ export const N06_KEYS = [
 // how a tile comes in, from this scale to 1 along this CSS cubic-bezier over times.tile_in_s.
 export const N06_APPEAR = { from_scale: 0.92, ease: [0.2, 0.8, 0.3, 1] };
 
-// What each tile shows (keys as in layout.json n06.tests): the tests whose case past the
-// limit it plays (the first that has a record), its name, and what it reads:
+// What each tile shows (keys as in layout.json n06.tests): the tests whose cases past the
+// limit it plays (see casesOf), its name, and what it reads:
 //   field   the field drawn on the vehicle ("stress": on the allowable's band, as N01;
 //           "temperature": on its own range, a part over its limit in red; null: none)
 //   from    the records its words come from ("motion", "still", else both)
+//   motion  the test whose case of the same name past the limit gives the motion
+//           (R1-step250-beyond -> P1-step250-beyond: the frame's stress played on the climb)
 //   assembly  the assembly's interferences instead of a test
 const TILES = {
-  step_break: { tests: ["P1", "R1"], name: "段差とフレーム", field: "stress", from: "still" },
+  step_break: { tests: ["R1", "P1"], motion: "P1", name: "段差とフレーム", field: "stress", from: "still" },
   tilt_over: { tests: ["S1", "S5"], name: "坂", field: null },
   step_stuck: { tests: ["P1"], name: "段差", field: null, from: "motion" },
   battery_hot: { tests: ["T1"], name: "電池の熱", field: "temperature" },
   parts_clash: { name: "組み立て", assembly: true },
+  wind: { tests: ["F1"], name: "横風", field: null },
+  // earlier keys (rollover was the sixth tile before wind)
   rollover: { tests: ["S3"], name: "曲がる", field: null },
-  // earlier keys
   step: { tests: ["P1"], name: "段差", field: "stress" },
   frame: { tests: ["R1"], name: "段差の力とフレーム", field: "stress" },
   slope: { tests: ["S5"], name: "凸凹の横斜面", field: null },
-  wind: { tests: ["F1"], name: "横風", field: null },
   brake: { tests: ["S4"], name: "急ブレーキ", field: null },
 };
 
@@ -79,12 +87,13 @@ const FLAGS = [
 // What a criterion that is not met means, by its quantity.
 const CRITERION_JA = {
   stopping_distance: "止まりきれない",
-  max_stress: "フレームが許容を超える",
+  max_stress: "フレームが持たない", // past the allowable stress ("許容" is not a viewer's word)
   critical_wind_speed: "風に耐えられない",
   tip_slope_angle: "斜面で倒れる",
   tilt_angle: "傾いて倒れる",
   min_side_load: "片側の輪が浮く",
   temp_battery_max: "電池が熱くなりすぎる",
+  climbable: "段差を越えられない",
 };
 
 const BEYOND = /-beyond$/;
@@ -119,20 +128,38 @@ export class CutN06 {
     this.build();
   }
 
-  // The newest ok analyses of the first of the tests' load cases past the limit that has
-  // one: one with a motion, one with the tile's field (a still), and the newest of all.
+  // The records a tile plays: for one load case past the limit and one design version, the
+  // newest ok analyses with a motion (from the def.motion test's case of the same name when
+  // it has one), with the tile's field (a still), and the newest of all.
+  //
+  // Which case and version: the cut says "作ってみると、うまくいかない", so a tile shows a
+  // record in which the limit is passed. The candidates go by the tests' order, then the
+  // cases' order in the project, then the versions from the newest; the first whose records
+  // say what went wrong (outcome has words) is taken. A later version that was fixed (in the
+  // video run, version 2 takes the frame under the allowable and climbs the lower step)
+  // would otherwise hide the failure. Without any, the first candidate (its name is shown).
   casesOf(def) {
     const kind = def.field ?? "stress";
+    const cases = this.s.project?.load_cases ?? [];
+    const all = this.s.order.analyses.map((id) => this.s.analyses[id]).filter(ok);
+    const found = [];
     for (const testId of def.tests) {
-      const lc = (this.s.project?.load_cases ?? []).find((c) => c.test_id === testId && BEYOND.test(c.load_case_id));
-      if (!lc) continue;
-      const anas = this.s.order.analyses.map((id) => this.s.analyses[id]).filter((a) => a.load_case_id === lc.load_case_id && ok(a));
-      if (!anas.length) continue;
-      const dyn = anas.filter((a) => !!motionOf(a)).at(-1) ?? null;
-      const still = anas.filter((a) => fieldsOf(a, { mesh: false }).some((f) => f.kind === kind)).at(-1) ?? null;
-      return { lc, dyn, still, any: anas.at(-1) };
+      for (const lc of cases.filter((c) => c.test_id === testId && BEYOND.test(c.load_case_id))) {
+        const anas = all.filter((a) => a.load_case_id === lc.load_case_id);
+        if (!anas.length) continue;
+        const sibling = def.motion && def.motion !== testId ? cases.find((c) => c.load_case_id === `${def.motion}${lc.load_case_id.slice(String(lc.test_id).length)}`) : null;
+        const moving = sibling ? all.filter((a) => a.load_case_id === sibling.load_case_id) : [];
+        for (const v of [...new Set(anas.map((a) => a.design_version))].sort((a, b) => b - a)) {
+          const mine = anas.filter((a) => a.design_version === v);
+          const dynOwn = mine.filter((a) => !!motionOf(a)).at(-1) ?? null;
+          const dynSib = moving.filter((a) => a.design_version === v && !!motionOf(a)).at(-1) ?? null;
+          const still = mine.filter((a) => fieldsOf(a, { mesh: false }).some((f) => f.kind === kind)).at(-1) ?? null;
+          const dyn = dynOwn ?? dynSib;
+          found.push({ lc, dyn, still, any: mine.at(-1), version: v, sceneLc: dynOwn || !dynSib ? lc : sibling });
+        }
+      }
     }
-    return null;
+    return found.find((c) => this.outcome(c, def).length) ?? found[0] ?? null;
   }
 
   // The allowable stress criterion of the run (a load case judged on max_stress in the unit).
@@ -313,16 +340,20 @@ export class CutN06 {
     const ana = c.dyn ?? c.still ?? c.any;
     const v = new Workbench3D(null, "zu", { renderer: this.renderer });
     v.setDesign(this.s.designs[ana.design_version] ?? this.s.designs[this.s.currentVersion]);
-    v.setLoading(c.lc.params?.loading ?? null);
+    const sceneLc = c.sceneLc ?? c.lc;
+    v.setLoading(sceneLc.params?.loading ?? null);
     const motion = c.dyn ? motionOf(c.dyn) : null;
     v.setMotion(motion);
-    v.setScene(c.lc, ana);
+    v.setScene(sceneLc, ana);
     // stress on the allowable's band (as N01); a temperature on its own range, the part the
     // load case limits held to it
     const field = def.field && c.still ? fieldsOf(c.still, { mesh: false }).find((f) => f.kind === def.field) : null;
     const crit = def.field === "stress" ? this.allowable(field?.unit) ?? c.lc.criterion : c.lc.criterion;
-    const ct = field ? contourOf(c.still, field, crit) : null;
+    // the bands' top is the allowable value (as the N04 tiles, tileContour), so only what is
+    // past it is red, and that is also boxed in translucent red (overMarks) to be seen small
+    const ct = field ? tileContour(c.still, field, crit) : null;
     v.setContour(ct);
+    tile.el.dataset.scale = ct ? (ct.judgedScale ? "allowable" : "shape") : "none";
     v.setVectors(null);
     v.setToggles({ parts: true, contour: true, arrows: false, cg: true, names: false, limit: true });
     v.resize(tile.inner.w, tile.inner.h);
@@ -336,8 +367,42 @@ export class CutN06 {
     const overMember = ct?.limitKnown && Object.values(ct.values ?? {}).some((x) => x > ct.max);
     const overPart = Object.entries(ct?.parts ?? {}).some(([id, x]) => overOf(ct, id, x));
     tile.el.dataset.over = overMember || overPart ? "1" : "0";
+    tile.el.dataset.overMarks = String(this.overMarks(v, ct));
     tile.el.dataset.lift = motion?.liftT !== null && motion?.liftT !== undefined && v.liftIsLimit ? "1" : "0";
     tile.el.dataset.past = this.markPast(v, c, motion) ? "1" : "0";
+    tile.el.dataset.case = c.lc.load_case_id;
+    tile.el.dataset.version = String(c.version ?? ana.design_version);
+  }
+
+  // A translucent red box (the overlay's colour and opacity) round each member and part
+  // whose recorded value is past the allowable (the contour's top): the place the ✕ is
+  // about, seen even when small in the picture. Returns how many.
+  overMarks(v, ct) {
+    if (!ct?.limitKnown) return 0;
+    const O = this.spec.overlay;
+    const mat = new THREE.MeshBasicMaterial({ color: O.color, transparent: true, opacity: O.opacity * 2, depthWrite: false });
+    const marks = new THREE.Group();
+    for (const [id, x] of Object.entries(ct.values ?? {})) {
+      const m = v.members[id];
+      if (!m || !(x > ct.max)) continue;
+      const k = Math.max(m.width, m.height) * 2.6;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(m.length + k * 0.4, k, k), mat);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(m.mesh.matrix);
+      mesh.renderOrder = 11;
+      marks.add(mesh);
+    }
+    const parts = v.design?.parts ?? [];
+    for (const [id, x] of Object.entries(ct.parts ?? {})) {
+      const p = parts.find((q) => q.id === id);
+      if (!p?.box || !overOf(ct, id, x)) continue;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...p.box.size_mm.map((s) => s * 1.15)), mat);
+      mesh.position.set(...p.box.center_mm);
+      mesh.renderOrder = 11;
+      marks.add(mesh);
+    }
+    v.body.add(marks);
+    return marks.children.length;
   }
 
   // A distance limit (op <= / <, in a length unit) that the record passes: the road from
@@ -445,7 +510,9 @@ export class CutN06 {
     if (!pane.view) return;
     if (pane.motion) {
       const m = pane.motion;
-      const tau = m.t0 + (m.t1 - m.t0) * u;
+      // paced over the play's stage time (pane.playS)
+      if (pane.playS && !pane.pace) pane.pace = pacer([{ motion: m, view: pane.view }], pane.playS, PACE_LIMIT_DEG_S);
+      const tau = m.t0 + (pane.pace ? pane.pace(u) : (m.t1 - m.t0) * u);
       pane.el.dataset.tau = String(tau);
       pane.view.setFrame(m.frame(tau));
     }
@@ -479,19 +546,22 @@ export class CutN06 {
       small.el.style.transform = `scale(${A.from_scale + (1 - A.from_scale) * e})`;
       small.el.style.visibility = p > 0 ? "visible" : "hidden";
       small.el.dataset.p = String(p);
-      if (p > 0 && p < 1) small.canvas.dataset.kind = "moving";
-      else delete small.canvas.dataset.kind;
       const now = t >= tile.turn.from && t < tile.turn.to;
+      small.playS = big.playS = tile.play.to - tile.play.from;
+      const u = share(tile.play.from, tile.play.to);
+      const plays = !!(big.motion || big.asm?.stage);
+      // the list's tile plays along with the large box in its turn
+      const along = now && plays && t >= tile.play.from && u < 1;
+      if ((p > 0 && p < 1) || along) small.canvas.dataset.kind = "moving";
+      else delete small.canvas.dataset.kind;
       small.el.dataset.featured = now ? "1" : "";
       small.el.style.borderColor = now ? sp.overlay.color : sp.colors.rule;
       small.label.style.visibility = now ? "hidden" : "";
-      if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : 0);
+      if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : now ? u : 0);
       // the large box: in its turn, the record plays, then holds its end
       big.el.style.visibility = now ? "visible" : "hidden";
       const q = easeIn(share(tile.turn.from, tile.turn.from + sp.times.tile_in_s));
       big.el.style.opacity = String(Math.min(1, q));
-      const u = share(tile.play.from, tile.play.to);
-      const plays = !!(big.motion || big.asm?.stage);
       if (now && (q < 1 || (plays && u < 1))) big.canvas.dataset.kind = "moving";
       else delete big.canvas.dataset.kind;
       if (now) this.pose(big, u);

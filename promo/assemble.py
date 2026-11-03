@@ -42,11 +42,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
-    from promo.export import ffmpeg_path
+    from promo.export import ENCODERS, ffmpeg_path, pick_encoder, video_args
     from promo.subs import burn_command
     from promo.voice import cuts_in_order, parse_script
 except ImportError:  # run as a script: promo/ is on sys.path
-    from export import ffmpeg_path
+    from export import ENCODERS, ffmpeg_path, pick_encoder, video_args
     from subs import burn_command
     from voice import cuts_in_order, parse_script
 
@@ -336,6 +336,25 @@ def ramps(span: Span, fps: int, kind: str) -> str | None:
     return parts[0] if len(parts) == 1 else f"max({parts[0]},{parts[1]})"
 
 
+def ramp_window(span: Span, fps: int, kind: str) -> str | None:
+    """Timeline expression in t: true on the frames where ramps(span, fps, kind) can be above 0.
+
+    Outside it the join's blends give back the picture unchanged (strength 0), so the
+    filters run with ``enable`` and skip those frames. The window reaches half a frame
+    past the ramp on each side.
+    """
+    L = span.total / fps
+    half = 0.5 / fps
+    parts = []
+    if span.join_in.kind == kind:
+        parts.append(f"lt(t,{span.join_in.frames(fps) / fps + half:.6f})")
+    if span.join_out.kind == kind:
+        parts.append(f"gt(t,{L - span.join_out.frames(fps) / fps - half:.6f})")
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else f"{parts[0]}+{parts[1]}"
+
+
 def drawtext_lines(card: dict, k: float, text_files: list[str]) -> list[str]:
     out = []
     for line, tf in zip(card["lines"], text_files):
@@ -353,9 +372,14 @@ def overlay_start(seg: Segment, span: Span, ov: Overlay, fps: int) -> int:
 
 
 def segment_graph(seg: Segment, span: Span, fps: int, width: int, height: int,
-                  band_top: int, band_rgb: str, text_files: list[str] | None = None) -> str:
+                  band_top: int, band_rgb: str, text_files: list[str] | None = None,
+                  fast: bool = True) -> str:
     """filter_complex for one segment file. Input 0 is the picture (none for a card);
-    the overlays' frames follow, in table order."""
+    the overlays' frames follow, in table order.
+
+    fast (the default) runs the join expressions only on the join's frames and the
+    grain look with the built-in overlay mode; fast=False is the earlier graph, which
+    evaluates every expression on every frame (kept to compare against)."""
     k = height / DESIGN_H
     n = span.total
     dur = n / fps
@@ -399,12 +423,14 @@ def segment_graph(seg: Segment, span: Span, fps: int, width: int, height: int,
 
     light = ramps(span, fps, "light")
     if light:
-        # glow from the picture's own light first, then the warm light fills the frame
+        # glow from the picture's own light first, then the warm light fills the frame;
+        # the expressions run only on the join's frames (strength 0 elsewhere leaves A as it is)
+        on = f":enable='{ramp_window(span, fps, 'light')}'" if fast else ""
         chains.append(f"[{cur}]split[lA][lB]")
-        chains.append(f"[lB]gblur=sigma={LIGHT_GLOW_SIGMA * k:.2f}[lG]")
-        chains.append(f"[lA][lG]blend=all_expr='255-(255-A)*(255-B*{light})/255'[lS]")
+        chains.append(f"[lB]gblur=sigma={LIGHT_GLOW_SIGMA * k:.2f}{on}[lG]")
+        chains.append(f"[lA][lG]blend=all_expr='255-(255-A)*(255-B*{light})/255'{on}[lS]")
         chains.append(src(LIGHT_RGB, "lW"))
-        chains.append(f"[lS][lW]blend=all_expr='A+(B-A)*pow({light},2.2)'[pl]")
+        chains.append(f"[lS][lW]blend=all_expr='A+(B-A)*pow({light},2.2)'{on}[pl]")
         cur = "pl"
 
     chains.append(f"[{cur}]format=yuv444p[py]")
@@ -415,15 +441,22 @@ def segment_graph(seg: Segment, span: Span, fps: int, width: int, height: int,
         chains.append(f"color=c=0x{GRAY}:s={size}:r={fps}:d={dur:.6f},format=yuv444p,"
                       f"noise=c0s={GRAIN_NOISE}:c0f=t:all_seed={seed},"
                       f"gblur=sigma={GRAIN_SIGMA * k:.2f}:planes=1[gN]")
-        chains.append(f"[{cur}][gN]blend=c0_expr='A+({over}-A)*{GRAIN_LOOK:.3f}':c1_expr=A:c2_expr=A[pg]")
+        if fast:
+            # the built-in overlay mode with a fixed opacity is the same formula as the expression
+            chains.append(f"[{cur}][gN]blend=c0_mode=overlay:c0_opacity={GRAIN_LOOK:.3f}"
+                          f":c1_mode=normal:c2_mode=normal[pg]")
+        else:
+            chains.append(f"[{cur}][gN]blend=c0_expr='A+({over}-A)*{GRAIN_LOOK:.3f}':c1_expr=A:c2_expr=A[pg]")
         cur = "pg"
     gjoin = ramps(span, fps, "grain")
     if gjoin:
+        on = f":enable='{ramp_window(span, fps, 'grain')}'" if fast else ""
+        # the noise runs on every frame so its random sequence stays the same
         chains.append(f"color=c=0x{GRAY}:s={size}:r={fps}:d={dur:.6f},format=yuv444p,"
                       f"noise=c0s={GRAIN_JOIN_NOISE}:c0f=t:all_seed={seed + 7919},"
-                      f"gblur=sigma={GRAIN_JOIN_SIGMA * k:.2f}:planes=1[gJ]")
+                      f"gblur=sigma={GRAIN_JOIN_SIGMA * k:.2f}:planes=1{on}[gJ]")
         chains.append(f"[{cur}][gJ]blend=c0_expr='A+({over}-A)*{GRAIN_JOIN:.3f}*pow({gjoin},1.5)'"
-                      f":c1_expr=A:c2_expr=A[pj]")
+                      f":c1_expr=A:c2_expr=A{on}[pj]")
         cur = "pj"
     chains.append(f"[{cur}]format=yuv420p[out]")
     return ";".join(chains)
@@ -439,8 +472,32 @@ def resolve_source(seg: Segment, height: int) -> Path | None:
     return Path(src)
 
 
+def codec_args(encoder: str, crf: int, preset: str) -> list[str]:
+    """Video codec arguments for a resolved encoder ('x264' or 'nvenc'), then yuv420p."""
+    return [*video_args(encoder, crf, preset), "-pix_fmt", "yuv420p"]
+
+
+def swap_encoder(cmd: list[str], encoder: str) -> list[str]:
+    """A command written for libx264 (-c:v libx264 -preset P -crf N) moved to ``encoder``."""
+    if encoder == "x264":
+        return cmd
+    i = cmd.index("-c:v")
+    if cmd[i + 1] != "libx264":
+        raise ValueError(f"expected libx264 at -c:v, got {cmd[i + 1]}")
+    j = i + 2
+    preset, crf = "medium", 23
+    while j < len(cmd) and cmd[j] in ("-preset", "-crf", "-tune"):
+        if cmd[j] == "-preset":
+            preset = cmd[j + 1]
+        elif cmd[j] == "-crf":
+            crf = int(cmd[j + 1])
+        j += 2
+    return cmd[:i] + video_args(encoder, crf, preset) + cmd[j:]
+
+
 def segment_command(seg: Segment, span: Span, fps: int, height: int, out: Path, band_top: int,
-                    band_rgb: str, text_files: list[str] | None = None, ffmpeg: str = "ffmpeg") -> list[str]:
+                    band_rgb: str, text_files: list[str] | None = None, ffmpeg: str = "ffmpeg",
+                    encoder: str = "x264", fast: bool = True) -> list[str]:
     width = height * DESIGN_W // DESIGN_H
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     srcp = resolve_source(seg, height)
@@ -453,9 +510,9 @@ def segment_command(seg: Segment, span: Span, fps: int, height: int, out: Path, 
             cmd += ["-framerate", str(fps), "-start_number", "0", "-i", str(Path(ov.frames) / "%05d.png")]
         else:
             cmd += ["-i", str(ov.frames)]
-    graph = segment_graph(seg, span, fps, width, height, band_top, band_rgb, text_files)
+    graph = segment_graph(seg, span, fps, width, height, band_top, band_rgb, text_files, fast)
     cmd += ["-filter_complex", graph, "-map", "[out]", "-frames:v", str(span.total), "-an",
-            "-c:v", "libx264", "-preset", "medium", "-crf", str(SEGMENT_CRF), "-pix_fmt", "yuv420p",
+            *codec_args(encoder, SEGMENT_CRF, "medium"),
             "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", str(out)]
     return cmd
 
@@ -522,14 +579,14 @@ def join_graph(sp: list[Span], fps: int, width: int = DESIGN_W, height: int = DE
 
 
 def join_command(files: list[Path], sp: list[Span], fps: int, out: Path, height: int = DESIGN_H,
-                 ffmpeg: str = "ffmpeg") -> list[str]:
+                 ffmpeg: str = "ffmpeg", encoder: str = "x264") -> list[str]:
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     for f in files:
         cmd += ["-i", str(f)]
     width = height * DESIGN_W // DESIGN_H
     cmd += ["-filter_complex", join_graph(sp, fps, width, height), "-map", "[film]",
             "-frames:v", str(film_frames(sp, fps)), "-r", str(fps),
-            "-c:v", "libx264", "-preset", "medium", "-crf", str(SEGMENT_CRF), "-pix_fmt", "yuv420p",
+            *codec_args(encoder, SEGMENT_CRF, "medium"),
             "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", str(out)]
     return cmd
 
@@ -552,7 +609,8 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def build(table: Table, out: Path, height: int, subs: Path | None, audio: Path | None,
-          ffmpeg: str = "ffmpeg", log=print) -> Path:
+          ffmpeg: str = "ffmpeg", log=print, encoder: str = "x264", fast: bool = True) -> Path:
+    """encoder is a resolved encoder ('x264' or 'nvenc', see export.pick_encoder)."""
     out = out.resolve()
     parts = out.parent / f"{out.stem}.parts"
     parts.mkdir(parents=True, exist_ok=True)
@@ -569,15 +627,16 @@ def build(table: Table, out: Path, height: int, subs: Path | None, audio: Path |
                 text_files.append(tf)
         # run in the parts folder: card text files are named bare (no drive colon in the filter)
         run(segment_command(seg, span, table.fps, height, f, table.band_top, table.band_rgb,
-                            text_files, ffmpeg), cwd=parts)
+                            text_files, ffmpeg, encoder, fast), cwd=parts)
         log(f"{span.name:10s} {seg.kind:5s} {span.first_frame / table.fps:7.2f}s "
             f"+{span.slot:4d}f  pre {span.pre} post {span.post}  -> {seg.join.kind}")
         files.append(f)
     film = parts / "film.mp4"
-    run(join_command(files, sp, table.fps, film, height, ffmpeg))
+    run(join_command(files, sp, table.fps, film, height, ffmpeg, encoder))
     if subs:
         # the ass filter is given a bare file name: Windows drive colons break its option parser
-        run(burn_command(film, Path(subs.name), out, audio.resolve() if audio else None, ffmpeg=ffmpeg),
+        run(swap_encoder(burn_command(film, Path(subs.name), out, audio.resolve() if audio else None,
+                                      ffmpeg=ffmpeg), encoder),
             cwd=subs.resolve().parent)
     else:
         run(mux_command(film, audio.resolve() if audio else None, out, ffmpeg))
@@ -609,6 +668,8 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--height", type=int, choices=(1080, 2160), default=1080)
             p.add_argument("--subs", type=Path)
             p.add_argument("--audio", type=Path)
+            p.add_argument("--encoder", choices=ENCODERS, default="auto",
+                           help="auto: h264_nvenc when it works, else libx264")
         p.add_argument("--work", help="folder that ${WORK} in the table stands for")
         p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                        help="another ${NAME} in the table")
@@ -624,7 +685,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"total {film_frames(sp, table.fps) / table.fps:.3f} s")
         return 0
     ff = ffmpeg_path()
-    build(table, a.out, a.height, a.subs, a.audio, ffmpeg=ff)
+    enc = pick_encoder(a.encoder, ff)
+    print(f"encoder: {enc}")
+    build(table, a.out, a.height, a.subs, a.audio, ffmpeg=ff, encoder=enc)
     return 0
 
 

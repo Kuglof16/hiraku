@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 from hiraku.webserve.launch import DEMO_RUNS_FILE, KEY_NAME
-from hiraku.webserve.server import DEFAULT_HOST, DEFAULT_PORT, LAYOUT_FILE, SAVED_DIR, WEB_DIR, list_runs, make_server
+from hiraku.webserve.server import DEFAULT_HOST, DEFAULT_PORT, LAYOUT_FILE, PETS_FILE, SAVED_DIR, WEB_DIR, list_runs, make_server
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--default-run", default=None, help="run the screen opens when the URL names none (default: the newest saved run)")
     p.add_argument("--web", default=str(WEB_DIR), help="folder of the screen files (default: web/ of this repository)")
     p.add_argument("--layout", default=str(LAYOUT_FILE), help="the video's layout rules served as /layout.json (default: promo/screens/layout.json)")
+    p.add_argument("--pets", default=str(PETS_FILE), help="the 3D pets' script served as /pets/pet3d.js (default: promo/pets/pet3d.js; without it the cut pages draw no pets)")
     p.add_argument("--demo-runs", default=str(DEMO_RUNS_FILE), help="the demo runs the run list offers (default: data/catalog/demo_runs.yaml)")
     p.add_argument("--quiet", action="store_true", help="do not log each request")
     p.add_argument("--open", action="store_true", help="open the screen in the default browser once the server listens")
@@ -27,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
 
     server = make_server(args.host, args.port, Path(args.runs), Path(args.web), quiet=args.quiet,
                          saved_dir=Path(args.saved), default_run=args.default_run, layout_file=Path(args.layout),
+                         pets_file=Path(args.pets),
                          demo_runs_file=Path(args.demo_runs))
     host, port = server.server_address[:2]
     print(f"HIRAKU screen: http://{host}:{port}/  (runs: {Path(args.runs).resolve()})", flush=True)

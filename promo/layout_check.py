@@ -48,6 +48,7 @@ import io
 import json
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -540,8 +541,19 @@ def times_for(cut: str, layout: dict, at: list[float] | None) -> list[float]:
     return times
 
 
+def cut_of(screen: str | Path) -> str:
+    """The cut a screen draws: ?cut= of a URL (the app's cut.html serves every
+    cut), else the page's file name. Times, allow_overlap and allow_overflow
+    are looked up under this name."""
+    if export.is_url(screen):
+        q = parse_qs(urlsplit(str(screen)).query).get("cut")
+        if q and q[0]:
+            return q[0]
+    return export.screen_name(screen)
+
+
 def check_screen(screen: str | Path, out_dir: Path, layout: dict, at: list[float] | None) -> dict:
-    cut = export.screen_name(screen)
+    cut = cut_of(screen)
     times = times_for(cut, layout, at)
     chk = layout["check"]
     cfg = {"w": layout["stage"]["w"], "h": layout["stage"]["h"],

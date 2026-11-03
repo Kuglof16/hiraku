@@ -152,6 +152,39 @@ class RecorderInBrowser(unittest.TestCase):
         self.assertGreater(min(len(a), len(b)), 1000)
         self.assertLess(abs(len(a) - len(b)), 0.02 * 44100)
 
+    def test_low_cut_stage(self):
+        # sines through the chain with only the low cut on: the level change in dB
+        r = self.page.evaluate("""async () => {
+          const D = window.HirakuDSP;
+          const s = D.cloneSettings(D.PRESETS.raw);
+          s.hum.on = true;
+          const gain = async (f) => {
+            const n = 44100, x = new Float32Array(n);
+            for (let i = 0; i < n; i++) x[i] = 0.1 * Math.sin(2 * Math.PI * f * i / n);
+            const y = await D.renderChain(x, n, s, false);
+            let a = 0;
+            for (let i = n / 2; i < n; i++) a += y[i] * y[i];  // the second half, once the filters settle
+            return 20 * Math.log10(Math.sqrt(a / (n / 2)) / (0.1 / Math.SQRT2));
+          };
+          const out = {};
+          for (const f of [30, 50, 100, 150, 175, 325, 550, 575, 1000, 3000]) out[f] = await gain(f);
+          return out;
+        }""")
+        self.assertLess(r["30"], -40)
+        self.assertLess(r["50"], -40)    # mains: the highpass and the notch
+        self.assertLess(r["100"], -30)   # 2nd harmonic: the notch on the cutoff
+        self.assertLess(r["150"], -30)   # 3rd harmonic: the notch alone
+        for f in ("175", "325"):  # halfway between two notches: their skirts take about 0.5 dB
+            self.assertGreater(r[f], -0.6, f)
+        self.assertGreater(r["550"], -1)  # the 11th harmonic is past the default ten notches
+        for f in ("575", "1000", "3000"):
+            self.assertAlmostEqual(r[f], 0, delta=0.3, msg=f)
+
+    def test_old_settings_get_the_low_cut(self):
+        s = self.page.evaluate("() => window.HirakuDSP.completeSettings({hp: {on: true, freq: 80}})")
+        self.assertEqual(s["hum"], {"on": True, "cut": 100, "mains": 50, "harmonics": 10})
+        self.assertEqual(self.page.locator('#knobs .stage[data-stage="hum"] input[type=range]').count(), 3)
+
     def test_download_button(self):
         with self.page.expect_download() as dl:
             self.page.click("#exportOne")
@@ -346,7 +379,8 @@ class ServedPageInBrowser(unittest.TestCase):
         cls.s = ServedWork()
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(args=ARGS)
-        cls.page = cls.browser.new_page()
+        cls.context = cls.browser.new_context()
+        cls.page = cls.context.new_page()
         cls.errors = []
         cls.page.on("pageerror", lambda e: cls.errors.append(str(e)))
         cls.page.goto(f"http://127.0.0.1:{cls.s.port}/")
@@ -390,6 +424,17 @@ class ServedPageInBrowser(unittest.TestCase):
         self.assertIn("1/3", self.page.locator("#stOut").inner_text())
         self.assertIn("保存 ✓", self.page.locator("#list .row").first.inner_text())
         self.assertIn("voice/recorded に保存", self.page.locator("#exportInfo").inner_text())
+
+    def test_takes_come_back_after_a_reload(self):
+        # the raw take is kept in IndexedDB, so "save all" works again after the page reopens
+        page = self.context.new_page()  # the same storage as the page that recorded
+        try:
+            page.goto(f"http://127.0.0.1:{self.s.port}/")
+            page.evaluate("async () => { await window.hirakuRec.ready; }")
+            n = page.evaluate("() => (window.hirakuRec.state.takes['N00_1'] || []).length")
+            self.assertEqual(n, 1)
+        finally:
+            page.close()
 
     def test_no_page_errors(self):
         self.assertEqual(self.errors, [])

@@ -78,12 +78,13 @@
   /* N04 / N15 (js/cut_grid.js): sizes and colours from layout.json n04 / n15 (set inline) */
   .grid-header { position: absolute; box-sizing: border-box; overflow: hidden; white-space: nowrap; font-weight: 700; color: #1b1a17; }
   .grid-tile .layer { position: absolute; inset: 0; }
-  .grid-tile .pet { position: absolute; box-sizing: border-box; pointer-events: none; }
+  .grid-tile .pet { position: absolute; box-sizing: border-box; pointer-events: none; z-index: 2; }
   .n04-assembly { position: absolute; box-sizing: border-box; overflow: hidden; }
   .grid-tile .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
   .grid-tile .asm div { overflow: hidden; text-overflow: ellipsis; }
   .grid-tile .ok { color: #2f7d4f; }
   .grid-tile .miss { color: #c8402a; }
+  .grid-tile .mark.dim { color: #b9b3a5; }
   .grid-tile .rate { background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 1px 4px; }
   .grid-tile .tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-weight: 700; color: #1b1a17; background: rgba(251, 249, 244, 0.88); border: 1px solid #c9c3b6; border-radius: 4px; padding: 1px 5px; }
   .grid-tile .tag small { font-size: 1em; font-weight: 400; margin-left: 4px; font-family: Consolas, monospace; }
@@ -129,13 +130,14 @@
   .n17-head { flex: none; border-bottom: 2px solid #c9c3b6; padding-bottom: 0.5em; margin-bottom: 0.6em; }
   .n17-kicker { color: #5c5a54; }
   .n17-head h2 { margin: 0.1em 0 0.3em; font-weight: 700; line-height: 1.25; }
-  .n17-chips { display: flex; flex-wrap: wrap; gap: 0.3em 1.2em; font-weight: 700; }
+  .n17-chips { display: flex; flex-wrap: wrap; gap: 0.2em 0.9em; font-weight: 700; line-height: 1.25; margin-top: 0.15em; }
+  .n17-pale { opacity: 0.5; }
   .n17-page .ok { color: #2f7d4f; }
   .n17-page .miss { color: #c8402a; }
   .n17-page .wait { color: #8a857a; }
   .n17-body { flex: 1 1 0; min-height: 0; overflow: hidden; }
-  .n17-domain { margin-bottom: 0.7em; }
-  .n17-domain h3 { margin: 0 0 0.25em; font-size: 1em; font-weight: 700; }
+  .n17-domain { margin-bottom: 0.35em; }
+  .n17-domain h3 { margin: 0 0 0.15em; font-size: 1em; font-weight: 700; line-height: 1.28; }
   .n17-line { font-weight: 400; }
   .n17-group { margin: 0.2em 0 0.35em 1em; }
   .n17-group h4 { margin: 0 0 0.1em; font-size: 1em; font-weight: 400; color: #5c5a54; }
@@ -170,11 +172,99 @@
   .n02-pane .miss { color: #c8402a; }
   .n03-reading { font-weight: 700; line-height: 1.1; white-space: nowrap; color: #1b1a17; }
   .n07-label .fixed { font-weight: 700; }
-  /* N16's list in a narrow column: the checks on their own line under the step's name */
-  .n16-steps .asm-steps.compact .nm { max-width: calc(100% - 2em); }
-  .n16-steps .asm-steps.compact .cks { float: none; display: flex; margin-left: 1.8em; }
+  /* N16's column: what the checks found (each on its own lines), then the step shown */
+  .n16-steps .n16-total { font-weight: 700; color: #1b1a17; }
+  .n16-steps .n16-sum { line-height: 1.3; color: #1b1a17; }
+  .n16-steps .n16-sum span { display: block; margin-left: 1.2em; font-weight: 700; }
+  .n16-steps .n16-soft { color: #8a857a; line-height: 1.35; }
+  .n16-steps .n16-now { margin-top: 1.2em; padding-top: 0.6em; border-top: 1px solid #c9c3b6; line-height: 1.3; color: #1b1a17; }
+  .n16-steps .n16-now-found { font-weight: 700; }
   .n17-change { display: block; font-weight: 700; line-height: 1.2; margin: 0.1em 0; color: #1b1a17; }
   .grid-header .num { font-weight: 700; }
+  /* N09 (js/cut_n09.js) and N14 (js/cut_n14.js): boxes, sizes and colours from layout.json n09 / n14 (set inline) */
+  .n09-request, .n09-view, .n14-knowledge, .n14-view, .n14-ask { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 12px; }
+  .n09-view canvas, .n14-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n09-view .none, .n14-view .none, .n14-ask .none { position: absolute; left: 16px; bottom: 12px; margin: 0; color: #a8a49a; }
+  .n09-request { display: flex; align-items: center; gap: 24px; padding: 0 16px; }
+  .n09-request .who { flex: none; color: #5c5a54; font-weight: 700; white-space: nowrap; }
+  .n09-request .want { margin: 0; font-weight: 700; line-height: 1.3; color: #1b1a17; }
+  .n09-chips { position: absolute; box-sizing: border-box; }
+  .n09-chip { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 2px solid; border-radius: 10px; padding: 0 16px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; color: #b9b3a5; }
+  .n09-chip .name { font-weight: 700; line-height: 1.1; white-space: nowrap; }
+  .n09-chip .line { line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .n09-chip[data-state="lit"] { color: #1b1a17; border-color: #d9861c !important; background: #fff3dc !important; box-shadow: 0 0 0 3px rgba(217, 134, 28, 0.25); }
+  .n09-chip[data-state="lit"] .line { color: #5c5a54; }
+  .n09-chip[data-state="pale"] { color: #a8a49a; }
+  .n14-knowledge { line-height: 1.35; color: #1b1a17; }
+  .n14-knowledge h3 { margin: 0 0 0.4em; font-weight: 700; line-height: 1.2; }
+  .n14-knowledge p { margin: 0 0 0.4em; }
+  .n14-knowledge .base { color: #5c5a54; }
+  .n14-knowledge .file { margin: 0.5em 0 0.7em; padding: 0.4em 0.7em; border: 2px dashed #8a857a; border-radius: 8px; background: #fff; }
+  .n14-knowledge .file .name { display: block; font-family: Consolas, monospace; font-weight: 700; }
+  .n14-knowledge .file .said { display: block; color: #5c5a54; }
+  .n14-knowledge .head { font-weight: 700; margin-top: 0.3em; }
+  .n14-knowledge .head .num { color: #b0650c; }
+  .n14-knowledge .skip-head { color: #8a857a; font-weight: 400; }
+  .n14-knowledge ul { list-style: none; margin: 0 0 0.5em; padding: 0; }
+  .n14-knowledge .rules li { padding: 0.1em 0.3em 0.1em 1.4em; border-radius: 6px; position: relative; }
+  .n14-knowledge .rules li .mark { position: absolute; left: 0.3em; font-weight: 700; }
+  .n14-knowledge .rules li[data-hit="1"] { color: #c8402a; font-weight: 700; background: rgba(200, 64, 42, 0.08); }
+  .n14-knowledge .skipped li { color: #8a857a; padding-left: 0.6em; margin-bottom: 0.2em; }
+  .n14-knowledge .skipped small { display: block; font-size: 1em; padding-left: 1em; }
+  .n14-knowledge .skipped small::before { content: "→ "; }
+  .n14-tag { position: absolute; white-space: nowrap; font-weight: 700; color: #c8402a; background: rgba(251, 249, 244, 0.92); border: 2px solid; border-radius: 8px; padding: 2px 10px; }
+  .n14-ask { border: 2px solid; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .n14-ask .who { color: #5c5a54; line-height: 1.1; }
+  .n14-ask .q { margin: 0; font-weight: 700; line-height: 1.35; color: #1b1a17; }
+  /* N11 / N12 / N13 (js/cut_n11.js .. cut_n13.js, panels from js/cut_panels.js): boxes, sizes and colours from layout.json (set inline) */
+  .cut-panel { position: absolute; box-sizing: border-box; overflow: hidden; padding: 16px 22px; line-height: 1.3; }
+  .cut-panel .cut-title { position: relative; z-index: 1; margin: 0 0 0.45em; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+  .cut-panel p { margin: 0; }
+  .cut-panel .mark { font-weight: 700; }
+  .n11-result canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n11-setting { position: absolute; left: 22px; bottom: 16px; z-index: 1; font-weight: 700; white-space: nowrap; background: rgba(251, 249, 244, 0.9); border: 1.5px solid #c8402a; border-radius: 6px; padding: 2px 10px; }
+  .n11-lines p { margin-bottom: 0.3em; }
+  .n11-what { font-weight: 700; }
+  .n11-in { display: flex; justify-content: space-between; gap: 1em; white-space: nowrap; }
+  .n11-in span:last-child { font-family: Consolas, monospace; }
+  .n11-value { margin-top: 0.5em; padding-top: 0.4em; border-top: 2px solid #c9c3b6; font-weight: 700; white-space: nowrap; }
+  .n11-log p { margin-bottom: 0.55em; white-space: nowrap; }
+  .n11-log p[data-step="stop"] { color: #c8402a; }
+  .n11-log p[data-step="run"] { color: #2f7d4f; }
+  .n12-table.cut-panel { display: flex; flex-direction: column; }
+  .n12-cols { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 0.4em; min-height: 0; }
+  .n12-col { display: flex; flex-direction: column; justify-content: center; border: 1.5px solid #c9c3b6; border-radius: 10px; padding: 14px 28px; box-sizing: border-box; }
+  .n12-col p { color: #5c5a54; white-space: nowrap; }
+  .n12-num { display: block; margin-top: 0.15em; font-family: Consolas, monospace; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+  .n12-again, .n12-pad { display: block; font-size: 1em; color: #5c5a54; white-space: nowrap; min-height: 1.3em; }
+  .n12-diff { flex: none; margin-top: 0.6em; white-space: nowrap; }
+  .n12-diff .mark { margin-left: 0.6em; }
+  .n12-why, .n12-fix { white-space: nowrap; }
+  .n12-fix { margin-top: 0.3em; }
+  .n13-want { white-space: nowrap; font-weight: 700; }
+  .n13-want.cut-panel { display: flex; align-items: center; padding-top: 0; padding-bottom: 0; }
+  .n13-cards { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 18px; margin: 0.4em 0 0.8em; }
+  .n13-card { position: relative; display: block; flex: none; box-sizing: border-box; border: 3px solid #b9b3a5; border-radius: 10px; background: #ece7dc; overflow: hidden; }
+  .n13-card.new { border: 3px dashed #c8402a; background: transparent; }
+  .n13-card.new[data-state="solid"] { border-color: #2f7d4f; }
+  .n13-card b { display: none; }
+  .n13-card.new b { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(47, 125, 79, 0.35); }
+  .n13-gap, .n13-made { white-space: nowrap; }
+  .n13-newwrap { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .n13-tag { white-space: nowrap; font-weight: 700; line-height: 1.2; background: #fbf9f4; border: 2px solid; border-radius: 6px; padding: 2px 10px; }
+  .n13-made { color: #2f7d4f; font-weight: 700; }
+  .n13-use p { white-space: nowrap; }
+  .n13-use-head { font-weight: 700; margin-bottom: 0.6em; }
+  .n13-use-num b { font-family: Consolas, monospace; line-height: 1.15; }
+  .n13-use-verdict { margin-top: 0.6em; font-weight: 700; }
+  .n13-code-head { color: #5c5a54; margin-bottom: 0.3em; }
+  .n13-lines { margin: 0; font-family: Consolas, monospace; line-height: 1.25; white-space: pre; overflow: hidden; color: #3b3934; }
+  .n13-caret { display: inline-block; width: 10px; height: 20px; background: #2b59c3; }
+  .n13-row { margin-bottom: 0.35em; }
+  .n13-row-name .mark { font-size: 1.25em; line-height: 1; }
+  .n13-row-name { display: flex; justify-content: space-between; gap: 0.6em; white-space: nowrap; font-weight: 700; }
+  .n13-row-val { white-space: nowrap; font-family: Consolas, monospace; }
+  .n13-src { white-space: nowrap; color: #5c5a54; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>

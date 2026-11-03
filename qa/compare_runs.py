@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from hiraku.contract import layout
+from qa import procs
 
 ROOT = Path(__file__).resolve().parents[1]
 MASKED = {"ts", "created_at", "wall_time_s", "run_id", "cost_usd"}
@@ -313,18 +314,22 @@ def compare(a: Path, b: Path, rel: float = 0.0, max_per_file: int = 20) -> Repor
 
 
 # --- scripted runs -------------------------------------------------------------------
-def scripted_run(requirements: Path, runs: Path, design: Path | None = None) -> Path:
-    """python -m hiraku run REQUIREMENTS --scripted --runs RUNS (without the API key); the new run folder."""
+def scripted_run(requirements: Path, runs: Path, design: Path | None = None, timeout: float | None = None) -> Path:
+    """python -m hiraku run REQUIREMENTS --scripted --runs RUNS (without the API key); the new run folder.
+    With timeout (s), a run still going then is stopped with everything it started (RuntimeError)."""
     requirements, runs = requirements.resolve(), runs.resolve()
     design = design.resolve() if design else None
     runs.mkdir(parents=True, exist_ok=True)
     before = {p.name for p in runs.iterdir()}
-    env = dict(os.environ, PYTHONUTF8="1")
+    env = procs.one_blas_thread(dict(os.environ, PYTHONUTF8="1"))
     env.pop("ANTHROPIC_API_KEY", None)
     cmd = [sys.executable, "-m", "hiraku", "run", str(requirements), "--scripted", "--runs", str(runs)]
     if design:
         cmd += ["--design", str(design)]
-    proc = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        proc = procs.run(cmd, cwd=ROOT, env=env, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"no run within {timeout:g} s (stopped): {requirements.name}\n{(e.stderr or '')[-1500:]}") from None
     new = sorted(p for p in runs.iterdir() if p.is_dir() and p.name not in before)
     if len(new) != 1:
         raise RuntimeError(f"expected one new run folder in {runs}, got {len(new)} (exit {proc.returncode})\n"

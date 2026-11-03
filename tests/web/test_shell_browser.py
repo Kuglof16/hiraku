@@ -29,6 +29,7 @@ def n07_layout():
         "view": {"x": 96, "y": 96, "w": 1500, "h": 790},
         "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20},
         "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08},
+        "ring": {"of_view_h": 0.08},
         "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0},
         "turn_deg": 90,
         "zoom": {"fill": 0.45},
@@ -255,7 +256,8 @@ class ShellBrowserTest(unittest.TestCase):
                    before: Number(b.el.style.opacity), after: Number(a.el.style.opacity), version: document.documentElement.dataset.n07Version,
                    label: document.querySelector('[data-box="n07.label"]').textContent,
                    text: document.getElementById("stage").innerText,
-                   mark: Number(c.mark.style.opacity) }; }"""
+                   mark: Number(c.mark.style.opacity), markW: parseFloat(c.mark.style.width), tone: c.mark.dataset.tone,
+                   wheels: b.view.wheels.visible }; }"""
         times = (0, T["lead_s"], (T["lead_s"] + T["turn_to_s"]) / 2, T["turn_to_s"], T["zoom_to_s"], T["swap_s"], (T["swap_s"] + T["swap_to_s"]) / 2, T["swap_to_s"], sp["duration_s"])
         at = {t: page.evaluate(js, t) for t in times}
         self.assertEqual(errors, [])
@@ -271,8 +273,18 @@ class ShellBrowserTest(unittest.TestCase):
         # the zoom: from turn_to_s to zoom_to_s; there the neighbourhood takes zoom.fill of the height
         self.assertLess(at[T["zoom_to_s"]]["dist"], at[T["turn_to_s"]]["dist"] / 3)
         self.assertAlmostEqual(at[T["zoom_to_s"]]["fill"], sp["zoom"]["fill"], places=6)
-        self.assertEqual(at[T["turn_to_s"]]["mark"], 0)
-        self.assertEqual(at[T["zoom_to_s"]]["mark"], 1)
+        # the ring round the largest element: hidden before lead_s, small while the vehicle
+        # turns (it shows where the weak spot is), as wide as zoom.fill of the view's height
+        # once zoomed in; the wheels are left out close in (the near tyre would hide the joint)
+        inner_h = sp["view"]["h"] - 4
+        self.assertEqual(at[0]["mark"], 0)
+        self.assertEqual(at[T["turn_to_s"]]["mark"], 1)
+        self.assertAlmostEqual(at[T["turn_to_s"]]["markW"], sp["ring"]["of_view_h"] * inner_h, places=3)  # far: ring.of_view_h
+        self.assertAlmostEqual(at[T["zoom_to_s"]]["markW"], sp["zoom"]["fill"] * inner_h, places=3)
+        self.assertTrue(at[T["turn_to_s"]]["wheels"])
+        self.assertFalse(at[T["zoom_to_s"]]["wheels"])
+        # red on the version before; this run has no verdict on the version after, so it stays red
+        self.assertEqual({at[t]["tone"] for t in times if t >= T["lead_s"]}, {"red"})
         # the swap: the version after fades in between swap_s and swap_to_s, same camera, and stays
         self.assertEqual((at[T["swap_s"]]["after"], at[T["swap_s"]]["label"]), (0, "補強の前"))
         mid = at[(T["swap_s"] + T["swap_to_s"]) / 2]
@@ -284,15 +296,16 @@ class ShellBrowserTest(unittest.TestCase):
         for t in times:
             for word in ("梁", "シェル"):
                 self.assertNotIn(word, at[t]["text"], t)
-        # one scale for both versions; each version's maximum as recorded
+        # one scale for both versions; the legend is the stress's name and the allowable only
         got = page.evaluate(
             """() => { const c = window.hiraku.cut; const lg = document.querySelector('[data-box="n07.legend"]');
                 return { scales: c.cases.map((x) => [x.ct.min, x.ct.max]), title: lg.querySelector("h3").textContent,
-                         rows: [...lg.querySelectorAll(".row")].map((r) => [...r.children].map((x) => x.textContent)) }; }"""
+                         text: lg.innerText.split("\\n").map((s) => s.trim()).filter(Boolean) }; }"""
         )
         self.assertEqual(got["scales"][0], got["scales"][1])
         self.assertEqual(got["title"], "応力 [MPa]")
-        self.assertEqual(got["rows"], [[name, f"最大 {sig4(self.shells[v]['results'][0]['value'])} MPa"] for name, v in (("補強の前", 1), ("補強の後", 2))])
+        limit = self.events[0]["data"]["load_cases"][0]["criterion"]["limit"]["value"]
+        self.assertEqual(got["text"], ["応力 [MPa]", f"許容 {sig4(limit)}"])
         page.close()
 
     def test_n07_boxes_stay_out_of_the_subtitle_band(self):
@@ -321,6 +334,20 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertTrue(V[0] <= lb[0] and lb[2] <= V[2] and V[1] <= lb[1] and lb[3] <= V[3])
         self.assertLessEqual(got["boxes"]["n07.view"][2], got["boxes"]["n07.legend"][0])
         page.close()
+
+    def test_n07_names_the_missing_ring_size(self):
+        """Without ring.of_view_h (the ring's size while far) the page names it and draws nothing."""
+        layout = n07_layout()
+        del layout["n07"]["ring"]
+        self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
+        try:
+            page, errors = self.cut(0)
+            err = page.evaluate("() => document.querySelector('.err')?.textContent ?? null")
+            self.assertIn("layout.json の n07 に無い: ring.of_view_h", err)
+            self.assertEqual(page.evaluate("() => document.querySelectorAll('.n07-view').length"), 0)
+            page.close()
+        finally:
+            self.layout_file.write_text(json.dumps(n07_layout()), encoding="utf-8")
 
     def test_n07_names_the_missing_keys(self):
         layout = n07_layout()

@@ -894,10 +894,10 @@ class BrowserReplayTest(unittest.TestCase):
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
     def test_a_going_run_started_elsewhere_takes_the_answer_and_the_drop(self):
-        """A run this screen did not start (a Claude Code plugin run holding its plugin.lock),
+        """A run this screen did not start (a Claude Code plugin run with a fresh plugin.alive),
         followed live while its record says running: A2 can answer and A5 can take a file,
         and there is no stop button (stopping stays with the run started here)."""
-        from hiraku.webserve.launch import PLUGIN_LOCK_FILE, Launcher
+        from hiraku.webserve.launch import PLUGIN_ALIVE_FILE, Launcher
 
         tmp = Path(tempfile.mkdtemp())
         run_id = "20261103-160000-plugin-run"
@@ -913,7 +913,7 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         (run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         (run / "project.json").write_text(json.dumps({**events[0]["data"], "status": "running", "driver": "claude_code_plugin"}), encoding="utf-8")
-        (run / PLUGIN_LOCK_FILE).write_bytes(b"")
+        (run / PLUGIN_ALIVE_FILE).write_bytes(b"")  # touched now: younger than PLUGIN_ALIVE_S for the test's few seconds
         lau = Launcher(tmp / "runs", tmp / "requirements", env={}, demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
