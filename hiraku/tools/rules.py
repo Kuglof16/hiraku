@@ -126,12 +126,38 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     return "done", None, "done"
 
 
-def stop_reason(ctx: RunContext) -> str | None:
-    """HK4: why the run may not stop yet (None when every picked domain is judged)."""
+def red_left_reason(ctx: RunContext) -> str | None:
+    """Why the lead may not stop yet although every picked domain is judged: a tile is red and design
+    revisions are left (version - 1 < round_limit). Names the red domains, their failing verdicts
+    (ver-...), the revisions left and what to do next. None when no tile is red, no revision is
+    left, or a picked domain is still pending (stop_reason says that)."""
+    if not ctx.version or pending(ctx):
+        return None
+    limit = ctx.project["round_limit"]
+    left = limit - (ctx.version - 1)
+    reds = [j for j in ctx.store.judgements() if j["state"] == "red" and j["domain"] in ctx.picked]
+    if not reds or left <= 0:
+        return None
+    verdicts = latest_verdicts(ctx, ctx.version)
+    parts, ids = [], []
+    for j in reds:
+        failed = [v for v in verdicts.values() if v["domain"] == j["domain"] and not v["pass"]]
+        ids += [v["verdict_id"] for v in failed]
+        what = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in failed) or j["summary"]
+        parts.append(f"{_ja(j['domain'])}: {what}")
+    hand = f"と合否の ID ({', '.join(ids)}) " if ids else " "
+    return (f"赤の分野が残っていますが、設計の直しがあと {left} 回できます (round_limit {limit}、今の版 {ctx.version})。"
+            f"{' / '.join(parts)}。設計役 (designer) に、通らなかった試験{hand}を渡して、revise_design で"
+            f"次の版 (版 {ctx.version + 1}) を作らせてください。新しい版で全部の荷重条件をやり直します")
+
+
+def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
+    """HK4: why the run may not stop yet (None when every picked domain is judged). With domain,
+    only that domain's pending load cases and open mismatches (a role's own stop)."""
     if not ctx.version:
         return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
                 "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
-    left = pending(ctx)
+    left = [(d, lcs) for d, lcs in pending(ctx) if domain is None or d == domain]
     if not left:
         return None
     parts = []
@@ -144,7 +170,7 @@ def stop_reason(ctx: RunContext) -> str | None:
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
             steps.append(f"{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")
-    open_ = ctx.open_mismatches()
+    open_ = ctx.open_mismatches(domain)
     tail = ""
     if open_:
         tail = f" 原因の書かれていない食い違い {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"

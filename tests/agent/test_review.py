@@ -110,6 +110,11 @@ class FailingChecksTest(ReviewCase, unittest.TestCase):
         self.assertFalse(f.ok)
         self.assertIn("1 blocked stops (lead 1); stop_code not_judged", f.detail)
 
+    def test_hk4_red_left_is_judged(self):
+        self.rewrite_events(lambda e: dict(e, data=dict(e["data"], stop_code="red_left"))
+                            if e["kind"] == "run.finished" else e)
+        self.assertTrue(self.review()["HK4 blocked stops and the final stop_code"].ok)
+
     def test_a_load_case_without_a_verdict(self):
         verdicts = self.ctx.store.records("verdict", self.v)
         gone = next(v for v in verdicts if v["load_case_id"] == "R1-step100")

@@ -164,11 +164,14 @@ def error_text(ctx: RunContext, result: Any) -> str:
     return (getattr(result, "subtype", None) or "error") + tail
 
 
-def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tuple[str, str | None, str]:
-    """(status, stop_reason, stop_code) of a Claude run from its last result message."""
+def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None,
+                 budget_usd: float | None = None) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a Claude run from its last result message. budget_usd:
+    the max_budget_usd the run was given (build_options; None: the project's cost_limit_usd)."""
     subtype = getattr(result, "subtype", None)
     if subtype == "error_max_budget_usd":
-        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached", "cost_limit"
+        budget = ctx.project["cost_limit_usd"] if budget_usd is None else budget_usd
+        return "stopped", f"cost limit {budget} USD reached", "cost_limit"
     if subtype == "error_max_turns":
         return "stopped", "turn limit reached", "turn_limit"
     if result is None or getattr(result, "is_error", False):
@@ -179,12 +182,16 @@ def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tu
 def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
     """(status, stop_reason, stop_code) of a run whose lead has stopped, Claude having reported
     no error or limit: not_judged while a picked domain is pending (blocks: how many stops HK4
-    turned down first), else rules.judged_end. Shared with the plugin (hiraku.agent.plugin)."""
+    turned down first); red_left when a tile is red and design revisions are left (the Stop hook
+    let the stop through at its cap); else rules.judged_end. Shared with the plugin
+    (hiraku.agent.plugin); the scripted driver keeps rules.judged_end."""
+    after = f" (止めるのを {blocks} 回断ったあと、上限で終了)" if blocks else ""
     left = rules.stop_reason(ctx)
     if left:
-        why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
-               if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
-        return "stopped", why + left, "not_judged"
+        return "stopped", f"まとめ役が、判定の付いていない分野を残して止まりました{after}。" + left, "not_judged"
+    red = rules.red_left_reason(ctx)
+    if red:
+        return "stopped", f"まとめ役が、設計の直しの回数を残したまま、赤の分野を残して止まりました{after}。" + red, "red_left"
     return rules.judged_end(ctx)
 
 
@@ -194,7 +201,8 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     Roles run in the foreground (FOREGROUND_ROLES_ENV), so the lead's turn normally outlasts
     them. Should a role still be at work when the lead's turn ends, the reading goes on (the
     roles are not cut off), and when the last role stops while the lead is idle, the lead is
-    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
+    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S; after MAX_WAKES
+    wake-ups the reading ends there instead (no turn would come).
     The stop button (stop.request, checked every STOP_POLL_S) interrupts the CLI; the
     hooks deny every tool from then on, and the reading ends within STOP_GRACE_S.
     The inbox (hiraku.agent.inbox) is read at the same times: its events are emitted
@@ -205,20 +213,27 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
 
     state = {"idle": False, "wakes": 0}
     loop = asyncio.get_running_loop()
+    main = asyncio.current_task()
+    cut = {"done": False}  # the reading was cut on purpose (stop button, no wake-up left): an ordinary end
 
     async def wake() -> None:
         await asyncio.sleep(WAKE_GRACE_S)
-        if state["idle"] and not hooks.running and state["wakes"] < MAX_WAKES:
+        if not state["idle"] or hooks.running:
+            return
+        if state["wakes"] < MAX_WAKES:
             state["wakes"] += 1
             state["idle"] = False
             await client.query(WAKE_TEXT)
+            return
+        # MAX_WAKES used up: nothing will start another turn of the lead's, so the reading ends here
+        ctx.store.emit("agent.said", agent="system",
+                       text=f"まとめ役を起こす回数の上限 ({MAX_WAKES} 回) に達したので、実行を終えます")
+        cut["done"] = True
+        main.cancel()
 
     def roles_done() -> None:
         if state["idle"]:
             loop.create_task(wake())
-
-    main = asyncio.current_task()
-    cut = {"done": False}
 
     async def watch_stop() -> None:
         while not hooks.stopping():
@@ -255,7 +270,7 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     except asyncio.CancelledError:
         if not cut["done"]:
             raise  # Ctrl+C
-        main.uncancel()  # the stop button cut the reading: an ordinary end
+        main.uncancel()  # the stop button or the wake limit cut the reading: an ordinary end
     finally:
         watcher.cancel()
 
@@ -306,6 +321,6 @@ async def run_with_claude(ctx: RunContext, *, model: str | None = None, effort: 
         close("stopped", STOPPED_BY_BUTTON, "user_stop")
         ctx.store.clear_stop_request()
         return "stopped"
-    status, reason, code = final_status(ctx, log.result, hooks)
+    status, reason, code = final_status(ctx, log.result, hooks, options.max_budget_usd)
     close(status, reason, code)
     return status

@@ -27,7 +27,8 @@ N12_KEY = "Q41"  # the requirement N12 writes in the wrong unit (offroad-4w-n12.
 N12_TEST = "S1"
 UNIT_WORDS = (("cm", "mm"), ("単位",))  # a cause names the unit mistake when it has every word of one group
 REPEATED_DENIAL = 2  # the same rule denying the same agent in the same domain this often: the reason was not read
-JUDGED_STOP_CODES = ("done", "round_limit")  # every tile judged (round_limit: judged, a red one left)
+# every tile judged (round_limit: judged, a red one left; red_left: judged, a red one left with revisions left)
+JUDGED_STOP_CODES = ("done", "round_limit", "red_left")
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ def _denials(r: RunRecord, rule: str, name: str, progress: str) -> Finding:
 def check_hk4_stops(r: RunRecord) -> Finding:
     """HK4 (stopping before every picked domain is judged). A weaker model ends its turn with domains
     left; each blocked stop is a hook.blocked_stop, and when the blocks run out the run finishes with
-    stop_code not_judged. ok when the run finished with every tile judged (done or round_limit)."""
+    stop_code not_judged. ok when the run finished with every tile judged (done, round_limit or red_left)."""
     blocked = r.of_kind("hook.blocked_stop")
     by = Counter(e.get("agent") or "?" for e in blocked)
     fin = r.finished()
