@@ -619,6 +619,29 @@ class MeshTest(RunCase, unittest.TestCase):
         self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
         self.assert_events_fit()
 
+    def test_a_tool_with_make_mesh_gets_its_own_mesh_once_per_version(self):
+        """Contract 3950ac7: make_mesh(design) instead of frame_mesh, mesher = the tool's name, made once per
+        version and mesher, recorded before the analysis; frame_mesh's mesh of the version is another one."""
+        tool = self.tools["step_climb"]
+        tool.needs_mesh = True
+        own = []
+        tool.make_mesh = lambda design: own.append(1) or self.mesh_of(design)
+        with mock.patch.object(self.solvers, "frame_mesh", mock.Mock(side_effect=AssertionError("not frame_mesh")),
+                               create=True):
+            self.analyze_p1()
+            self.analyze_p1()
+        self.assertEqual(own, [1])
+        (mesh,) = self.ctx.store.records("mesh", 1)
+        self.assertEqual((mesh["mesher"], mesh["mesh_id"]), ("step_climb", "mesh-0001"))
+        self.assertEqual([r[3]["mesh"]["mesh_id"] for r in tool.runs], ["mesh-0001"] * 2)
+        kinds = self.kinds()
+        self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
+        del tool.make_mesh  # a frame_mesh tool on the same version gets its own (another mesher)
+        with mock.patch.object(self.solvers, "frame_mesh", self.mesh_of, create=True):
+            self.analyze_p1()
+        self.assertEqual([m["mesher"] for m in self.ctx.store.records("mesh", 1)], ["step_climb", "frame_mesh"])
+        self.assert_events_fit()
+
     def test_a_tool_without_needs_mesh_gets_none(self):
         with mock.patch.object(self.solvers,"frame_mesh", mock.Mock(side_effect=AssertionError), create=True):
             self.analyze_p1()

@@ -430,19 +430,29 @@ def trusted_analysis(ctx: RunContext, load_case_id: str) -> Record | None:
 _MESH_LOCK = threading.Lock()  # roles analyse side by side (the MCP calls run in threads)
 
 
-def version_mesh(ctx: RunContext, version: int, agent: str) -> Record:
-    """The shell mesh of a design version: the one already recorded, else made once from the
-    design by hiraku.solvers.frame_mesh and recorded (mesh-NNNN.json, mesh.created)."""
+FRAME_MESHER = "frame_mesh"  # the version's shell mesh of hiraku.solvers.frame_mesh; a mesh without mesher is one
+
+
+def version_mesh(ctx: RunContext, version: int, agent: str, tool: Any = None) -> Record:
+    """The mesh of a design version for a tool (docs/contract.md: one per version and mesher): the one
+    already recorded by that mesher, else made once and recorded (mesh-NNNN.json, mesh.created). The
+    mesher is the tool's own make_mesh(design) when it has one (mesher = the tool's name), else
+    hiraku.solvers.frame_mesh."""
+    own = getattr(tool, "make_mesh", None)
+    mesher = getattr(tool, "name", None) if own is not None else FRAME_MESHER
     with _MESH_LOCK:
-        have = ctx.store.records("mesh", version)
+        have = [m for m in ctx.store.records("mesh", version) if m.get("mesher", FRAME_MESHER) == mesher]
         if have:
             return have[-1]
-        solvers = importlib.import_module("hiraku.solvers")
-
-        if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
-            raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
-        mesh = {**solvers.frame_mesh(ctx.store.design(version)), "mesh_id": ctx.store.next_id("mesh"),
-                "design_version": version}
+        design = ctx.store.design(version)
+        if own is not None:
+            made = own(design)
+        else:
+            solvers = importlib.import_module("hiraku.solvers")
+            if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
+                raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
+            made = solvers.frame_mesh(design)
+        mesh = {**made, "mesher": mesher, "mesh_id": ctx.store.next_id("mesh"), "design_version": version}
         return ctx.store.add_record("mesh", mesh, design_version=version, agent=agent)
 
 
@@ -472,7 +482,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     mesh, mesh_error = None, None
     if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
         try:
-            mesh = version_mesh(ctx, v, agent)
+            mesh = version_mesh(ctx, v, agent, ctx.tools[name])
         except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
             mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     analysis_id = ctx.store.next_id("analysis")
