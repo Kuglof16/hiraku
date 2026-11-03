@@ -21,7 +21,7 @@
 // Nothing is coloured by hand: a last version that is not all green stays as it is.
 
 import * as THREE from "three";
-import { clearOfBand, squeeze } from "./compose.js";
+import { clearOfBand } from "./compose.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { esc } from "./labels.js";
 import { channelsOf, motionOf, xSeriesOf } from "./series.js";
@@ -30,6 +30,7 @@ import { VIEWS, cutView } from "./workbench3d.js";
 import { cutLookOf } from "./look.js";
 import { FEATURE_KEYS, listRects, storyOf } from "./cut_n03.js";
 import { TilePets, loadPets, missingPetKeys } from "./cut_pets.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -663,9 +664,13 @@ export class CutGrid {
       const mark = layer.el.querySelector(".mark");
       if (mark) mark.classList.toggle("dim", this.name === "n04" && !hot);
       if (!gridShown || !layer.view) continue;
-      // the record plays from lead_s to the grid's end, squeezed to fit
-      const tau = layer.span ? squeeze(t, T.lead_s, end, layer.span[0], layer.span[1]).tau : 0;
-      if (layer.motion) layer.view.setFrame(layer.motion.frame(tau));
+      // the record plays from lead_s to the grid's end, squeezed to fit and paced (pace.js) so
+      // nothing turns faster than 90 deg/s on the screen
+      if (layer.motion) {
+        layer.pace ??= pacer([{ motion: layer.motion, view: layer.view }], end - T.lead_s, PACE_LIMIT_DEG_S);
+        const share = (t - T.lead_s) / Math.max(1e-9, end - T.lead_s);
+        layer.view.setFrame(layer.motion.frame(layer.motion.t0 + layer.pace(share)));
+      }
       layer.view.animate(t, false); // a mode shape swings with the stage clock
       layer.view.renderInto(layer.canvas.getContext("2d"), layer.canvas.width, layer.canvas.height, this.scale);
     }

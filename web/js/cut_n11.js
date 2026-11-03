@@ -6,8 +6,9 @@
 // - result: the analysis's load case (its title), from times.plausible_s the vehicle on the
 //   test in 3D, still, with the setting that came from the request as written (a load-case
 //   parameter equal to a requirement, by its name: "荷の重心の高さ (荷台の床から) 62 mm");
-//   from times.run_s the record's motion plays, squeezed, to the end. No value of the
-//   analysis is shown (the comparison is N12's).
+//   from times.run_s the record's motion plays to the end, paced (pace.js) so the tilting
+//   and the tipping never turn faster than 90 deg/s on the screen. No value of the analysis
+//   is shown (the comparison is N12's).
 // - memo: the hand calculation, written line by line from times.memo_s to times.stop_s:
 //   what it estimates and the prediction's inputs in words (an input without a name in
 //   labels.js formulaInputName is left out). The predicted value comes when it is recorded.
@@ -20,10 +21,10 @@
 // key is named on the page.
 
 import * as THREE from "three";
-import { squeeze } from "./compose.js";
 import { requireKeys, storyOf } from "./cut_n03.js";
 import { GREEN, PANEL_BORDER_PX, RED, panel, requestedSetting, showFrom, spread, textPx } from "./cut_panels.js";
 import { esc, fmtVU, formulaInputName, quantityName, ruleOf } from "./labels.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 import { motionOf } from "./series.js";
 import { VIEWS, cutView } from "./workbench3d.js";
 
@@ -125,6 +126,7 @@ export class CutN11 {
     const pts = v.contentPoints();
     for (const o of v.sceneDesc?.objects ?? []) if (o.size_mm) pts.push(new THREE.Vector3(o.position_mm[0], o.position_mm[1] - o.size_mm[1] / 2, o.position_mm[2]), new THREE.Vector3(o.position_mm[0], o.position_mm[1] + o.size_mm[1] / 2, o.position_mm[2]));
     v.fitPoints(pts, VIEWS[v.view ?? "default"], 1.1);
+    this.pace = pacer([{ motion: this.motion, view: v }], this.spec.duration_s - this.spec.times.run_s, PACE_LIMIT_DEG_S);
     return v;
   }
 
@@ -146,7 +148,7 @@ export class CutN11 {
     else delete this.canvas.dataset.kind;
     if (this.view && shown) {
       if (this.motion) {
-        const { tau } = squeeze(t, T.run_s, sp.duration_s, 0, this.motion.duration);
+        const tau = this.pace((t - T.run_s) / Math.max(1e-9, sp.duration_s - T.run_s));
         this.view.setFrame(this.motion.frame(Math.min(this.motion.t1, this.motion.t0 + tau)));
       }
       this.view.renderInto(this.canvas.getContext("2d"), this.canvas.width, this.canvas.height, this.scale);

@@ -20,8 +20,11 @@
 // representative of the others. The cut from times.tiles_s to its end is shared equally by
 // the turns; in its turn the record plays in the large box (from tile_in_s after the turn
 // starts to its end), then holds its end there until the next turn. In the list a tile holds
-// the record's first pose until its turn is over, then its last pose; its tag is hidden while
-// the large box shows it. So two things move at most: the large picture and a tile coming in.
+// the record's first pose until its turn, plays along with the large box in its turn (so it
+// does not jump from the first pose to the last when the turn ends), then holds its last pose;
+// its tag is hidden while the large box shows it. The record is paced (pace.js) so nothing
+// turns faster than 90 deg/s on the screen (a tip-over plays slower, the rest faster). So
+// three things move at most: the large picture, its tile in the list and a tile coming in.
 //
 // Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS).
 
@@ -33,6 +36,7 @@ import { AssemblyStage } from "./assembly.js";
 import { VIEWS, cutView } from "./workbench3d.js";
 import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
 import { tileContour } from "./cut_grid.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -506,7 +510,9 @@ export class CutN06 {
     if (!pane.view) return;
     if (pane.motion) {
       const m = pane.motion;
-      const tau = m.t0 + (m.t1 - m.t0) * u;
+      // paced over the play's stage time (pane.playS)
+      if (pane.playS && !pane.pace) pane.pace = pacer([{ motion: m, view: pane.view }], pane.playS, PACE_LIMIT_DEG_S);
+      const tau = m.t0 + (pane.pace ? pane.pace(u) : (m.t1 - m.t0) * u);
       pane.el.dataset.tau = String(tau);
       pane.view.setFrame(m.frame(tau));
     }
@@ -540,19 +546,22 @@ export class CutN06 {
       small.el.style.transform = `scale(${A.from_scale + (1 - A.from_scale) * e})`;
       small.el.style.visibility = p > 0 ? "visible" : "hidden";
       small.el.dataset.p = String(p);
-      if (p > 0 && p < 1) small.canvas.dataset.kind = "moving";
-      else delete small.canvas.dataset.kind;
       const now = t >= tile.turn.from && t < tile.turn.to;
+      small.playS = big.playS = tile.play.to - tile.play.from;
+      const u = share(tile.play.from, tile.play.to);
+      const plays = !!(big.motion || big.asm?.stage);
+      // the list's tile plays along with the large box in its turn
+      const along = now && plays && t >= tile.play.from && u < 1;
+      if ((p > 0 && p < 1) || along) small.canvas.dataset.kind = "moving";
+      else delete small.canvas.dataset.kind;
       small.el.dataset.featured = now ? "1" : "";
       small.el.style.borderColor = now ? sp.overlay.color : sp.colors.rule;
       small.label.style.visibility = now ? "hidden" : "";
-      if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : 0);
+      if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : now ? u : 0);
       // the large box: in its turn, the record plays, then holds its end
       big.el.style.visibility = now ? "visible" : "hidden";
       const q = easeIn(share(tile.turn.from, tile.turn.from + sp.times.tile_in_s));
       big.el.style.opacity = String(Math.min(1, q));
-      const u = share(tile.play.from, tile.play.to);
-      const plays = !!(big.motion || big.asm?.stage);
       if (now && (q < 1 || (plays && u < 1))) big.canvas.dataset.kind = "moving";
       else delete big.canvas.dataset.kind;
       if (now) this.pose(big, u);

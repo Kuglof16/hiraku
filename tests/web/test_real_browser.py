@@ -257,7 +257,7 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual(got["member"], {"type": "MeshPhysicalMaterial", "finish": "painted_steel", "clearcoat": 1})
         self.assertEqual(got["tyre"]["finish"], "rubber")
         self.assertTrue(got["tyre"]["normal"])
-        self.assertEqual(got["seat"]["finish"], "fabric")
+        self.assertEqual(got["seat"]["finish"], "vinyl")  # look.js MATERIAL_OF: a seat's cover
         self.assertGreater(got["seat"]["sheen"], 0)
         self.assertEqual(got["motor"]["finish"], "aluminium")
         self.assertEqual(got["battery"]["finish"], "resin")

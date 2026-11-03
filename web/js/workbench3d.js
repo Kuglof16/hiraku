@@ -476,7 +476,7 @@ export class Workbench3D {
     for (const m of design.members ?? []) {
       const g = memberGeometry(design, m, nodes);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material]?.name ?? null));
+      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
       mesh.castShadow = mesh.receiveShadow = this.look.real;
       mesh.matrixAutoUpdate = false;
@@ -568,8 +568,9 @@ export class Workbench3D {
         for (const m of [torso, ball]) m.castShadow = this.look.real;
         g.add(torso, ball);
       } else {
-        // The part's shape for its kind inside its box, or the box itself.
-        const pieces = partPieces(p, design) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
+        // The part's shape for its kind inside its box, or the box itself (its edges
+        // rounded in the real look only).
+        const pieces = partPieces(p, { round: this.look.real, design });
         const holder = new THREE.Group();
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
@@ -579,7 +580,7 @@ export class Workbench3D {
         for (const pc of pieces) pushEdges(lines, pc.geo, holder.matrix, 35);
         // one mesh per material (the pieces of the same sub merged)
         for (const pc of mergePieces(pieces)) {
-          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p.kind, pc.sub));
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p, pc.sub, design.materials ?? null));
           mesh.material.userData.sub = pc.sub;
           mesh.renderOrder = 2;
           mesh.castShadow = mesh.receiveShadow = this.look.real;
