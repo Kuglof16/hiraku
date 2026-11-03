@@ -277,10 +277,18 @@ def _verdict(r: dict) -> str:
     return f"FAILED ({', '.join(counts)})" if counts else "OK"
 
 
+def _utf8_out() -> None:
+    """stdout and stderr in utf-8: failure texts hold characters the console's code page (cp932) lacks."""
+    for stream in (sys.stdout, sys.stderr):
+        if callable(getattr(stream, "reconfigure", None)):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["--worker"]:
         return worker(Path(argv[1]), argv[2:])
+    _utf8_out()
     ap = argparse.ArgumentParser(prog="python -m qa.run_tests", description=__doc__.split("\n\n")[0])
     ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
