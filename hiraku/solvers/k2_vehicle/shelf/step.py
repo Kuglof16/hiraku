@@ -18,17 +18,20 @@ from .base import MOTOR, MU, K2Tool, P, Pair, _box, _half_width, _length, _res
 
 
 def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=None, ramp_s: float = 4.0,
-              run_up: float = 2.0, rec_hz: float = 0.0, after_s: float = 0.0, log: bool = False) -> dict:
+              run_up: float = 2.0, rec_hz: float = 0.0, after_s: float = 0.0, crawl: float | None = None,
+              log: bool = False) -> dict:
     """Quasi-static push: the stepping wheels stand 0.5 mm before the step corner and the
     drive torque grows slowly from zero until they leave the low ground.
 
     The forces are taken when the stepping wheel's road force is steepest (its ground
     contact has just unloaded), which is the lift-off of the rigid-wheel balance.
     run_up: the step for the dynamic run is placed this far further (m).
-    rec_hz > 0 records the push, and the body's loads (Sim.loads) every 10 ms in "states";
-    after_s goes on that long after the lift-off with the torque of the lift-off held, so the
-    record shows the wheels rolling onto the step. log: every step in a record.BodyLog
-    ("body_log", for replaying the sprung body elsewhere).
+    rec_hz > 0 records the push, and the body's loads (Sim.loads) every 10 ms in "states".
+    After the lift-off: with crawl (m/s) the speed controller holds that speed until every
+    wheel the step covers has its centre past the step's corner ("crossed": the time of each),
+    then after_s more (at most CRAWL_MAX_S; "stalled" when the body stands still for 2 s);
+    without crawl, after_s with the torque of the lift-off held. log: every step in a
+    record.BodyLog ("body_log", for replaying the sprung body elsewhere).
     """
     xs = max(float(veh.corners[i].pos[0]) for i in stepping)
     r = max(veh.corners[i].radius for i in stepping)
@@ -53,11 +56,12 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
     every = max(1, int(round(LOAD_EVERY_S / dt)))
     best, snap, lifted, slip = -1.0, None, False, False
 
-    def push(total: float) -> None:
-        drive = [0.0] * sim.n
-        for i in driven:
-            drive[i] = total / len(driven)
-        sim.step(controls(sim, 0.0, drive, [0.0] * sim.n))
+    def push(total: float, drive: list[float] | None = None, brake: list[float] | None = None) -> None:
+        if drive is None:
+            drive = [0.0] * sim.n
+            for i in driven:
+                drive[i] = total / len(driven)
+        sim.step(controls(sim, 0.0, drive, brake or [0.0] * sim.n))
         if body is not None:
             body.tick()
         if rec is not None:
@@ -88,14 +92,34 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
         if any(abs(sim.om[i]) * veh.corners[i].radius > 0.5 for i in driven) and sim.forward_speed() < 0.05:
             slip = True
             break
-    if lifted and after_s > 0.0:
+    crossed: dict[int, float] = {}
+    stalled = False
+    if lifted and crawl is not None:
+        covered = [i for i, c in enumerate(veh.corners)
+                   if y_range is None or y_range[0] <= float(c.pos[1]) <= y_range[1]]
+        ctrl = SpeedController(sim)
+        t_max, t_end, still = sim.t + CRAWL_MAX_S, math.inf, 0.0
+        while sim.t < min(t_max, t_end):
+            drive, brake = ctrl.torques(sim, crawl)
+            push(sum(drive), drive, brake)
+            wc = sim.wheel_centres()
+            for i in covered:
+                if i not in crossed and wc[i][0] >= x_step:
+                    crossed[i] = sim.t
+            if len(crossed) == len(covered) and t_end == math.inf:
+                t_end = sim.t + after_s
+            still = still + sim.dt if sim.forward_speed() < 0.05 else 0.0
+            if still > 2.0:
+                stalled = True
+                break
+    elif lifted and after_s > 0.0:
         held = rate * sim.t
         t_end = sim.t + after_s
         while sim.t < t_end:
             push(held)
     return {"ratio": best, "snap": snap, "static": static, "lifted": lifted, "slip": slip, "x_corner": x_step,
-            "x_step": x_step + run_up, "road": road, "recorder": rec, "states": states,
-            "body_log": None if body is None else body.record()}
+            "x_step": x_step + run_up, "road": road, "recorder": rec, "states": states, "crossed": crossed,
+            "stalled": stalled, "body_log": None if body is None else body.record()}
 
 
 def step_body_log(design: dict, step_height_mm: float, step_supports: list[str] | None = None, *,
@@ -113,8 +137,11 @@ def step_body_log(design: dict, step_height_mm: float, step_supports: list[str] 
 
 
 LOAD_EVERY_S = 0.01  # s between the body's loads kept during the push
-DENSE_BEFORE_S, DENSE_AFTER_S, DENSE_MAX = 0.2, 0.2, 40  # around lift-off to the wheels on the step
+DENSE_BEFORE_S, DENSE_AFTER_S, DENSE_MAX = 0.2, 0.2, 30  # around lift-off to the wheels on the step
+CLIMB_BEFORE_S = 0.6  # a following wheel's climb: from this long before its centre passes the corner
 SPARSE_EVERY_S = 0.25
+CRAWL_SPEED = 0.5  # m/s after the lift-off (K2's choice: slow, so the record stays nearly quasi-static)
+CRAWL_MAX_S = 20.0
 
 
 def load_state(sim) -> dict:
@@ -152,23 +179,36 @@ def mount_vectors(veh, snap: dict) -> list:
     return out
 
 
-def mount_times(ts: list[float], t_lift: float, t_on: float) -> list[int]:
+def climb_windows(t_lift: float, crossed: dict[int, float], stepping: list[int]) -> list[tuple[float, float]]:
+    """The spans to sample closely: from DENSE_BEFORE_S before the lift-off to DENSE_AFTER_S after
+    the stepping wheels' centres pass the step's corner (0.6 s after the lift-off when they did
+    not), and each following wheel's climb, CLIMB_BEFORE_S before to DENSE_AFTER_S after its
+    centre passes the corner."""
+    on = [crossed[i] for i in stepping if i in crossed]
+    t_on = max(on) if len(on) == len(stepping) else t_lift + 0.6
+    out = [(t_lift - DENSE_BEFORE_S, t_on + DENSE_AFTER_S)]
+    out += [(t - CLIMB_BEFORE_S, t + DENSE_AFTER_S) for i, t in sorted(crossed.items()) if i not in stepping]
+    return out
+
+
+def mount_times(ts: list[float], windows: list[tuple[float, float]]) -> list[int]:
     """Indices into the load states' times ts: every SPARSE_EVERY_S, and at most DENSE_MAX evenly
-    from DENSE_BEFORE_S before the lift-off to DENSE_AFTER_S after the wheels are on the step."""
-    lo, hi = t_lift - DENSE_BEFORE_S, t_on + DENSE_AFTER_S
-    dense = [k for k, t in enumerate(ts) if lo <= t <= hi]
-    stride = max(1, math.ceil(len(dense) / DENSE_MAX))
-    keep = set(dense[::stride])
-    if dense:
-        keep.add(dense[-1])
+    in each window (lo, hi)."""
+    keep: set[int] = set()
+    for lo, hi in windows:
+        dense = [k for k, t in enumerate(ts) if lo <= t <= hi]
+        stride = max(1, math.ceil(len(dense) / DENSE_MAX))
+        keep.update(dense[::stride])
+        if dense:
+            keep.add(dense[-1])
     sparse = max(1, int(round(SPARSE_EVERY_S / LOAD_EVERY_S)))
     keep.update(k for k in range(0, len(ts), sparse))
     keep.add(len(ts) - 1)
     return sorted(keep)
 
 
-def mount_series(veh, states: list[dict], t_lift: float, t_on: float) -> list:
-    """Time series of the body's loads at mount_times: per K&C corner and mount
+def mount_series(veh, states: list[dict], windows: list[tuple[float, float]]) -> list:
+    """Time series of the body's loads at mount_times (windows: climb_windows): per K&C corner and mount
     mount_x/y/z.<support>.<mount> (N, the force the body receives, world axes); per corner whose
     drive or brake reacts on the body body_torque_x/y/z.<support> (N*m, world); and the sprung
     body's sprung_cg_x/y/z (m), sprung_accel_x/y/z (m/s^2), sprung_ang_vel_x/y/z (rad/s),
@@ -180,7 +220,7 @@ def mount_series(veh, states: list[dict], t_lift: float, t_on: float) -> list:
     from ..sim import euler_from_r
     if not states:
         return []
-    idx = mount_times([st["t"] for st in states], t_lift, t_on)
+    idx = mount_times([st["t"] for st in states], windows)
     ts = [_round(states[k]["t"]) for k in idx]
     ch: dict[str, tuple[str, list]] = {}
 
@@ -208,14 +248,6 @@ def mount_series(veh, states: list[dict], t_lift: float, t_on: float) -> list:
             if not (name.startswith("body_torque_") and not any(vals))]
 
 
-def wheels_on_step(states: list[dict], stepping: list[int], x_corner: float, after: float) -> float | None:
-    """Time of the first load state after `after` with every stepping wheel's centre past the step's corner."""
-    for st in states:
-        if st["t"] > after and all(st["corners"][i]["point"][0] >= x_corner for i in stepping):
-            return st["t"]
-    return None
-
-
 class StepClimbTool(K2Tool):
     """Step climb driven in K2 (step_climb_dynamic; P1, feeds R1). The analysis
     department's step_climb is the hand-calculation balance -> K1; this one drives over
@@ -236,15 +268,16 @@ class StepClimbTool(K2Tool):
     onto the step), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
     series, vectors and scene all come from run 1: the series run from the standstill
-    against the step until 1.5 s after the lift-off (the torque of the lift-off held), the
+    against the step through the lift-off, then at a crawl (CRAWL_SPEED, the speed
+    controller) until every wheel the step covers has crossed it and 0.5 s more, the
     vectors are that run at lift-off (each wheel's reaction and grip, and the inertia
     force -(road forces + weight) at the CG, so the set balances the weight), and the
     scene's step stands where that run's step is. Run 2 gives numbers only.
     With K&C corners, run 1 also gives the force the body receives at each suspension mount
     (joint vectors at lift-off, and the mount_* series of mount_series: tens of instants from
-    the standstill against the step until the end of the record, closer from 0.2 s before the
-    lift-off until 0.2 s after the stepping wheels' centres pass the step's corner), with the
-    sprung body's motion and d'Alembert force and moment that balance them.
+    the standstill against the step until the end of the record, closer around each climb,
+    climb_windows), with the sprung body's motion and d'Alembert force and moment that
+    balance them.
     """
 
     name = "step_climb_dynamic"
@@ -314,7 +347,8 @@ class StepClimbTool(K2Tool):
         xmax = max(float(c.pos[0]) for c in veh.corners)
         tag = "front" if all(abs(float(veh.corners[i].pos[0]) - xmax) < 1e-9 for i in stepping) else "step"
 
-        crawl = step_push(veh, h, stepping, dt=self.dt, y_range=y_range, rec_hz=self.record_hz, after_s=1.5)
+        crawl = step_push(veh, h, stepping, dt=self.dt, y_range=y_range, rec_hz=self.record_hz, after_s=0.5,
+                          crawl=CRAWL_SPEED)
         res = []
         vectors = []
         snap = crawl["snap"]
@@ -348,6 +382,9 @@ class StepClimbTool(K2Tool):
         if not crawl["lifted"]:
             notes.append("pushing with a growing torque did not lift the stepping wheels"
                          + (" (the driven wheels spun: grip)" if crawl["slip"] else ""))
+        elif crawl["stalled"]:
+            notes.append(f"after the lift-off the crawl at {CRAWL_SPEED} m/s stopped before every wheel the step covers "
+                         "had crossed it (the record ends there)")
 
         # run 2: the test speed with the motor's torque
         speed = self.q(lp, "speed", "m/s")
@@ -401,7 +438,6 @@ class StepClimbTool(K2Tool):
                       (x0, y0, 0.0), (x0 + _length(veh) + 3.0, y1, h))]
         series = rec.series()
         if crawl["states"] and snap is not None:
-            t_on = wheels_on_step(crawl["states"], stepping, crawl["x_corner"], snap["t"])
-            series += mount_series(veh, crawl["states"], snap["t"], snap["t"] + 0.6 if t_on is None else t_on)
+            series += mount_series(veh, crawl["states"], climb_windows(snap["t"], crawl["crossed"], stepping))
         return {"results": res, "series": series, "vectors": vectors or rec.vectors(-1), "scene": scene,
                 "assumptions": notes}
