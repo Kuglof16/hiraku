@@ -104,11 +104,11 @@ class BeyondBuildTest(unittest.TestCase):
         by_id = {lc["load_case_id"]: lc for lc in out}
         self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100"])
         self.assertEqual(by_id["P1-step250-beyond"]["feeds"], ["R1-step250-beyond"])
-        # the step past the wheel (1.1 x the 300 mm front wheel): judged on climbed, feeds nothing
+        # the step past the wheel (1.1 x the 300 mm front wheel): judged on climbable, feeds nothing
         wall = by_id["P1-step330-beyond"]
         self.assertNotIn("feeds", wall)
         self.assertEqual((wall["criterion"]["quantity"], wall["criterion"]["op"], wall["criterion"]["limit"]),
-                         ("climbed", ">=", {"value": 1.0, "unit": "1"}))
+                         ("climbable", ">=", {"value": 1.0, "unit": "1"}))
         self.assertEqual(wall["params"]["step_height"], {"value": 330.0, "unit": "mm"})
         for lc in out:
             self.assertEqual(contract.errors("load_case", lc), [], lc["load_case_id"])

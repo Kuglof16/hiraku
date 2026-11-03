@@ -157,8 +157,8 @@ def _p1_step(spec: Record, req: Record, design: Record) -> Record | list[Record]
 
 def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str]) -> Record:
     """P1 past the limit at a step higher than the front wheel radius (WALL_STEP_RATIO r): judged on
-    climbed (1 = climbs; step_climb_dynamic's result, predicted by step_climb.climb_limit's
-    climbable), which the case is meant to fail."""
+    climbable (1 = climbs, by the push or at speed: step_climb_dynamic's result, predicted by
+    step_climb.climb_limit), which the case is meant to fail."""
     from hiraku.catalog.summary import design_summary
 
     r = design_summary(design).get("front_wheel_radius", {}).get("value")
@@ -174,7 +174,7 @@ def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str]) -> Rec
         "params": {"step_height": _q(h, "mm"), "speed": _q(speed["value"], speed["unit"]), "loading": loading},
         "requirement_keys": list(keys),
         "criterion": {
-            "quantity": "climbed",
+            "quantity": "climbable",
             "op": ">=",
             "limit": _q(1, "1"),
             "basis": f"the vehicle climbs the step (1 climbs, 0 does not); the step is {WALL_STEP_RATIO:g} times "

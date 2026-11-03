@@ -223,13 +223,13 @@ offroad-4w:
           (R1 には静的な釣り合いの結果を使っています)
     # Past the limit: a step higher than the front wheel radius (hiraku/catalog/build.py
     # WALL_STEP_RATIO). Only the moving tool: the static push of step_climb needs h < r.
-    # The hand calculation is the rigid wheel's limit (climbable 0 from h = r up); K2's climbed
-    # is compared with it under the criterion's name.
+    # The hand calculation is the rigid wheel's limit (climbable 0 from h = r up); K2's climbable
+    # is 1 when the push or the run at speed gets the wheel onto the step.
     - load_case: P1-step330-beyond
       tool: step_climb_dynamic
       say: 段差が車輪の半径より高いので、角の押す力が水平になり、硬い輪では越えられないとみて先に見積もります
       predictions:
-        - quantity: climbed
+        - quantity: climbable
           formula_id: step_climb.climb_limit
           output: climbable
           assumptions: [車輪はたわまない硬い輪とみる]
