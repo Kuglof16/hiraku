@@ -48,12 +48,16 @@ DEFAULTS = {
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
     "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
                                                    "max_steer_angle)"),
-    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed; the "
-                                             "design has no bushing_radial_stiffness)"),
-    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed; the "
-                                              "design has no bushing_axial_stiffness)"),
-    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed; the design has no "
-                                       "tie_rod_stiffness)"),
+    # The three joint stiffnesses below have no checked source (searched 2026-11-03 for small
+    # double-wishbone vehicles, UTV / ATV / small cars: no published measured value was opened
+    # and read). Passenger-car arm bushings in search summaries were about 1.7 to 5 kN/mm radial;
+    # those numbers were not checked against the papers.
+    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed, no "
+                                             "source; the design has no bushing_radial_stiffness)"),
+    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed, no "
+                                              "source; the design has no bushing_axial_stiffness)"),
+    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed, no source; the "
+                                       "design has no tie_rod_stiffness)"),
 }
 
 

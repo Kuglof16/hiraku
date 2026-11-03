@@ -29,11 +29,11 @@ from .sim import Controls, Sim
 from .road import flat
 from .units import G0
 
-# The tilt table and the side wind of the checks: fast to a tenth (a fifth) of the starting
-# upper-wheel load, then slow to the tip. A full-speed sweep agrees with the slow one of the
-# tools to 1e-4 of the tip angle on the check vehicles (K2 runs, 2026-11-03), and the checks'
-# tolerances are 2e-3 and 5e-3.
-CHECK_TILT = {"fast_rate": math.radians(10.0), "slow_rate": math.radians(0.5), "slow_below": 0.10,
+# The tilt table and the side wind of the checks: the table fast to the tip, then slowly over
+# the last 2 deg (the wind: fast to a fifth of the starting upper-wheel load, then slow). A
+# full-speed sweep agrees with the slow one of the tools to 1e-4 of the tip angle on the check
+# vehicles (K2 runs, 2026-11-03), and the checks' tolerances are 2e-3 and 5e-3.
+CHECK_TILT = {"fast_rate": math.radians(20.0), "slow_rate": math.radians(0.5), "slow_span": math.radians(2.0),
               "settle_s": 1.0, "after_s": 0.0}
 CHECK_WIND = {"fast": 25.0, "slow": 1.0, "slow_below": 0.2}
 
