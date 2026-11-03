@@ -136,7 +136,8 @@ export class CutN16 {
 
   // Only the rows around the current step are shown (window: AROUND before and after).
   // Their text steps down a pixel at a time (not below min_text_px) until they end inside
-  // the box; if they still do not, fewer rows are shown.
+  // the box and no row is wider than it; if they still do not end inside, fewer rows are
+  // shown.
   fitList() {
     const box = this.spec.steps;
     const rows = () => [...this.ol.children];
@@ -150,10 +151,12 @@ export class CutN16 {
       this.ol.style.fontSize = `${px}px`;
       for (const r of rows()) r.style.marginBottom = `${box.row_gap}px`;
     };
+    // a row is cut short at its right edge when its number, name and checks are wider than the box
+    const wide = () => rows().some((r) => r.style.display !== "none" && r.scrollWidth > r.clientWidth + 0.5);
     this.window = Math.min(this.rec.steps.length, 2 * AROUND + 1);
     this.showWindow();
     apply();
-    while (bottom() > box.h && px > this.minPx) {
+    while ((bottom() > box.h || wide()) && px > this.minPx) {
       px -= 1;
       apply();
     }

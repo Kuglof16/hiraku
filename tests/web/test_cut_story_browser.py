@@ -38,23 +38,25 @@ from tests.web.test_cut_n17_browser import REPORT, long_report, report_events
 
 KINDS = ["label", "graph", "legend", "number", "moving"]
 
-# The promo department's layout.json (story commit), the sections the cut pages read.
+# The promo department's layout.json (story commit), the sections the cut pages read, with
+# the boxes they set afterwards (not in layout.json yet): n01.view / pane, n02.grid (no
+# n02.result), n16.view / steps, n17.dim_opacity.
 LAYOUT_JSON = r"""{
   "stage": {"w": 1920, "h": 1080},
   "subtitle_band": {"y": 910, "h": 170},
   "safe": {"x": 96, "y": 60, "w": 1728, "h": 850},
   "min_text_px": 18,
   "colors": {"night": "#131311", "ink": "#1b1a17", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
-  "n01": {"duration_s": 4.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "pane": {"x": 1328, "y": 96, "w": 496, "h": 790}, "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2}, "times": {"lead_s": 0.4, "zoom_s": 1.6}, "zoom": {"from": 1.6, "to": 1.06}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n02": {"duration_s": 7.0, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"], "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2}, "times": {"lead_s": 0.3}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n01": {"duration_s": 4.0, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "pane": {"x": 1520, "y": 96, "w": 304, "h": 790}, "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2}, "times": {"lead_s": 0.4, "zoom_s": 1.6}, "zoom": {"from": 1.6, "to": 1.06}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n02": {"duration_s": 7.0, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"], "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n03": {"duration_s": 5.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22}, "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n04": {"duration_s": 4.0, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n05": {"duration_s": 5.0, "grid": {"x": 96, "y": 280, "cols": 4, "rows": 3, "tile_w": 408, "tile_h": 180, "gap_x": 32, "gap_y": 26}, "tile": {"border_px": 2, "radius_px": 10, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "hero": {"x": 210, "y": 60, "w": 1500, "h": 750, "src": "media/n05_hero_2x.png"}, "hero_motion": {"push_scale": 1.04, "burst_scale": 1.7, "burst_dur_s": 0.4, "ease": [0.5, 0, 0.9, 0.4]}, "ease": {"tile": [0.2, 0.9, 0.3, 1.15]}, "title": {"name": {"y": 62, "size_px": 124}, "tag": {"y": 200, "size_px": 42}}, "times": {"burst_s": 1.25, "tiles_s": 1.35, "tile_in_s": 0.6, "tile_stagger_s": 0.05, "name_s": 1.75, "tag_s": 2.3, "door_open_s": 0.55, "latch_s": 0.38, "mesh_in_s": 0.2, "mesh_out_s": 0.78}, "door": {"crack_dur_s": 0.2, "crack_deg": 12, "crack_ease": [0.25, 0, 0.3, 1], "hold_dur_s": 0.12, "open_dur_s": 0.38, "angle_deg": 105, "perspective_px": 2400, "ease": [0.45, 0, 0.8, 0.55], "seam_w_px": 4, "seam_glow_w_px": 220, "spill_dur_s": 0.9, "hero_fade_dur_s": 0.35, "hero_fade_scale": 1.1, "panel": {"inset_px": 72, "upper_h_px": 300, "gap_px": 40, "line_px": 2, "bevel_px": 16}, "handle": {"w_px": 12, "h_px": 200, "seam_gap_px": 48}, "crack_overshoot_deg": 3, "settle_dur_s": 0.1, "latch_dur_s": 0.17, "latch_deg": 0.8, "thickness_px": 24, "dolly_px": 260, "dolly_ease": [0.55, 0, 0.85, 0.5], "bolt": {"w_px": 120, "h_px": 18, "reach_px": 40, "travel_px": 72, "gap_px": 64}}, "rays": {"count": 26, "seed": 7, "width_min_deg": 0.7, "width_max_deg": 3.6, "spread_deg": 62, "length_px": 1500, "blur_px": 6, "peak_alpha": 0.32, "crack_scale": 0.12, "shimmer_min_dur_s": 0.45, "shimmer_max_dur_s": 1.1, "out_dur_s": 0.5}, "dust": {"count": 90, "seed": 11, "size_min_px": 2, "size_max_px": 7, "w": 1600, "h": 760, "drift_px": 70, "in_dur_s": 0.3, "out_dur_s": 0.7}, "bloom": {"peak_alpha": 0.3, "rise_dur_s": 0.12, "fall_dur_s": 0.55}, "hero_mesh": {"size_px": 50, "jitter": 0.28, "seed": 5, "line_px": 1.3, "in_dur_s": 0.4, "reach_px": 520, "spread_dur_s": 0.27, "jitter_dur_s": 0.04, "el_dur_s": 0.13, "end_scale": 0.15}, "tile_fx": {"ghosts": 2, "ghost_lag_s": 0.035, "ghost_alpha": 0.32, "land_dur_s": 0.5, "land_glow_px": 26}, "name_wipe": {"wipe_dur_s": 0.65, "feather_px": 180, "sweep_w_px": 300, "afterglow_dur_s": 1.3}, "fly_from": {"x": 960, "y": 470}, "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"]},
   "n06": {"duration_s": 11.7, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}}, "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n07": {"duration_s": 15.3, "view": {"x": 96, "y": 96, "w": 1500, "h": 790}, "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20}, "label": {"x": 120, "y": 120, "size_px": 30}, "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0}, "turn_deg": 90, "zoom": {"fill": 0.45}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1152, "h": 48}, "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22}, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1152, "h": 48}, "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22}, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}, "dim_opacity": 0.3},
   "story": {
     "defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
     "cuts": {
@@ -157,6 +159,46 @@ SIZES = """() => {
     fixed: q(".n07-label .fixed").map((el) => [el.textContent, getComputedStyle(el).color]),
   };
 }"""
+
+
+# Where the boxes are, how low anything shown reaches, and text that runs past its box or
+# is cut short (wider than its own width) inside the given boxes.
+FIT = """(roots) => {
+  const shown = (el) => {
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const rect = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+  const own = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  const boxes = {};
+  for (const el of document.querySelectorAll("[data-box]")) if (shown(el)) boxes[el.dataset.box] = rect(el);
+  const all = [...document.querySelectorAll("#stage *")].filter(shown);
+  const out = [];
+  for (const sel of roots) {
+    for (const root of document.querySelectorAll(sel)) {
+      if (!shown(root)) continue;
+      const R = root.getBoundingClientRect();
+      for (const el of root.querySelectorAll("*")) {
+        if (!own(el) || !shown(el)) continue;
+        const r = el.getBoundingClientRect();
+        const block = getComputedStyle(el).display !== "inline";
+        const cut = block && el.scrollWidth > el.clientWidth + 1;
+        if (r.left < R.left - 0.5 || r.right > R.right + 0.5 || r.bottom > R.bottom + 0.5 || cut)
+          out.push({ root: root.dataset.box, text: el.textContent.trim().slice(0, 30), px: parseFloat(getComputedStyle(el).fontSize), cut, rect: [r.left, r.top, r.right, r.bottom], box: [R.left, R.top, R.right, R.bottom] });
+      }
+    }
+  }
+  return { boxes, lowest: Math.max(...all.map((el) => el.getBoundingClientRect().bottom)), right: Math.max(...all.map((el) => el.getBoundingClientRect().right)), over: out };
+}"""
+
+# The boxes checked against the layout, and the boxes whose text must fit, by cut.
+FIT_BOXES = {
+    "n01": (["n01.view", "n01.pane"], ['[data-box="n01.pane"]']),
+    "n02": ([], ['.n02-pane']),
+    "n16": (["n16.view", "n16.steps"], ['[data-box="n16.steps"]', '[data-box="n16.view"]']),
+    "n17": (["n17.page"], ['[data-box="n17.page"]']),
+}
 
 
 def with_verdict(events, run_id, passed):
@@ -270,6 +312,8 @@ class CutStoryTest(unittest.TestCase):
             self.assertEqual(got["page"]["over"], [], where)
             self.assertEqual(got["page"]["counts"], {k: got["counts"].get(k, 0) for k in KINDS}, where)  # the page counts as this test does
             got["sizes"] = page.evaluate(SIZES)
+            if cut in FIT_BOXES:
+                self.check_fit(cut, page.evaluate(FIT, FIT_BOXES[cut][1]), where)
             seen[t] = got
             if self.shots:
                 self.shots.mkdir(parents=True, exist_ok=True)
@@ -277,6 +321,23 @@ class CutStoryTest(unittest.TestCase):
         self.assertEqual(errors, [], cut)
         page.close()
         return seen
+
+    def check_fit(self, cut, fit, where):
+        """The boxes where the layout puts them, nothing in the subtitle band or past the
+        stage, and no text running past its box or cut short."""
+        L = self.layout
+        rect = lambda b: [b["x"], b["y"], b["x"] + b["w"], b["y"] + b["h"]]  # noqa: E731
+        for key in FIT_BOXES[cut][0]:
+            sec, name = key.split(".")
+            self.assertEqual([round(v) for v in fit["boxes"][key]], rect(L[sec][name]), (where, key))
+        if cut == "n02":
+            g = L["n02"]["grid"]
+            for i, k in enumerate(L["n02"]["panes"]):
+                x, y = g["x"] + (i % g["cols"]) * (g["tile_w"] + g["gap_x"]), g["y"] + (i // g["cols"]) * (g["tile_h"] + g["gap_y"])
+                self.assertEqual([round(v) for v in fit["boxes"][f"n02.pane.{k}"]], [x, y, x + g["tile_w"], y + g["tile_h"]], (where, k))
+        self.assertLessEqual(fit["lowest"], L["subtitle_band"]["y"] + 0.5, where)
+        self.assertLessEqual(fit["right"], L["stage"]["w"] + 0.5, where)
+        self.assertEqual(fit["over"], [], where)
 
     def assert_larger(self, got, n):
         """n large words (the representative; None: one or more) shown, each larger than every other text."""

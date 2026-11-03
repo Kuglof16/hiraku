@@ -13,7 +13,7 @@
 // cut's one tag and holds one change (the report's first next), its sentence large (as
 // large as fits the page's width on one line, up to N17_STYLE.change_of_title x title_px)
 // and its reason at the story's body text size; from light_s everything else on the page
-// is drawn pale (N17_STYLE.dim_opacity). Before / after figures of the change are not
+// is drawn pale (layout.json n17.dim_opacity). Before / after figures of the change are not
 // shown: the report's next holds only the change and its reason in words, and the
 // effects and sensitivities hold the present values only (no value after the change), so
 // a figure after the change would be a guess.
@@ -22,16 +22,16 @@ import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
 import { DOMAIN_JA, esc, fmt, quantityName } from "./labels.js";
 
-// Not in layout.json (written here until the promo department gives keys for them): the
-// opacity of the rest of the page from light_s, and the largest size of the change's
-// sentence (a multiple of page.title_px).
-export const N17_STYLE = { dim_opacity: 0.3, change_of_title: 1.5 };
+// Not in layout.json (written here until the promo department gives a key for it): the
+// largest size of the change's sentence (a multiple of page.title_px).
+export const N17_STYLE = { change_of_title: 1.5 };
 
 const $ = (id) => document.getElementById(id);
 
 // Every value the cut reads (nested ones by their path); the top's min_text_px too.
 const N17_KEYS = [
   "duration_s",
+  "dim_opacity",
   "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px",
   "times.lead_s", "times.light_s",
   "colors.bg", "colors.panel", "colors.rule",
@@ -268,7 +268,7 @@ export class CutN17 {
     const lit = t >= T.light_s;
     this.el.querySelector(".n17-next").classList.toggle("lit", lit);
     this.el.querySelector(".n17-bar.strongest")?.classList.toggle("lit", lit);
-    for (const part of this.el.querySelectorAll(".n17-head, .n17-body")) part.style.opacity = lit ? String(N17_STYLE.dim_opacity) : "";
+    for (const part of this.el.querySelectorAll(".n17-head, .n17-body")) part.style.opacity = lit ? String(this.spec.dim_opacity) : "";
     document.documentElement.dataset.n17Lit = lit ? "1" : "0";
   }
 }

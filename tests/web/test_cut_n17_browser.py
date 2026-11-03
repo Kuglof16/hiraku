@@ -91,6 +91,7 @@ def n17_layout():
         "min_text_px": 18,
         "n17": {
             "duration_s": 8.7,
+            "dim_opacity": 0.3,
             "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22},
             "times": {"lead_s": 0.3, "light_s": 5.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
@@ -215,6 +216,9 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assertTrue(got["nextLit"])
         self.assertEqual(got["litBars"], [strongest])
         self.assertEqual(got["lit"], "1")
+        # from light_s the rest of the page is as pale as layout.json n17.dim_opacity
+        self.assertEqual(page.evaluate("[...document.querySelectorAll('.n17-head, .n17-body')].map((e) => getComputedStyle(e).opacity)"),
+                         [str(layout["n17"]["dim_opacity"])] * 2)
         got = self.at(page, layout["n17"]["duration_s"])
         self.assertTrue(got["nextLit"])
         self.assert_inside(got, layout)
@@ -262,6 +266,13 @@ class CutN17BrowserTest(unittest.TestCase):
         page, errors = self.open(self.run_id, 1)
         got = page.evaluate(STATE)
         self.assertIn("layout.json の n17 に無い: page.title_px, times.light_s, colors.bg, colors.panel, colors.rule", got["err"])
+        page.close()
+        # the amount the rest is made pale is the layout's too
+        layout = n17_layout()
+        del layout["n17"]["dim_opacity"]
+        self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
+        page, errors = self.open(self.run_id, 1)
+        self.assertIn("layout.json の n17 に無い: dim_opacity", page.evaluate(STATE)["err"])
         page.close()
 
     def test_n17_says_when_the_run_has_no_report(self):

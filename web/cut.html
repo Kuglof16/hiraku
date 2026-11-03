@@ -52,10 +52,11 @@
   .n01-card .miss { color: #c8402a; }
   .n01-card table { width: 100%; border-collapse: collapse; }
   .n01-card td:last-child { text-align: right; font-family: Consolas, monospace; }
-  .n01-legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
-  .n01-legend i { display: block; height: 14px; border-radius: 3px; }
-  .n01-legend span:nth-of-type(2) { grid-column: 2; justify-self: start; }
-  .n01-legend span:nth-of-type(3) { grid-column: 2; justify-self: end; margin-top: -1.2em; }
+  .n01-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
+  .n01-legend span:first-child { grid-column: 1 / -1; }
+  .n01-legend i { display: block; height: 14px; border-radius: 3px; grid-column: 1 / -1; }
+  .n01-legend span:nth-of-type(2) { justify-self: start; }
+  .n01-legend span:nth-of-type(3) { justify-self: end; white-space: nowrap; }
   .n01-note { color: #5c5a54; margin: 0; }
   /* N02: sizes and colours from layout.json n02 (set inline) */
   .n02-pane { position: absolute; box-sizing: border-box; overflow: hidden; }
@@ -169,6 +170,9 @@
   .n02-pane .miss { color: #c8402a; }
   .n03-reading { font-weight: 700; line-height: 1.1; white-space: nowrap; color: #1b1a17; }
   .n07-label .fixed { font-weight: 700; }
+  /* N16's list in a narrow column: the checks on their own line under the step's name */
+  .n16-steps .asm-steps.compact .nm { max-width: calc(100% - 2em); }
+  .n16-steps .asm-steps.compact .cks { float: none; display: flex; margin-left: 1.8em; }
   .n17-change { display: block; font-weight: 700; line-height: 1.2; margin: 0.1em 0; color: #1b1a17; }
   .grid-header .num { font-weight: 700; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }

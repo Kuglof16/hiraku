@@ -115,8 +115,8 @@ def n05_layout():
         },
         "n01": {
             "duration_s": 4.0,
-            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
-            "pane": {"x": 1328, "y": 96, "w": 496, "h": 790},
+            "view": {"x": 96, "y": 96, "w": 1400, "h": 790},
+            "pane": {"x": 1520, "y": 96, "w": 304, "h": 790},
             "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2},
             "times": {"lead_s": 0.4, "zoom_s": 1.6},
             "zoom": {"from": 1.6, "to": 1.06},
@@ -125,10 +125,9 @@ def n05_layout():
         },
         "n02": {
             "duration_s": 7.0,
-            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24},
+            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
             "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
             "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
-            "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2},
             "times": {"lead_s": 0.3},
             "overlay": {"color": "#c8402a", "opacity": 0.22},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},

@@ -493,7 +493,7 @@ class CutN01 {
 // its first pose before and its last after; so no more than m move at one time. Without a
 // story they all play from lead_s to the end.
 
-const N02_KEYS = ["duration_s", "grid", "panes", "pane", "result", "times", "overlay", "colors"];
+const N02_KEYS = ["duration_s", "grid", "panes", "pane", "times", "overlay", "colors"];
 const N02_TESTS = {
   tilt: { test: "S1", name: "傾斜台" },
   wind: { test: "F1", name: "横風" },
@@ -622,7 +622,7 @@ class CutN02 {
       [cg, "重心"],
       [ghost, "半透明の赤: 限界の外の条件の動き"],
     ];
-    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${sp.result.text_px}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
+    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${Math.max(this.layout.min_text_px, st.rate.size_px)}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
   }
 
   resize(scale) {
