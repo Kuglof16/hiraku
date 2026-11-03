@@ -40,15 +40,13 @@ const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
-// Not in layout.json (written here until the promo department gives a key): the ring's
-// size while the vehicle turns, a share of the view's height (it grows to zoom.fill).
-const MARK_SMALL = 0.08;
 
 const N07_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
   "legend.x", "legend.y", "legend.w", "legend.h", "legend.title_px", "legend.text_px",
   "label.x", "label.y", "label.size_px", "label.of_view_h",
+  "ring.of_view_h",
   "times.lead_s", "times.turn_to_s", "times.zoom_s", "times.zoom_to_s", "times.swap_s", "times.swap_to_s",
   "turn_deg", "zoom.fill",
   "colors.bg", "colors.panel", "colors.rule",
@@ -296,11 +294,12 @@ export class CutN07 {
     }
     this.setLabel(a && mix >= 0.5 ? a : b);
     // the ring round the largest element (of the version before): from lead_s a small one
-    // (MARK_SMALL of the view's height) shows where the weak spot is while the vehicle
+    // (ring.of_view_h of the view's height) shows where the weak spot is while the vehicle
     // turns, it grows with the zoom to zoom.fill of the view's height, and once the version
     // after is shown and the record judges it a pass (✓ 直った) it turns green
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
-    const d = (MARK_SMALL + (this.spec.zoom.fill - MARK_SMALL) * p.zoom) * this.inner.h;
+    const small = this.spec.ring.of_view_h;
+    const d = (small + (this.spec.zoom.fill - small) * p.zoom) * this.inner.h;
     const fixed = !!(a && a.fixed && mix >= 0.5);
     const tone = fixed ? GREEN : this.spec.overlay.color;
     Object.assign(this.mark.style, {

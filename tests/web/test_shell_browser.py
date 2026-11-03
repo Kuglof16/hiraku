@@ -29,6 +29,7 @@ def n07_layout():
         "view": {"x": 96, "y": 96, "w": 1500, "h": 790},
         "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20},
         "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08},
+        "ring": {"of_view_h": 0.08},
         "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0},
         "turn_deg": 90,
         "zoom": {"fill": 0.45},
@@ -278,7 +279,7 @@ class ShellBrowserTest(unittest.TestCase):
         inner_h = sp["view"]["h"] - 4
         self.assertEqual(at[0]["mark"], 0)
         self.assertEqual(at[T["turn_to_s"]]["mark"], 1)
-        self.assertLess(at[T["turn_to_s"]]["markW"], 0.2 * inner_h)
+        self.assertAlmostEqual(at[T["turn_to_s"]]["markW"], sp["ring"]["of_view_h"] * inner_h, places=3)  # far: ring.of_view_h
         self.assertAlmostEqual(at[T["zoom_to_s"]]["markW"], sp["zoom"]["fill"] * inner_h, places=3)
         self.assertTrue(at[T["turn_to_s"]]["wheels"])
         self.assertFalse(at[T["zoom_to_s"]]["wheels"])
@@ -333,6 +334,20 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertTrue(V[0] <= lb[0] and lb[2] <= V[2] and V[1] <= lb[1] and lb[3] <= V[3])
         self.assertLessEqual(got["boxes"]["n07.view"][2], got["boxes"]["n07.legend"][0])
         page.close()
+
+    def test_n07_names_the_missing_ring_size(self):
+        """Without ring.of_view_h (the ring's size while far) the page names it and draws nothing."""
+        layout = n07_layout()
+        del layout["n07"]["ring"]
+        self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
+        try:
+            page, errors = self.cut(0)
+            err = page.evaluate("() => document.querySelector('.err')?.textContent ?? null")
+            self.assertIn("layout.json の n07 に無い: ring.of_view_h", err)
+            self.assertEqual(page.evaluate("() => document.querySelectorAll('.n07-view').length"), 0)
+            page.close()
+        finally:
+            self.layout_file.write_text(json.dumps(n07_layout()), encoding="utf-8")
 
     def test_n07_names_the_missing_keys(self):
         layout = n07_layout()
