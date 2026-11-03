@@ -437,6 +437,33 @@ def _given_table(points: tuple, radius: float, travel: float, bushings: kinemati
     return json.loads(_given_table_json(points, float(radius), float(travel), bushings))
 
 
+def hardpoints_for(support: dict, *, upper_joint_z_mm: float | None = None,
+                   damper_upper_y_mm: float | None = None) -> dict:
+    """Hardpoints a design can write as a support's suspension.hardpoints_mm (mm, design frame,
+    a right wheel's mirrored in y): the builtin double wishbone for the support's wheel and
+    travel, with the whole upper arm at the ball-joint height upper_joint_z_mm (its inner pivots
+    15 mm lower, as the generic layout) and the damper's body mount at the side position
+    damper_upper_y_mm (|y|, as for the left wheel), and the tie rod placed again for the least
+    bump steer (kinematics.fitted_hardpoints). Clearing the frame is the design's choice; this
+    only keeps the linkage working. Raises DesignError when it does not move through the travel."""
+    sus = support["suspension"]
+    pos = np.asarray(support["position_mm"], dtype=float) / 1000.0
+    travel = float(sus["travel_mm"]) / 1000.0 if "travel_mm" in sus else DEFAULTS["travel"][0]
+    left = pos.copy()
+    left[1] = abs(left[1])
+    try:
+        hp = kinematics.fitted_hardpoints(
+            left, float(support["radius_mm"]) / 1000.0, _table_travel(travel),
+            upper_joint_z=None if upper_joint_z_mm is None else upper_joint_z_mm / 1000.0,
+            damper_upper_y=None if damper_upper_y_mm is None else damper_upper_y_mm / 1000.0).to_json()
+    except ValueError as e:
+        raise DesignError(f"support {support['id']}: {e}") from e
+    out = {k: v for k, v in hp.items() if isinstance(v, list) and k != "axle"}
+    if pos[1] < 0.0:
+        out = {k: [v[0], -v[1], v[2]] for k, v in out.items()}
+    return out
+
+
 def hardpoints_of(design: dict, support_id: str) -> dict:
     """The double-wishbone hardpoints (mm, design frame) of a support as K2 runs them: the design's
     suspension.hardpoints_mm when it gives them, else those of the builtin K&C table (the left-wheel

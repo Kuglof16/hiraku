@@ -211,6 +211,29 @@ class KcBench(unittest.TestCase):
         with self.assertRaisesRegex(DesignError, "wheel_center"):
             build_vehicle(bad)
 
+    def test_hardpoints_for_moves_the_upper_arm_and_the_damper_mount(self):
+        from hiraku.solvers.k2_vehicle.model import DesignError, hardpoints_for, hardpoints_of
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        fl, fr = (next(s for s in d["supports"] if s["id"] == k) for k in ("FL", "FR"))
+        same = hardpoints_of(d, "FL")
+        self.assertEqual(hardpoints_for(fl), {k: v for k, v in same.items() if k not in ("axle", "radius_mm")})
+        up = same["uca_outer"][2] + 20.0
+        hp = hardpoints_for(fl, upper_joint_z_mm=up, damper_upper_y_mm=same["damper_upper"][1] + 30.0)
+        self.assertAlmostEqual(hp["uca_outer"][2], up, places=9)
+        self.assertAlmostEqual(hp["uca_front"][2], up - 15.0, places=9)  # the arm keeps its slope
+        self.assertAlmostEqual(hp["damper_upper"][1], same["damper_upper"][1] + 30.0, places=9)
+        for k in ("lca_front", "lca_rear", "lca_outer", "wheel_center", "damper_lower"):
+            self.assertEqual(hp[k], same[k], k)
+        right = hardpoints_for(fr, upper_joint_z_mm=up, damper_upper_y_mm=same["damper_upper"][1] + 30.0)
+        self.assertEqual(right["damper_upper"], [hp["damper_upper"][0], -hp["damper_upper"][1], hp["damper_upper"][2]])
+        # written into the design, K2 runs on them: the tie rod was placed again, little bump steer
+        for s in d["supports"]:
+            s["suspension"]["hardpoints_mm"] = hardpoints_for(s, upper_joint_z_mm=up)
+        toe = [r["toe_deg"] for r in build_vehicle(d).corners[0].table["rows"]]
+        self.assertLess(max(toe) - min(toe), 0.1)
+        with self.assertRaisesRegex(DesignError, "FL"):
+            hardpoints_for(fl, upper_joint_z_mm=-500.0)
+
     def test_a_design_without_a_kc_table_is_told_so(self):
         rec = TOOLS["kc_bench"].run(box_design(), {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})
         self.assertEqual(rec["status"], "failed")
