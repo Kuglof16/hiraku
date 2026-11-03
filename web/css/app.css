@@ -302,6 +302,19 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .legend .kinds { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .legend .kinds button { font-size: 12px; border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
 .legend .kinds button.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.legend .acts { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.legend .acts button { font-size: 12px; border: 1.5px solid var(--blue); border-radius: 6px; padding: 2px 8px; color: var(--blue); background: transparent; }
+.legend .acts button.on { background: var(--blue); color: #fbf9f4; font-weight: 600; }
+.legend .cmp { margin-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* before / after side by side (js/app.js setCompare): the previous version at the left */
+.viewport .cmp-view { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; pointer-events: none; border-right: 1.5px solid var(--line); }
+.viewport .cmp-view[hidden] { display: none; }
+.viewport.compare > canvas.gl, .viewport.compare > .gl-labels { left: 50%; right: auto; }
+.viewport .cmp-tags { position: absolute; left: 0; right: 0; top: 52px; z-index: 4; pointer-events: none; }
+.viewport .cmp-tags[hidden] { display: none; }
+.viewport .cmp-tags span { position: absolute; transform: translateX(-50%); font-weight: 700; font-size: 15px; background: rgba(251, 249, 244, 0.9); border: 1.5px solid var(--line); border-radius: 6px; padding: 1px 10px; }
+.viewport .cmp-tags span:first-child { left: 25%; }
+.viewport .cmp-tags span:last-child { left: 75%; }
 
 .bubble {
   position: absolute;

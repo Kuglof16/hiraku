@@ -1,6 +1,7 @@
-"""Ways in and out for a part: straight along one of the six directions, or, when
-none of those is clear, two moves (slide along one direction, then out along
-another), found by trying slide lengths on a grid.
+"""Ways in and out for a part, or for a group of parts moving as one: straight
+along one of the six directions, or, when none of those is clear, two moves
+(slide along one direction, then out along another), found by trying slide
+lengths on a grid.
 
 A route is a list of moves (direction name, distance mm) taking the part OUT
 from where it is fitted; path_in() turns it into the centre's path going in,
@@ -22,20 +23,26 @@ SLIDE_JA = {"-z": "下へずらし", "+z": "上へずらし", "-x": "後ろへ�
             "+y": "左へずらし"}
 
 
-def straight(part: Body, others: list[Body], travel: float) -> list[str]:
-    """The directions it can leave along in one move, in the preferred order."""
-    return [d for d in PREFERRED if blocker(part, others, DIRECTIONS[d], travel) is None]
+def _unit(part: Body | list[Body]) -> list[Body]:
+    return part if isinstance(part, list) else [part]
 
 
-def two_moves(part: Body, others: list[Body], travel: float) -> list[tuple[str, float]] | None:
+def straight(part: Body | list[Body], others: list[Body], travel: float,
+             prefer: tuple[str, ...] = PREFERRED) -> list[str]:
+    """The directions it can leave along in one move, in the order `prefer`."""
+    return [d for d in prefer if blocker(part, others, DIRECTIONS[d], travel) is None]
+
+
+def two_moves(part: Body | list[Body], others: list[Body], travel: float,
+              prefer: tuple[str, ...] = PREFERRED) -> list[tuple[str, float]] | None:
     """The shortest slide then straight-out route, or None. The slide must itself be clear."""
     best = None
-    for d1 in PREFERRED:
+    for d1 in prefer:
         v1 = np.asarray(DIRECTIONS[d1], float)
         t = SLIDE_STEP_MM
         while t <= travel and blocker(part, others, v1, t) is None:
-            moved = Body(part.id, part.obb.moved(v1 * t), part.kind, part.support, part.nodes)
-            for d2 in PREFERRED:
+            moved = [b.moved(v1 * t) for b in _unit(part)]
+            for d2 in prefer:
                 if d2[1] == d1[1]:
                     continue
                 if blocker(moved, others, DIRECTIONS[d2], travel) is None:
@@ -46,6 +53,15 @@ def two_moves(part: Body, others: list[Body], travel: float) -> list[tuple[str, 
                 break
             t += SLIDE_STEP_MM
     return best
+
+
+def away_from(center, points: list, prefer: tuple[str, ...] = PREFERRED) -> tuple[str, ...]:
+    """The directions out, those leading away from a single fastening point first (a wheel off
+    its hub, a corner off its mount); with several points (or none), `prefer` as it is."""
+    if len(points) != 1:
+        return prefer
+    v = np.asarray(center, float) - np.asarray(points[0], float)
+    return tuple(sorted(prefer, key=lambda d: (-round(float(v @ np.asarray(DIRECTIONS[d], float)), 6), prefer.index(d))))
 
 
 def path_in(center, moves: list[tuple[str, float]]) -> list[list[float]]:

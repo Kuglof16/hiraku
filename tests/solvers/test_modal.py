@@ -45,6 +45,16 @@ class ModalTest(unittest.TestCase):
         f = hand["outputs"]["f"]["value"]
         self.assertLessEqual(abs(r["frequencies"][i] - f) / f, 0.15)
 
+    def test_frequency_response_series(self):
+        rec = TOOL.run(DESIGN, lc(speed=q(40, "km/h")), PRED, {})
+        s = next(x for x in rec["series"] if x["channel"].startswith("frequency_response."))
+        self.assertEqual((s["x"]["quantity"], s["x"]["unit"], len(s["x"]["values"])), ("frequency", "Hz", len(s["values"])))
+        self.assertAlmostEqual(s["values"][0], 1.0, places=4)  # over its value at 0 Hz
+        peak = s["x"]["values"][max(range(len(s["values"])), key=s["values"].__getitem__)]
+        body = results(rec)["first_body_mode"]["value"]
+        self.assertLess(abs(peak - body) / body, 0.15)  # the body bouncing on its springs dominates the seat
+        contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
+
     def test_ladder_twist_formula(self):
         E, nu, Jr, Jc, n, w, L = 205000.0, 0.3, 3.4e5, 1.2e5, 6.0, 700.0, 2500.0
         I0, rx, k, t, d = 100.0, 640.0, 20.0, 1100.0, 900.0

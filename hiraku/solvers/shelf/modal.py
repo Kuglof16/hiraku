@@ -121,4 +121,42 @@ class Modal(BuiltinTool):
                            "per_node": {nid: [float(x) for x in u] for nid, u in r["shapes"][i].items()}})
         effects = [{"name": f"mode {i + 1}: share of the shape that bends the frame", "value": float(flex[i]), "unit": "1"}
                    for i in range(min(FIELD_MODES, len(f)))]
-        return {"results": results, "fields": fields, "effects": effects}
+        series, note = response_series(design, r, f, flex)
+        effects.append({"name": note})
+        return {"results": results, "fields": fields, "effects": effects, "series": series}
+
+
+FRF_POINTS = 400
+
+
+def body_damping(design: Record) -> float:
+    """Damping ratio of the body on its suspension: all dampers over twice the root of all springs times the
+    sprung mass."""
+    from ..k0_handcalc.vehicle import mass_summary
+
+    summ = mass_summary(design)
+    sus = [s.get("suspension", {}) for s in design["supports"]]
+    k = sum(float(s.get("stiffness_N_per_mm") or 0.0) for s in sus) * 1e3
+    c = sum(float(s.get("damping_Ns_per_mm") or 0.0) for s in sus) * 1e3
+    m = summ["mass_kg"] - summ["unsprung_mass_kg"]
+    return c / (2.0 * math.sqrt(k * m)) if k > 0 and m > 0 else 0.0
+
+
+def response_series(design: Record, r: Record, f, flex) -> tuple[list[Record], str]:
+    """The frequency response of the driver's seat (the first occupant's carried_by nodes, or the frame nodes)
+    to a vertical force at the first front wheel, as a series against frequency."""
+    from ..k1_frame.modal import FRAME_DAMPING, frequency_response
+
+    fm = r["model"]
+    sup = max(design["supports"], key=lambda s: s["position_mm"][0])
+    seat = next((p.get("carried_by") for p in design.get("parts", []) if p["kind"] == "occupant" and p.get("carried_by")),
+                None) or fm.frame_nodes
+    zb = body_damping(design)
+    zetas = [FRAME_DAMPING if x >= FLEX_LIMIT else zb for x in flex]
+    freqs = np.linspace(0.0, 1.1 * float(max(f)), FRF_POINTS)
+    amp = frequency_response(fm, fm.wheel_nodes[sup["id"]], list(seat), zetas, freqs)
+    note = (f"frequency response: vertical motion at {', '.join(seat)} per vertical force at wheel {sup['id']}, over its "
+            f"value at 0 Hz; damping ratio {zb:.2f} for the body on its springs (from the dampers), {FRAME_DAMPING:g} for "
+            f"the frame's modes (assumed, not checked)")
+    return [{"channel": f"frequency_response.{sup['id']}", "unit": "1", "values": [round(float(a), 5) for a in amp],
+             "x": {"quantity": "frequency", "unit": "Hz", "values": [round(float(x), 4) for x in freqs]}}], note

@@ -209,9 +209,11 @@ requirements:
 # scripted step. P1, S5 and N1 have no criterion: they are compared but not judged.
 tests: [P1, R1, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3, H5]
 # Cases past the limit, for showing the failing side: their verdicts are expected to be red.
-# P1 and R1 at a 250 mm step (hiraku/catalog/build.py); F1, S4 and S5 from the K2 builders.
-# S3 has none (on the demo vehicle the tyres slide before a wheel lifts).
-beyond: [P1, R1, F1, S4, S5]
+# P1 and R1 at a 250 mm step, and P1 at a step higher than the front wheel (hiraku/catalog/build.py);
+# F1, S4 and S5 from the K2 builders; T1 at an assumed air temperature from the analysis builders.
+# S3 has none (on the demo vehicle two wheels never lift in the lane change: the K2 team's runs at
+# friction 0.8 to 1.6 and 50 to 80 km/h).
+beyond: [P1, R1, T1, F1, S4, S5]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 1
 cost_limit_usd: 2.0

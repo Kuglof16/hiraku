@@ -8,6 +8,7 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `frame2d.py` | 平面の骨組みの剛性法。閉じた式の無い骨組みで K1 と比べる二つ目の意見。`hiraku.solvers` とはコードを共有しない |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
+| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる) |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方
@@ -15,7 +16,8 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 venv の Python で、リポジトリの一番上から。
 
 ```
-python -m unittest                                   # 全部の試験 (skip は理由つきで出る: -v)
+python -m qa.run_tests                               # 全部の試験を並べて回す (main に入れる前はこれ)
+python -m unittest                                   # 全部の試験を 1 つのプロセスで (skip は理由つきで出る: -v)
 python -m qa.check_run runs/<run_id>                 # 1 回の実行の記録を点検
 python -m qa.check_run --all --recompute             # runs/ の全部。予測を K0 で計算し直す
 python -m qa.check_run runs/<run_id> --effects       # hooks が止めた所とその次の記録、食い違いと原因、合否の出どころ
