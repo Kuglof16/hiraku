@@ -126,6 +126,7 @@ OWNERS = {
         "tests/contract/",
         "docs/",
         "README.md",
+        "HIRAKU.cmd",  # double-click launcher of the screen
         "CLAUDE.md",
         "requirements.txt",
         ".gitignore",

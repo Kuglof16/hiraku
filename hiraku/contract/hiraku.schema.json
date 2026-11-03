@@ -1576,6 +1576,107 @@
             "type": "string"
           },
           "description": "Values the tool had to assume because neither the load case nor the design gives them (e.g. a default side-force coefficient)."
+        },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "What the solver put on the model for this load case (pre-processing), for drawing and checking. Node numbers are indices into nodes_mm of the analysis's mesh (mesh_id).",
+          "properties": {
+            "mesh_id": {
+              "type": "string",
+              "pattern": "^mesh-[0-9]{4,}$"
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "node",
+                  "dofs"
+                ],
+                "properties": {
+                  "node": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "dofs": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "ux",
+                        "uy",
+                        "uz",
+                        "rx",
+                        "ry",
+                        "rz"
+                      ]
+                    }
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "loads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "origin_mm",
+                  "vector_N"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "origin_mm": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "vector_N": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "moment_Nmm": {
+                    "$ref": "#/$defs/vec3"
+                  },
+                  "spread_to": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "node",
+                        "weight"
+                      ],
+                      "properties": {
+                        "node": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "weight": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "description": "How a point load was distributed (RBE3-like): mesh nodes and weights."
+                  }
+                }
+              }
+            },
+            "inertia_relief": {
+              "type": "boolean",
+              "description": "Unbalanced load taken by inertia instead of supports."
+            },
+            "checks": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/quantity"
+              },
+              "description": "Pre-processing checks: e.g. equilibrium_residual, model_mass, design_mass."
+            }
+          }
         }
       }
     },
