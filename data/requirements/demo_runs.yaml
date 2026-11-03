@@ -1,0 +1,63 @@
+# The runs the screen offers as demos (its demo list) and the video cuts each one is for.
+# file: a requirements file under data/requirements/ (its round_limit and cost_limit_usd apply).
+# request: an A1 request instead of a run: the want of data/requirements/products/<product>.yaml is sent
+#   and Claude picks the domains (those products have no design kind yet: hiraku.designgen.archetypes is
+#   empty for their flags, so a run would stop before version 1).
+# modes: how it is meant to be run. Every file here ran end to end in its scripted run before it was
+# listed, or stops where its line says (tests/tools/test_catalog.py checks the files load).
+runs:
+  - id: n09-electric-guitar
+    title: ギターの分野を選ぶ
+    shows: 依頼の文から Claude が製品の性質を読み、使う分野とその理由・呼び名を選ぶ (A1)
+    request: {product: electric-guitar}
+    modes: [claude]
+    cuts: [N09]
+  - id: n09-care-bed
+    title: 介護ベッドの分野を選ぶ
+    shows: 依頼の文から Claude が製品の性質を読み、使う分野とその理由・呼び名を選ぶ (A1)
+    request: {product: care-bed}
+    modes: [claude]
+    cuts: [N09]
+  - id: n09-serving-robot
+    title: 配膳ロボの分野を選ぶ
+    shows: 依頼の文から Claude が製品の性質を読み、使う分野とその理由・呼び名を選ぶ (A1)
+    request: {product: serving-robot}
+    modes: [claude]
+    cuts: [N09]
+  - id: n11-n12
+    title: 重心の高さの単位の取り違え
+    shows: >-
+      要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、照合で
+      手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
+    file: offroad-4w-n12.yaml
+    modes: [claude, scripted]
+    cuts: [N11, N12]
+  - id: n13
+    title: ロールバーのツールをその場で作る
+    shows: >-
+      横転しても乗っている人を守りたい。棚に無いロールバーの横転のツールを、Claude が実行の中で書き、
+      答えの分かっている例で確かめてから使う (台本の運転では、R4 は判定の無いまま止まる)
+    file: offroad-4w-n13.claude.yaml
+    modes: [claude]
+    cuts: [N13]
+  - id: n14
+    title: ナレッジを渡して規則にする
+    shows: >-
+      実行の途中で規則のファイルを A5 に落とすと規則になり、部品に当たり、HIRAKU が聞き返す。Claude で
+      回すときは、実行が始まってから data/knowledge/samples/bending-notes.md を A5 に落とす
+    file: offroad-4w-n14.yaml
+    modes: [scripted, claude]
+    cuts: [N14]
+  - id: video
+    title: 動画の運転 (限界の外を含む)
+    shows: >-
+      デモの車の全部の試験と限界の外の 7 つ。版 1 の赤 (つなぎ目の壁・組み立て・加速) を設計役が直し、
+      版 2 で直せる赤は緑になる。限界の外は赤のまま、直しの回数を使い切って止まる
+    file: offroad-4w-video.yaml
+    modes: [scripted, claude]
+    cuts: [N04, N06, N17]
+  - id: demo
+    title: デモの車の 6 つの試験
+    shows: 段差・フレーム・振動・組み立て・加速。版 1 の赤を設計役が直し、版 2 で全部緑
+    file: offroad-4w.yaml
+    modes: [scripted, claude]

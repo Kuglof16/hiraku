@@ -3,7 +3,7 @@ import unittest
 
 from hiraku import contract
 from hiraku.catalog import (CatalogError, applies, build_load_cases, builder_for, load_catalog, load_requirements,
-                            min_frame_yield, owner_agent, parts_on_board, project_fields)
+                            min_frame_yield, owner_agent, parts_on_board, project_fields, read_data)
 from hiraku.tools.summary import design_summary
 from tests.tools.fakes import example_design, loaded_design
 from tests.tools.helpers import REQUIREMENTS
@@ -144,6 +144,18 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["wheelbase"]["value"], 1800.0)
         self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
+
+    def test_the_demo_runs_point_at_files_that_load(self):
+        listed = read_data(REQUIREMENTS.parent / "demo_runs.yaml")["runs"]
+        self.assertEqual(len({r["id"] for r in listed}), len(listed))
+        for r in listed:
+            with self.subTest(run=r["id"]):
+                self.assertTrue(r["title"] and r["shows"] and r["modes"])
+                self.assertEqual(("file" in r) + ("request" in r), 1)
+                if "file" in r:
+                    self.assertEqual(contract.errors("requirements_file", load_requirements(REQUIREMENTS.parent / r["file"])), [])
+                else:
+                    self.assertTrue((REQUIREMENTS.parent / "products" / f"{r['request']['product']}.yaml").is_file())
 
     def test_the_frame_yield_leaves_out_another_parts_members(self):
         d = loaded_design()
