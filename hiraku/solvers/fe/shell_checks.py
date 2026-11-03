@@ -152,6 +152,146 @@ def cantilever_strip(kind: str = "tri", L: float = 200.0, b: float = 20.0, t: fl
             "w_shear": P * L / (5.0 / 6.0 * G * b * t), "spread": float(np.ptp(sol.displacements[tip, 2]))}
 
 
+DRILL_SPRING = 1e-3  # N mm / rad
+
+
+def drill_springs(model: FEModel, ids, comp: int, k: float = DRILL_SPRING) -> None:
+    """Very soft ground springs (k N mm/rad) on the global rotation `comp` (the walls' normal) of flat MITC4
+    meshes. MITC4's drilling terms (k1_shell: the centre penalty and the hourglass pattern) leave the two
+    linear patterns (1, 0, -1, 0), (0, 1, 0, -1) of an element's normal rotations free, and a flat structured
+    mesh assembles them into zero-energy checkerboards (measured: two eigenvalues of 1e-17 of the largest on
+    a 4 x 6 plate, which then fails the static solve). Holding the rotation instead is wrong: the drilling
+    penalty (theta_n - omega) then puts reaction couples on the in-plane rotation omega and takes part of an
+    in-plane bending moment from the membrane (measured on strip_lateral_buckling: M_cr 16 % high at L / h
+    = 20, 2.4 times at L / h = 80). The springs here are 1e-8 of the drilling penalty's scale."""
+    from .connect import Spring
+
+    ids = np.asarray(ids, int)
+    kk = np.zeros(6)
+    kk[comp] = k
+    model.add(Spring(np.stack([ids, -np.ones(len(ids), int)], axis=1), kk, rotations=True, name="drill springs"))
+
+
+def ritz_linear_edge(a: float, b: float, t: float, psi: float, n_terms: int = 30, m_max: int = 8) -> dict:
+    """[Ritz] buckling stress sigma0 of a simply supported a x b plate whose edges x = 0, a carry the
+    compression sigma(y) = sigma0 (1 - psi y / b) (psi = 0 uniform, 2 pure in-plane bending), by the energy
+    method with w = sum a_mn sin(m pi x / a) sin(n pi y / b), n = 1..n_terms (the method of Timoshenko &
+    Gere 1961, chapter 9, for plates under in-plane bending; its tabulated k, e.g. 23.9 for pure bending,
+    is not used here and not checked). Strain energy (pi^4 a b D / 8) sum a_mn^2 (m^2/a^2 + n^2/b^2)^2; work
+    of the stress (t / 2) integral sigma(y) w_,x^2 dA = (t a / 4) (m pi / a)^2 sum_n,p a_mn a_mp I_np,
+    I_np = integral_0^b sigma(y) / sigma0 sin(n pi y / b) sin(p pi y / b) dy (Gauss-Legendre, 200 points).
+    The m terms do not couple; for each m the smallest positive eigenvalue of K a = sigma0 G a, then the
+    smallest over m. A Ritz value: an upper bound that falls as n_terms grows."""
+    from scipy.linalg import eigh
+
+    D = E_ST * t ** 3 / (12 * (1 - NU_ST ** 2))
+    gp, gw = np.polynomial.legendre.leggauss(200)
+    y = 0.5 * b * (gp + 1.0)
+    wy = 0.5 * b * gw
+    n = np.arange(1, n_terms + 1)
+    S = np.sin(np.outer(n, y) * np.pi / b)
+    I = np.einsum("ny,py,y->np", S, S, wy * (1.0 - psi * y / b))
+    best = None
+    for m in range(1, m_max + 1):
+        K = np.diag(np.pi ** 4 * a * b * D / 4.0 * (m * m / a ** 2 + n * n / b ** 2) ** 2)
+        G = t * a / 2.0 * (m * np.pi / a) ** 2 * I
+        lam = eigh(G, K, eigvals_only=True)  # G a = mu K a, sigma0 = 1 / mu for the largest mu > 0
+        mu = lam.max()
+        s = 1.0 / mu
+        if best is None or s < best[0]:
+            best = (s, m)
+    return {"sigma_cr": best[0], "m": best[1], "k": best[0] * b * b * t / (np.pi ** 2 * D)}
+
+
+def linear_edge_buckling(psi: float = 2.0, a: float = 200.0, b: float = 300.0, t: float = 2.0, nx: int = 8,
+                         ny: int = 12, kind: str = "quad", at: str = "gauss", thickness_terms: bool = True) -> dict:
+    """The plate of ritz_linear_edge in MITC4 (or triangles): w = 0 and the rotation about the edge's in-plane
+    normal held on the four edges (eigen_checks.plate_buckling's support), ux = 0 on x = 0 and uy = 0 at
+    (0, 0); the edge x = a carries the consistent nodal forces of the traction -sigma0 (1 - psi y / b) t
+    (linear on each element edge: h (2 q_i + q_j) / 6). The stress inside is exactly sigma(y) (a linear
+    sigma_x, sigma_y = tau = 0 satisfies equilibrium and compatibility), so it varies across every element.
+    at, thickness_terms: passed to the MITC4 groups' geometric_stiffness."""
+    from . import eigen
+
+    nodes, q = plate_shell(a, b, nx, ny)
+    model = FEModel(nodes)
+    gs = mixed_groups(model, q, kind, t, E_ST, NU_ST, tri_where=lambda x, y: x > a / 2)
+    x, y = nodes[:, 0], nodes[:, 1]
+    model.fix(np.nonzero((x < 1e-9) | (x > a - 1e-9) | (y < 1e-9) | (y > b - 1e-9))[0], [2])
+    model.fix(np.nonzero((x < 1e-9) | (x > a - 1e-9))[0], [3])
+    model.fix(np.nonzero((y < 1e-9) | (y > b - 1e-9))[0], [4])
+    model.fix(np.nonzero(x < 1e-9)[0], [0])
+    model.fix(0, [1])
+    drill_springs(model, np.arange(len(nodes)), 5)
+    F = np.zeros((len(nodes), 6))
+    right = np.nonzero(x > a - 1e-9)[0]
+    right = right[np.argsort(y[right])]
+    qv = -(1.0 - psi * y[right] / b) * t  # force per length along x for sigma0 = 1
+    for i in range(len(right) - 1):
+        h = y[right[i + 1]] - y[right[i]]
+        F[right[i], 0] += h * (2 * qv[i] + qv[i + 1]) / 6.0
+        F[right[i + 1], 0] += h * (qv[i] + 2 * qv[i + 1]) / 6.0
+    for g in gs:
+        if isinstance(g, MITC4):
+            g.kg_options = {"at": at, "thickness_terms": thickness_terms}
+    r = eigen.buckling(model, F, 2)
+    rz = ritz_linear_edge(a, b, t, psi)
+    return {"sigma_cr": float(r.factors[0]), "sigma_ritz": rz["sigma_cr"], "k_ritz": rz["k"], "m_ritz": rz["m"],
+            "factors": r.factors}
+
+
+def narrow_strip_torsion_constant(h: float, t: float) -> float:
+    """[Strip] J of a thin rectangle h x t: h t^3 / 3 (1 - 0.630 t / h) (the series of Saint-Venant's solution
+    cut to its first correction, as commonly quoted, e.g. Timoshenko & Goodier, Theory of Elasticity;
+    not checked here)."""
+    return h * t ** 3 / 3.0 * (1.0 - 0.630 * t / h)
+
+
+def strip_lateral_buckling(L: float = 1000.0, h: float = 50.0, t: float = 2.0, nx: int = 40, nz: int = 4,
+                           at: str = "gauss", thickness_terms: bool = True) -> dict:
+    """[Strip] lateral-torsional buckling of a deep narrow strip (in the x-z plane, thickness t along y) bent in
+    its own plane by equal and opposite end moments M about y, in MITC4 shells (nz elements over the depth).
+    Fork ends: uy = 0 on every end node (lateral and twist held), uz = 0 at the bottom end nodes' middle
+    (here the node at z = 0); ux = 0 at one node; the drilling rotation (global ry, the walls' normal) held
+    held by drill_springs. The end moment is the linear axial traction sigma = M (z - h/2) / I
+    over the end edge, consistent nodal forces. Against M_cr = (pi / L) sqrt(E I_z G J) with I_z = h t^3 / 12
+    (Timoshenko & Gere 1961, chapter 6, for a beam without warping stiffness; a thin rectangle's warping
+    is negligible) - with E and with E / (1 - nu^2) (a plate's lateral bending; the strip lies between)."""
+    from . import eigen
+
+    xs, zs = np.linspace(0, L, nx + 1), np.linspace(0, h, nz + 1)
+    nodes = np.array([[x, 0.0, z] for z in zs for x in xs])
+    q = [[j * (nx + 1) + i, (j + 1) * (nx + 1) + i, (j + 1) * (nx + 1) + i + 1, j * (nx + 1) + i + 1]
+         for j in range(nz) for i in range(nx)]
+    model = FEModel(nodes)
+    g = model.add(MITC4(q, t, E_ST, NU_ST))
+    g.kg_options = {"at": at, "thickness_terms": thickness_terms}
+    x, z = nodes[:, 0], nodes[:, 2]
+    ends = [np.nonzero(x < 1e-9)[0], np.nonzero(x > L - 1e-9)[0]]
+    for e in ends:
+        model.fix(e, [1])
+        model.fix(e[np.argmin(z[e])], [2])
+    model.fix(ends[0][np.argmin(z[ends[0]])], [0])
+    drill_springs(model, np.arange(len(nodes)), 4)
+    I = t * h ** 3 / 12.0
+    M = 1.0e5
+    F = np.zeros((len(nodes), 6))
+    for sgn, e in zip((-1.0, 1.0), ends):
+        e = e[np.argsort(z[e])]
+        qv = sgn * M * (zs - h / 2) / I * t  # N/mm along x: the moment about +y at x = L is M
+        for i in range(nz):
+            dz = zs[i + 1] - zs[i]
+            F[e[i], 0] += dz * (2 * qv[i] + qv[i + 1]) / 6.0
+            F[e[i + 1], 0] += dz * (qv[i] + 2 * qv[i + 1]) / 6.0
+    r = eigen.buckling(model, F, 2)
+    G = E_ST / (2 * (1 + NU_ST))
+    Iz = h * t ** 3 / 12.0
+    J = narrow_strip_torsion_constant(h, t)
+    Mb = np.pi / L * np.sqrt(E_ST * Iz * G * J)
+    return {"M_cr": float(r.factors[0] * M), "M_beam": Mb, "M_plate": Mb / np.sqrt(1 - NU_ST ** 2),
+            "factors": r.factors}
+
+
 def tri_plate_buckling(a: float = 200.0, b: float = 200.0, nx: int = 16, ny: int = 16, kind: str = "tri",
                        bending: str = "dkt") -> dict:
     """eigen_checks.plate_buckling (simply supported plate, uniaxial compression) on triangles."""
