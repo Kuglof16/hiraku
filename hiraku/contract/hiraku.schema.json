@@ -51,6 +51,7 @@
         "Ah",
         "J/K",
         "rad/s",
+        "rad/s^2",
         "deg/s"
       ]
     },
@@ -356,6 +357,113 @@
         "verified": {
           "type": "boolean",
           "description": "false until the value is checked against the cited source."
+        },
+        "tensile_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Minimum tensile strength."
+        },
+        "elongation_pct": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum elongation after fracture."
+        },
+        "stress_strain": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Engineering stress-strain points [strain, stress MPa] from 0 to the tensile strength; at least yield and tensile."
+        },
+        "thermal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expansion_per_K": {
+              "type": "number"
+            },
+            "conductivity_W_per_mK": {
+              "type": "number"
+            },
+            "specific_heat_J_per_kgK": {
+              "type": "number"
+            }
+          }
+        },
+        "fatigue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parent": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "FAT_MPa",
+                "m"
+              ],
+              "properties": {
+                "FAT_MPa": {
+                  "type": "number"
+                },
+                "m": {
+                  "type": "number"
+                },
+                "iiw_detail": {
+                  "type": "string"
+                },
+                "meaning": {
+                  "type": "string"
+                }
+              }
+            },
+            "welds": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "FAT_MPa",
+                  "m"
+                ],
+                "properties": {
+                  "FAT_MPa": {
+                    "type": "number"
+                  },
+                  "m": {
+                    "type": "number"
+                  },
+                  "iiw_detail": {
+                    "type": "string"
+                  },
+                  "meaning": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "N_ref": {
+              "type": "number"
+            },
+            "N_knee": {
+              "type": "number"
+            },
+            "m2": {
+              "type": "number"
+            }
+          },
+          "description": "S-N data: the parent material and named weld details (IIW FAT classes)."
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Per field name: the source (title, table, URL) and whether it was checked."
         }
       }
     },
@@ -2995,6 +3103,7 @@
                       "done",
                       "not_judged",
                       "round_limit",
+                      "red_left",
                       "cost_limit",
                       "turn_limit",
                       "user_stop",
@@ -3052,6 +3161,7 @@
                           "enum": [
                             "not_judged",
                             "round_limit",
+                            "red_left",
                             "cost_limit",
                             "turn_limit",
                             "user_stop"
