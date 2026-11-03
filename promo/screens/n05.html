@@ -11,35 +11,71 @@
 <style>
   /* N05: the vehicle stands in front of a closed double door that fills the
      screen, with warm light in the door's seam. The door stays shut a while
-     (the light grows, the vehicle comes slowly closer), then its leaves part
-     a little, stop for a moment, and swing wide towards the viewer
-     (kannon-biraki: each leaf hinged on its outer edge). Light spills out
-     from behind the door; the vehicle does not open: it fades out as the
-     leaves swing wide. Then the tiles of the preset tests fly out into a
-     grid and the name settles above it.
+     (the light grows, the vehicle comes slowly closer and a triangle mesh
+     shows over it); a bolt slides back and the leaves jolt, the seam light
+     flickers; the leaves part a little, run past and settle like heavy doors,
+     stop for a moment, and swing wide towards the viewer (kannon-biraki: each
+     leaf hinged on its outer edge, with a thick free edge) while the view
+     moves in through the door. Shafts of light and floating motes come
+     through the opening; the vehicle does not open: it comes apart element by
+     element, from the middle outwards. The light floods out, the tiles of the
+     preset tests fly out into a grid (trailing faint outlines, a glow as each
+     lands), and a light strokes the name in from left to right.
      Layers, back to front: light behind the door, the door, the light in the
-     seam and the spill, the vehicle, the tiles, the flash, the name.
+     seam and the spill, the shafts and motes, the vehicle and its mesh, the
+     tiles, their trails and landing glows, the flood of light, the flash, the
+     name.
      ?layer=fg draws all of these but the tiles (.bg-only): the door hides
      the app's render below until it opens, then it is hidden (visibility)
-     and the ground is transparent again.
+     and the ground is transparent again. The trails and landing glows move
+     with the app's tiles (same cells, start times, flight and easing).
      The vehicle's picture comes from one place: ?hero=<png> in the URL, else
      layout.json n05.hero.src, else the line drawing of vehicle.js.
      Placement and times: layout.json n05 (CSS variables from layout.js;
-     --t-* from n05.times, --door-* from n05.door); the tiles are placed on
-     the cells of promoLayout.gridCells(n05.grid). */
+     --t-* from n05.times, --door-* from n05.door, --rays-*, --dust-*,
+     --bloom-*, --hero-mesh-*, --tile-fx-*, --name-wipe-* from the groups of
+     the same names); the tiles are placed on the cells of
+     promoLayout.gridCells(n05.grid). Shafts, motes and the mesh are made by
+     the script below from seeded random numbers (the same seed, the same
+     picture). */
   :root {
     --page-bg: var(--night);
     /* the wide swing starts after the crack and the pause */
     --swing-at: calc(var(--t-door-open) + var(--door-crack-dur) + var(--door-hold-dur));
+    --to-burst: calc(var(--t-burst) - var(--t-door-open));
+    --mesh-ink: rgba(22, 21, 18, 0.62);
+    /* set by the script from layout.json (plain numbers) */
+    --dolly-scale: 1;
+    --rays-peak: 0.5;
+    --bloom-peak: 0.4;
+    /* the name's measured extent (design px), refined by the script */
+    --wipe-x0: calc(480 * var(--u));
+    --wipe-x1: calc(1440 * var(--u));
+  }
+
+  /* --- the light layers in front of and behind the door grow with the
+         dolly as the door does (same factor, about the stage's centre) --- */
+  .fx-scene {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    animation: fx-dolly var(--to-burst) var(--door-dolly-ease) both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes fx-dolly {
+    from { transform: scale(1); }
+    to   { transform: scale(var(--dolly-scale)); }
   }
 
   /* --- light behind the door: only the opening shows it --- */
   .door-back {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg,
-      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.14) 22%, rgba(246, 234, 208, 0.6) 50%,
-      rgba(246, 234, 208, 0.14) 78%, rgba(246, 234, 208, 0) 100%);
+    background:
+      radial-gradient(ellipse 22% 40% at 50% 44%, rgba(255, 246, 226, 0.55), rgba(246, 234, 208, 0) 70%),
+      linear-gradient(90deg,
+        rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.08) 22%, rgba(246, 234, 208, 0.42) 50%,
+        rgba(246, 234, 208, 0.08) 78%, rgba(246, 234, 208, 0) 100%);
     /* fades soon after the leaves are out, so (in ?layer=fg) the app's
        render below this page is not washed out for long */
     animation: back-fade var(--door-spill-dur) ease-out both;
@@ -64,23 +100,49 @@
     from { visibility: visible; }
     to   { visibility: hidden; }
   }
-  /* .leaf turns by the crack, .leaf-body inside it on to the full angle:
-     both hinged on the same outer edge, so the turns add up */
+  /* the view moves in: the whole door comes towards the viewer */
+  .door-cam {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    animation: door-dolly var(--to-burst) var(--door-dolly-ease) both;
+    animation-delay: var(--t-door-open);
+  }
+  @keyframes door-dolly {
+    from { transform: translateZ(0); }
+    to   { transform: translateZ(var(--door-dolly-px)); }
+  }
+  /* Nested turns, all hinged on the same outer edge, so they add up:
+     .leaf the jolt as the bolt goes, .leaf-crack the crack (running past),
+     .leaf-settle back by the overshoot, .leaf-body the wide swing */
   .leaf {
     position: absolute;
     top: 0;
     width: 50%;
     height: 100%;
     transform-style: preserve-3d;
+    animation: jolt-l var(--door-latch-dur) linear both;
+    animation-delay: var(--t-latch);
+  }
+  .leaf-l { left: 0; transform-origin: 0 50%; }
+  .leaf-r { right: 0; transform-origin: 100% 50%; animation-name: jolt-r; }
+  .leaf-crack, .leaf-settle, .leaf-body {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transform-origin: inherit;
+  }
+  .leaf-crack {
     animation: crack-l var(--door-crack-dur) var(--door-crack-ease) both;
     animation-delay: var(--t-door-open);
   }
-  .leaf-l { left: 0; transform-origin: 0 50%; }
-  .leaf-r { right: 0; transform-origin: 100% 50%; animation-name: crack-r; }
+  .leaf-r .leaf-crack { animation-name: crack-r; }
+  .leaf-settle {
+    animation: settle-l var(--door-settle-dur) linear both;
+    animation-delay: calc(var(--t-door-open) + var(--door-crack-dur));
+  }
+  .leaf-r .leaf-settle { animation-name: settle-r; }
   .leaf-body {
-    position: absolute;
-    inset: 0;
-    transform-origin: inherit;
     border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 22%, transparent);
     animation: swing-l var(--door-open-dur) var(--door-ease) both;
     animation-delay: var(--swing-at);
@@ -94,14 +156,39 @@
     background: linear-gradient(270deg, var(--night) 0%, var(--night-2) 85%, #24221e 100%);
     animation-name: swing-r;
   }
-  /* the free edges come towards the viewer */
+  /* the free edges come towards the viewer (left leaf: negative turn) */
+  @keyframes jolt-l {
+    0%   { transform: rotateY(0deg); }
+    45%  { transform: rotateY(0deg); }
+    62%  { transform: rotateY(calc(-1 * var(--door-latch))); }
+    80%  { transform: rotateY(calc(-0.25 * var(--door-latch))); }
+    100% { transform: rotateY(calc(-0.4 * var(--door-latch))); }
+  }
+  @keyframes jolt-r {
+    0%   { transform: rotateY(0deg); }
+    45%  { transform: rotateY(0deg); }
+    62%  { transform: rotateY(var(--door-latch)); }
+    80%  { transform: rotateY(calc(0.25 * var(--door-latch))); }
+    100% { transform: rotateY(calc(0.4 * var(--door-latch))); }
+  }
   @keyframes crack-l {
     from { transform: rotateY(0deg); }
-    to   { transform: rotateY(calc(-1 * var(--door-crack))); }
+    to   { transform: rotateY(calc(-1 * (var(--door-crack) + var(--door-crack-overshoot)))); }
   }
   @keyframes crack-r {
     from { transform: rotateY(0deg); }
-    to   { transform: rotateY(var(--door-crack)); }
+    to   { transform: rotateY(calc(var(--door-crack) + var(--door-crack-overshoot))); }
+  }
+  /* back by the overshoot, with a small rebound: a heavy leaf stopping */
+  @keyframes settle-l {
+    0%   { transform: rotateY(0deg); animation-timing-function: cubic-bezier(.3, .5, .4, 1); }
+    55%  { transform: rotateY(calc(1.15 * var(--door-crack-overshoot))); animation-timing-function: ease-in-out; }
+    100% { transform: rotateY(var(--door-crack-overshoot)); }
+  }
+  @keyframes settle-r {
+    0%   { transform: rotateY(0deg); animation-timing-function: cubic-bezier(.3, .5, .4, 1); }
+    55%  { transform: rotateY(calc(-1.15 * var(--door-crack-overshoot))); animation-timing-function: ease-in-out; }
+    100% { transform: rotateY(calc(-1 * var(--door-crack-overshoot))); }
   }
   @keyframes swing-l {
     from { transform: rotateY(0deg); }
@@ -110,6 +197,39 @@
   @keyframes swing-r {
     from { transform: rotateY(0deg); }
     to   { transform: rotateY(calc(var(--door-angle) - var(--door-crack))); }
+  }
+  /* the leaf's thickness: a strip at the free edge, turned back by 90 deg;
+     it faces the opening and catches the light from behind */
+  .edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--door-thickness-px);
+  }
+  .leaf-l .edge {
+    left: 100%;
+    transform-origin: 0 50%;
+    transform: rotateY(90deg);
+    background: linear-gradient(90deg, #6f6150 0%, #a8936f 12%, #4a4136 40%, #2a2620 100%);
+  }
+  .leaf-r .edge {
+    right: 100%;
+    transform-origin: 100% 50%;
+    transform: rotateY(-90deg);
+    background: linear-gradient(270deg, #6f6150 0%, #a8936f 12%, #4a4136 40%, #2a2620 100%);
+  }
+  /* light raking across the leaf from the seam, while the door is shut */
+  .rake {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation: rake var(--swing-at) ease-in both;
+  }
+  .leaf-l .rake { background: linear-gradient(270deg, rgba(246, 234, 208, 0.16), rgba(246, 234, 208, 0) 38%); }
+  .leaf-r .rake { background: linear-gradient(90deg, rgba(246, 234, 208, 0.16), rgba(246, 234, 208, 0) 38%); }
+  @keyframes rake {
+    from { opacity: 0.25; }
+    to   { opacity: 1; }
   }
   /* a swinging leaf turns away from the light and darkens */
   .leaf-body::after {
@@ -125,14 +245,33 @@
     from { opacity: 0; }
     to   { opacity: 0.6; }
   }
-  /* raised panels: an outline, a raised border, and an inner outline */
+  /* raised panels: an outline, a raised border lit on the side facing the
+     seam and shaded on the other, and an inner outline */
   .pane {
     position: absolute;
     left: var(--door-panel-inset-px);
     right: var(--door-panel-inset-px);
     border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 45%, transparent);
-    background: color-mix(in srgb, var(--night) 60%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--night-2) 80%, transparent),
+                                color-mix(in srgb, var(--night) 70%, transparent));
+    --lit: calc(var(--door-panel-bevel-px) * 0.45);
+  }
+  .leaf-l .pane {
     box-shadow:
+      inset calc(-1 * var(--lit)) 0 0 rgba(246, 234, 208, 0.09),
+      inset var(--lit) 0 0 rgba(0, 0, 0, 0.45),
+      inset 0 var(--lit) 0 rgba(246, 234, 208, 0.04),
+      inset 0 calc(-1 * var(--lit)) 0 rgba(0, 0, 0, 0.35),
+      inset 0 0 0 var(--door-panel-bevel-px) var(--night-2),
+      inset 0 0 0 calc(var(--door-panel-bevel-px) + var(--door-panel-line-px))
+        color-mix(in srgb, var(--on-night-soft) 28%, transparent);
+  }
+  .leaf-r .pane {
+    box-shadow:
+      inset var(--lit) 0 0 rgba(246, 234, 208, 0.09),
+      inset calc(-1 * var(--lit)) 0 0 rgba(0, 0, 0, 0.45),
+      inset 0 var(--lit) 0 rgba(246, 234, 208, 0.04),
+      inset 0 calc(-1 * var(--lit)) 0 rgba(0, 0, 0, 0.35),
       inset 0 0 0 var(--door-panel-bevel-px) var(--night-2),
       inset 0 0 0 calc(var(--door-panel-bevel-px) + var(--door-panel-line-px))
         color-mix(in srgb, var(--on-night-soft) 28%, transparent);
@@ -145,19 +284,71 @@
     top: calc(var(--door-panel-inset-px) + var(--door-panel-upper-h-px) + var(--door-panel-gap-px));
     bottom: var(--door-panel-inset-px);
   }
+  /* the pull on its back plate, lit from the seam side */
+  .plate {
+    position: absolute;
+    top: calc(50% - var(--door-handle-h-px) / 2 - var(--door-handle-w-px) * 2);
+    height: calc(var(--door-handle-h-px) + var(--door-handle-w-px) * 4);
+    width: calc(var(--door-handle-w-px) * 3);
+    border-radius: calc(var(--door-handle-w-px) * 0.5);
+    background: color-mix(in srgb, var(--night-2) 70%, #2c2a25);
+    box-shadow: 0 0 0 var(--door-panel-line-px) color-mix(in srgb, var(--on-night-soft) 25%, transparent);
+  }
+  .leaf-l .plate { right: calc(var(--door-handle-seam-gap-px) - var(--door-handle-w-px)); }
+  .leaf-r .plate { left: calc(var(--door-handle-seam-gap-px) - var(--door-handle-w-px)); }
   .handle {
     position: absolute;
     top: calc(50% - var(--door-handle-h-px) / 2);
     width: var(--door-handle-w-px);
     height: var(--door-handle-h-px);
     border-radius: var(--door-handle-w-px);
-    background: linear-gradient(90deg,
-      color-mix(in srgb, var(--on-night-soft) 35%, transparent),
-      color-mix(in srgb, var(--on-night-soft) 80%, transparent),
-      color-mix(in srgb, var(--on-night-soft) 35%, transparent));
   }
-  .leaf-l .handle { right: var(--door-handle-seam-gap-px); }
-  .leaf-r .handle { left: var(--door-handle-seam-gap-px); }
+  .leaf-l .handle {
+    right: var(--door-handle-seam-gap-px);
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--on-night-soft) 30%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 70%, transparent) 55%,
+      color-mix(in srgb, var(--glow) 90%, transparent));
+  }
+  .leaf-r .handle {
+    left: var(--door-handle-seam-gap-px);
+    background: linear-gradient(270deg,
+      color-mix(in srgb, var(--on-night-soft) 30%, transparent),
+      color-mix(in srgb, var(--on-night-soft) 70%, transparent) 55%,
+      color-mix(in srgb, var(--glow) 90%, transparent));
+  }
+  /* the bolt across the seam (on the left leaf) and its keeper (right leaf) */
+  .bolt, .keeper {
+    position: absolute;
+    top: calc(50% - var(--door-handle-h-px) / 2 - var(--door-handle-w-px) * 2 - var(--door-bolt-gap-px) - var(--door-bolt-h-px));
+    height: var(--door-bolt-h-px);
+  }
+  .bolt {
+    right: calc(-1 * var(--door-bolt-reach-px));
+    width: var(--door-bolt-w-px);
+    border-radius: calc(var(--door-bolt-h-px) / 2);
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--glow) 70%, transparent), color-mix(in srgb, var(--on-night-soft) 55%, transparent) 45%,
+      color-mix(in srgb, var(--night) 60%, #3a372f));
+    transform: translateZ(calc(2 * var(--u)));
+    animation: bolt-back var(--door-latch-dur) cubic-bezier(.6, 0, .3, 1) both;
+    animation-delay: var(--t-latch);
+  }
+  @keyframes bolt-back {
+    0%   { transform: translateZ(calc(2 * var(--u))); }
+    55%  { transform: translateX(calc(-1 * var(--door-bolt-travel-px))) translateZ(calc(2 * var(--u))); }
+    100% { transform: translateX(calc(-1 * var(--door-bolt-travel-px))) translateZ(calc(2 * var(--u))); }
+  }
+  .keeper {
+    left: calc(var(--door-bolt-reach-px) * 0.15);
+    width: calc(var(--door-bolt-reach-px) * 1.3);
+    margin-top: calc(-0.4 * var(--door-bolt-h-px));
+    height: calc(1.8 * var(--door-bolt-h-px));
+    border: var(--door-panel-line-px) solid color-mix(in srgb, var(--on-night-soft) 45%, transparent);
+    border-left: 0;
+    border-radius: 0 calc(var(--door-bolt-h-px) / 3) calc(var(--door-bolt-h-px) / 3) 0;
+    background: color-mix(in srgb, var(--night-2) 70%, #2c2a25);
+  }
 
   /* --- the light in the seam, and the light that spills out --- */
   .door-light {
@@ -180,6 +371,21 @@
   @keyframes seam-out {
     0%, 30% { opacity: 1; }
     100%    { opacity: 0; }
+  }
+  /* the seam light falters once as the bolt goes */
+  .seam-flick {
+    position: absolute;
+    inset: 0;
+    animation: seam-flick var(--door-latch-dur) linear both;
+    animation-delay: var(--t-latch);
+  }
+  @keyframes seam-flick {
+    0%   { opacity: 1; }
+    14%  { opacity: 0.3; }
+    26%  { opacity: 1; }
+    40%  { opacity: 0.55; }
+    52%  { opacity: 1; }
+    100% { opacity: 1; }
   }
   .seam-glow, .seam-core {
     position: absolute;
@@ -219,6 +425,63 @@
     100%    { transform: scaleX(1.3); opacity: 0; }
   }
 
+  /* --- shafts of light through the opening (n05.rays) --- */
+  svg.rays, svg.dust {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    transform-origin: calc(var(--fly-from-x)) calc(var(--fly-from-y));
+  }
+  svg.rays {
+    animation:
+      rays-in var(--to-burst) cubic-bezier(.6, 0, .9, .6) both,
+      rays-out var(--rays-out-dur) ease-out forwards;
+    animation-delay: var(--t-door-open), var(--t-burst);
+  }
+  @keyframes rays-in {
+    0%   { opacity: 0; transform: scaleX(var(--rays-crack-scale)); }
+    45%  { opacity: calc(0.35 * var(--rays-peak)); transform: scaleX(calc(var(--rays-crack-scale) * 1.6)); }
+    100% { opacity: var(--rays-peak); transform: scaleX(1); }
+  }
+  @keyframes rays-out {
+    from { opacity: var(--rays-peak); transform: scaleX(1); }
+    to   { opacity: 0; transform: scaleX(1.25); }
+  }
+  .ray {
+    animation: shimmer var(--sd) ease-in-out infinite alternate;
+    animation-delay: var(--sp);
+  }
+  @keyframes shimmer {
+    from { opacity: calc(0.4 * var(--o)); }
+    to   { opacity: var(--o); }
+  }
+
+  /* --- motes floating in the light (n05.dust) --- */
+  svg.dust {
+    animation:
+      dust-in var(--dust-in-dur) ease-out both,
+      dust-out var(--dust-out-dur) ease-in forwards;
+    animation-delay: calc(var(--t-door-open) + var(--door-crack-dur)), var(--t-burst);
+  }
+  @keyframes dust-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dust-out { from { opacity: 1; } to { opacity: 0; } }
+  .mote {
+    animation:
+      drift var(--md) linear both,
+      twinkle var(--tw) ease-in-out infinite alternate;
+    animation-delay: var(--t-door-open), var(--tp);
+  }
+  @keyframes drift {
+    from { transform: translate(0, 0); }
+    to   { transform: translate(calc(var(--mx) * 1px), calc(var(--my) * 1px)); }
+  }
+  @keyframes twinkle {
+    from { opacity: calc(0.3 * var(--o)); }
+    to   { opacity: var(--o); }
+  }
+
   /* --- the vehicle, in front of the door --- */
   .hero {
     position: absolute;
@@ -235,11 +498,15 @@
       hero-fade var(--door-hero-fade-dur) ease-in forwards;
     animation-delay: 0s, var(--swing-at);
   }
+  /* with a picture, the mesh takes the vehicle apart; the box only grows
+     (and is cleared at the very end, should a piece remain) */
+  .hero.meshed { animation-name: hero-push, hero-grow; }
   .hero > svg, .hero > .hero-img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+    overflow: visible;
   }
   .hero > .hero-img { object-fit: contain; }
   .hero .v-line { stroke: var(--on-night); }
@@ -251,26 +518,39 @@
     from { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
     to   { transform: scale(var(--door-hero-fade-scale)); opacity: 0; }
   }
-
-  .burst {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 100%;
-    background: linear-gradient(90deg,
-      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.5) 35%, var(--glow) 50%,
-      rgba(246, 234, 208, 0.5) 65%, rgba(246, 234, 208, 0) 100%);
-    animation: burst 0.6s cubic-bezier(.2, .8, .3, 1) both;
-    animation-delay: calc(var(--t-burst) - 0.05s);
-    /* .safe ends at the subtitle band; fade out before it instead of a hard edge */
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
-            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+  @keyframes hero-grow {
+    0%   { transform: scale(var(--hero-motion-push-scale)); opacity: 1; }
+    99%  { opacity: 1; }
+    100% { transform: scale(var(--door-hero-fade-scale)); opacity: 0; }
   }
-  @keyframes burst {
-    0%   { transform: scaleX(0.01); opacity: 0; }
-    15%  { opacity: 1; }
-    100% { transform: scaleX(1.4); opacity: 0; }
+  /* the mesh (n05.hero_mesh): lines over the picture, then each element
+     flares, shrinks to its centre and takes its piece of the picture away */
+  .wire {
+    opacity: 0;
+    animation: wire-in var(--hero-mesh-in-dur) ease-out both;
+    animation-delay: var(--t-mesh-in);
+  }
+  @keyframes wire-in { from { opacity: 0; } to { opacity: 1; } }
+  .wire polygon {
+    fill: none;
+    stroke: var(--mesh-ink);
+    stroke-linejoin: round;
+  }
+  .wire polygon, .cells polygon {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: el-out var(--hero-mesh-el-dur) cubic-bezier(.55, 0, .8, .4) both;
+    animation-delay: var(--k);
+  }
+  .wire polygon { animation-name: line-out; }
+  @keyframes el-out {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(var(--hero-mesh-end-scale)); }
+  }
+  @keyframes line-out {
+    0%   { opacity: 1; transform: scale(1); stroke: var(--mesh-ink); }
+    25%  { stroke: var(--glow); stroke-width: calc(2.2 * var(--lw)); }
+    100% { opacity: 0; transform: scale(var(--hero-mesh-end-scale)); stroke: var(--glow); stroke-width: calc(2.2 * var(--lw)); }
   }
 
   .grid {
@@ -312,25 +592,199 @@
   .tile .v-line { stroke: var(--ink); }
   .tile .mark { stroke: var(--ink-soft); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .tile .solid { fill: #d9d4c7; stroke: var(--ink-soft); stroke-width: 2.5; }
+
+  /* --- trails and landing glows of the tiles (n05.tile_fx), drawn in
+         ?layer=fg too: the same flight as .tile and as the app's tiles --- */
+  .tile-fx {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .ghost, .land {
+    position: absolute;  /* one cell of gridCells */
+    border-radius: var(--tile-radius-px);
+  }
+  .ghost {
+    border: calc(1.5 * var(--u)) solid rgba(246, 234, 208, 0.9);
+    box-shadow: 0 0 calc(14 * var(--u)) rgba(246, 234, 208, 0.3);
+    opacity: 0;
+    animation:
+      ghost-fly var(--t-tile-in) var(--ease-tile) both,
+      ghost-fade var(--t-tile-in) linear both;
+    animation-delay: var(--gd), var(--gd);
+  }
+  @keyframes ghost-fly {
+    from { transform: translate(calc(var(--dx) * var(--u)), calc(var(--dy) * var(--u))) scale(0.2); }
+    to   { transform: none; }
+  }
+  @keyframes ghost-fade {
+    0%   { opacity: 0; }
+    12%  { opacity: var(--ga); }
+    55%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+  .land {
+    border: calc(2 * var(--u)) solid rgba(246, 234, 208, 0.9);
+    box-shadow:
+      0 0 var(--tile-fx-land-glow-px) rgba(246, 234, 208, 0.55),
+      inset 0 0 calc(0.6 * var(--tile-fx-land-glow-px)) rgba(246, 234, 208, 0.35);
+    opacity: 0;
+    animation: land-glow var(--tile-fx-land-dur) ease-out both;
+    animation-delay: var(--ld);
+  }
+  @keyframes land-glow {
+    0%   { opacity: 0; transform: scale(1); }
+    12%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.035); }
+  }
+
+  /* --- the light floods out as the door is fully open (n05.bloom) --- */
+  .bloom {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 48% 58% at calc(var(--fly-from-x)) calc(var(--fly-from-y)),
+      rgba(255, 248, 232, 1) 0%, rgba(246, 234, 208, 0.45) 30%, rgba(246, 234, 208, 0) 75%);
+    opacity: 0;
+    animation:
+      bloom-rise var(--bloom-rise-dur) ease-in both,
+      bloom-fall var(--bloom-fall-dur) cubic-bezier(.2, .6, .4, 1) forwards;
+    animation-delay: calc(var(--t-burst) - var(--bloom-rise-dur)), var(--t-burst);
+  }
+  @keyframes bloom-rise { from { opacity: 0; } to { opacity: var(--bloom-peak); } }
+  @keyframes bloom-fall { from { opacity: var(--bloom-peak); } to { opacity: 0; } }
+
+  .burst {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 0%, rgba(246, 234, 208, 0.5) 35%, var(--glow) 50%,
+      rgba(246, 234, 208, 0.5) 65%, rgba(246, 234, 208, 0) 100%);
+    animation: burst 0.6s cubic-bezier(.2, .8, .3, 1) both;
+    animation-delay: calc(var(--t-burst) - 0.05s);
+    /* .safe ends at the subtitle band; fade out before it instead of a hard edge */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 65%, transparent);
+  }
+  @keyframes burst {
+    0%   { transform: scaleX(0.01); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: scaleX(1.4); opacity: 0; }
+  }
+
+  /* --- the name: a light strokes it in from left to right (n05.name_wipe).
+         The mask is twice the stage wide: opaque up to feather before its
+         middle, clear from the middle on; moving it moves that edge from the
+         first letter's left (--wipe-x0) to past the last letter's right. --- */
+  .name {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(50% - var(--name-wipe-feather-px)), transparent 50%);
+            mask-image: linear-gradient(90deg, #000 calc(50% - var(--name-wipe-feather-px)), transparent 50%);
+    -webkit-mask-size: calc(2 * var(--stage-w)) 100%;
+            mask-size: calc(2 * var(--stage-w)) 100%;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    /* name-show: hidden (not only masked) until the wipe starts */
+    animation:
+      name-wipe var(--name-wipe-wipe-dur) cubic-bezier(.4, .1, .5, 1) both,
+      name-show 0s linear both;
+    animation-delay: var(--t-name), var(--t-name);
+  }
+  @keyframes name-show {
+    from { visibility: hidden; }
+    to   { visibility: visible; }
+  }
+  @keyframes name-wipe {
+    from {
+      -webkit-mask-position: calc(var(--wipe-x0) - var(--stage-w)) 0;
+              mask-position: calc(var(--wipe-x0) - var(--stage-w)) 0;
+    }
+    to {
+      -webkit-mask-position: calc(var(--wipe-x1) + var(--name-wipe-feather-px) - var(--stage-w)) 0;
+              mask-position: calc(var(--wipe-x1) + var(--name-wipe-feather-px) - var(--stage-w)) 0;
+    }
+  }
+  /* each letter is lit as the edge passes it, then cools (title.css's
+     letter rise is replaced by the wipe) */
+  .name span {
+    animation: letter-lit var(--name-wipe-afterglow-dur) ease-out both;
+    animation-delay: calc(var(--t-name) + (var(--i) + 0.5) / 6 * var(--name-wipe-wipe-dur));
+  }
+  @keyframes letter-lit {
+    from {
+      color: #fffaf0;
+      text-shadow: 0 0 calc(26 * var(--u)) rgba(246, 234, 208, 0.95), 0 0 calc(8 * var(--u)) rgba(255, 248, 232, 0.9);
+    }
+    to {
+      color: var(--on-night);
+      text-shadow: 0 0 calc(26 * var(--u)) rgba(246, 234, 208, 0), 0 0 calc(8 * var(--u)) rgba(255, 248, 232, 0);
+    }
+  }
+  .name-sweep {
+    position: absolute;
+    left: 0;
+    top: calc(var(--title-name-y) - 40 * var(--u));
+    width: var(--name-wipe-sweep-w-px);
+    height: calc(var(--title-name-size-px) + 80 * var(--u));
+    pointer-events: none;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(255, 248, 232, 0.55), rgba(246, 234, 208, 0.18) 45%, rgba(246, 234, 208, 0) 100%);
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation:
+      sweep-move var(--name-wipe-wipe-dur) cubic-bezier(.4, .1, .5, 1) both,
+      sweep-fade var(--name-wipe-wipe-dur) linear both;
+    animation-delay: var(--t-name), var(--t-name);
+  }
+  @keyframes sweep-move {
+    from { transform: translateX(calc(var(--wipe-x0) - var(--name-wipe-feather-px) / 2 - var(--name-wipe-sweep-w-px) / 2)); }
+    to   { transform: translateX(calc(var(--wipe-x1) + var(--name-wipe-feather-px) / 2 - var(--name-wipe-sweep-w-px) / 2)); }
+  }
+  @keyframes sweep-fade {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
 </style>
 </head>
 <body data-duration="5">
 <div class="stage night">
-  <div class="door-back"></div>
+  <div class="fx-scene"><div class="door-back"></div></div>
   <div class="door" data-box="n05.door">
-    <div class="leaf leaf-l"><div class="leaf-body"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div></div>
-    <div class="leaf leaf-r"><div class="leaf-body"><i class="pane up"></i><i class="pane dn"></i><i class="handle"></i></div></div>
+    <div class="door-cam">
+      <div class="leaf leaf-l"><div class="leaf-crack"><div class="leaf-settle"><div class="leaf-body">
+        <i class="pane up"></i><i class="pane dn"></i><i class="rake"></i><i class="plate"></i><i class="handle"></i><i class="bolt"></i><i class="edge"></i>
+      </div></div></div></div>
+      <div class="leaf leaf-r"><div class="leaf-crack"><div class="leaf-settle"><div class="leaf-body">
+        <i class="pane up"></i><i class="pane dn"></i><i class="rake"></i><i class="plate"></i><i class="handle"></i><i class="keeper"></i><i class="edge"></i>
+      </div></div></div></div>
+    </div>
   </div>
+  <!-- the seam light stays out of .fx-scene: on the centre line the dolly
+       does not move it, and its mask under the growing scale painted
+       differently when the same t was shot twice -->
   <div class="door-light">
     <div class="spill"></div>
-    <div class="seam-wrap"><div class="seam-glow"></div><div class="seam-core"></div></div>
+    <div class="seam-wrap"><div class="seam-flick"><div class="seam-glow"></div><div class="seam-core"></div></div></div>
+  </div>
+  <div class="fx-scene">
+    <svg class="rays" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <svg class="dust" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
   </div>
   <div class="safe">
     <div class="hero" data-box="n05.hero"></div>
     <div class="grid bg-only"></div>
+    <div class="tile-fx"></div>
+  </div>
+  <div class="bloom"></div>
+  <div class="safe">
     <div class="burst"></div>
   </div>
   <div class="safe">
+    <div class="name-sweep"></div>
     <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
     <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
   </div>
@@ -343,12 +797,34 @@
   // Preset tests in the grid, in reading order (layout.json n05.tests), each
   // [name, key, svg] from tests.js. Each tile loops a line drawing of how its
   // test is run (tests.js, tests.css); it shows no result.
-  const { gridCells, boxStyle, cutRules } = window.promoLayout;
-  const TESTS = cutRules.tests.map((key) => {
+  const { gridCells, boxStyle, cutRules, rules: LAYOUT } = window.promoLayout;
+  const R = cutRules;
+  const root = document.documentElement.style;
+  const TESTS = R.tests.map((key) => {
     const t = window.TEST_TILES.find(([, k]) => k === key);
     if (!t) throw new Error(`n05: no tile "${key}" in tests.js`);
     return t;
   });
+
+  // Seeded random numbers (mulberry32): the same seed gives the same picture.
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const f3 = (v) => v.toFixed(3);
+
+  // Plain numbers the CSS uses as they are (layout.js turns numbers into lengths).
+  const P = R.door.perspective_px;
+  root.setProperty("--dolly-scale", String(P / (P - R.door.dolly_px)));
+  root.setProperty("--rays-peak", String(R.rays.peak_alpha));
+  root.setProperty("--bloom-peak", String(R.bloom.peak_alpha));
 
   function tileArt([, , art]) {
     return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">${art}</svg>`;
@@ -357,8 +833,8 @@
   // Each tile sits on one cell of the grid rule and flies in from fly_from;
   // --d orders them by distance from there so the grid opens outward.
   const grid = document.querySelector(".grid");
-  const from = cutRules.fly_from;
-  const tiles = gridCells(cutRules.grid).slice(0, TESTS.length).map((cell, n) => {
+  const from = R.fly_from;
+  const tiles = gridCells(R.grid).slice(0, TESTS.length).map((cell, n) => {
     const dx = from.x - cell.cx, dy = from.y - cell.cy;
     return { test: TESTS[n], cell, dx, dy, dist: Math.hypot(dx, dy) };
   });
@@ -368,25 +844,177 @@
           style="${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
        ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label">${t.test[0]}</b></div>`).join("");
 
+  // Trails and landing glows (n05.tile_fx), on the same cells, start times
+  // and flight as the tiles. A tile has landed when its eased flight first
+  // reaches its place: the first point of ease.tile (cubic-bezier) at y >= 1.
+  function firstArrival([x1, y1, x2, y2]) {
+    const bx = (s) => 3 * x1 * s * (1 - s) ** 2 + 3 * x2 * s * s * (1 - s) + s ** 3;
+    const by = (s) => 3 * y1 * s * (1 - s) ** 2 + 3 * y2 * s * s * (1 - s) + s ** 3;
+    for (let i = 1; i <= 10000; i++) if (by(i / 10000) >= 1) return bx(i / 10000);
+    return 1;
+  }
+  const T = R.times, FX = R.tile_fx;
+  const arrive = firstArrival(R.ease.tile);
+  document.querySelector(".tile-fx").innerHTML = tiles.map((t) => {
+    const start = T.tiles_s + order.indexOf(t) * T.tile_stagger_s;
+    const box = `${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy}`;
+    let html = "";
+    for (let g = 1; g <= FX.ghosts; g++) {
+      const alpha = FX.ghost_alpha * (1 - (g - 1) / FX.ghosts);
+      html += `<i class="ghost" style="${box};--gd:${f3(start + g * FX.ghost_lag_s)}s;--ga:${f3(alpha)}"></i>`;
+    }
+    return html + `<i class="land" style="${boxStyle(t.cell)};--ld:${f3(start + arrive * T.tile_in_s)}s"></i>`;
+  }).join("");
+
+  // Shafts of light (n05.rays): wedges from fly_from, half to each side.
+  (function rays() {
+    const Q = R.rays, rnd = seeded(Q.seed), L = Q.length_px;
+    const ox = from.x, oy = from.y, rad = Math.PI / 180;
+    let shapes = "";
+    for (let i = 0; i < Q.count; i++) {
+      const side = i % 2 ? 180 : 0;
+      const a = (side + lerp(-Q.spread_deg, Q.spread_deg, rnd())) * rad;
+      const w = lerp(Q.width_min_deg, Q.width_max_deg, rnd()) * rad / 2;
+      const p = (k) => `${f3(ox + L * Math.cos(a + k))},${f3(oy + L * Math.sin(a + k))}`;
+      const o = lerp(0.35, 1, rnd());
+      const sd = lerp(Q.shimmer_min_dur_s, Q.shimmer_max_dur_s, rnd());
+      const sp = -rnd() * 2 * sd;
+      shapes += `<polygon class="ray" points="${ox},${oy} ${p(-w)} ${p(w)}" fill="url(#ray-g)"
+                   style="--o:${f3(o)};--sd:${f3(sd)}s;--sp:${f3(sp)}s"/>`;
+    }
+    document.querySelector("svg.rays").innerHTML =
+      `<defs><radialGradient id="ray-g" gradientUnits="userSpaceOnUse" cx="${ox}" cy="${oy}" r="${L}">
+         <stop offset="0" stop-color="#fff8e8" stop-opacity="1"/>
+         <stop offset="0.12" stop-color="#f6ead0" stop-opacity="0.55"/>
+         <stop offset="0.4" stop-color="#f6ead0" stop-opacity="0.14"/>
+         <stop offset="0.8" stop-color="#f6ead0" stop-opacity="0"/></radialGradient>
+         <filter id="ray-blur" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2320" height="1480">
+           <feGaussianBlur stdDeviation="${Q.blur_px}"/></filter></defs>
+       <g filter="url(#ray-blur)">${shapes}</g>`;
+    // (the blur is an SVG filter inside the drawing: a CSS filter on the
+    // whole layer made the vehicle above it paint differently when the same
+    // t was shot twice)
+  })();
+
+  // Motes (n05.dust): soft dots in an ellipse around fly_from, brighter near it.
+  (function dust() {
+    const Q = R.dust, rnd = seeded(Q.seed);
+    const drift = R.duration_s - T.door_open_s;
+    let dots = "";
+    for (let i = 0; i < Q.count; i++) {
+      const ang = rnd() * 2 * Math.PI, rr = Math.sqrt(rnd());
+      const x = from.x + Math.cos(ang) * rr * Q.w / 2, y = from.y + Math.sin(ang) * rr * Q.h / 2;
+      const r = lerp(Q.size_min_px, Q.size_max_px, rnd() ** 2) / 2;
+      const o = (1 - rr) ** 1.2 * lerp(0.45, 1, rnd());
+      // a slow drift, outwards from the light and a little upwards
+      const mx = Math.cos(ang) * Q.drift_px * lerp(0.3, 1, rnd());
+      const my = Math.sin(ang) * Q.drift_px * 0.5 - Q.drift_px * lerp(0.1, 0.5, rnd());
+      const tw = lerp(0.35, 0.9, rnd()), tp = -rnd() * 2 * tw;
+      dots += `<circle class="mote" cx="${f3(x)}" cy="${f3(y)}" r="${f3(r)}" fill="url(#mote-g)"
+                 style="--o:${f3(o)};--md:${f3(drift)}s;--mx:${f3(mx)};--my:${f3(my)};--tw:${f3(tw)}s;--tp:${f3(tp)}s"/>`;
+    }
+    document.querySelector("svg.dust").innerHTML =
+      `<defs><radialGradient id="mote-g">
+         <stop offset="0" stop-color="#fffaf0" stop-opacity="1"/>
+         <stop offset="0.45" stop-color="#f6ead0" stop-opacity="0.55"/>
+         <stop offset="1" stop-color="#f6ead0" stop-opacity="0"/></radialGradient></defs>${dots}`;
+  })();
+
   // The vehicle's picture, from one place: ?hero=<path> (read once at load;
   // the time t never depends on it), else layout.json n05.hero.src, else the
   // line drawing. A picture is the vehicle alone on a transparent ground.
   const heroSrc = new URLSearchParams(location.search).get("hero") || cutRules.hero.src;
   const hero = document.querySelector(".hero");
   if (heroSrc) {
-    const img = document.createElement("img");
-    img.className = "hero-img";
-    img.alt = "";
-    img.src = heroSrc;
-    hero.append(img);
+    hero.classList.add("meshed");
+    hero.innerHTML = meshedPicture(heroSrc);
   } else {
     // halo: a dark stroke under each line, so the door's lines stop at the
     // vehicle's and it reads as standing in front of the door
     hero.innerHTML = drawVehicle({ strokeScale: 0.7, halo: true });
   }
+
+  // The picture under a triangle mesh (n05.hero_mesh), in the hero box's
+  // design px. Rows of nodes size_px apart, every other row shifted by half a
+  // side (near-equilateral triangles), each inner node moved by a seeded
+  // amount; the box's edges stay straight. The lines are cut to the picture's
+  // alpha by a filter (feComposite "in"; an SVG mask over the animated lines
+  // painted differently when the same t was shot twice), so they show on the
+  // vehicle only; the picture is masked by the triangles, so each element
+  // takes its piece with it.
+  function meshedPicture(src) {
+    const M = R.hero_mesh, rnd = seeded(M.seed);
+    const W = R.hero.w, H = R.hero.h, s = M.size_px, rowH = s * Math.sqrt(3) / 2;
+    const rows = Math.ceil(H / rowH), cols = Math.ceil(W / s) + 1;
+    const node = [];
+    for (let r = 0; r <= rows; r++) {
+      const line = [];
+      for (let c = 0; c <= cols; c++) {
+        let x = (c - (r % 2 ? 0.5 : 0)) * s, y = r * rowH;
+        if (r > 0 && r < rows && c > 0 && c < cols) {
+          x += (rnd() - 0.5) * 2 * M.jitter * s;
+          y += (rnd() - 0.5) * 2 * M.jitter * s;
+        }
+        line.push([Math.min(W, Math.max(0, x)), Math.min(H, Math.max(0, y))]);
+      }
+      node.push(line);
+    }
+    // element start: from the light's point outwards, plus a seeded jitter
+    const ox = from.x - R.hero.x, oy = from.y - R.hero.y;
+    const tris = [];
+    const add = (a, b, c) => {
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3;
+      const reach = Math.min(1, Math.hypot(cx - ox, cy - oy) / M.reach_px);
+      const k = T.mesh_out_s + M.spread_dur_s * reach + M.jitter_dur_s * rnd();
+      const pts = [a, b, c].map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+      tris.push(`<polygon points="${pts}" style="--k:${f3(k)}s"/>`);
+    };
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const A = node[r], B = node[r + 1];
+        // the shifted row decides which way the two triangles of a cell lean
+        if (r % 2 === 0) { add(A[c], A[c + 1], B[c + 1]); add(A[c], B[c + 1], B[c]); }
+        else { add(A[c], A[c + 1], B[c]); add(A[c + 1], B[c + 1], B[c]); }
+      }
+    }
+    const all = tris.join("");
+    const img = `href="${src}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet"`;
+    // The picture is masked by the triangles (white, edged to close the seams
+    // between neighbours), so each element takes its piece away as it shrinks.
+    return `<svg class="hero-img" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+      <defs>
+        <mask id="mesh-cells" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}">
+          <g class="cells" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round">${all}</g></mask>
+        <filter id="mesh-veh" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}">
+          <feImage ${img} result="veh"/>
+          <feComposite in="SourceGraphic" in2="veh" operator="in"/></filter>
+      </defs>
+      <image ${img} mask="url(#mesh-cells)"/>
+      <g filter="url(#mesh-veh)"><g class="wire" stroke-width="${M.line_px}" style="--lw:${M.line_px}px">${all}</g></g>
+    </svg>`;
+  }
+
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
+
+  // The wipe runs over the letters as laid out: their extent in design px,
+  // measured once the fonts are in (a seek waits for them).
+  let measured = false;
+  function measureName() {
+    if (measured || document.fonts.status !== "loaded") return;
+    const stage = document.querySelector(".stage").getBoundingClientRect();
+    const u = stage.width / LAYOUT.stage.w;
+    const spans = document.querySelectorAll(".name span");
+    const a = spans[0].getBoundingClientRect(), b = spans[spans.length - 1].getBoundingClientRect();
+    root.setProperty("--wipe-x0", `calc(${f3((a.left - stage.left) / u)} * var(--u))`);
+    root.setProperty("--wipe-x1", `calc(${f3((b.right - stage.left) / u)} * var(--u))`);
+    measured = true;
+  }
+  measureName();
 </script>
 <script src="timeline.js"></script>
+<script>
+  window.promo.onSeek(measureName);
+</script>
 </body>
 </html>
