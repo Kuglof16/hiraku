@@ -122,6 +122,27 @@ def n1_twist(design: Record, load_case: Record) -> Record:
         raise BuildError(f"no ladder frame for the twist hand calculation: {e}") from None
 
 
+def joint_wall_calc(design: Record, load_case: Record) -> Record:
+    """The inputs of frame_static.joint_wall_bending (frame_inputs.joint_wall_inputs) for a step load case (R1s):
+    the joint off the wheel mounts where the side wall's plate bending is largest, at the load case's loading,
+    step_height and step_supports (default the front-most supports). Quantities named as the formula's inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc import units
+    from hiraku.solvers.k0_handcalc.frame_inputs import joint_wall_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+    from hiraku.solvers.shelf.frame_static import front_supports
+
+    params = load_case.get("params") or {}
+    step = units.to_unit(params["step_height"], "mm", "step_height") if "step_height" in params else None
+    sup = [s.strip() for s in params["step_supports"].split(",")] if params.get("step_supports") else None
+    if step is not None and sup is None:
+        sup = front_supports(design)
+    try:
+        return joint_wall_inputs(design, loading=loading_of(load_case), step_mm=step, step_supports=sup)["inputs"]
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no ladder joint for the joint wall hand calculation: {e}") from None
+
+
 _TWIST = ("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
 N1_PLAN = {
     "tool": "modal",
