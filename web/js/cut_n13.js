@@ -66,8 +66,9 @@ const MAX_ROWS = 4;
 const PAD_X_PX = 22;
 const BORDER_PX = 2;
 
-// The system's line naming the shelf's tools the run did not check (hiraku/tools/shelf.py).
-const UNCHECKED_RE = /には使わないので確かめない道具: (.+)$/;
+// The system's line naming the shelf's tools the run did not check (hiraku/tools/shelf.py):
+// 道具 in the runs before the design department's 4c700b7, ツール from then on.
+const UNCHECKED_RE = /には使わないので確かめない(?:道具|ツール): (.+)$/;
 
 // The records N13 is drawn from (see the top).
 export function n13Records(s, events) {
