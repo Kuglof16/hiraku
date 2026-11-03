@@ -5,7 +5,8 @@ import unittest
 from hiraku import contract, solvers
 
 STAGES = {"assembly": 0, "frame_static": 1, "step_climb": 1, "modal": 1, "drive_energy": 1, "thermal": 1, "crash": 1,
-          "bed_static": 1, "actuator_linkage": 1, "frame_shell": 3, "frame_tubes": 3, "fatigue": 3}
+          "bed_static": 1, "actuator_linkage": 1, "use_fatigue": 1, "actuator_duty": 1, "frame_shell": 3, "frame_tubes": 3,
+          "fatigue": 3}
 
 
 class ToolStagesTest(unittest.TestCase):

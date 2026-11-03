@@ -84,19 +84,23 @@ def required_case(tool, test_id):
     """A load case with the required params of a tool, at values that run on the demo vehicle."""
     values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
               "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
-              "speed": q(20, "km/h"), "actuator": "back"}
+              "speed": q(20, "km/h"), "actuator": "back", "n_seat": q(10000, "1"), "n_raise": q(1000, "1"),
+              "uses_per_hour": q(6, "1")}
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
-    if tool.name == "actuator_linkage":
+    if tool.name in BED_TOOLS:
         params.update(loading="driver")  # a care bed has one occupant; the default loading names two
     return load_case(f"{test_id}-x", test_id, tool.domain, **params)
+
+
+BED_TOOLS = ("actuator_linkage", "use_fatigue", "actuator_duty")  # tools that read a care bed's names
 
 
 def design_for(tool):
     """The demo vehicle, a default care bed for the tools that read a care bed's names, or the default space frame
     for frame_tubes (it needs the suspension's pickup points on frame nodes)."""
-    if tool.name == "actuator_linkage":
+    if tool.name in BED_TOOLS:
         from hiraku.designgen import care_bed
 
         return care_bed.build()
