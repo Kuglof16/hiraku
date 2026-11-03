@@ -54,7 +54,7 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 ```
 
 - 画面は three.js 0.170.0 (MIT) を jsDelivr から読み込むので、ネットにつながっている必要があります。字は PC にある BIZ UDPGothic を使い、同梱していません
-- ブラウザの試験は Playwright を使い、`HIRAKU_WEB_BROWSER=1` のときだけ回ります (Playwright は requirements.txt に入れていません)
+- ブラウザの試験は Playwright を使い、`python -m tests.web.browser` で回します (中で `HIRAKU_WEB_BROWSER=1` を入れる。試験の名前を 1 つ渡すと、それだけを回す)。ふつうの全部の試験では飛ばします (Playwright は requirements.txt に入れていません)
 - Rapier と照らし合わせる試験は、`qa/rapier` で `npm install` をしておく必要があります。していなければ、その試験は飛ばします
 - 動画の書き出しの道具は `promo/` にあり、要るものは `promo/requirements-video.txt` です
 
@@ -206,7 +206,7 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
   - `tests/` の下で `def test_` を数えると、103 ファイルに 1,315 個ある (このブランチ lead-merge-trial、2fb6f9b の時点)。
-  - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `HIRAKU_WEB_BROWSER=1` のときだけ回る (`README.md`)。
+  - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
 ### Codex について
