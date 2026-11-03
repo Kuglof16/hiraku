@@ -19,6 +19,8 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from hiraku.catalog import REPO_ROOT, load_catalog, load_requirements, project_fields
 from hiraku.contract import layout
 from hiraku.intake import events as ev
@@ -30,16 +32,37 @@ from hiraku.store import RunStore
 Record = dict[str, Any]
 
 N09_PRODUCTS = ("electric-guitar", "care-bed", "serving-robot", "offroad-4w")
+# The sentence a person would say, with what the flags say (the file's flags are what the product is): Claude reads the
+# properties from the sentence, so a sentence that leaves out the battery makes it drop the thermal domain.
+N09_WANTS = {
+    "offroad-4w": "林道を走れる 2 人乗りの小さな電動のオフロード車両 (電池で走る 4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+}
 N14_FILE = REPO_ROOT / "data" / "requirements" / "offroad-4w-n14.yaml"
 N14_NAME = "offroad-4w-n14.yaml"  # the scripted plan is looked up by the file's name
 
 
+def n09_requirements(product: str) -> Record:
+    """The product's requirements for the N09 scene: no design or tests (it stops at the picks), the scene's sentence."""
+    req = {k: v for k, v in load_product(product).items() if k not in ("design_file", "tests", "beyond")}
+    return {**req, "want": N09_WANTS.get(product, req["want"])}
+
+
+def write_n09_file(product: str, runs: Path | str = layout.RUNS_DIR) -> Path:
+    """runs/_video_files/<product>-n09.yaml: the file a real run of the scene starts from."""
+    folder = Path(runs) / "_video_files"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{product}-n09.yaml"
+    path.write_text(yaml.safe_dump(n09_requirements(product), allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+    return path
+
+
 def make_n09(product: str, runs: Path | str = layout.RUNS_DIR) -> Path:
     """The run folder of one product: run.started, domains.picked, run.finished (made on the run store, below the agent)."""
-    req = load_product(product)
+    write_n09_file(product, runs)
+    keep = n09_requirements(product)
+    req = keep
     picked = pick_domains(req["want"], req["flags"], req.get("speed_class"), product=req.get("product"))
     catalog = load_catalog()
-    keep = {k: v for k, v in req.items() if k not in ("design_file", "tests", "beyond")}  # no design: stop at the picks
     agents = [{"agent_id": a, "role": a, "prop": catalog.prop(a)} for a in ("lead", "designer")]
     store = RunStore.create(dict(project_fields(catalog, keep, []), agents=agents), root=Path(runs), slug=f"{product}-n09")
     event = ev.picked_event(picked)
