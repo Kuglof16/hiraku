@@ -104,6 +104,50 @@ function supportGeometry(s) {
   return { geo: new THREE.CylinderGeometry(r, r, w, 48), r, w };
 }
 
+// How a view looks at one element of a shell mesh (ISO mm): its centre, the face's
+// outward normal, the axis of the member it belongs to and the direction the camera
+// stands in, plus the radius of the neighbourhood to take in.
+//   normal: the cross product of a quad's diagonals (of two sides for a triangle); the
+//     contract lists corners counter-clockwise seen from the outer side, so it points out.
+//   axis: node_a -> node_b of the element's member (element_member), made square to the
+//     normal; an element of a part with no member (e.g. a plate) takes its first side.
+//   direction: the normal turned FOCUS_TILT toward the member's axis, with a little of
+//     ISO up. Straight along the normal the wall's colours read but its bend along the
+//     member is flat; turned toward the axis, the wall runs away from the eye, so the
+//     change of colour along the member (where a wall bends near a joint) is seen
+//     while the face keeps cos(FOCUS_TILT) of its width. The axis' sign is the one on
+//     the default view's side, so the camera does not swing round to the far side.
+//   radius: 1.5 times the larger side of the member's section (the whole tube around
+//     the element), at least 4 element edges.
+const FOCUS_TILT = (35 * Math.PI) / 180;
+const FOCUS_UP = 0.25;
+export function maxElementFocus(rec, elem, design) {
+  const ids = rec.elements[elem];
+  const pts = ids.map((i) => v3(rec.nodes_mm[i]));
+  const center = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+  const normal =
+    pts.length === 4
+      ? pts[2].clone().sub(pts[0]).cross(pts[3].clone().sub(pts[1]))
+      : pts[1].clone().sub(pts[0]).cross(pts[2].clone().sub(pts[0]));
+  normal.normalize();
+  const memberId = rec.element_member?.[elem];
+  const m = (design?.members ?? []).find((x) => x.id === memberId);
+  const nodes = Object.fromEntries((design?.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
+  const axis = m && nodes[m.node_a] && nodes[m.node_b] ? nodes[m.node_b].clone().sub(nodes[m.node_a]) : pts[1].clone().sub(pts[0]);
+  axis.addScaledVector(normal, -axis.dot(normal));
+  if (axis.lengthSq() < 1e-12) axis.set(1, 0, 0).addScaledVector(normal, -normal.x);
+  axis.normalize();
+  if (axis.dot(v3(VIEWS.default)) < 0) axis.negate();
+  const dir = normal.clone().multiplyScalar(Math.cos(FOCUS_TILT)).addScaledVector(axis, Math.sin(FOCUS_TILT));
+  dir.z += FOCUS_UP;
+  dir.normalize();
+  let edge = 0;
+  for (let i = 0; i < pts.length; i += 1) edge = Math.max(edge, pts[i].distanceTo(pts[(i + 1) % pts.length]));
+  const sec = m ? sectionSize(design.sections?.[m.section]) : null;
+  const radius = Math.max(sec ? 1.5 * Math.max(sec.width, sec.height) : 0, 4 * edge);
+  return { elem, member: memberId ?? null, center, normal, axis, dir, radius };
+}
+
 function pushEdges(out, geometry, matrix, threshold = 20) {
   const edges = new THREE.EdgesGeometry(geometry, threshold);
   const pos = edges.getAttribute("position");
@@ -689,13 +733,19 @@ export class Workbench3D {
   }
 
   // Colour a shell's faces by element values (one colour per element) or by node values.
-  paintShell(o, m, contour) {
+  // sweep {axis, from, to, k}: only the corners whose coordinate on that ISO axis lies
+  // within the first share k of from -> to take their colour; the rest stay plain (a
+  // front of colour passing over the mesh; no value is made up for the plain ones).
+  paintShell(o, m, contour, sweep = null) {
     const col = o.faces.geometry.getAttribute("color");
     const rgb = new Map(); // band colour -> [r, g, b] (linear)
     const c = new THREE.Color();
+    const P = o.rec.nodes_mm;
+    const plain = this.look.real ? "#b9b4aa" : GRAY;
     for (let k = 0; k < o.vNode.length; k += 1) {
       const v = m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]];
-      const hex = colorOf(v, contour.max, contour.min);
+      const off = sweep && (P[o.vNode[k]][sweep.axis] - sweep.from) / (sweep.to - sweep.from || 1) > sweep.k;
+      const hex = off ? plain : colorOf(v, contour.max, contour.min);
       let t = rgb.get(hex);
       if (!t) rgb.set(hex, (t = c.set(hex).toArray()));
       col.array.set(t, k * 3);
@@ -793,6 +843,63 @@ export class Workbench3D {
       const tag = label(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
       tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
       this.overGhosts.add(tag);
+    }
+  }
+
+  // Repaint the shown shell contour with a sweep (paintShell); k >= 1 is the whole contour.
+  sweepShell(sweep) {
+    const ct = this.keys.contour;
+    if (!ct?.mesh) return;
+    this.paintShell(this.shellObj(ct.mesh.rec), ct.mesh, ct, sweep && sweep.k < 1 ? sweep : null);
+  }
+
+  // The focus (maxElementFocus) of a shell contour's largest element, or null.
+  maxFocus(contour) {
+    const at = contour?.mesh?.maxAt?.elem;
+    return at === undefined ? null : maxElementFocus(contour.mesh.rec, at, this.design);
+  }
+
+  // Where the camera stands to see a focus with its neighbourhood (radius) taking `fill`
+  // of the view's smaller side: { target, position, near, far } in three.js metres.
+  focusView(f, fill = 0.5) {
+    const target = isoToThree(f.center.toArray());
+    const d = isoToThree(f.dir.toArray()).normalize();
+    const tv = Math.tan((this.camera.fov * Math.PI) / 360);
+    const t = Math.min(tv, tv * this.camera.aspect);
+    const dist = (f.radius * 0.001) / (fill * t);
+    const span = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() * 0.001 : dist * 20;
+    return { target, position: target.clone().addScaledVector(d, dist), near: dist / 50, far: dist + span * 3 };
+  }
+
+  // The camera at a view ({ target, position, near?, far? } in three.js metres).
+  lookFrom(v) {
+    this.controls.target.copy(v.target);
+    this.camera.position.copy(v.position);
+    if (v.near) this.camera.near = v.near;
+    if (v.far) this.camera.far = v.far;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
+  cameraView() {
+    return { target: this.controls.target.clone(), position: this.camera.position.clone(), near: this.camera.near, far: this.camera.far };
+  }
+
+  // Look at a shell contour's largest element up close (fill as in focusView), or, with
+  // null, go back to the view from before the first focus.
+  setFocus(contour, fill = 0.5) {
+    const f = this.maxFocus(contour);
+    const key = f ? `${contour.key}|${f.elem}` : null;
+    if (key === this.focusKey) return;
+    this.focusKey = key;
+    if (f) {
+      this.focusSaved ??= this.cameraView();
+      this.lookFrom(this.focusView(f, fill));
+      this.focused = f;
+    } else if (this.focusSaved) {
+      this.lookFrom(this.focusSaved);
+      this.focusSaved = null;
+      this.focused = null;
     }
   }
 
@@ -1106,7 +1213,7 @@ export class Workbench3D {
   }
 
   render() {
-    if (!this.noFollow) this.follow();
+    if (!this.noFollow && !this.focused) this.follow();
     if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself

@@ -88,6 +88,23 @@
   .grid-tile .tag small { font-size: 1em; font-weight: 400; margin-left: 4px; font-family: Consolas, monospace; }
   .grid-tile .tag.over { color: #c8402a; border-color: #c8402a; }
   .grid-tile .asm { position: absolute; box-sizing: border-box; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  /* N07 (js/cut_n07.js): sizes and colours from layout.json n07 (set inline) */
+  .n07-view { position: absolute; box-sizing: border-box; overflow: hidden; }
+  .n07-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n07-mark { position: absolute; box-sizing: border-box; border: 3px solid; border-radius: 50%; pointer-events: none; }
+  .n07-legend { position: absolute; box-sizing: border-box; border: 2px solid; border-radius: 12px; padding: 16px 20px; overflow: hidden; }
+  .n07-legend h3 { margin: 0 0 4px; }
+  .n07-legend p { margin: 0 0 10px; color: #5c5a54; }
+  .n07-legend .bar { display: block; height: 18px; border-radius: 3px; }
+  .n07-legend .ends { display: flex; justify-content: space-between; margin: 4px 0 12px; font-family: Consolas, monospace; }
+  .n07-legend .sw { display: inline-block; width: 16px; height: 16px; vertical-align: -2px; }
+  .n07-legend table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .n07-legend td { padding: 4px 0; color: #8a857a; }
+  .n07-legend td:last-child { text-align: right; font-family: Consolas, monospace; }
+  .n07-legend tr.on td { color: #1b1a17; font-weight: 700; }
+  .n07-legend .src { margin: 0; }
+  .n07-label { position: absolute; color: #1b1a17; line-height: 1.35; }
+  .n07-label b { margin-right: 0.4em; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>
