@@ -547,6 +547,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .main.wide { grid-template-columns: minmax(0, 1fr); }
 .main.wide .col-left, .main.wide .col-right { display: none; }
 .grid-view { gap: 12px; }
+.intake-view { min-height: 0; overflow: auto; border: 1.5px solid var(--line); border-radius: 12px; }
 .grid-head { display: flex; align-items: center; gap: 20px; font-size: 18px; flex-wrap: nowrap; min-width: 0; }
 .grid-head h2 { font-size: 28px; margin: 0; white-space: nowrap; }
 .grid-head .muted { color: var(--muted); white-space: nowrap; }

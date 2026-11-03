@@ -569,6 +569,53 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_screens_in_their_tabs(self):
+        """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;
+        a replay is read-only (the hearing's buttons are off) and a rewind redraws them."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported")}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        t0 = events[0]["t"]
+        events = events[:1] + [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)] + events[1:]
+        for i, e in enumerate(events):
+            e["seq"] = i
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        read = """() => { const v = document.getElementById("view-intake");
+          const pane = [...v.querySelectorAll(".in-pane")].find((p) => !p.hidden);
+          return { shown: !v.hidden, bench: !document.getElementById("view-bench").hidden, screen: pane?.dataset.screen ?? null,
+                   text: pane?.textContent ?? "", on: document.querySelector(".tab.on")?.dataset.tab,
+                   answer: [...(pane?.querySelectorAll("button") ?? [])].filter((b) => /進める/.test(b.textContent)).map((b) => b.disabled) }; }"""
+        def tab(key):
+            page.click(f'.tab[data-tab="{key}"]')
+            page.wait_for_function(f"document.querySelector('.tab.on')?.dataset.tab === '{key}'")
+            return page.evaluate(read)
+
+        a1 = tab("A1")
+        a2 = tab("A2")
+        a5 = tab("A5")
+        self.assertEqual(errors, [])
+        self.assertEqual((a1["shown"], a1["bench"], a1["screen"], a1["on"]), (True, False, "A1", "A1"))
+        self.assertIn(ex["domains_picked"]["picks"][0]["shown_name"], a1["text"])
+        self.assertEqual((a2["screen"], a2["on"]), ("A2", "A2"))
+        self.assertIn(ex["hearing_asked"]["questions"][0]["text"], a2["text"])
+        self.assertTrue(a2["answer"] and all(a2["answer"]))  # a replay cannot answer
+        self.assertEqual(a5["screen"], "A5")
+        self.assertIn(ex["knowledge_imported"]["rules"][0]["text"], a5["text"])
+        page.evaluate("async () => { await window.hiraku.seek(0); }")  # back before the knowledge came
+        page.wait_for_function(f"!document.querySelector('#view-intake .in-pane[data-screen=A5]').textContent.includes({json.dumps(ex['knowledge_imported']['rules'][0]['text'])})")
+        self.assertEqual(tab("bench")["shown"], False)
+        self.assertEqual(errors, [])
+        page.close()
+
     @unittest.skipUnless("x" in contract.schema()["$defs"]["series"]["properties"], "contract without series against x")
     def test_series_against_another_quantity_are_charted(self):
         """Series with x (a K&C bench) give a graph without a motion: one chart per channel

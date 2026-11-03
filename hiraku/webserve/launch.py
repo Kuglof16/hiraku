@@ -152,6 +152,21 @@ class Launcher:
         self.current["stop_requested"] = True
         return {"run_id": run_id, "stop_requested": True}
 
+    def answer(self, run_id: Any, body: Any) -> dict[str, Any]:
+        """The hearing's answer (A2) for the run started here, while it runs: checked and
+        written as hearing.answer.json in its folder by hiraku.intake.hearing.save_answer."""
+        if not self.running() or not self.current or self.current.get("run_id") != run_id:
+            raise LaunchError(409, "no run started from this screen is going under that id")
+        if not isinstance(body, dict):
+            raise LaunchError(400, "answer must be an object (answers, note, useDefaults)")
+        from hiraku.intake.hearing import save_answer
+
+        try:
+            save_answer(self.runs_dir / run_id, body)
+        except ValueError as e:  # IntakeError: an answer the hearing does not take
+            raise LaunchError(400, str(e)) from e
+        return {"run_id": run_id, "answered": True}
+
     @staticmethod
     def _read(proc: subprocess.Popen, info: dict[str, Any], tail: deque[str]) -> None:
         for line in proc.stdout:

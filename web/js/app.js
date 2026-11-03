@@ -7,7 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?tab=grid       open on the all-domains grid instead of the workbench
+//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens)
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -18,6 +18,7 @@ import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from ".
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, contourOf, fieldsOf, preferredField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
+import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
@@ -33,9 +34,12 @@ const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
+const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
+const TABS = ["bench", "grid", ...INTAKE_TABS];
+
 const ui = {
   pinnedLc: null,
-  pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
+  pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
@@ -138,7 +142,46 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
+  if (INTAKE_TABS.includes(s.focus.screen)) return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
+}
+
+// ---- the intake screens (A1, A2, A5) ------------------------------------------
+// Mounted on first show. They draw from the events applied so far (the replay's
+// playhead, or the live run); listeners hear when that changes (a rewind too).
+const intakeListeners = new Set();
+let intakeApplied = null; // run id and events applied when the listeners last heard
+let intake = null;
+const intakeApi = {
+  events: () => player.events.slice(0, player.applied),
+  onEvent(fn) {
+    intakeListeners.add(fn);
+    return () => intakeListeners.delete(fn);
+  },
+  // Only for a run this screen started while it runs (a replay stays read-only): the
+  // answer goes to the run's folder as hearing.answer.json, which the run waits for.
+  get answerHearing() {
+    const s = player.state;
+    return ui.stoppable && ui.stoppable === s.runId && s.status === "running" ? answerHearing : undefined;
+  },
+};
+
+async function answerHearing(body) {
+  const res = await fetch("/api/launch/hearing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, answer: body }) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+function renderIntake(tab) {
+  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (intake.screen !== tab) intake.show(tab);
+  const now = `${player.state.runId}|${player.applied}`;
+  if (now !== intakeApplied) {
+    intakeApplied = now;
+    const last = player.events[player.applied - 1] ?? null;
+    for (const fn of intakeListeners) fn(last);
+  }
 }
 
 function renderTop(s) {
@@ -586,11 +629,14 @@ function draw() {
     renderChain(s, chain);
     renderStatus(s);
     renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0);
+    const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
-    $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
+    $("view-intake").hidden = !intakeTab;
+    $("main").classList.toggle("wide", tab === "grid" || intakeTab); // A6 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
+    if (intakeTab) renderIntake(tab);
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);

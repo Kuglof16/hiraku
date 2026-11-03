@@ -275,7 +275,7 @@ class Handler(BaseHTTPRequestHandler):
             length = 0
         raw = self.rfile.read(min(max(length, 0), 10000))
         route = urlsplit(self.path).path
-        if route not in ("/api/launch", "/api/launch/stop") or not self.launcher:
+        if route not in ("/api/launch", "/api/launch/stop", "/api/launch/hearing") or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         # Only this server's own page may start a run: another web page could
@@ -307,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == "/api/launch/stop":
                 self._send_json(self.launcher.stop(body.get("run_id")))
+            elif route == "/api/launch/hearing":
+                self._send_json(self.launcher.answer(body.get("run_id"), body.get("answer")))
             else:
                 self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
         except LaunchError as e:

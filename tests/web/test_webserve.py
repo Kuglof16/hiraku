@@ -303,6 +303,29 @@ class LaunchTest(unittest.TestCase):
             self.assertTrue(json.loads(r.read())["stop_requested"])
         self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
 
+    def test_hearing_answer_goes_to_the_started_run_only(self):
+        base = self.serve({})
+        _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+
+        def answer(run_id, body):
+            req = urllib.request.Request(base + "/api/launch/hearing", data=json.dumps({"run_id": run_id, "answer": body}).encode(),
+                                         method="POST", headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        self.assertEqual(answer("20991231-000000-other", {"answers": {}})[0], 409)  # not the run started here
+        status, got = answer(out["run_id"], {"answers": {}, "note": "林道", "colour": "red"})
+        self.assertEqual(status, 400)  # the hearing's own check
+        self.assertIn("colour", got["error"])
+        self.assertFalse((self.runs / out["run_id"] / "hearing.answer.json").exists())
+        status, got = answer(out["run_id"], {"answers": {}, "note": "林道", "useDefaults": True})
+        self.assertEqual((status, got["answered"]), (200, True))
+        written = json.loads((self.runs / out["run_id"] / "hearing.answer.json").read_text(encoding="utf-8"))
+        self.assertEqual(written, {"answers": {}, "note": "林道", "use_defaults": True})
+
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
