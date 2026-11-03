@@ -28,7 +28,9 @@ class PathTest(unittest.TestCase):
         self.assertEqual(get_value(DESIGN, "sections.rt40x80x2.3.dims_mm.t"), (2.3, "mm"))
         self.assertEqual(get_value(DESIGN, "variables.motor_peak_power"), (10.0, "kW"))
         self.assertEqual(get_value(DESIGN, "parts.cargo.mass_kg"), (150.0, "kg"))
-        self.assertEqual(get_value(DESIGN, "parts.cargo.box.center_mm.2")[0], 600.0)
+        # the cargo stands on the deck, a 3.2 mm sheet since 318ea65 (the floors' bottoms stay on the rails, so
+        # what stands on them is 16.8 mm lower than with the thicker boxes before)
+        self.assertEqual(get_value(DESIGN, "parts.cargo.box.center_mm.2")[0], 583.2)
         d2 = with_value(DESIGN, "parts.cargo.mass_kg", 100.0)
         self.assertEqual(get_value(d2, "parts.cargo.mass_kg")[0], 100.0)
         self.assertEqual(get_value(DESIGN, "parts.cargo.mass_kg")[0], 150.0)  # the original is untouched
