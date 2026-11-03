@@ -1,5 +1,14 @@
-"""K0 formulas for fatigue: constant-amplitude damage on an IIW-type S-N curve and
-the number of load cycles over a distance."""
+"""K0 formulas for fatigue: constant-amplitude damage on an IIW-type S-N curve,
+road (variable-amplitude) damage and the number of load cycles over a distance.
+
+Slope below the knee: for a stress spectrum summed by Miner's rule the S-N curve
+is continued below the knee with m2 = 2 m - 1 (5 for m = 3): IIW-1823-07 (2008),
+Recommendations for Fatigue Design of Welded Joints and Components, sec. 4.3.1,
+PDF p.110; the value was read in that document by the quality department. The
+steeper slope of the design variable fatigue_slope_after_knee (22 in the demo
+designs) is the constant-amplitude, very-high-cycle slope (same document, sec. 3.2,
+PDF p.44) and is used only by fatigue.constant_amplitude_damage.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +19,11 @@ from .registry import Formula
 
 def _in(unit: str, description: str, **kw) -> dict:
     return {"unit": unit, "description": description, **kw}
+
+
+def spectrum_slope(m: float) -> float:
+    """S-N slope below the knee for Miner summation of a stress spectrum: 2 m - 1 (IIW-1823-07 sec. 4.3.1, p.110)."""
+    return 2.0 * m - 1.0
 
 
 def _damage(v: dict) -> dict:
@@ -58,7 +72,8 @@ def _rayleigh_damage(sigma_s: float, cycles: float, v: dict) -> float:
 
     a = np.linspace(sigma_s * 1e-4, 8.0 * sigma_s, BAND_POINTS)  # stress amplitudes, Rayleigh
     p = a / sigma_s**2 * np.exp(-a**2 / (2.0 * sigma_s**2))
-    inv_n = np.array([1.0 / sn_cycles(2.0 * x, v["FAT"], v["m"], v["N_knee"], v["m2"]) for x in a])
+    m2 = spectrum_slope(v["m"])  # a spectrum, not constant amplitude: the design's m2 is not used
+    inv_n = np.array([1.0 / sn_cycles(2.0 * x, v["FAT"], v["m"], v["N_knee"], m2) for x in a])
     return cycles * float(np.trapezoid(p * inv_n, a))
 
 
@@ -115,7 +130,8 @@ def all_formulas() -> list[Formula]:
             title="1/4 車で見た悪路の疲労の損傷 (静的な応力 × 輪の力のゆれ、レイリー分布の繰り返し)",
             domain="strength",
             expression=("sigma_F^2 = integral |H_F(f)|^2 G_z(f) df (quarter car, G_d(n) = G_d(n0) (n/n0)^-2); "
-                        "sigma_s = sigma_w sigma_F / W; nu0 = sqrt(m2/m0); D = nu0 (d/v) E[1/N(2a)], a ~ Rayleigh(sigma_s)"),
+                        "sigma_s = sigma_w sigma_F / W; nu0 = sqrt(m2/m0); D = nu0 (d/v) E[1/N(2a)], a ~ Rayleigh(sigma_s); "
+                        "N: slope m above the knee, 2 m - 1 below"),
             inputs={"sigma_w": _in("MPa", "stress at the weld under the wheel's static load", min=0),
                     "W": _in("N", "static load of that wheel", min=0),
                     "m_u": _in("kg", "unsprung mass of that wheel", min=0),
@@ -126,8 +142,7 @@ def all_formulas() -> list[Formula]:
                     "v": _in("km/h", "speed", min=0), "d": _in("km", "distance", min=0),
                     "FAT": _in("MPa", "fatigue class: stress range at 2e6 cycles", min=0),
                     "m": _in("1", "slope of the S-N curve", min=0),
-                    "N_knee": _in("1", "cycles at the knee of the curve", min=0),
-                    "m2": _in("1", "slope beyond the knee", min=0)},
+                    "N_knee": _in("1", "cycles at the knee of the curve", min=0)},
             outputs={"D": ("1", "Miner damage over the distance (failure at 1)", None),
                      "sigma_s": ("MPa", "spread (standard deviation) of the weld stress", None),
                      "sigma_F": ("N", "spread of the dynamic tyre force", None),
@@ -136,11 +151,15 @@ def all_formulas() -> list[Formula]:
             assumptions=["one wheel as a linear quarter car; the weld stress follows that wheel's force in proportion "
                          "to its static stress", "the other wheels and the body's pitch are left out",
                          "narrow-band cycles: Rayleigh amplitudes at the mean crossing rate",
-                         "IIW-type S-N curve and Miner's rule, no mean stress correction"],
+                         "IIW-type S-N curve and Miner's rule, no mean stress correction; below the knee the curve goes on with "
+                         "slope 2 m - 1 (IIW-1823-07 (2008) sec. 4.3.1, p.110, for Miner summation of a spectrum); the "
+                         "design's slope after the knee (constant amplitude) is not used"],
             source=("random vibration of a linear system (textbook): output spread from the frequency response and the "
                     "input spectrum; narrow-band Miner damage of Rayleigh cycles (textbook fatigue); the road spectrum form "
-                    "of ISO 8608 and the S-N curve of the IIW recommendations (A. F. Hobbacher, 2nd ed., Springer 2016), "
-                    "neither checked in this repository"),
+                    "of ISO 8608 (not checked in this repository); the S-N curve of the IIW recommendations: m, the knee "
+                    "and the slope 2 m - 1 below it for a spectrum as in IIW-1823-07 (2008) sec. 3.2 and 4.3.1, "
+                    "pp.42 and 110, read there by the quality department; the 2016 edition (A. F. Hobbacher, 2nd ed., "
+                    "Springer) not checked"),
             requires=[(lambda v: v["W"] > 0 and v["v"] > 0 and v["sigma_w"] > 0, "W, v and sigma_w must be positive")],
             fn=_road_damage,
         ),
@@ -150,7 +169,8 @@ def all_formulas() -> list[Formula]:
             domain="strength",
             expression=("S_sigma(f) = sum over the two tracks |sigma_f H_f(f) + sigma_r H_r(f) exp(-2 pi i f L / v)|^2 G_z(f) "
                         "(H: quarter-car tyre force per road height, G_d(n) = G_d(n0) (n/n0)^-2); sigma_s^2 = m0, "
-                        "nu0 = sqrt(m2/m0); D = nu0 (d/v) E[1/N(2a)], a ~ Rayleigh(sigma_s)"),
+                        "nu0 = sqrt(m2/m0); D = nu0 (d/v) E[1/N(2a)], a ~ Rayleigh(sigma_s); N: slope m above the knee, "
+                        "2 m - 1 below"),
             inputs={"sigma_ra": _in("MPa", "weld stress for 1 kN up at rear wheel a"),
                     "sigma_rb": _in("MPa", "weld stress for 1 kN up at rear wheel b"),
                     "sigma_fa": _in("MPa", "weld stress for 1 kN up at front wheel a (the track of rear a)"),
@@ -169,8 +189,7 @@ def all_formulas() -> list[Formula]:
                     "v": _in("km/h", "speed", min=0), "d": _in("km", "distance", min=0),
                     "FAT": _in("MPa", "fatigue class: stress range at 2e6 cycles", min=0),
                     "m": _in("1", "slope of the S-N curve", min=0),
-                    "N_knee": _in("1", "cycles at the knee of the curve", min=0),
-                    "m2": _in("1", "slope beyond the knee", min=0)},
+                    "N_knee": _in("1", "cycles at the knee of the curve", min=0)},
             outputs={"D": ("1", "Miner damage over the distance (failure at 1)", None),
                      "sigma_s": ("MPa", "spread (standard deviation) of the weld stress", None),
                      "nu0": ("Hz", "mean rate of load cycles", None),
@@ -180,11 +199,15 @@ def all_formulas() -> list[Formula]:
                          "the two sides' quarter cars alike (one set of front and one of rear values)",
                          "narrow-band cycles: Rayleigh amplitudes at the mean crossing rate (more damage than "
                          "rainflow counting gives for a broad-band stress)",
-                         "IIW-type S-N curve and Miner's rule, no mean stress correction"],
+                         "IIW-type S-N curve and Miner's rule, no mean stress correction; below the knee the curve goes on with "
+                         "slope 2 m - 1 (IIW-1823-07 (2008) sec. 4.3.1, p.110, for Miner summation of a spectrum); the "
+                         "design's slope after the knee (constant amplitude) is not used"],
             source=("random vibration of linear systems (textbook): output spread from the frequency responses, the "
                     "input spectrum and the lag between the axles; narrow-band Miner damage of Rayleigh cycles "
-                    "(textbook fatigue); the road spectrum form of ISO 8608 and the S-N curve of the IIW "
-                    "recommendations (A. F. Hobbacher, 2nd ed., Springer 2016), neither checked in this repository"),
+                    "(textbook fatigue); the road spectrum form of ISO 8608 (not checked in this repository); the S-N "
+                    "curve of the IIW recommendations: m, the knee and the slope 2 m - 1 below it for a spectrum as in "
+                    "IIW-1823-07 (2008) sec. 3.2 and 4.3.1, pp.42 and 110, read there by the quality department; the "
+                    "2016 edition (A. F. Hobbacher, 2nd ed., Springer) not checked"),
             requires=[(lambda v: v["v"] > 0 and v["W_f"] > 0 and v["W_r"] > 0, "v, W_f and W_r must be positive"),
                       (lambda v: any(v[k] != 0 for k in ("sigma_ra", "sigma_rb", "sigma_fa", "sigma_fb")),
                        "at least one wheel must stress the weld")],
@@ -200,10 +223,14 @@ def all_formulas() -> list[Formula]:
                     "FAT": _in("MPa", "fatigue class: stress range at 2e6 cycles", min=0),
                     "m": _in("1", "slope of the S-N curve", min=0),
                     "N_knee": _in("1", "cycles at the knee of the curve", min=0),
-                    "m2": _in("1", "slope beyond the knee", min=0)},
+                    "m2": _in("1", "slope beyond the knee for constant amplitude (not for a spectrum: there "
+                                    "IIW uses 2 m - 1)", min=0)},
             outputs={"D": ("1", "Miner damage (failure at 1)", None), "N": ("1", "cycles to failure at this range", None)},
             assumptions=["constant stress range", "IIW-type S-N curve for welded joints (no mean stress correction)",
-                         "linear damage accumulation (Miner)"],
+                         "linear damage accumulation (Miner)",
+                         "m2 is the slope below the knee for constant amplitude (IIW-1823-07 (2008) sec. 3.2, p.44, "
+                         "for very high cycles); for a stress spectrum IIW continues the curve with 2 m - 1 "
+                         "(sec. 4.3.1, p.110), as the road formulas do"],
             source=("S-N curve N = 2e6 (FAT / range)^m and Miner's rule: A. F. Hobbacher, Recommendations for Fatigue Design "
                     "of Welded Joints and Components, 2nd ed., Springer 2016 (IIW document IIW-2259-15); "
                     "not checked in this repository"),
