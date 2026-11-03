@@ -3,7 +3,7 @@ quality_fixture: the mesh check's colours, the elements past a limit, the zoom t
 worst element, the free edges, the list, the thickness colours and the setup's marks.
 
 The fixture's fit to the contract is checked only when the contract has mesh.quality
-(and analysis.setup); the browser tests need HIRAKU_WEB_BROWSER=1 and Playwright (see
+(and analysis.setup); the browser tests run with python -m tests.web.browser and need Playwright (see
 test_browser.py).
 """
 
@@ -84,7 +84,7 @@ class QualityFixtureTest(unittest.TestCase):
         self.assertAlmostEqual(sum(s["weight"] for s in st["loads"][0]["spread_to"]), 1.0, places=5)
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class QualityBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
