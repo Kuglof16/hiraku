@@ -266,6 +266,8 @@ py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" <作業>/f
 py promo/voice.py speakers
 py promo/voice.py reading <原稿> --speaker <ID> --readings <読みの表>
 py promo/voice.py synth   <原稿> <作業>/voice --speaker <ID> --readings <読みの表>
+py promo/voice.py edges   <作業>/voice/recorded <作業>/voice/recorded_v2
+py promo/voice.py adopt   <原稿> <作業>/voice/recorded_v2
 py promo/subs.py layout <作業>/voice <作業>/subs/n00 --cuts N00 --hot "99 %"
 py promo/subs.py burn <作業>/clips/n00_1080p.mp4 <作業>/subs/n00/subs.ass <作業>/clips/n00_final.mp4 --audio <作業>/subs/n00/narration.wav
 ```
@@ -276,6 +278,8 @@ py promo/subs.py burn <作業>/clips/n00_1080p.mp4 <作業>/subs/n00/subs.ass <�
 - 前のカットの声が終わっていなければ、次のカットの声はそのあとまで待ちます (声は重ならない)。枠を超えたカットと、何秒超えたかを表示します
 - 「、」で分けるときは、行の数をいちばん少なくし、そのなかで行の幅がいちばんそろう分け方を選びます
 - `layout --script <原稿>` は、枠と文を原稿から取り、声は合成したものをそのまま使います (枠を変えるたびに合成し直さなくてよい)。合成したあとに文が変わった文は、合成し直すように表示します
+- `voice.py edges <録った声> <新しいフォルダ>` は、録った文の WAV の端をなめらかにした写しを書きます (元のフォルダは変えない。長さも変えないので、並べた位置は動かない)。最初の音の 30 ms 前から cos の 2 乗の形で立ち上げ、最後の声の 20 ms 後から 150 ms で 0 まで下げ、その外は無音にします。2026-11 に録った 36 文では、部屋の音 (約 −60 dBFS、多くは 2 kHz より上) が WAV の頭で急に始まり、録音を止めた所で急に切れ (そこにクリックがあることも多い)、音楽に重ねると 2〜8 kHz の帯で最大 51 dB (頭)・38 dB (尾) の段差でした。直したあとは 4.7 dB 以下です。作り直したら `adopt` で `voice.json` を書き直します
+- 録音アプリの書き出しも同じ形で端を下げるようにしたので、これから録る文には `edges` は要りません (`recorder/README.md` の「保存する WAV の作り方」)
 - `burn` は下の 170 px に黒インクの帯を敷き、字幕を焼き込みます。日本語は 48 px の太字で y = 995、英語は 30 px で y = 1040 に固定 (どちらもいつも 1 行)。座標は 1920×1080 で書き、4K では libass が拡大します
 
 声のモデル: 「阿井田 茂」(制作 古山キリヲ)、Aivis Common Model License (ACML) 1.0。ライセンスの本文はエンジンの `GET /aivm_models` の `manifest.license` で読めます (営利の利用も可、クレジットの表記は任意)。
@@ -300,6 +304,8 @@ py promo/subs.py burn <映像> <作業>/subs/all/subs.ass <出力>.mp4 --audio <
 ```
 
 `mix` は、音楽をはじめから終わりまで声より 15 LU 下 (`--under-voice-lu`) の一定の大きさにします (声の下で下げない)。`--duck-db 9` のように 0 より大きくすると、声の切れ目で音楽をその分だけ上げる作りになります (下げ始めは声の 0.3 秒前、声が止んでも 0.6 秒は下げたまま)。足したものは全体で -16 LUFS (`--lufs`) にし、真のピークを -3 dBFS (`--true-peak`) に抑えます (先読みの短いリミッター)。大きさと真のピークは ffmpeg の ebur128 (ITU-R BS.1770) で測ります。numpy と scipy (HIRAKU の `requirements.txt` にあるもの) と ffmpeg で動きます。
+
+2026-11 に録った声 (`--duck-db` は既定の 0) で測ったこと: 音楽は声の切れ目でも上げ下げされず一定でした (音楽の元の WAV より 12.1 dB 下)。そのため、文の終わりの段差は音楽の戻りではなく、声の WAV の端 (上の `voice.py edges`) が原因でした。リミッターは最大 8.2 dB 下げ、1 dB を超えて下げた所が 341 か所ありました。どれも文の中の大きな音節で、文の終わりにいちばん近いものでも 0.97 秒前です。
 
 ## 試験
 

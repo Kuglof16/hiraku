@@ -16,7 +16,8 @@
 // getFrequencyResponse in Chromium: Q -3.01 gives -3.01 dB at the cutoff),
 // so the Butterworth Q values below are given in dB.
 // exportTake() renders a take through the chain at 44.1 kHz, trims silence at
-// the head and tail, sets the loudness and encodes 16-bit mono WAV.
+// the head and tail, fades the edges (EDGE below), sets the loudness and
+// encodes 16-bit mono WAV.
 
 "use strict";
 
@@ -393,9 +394,48 @@ function trimBounds(x, fs, pad = 0.05) {
   const thr = Math.max(-60, top - 35);
   let first = -1, last = -1;
   for (let k = 0; k < n; k++) if (db[k] > thr) { if (first < 0) first = k; last = k; }
-  if (first < 0) return { start: 0, end: x.length };
+  if (first < 0) return { start: 0, end: x.length, voiceStart: 0, voiceEnd: x.length };
   const p = Math.round(pad * fs);
-  return { start: Math.max(0, first * frame - p), end: Math.min(x.length, (last + 1) * frame + p) };
+  return {
+    start: Math.max(0, first * frame - p), end: Math.min(x.length, (last + 1) * frame + p),
+    voiceStart: first * frame, voiceEnd: (last + 1) * frame,
+  };
+}
+
+// Edges of an exported take. Measured on recorded takes: the room tone
+// (about -60 dBFS, mostly above 2 kHz) started at the first sample and
+// stopped at the last one, and where the take was stopped there was often a
+// click; over the music both edges stood out as hiss starting / stopping at
+// once. So the room tone is faded in at the head and faded out after the last
+// voiced frame (raised cosine), and the export ends before the take's stop.
+const EDGE = {
+  fadeIn: 0.03,     // s, from the first exported sample
+  fadeOut: 0.15,    // s, room tone and breath after the last word
+  hold: 0.02,       // s, after the last voiced frame before the fade-out starts
+  stopGuard: 0.01,  // s, left out before the end of the take (the stop's click)
+};
+
+// Fade x (in place) over [a, b): gain from 0 at a to 1 when rising, from 1
+// to 0 at b - 1 when not.
+function rampInPlace(x, a, b, rising) {
+  const n = Math.max(1, b - a);
+  for (let i = a; i < b; i++) {
+    const c = Math.cos(0.5 * Math.PI * (i - a + (rising ? 0 : 1)) / n);
+    x[i] *= rising ? 1 - c * c : c * c;
+  }
+}
+
+// Where the export of a take ends and its fade-out lies, in samples of the
+// rendered take. srcEnd: where the take's own samples end in the render
+// (after it only the filters' decay of the render's tail is left).
+function edgeSpan(b, srcEnd, fs) {
+  const fo = Math.round(EDGE.fadeOut * fs), hold = Math.round(EDGE.hold * fs);
+  // at least hold + fade-out after the last word (longer when the pad is),
+  // never past the take's stop
+  const limit = Math.max(b.start + 1, srcEnd - Math.round(EDGE.stopGuard * fs));
+  const end = Math.min(Math.max(b.end, b.voiceEnd + hold + fo), limit);
+  const outStart = Math.max(b.start, Math.min(b.voiceEnd + hold, end - fo));
+  return { end, outStart };
 }
 
 // --- render and export -------------------------------------------------------
@@ -424,8 +464,14 @@ async function renderChain(pcm, rate, settings, bypass) {
 async function processTake(pcm, rate, settings, { bypass = false } = {}) {
   const y = await renderChain(pcm, rate, settings, bypass);
   const o = settings.out;
-  const b = o.trim ? trimBounds(y, OUT_RATE, o.pad) : { start: 0, end: y.length };
+  const srcEnd = Math.min(y.length, Math.ceil(pcm.length * OUT_RATE / rate));
+  const b = o.trim ? trimBounds(y.subarray(0, srcEnd), OUT_RATE, o.pad)
+    : { start: 0, end: srcEnd, voiceStart: 0, voiceEnd: srcEnd };
+  const span = edgeSpan(b, srcEnd, OUT_RATE);
+  b.end = span.end;
   const seg = y.slice(b.start, b.end);
+  rampInPlace(seg, 0, Math.min(seg.length, Math.round(EDGE.fadeIn * OUT_RATE)), true);
+  rampInPlace(seg, span.outStart - b.start, seg.length, false);
   const before = integratedLoudness(seg, OUT_RATE);
   let gainDb = 0, limited = false;
   if (o.normalize && isFinite(before)) {
@@ -481,5 +527,5 @@ function wavSeconds(arrayBuffer) {
 window.HirakuDSP = {
   PRESETS, cloneSettings, completeSettings, ensureWorklet, buildChain, MAX_HARMONICS,
   integratedLoudness, kWeightCoeffs, trimBounds, peakOf, renderChain, processTake,
-  encodeWav16, wavSeconds, OUT_RATE,
+  encodeWav16, wavSeconds, OUT_RATE, EDGE, edgeSpan,
 };
