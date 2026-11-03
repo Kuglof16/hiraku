@@ -67,8 +67,10 @@ export class TilePets {
     this.HP = HP;
     this.cam = layout.n00.camera;
     this.motion = layout.n00.motion;
-    const W = Math.max(...tiles.map((x) => x.w));
-    const H = Math.max(...tiles.map((x) => x.h));
+    // room for the largest box (every tile may be the large one: N04's follows the voice)
+    const big = layout.n04?.tile?.pet?.feature ?? {};
+    const W = Math.max(...tiles.map((x) => x.w), big.w ?? 0);
+    const H = Math.max(...tiles.map((x) => x.h), big.h ?? 0);
     this.size = { W, H };
     const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1);
@@ -125,6 +127,21 @@ export class TilePets {
       p.canvas.height = Math.round(p.h * scale);
       p.last = null;
     }
+  }
+
+  // A tile's pet box changed size (N04: the large tile follows the voice).
+  setBox(key, w, h) {
+    const p = this.pets.find((x) => x.key === key);
+    if (!p || (p.w === w && p.h === h)) return;
+    p.w = w;
+    p.h = h;
+    if (w > this.size.W || h > this.size.H) {
+      this.size = { W: Math.max(w, this.size.W), H: Math.max(h, this.size.H) };
+      this.renderer.setSize(Math.ceil(this.size.W * this.scale), Math.ceil(this.size.H * this.scale), false);
+    }
+    p.canvas.width = Math.round(w * this.scale);
+    p.canvas.height = Math.round(h * this.scale);
+    p.last = null;
   }
 
   // A camera for a box of aspect a, fitted to pet3d's FRAME (n00.html / viewer.html).

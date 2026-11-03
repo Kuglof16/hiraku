@@ -78,6 +78,28 @@ def report_events(report):
     return out
 
 
+def failing_events():
+    """REPORT with a handling domain whose verdicts are recorded: one passes, one fails
+    (shape example, the numbers of run 153914's S5 and F1 lines): the line must write the
+    sign that holds between each value and its limit."""
+    rep = copy.deepcopy(REPORT)
+    rep["domains"].append({"domain": "handling", "state": "red", "verdict_ids": ["ver-0101", "ver-0102"], "line": "S5 ... > ...",
+                           "effects": [], "assumptions": ["the body rolls (English, for the makers)"], "differences": []})
+    events = report_events(rep)
+    end = events.pop()
+    base = {"ts": end["ts"], "run_id": end["run_id"], "agent": "cae.handling", "domain": "handling", "design_version": 1}
+    for vid, q, val, op, lim, unit, ok in (("ver-0101", "tip_slope_angle", 41.85, ">", 43.31, "deg", False),
+                                           ("ver-0102", "critical_wind_speed", 56.4, ">=", 30.0, "m/s", True)):
+        events.insert(len(events) - 1, {**base, "t": end["t"] - 0.2, "kind": "verdict.recorded",
+                                        "data": {"verdict_id": vid, "comparison_id": f"cmp-{vid[-4:]}", "load_case_id": "S5-x", "test_id": "S5",
+                                                 "domain": "handling", "quantity": q, "value": {"value": val, "unit": unit}, "op": op,
+                                                 "limit": {"value": lim, "unit": unit}, "pass": ok}})
+    events.append(end)
+    for i, ev in enumerate(events):
+        ev["seq"] = i
+    return events
+
+
 def write_run(root, run_id, events):
     (root / run_id).mkdir(parents=True)
     (root / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
@@ -127,6 +149,8 @@ STATE = """() => {
     strongest: [...page.querySelectorAll('[data-strongest="1"]')].map((e) => e.dataset.box),
     sensBars: page.querySelectorAll('.n17-bar.sens').length,
     effBars: page.querySelectorAll('[data-box$=".effects"] .n17-bar').length,
+    lineFont: Math.min(...[...page.querySelectorAll('.n17-domain h3')].map((e) => parseFloat(getComputedStyle(e).fontSize))),
+    lines: [...page.querySelectorAll('.n17-line')].map((e) => e.textContent),
     lit: document.documentElement.dataset.n17Lit,
   };
 }"""
@@ -143,6 +167,8 @@ class CutN17BrowserTest(unittest.TestCase):
         write_run(cls.tmp / "runs", cls.run_id, report_events(REPORT))
         write_run(cls.tmp / "runs", cls.run_long, report_events(long_report()))
         write_run(cls.tmp / "runs", cls.run_none, [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()])
+        cls.run_fail = "20261102-203000-reportfail"
+        write_run(cls.tmp / "runs", cls.run_fail, failing_events())
         cls.layout_file = cls.tmp / "layout.json"
         cls.layout_file.write_text(json.dumps(n17_layout()), encoding="utf-8")
         cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False, layout_file=cls.layout_file)
@@ -188,6 +214,18 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assertLessEqual(got["bodyOver"], 0)
         self.assertGreaterEqual(got["minFont"], layout["min_text_px"])
 
+    def test_n17_line_writes_the_sign_that_holds(self):
+        """A verdict that fails is written with the sign that holds (41.85 ≤ 43.31 where the
+        criterion asks >), a pass with the criterion's own; English assumptions are left out."""
+        page, errors = self.open(self.run_fail, 1)
+        got = self.at(page, 1)
+        self.assertEqual(errors, [])
+        line = next(x for x in got["lines"] if "斜面" in x)
+        self.assertEqual(line, "山側の輪が浮く斜面の角度 41.85 ° ≤ 43.31 ° / 転倒する風速 56.4 m/s ≥ 30 m/s")
+        self.assertNotIn("for the makers", got["text"])
+        self.assertNotIn("S5", got["text"])
+        page.close()
+
     def test_n17_page_in_its_box_and_lit_at_light_s(self):
         layout = n17_layout()
         T = layout["n17"]["times"]
@@ -201,9 +239,22 @@ class CutN17BrowserTest(unittest.TestCase):
         # the rest steps down to leave room for the large change (not below min_text_px)
         self.assertLessEqual(got["textPx"], layout["n17"]["page"]["text_px"])
         self.assertGreaterEqual(got["textPx"], layout["min_text_px"])
-        # the words are the report's
-        for s in [REPORT["summary"], REPORT["domains"][0]["line"], REPORT["next"][0]["change"], REPORT["next"][0]["reason"]]:
+        # the words are the report's; a domain's line is made from its verdicts in the viewers'
+        # words (the sample's ver-0001: max_stress 123.6 MPa <= 156.67 MPa), not the report's line
+        for s in [REPORT["summary"], REPORT["next"][0]["change"], REPORT["next"][0]["reason"]]:
             self.assertIn(s, got["text"])
+        self.assertIn("最大応力 123.6 MPa ≤ 156.7 MPa", got["text"])
+        self.assertNotIn(REPORT["domains"][0]["line"], got["text"])
+        # no internal names or ids: effects in Japanese, mismatches counted, the unchecked
+        # item's words without its requirement key
+        for word in ("bending", "torsion", "rail_R_S2B", "cmp-0001", "cause-0001"):
+            self.assertNotIn(word, got["text"])
+        self.assertIn("上下の曲げ", got["text"])
+        self.assertIn("途中で手計算と食い違った 1 件 (原因を書いたもの 1 件)", got["text"])
+        self.assertIn(REPORT["domains"][0]["assumptions"][0], got["text"])
+        # each domain's line at the story's body text size (this layout has no story: its
+        # min_text_px; with the promo department's story, 24 px: test_cut_story_browser)
+        self.assertGreaterEqual(got["lineFont"], n17_layout()["min_text_px"])
         self.assertEqual(got["effBars"], len(REPORT["domains"][0]["effects"]))
         self.assertEqual(got["sensBars"], len(REPORT["domains"][0]["sensitivity"]))
         strongest = f"n17.domain.strength.sens.{STRONGEST}"

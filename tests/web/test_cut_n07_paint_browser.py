@@ -99,6 +99,7 @@ STATE = """() => {
       states: x.ct.mesh.states ?? null, colors: x.ct.mesh.colors ? [...new Set(x.ct.mesh.colors)] : null,
       members: x.ct.mesh.rec.element_member })),
     red: c.spec.overlay.color,
+    tone: c.mark.dataset.tone ?? null,
   };
 }"""
 
@@ -202,6 +203,8 @@ class CutN07PaintTest(unittest.TestCase):
             self.assertTrue(v2["fixed"])
         late = seen[swap_to + 1.0]
         self.assertIn("直った", late["n07"]["text"])
+        # the ring is red on the version before, green once the fixed version is shown
+        self.assertEqual((seen[7.5]["n07"]["tone"], late["n07"]["tone"]), ("red", "green"))
 
     def test_b_without_the_member_field_says_so_and_paints_as_a(self):
         seen = self.read("bare", "&paint=member", [0.5, 7.5])

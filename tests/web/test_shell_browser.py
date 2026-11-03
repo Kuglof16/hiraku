@@ -255,7 +255,8 @@ class ShellBrowserTest(unittest.TestCase):
                    before: Number(b.el.style.opacity), after: Number(a.el.style.opacity), version: document.documentElement.dataset.n07Version,
                    label: document.querySelector('[data-box="n07.label"]').textContent,
                    text: document.getElementById("stage").innerText,
-                   mark: Number(c.mark.style.opacity) }; }"""
+                   mark: Number(c.mark.style.opacity), markW: parseFloat(c.mark.style.width), tone: c.mark.dataset.tone,
+                   wheels: b.view.wheels.visible }; }"""
         times = (0, T["lead_s"], (T["lead_s"] + T["turn_to_s"]) / 2, T["turn_to_s"], T["zoom_to_s"], T["swap_s"], (T["swap_s"] + T["swap_to_s"]) / 2, T["swap_to_s"], sp["duration_s"])
         at = {t: page.evaluate(js, t) for t in times}
         self.assertEqual(errors, [])
@@ -271,8 +272,18 @@ class ShellBrowserTest(unittest.TestCase):
         # the zoom: from turn_to_s to zoom_to_s; there the neighbourhood takes zoom.fill of the height
         self.assertLess(at[T["zoom_to_s"]]["dist"], at[T["turn_to_s"]]["dist"] / 3)
         self.assertAlmostEqual(at[T["zoom_to_s"]]["fill"], sp["zoom"]["fill"], places=6)
-        self.assertEqual(at[T["turn_to_s"]]["mark"], 0)
-        self.assertEqual(at[T["zoom_to_s"]]["mark"], 1)
+        # the ring round the largest element: hidden before lead_s, small while the vehicle
+        # turns (it shows where the weak spot is), as wide as zoom.fill of the view's height
+        # once zoomed in; the wheels are left out close in (the near tyre would hide the joint)
+        inner_h = sp["view"]["h"] - 4
+        self.assertEqual(at[0]["mark"], 0)
+        self.assertEqual(at[T["turn_to_s"]]["mark"], 1)
+        self.assertLess(at[T["turn_to_s"]]["markW"], 0.2 * inner_h)
+        self.assertAlmostEqual(at[T["zoom_to_s"]]["markW"], sp["zoom"]["fill"] * inner_h, places=3)
+        self.assertTrue(at[T["turn_to_s"]]["wheels"])
+        self.assertFalse(at[T["zoom_to_s"]]["wheels"])
+        # red on the version before; this run has no verdict on the version after, so it stays red
+        self.assertEqual({at[t]["tone"] for t in times if t >= T["lead_s"]}, {"red"})
         # the swap: the version after fades in between swap_s and swap_to_s, same camera, and stays
         self.assertEqual((at[T["swap_s"]]["after"], at[T["swap_s"]]["label"]), (0, "補強の前"))
         mid = at[(T["swap_s"] + T["swap_to_s"]) / 2]

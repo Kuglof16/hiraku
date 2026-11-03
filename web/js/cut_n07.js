@@ -39,6 +39,9 @@ const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
 const NO_MEMBER_JA = "記録に部材ごとの値が無い";
+// Not in layout.json (written here until the promo department gives a key): the ring's
+// size while the vehicle turns, a share of the view's height (it grows to zoom.fill).
+const MARK_SMALL = 0.08;
 const OPS = { "<=": (v, L) => v <= L, "<": (v, L) => v < L, ">=": (v, L) => v >= L, ">": (v, L) => v > L };
 
 // The per-member field of the quantity a criterion judges, in an analysis: a field
@@ -216,9 +219,10 @@ export class CutN07 {
     // the overlay's opacity only toward the rim
     this.mark = document.createElement("div");
     this.mark.className = "n07-mark";
-    const [r, g, b] = new THREE.Color(sp.overlay.color).toArray().map((x) => Math.round(x * 255));
-    const rim = `rgba(${r}, ${g}, ${b}, ${sp.overlay.opacity})`;
-    Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${rim} 100%)`, opacity: "0" });
+    const rgba = (hex) => `rgba(${new THREE.Color(hex).toArray().map((x) => Math.round(x * 255)).join(", ")}, ${sp.overlay.opacity})`;
+    this.rim = rgba(sp.overlay.color);
+    this.greenRim = rgba(GREEN);
+    Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${this.rim} 100%)`, opacity: "0" });
     for (const c of this.cases) {
       c.el = document.createElement("canvas");
       c.el.dataset.kind = "moving";
@@ -341,6 +345,11 @@ export class CutN07 {
     this.now = { t, ...p };
     const [b, a] = this.cases;
     b.view.lookFrom(this.cameraAt(p));
+    // close in, the wheels are left out: the near tyre would stand between the camera and
+    // the joint (it is seen through the spokes otherwise)
+    const close = p.zoom >= 0.5;
+    for (const c of this.cases) c.view.wheels.visible = !close;
+    this.mark.dataset.wheels = close ? "hidden" : "shown";
     const mix = a ? p.mix : 0;
     if (mix < 1) b.view.renderInto(b.el.getContext("2d"), b.el.width, b.el.height, this.scale);
     b.el.style.opacity = mix < 1 ? "1" : "0";
@@ -350,16 +359,24 @@ export class CutN07 {
       if (mix > 0) a.view.renderInto(a.el.getContext("2d"), a.el.width, a.el.height, this.scale);
     }
     this.setLabel(a && mix >= 0.5 ? a : b);
-    // the ring round the largest element (of the version before), as wide as zoom.fill of the view's height
+    // the ring round the largest element (of the version before): from lead_s a small one
+    // (MARK_SMALL of the view's height) shows where the weak spot is while the vehicle
+    // turns, it grows with the zoom to zoom.fill of the view's height, and once the version
+    // after is shown and the record judges it a pass (✓ 直った) it turns green
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
-    const d = this.spec.zoom.fill * this.inner.h;
+    const d = (MARK_SMALL + (this.spec.zoom.fill - MARK_SMALL) * p.zoom) * this.inner.h;
+    const fixed = !!(a && a.fixed && mix >= 0.5);
+    const tone = fixed ? GREEN : this.spec.overlay.color;
     Object.assign(this.mark.style, {
       left: `${BORDER_PX + ((at.x + 1) / 2) * this.inner.w - d / 2}px`,
       top: `${BORDER_PX + ((1 - at.y) / 2) * this.inner.h - d / 2}px`,
       width: `${d}px`,
       height: `${d}px`,
-      opacity: p.zoom >= 1 ? "1" : "0",
+      borderColor: tone,
+      background: `radial-gradient(circle, transparent 60%, ${fixed ? this.greenRim : this.rim} 100%)`,
+      opacity: t >= this.spec.times.lead_s ? "1" : "0",
     });
+    this.mark.dataset.tone = fixed ? "green" : "red";
     document.documentElement.dataset.n07Version = String(this.labelFor.version);
   }
 }

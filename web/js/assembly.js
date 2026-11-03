@@ -56,11 +56,14 @@ export function partNames(design) {
 export const shortName = (name) => String(name).replace(/\s*[（(].*$/, "") || String(name);
 
 // A step's part by name: the design's part, else a group built first (the contract's
-// "corner:FL" for a suspension corner) as "FL の角の組", else the id.
+// "corner:FL" for a suspension corner) as "前左の足まわり (先に組んだ組)" — the corner's
+// position in the words the design's part names use (前 / 後, 左 / 右) — else the id.
+const CORNER_JA = { FL: "前左", FR: "前右", RL: "後左", RR: "後右" };
 export function nameOf(names, id) {
   if (names[id]) return names[id];
   const m = /^corner:(.+)$/.exec(String(id));
-  return m ? `${m[1]} の角の組` : String(id);
+  if (!m) return String(id);
+  return CORNER_JA[m[1]] ? `${CORNER_JA[m[1]]}の足まわり (先に組んだ組)` : `${m[1]} の角の組`;
 }
 
 // "node LB" -> "節点 LB", "member x" -> "部材 x", "part susp_RR" -> that part's name.
@@ -266,7 +269,9 @@ export class AssemblyStage {
   }
 
   markCurrent(cur) {
-    const ok = cur ? stepOk(cur.m.step) : true;
+    // this.ngChecks (keys of CHECKS): only these failing make the outline red (N16: only a
+    // part that does not fit; a step hard for a tool or a hand stays in the current colour)
+    const ok = cur ? (this.ngChecks ? this.ngChecks.every((k) => cur.m.step[k] === true) : stepOk(cur.m.step)) : true;
     // the path from outside to the place
     const path = cur?.m.step.path_mm ?? [];
     const segs = [];
@@ -383,10 +388,12 @@ export class AssemblySeek {
     }
   }
 
-  setSteps(steps) {
+  // ngChecks (keys of CHECKS, else all): the checks whose failing marks a step's tick red
+  setSteps(steps, ngChecks = null) {
     this.n = steps.length;
+    const ok = (s) => (ngChecks ? ngChecks.every((k) => s[k] === true) : stepOk(s));
     this.el.querySelector(".as-ticks").innerHTML = steps
-      .map((s, i) => `<i class="${stepOk(s) ? "" : "ng"}" style="left:${(this.n ? (i + 1) / this.n : 0) * 100}%" title="手順 ${s.order}"></i>`)
+      .map((s, i) => `<i class="${ok(s) ? "" : "ng"}" style="left:${(this.n ? (i + 1) / this.n : 0) * 100}%" title="手順 ${s.order}"></i>`)
       .join("");
   }
 

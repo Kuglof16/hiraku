@@ -19,7 +19,7 @@ from pathlib import Path
 from hiraku.webserve.server import REPO_DIR, make_server
 from tests.web.domains_fixture import V1_RED, V2_RED, domain_events
 from tests.web.test_browser import ENABLED, sync_playwright
-from tests.web.test_cut_grid_browser import TESTS, box_of, grid_layout, list_rects, three_versions, with_state
+from tests.web.test_cut_grid_browser import TESTS, box_of, crash_drawn, grid_layout, list_rects, switch_times, three_versions, with_state
 
 PETS_COMMIT = "073e7be"  # pet3d.js v8 (the promo department's branch)
 
@@ -109,7 +109,7 @@ class CutPetsTest(unittest.TestCase):
         layout = grid_layout()
         P = layout["n04"]["tile"]["pet"]
         B = layout["n04"]["tile"]["border_px"]
-        base = self.serve({"20261103-130000-pets": domain_events()}, self.pets_file)
+        base = self.serve({"20261103-130000-pets": crash_drawn(domain_events())}, self.pets_file)
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261103-130000-pets&version=1&t=0")
         got = page.evaluate(PETS, 0.4)
         self.assertEqual(errors, [])
@@ -140,7 +140,7 @@ class CutPetsTest(unittest.TestCase):
         T = layout["n04"]["times"]
         dur = layout["n00"]["motion"]["pass_dur_s"]
         self.assertLess(T["nvh_s"] + 0.1, T["crash_s"] + dur)  # the times below assume the overlap
-        events = with_state(domain_events(), 1, "crash", "green")
+        events = with_state(crash_drawn(domain_events()), 1, "crash", "green")
         base = self.serve({"20261103-130000-pets": events}, self.pets_file)
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261103-130000-pets&version=1&t=0")
         times = [0.35, T["crash_s"] + 0.1, T["nvh_s"] + 0.1, T["crash_s"] + dur + 0.05, T["assembly_s"] - 0.05]
@@ -156,31 +156,41 @@ class CutPetsTest(unittest.TestCase):
         for k in ("handling", "thermal", "assembly"):
             self.assertEqual([shots[t][k]["draws"] for t in times], [1] * len(times), k)  # drawn once
             self.assertEqual(len({shots[t][k]["pixels"] for t in times}), 1, k)
-        # a reaction moves the pet, and it comes back to its idle pose
+        # a reaction moves the pet (crash is the large tile from the start to nvh_s, so both
+        # pictures are in the same box), and afterwards it is idle again (states above; its
+        # box is then a list slot, as NVH has become the large tile)
         self.assertNotEqual(shots[times[0]]["crash"]["pixels"], shots[times[1]]["crash"]["pixels"])
-        self.assertEqual(shots[times[0]]["crash"]["pixels"], shots[times[3]]["crash"]["pixels"])
+        self.assertEqual(shots[times[0]]["crash"]["box"][2:], [160, 160])
+        self.assertEqual(shots[times[3]]["crash"]["box"][2:], [84, 84])
         page.close()
 
     def test_n15_pets_react_when_the_version_changes_a_tile(self):
         """N15 over three versions (fixture: red in V1_RED, then V2_RED, then all green): a
-        pet reacts when its tile's judgement changes from the version before (pass when it
-        turns green), not when it stays the same."""
+        pet reacts at its tile's own time in the round (the record's order, switch_times)
+        when its judgement changes from the version before (pass when it turns green), and
+        not when it stays the same."""
         self.need_pets()
         layout = grid_layout()
         T = layout["n15"]["times"]
         dur = layout["n00"]["motion"]["pass_dur_s"]
-        base = self.serve({"20261103-130000-pets3": three_versions()}, self.pets_file)
+        events = three_versions()
+        sw = switch_times(events, T)
+        base = self.serve({"20261103-130000-pets3": events}, self.pets_file)
         page, errors = self.open(f"{base}/cut.html?cut=n15&run=20261103-130000-pets3&t=0")
-        v2_at = T["rounds_from_s"] + (T["all_green_s"] - T["rounds_from_s"]) / 2  # three versions: v2 from the middle
-        got = {t: {x["key"]: x["state"] for x in page.evaluate(PETS, t)["tiles"]} for t in (v2_at - 0.1, v2_at + 0.1, T["all_green_s"] + 0.1, T["all_green_s"] + dur + 0.1)}
+        state = lambda t: {x["key"]: x["state"] for x in page.evaluate(PETS, t)["tiles"]}  # noqa: E731
+        self.assertEqual(set(state(T["rounds_from_s"] - 0.1).values()), {"idle"})
+        # each tile that turns green: idle just before its time, pass just after
+        for k, v in [(k, 2) for k in V1_RED - V2_RED] + [(k, 3) for k in V2_RED]:
+            at = sw[k][v]
+            if at > 0.05:
+                self.assertEqual(state(at - 0.05)[k], "idle", (k, v))
+            self.assertEqual(state(at + 0.05)[k], "pass", (k, v))
+        # a tile green all along never reacts
+        steady = [k for k in TESTS if k not in V1_RED]
+        for t in (1.0, 2.5, T["all_green_s"] + 0.1):
+            self.assertTrue(all(state(t)[k] == "idle" for k in steady), t)
+        self.assertEqual(set(state(T["all_green_s"] + dur + 0.1).values()), {"idle"})
         self.assertEqual(errors, [])
-        react = lambda s: {k for k, v in s.items() if v != "idle"}  # noqa: E731
-        t0, t1, t2, t3 = sorted(got)
-        self.assertEqual(react(got[t0]), set())
-        self.assertEqual(react(got[t1]), V1_RED - V2_RED)  # red in v1, green in v2
-        self.assertTrue(all(got[t1][k] == "pass" for k in V1_RED - V2_RED))
-        self.assertEqual(react(got[t2]), V2_RED)  # red in v2, green in v3
-        self.assertEqual(react(got[t3]), set())
         page.close()
 
     def test_page_works_without_the_pets_file(self):

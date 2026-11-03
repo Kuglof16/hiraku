@@ -3,17 +3,21 @@
 // record of a design version and nothing else in words or figures (the story: a picture
 // and a tick or cross); its corner mark is the domain's judgement of that version
 // (judgement.updated: green ✓, red ✕, else none). The header is one line with one number:
-// N04 how many tiles are still red, N15 how many rounds it took. Positions, sizes, times
-// and the order of the tiles come only from layout.json (n04 / n15); a missing key is
-// named on the page.
+// N04 the version (and the rounds to it, no count of red tiles), N15 how many rounds it
+// took. Positions, sizes, times and the order of the tiles come only from layout.json
+// (n04 / n15); a missing key is named on the page.
 //
 // N04: one version (?version=, else the run's last), a version on the way. The tiles the
 // voice names (crash, NVH, assembly) are lit from times.crash_s / nvh_s / assembly_s in
-// the colour of their judgement in the record (green or red; not lit without one); from
-// times.assembly_s the grid gives way to the assembly's box (n16.view), where the newest
-// assembly record's steps go in one after another to the end of the cut (assembly.js).
-// N15: the run's versions in order (up to ?version=), one after the other between
-// times.rounds_from_s and times.all_green_s; the last one from all_green_s to the end.
+// the colour of their judgement in the record (green or red; not lit without one), and the
+// large tile is the one being named (featuredAt); the ticks and crosses are pale until
+// their tile is lit. From times.assembly_s the grid gives way to the assembly's box
+// (n16.view), where the version's assembly record's steps go in one after another to the
+// end of the cut (assembly.js).
+// N15: the run's versions in order (up to ?version=): the rounds share the time from
+// times.rounds_from_s to times.all_green_s, and in a round's slot the tiles take the new
+// version one by one in the order the record judged them (switchTimes); from all_green_s
+// every tile is on the last version, to the end. The header counts the round in progress.
 // Nothing is coloured by hand: a last version that is not all green stays as it is.
 
 import * as THREE from "three";
@@ -206,54 +210,62 @@ export class CutGrid {
       const lit = this.namedTimes().find(([k]) => k === tile.key)?.[1];
       return lit === undefined || (s !== "green" && s !== "red") ? [{ at: null, state: null }] : [{ at: null, state: null }, { at: lit, state: s }];
     }
-    const n = this.versions.length;
-    const T = this.spec.times;
-    const startOf = (k) => (k === 0 ? null : k === n - 1 ? T.all_green_s : T.rounds_from_s + (k * (T.all_green_s - T.rounds_from_s)) / (n - 1));
+    // N15: the tile takes versions[k] at its time in round k's slot (switchTimes)
+    const at = tile.switchAt ?? this.switchTimes(tile.key);
     const out = [{ at: null, state: st(this.versions[0]) }];
-    for (let k = 1; k < n; k += 1) {
+    for (let k = 1; k < this.versions.length; k += 1) {
       const s = st(this.versions[k]);
-      if (s !== out.at(-1).state) out.push({ at: startOf(k), state: s });
+      if (s !== out.at(-1).state) out.push({ at: at[k], state: s });
     }
     return out;
   }
 
-  // The tile shown large, chosen for the cut's message (layout.json story):
+  // The tile shown large at stage time t, chosen for the cut's message (layout.json story):
   //   N04 "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)":
-  //     the last tile the voice names (times.crash_s, nvh_s, assembly_s in time order) that
-  //     has a record to draw. The message is that everything is looked at at once, not
-  //     that something is red, so the colour does not choose; the voice ends its list on
-  //     it ("…組み立てまで"), and the large tile is the one being named when the grid
-  //     gives way. Without one, the first tile with a record in the layout's order;
+  //     the tile the voice is naming now: crash, NVH, assembly in the order of their times
+  //     (times.crash_s, nvh_s, assembly_s), each from its time; before the first, the
+  //     first. A named tile without a record to draw is passed over. So the large tile is
+  //     what the viewer hears, not one still to come (the review of the first cuts: the
+  //     assembly's red ✕ large from the start read as "it failed"). Without a named tile
+  //     with a record, the first tile with one in the layout's order;
   //   N15 "全部の分野が緑になるまで": the tile that turned green last, the one the rounds
   //     were for (the first version from which it stays green to the last is the latest);
   //   else the first tile. A tile with a record to draw for the last version shown comes
   //   before one without (a large empty tile says nothing).
+  featuredAt(t) {
+    if (this.name !== "n04") return this.featuredKey();
+    const keys = this.spec.tests;
+    const named = this.namedTimes().filter(([k]) => keys.includes(k) && this.drawn(k));
+    if (!named.length) return this.featuredKey();
+    return (named.filter(([, at]) => at <= t).at(-1) ?? named[0])[0];
+  }
+
+  // Whether a tile has a record to draw for the last version shown.
+  drawn(k) {
+    const def = TILES[k];
+    if (!def) return false;
+    const v = this.versions.at(-1);
+    return def.assembly ? !!assemblyFor(this.s, v) : !!recordFor(this.s, k, def, v);
+  }
+
   featuredKey() {
     const keys = this.spec.tests;
-    const v = this.versions.at(-1);
     const state = (x, k) => this.s.judgements[`${x}|${k}`]?.state ?? null;
-    const drawn = (k) => {
-      const def = TILES[k];
-      if (!def) return false;
-      return def.assembly ? !!assemblyFor(this.s, v) : !!recordFor(this.s, k, def, v);
-    };
+    const drawn = (k) => this.drawn(k);
     const first = (list) => list.find(drawn) ?? list[0];
-    if (this.name === "n04") {
-      const named = this.namedTimes().filter(([k]) => keys.includes(k)).map(([k]) => k);
-      return [...named].reverse().find(drawn) ?? first(keys);
-    }
+    if (this.name === "n04") return first(keys);
     const vs = this.versions;
-    // the first version from which each green tile stays green, the latest first
+    // the first version from which each green tile stays green, the latest first; within a
+    // version, the tile that turns green latest in its round (switchTimes, the record's order)
     const greens = keys
       .filter((k) => state(vs.at(-1), k) === "green")
       .map((k) => {
         let from = vs.length - 1;
         while (from > 0 && state(vs[from - 1], k) === "green") from -= 1;
-        return { k, from };
+        return { k, from, at: this.switchTimes(k)[from] };
       })
-      .sort((a, b) => b.from - a.from);
-    const latest = greens.filter((g) => g.from === greens[0]?.from).map((g) => g.k);
-    return first(latest) ?? first(greens.map((g) => g.k)) ?? keys[0];
+      .sort((a, b) => b.from - a.from || b.at - a.at);
+    return first(greens.map((g) => g.k)) ?? keys[0];
   }
 
   // N04: [tile, time] of the tiles the voice names, in time order.
@@ -267,16 +279,52 @@ export class CutGrid {
     return this.s.versions.filter((x) => x < v).length;
   }
 
-  // The version shown at stage time t (an index into this.versions).
+  // N15: the rounds share the time from rounds_from_s to all_green_s, one slot each
+  // (round k brings versions[k]: slot k of n - 1). The round in progress at stage time t
+  // (an index into this.versions): 0 before the first slot, k from the start of slot k.
+  slotOf(k) {
+    const T = this.spec.times;
+    const n = this.versions.length;
+    const span = (T.all_green_s - T.rounds_from_s) / Math.max(1, n - 1);
+    return [T.rounds_from_s + (k - 1) * span, T.rounds_from_s + k * span];
+  }
+
   versionAt(t) {
     const n = this.versions.length;
     if (this.name !== "n15" || n === 1) return n - 1;
-    const T = this.spec.times;
-    if (t >= T.all_green_s) return n - 1;
-    if (t < T.rounds_from_s) return 0;
-    // the versions before the last share the time from rounds_from_s to all_green_s
-    const k = Math.floor(((t - T.rounds_from_s) / (T.all_green_s - T.rounds_from_s)) * (n - 1));
-    return Math.min(n - 2, Math.max(0, k));
+    let k = 0;
+    for (let i = 1; i < n; i += 1) if (t >= this.slotOf(i)[0]) k = i;
+    return k;
+  }
+
+  // N15: when a tile takes each version (an array by version index; 0 for the first). In
+  // round k's slot the tiles change one by one in the order the record judged them: a
+  // tile's time in the slot is as far along as its domain's judgement of versions[k] is
+  // between the earliest and the latest judgement of that version (the record's event
+  // times), so the slot ends with every tile on versions[k].
+  switchTimes(key) {
+    const out = [0];
+    for (let k = 1; k < this.versions.length; k += 1) {
+      const v = this.versions[k];
+      const ts = this.spec.tests.map((x) => this.s.judgements[`${v}|${x}`]?.t).filter(Number.isFinite);
+      const lo = Math.min(...ts);
+      const hi = Math.max(...ts);
+      const own = this.s.judgements[`${v}|${key}`]?.t;
+      const f = Number.isFinite(own) && hi > lo ? (own - lo) / (hi - lo) : 1;
+      const [a, b] = this.slotOf(k);
+      out.push(a + f * (b - a));
+    }
+    return out;
+  }
+
+  // The version index a tile shows at stage time t.
+  tileVersionAt(tile, t) {
+    if (this.name !== "n15") return this.versions.length - 1;
+    let k = 0;
+    tile.switchAt.forEach((at, i) => {
+      if (i > 0 && t >= at) k = i;
+    });
+    return k;
   }
 
   build() {
@@ -292,7 +340,7 @@ export class CutGrid {
     const slots = listRects(sp.list);
     if (sp.tests.length - 1 > slots.length) throw new Error(`layout.json の ${this.name}.tests の一覧は ${sp.tests.length - 1} 枚、list は ${slots.length} 枠`);
     // one representative tile in the feature box, the others in the list's slots, in order
-    this.featured = this.featuredKey();
+    this.featured = this.featuredAt(0);
     let j = 0;
     const rects = sp.tests.map((key) => (key === this.featured ? sp.feature : slots[j++]));
     this.tiles = sp.tests.map((key, i) => {
@@ -313,7 +361,7 @@ export class CutGrid {
       const petSize = key === this.featured ? { w: st.pet.feature.w, h: st.pet.feature.h } : { w: st.pet.w, h: st.pet.h };
       el.innerHTML = `<div class="pet" data-box="${box}.pet" style="right:${st.pet.right}px;bottom:${st.pet.bottom}px;width:${petSize.w}px;height:${petSize.h}px"></div>`;
       this.stage.append(el);
-      const tile = { key, def, el, rect: r, inner: { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px }, petBox: el.querySelector(".pet"), petSize };
+      const tile = { key, def, el, rect: r, inner: { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px }, petBox: el.querySelector(".pet"), petSize, switchAt: this.switchTimes(key) };
       // one layer per version: its label, mark and drawing
       tile.layers = this.versions.map((v) => this.makeLayer(tile, v));
       return tile;
@@ -359,8 +407,9 @@ export class CutGrid {
     const state = this.s.judgements[`${v}|${tile.key}`]?.state ?? null;
     const layer = { v, el, state, area: null };
     el.innerHTML = this.markHtml(box, state);
+    // what is missing is said as a note for the makers (data-kind "note": not body text)
     if (!def) {
-      el.insertAdjacentHTML("beforeend", `<span class="none" style="font-size:${this.textPx}px">この札の中身はまだ決めていない (${esc(tile.key)})</span>`);
+      el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">この札の中身はまだ決めていない (${esc(tile.key)})</span>`);
     } else {
       el.insertAdjacentHTML("afterbegin", `<canvas></canvas>`);
       layer.canvas = el.querySelector("canvas");
@@ -368,7 +417,7 @@ export class CutGrid {
       else {
         layer.rec = recordFor(this.s, tile.key, def, v);
         if (layer.rec) this.makeView(tile, layer);
-        else el.insertAdjacentHTML("beforeend", `<span class="none" style="font-size:${this.textPx}px">版 ${v} の記録が無い (${esc(def.test ?? tile.key)})</span>`);
+        else el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">版 ${v} の記録が無い (${esc(def.test ?? tile.key)})</span>`);
       }
     }
     el.style.display = "none";
@@ -390,21 +439,60 @@ export class CutGrid {
     return st.mark.top + Math.max(st.mark.size_px, this.story.bodyPx) + st.label.y / 2;
   }
 
-  // A 3D view of the design through the shared renderer in a part of the tile.
-  newView(tile, layer, design, x, w, y = 0, h = tile.inner.h) {
+  // A 3D view of the design through the shared renderer in a part of the tile: areaOf(tile)
+  // gives that part (from the tile's inner size, so it follows the tile when the tile is
+  // placed again in the other box, placeTiles).
+  newView(tile, layer, design, areaOf) {
     const v = new Workbench3D(null, params.get("tilelook") === "real" ? "real" : "zu", { renderer: this.renderer });
     v.setDesign(design);
-    layer.area = { x, y, w, h };
-    Object.assign(layer.canvas.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
-    v.resize(w, h);
+    layer.areaOf = areaOf;
+    this.placeArea(tile, layer, v);
     return v;
+  }
+
+  // The layer's canvas in its part of the tile, the view sized to it and (once fitted) its
+  // camera fitted again to the same points.
+  placeArea(tile, layer, v = layer.view) {
+    const a = layer.areaOf(tile);
+    layer.area = a;
+    Object.assign(layer.canvas.style, { left: `${a.x}px`, top: `${a.y}px`, width: `${a.w}px`, height: `${a.h}px` });
+    v.resize(a.w, a.h);
+    if (layer.fit) v.fitPoints(layer.fit.pts, layer.fit.view, layer.fit.margin);
+    if (this.scale) {
+      layer.canvas.width = Math.round(a.w * this.scale);
+      layer.canvas.height = Math.round(a.h * this.scale);
+    }
+  }
+
+  // The tiles in their boxes with `featured` in the large one (the others in the list's
+  // slots, in the layout's order): each tile's box, its pet's box, and its views.
+  placeTiles(featured) {
+    const sp = this.spec;
+    const st = sp.tile;
+    const slots = listRects(sp.list);
+    this.featured = featured;
+    let j = 0;
+    for (const tile of this.tiles) {
+      const r = tile.key === featured ? sp.feature : slots[j++];
+      tile.rect = r;
+      tile.inner = { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px };
+      Object.assign(tile.el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+      if (tile.key === featured) tile.el.dataset.featured = "1";
+      else delete tile.el.dataset.featured;
+      if (!clearOfBand(r, this.layout)) tile.el.dataset.outside = "1";
+      else delete tile.el.dataset.outside;
+      tile.petSize = tile.key === featured ? { w: st.pet.feature.w, h: st.pet.feature.h } : { w: st.pet.w, h: st.pet.h };
+      Object.assign(tile.petBox.style, { width: `${tile.petSize.w}px`, height: `${tile.petSize.h}px` });
+      this.pets?.setBox(tile.key, tile.petSize.w, tile.petSize.h);
+      for (const l of tile.layers ?? []) if (l.view && l.areaOf) this.placeArea(tile, l);
+    }
   }
 
   // The test's record in 3D over the whole tile: its motion, its field as a contour.
   makeView(tile, layer) {
     const { lc, ana } = layer.rec;
     const def = tile.def;
-    const v = this.newView(tile, layer, this.s.designs[ana.design_version] ?? this.s.designs[layer.v], 0, tile.inner.w);
+    const v = this.newView(tile, layer, this.s.designs[ana.design_version] ?? this.s.designs[layer.v], (t) => ({ x: 0, y: 0, w: t.inner.w, h: t.inner.h }));
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);
     v.setMotion(motion);
@@ -421,7 +509,8 @@ export class CutGrid {
     const d = v.sceneDesc;
     if (d?.wall) pts.push(new THREE.Vector3(d.wall.x + 300, 0, 1200));
     for (const o of d?.objects ?? []) if (o.kind === "wall") pts.push(new THREE.Vector3(o.position_mm[0] - o.size_mm[0] / 2, o.position_mm[1], o.position_mm[2]));
-    v.fitPoints(pts, VIEWS[v.view ?? "default"], 1.06);
+    layer.fit = { pts, view: VIEWS[v.view ?? "default"], margin: 1.06 };
+    v.fitPoints(pts, layer.fit.view, layer.fit.margin);
     layer.view = v;
     layer.motion = motion;
     layer.span = motion ? [motion.t0, motion.t1] : null;
@@ -435,17 +524,18 @@ export class CutGrid {
     const asm = assemblyFor(this.s, layer.v);
     const el = layer.el;
     if (!asm) {
-      el.insertAdjacentHTML("beforeend", `<span class="none" style="font-size:${this.textPx}px">版 ${layer.v} の組み立ての記録が無い</span>`);
+      el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">版 ${layer.v} の組み立ての記録が無い</span>`);
       return;
     }
     const design = this.s.designs[layer.v];
     const below = this.belowHead();
     el.dataset.hits = String(asm.hits.length);
-    const v = this.newView(tile, layer, design, 0, tile.inner.w, below, tile.inner.h - below);
+    const v = this.newView(tile, layer, design, (t) => ({ x: 0, y: below, w: t.inner.w, h: t.inner.h - below }));
     v.setScene(null, null);
     v.setContour(null);
     v.setToggles({ parts: true, contour: false, arrows: false, cg: false, names: false, limit: false });
-    v.fitPoints(v.contentPoints(), VIEWS.default, 1.1);
+    layer.fit = { pts: v.contentPoints(), view: VIEWS.default, margin: 1.1 };
+    v.fitPoints(layer.fit.pts, layer.fit.view, layer.fit.margin);
     const marks = new THREE.Group();
     const mat = new THREE.MeshBasicMaterial({ color: RED, transparent: true, opacity: 0.45, depthWrite: false });
     for (const ref of new Set(asm.hits.flatMap((x) => [x.a, x.b]))) {
@@ -520,11 +610,17 @@ export class CutGrid {
     document.documentElement.dataset.version = String(v);
     this.setHeader(v);
     const end = this.name === "n04" ? T.assembly_s : sp.duration_s;
+    // N04: the large tile follows the voice
+    const featured = this.featuredAt(t);
+    if (featured !== this.featured) this.placeTiles(featured);
     if (gridShown) this.pets?.draw(t);
     for (const tile of this.tiles) {
       tile.el.style.visibility = gridShown ? "visible" : "hidden";
-      tile.layers.forEach((l, i) => (l.el.style.display = i === k ? "" : "none"));
-      const layer = tile.layers[k];
+      // N15: each tile takes the next version at its own time in the round (switchTimes)
+      const kt = this.tileVersionAt(tile, t);
+      tile.layers.forEach((l, i) => (l.el.style.display = i === kt ? "" : "none"));
+      tile.el.dataset.version = String(this.versions[kt]);
+      const layer = tile.layers[kt];
       // N04: a tile the voice names is lit from that time in its judgement's colour in the
       // record (green or red as it is; nothing is turned red), not lit without a judgement
       const litAt = this.name === "n04" ? this.namedTimes().find(([k]) => k === tile.key)?.[1] : undefined;
@@ -534,6 +630,10 @@ export class CutGrid {
       tile.el.dataset.lit = hot ? layer.state : "";
       tile.el.style.borderColor = hot ? tone : this.colors.rule;
       tile.el.style.boxShadow = hot ? `0 0 0 ${sp.tile.border_px * 2}px ${tone}` : "none";
+      // N04: a tick or cross is pale (gray) until its tile is named and lit, so lighting up
+      // is what shows the record's colour; a tile the voice does not name stays pale
+      const mark = layer.el.querySelector(".mark");
+      if (mark) mark.classList.toggle("dim", this.name === "n04" && !hot);
       if (!gridShown || !layer.view) continue;
       // the record plays from lead_s to the grid's end, squeezed to fit
       const tau = layer.span ? squeeze(t, T.lead_s, end, layer.span[0], layer.span[1]).tau : 0;
@@ -543,16 +643,14 @@ export class CutGrid {
     }
   }
 
-  // One line, one number: N04 the tiles of the version still red, N15 the rounds to it.
+  // One line, one number: N15 the rounds to the version; N04 the version and the rounds to
+  // it (no count of red tiles: the voice says what can be checked, not what failed).
   setHeader(v) {
     if (this.headerFor === v) return;
     this.headerFor = v;
     const num = (n) => `<span class="num" data-kind="number">${esc(String(n))}</span>`;
     if (this.name === "n15") this.header.innerHTML = `繰り返し ${num(this.roundsTo(v))} 回`;
-    else {
-      const reds = this.tiles.filter((x) => this.s.judgements[`${v}|${x.key}`]?.state === "red").length;
-      this.header.innerHTML = reds ? `まだ赤が ${num(reds)} 枚` : "全部が緑";
-    }
+    else this.header.innerHTML = `設計の版 ${num(v)}・直し ${esc(String(this.roundsTo(v)))} 回`;
   }
 }
 

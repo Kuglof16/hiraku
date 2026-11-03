@@ -82,7 +82,7 @@ const FLAGS = [
 // What a criterion that is not met means, by its quantity.
 const CRITERION_JA = {
   stopping_distance: "止まりきれない",
-  max_stress: "フレームが許容を超える",
+  max_stress: "フレームが持たない", // past the allowable stress ("許容" is not a viewer's word)
   critical_wind_speed: "風に耐えられない",
   tip_slope_angle: "斜面で倒れる",
   tilt_angle: "傾いて倒れる",

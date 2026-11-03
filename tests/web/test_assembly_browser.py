@@ -257,18 +257,24 @@ class AssemblyBrowserTest(unittest.TestCase):
         const up = el.parentElement?.closest('[data-box]');
         return { key: el.dataset.box, box: r(el), parent: up ? up.dataset.box : null, parentBox: up ? r(up) : null };
       });
+      const column = [...document.querySelectorAll('[data-box="n16.steps"] *')]
+        .filter((el) => shown(el) && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
       return {
         err: document.querySelector('.err')?.textContent ?? null,
         duration: window.hiraku.player.duration,
         step: Number(document.documentElement.dataset.n16Step),
-        cur: [...document.querySelectorAll('[data-box^="n16.step."].cur')].map((li) => li.dataset.order),
         u: Number(document.querySelector('[data-box="n16.seek"]').dataset.u),
         fill: parseFloat(document.querySelector('[data-box="n16.seek"] .as-fill').style.width),
         caption: document.querySelector('[data-box="n16.caption"]').textContent,
         boxes: Object.fromEntries(['n16.view', 'n16.seek', 'n16.steps'].map((k) => [k, r(document.querySelector(`[data-box="${k}"]`))])),
         all,
         rows: rows.map((li) => li.dataset.box),
-        checks: rows.map((li) => [...li.querySelectorAll('.ck')].map((c) => c.classList.contains('is-ok'))),
+        sums: [...document.querySelectorAll('.n16-sum')].map((el) => el.innerText.replace(/\\s+/g, ' ').trim()),
+        now: document.querySelector('.n16-now')?.innerText.replace(/\\s+/g, ' ').trim() ?? '',
+        outline: window.hiraku.cut.asm.outline.visible ? '#' + window.hiraku.cut.asm.outline.material.color.getHexString() : null,
+        redTicks: document.querySelectorAll('[data-box="n16.seek"] .as-ticks i.ng').length,
+        seekKind: document.querySelector('[data-box="n16.seek"]').dataset.kind ?? null,
+        columnSizes: column.map((el) => parseFloat(getComputedStyle(el).fontSize)),
         sizes: texts.map((el) => parseFloat(getComputedStyle(el).fontSize)),
         outside: document.querySelectorAll('[data-outside]').length,
         visible: window.hiraku.cut.asm.movers.map((m) => m.obj.group.visible),
@@ -324,16 +330,23 @@ class AssemblyBrowserTest(unittest.TestCase):
             b = layout["n16"][key]
             self.assertEqual([round(v) for v in got["boxes"][f"n16.{key}"]], [b["x"], b["y"], b["w"], b["h"]])
 
-        # steps_from..steps_to: one step after another, as many as the record has
+        # before steps_from the caption names the first part by its name in the design (no
+        # node or member ids, nothing in brackets), and the column says what it found
+        self.assertEqual(got["caption"], "手順 1 電池を付ける")
+        self.assertEqual(got["now"], "手順 1 電池 問題なし")
+        # steps_from..steps_to: one step after another, as many as the record has; the
+        # caption holds one sentence for the whole order (too fast to read step by step)
         dt = (T["steps_to_s"] - T["steps_from_s"]) / n
         for k in range(1, n + 1):
             got = at(T["steps_from_s"] + (k - 0.5) * dt)
             self.assertEqual(got["step"], k)
-            self.assertEqual(got["cur"], [str(k)])
             self.assertAlmostEqual(got["u"], k - 0.5)
             self.assertAlmostEqual(got["fill"], (k - 0.5) / n * 100, places=3)
-            self.assertIn(STEPS[k - 1]["text"], got["caption"])
+            self.assertEqual(got["caption"], f"全 {n} 手順を、入る順に組む")
+            self.assertEqual(got["now"], "")
             self.assertEqual(got["visible"], [i < k for i in range(n)])
+            # the part going in is outlined in the current colour (orange); red only for a part that does not fit
+            self.assertEqual(got["outline"], "#e9893a", k)
         seen = []
         for i in range(41):
             seen.append(at(T["steps_from_s"] + (T["steps_to_s"] - T["steps_from_s"]) * i / 40 - 1e-3)["step"])
@@ -354,11 +367,21 @@ class AssemblyBrowserTest(unittest.TestCase):
         got = at(T["scrub_s"] + (T["scrub_to_s"] - T["scrub_s"]) * low / 28)
         self.assertEqual(got["visible"], [i < got["u"] for i in range(n)])
 
-        # held on the last step to the end
+        # held on the last step to the end: the caption and the column name it, and the
+        # column says in words what the checks found over all the steps (counted from the record)
         got = at(layout["n16"]["duration_s"])
         self.assertEqual((got["step"], got["u"], got["fill"]), (n, n, 100))
-        self.assertEqual(got["checks"], [[s["no_interference"], s["tool_clearance"], s["hand_reach"]] for s in STEPS])
-        self.assertEqual(got["rows"], [f"n16.step.{s['order']}" for s in STEPS])
+        self.assertEqual(got["caption"], "手順 3 前左の車輪を付ける")
+        self.assertEqual(got["now"], "手順 3 前左の車輪 手が届きにくい")
+        self.assertEqual(got["sums"], ["✓ ぶつからずに入る 全手順", "✕ 工具が入りにくい 1 手順", "✕ 手が届きにくい 1 手順"])
+        self.assertEqual(got["rows"], [])  # no list of steps (one per frame was not readable)
+        self.assertEqual(got["redTicks"], 0)  # every part fits: no red tick on the bar
+        self.assertEqual(got["seekKind"], "note")  # the bar's "手順 3 / 3" is the makers' note
+        for name in ("節点", "N1", "rail_L", "ピン"):
+            self.assertNotIn(name, got["caption"] + got["now"])
+        # what is read in the column is at steps.text_px (this layout has no story; with one,
+        # the story's body text size: test_cut_story_browser)
+        self.assertGreaterEqual(min(got["columnSizes"]), layout["n16"]["steps"]["text_px"])
 
         for t in N16_CHECK_TIMES:
             self.assert_boxes_fit(at(t), layout, t)
@@ -366,13 +389,14 @@ class AssemblyBrowserTest(unittest.TestCase):
         page.close()
 
     def test_n16_nineteen_steps_fit_at_the_check_times(self):
-        """As many steps as the video's record (19): the list still ends inside its box."""
+        """Many steps (19): the column still ends inside its box, its counts from the record."""
         layout = n16_layout()
         page, errors, at = self.n16_page(self.run19)
         for t in N16_CHECK_TIMES:
             got = at(t)
             self.assertIsNone(got["err"])
-            self.assertTrue(got["rows"])
+            self.assertEqual(len(got["sums"]), 3)
+            self.assertIn("✕ 工具が入りにくい 6 手順", got["sums"])  # steps 2, 5, ... 17 (every third)
             self.assert_boxes_fit(got, layout, t)
         self.assertEqual(errors, [])
         page.close()

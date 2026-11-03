@@ -190,7 +190,26 @@ const QUANTITY_JA = {
   toe_longitudinal: "前後力によるトー",
   camber_longitudinal: "前後力によるキャンバー",
   toe_aligning: "アライニングトルクによるトー",
+  // judged quantities of the scripted video runs (report lines)
+  temp_battery_max: "電池のいちばん高い温度",
+  temp_controller_max: "制御器のいちばん高い温度",
+  knee_room: "ひざの前のすき間",
+  tip_slope_angle: "山側の輪が浮く斜面の角度",
+  climbable: "段差を登れるか",
 };
+
+// Names for viewers who do not know CAE (the video's pages): the trade's words left out.
+// A quantity not listed here reads as quantityName.
+const PLAIN_JA = {
+  max_hot_spot_stress: "つなぎ目の応力",
+  min_side_load: "軽い側の輪の重さ",
+  first_frame_mode: "フレームのいちばん低い揺れの速さ",
+  fatigue_damage: "くり返しの力による傷み",
+};
+
+export function plainName(q) {
+  return PLAIN_JA[q] ?? quantityName(q);
+}
 
 const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力", joint: "取付点の力" };
 
@@ -199,7 +218,8 @@ export function vectorName(kind) {
 }
 
 // Results that answer yes or no (recorded as 1 or 0).
-const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "reached_target", "moved_uphill"]);
+const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "climbable", "reached_target", "moved_uphill"]);
+export const isYesNo = (q) => YES_NO.has(q);
 
 // A result's value with its unit, or はい / いいえ for a yes-or-no result.
 export function resultText(r, sig = 3) {
