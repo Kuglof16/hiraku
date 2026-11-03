@@ -1,5 +1,6 @@
 """modal (N1): natural frequencies and mode shapes of the frame on its springs,
-next to the frequencies the wheels and the motor shake it with."""
+next to the frequencies the wheels and the motor shake it with, and the first
+bending and torsion frequencies of the driveshafts (k1_frame.shaft)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ from ..k0_handcalc import units
 from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import build
 from ..k1_frame.modal import MASS_CASE, modes, solve_modal
+from ..k1_frame.shaft import driveshaft_modes
 from . import fixtures
 from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 
@@ -37,7 +39,7 @@ class Modal(BuiltinTool):
     base = "K1"
     tests = ["N1"]
     formulas = ["modal.spring_mass", "modal.quarter_car", "modal.ladder_twist_mode", "modal.simple_beam_first_mode",
-                "modal.rotation_excitation"]
+                "modal.rotation_excitation", "modal.tube_shaft_bending", "modal.two_inertia_torsion"]
     load_case_params = (
         Param("speed", "km/h", "driving speed for the wheel and motor rotation frequencies "
               "(without it: the design variable max_speed)"),
@@ -54,6 +56,10 @@ class Modal(BuiltinTool):
                  "one rail as a simply supported beam on the axles, without the masses it carries"),
         Predicts("wheel_rotation_frequency", "modal.rotation_excitation", "f_wheel"),
         Predicts("motor_rotation_frequency", "modal.rotation_excitation", "f_motor", "i = the design variable gear_ratio"),
+        Predicts("driveshaft_bending_mode", "modal.tube_shaft_bending", "f1",
+                 "inputs from hiraku.solvers.k1_frame.shaft.shaft_inputs(design) (the lowest of the shafts)"),
+        Predicts("driveshaft_torsion_mode", "modal.two_inertia_torsion", "f",
+                 "inputs from hiraku.solvers.k1_frame.shaft.shaft_inputs(design): J_1 = J_in, J_2 = J_out"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -92,15 +98,19 @@ class Modal(BuiltinTool):
                 raise LoadCaseError("give the load case parameter speed (km/h) or the design variable max_speed")
             v = units.to_unit(q, "km/h", "max_speed")
         r = modes(design, n)
-        f, flex = r["frequencies"], r["flexibility"]
+        f, flex, lflex = r["frequencies"], r["flexibility"], r["ladder_flexibility"]
         results = [result(f"mode_{i + 1}", float(fi), "Hz") for i, fi in enumerate(f)]
         body = [float(fi) for fi, x in zip(f, flex) if x < FLEX_LIMIT]
-        frame = [float(fi) for fi, x in zip(f, flex) if x >= FLEX_LIMIT]
+        ladder = [float(fi) for fi, x, lx in zip(f, flex, lflex) if x >= FLEX_LIMIT and lx >= FLEX_LIMIT]
+        other = [float(fi) for fi, x, lx in zip(f, flex, lflex) if x >= FLEX_LIMIT and lx < FLEX_LIMIT]
+        frame = [float(fi) for fi, x in zip(f, flex) if x >= FLEX_LIMIT]  # everything that bends (the excitation gap)
         if body:
             results.append(result("first_body_mode", body[0], "Hz"))
-        if not frame:
+        if not ladder:
             raise DesignError(f"no frame bending mode among the first {n} modes; ask for more modes (n_modes)")
-        results.append(result("first_frame_mode", frame[0], "Hz"))
+        results.append(result("first_frame_mode", ladder[0], "Hz"))
+        if other:  # members of another part (the roll bar) bend while the ladder stays as it is
+            results.append(result("first_rollbar_mode", other[0], "Hz"))
         driven = [s for s in design["supports"] if s["actuation"]["drive"]] or design["supports"]
         radius = float(np.mean([s["radius_mm"] for s in driven]))
         f_wheel = (v / 3.6) / (2 * math.pi * radius / 1000.0)
@@ -110,12 +120,17 @@ class Modal(BuiltinTool):
         if gear is not None:
             exc["motor"] = f_wheel * units.to_unit(gear, "1", "gear_ratio")
             results.append(result("motor_rotation_frequency", exc["motor"], "Hz"))
+        shafts = driveshaft_modes(design)
+        for key, quantity in (("bending", "driveshaft_bending_mode"), ("torsion", "driveshaft_torsion_mode")):
+            if shafts[key]:
+                pid = min(shafts[key], key=shafts[key].get)
+                results.append(result(quantity, shafts[key][pid], "Hz", pid))
         gaps = {k: min(abs(fr - fe) / fe for fr in frame) * 100.0 for k, fe in exc.items() if fe > 0}
         nearest = min(gaps, key=gaps.get)
         results.append(result("excitation_gap", gaps[nearest], "%", nearest))
         fields = []
         for i in range(min(FIELD_MODES, len(f))):
-            kind = "frame" if flex[i] >= FLEX_LIMIT else "body on springs"
+            kind = ("body on springs" if flex[i] < FLEX_LIMIT else "frame" if lflex[i] >= FLEX_LIMIT else "roll bar")
             fields.append({"kind": "mode_shape", "label": f"mode {i + 1} ({kind})", "unit": "1",
                            "frequency_Hz": float(f[i]),
                            "per_node": {nid: [float(x) for x in u] for nid, u in r["shapes"][i].items()}})

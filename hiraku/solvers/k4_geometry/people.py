@@ -1,4 +1,5 @@
-"""Occupant fit against body-size statistics (H3).
+"""Occupant fit against body-size statistics (H3), and the seated body: legs, feet and
+arms placed against the seat, the floor, the pedals and the steering wheel.
 
 Source of the values (mm): percentiles of the young adults (18-29 years) in
 the AIST anthropometric database 1991-92 (Makiko Kouchi and Masaaki Mochimaru,
@@ -6,9 +7,23 @@ the AIST anthropometric database 1991-92 (Makiko Kouchi and Masaaki Mochimaru,
 Science and Technology, H16PRO 287), read from the item tables at
 https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03 (item ID
 and name as in that list). Only statistics are used (no individual data).
+
+The seated body (seated()) is a chain of straight links in the side view of each
+leg, from the item values: the hip joint at the buttock-trochanterion length
+(J9) ahead of the seat back and the trochanterion height (I11) above the seat;
+the thigh from the hip to the knee joint, J7 - J9 long (the knee joint is the
+lateral condyle; the thigh is level when J7 and J9 are measured); the shank
+from the knee joint to the ankle, I13 - M4 long (knee joint height over the
+floor less the ankle's height over the sole); the foot from the heel, the ankle
+M24 along the sole and M4 above it, the ball of the foot M20 along the sole,
+the toe M15. The legs are side by side, a thigh breadth (D15) apart. The links
+being straight lines through the joints is an assumption.
 """
 
 from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -20,7 +35,67 @@ AIST = {
     "buttock_knee_m95": 616.4,  # source: J5 Buttock-knee length, sitting, male 95th percentile
 }
 SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items I1, D2, "
-          "J2, J5 read from https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03")
+          "J2, J5, J7, J9, I3, I11, I13, C3, C7, C12, C16, D15, D17, M4, M15, M16, M20, M24 read from "
+          "https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03")
+
+# Body sizes for the seated body: young adult male 95th percentile (the large person: room,
+# clearance) and young adult female 5th percentile (the small person: reach). Same source as AIST.
+SIZES: dict[str, dict[str, float]] = {
+    "m95": {
+        "buttock_trochanter": 146.0,  # source: J9 Buttock-trochanterion length, sitting
+        "trochanter_height": 82.0,  # source: I11 Trochanterion height, sitting (over the seat)
+        "buttock_condyle": 570.3,  # source: J7 Buttock-lateral condyle length, sitting
+        "buttock_knee": 616.4,  # source: J5 Buttock-knee length, sitting
+        "knee_joint_height": 501.4,  # source: I13 Knee joint height, sitting (over the floor)
+        "malleolus_height": 81.6,  # source: M4 Lateral malleolus height
+        "heel_malleolus": 62.1,  # source: M24 Heel to lateral malleolus
+        "instep_length": 199.5,  # source: M20 Instep length (heel to the ball of the foot)
+        "foot_length": 272.5,  # source: M15 Foot length, direct
+        "foot_breadth": 107.0,  # source: M16 Foot breadth, direct
+        "thigh_breadth": 184.0,  # source: D15 Thigh breadth
+        "calf_breadth": 126.0,  # source: D17 Maximum lower leg breadth
+        "shoulder_height": 637.5,  # source: I3 Acromiale height, sitting (over the seat)
+        "back_shoulder": 94.0,  # source: C16 Back to acromiale, arms forward
+        "grip_reach": 763.0,  # source: C3 Grip reach from back
+        "upper_arm": 336.4,  # source: C7 Upper arm length
+        "elbow_grip": 358.0,  # source: C12 Elbow-grip length
+        "sitting_height": 985.2,  # source: I1 Sitting height
+    },
+    "f5": {
+        "buttock_trochanter": 65.9,
+        "trochanter_height": 58.0,
+        "buttock_condyle": 470.1,
+        "buttock_knee": 511.0,
+        "knee_joint_height": 399.1,
+        "malleolus_height": 56.0,
+        "heel_malleolus": 41.0,
+        "instep_length": 159.5,
+        "foot_length": 216.1,
+        "foot_breadth": 84.8,
+        "thigh_breadth": 146.0,
+        "calf_breadth": 92.1,
+        "shoulder_height": 519.0,
+        "back_shoulder": 65.0,
+        "grip_reach": 606.0,
+        "upper_arm": 265.0,
+        "elbow_grip": 283.0,
+        "sitting_height": 824.1,
+    },
+}
+BIG, SMALL = "m95", "f5"
+# Posture (assumptions, no source): the sole tilted up toward the toe, resting on the pedals and the
+# toe board; the knee angle (between thigh and shank) of a person sitting with the feet forward on
+# the floor, used to place the pedals and the feet of a seat without pedals; the largest knee angle
+# a person reaches a pedal with.
+FOOT_ANGLE_DEG = 20.0
+KNEE_ANGLE_DEG = 100.0
+KNEE_MAX_DEG = 150.0
+PEDAL_KINDS = ("pedal", "accelerator_pedal", "brake_pedal")
+WHEEL_KINDS = ("steering", "steering_wheel")  # the steering wheel (designs with pedals only, see body_fit)
+# Bodies the legs and feet are not checked against: the person's own seat, the occupants' mass
+# boxes (the body itself) and, for the feet, the floor and pedals they rest on.
+LEG_SKIP_KINDS = ("seat", "occupant")
+FOOT_SKIP_KINDS = ("seat", "occupant", *PEDAL_KINDS)
 
 
 def _box(p):
@@ -29,6 +104,177 @@ def _box(p):
     return c - h, c + h
 
 
+def _extent(p):
+    """(lower, upper corner) of a part's box, turned by its rpy_deg when it has one."""
+    from .obb import from_box
+
+    o = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"))
+    c = o.corners()
+    return c.min(axis=0), c.max(axis=0)
+
+
+# ---------------------------------------------------------------------------- the seated body
+@dataclass
+class Leg:
+    hip: np.ndarray
+    knee: np.ndarray
+    ankle: np.ndarray
+    heel: np.ndarray
+    ball: np.ndarray
+    toe: np.ndarray
+    knee_angle: float  # deg, between thigh and shank
+    reached: bool = True  # False: the foot's target is beyond the straight leg (the leg is stretched toward it)
+
+
+@dataclass
+class Pose:
+    size: str
+    legs: dict[str, Leg]  # "L" (+y) and "R" (-y)
+    shoulder: np.ndarray  # the shoulder point in the person's middle plane (the arms reach from it)
+    arm_reach: float  # mm from the shoulder to the grip, the arm straight forward (C3 - C16)
+    radii: dict[str, float] = field(default_factory=dict)
+
+
+def _rot(a_deg: float, v) -> np.ndarray:
+    """The side-view vector v = (along x, along z) turned up by a (toe up), as (dx, dz)."""
+    a = math.radians(a_deg)
+    return np.array([v[0] * math.cos(a) - v[1] * math.sin(a), v[0] * math.sin(a) + v[1] * math.cos(a)])
+
+
+def _links(s: dict) -> tuple[float, float]:
+    return s["buttock_condyle"] - s["buttock_trochanter"], s["knee_joint_height"] - s["malleolus_height"]
+
+
+def hip_point(seat_back_x: float, seat_top_z: float, size: str) -> np.ndarray:
+    s = SIZES[size]
+    return np.array([seat_back_x + s["buttock_trochanter"], seat_top_z + s["trochanter_height"]])
+
+
+def _ankle_from_heel(size: str, foot_angle: float) -> np.ndarray:
+    s = SIZES[size]
+    return _rot(foot_angle, (s["heel_malleolus"], s["malleolus_height"]))
+
+
+def _knee(hip: np.ndarray, ankle: np.ndarray, l1: float, l2: float) -> tuple[np.ndarray, float, bool]:
+    """Knee point (above the hip-ankle line), knee angle (deg) and whether the ankle is within reach."""
+    v = ankle - hip
+    d = float(np.linalg.norm(v))
+    reached = d <= l1 + l2
+    d = min(max(d, abs(l1 - l2) + 1e-9), l1 + l2)
+    base = math.atan2(v[1], v[0])
+    alpha = math.acos(max(-1.0, min(1.0, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
+    knee = hip + l1 * np.array([math.cos(base + alpha), math.sin(base + alpha)])
+    theta = math.degrees(math.acos(max(-1.0, min(1.0, (l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2)))))
+    return knee, theta, reached
+
+
+def leg_at_knee_angle(hip: np.ndarray, floor_z: float, size: str, knee_angle: float = KNEE_ANGLE_DEG,
+                      foot_angle: float = FOOT_ANGLE_DEG) -> tuple[np.ndarray, ...]:
+    """Side view (x, z) of a leg with the heel on the floor and the knee at knee_angle:
+    (knee, ankle, heel, ball, toe)."""
+    s = SIZES[size]
+    l1, l2 = _links(s)
+    off = _ankle_from_heel(size, foot_angle)
+    az = floor_z + off[1]
+    d = math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * math.cos(math.radians(knee_angle)))
+    dz = hip[1] - az
+    if abs(dz) > d:
+        raise ValueError(f"the ankle cannot be {dz:.0f} mm below the hip with the knee at {knee_angle:g} deg")
+    ankle = np.array([hip[0] + math.sqrt(d * d - dz * dz), az])
+    heel = ankle - off
+    return _foot(hip, heel, size, foot_angle)
+
+
+def _foot(hip, heel, size, foot_angle):
+    s = SIZES[size]
+    l1, l2 = _links(s)
+    ankle = heel + _ankle_from_heel(size, foot_angle)
+    knee, _, _ = _knee(hip, ankle, l1, l2)
+    return knee, ankle, heel, heel + _rot(foot_angle, (s["instep_length"], 0.0)), heel + _rot(foot_angle, (s["foot_length"], 0.0))
+
+
+def leg_to_ball(hip: np.ndarray, ball: np.ndarray, size: str, foot_angle: float = FOOT_ANGLE_DEG) -> Leg:
+    """A leg (side view, x z) whose ball of the foot is at `ball`."""
+    s = SIZES[size]
+    l1, l2 = _links(s)
+    heel = ball - _rot(foot_angle, (s["instep_length"], 0.0))
+    ankle = heel + _ankle_from_heel(size, foot_angle)
+    knee, theta, reached = _knee(hip, ankle, l1, l2)
+    toe = heel + _rot(foot_angle, (s["foot_length"], 0.0))
+    return Leg(hip, knee, ankle, heel, ball, toe, theta, reached)
+
+
+def leg_spacing(size: str) -> float:
+    """Half the distance between the legs' middle lines: thighs side by side (D15)."""
+    return SIZES[size]["thigh_breadth"] / 2.0
+
+
+def _3d(p2, y: float) -> np.ndarray:
+    return np.array([float(p2[0]), y, float(p2[1])])
+
+
+def seated(seat_back_x: float, seat_top_z: float, y: float, floor_z: float, size: str = BIG,
+           right_ball=None, knee_angle: float = KNEE_ANGLE_DEG, foot_angle: float = FOOT_ANGLE_DEG) -> Pose:
+    """The seated body of one person, centred at y: both legs with the heel on the floor and the knee
+    at knee_angle, or the right leg's ball of the foot on right_ball (x, z) when given (a pedal);
+    the left foot then beside it at the same x. 3D points (mm)."""
+    s = SIZES[size]
+    hip = hip_point(seat_back_x, seat_top_z, size)
+    h = leg_spacing(size)
+    legs = {}
+    if right_ball is None:
+        knee, ankle, heel, ball, toe = leg_at_knee_angle(hip, floor_z, size, knee_angle, foot_angle)
+        free = Leg(hip, knee, ankle, heel, ball, toe, knee_angle)
+        sides = {"L": free, "R": free}
+    else:
+        r = leg_to_ball(hip, np.asarray(right_ball, float), size, foot_angle)
+        # the left foot rests on the floor level with the right heel: the same leg, its heel down on the floor
+        drop = r.heel[1] - floor_z
+        left = leg_to_ball(hip, r.ball - np.array([0.0, drop]), size, foot_angle)
+        sides = {"L": left, "R": r}
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        g = sides[side]
+        yy = y + sign * h
+        legs[side] = Leg(*(_3d(p, yy) for p in (g.hip, g.knee, g.ankle, g.heel, g.ball, g.toe)), g.knee_angle, g.reached)
+    shoulder = np.array([seat_back_x + s["back_shoulder"], y, seat_top_z + s["shoulder_height"]])
+    radii = {"thigh": s["thigh_breadth"] / 2.0, "shank": s["calf_breadth"] / 2.0}
+    return Pose(size, legs, shoulder, s["grip_reach"] - s["back_shoulder"], radii)
+
+
+def leg_bodies(pose: Pose, owner: str) -> dict:
+    """K4 bodies of the legs: thighs and shanks as capsules, feet as boxes along the sole."""
+    from .capsule import from_points
+    from .model import Body
+    from .obb import OBB
+
+    s = SIZES[pose.size]
+    out = {}
+    for side, g in pose.legs.items():
+        for link, a, b, r in (("thigh", g.hip, g.knee, pose.radii["thigh"]), ("shank", g.knee, g.ankle, pose.radii["shank"])):
+            c = from_points(a, b, r, f"{owner}.{link}_{side}")
+            out[f"leg:{owner}.{link}_{side}"] = Body(f"leg:{owner}.{link}_{side}", _link_box(a, b, r), "leg", capsule=c)
+        u = (g.toe - g.heel) / float(np.linalg.norm(g.toe - g.heel))
+        up = np.cross(np.cross(u, [0.0, 0.0, 1.0]), u)
+        up /= float(np.linalg.norm(up))
+        side_ax = np.cross(up, u)
+        hz = s["malleolus_height"] / 2.0
+        centre = (g.heel + g.toe) / 2.0 + up * hz
+        out[f"leg:{owner}.foot_{side}"] = Body(f"leg:{owner}.foot_{side}",
+                                               OBB(centre, np.array([u, side_ax, up]),
+                                                   np.array([s["foot_length"] / 2.0, s["foot_breadth"] / 2.0, hz]),
+                                                   f"{owner}.foot_{side}"), "leg")
+    return out
+
+
+def _link_box(a, b, r):
+    from .obb import from_member
+
+    o = from_member(a, b, 2 * r, 2 * r)
+    o.half[0] += r
+    return o
+
+
+# ---------------------------------------------------------------------------- checks
 def fit(design: dict) -> dict:
     """Margins (mm, negative = does not fit) for the occupants and seats in the design."""
     parts = design.get("parts", [])
@@ -55,7 +301,179 @@ def fit(design: dict) -> dict:
             out[f"head_clearance.{o['id']}"] = (roof - head, o["id"])
     for oid, (length, obstacle) in knee_space(design).items():
         out[f"knee_room.{oid}"] = (length - AIST["buttock_knee_m95"], obstacle)
+    out.update(body_fit(design))
     return out
+
+
+def driver_pedal(design: dict, occupant: dict) -> dict | None:
+    """The pedal under the driver's right foot: of the pedals, the one nearest in y to the
+    occupant's right leg (the first occupant drives). None without pedals."""
+    pedals = [p for p in design.get("parts", []) if p["kind"] in PEDAL_KINDS]
+    if not pedals:
+        return None
+    y = float(occupant["box"]["center_mm"][1]) - leg_spacing(BIG)
+    return min(pedals, key=lambda p: abs(float(p["box"]["center_mm"][1]) - y))
+
+
+def pedal_face(pedal: dict) -> np.ndarray:
+    """The middle of the pedal pad's upper face (where the ball of the foot presses), 3D."""
+    from .obb import from_box
+
+    o = from_box(pedal["box"]["center_mm"], pedal["box"]["size_mm"], pedal["box"].get("rpy_deg"))
+    k = int(np.argmax(np.abs(o.axes[:, 2])))
+    n = o.axes[k] * np.sign(o.axes[k][2])
+    return o.center + n * o.half[k]
+
+
+def floor_under(design: dict, x: float, y: float, below: float) -> dict | None:
+    """The highest part of kind body whose box covers (x, y) in plan and whose top is below `below`."""
+    best = None
+    for p in design.get("parts", []):
+        if p["kind"] != "body":
+            continue
+        lo, hi = _extent(p)
+        if lo[0] <= x <= hi[0] and lo[1] <= y <= hi[1] and hi[2] < below and (best is None or hi[2] > _extent(best)[1][2]):
+            best = p
+    return best
+
+
+def feet_floor(design: dict, seat_back_x: float, seat_top_z: float, y: float) -> dict | None:
+    """The floor the big person's heels rest on, sitting at KNEE_ANGLE_DEG: of the body parts below the
+    seat top, the highest one under the heel."""
+    hip = hip_point(seat_back_x, seat_top_z, BIG)
+    cands = sorted((p for p in design.get("parts", []) if p["kind"] == "body" and _extent(p)[1][2] < seat_top_z),
+                   key=lambda p: -_extent(p)[1][2])
+    for p in cands:
+        lo, hi = _extent(p)
+        try:
+            heel = leg_at_knee_angle(hip, float(hi[2]), BIG)[2]
+        except ValueError:
+            continue
+        if lo[0] <= heel[0] <= hi[0] and lo[1] <= y <= hi[1]:
+            return p
+    return None
+
+
+def poses(design: dict) -> dict[str, dict]:
+    """For each occupant with a seat: {"big": Pose (m95), "small": Pose (f5) or None, "pedal": part or None,
+    "floor": part}. The first occupant drives: the big and the small person's right foot on the pedal
+    under it. The others sit with the knee at KNEE_ANGLE_DEG. Occupants without a floor ahead are left out."""
+    parts = design.get("parts", [])
+    seats = [p for p in parts if p["kind"] == "seat"]
+    occ = [p for p in parts if p["kind"] == "occupant"]
+    out = {}
+    for i, o in enumerate(occ):
+        seat = _seat_of(o, seats)
+        if seat is None:
+            continue
+        lo, hi = _box(seat)
+        y = float(seat["box"]["center_mm"][1])
+        floor = feet_floor(design, lo[0], hi[2], y)
+        pedal = driver_pedal(design, o) if i == 0 else None
+        if pedal is not None:
+            face = pedal_face(pedal)
+            floor = floor_under(design, float(face[0]), float(face[1]), float(face[2])) or floor
+        if floor is None:
+            continue
+        fz = float(_extent(floor)[1][2])
+        if pedal is not None:
+            ball_xz = (float(face[0]), float(face[2]))
+            big = seated(lo[0], hi[2], y, fz, BIG, right_ball=ball_xz)
+            small = seated(lo[0], hi[2], y, fz, SMALL, right_ball=ball_xz)
+        else:
+            big, small = seated(lo[0], hi[2], y, fz, BIG), None
+        out[o["id"]] = {"big": big, "small": small, "pedal": pedal, "floor": floor, "seat": seat}
+    return out
+
+
+def body_fit(design: dict) -> dict[str, tuple[float, str]]:
+    """The seated body against the vehicle (mm, negative = does not fit), for designs with pedals:
+    foot_room (the big person's feet to the nearest body other than what they rest on), foot_support
+    (how far inside the floor's edge in plan the feet are), leg_clearance (the big person's thighs and
+    shanks to the nearest body, as capsules), pedal_reach (the small person's ball of the foot onto the
+    pedal: the hip-ankle distance with the knee at KNEE_MAX_DEG less the distance needed) and wheel_reach
+    (the small person's arm reach, C3 - C16, less the distance from the shoulder to the grip on the
+    steering wheel's rim beside its centre)."""
+    from .model import bodies, shape_overlap
+
+    if not any(p["kind"] in PEDAL_KINDS for p in design.get("parts", [])):
+        return {}
+    bs = bodies(design)
+    out: dict[str, tuple[float, str]] = {}
+    for oid, ps in poses(design).items():
+        legs = leg_bodies(ps["big"], oid)
+        seat_key = f"part:{ps['seat']['id']}"
+        floor_key = f"part:{ps['floor']['id']}"
+        worst_leg, worst_foot = (-math.inf, ""), (-math.inf, "")
+        for k, lb in legs.items():
+            foot = ".foot_" in k
+            for kb, b in bs.items():
+                if kb == seat_key or b.kind in (FOOT_SKIP_KINDS if foot else LEG_SKIP_KINDS):
+                    continue
+                if foot and kb == floor_key:
+                    continue
+                o = shape_overlap(lb, b)
+                cur = worst_foot if foot else worst_leg
+                if o > cur[0]:
+                    cur = (o, kb.split(":", 1)[1])
+                if foot:
+                    worst_foot = cur
+                else:
+                    worst_leg = cur
+        if worst_foot[1]:
+            out[f"foot_room.{oid}"] = (-worst_foot[0], worst_foot[1])
+        if worst_leg[1]:
+            out[f"leg_clearance.{oid}"] = (-worst_leg[0], worst_leg[1])
+        lo, hi = _extent(ps["floor"])
+        s = SIZES[BIG]
+        margins = []
+        for g in ps["big"].legs.values():
+            for p in (g.heel, g.toe):
+                for sy in (-1.0, 1.0):
+                    yy = p[1] + sy * s["foot_breadth"] / 2.0
+                    margins.append(min(p[0] - lo[0], hi[0] - p[0], yy - lo[1], hi[1] - yy))
+        out[f"foot_support.{oid}"] = (float(min(margins)), ps["floor"]["id"])
+        if ps["small"] is not None:
+            out[f"pedal_reach.{oid}"] = (pedal_margin(ps["small"]), ps["pedal"]["id"])
+            wheel = steering_wheel_of(design, ps["seat"])
+            if wheel is not None:
+                out[f"wheel_reach.{oid}"] = (wheel_margin(ps["small"], wheel), wheel["id"])
+    return out
+
+
+def pedal_margin(pose: Pose, knee_max: float = KNEE_MAX_DEG) -> float:
+    """How much closer (mm, negative: farther) the right ankle is to the hip than the leg reaches
+    with the knee at knee_max."""
+    s = SIZES[pose.size]
+    l1, l2 = _links(s)
+    g = pose.legs["R"]
+    d_max = math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * math.cos(math.radians(knee_max)))
+    need = float(np.linalg.norm((g.ankle - g.hip)[[0, 2]]))
+    return d_max - need
+
+
+def steering_wheel_of(design: dict, seat: dict) -> dict | None:
+    wheels = [p for p in design.get("parts", []) if p["kind"] in WHEEL_KINDS]
+    if not wheels:
+        return None
+    y = float(seat["box"]["center_mm"][1])
+    return min(wheels, key=lambda p: abs(float(p["box"]["center_mm"][1]) - y))
+
+
+def grip_points(wheel: dict) -> list[np.ndarray]:
+    """The two grips on the rim, at the ends of the wheel's diameter that runs most nearly along y."""
+    from .obb import from_box
+
+    o = from_box(wheel["box"]["center_mm"], wheel["box"]["size_mm"], wheel["box"].get("rpy_deg"))
+    k = int(np.argmax(np.abs(o.axes[:, 1]) * (o.half > o.half.min() + 1e-9)))
+    return [o.center + o.axes[k] * o.half[k], o.center - o.axes[k] * o.half[k]]
+
+
+def wheel_margin(pose: Pose, wheel: dict) -> float:
+    """Arm reach less the distance from the shoulder to the farther grip, both measured in the side
+    view (the hands are taken at shoulder width: assumption)."""
+    far = max(float(np.linalg.norm((g - pose.shoulder)[[0, 2]])) for g in grip_points(wheel))
+    return pose.arm_reach - far
 
 
 KNEE_BAND_MM = 300.0  # parts this far above the seat top are at knee height (assumption)
@@ -67,7 +485,8 @@ def _seat_of(o: dict, seats: list[dict]) -> dict | None:
 
 def knee_space(design: dict) -> dict[str, tuple[float, str]]:
     """For each occupant: (length mm from the seat back to the nearest part ahead at knee
-    height, that part's id). Occupants with nothing ahead are left out."""
+    height, that part's id). Occupants with nothing ahead are left out. Parts turned by
+    rpy_deg are taken at the box around their turned box."""
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
     out = {}
@@ -77,21 +496,21 @@ def knee_space(design: dict) -> dict[str, tuple[float, str]]:
         seat_top = _box(seat)[1][2] if seat else lo[2]
         seat_back = _box(seat)[0][0] if seat else lo[0]
         ahead = [p for p in parts if p is not o and p is not seat and p["kind"] not in ("occupant", "seat")
-                 and _box(p)[0][0] > seat_back and _box(p)[0][2] < seat_top + KNEE_BAND_MM and _box(p)[1][2] > seat_top
-                 and _overlaps_y(p, o)]
+                 and _extent(p)[0][0] > seat_back and _extent(p)[0][2] < seat_top + KNEE_BAND_MM
+                 and _extent(p)[1][2] > seat_top and _overlaps_y(p, o)]
         if ahead:
-            first = min(ahead, key=lambda p: _box(p)[0][0])
-            out[o["id"]] = (float(_box(first)[0][0] - seat_back), first["id"])
+            first = min(ahead, key=lambda p: _extent(p)[0][0])
+            out[o["id"]] = (float(_extent(first)[0][0] - seat_back), first["id"])
     return out
 
 
 def _overlaps_y(p, o) -> bool:
-    a0, a1 = _box(p)
+    a0, a1 = _extent(p)
     b0, b1 = _box(o)
     return a0[1] < b1[1] and b0[1] < a1[1]
 
 
 def _overlaps_xy(p, o) -> bool:
-    a0, a1 = _box(p)
+    a0, a1 = _extent(p)
     b0, b1 = _box(o)
     return _overlaps_y(p, o) and a0[0] < b1[0] and b0[0] < a1[0]

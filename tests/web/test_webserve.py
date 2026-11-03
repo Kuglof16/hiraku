@@ -1,3 +1,4 @@
+import io
 import json
 import shutil
 import tempfile
@@ -7,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from hiraku.webserve.launch import Launcher
+from hiraku.webserve.launch import Launcher, LaunchError
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
@@ -230,6 +231,38 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class OpenTest(unittest.TestCase):
+    """python -m hiraku.webserve --open (what HIRAKU.cmd runs): the browser opens on the server's page."""
+
+    def test_open_starts_the_browser_on_the_page(self):
+        from unittest import mock
+
+        from hiraku.webserve import __main__ as entry
+
+        class Fake:
+            server_address = ("127.0.0.1", 8765)
+            RequestHandlerClass = type("H", (), {"launcher": None})
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            with mock.patch.object(entry, "make_server", return_value=Fake()), mock.patch.object(entry.webbrowser, "open") as opened, \
+                    mock.patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(entry.main(["--open", "--runs", str(tmp), "--saved", str(tmp)]), 0)
+                opened.assert_called_once_with("http://127.0.0.1:8765/")
+            with mock.patch.object(entry, "make_server", return_value=Fake()), mock.patch.object(entry.webbrowser, "open") as opened, \
+                    mock.patch("sys.stdout", new_callable=io.StringIO):
+                entry.main(["--runs", str(tmp), "--saved", str(tmp)])
+                opened.assert_not_called()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class ShelfTest(unittest.TestCase):
     """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
 
@@ -416,6 +449,63 @@ class LaunchTest(unittest.TestCase):
         big = json.dumps({"run_id": out["run_id"], "name": "big.md", "text": "x" * 2_100_000}).encode()
         self.assertEqual(drop(None, raw=big)[0], 413)
         self.assertFalse((run / "knowledge" / "big.md").exists())
+
+    def test_a_request_from_A1_runs_with_its_intake_events(self):
+        """A1 -> A2 -> 始める without a command: /api/request (the domains and the hearing),
+        /api/request/answer (the request's files under runs/_requests/<id>/), then /api/launch
+        {request} starts hiraku run with --intake-events."""
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+
+        def command(req, mode, runs, intake_events=None):
+            seen.append((Path(req), intake_events and Path(intake_events)))
+            return fake(req, mode, runs)
+
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        self.launchers = [*getattr(self, "launchers", []), lau]
+        server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.servers.append(server)
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+
+        def post(path, body):
+            req = urllib.request.Request(base + path, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        status, first = post("/api/request", {"want": "林道を走れる 2 人乗りの小さな車両", "product": "offroad-4w", "claude": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(first["mode"], "code")  # no key here: Claude is not asked
+        self.assertEqual([e["kind"] for e in first["events"]], ["domains.picked", "hearing.asked"])
+        status, half = post("/api/request/answer", {"draft": first["draft"], "answers": {}})
+        self.assertEqual((status, half["ready"]), (200, False))  # required items unanswered
+        self.assertIn("Q30", half["next"])
+        answers = {"Q30": "two_cargo", "Q40": 150, "Q50": 40, "Q70": "私有地だけ"}
+        status, done = post("/api/request/answer", {"draft": first["draft"], "answers": answers})
+        self.assertEqual((status, done["ready"], done["scripted_plan"], done["designable"]), (200, True, True, True))
+        folder = self.runs / "_requests" / done["request_id"]
+        self.assertTrue((folder / "requirements.yaml").is_file() and (folder / "intake.json").is_file())
+        self.assertEqual(post("/api/launch", {"request": "../evil", "mode": "scripted"})[0], 400)
+        status, out = post("/api/launch", {"request": done["request_id"], "mode": "scripted"})
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, f"_requests/{done['request_id']}"))
+        self.assertEqual(seen, [(folder / "requirements.yaml", folder / "intake.json")])
+        status, bad = post("/api/request", {"want": 7})
+        self.assertEqual(status, 400)
+        self.assertTrue(bad["error"])
+
+    def test_a_request_with_no_kind_of_design_is_refused(self):
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, self.RUN, 1.0), reader=fake_reader)
+        folder = lau.requests_dir / "20261103-120000-guitar"
+        folder.mkdir(parents=True)
+        (folder / "requirements.yaml").write_text("product: guitar\nflags: {}\n", encoding="utf-8")
+        (folder / "intake.json").write_text("[]", encoding="utf-8")
+        with self.assertRaises(LaunchError) as cm:
+            lau.start(None, "scripted", "20261103-120000-guitar")
+        self.assertEqual(cm.exception.status, 422)
+        self.assertIn("設計の作り方がまだ無い", str(cm.exception))
 
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})

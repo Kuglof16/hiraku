@@ -115,8 +115,8 @@ def n05_layout():
         },
         "n01": {
             "duration_s": 4.0,
-            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
-            "pane": {"x": 1328, "y": 96, "w": 496, "h": 790},
+            "view": {"x": 96, "y": 96, "w": 1400, "h": 790},
+            "pane": {"x": 1520, "y": 96, "w": 304, "h": 790},
             "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2},
             "times": {"lead_s": 0.4, "zoom_s": 1.6},
             "zoom": {"from": 1.6, "to": 1.06},
@@ -125,10 +125,9 @@ def n05_layout():
         },
         "n02": {
             "duration_s": 7.0,
-            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24},
+            "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
             "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
             "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
-            "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2},
             "times": {"lead_s": 0.3},
             "overlay": {"color": "#c8402a", "opacity": 0.22},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
@@ -569,6 +568,55 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    def test_field_frames_follow_the_motion(self):
+        """A field with frames (the same field at moments of the motion that gave its loads) is
+        coloured by the moment nearest to the motion's time, on one scale for every moment, and
+        the legend names the moment."""
+        events, _ = tilt_events()
+        ana = next(e for e in events if e["kind"] == "analysis.finished" and e["data"].get("series"))["data"]
+        design = next(e for e in events if e["kind"] == "design.created")["data"]
+        members = [m["id"] for m in design["members"]]
+        t = [s for s in ana["series"] if s.get("t_s")][0]["t_s"]
+        moments = [t[0], t[len(t) // 2], t[-1]]
+        # shape example: the stress grows over the moments, not a result
+        per = [{m: 10.0 * (k + 1) + i for i, m in enumerate(members)} for k in range(3)]
+        ana["fields"] = [{"kind": "stress", "label": "応力 (形の見本)", "unit": "MPa",
+                          "frames": {"t_s": moments, "per_member": per, "max": [max(p.values()) for p in per], "source_analysis_id": ana["analysis_id"]}}]
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        page.wait_for_function("document.getElementById('legend-t')?.textContent")
+        got = page.evaluate("""() => { const c = window.hiraku.bench.keys.contour;
+            return { k: c.frameIndex, max: c.max, min: c.min, top: c.frameMax, t: document.getElementById('legend-t').textContent }; }""")
+        self.assertEqual(errors, [])
+        self.assertEqual(got["k"], 2)  # the replay is at the end: the last moment
+        self.assertEqual(got["top"], max(per[2].values()))
+        self.assertEqual(got["max"], max(per[2].values()))  # the scale holds every moment
+        self.assertEqual(got["min"], 0)
+        self.assertIn(f"t = ", got["t"])
+        page.close()
+
+    def test_mesh_convergence_line(self):
+        """analysis.mesh_convergence is one line under the analysis' results: the change between the
+        two finest meshes against its limit, or, when singular, that the value is not judged."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        # shape example: three mesh sizes, not a result
+        ana["mesh_convergence"] = {"quantity": "max_stress", "unit": "MPa", "verdict": "converged", "change_pct": 2.0, "limit_pct": 5.0,
+                                   "levels": [{"element_size_mm": 20, "value": 118.0}, {"element_size_mm": 10, "value": 121.0}, {"element_size_mm": 5, "value": 123.5}]}
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        line = page.text_content("#card-ana .conv")
+        self.assertEqual(line, "メッシュ 10 → 5 mm で 2 % (限度 5 %): 収まった")
+        # with three meshes, the Richardson extrapolated value when the record gives it
+        ana["mesh_convergence"].update({"observed_order": 1.3, "extrapolated": 125.2, "error_pct": 1.4})
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        self.assertEqual(page.text_content("#card-ana .conv"), "メッシュ 10 → 5 mm で 2 % (限度 5 %): 収まった・外挿 125.2 MPa")
+        ana["mesh_convergence"]["verdict"] = "singular"
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        self.assertIn("細かくするほど上がる (特異点): この値では判定しない", page.text_content("#card-ana .conv"))
+        self.assertEqual(errors, [])
+        page.close()
+
     def test_joint_vectors_are_drawn(self):
         """A force at a suspension mounting point (vector kind joint, at "<support>.<point>")
         is drawn with its own colour and name, beside the reactions."""
@@ -610,6 +658,55 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["hot"], [True, False])
         self.assertEqual(got["lost"], [None, False, False])  # no recorded part for the limit: no part held to it
         page.close()
+
+    def test_a_new_request_from_A1_to_a_run(self):
+        """?new=1: write the request in A1 and send it, answer the hearing, then 台本で始める starts a
+        run on the saved request (with its intake events) and the screen follows it."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        run_id = "20261103-120000-offroad-4w-fake"
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, run_id, 20.0)
+
+        def command(req, mode, runs, intake_events=None):
+            seen.append((Path(req).name, intake_events and Path(intake_events).name, mode))
+            return fake(req, mode, runs)
+
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?new=1")
+            page.wait_for_selector("#draftbar")
+            self.assertIn("作りたいものを書いて", page.text_content("#draftbar"))
+            page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
+            page.click("#view-intake button:has-text('送る')")
+            page.wait_for_function("window.hiraku.request.state.state && !window.hiraku.request.state.busy")
+            self.assertIn("分野が決まりました", page.text_content("#draftbar"))
+            self.assertGreater(page.evaluate("window.hiraku.request.state.events.length"), 0)
+            page.evaluate("async () => { await window.hiraku.request.answer({ answers: { Q30: 'two_cargo', Q40: 150, Q50: 40, Q70: '私有地だけ' } }); }")
+            page.wait_for_selector("#draftbar button[data-start='scripted']")
+            self.assertIn("要件がそろいました", page.text_content("#draftbar"))
+            self.assertTrue(page.is_disabled("#draftbar button:has-text('Claude で始める')"))  # no key in this server's window
+            page.click("#draftbar button[data-start='scripted']")
+            page.wait_for_url(f"**/?run={run_id}", timeout=30000)
+            self.assertEqual(seen, [("requirements.yaml", "intake.json", "scripted")])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
         """On a run this screen started and still going, a file given to A5 lands in the run's
@@ -871,7 +968,8 @@ class BrowserReplayTest(unittest.TestCase):
               return { duration: window.hiraku.player.duration,
                        hero: getComputedStyle(document.querySelector('[data-box="n05.hero"]')).visibility,
                        tiles: tiles.map((el) => ({ key: el.dataset.box, box: box(el), shown: getComputedStyle(el).visibility,
-                                                    rate: el.querySelector(".rate").textContent })) };
+                                                    rate: el.querySelector(".rate")?.textContent ?? null, charts: el.querySelectorAll("svg.chart").length,
+                                                    label: el.querySelector("b")?.textContent ?? null })) };
             }"""
             early = page.evaluate(js, 0.5)
             late = page.evaluate(js, 4.9)
@@ -887,8 +985,10 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertEqual(t["box"], [g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"]), g["tile_w"], g["tile_h"]])
                 self.assertLessEqual(t["box"][1] + t["box"][3], layout["subtitle_band"]["y"])
                 self.assertEqual(t["shown"], "visible")
-            if given:
-                self.assertTrue(all(t["rate"].startswith("×") for t in late["tiles"] if t["key"] not in ("n05.tile.nvh", "n05.tile.fatigue", "n05.tile.heat")))
+                # the name only: no squeeze, chart or figure on a tile (the story: pictures, no figures)
+                self.assertIsNone(t["rate"], t["key"])
+                self.assertEqual(t["charts"], 0, t["key"])
+                self.assertFalse(any(c.isdigit() for c in t["label"]), t["key"])
             page.close()
         finally:
             server.shutdown()
@@ -986,6 +1086,7 @@ class BrowserReplayTest(unittest.TestCase):
             got = page.evaluate(
                 """() => ({ duration: window.hiraku.player.duration, err: document.querySelector(".err")?.textContent ?? null,
                            cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
+                           tables: document.querySelectorAll(".n01-card table").length,
                            ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
                            contour: window.hiraku.cut.contour?.kind ?? null,
                            view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
@@ -999,8 +1100,10 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertIsNone(got["err"])
             self.assertEqual(got["duration"], 4.0)
             self.assertEqual([c[0] for c in got["cards"]], ["n01.card.ok", "n01.card.over"])
-            self.assertIn("100 mm", got["cards"][0][1])
-            self.assertIn("限界の外の条件", got["cards"][1][1])
+            # each card is the step's height and whether it climbed (no table of values)
+            self.assertEqual(got["cards"][0][1], "段差 100 mm")
+            self.assertEqual(got["cards"][1][1], "段差 250 mm")
+            self.assertEqual(got["tables"], 0)
             self.assertTrue(got["ghost"] and got["tinted"])
             self.assertEqual(got["contour"], "stress")  # the K1 static analysis of the same load case
             self.assertLessEqual(got["view"], 910)
@@ -1012,7 +1115,7 @@ class BrowserReplayTest(unittest.TestCase):
 
     def test_n02_cut_lays_out_five_tests_and_their_limits(self):
         """cut.html?cut=n02 on the real tools' records (HIRAKU_WEB_DEV_RUNS): panes where the grid
-        puts them, each test playing its record, the results listed as written."""
+        puts them, each test playing its record under its one tag."""
         given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
         if not given:
             self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
@@ -1035,7 +1138,8 @@ class BrowserReplayTest(unittest.TestCase):
                            panes: [...document.querySelectorAll(".n02-pane")].map((p) => { const r = p.getBoundingClientRect();
                              return [p.dataset.box, Math.round(r.left), Math.round(r.top), Math.round(r.bottom)]; }),
                            views: window.hiraku.cut.panes.filter((p) => p.view).length,
-                           results: document.querySelectorAll(".n02-res").length })"""
+                           results: document.querySelectorAll(".n02-res, .n02-result").length,
+                           labels: [...document.querySelectorAll('.n02-pane b[data-kind="label"]')].map((b) => b.textContent) })"""
             )
             self.assertEqual(errors, [])
             self.assertIsNone(got["err"])
@@ -1046,37 +1150,11 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertEqual(p[1:3], [g["x"] + (i % 3) * (g["tile_w"] + g["gap_x"]), g["y"] + (i // 3) * (g["tile_h"] + g["gap_y"])])
                 self.assertLessEqual(p[3], layout["subtitle_band"]["y"])
             self.assertEqual(got["views"], 5)  # every test has its record in the dev run
-            self.assertEqual(got["results"], 5)
+            # the panes only: no column of results, one tag per test, no figures
+            self.assertEqual(got["results"], 0)
+            self.assertEqual(got["labels"], [n for n in got["labels"] if not any(c.isdigit() for c in n)])
+            self.assertEqual(len(got["labels"]), 5)
             page.close()
-
-            # The result rows end inside their box: with a box shorter than they need, their
-            # text steps down (not below min_text_px) until they do.
-            fit = """() => { const box = document.querySelector('[data-box="n02.result"]');
-                const blocks = [...box.querySelectorAll(".n02-res")];
-                return { px: Number(box.dataset.textPx), top: box.getBoundingClientRect().top,
-                         bottom: Math.max(...blocks.map((b) => b.getBoundingClientRect().bottom)),
-                         sizes: blocks.map((b) => parseFloat(getComputedStyle(b).fontSize)) }; }"""
-            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
-            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
-            page.evaluate("window.hiraku.ready")
-            natural = page.evaluate(fit)
-            page.close()
-            R = layout["n02"]["result"]
-            self.assertEqual(natural["px"], R["text_px"])
-            self.assertLessEqual(natural["bottom"], R["y"] + R["h"])
-            # 10 px short: within what text down to min_text_px saves on the dev run's rows
-            layout["n02"]["result"]["h"] = round(natural["bottom"] - natural["top"]) - 10
-            (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
-            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
-            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
-            page.evaluate("window.hiraku.ready")
-            tight = page.evaluate(fit)
-            page.close()
-            self.assertLess(tight["px"], R["text_px"])
-            self.assertGreaterEqual(min(tight["sizes"]), layout["min_text_px"])
-            self.assertLessEqual(tight["bottom"], R["y"] + layout["n02"]["result"]["h"])
         finally:
             server.shutdown()
             server.server_close()

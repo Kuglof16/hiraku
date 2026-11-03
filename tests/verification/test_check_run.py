@@ -859,6 +859,48 @@ class CheckRun(unittest.TestCase):
                      design_version=1)
         self.assertFlags(ev, "mesh.version")
 
+    QUALITY = {"verdict": "ok",
+               "metrics": {"aspect_ratio": {"worst": 1.0, "p95": 1.0, "limit": 5.0, "over_limit": 0, "worst_element": 0},
+                           "min_angle_deg": {"worst": 90.0, "limit": 30.0, "over_limit": 0}},
+               "per_element": {"aspect_ratio": [1.0, 1.0], "min_angle_deg": [90.0, 90.0]},
+               "topology": {"free_edges": 6, "coincident_nodes": 0, "unconnected_groups": 1, "flipped_normals": 0}}
+
+    def _quality(self, field=None, **change):
+        q = copy.deepcopy(self.QUALITY)
+        for path, value in change.items():  # metrics__aspect_ratio__worst=1.5
+            *keys, last = path.split("__")
+            d = q
+            for k in keys:
+                d = d[k]
+            d[last] = value
+        return self._mesh(field=field, quality=q)
+
+    def test_mesh_quality(self):
+        found = self.findings(self._quality())
+        self.assertEqual([str(f) for f in found if f.rule.startswith("mesh")], [])
+        self.assertFlags(self._quality(metrics__aspect_ratio__worst=2.0), "mesh.quality")  # per_element says 1
+        self.assertFlags(self._quality(metrics__min_angle_deg__over_limit=1), "mesh.quality")  # none below 30
+        self.assertFlags(self._quality(per_element__aspect_ratio=[1.0]), "mesh.quality")
+        self.assertFlags(self._quality(metrics__aspect_ratio__worst_element=2), "mesh.quality")
+        over = self._quality(metrics__aspect_ratio__limit=0.5, metrics__aspect_ratio__over_limit=2)
+        self.assertFlags(over, "mesh.quality")  # past the limit with verdict ok
+        self.assertEqual({f.rule for f in self.findings(self._quality(verdict="warn", metrics__aspect_ratio__limit=0.5,
+                                                                      metrics__aspect_ratio__over_limit=2))
+                          if f.level == "error"}, set())
+        # measured apart: the solver's worst or topology differs -> warnings
+        apart = self._quality(metrics__aspect_ratio__worst=1.5, per_element={}, topology__free_edges=4)
+        self.assertEqual([f.rule for f in self.findings(apart) if f.level == "error"], [])
+        warned = [f.message for f in self.findings(apart) if f.rule == "mesh.quality" and f.level == "warn"]
+        self.assertTrue(any("aspect_ratio" in s for s in warned) and any("free_edges" in s for s in warned), warned)
+
+    def test_collapsed_element_and_a_fail_verdict(self):
+        nodes = self._example("mesh")["nodes_mm"]
+        nodes[4] = list(nodes[1])  # element 0 [0, 1, 4, 3] loses its edge 1-4
+        ev = self._mesh(nodes_mm=nodes)
+        self.assertFlags(ev, "mesh.quality")
+        ev = self._quality(field={"per_element": [80.0, 95.5]}, verdict="fail")
+        self.assertFlags(ev, "mesh.quality")  # an ok analysis drew on a mesh the solver must refuse
+
     def test_fields_on_a_mesh(self):
         self.assertFlags(self._mesh(field={"per_element": [80.0]}), "field.mesh")  # 2 elements
         self.assertFlags(self._mesh(field={"kind": "displacement", "unit": "mm", "per_mesh_node": [0.1] * 5}), "field.mesh")

@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N17b How HIRAKU was built</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n17b"></script>
+<script src="n17b.data.js"></script>
+<style>
+  /* N17b: how HIRAKU was built. One lane per Claude Code session (the lead
+     and the departments); commits stream along the time axis and the
+     departments' merges join main. Then the actual counts. Every figure
+     comes from n17b.data.js (promo/n17b_data.py, from git); the planned
+     100,000 is shown first, faint, and is gone before the counts come in.
+     Placement and times: layout.json n17b (CSS variables from layout.js). */
+  :root {
+    --page-bg: var(--night);
+    --stage-bg: var(--night);
+    /* lane tints: unbleached to warm light, kept close to one another */
+    --l-lead: #f6ead0;
+    --l-design: #ecd3a2;
+    --l-analysis: #e6c48c;
+    --l-k2: #dcb98a;
+    --l-screen: #f0ddb4;
+    --l-qa: #d8c9a6;
+    --l-intake: #e4d0ac;
+    --l-promo: #e7b36a;
+  }
+
+  .vision {
+    position: absolute;
+    left: var(--vision-x);
+    top: var(--vision-y);
+    width: var(--vision-w);
+    height: var(--vision-h);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--glow);
+    opacity: 0;
+    animation: vision-in var(--vision-in-dur) ease-out both, vision-out var(--vision-out-dur) ease-in forwards;
+    animation-delay: var(--t-vision), var(--t-vision-out);
+  }
+  .vision .cap {
+    font: 500 var(--vision-cap-size-px) / 1.4 var(--font-ja);
+    letter-spacing: 0.3em;
+    margin-bottom: calc(6 * var(--u));
+  }
+  .vision .num {
+    font: 300 var(--vision-num-size-px) / 1.05 var(--font-latin);
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .vision .num small {
+    font: 400 var(--vision-unit-size-px) / 1 var(--font-ja);
+    margin-left: 0.25em;
+  }
+
+  .lanes {
+    position: absolute;
+    left: var(--lanes-x);
+    top: var(--lanes-y);
+    width: var(--lanes-w);
+    height: var(--lanes-h);
+  }
+  .lane-name {
+    position: absolute;
+    left: 0;
+    width: var(--lanes-label-w);
+    height: var(--lanes-pitch-px);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font: 500 var(--lanes-label-size-px) / 1.3 var(--font-ja);
+    color: var(--c);
+    white-space: nowrap;
+    animation: fade-in 0.5s ease-out both;
+  }
+  .graph {
+    position: absolute;
+    left: var(--lanes-graph-x);
+    top: 0;
+    width: var(--lanes-graph-w);
+    height: var(--lanes-h);
+    overflow: visible;
+  }
+  .reveal { position: absolute; inset: 0; }
+  .graph svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+  .base { stroke: rgba(246, 234, 208, 0.07); stroke-width: 1; }
+  .track { stroke: var(--c); stroke-opacity: 0.42; stroke-linecap: round; }
+  .track.main { stroke-opacity: 0.85; }
+  .main-glow {
+    stroke: var(--glow);
+    filter: url(#soft);
+    opacity: 0.25;
+    animation: calm 0.8s ease-in-out both;
+    animation-delay: var(--t-calm);
+  }
+  .day { stroke: rgba(246, 234, 208, 0.16); stroke-width: 1; stroke-dasharray: 3 5; }
+  .dot {
+    fill: var(--c);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dot-in var(--dot-dur) ease-out both;
+  }
+  .merge {
+    fill: none;
+    stroke: var(--c);
+    stroke-opacity: 0.4;
+    stroke-width: 1.4;
+    stroke-dasharray: 1 1;
+    animation: draw var(--merge-dur) ease-in-out both;
+  }
+  .join {
+    fill: var(--glow);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dot-in var(--dot-dur) ease-out both;
+  }
+
+  .edge {
+    position: absolute;
+    left: var(--lanes-graph-x);
+    top: calc(var(--lanes-top) - 10 * var(--u));
+    width: calc(2 * var(--u));
+    height: calc(var(--lanes-axis-y) - var(--lanes-top));
+    margin-left: calc(-1 * var(--u));
+    background: linear-gradient(transparent, rgba(246, 234, 208, 0.75) 20%, rgba(246, 234, 208, 0.75) 80%, transparent);
+    box-shadow: 0 0 calc(18 * var(--u)) calc(6 * var(--u)) rgba(246, 234, 208, 0.16);
+    animation: n17b-edge var(--dur) linear both;
+  }
+  .axis {
+    position: absolute;
+    top: var(--lanes-axis-y);
+    font: 400 var(--lanes-axis-size-px) / 1.3 var(--font-latin);
+    color: var(--on-night-soft);
+    white-space: nowrap;
+    animation: fade-in 0.5s ease-out both;
+    animation-delay: var(--t-flow);
+  }
+
+  .counts {
+    position: absolute;
+    left: var(--counts-x);
+    top: var(--counts-y);
+    width: var(--counts-w);
+    height: var(--counts-h);
+    color: var(--on-night);
+  }
+  .counts .head {
+    height: var(--counts-head-h);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    animation: fade-in 0.5s ease-out both;
+    animation-delay: var(--t-counts);
+  }
+  .counts .head b { font: 600 var(--counts-head-size-px) / 1.4 var(--font-ja); letter-spacing: 0.08em; }
+  .counts .head .stamp { font: 400 var(--counts-stamp-size-px) / 1.4 var(--font-ja); color: var(--on-night-soft); }
+  .tiles { display: flex; gap: var(--counts-gap-px); }
+  .tile {
+    height: calc(var(--counts-h) - var(--counts-head-h));
+    padding-top: calc(10 * var(--u));
+    border-top: calc(1 * var(--u)) solid rgba(246, 234, 208, 0.28);
+    animation: fade-in var(--count-in) ease-out both;
+  }
+  .tile .lab { font: 500 var(--counts-label-size-px) / 1.45 var(--font-ja); color: var(--on-night-soft); }
+  .tile .num {
+    display: flex;
+    align-items: flex-end;
+    font: 400 var(--counts-num-size-px) / 1.25 var(--font-latin);
+    font-variant-numeric: tabular-nums;
+    color: var(--glow);
+    white-space: nowrap;
+  }
+  .tile .num .unit { font: 400 var(--counts-unit-size-px) / 2 var(--font-ja); margin-left: 0.3em; color: var(--on-night); }
+  .tile .sub { font: 400 var(--counts-sub-size-px) / 1.35 var(--font-ja); color: var(--on-night-soft); white-space: nowrap; }
+  /* the count-up: a window one line high over a column of the values the
+     count passes through (worked out at load); it steps one line at a time,
+     so every frame shows a whole number and the last line is the count */
+  .count { display: inline-block; height: 1.25em; overflow: hidden; text-align: right; }
+  .count .rows { display: block; animation: roll var(--count-dur) steps(var(--n), end) both; }
+  .count .rows span { display: block; height: 1.25em; line-height: 1.25; }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(calc(12 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes vision-in {
+    from { opacity: 0; transform: scale(1); }
+    to   { opacity: var(--vision-alpha); transform: scale(var(--vision-drift-scale)); }
+  }
+  @keyframes vision-out {
+    from { opacity: var(--vision-alpha); transform: scale(var(--vision-drift-scale)); }
+    to   { opacity: 0; transform: scale(var(--vision-drift-scale)); }
+  }
+  @keyframes dot-in {
+    0%   { opacity: 0; transform: scale(2.4); }
+    35%  { opacity: 1; }
+    100% { opacity: 0.92; transform: scale(1); }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes calm {
+    from { opacity: 0.25; }
+    to   { opacity: 0.6; }
+  }
+  @keyframes roll {
+    from { transform: translateY(0); }
+    to   { transform: translateY(calc(var(--n) * -1.25em)); }
+  }
+</style>
+</head>
+<body data-duration="5.8">
+<div class="stage">
+  <div class="safe">
+    <div class="vision" data-box="n17b.vision">
+      <div class="cap">構想の見通し</div>
+      <div class="num" data-box="n17b.vision.num" data-kind="number">100,000<small>行</small></div>
+    </div>
+    <div class="lanes" data-box="n17b.lanes">
+      <div class="graph" data-box="n17b.lanes.graph" data-kind="graph">
+        <div class="reveal"><svg></svg></div>
+      </div>
+      <div class="edge"></div>
+    </div>
+    <div class="counts" data-box="n17b.counts">
+      <div class="head" data-box="n17b.counts.head"><b data-kind="note">実際の数 — git の記録から</b><span class="stamp" data-kind="note"></span></div>
+      <div class="tiles"></div>
+    </div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Everything below is drawn once at load from N17B_DATA (counted from git
+  // by promo/n17b_data.py) and the n17b rules; motion is CSS animation only,
+  // so timeline.js decides every frame from t.
+  (function () {
+    const D = window.N17B_DATA;
+    const R = window.promoLayout.cutRules;
+    const L = R.lanes, F = R.flow, C = R.count, T = R.times, V = R.vision;
+    const DUR = R.duration_s;
+    const root = document.documentElement.style;
+    root.setProperty("--dur", `${DUR}s`);
+    root.setProperty("--dot-dur", `${F.dot_dur_s}s`);
+    root.setProperty("--merge-dur", `${F.merge_dur_s}s`);
+    root.setProperty("--count-dur", `${C.dur_s}s`);
+    root.setProperty("--count-in", `${C.in_dur_s}s`);
+    root.setProperty("--vision-in-dur", `${V.in_dur_s}s`);
+    root.setProperty("--vision-out-dur", `${V.out_dur_s}s`);
+    root.setProperty("--vision-alpha", String(V.peak_alpha));
+
+    // --- the sweep of the time axis: P(t) in 0..1 -----------------------------
+    function bezier(x1, y1, x2, y2) {
+      const at = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+      return (x) => {
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (at(x1, x2, m) < x) lo = m; else hi = m;
+        }
+        return at(y1, y2, (lo + hi) / 2);
+      };
+    }
+    const easeA = bezier(...F.a_ease), easeB = bezier(...F.b_ease);
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    function sweep(t) {
+      if (t <= T.lanes_s) return 0;
+      if (t < T.flow_s) return F.first_frac * easeA(clamp01((t - T.lanes_s) / (T.lanes_to_s - T.lanes_s)));
+      return F.first_frac + (1 - F.first_frac) * easeB(clamp01((t - T.flow_s) / (T.flow_to_s - T.flow_s)));
+    }
+    // first t at which the sweep reaches p
+    function reach(p) {
+      let lo = T.lanes_s, hi = T.flow_to_s;
+      for (let i = 0; i < 50; i++) {
+        const m = (lo + hi) / 2;
+        if (sweep(m) < p) lo = m; else hi = m;
+      }
+      return hi;
+    }
+    const edgeAlpha = (t) => t < T.lanes_s ? 0
+      : Math.min(1, (t - T.lanes_s) / 0.3) * (t <= T.flow_to_s ? 1 : clamp01(1 - (t - T.flow_to_s) / F.glow_out_dur_s));
+
+    // keyframes for the reveal (clip) and the edge light, sampled every step_s
+    const W = L.graph_w;
+    const n = Math.round(DUR / F.step_s);
+    const reveal = [], edge = [];
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * DUR, p = sweep(t), pct = ((i / n) * 100).toFixed(3);
+      reveal.push(`${pct}% { clip-path: inset(-2% ${((1 - p) * 100).toFixed(3)}% -2% -1%); }`);
+      edge.push(`${pct}% { transform: translateX(calc(${(p * W).toFixed(2)} * var(--u))); opacity: ${edgeAlpha(t).toFixed(3)}; }`);
+    }
+    const style = document.createElement("style");
+    style.textContent = `@keyframes n17b-reveal { ${reveal.join(" ")} }\n@keyframes n17b-edge { ${edge.join(" ")} }\n` +
+      `.reveal { animation: n17b-reveal var(--dur) linear both; }`;
+    document.head.appendChild(style);
+
+    // --- lanes ------------------------------------------------------------------
+    const span = D.t1 - D.t0;
+    const xOf = (ts) => ((ts - D.t0) / span) * W;
+    const yOf = (i) => L.top + (i + 0.5) * L.pitch_px;
+    const s = (v) => `${v}s`;
+    const lanesEl = document.querySelector(".lanes");
+    const svgParts = [`<defs><filter id="soft" x="-5%" y="-400%" width="110%" height="900%"><feGaussianBlur stdDeviation="5"/></filter></defs>`];
+    const dots = [], merges = [];
+    D.lanes.forEach((ln, i) => {
+      const y = yOf(i), c = `var(--l-${ln.key})`;
+      lanesEl.insertAdjacentHTML("beforeend",
+        `<div class="lane-name" style="top:calc(${L.top + i * L.pitch_px} * var(--u));--c:${c};` +
+        `animation-delay:${s(T.labels_s + i * T.label_step_s)}" data-box="n17b.lanes.label.${ln.key}" data-kind="label">${ln.name}</div>`);
+      svgParts.push(`<line class="base" x1="0" x2="${W}" y1="${y}" y2="${y}"/>`);
+      const times = ln.commits.concat(ln.into_main);
+      const x0 = i === 0 ? 0 : xOf(Math.min(...times)), x1 = i === 0 ? W : xOf(Math.max(...times));
+      if (i === 0) svgParts.push(`<line class="main-glow" x1="0" x2="${W}" y1="${y}" y2="${y}" stroke-width="${L.main_line_px * 3}"/>`);
+      svgParts.push(`<line class="track${i === 0 ? " main" : ""}" style="--c:${c}" x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" ` +
+        `y1="${y}" y2="${y}" stroke-width="${i === 0 ? L.main_line_px : L.line_px}"/>`);
+      let g = `<g style="--c:${c}">`;
+      if (i > 0) {
+        const dx = L.curve_dx_px * Math.sqrt(i);
+        for (const tm of ln.into_main) {
+          const xm = xOf(tm), ym = yOf(0), xs = xm - dx;
+          g += `<path class="merge" pathLength="1" style="animation-delay:${s(reach(Math.max(0, xs) / W))}" ` +
+            `d="M${xs.toFixed(1)} ${y} C${(xs + dx * 0.6).toFixed(1)} ${y} ${(xm - dx * 0.6).toFixed(1)} ${ym} ${xm.toFixed(1)} ${ym}"/>`;
+          merges.push(tm);
+        }
+      }
+      for (const tc of ln.commits) {
+        const x = xOf(tc);
+        g += `<circle class="dot" cx="${x.toFixed(1)}" cy="${y}" r="${L.dot_r_px}" style="animation-delay:${s(reach(x / W))}"/>`;
+        dots.push(tc);
+      }
+      svgParts.push(g + `</g>`);
+    });
+    // where each department's merge joins the lead's lane
+    svgParts.push(`<g>` + D.lanes.slice(1).flatMap((ln) => ln.into_main).map((tm) => {
+      const x = xOf(tm);
+      return `<circle class="join" cx="${x.toFixed(1)}" cy="${yOf(0)}" r="${L.dot_r_px - 0.5}" ` +
+        `style="animation-delay:${s(reach(x / W) + F.merge_dur_s * 0.8)}"/>`;
+    }).join("") + `</g>`);
+
+    // dates: the first commit, each midnight (JST), the newest commit
+    const jst = (ts) => new Date((ts + 9 * 3600) * 1000);
+    const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    const hm = (d) => `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    const yBottom = yOf(D.lanes.length - 1) + L.pitch_px / 2;
+    const axis = [{ x: 0, text: `${md(jst(D.t0))} ${hm(jst(D.t0))}`, align: "start" },
+                  { x: W, text: `${md(jst(D.t1))} ${hm(jst(D.t1))}`, align: "end" }];
+    const firstDay = Math.floor((D.t0 + 9 * 3600) / 86400) + 1;
+    for (let day = firstDay; day * 86400 - 9 * 3600 < D.t1; day++) {
+      const ts = day * 86400 - 9 * 3600, x = xOf(ts);
+      svgParts.push(`<line class="day" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${L.top}" y2="${yBottom}"/>`);
+      if (x > 160 && x < W - 160) axis.push({ x, text: md(jst(ts)), align: "middle" });
+    }
+    document.querySelector(".graph svg").setAttribute("viewBox", `0 0 ${W} ${L.h}`);
+    document.querySelector(".graph svg").innerHTML = svgParts.join("");
+    for (const a of axis) {
+      const shift = a.align === "start" ? "0" : a.align === "end" ? "-100%" : "-50%";
+      lanesEl.insertAdjacentHTML("beforeend",
+        `<div class="axis" data-kind="note" style="left:calc(${(L.graph_x + a.x).toFixed(1)} * var(--u));transform:translateX(${shift})">${a.text}</div>`);
+    }
+
+    // --- the counts ---------------------------------------------------------------
+    const fmt = (v) => v.toLocaleString("en-US");
+    // the values a count passes through: line j of steps shows
+    // from + (v - from) x ease(j / steps), rounded down, so the last line is v
+    // itself (count.ease). A day count starts at day 1, the others at 0.
+    const countEase = bezier(...C.ease);
+    function counter(v, from = 0) {
+      const steps = Math.max(1, Math.min(C.steps, v - from));
+      const rows = Array.from({ length: steps + 1 }, (_, j) =>
+        `<span>${fmt(j === steps ? v : from + Math.floor((v - from) * countEase(j / steps)))}</span>`).join("");
+      return `<span class="count"><span class="rows" style="--n:${steps}">${rows}</span></span>`;
+    }
+    const first = jst(D.t0);
+    const tiles = [
+      { key: "days", lab: "日数", v: D.days, from: 1, unit: "日目", sub: [`${md(first)} の最初のコミットから`] },
+      { key: "commits", lab: "コミット", v: D.commits, unit: "", sub: [`マージ ${fmt(D.commits - D.commits_no_merges)} を含む`] },
+      { key: "lines", lab: "書いたコード", v: D.lines_total, unit: "行", sub: ["空行とコメントを含む。生成したファイルは除く"] },
+      { key: "tests", lab: "試験", v: D.tests, unit: "", sub: ["試験の関数 (def test_) の数"] },
+    ];
+    document.querySelector(".tiles").innerHTML = tiles.map((t, i) => {
+      const at = T.counts_s + i * C.stagger_s;
+      return `<div class="tile" style="width:var(--counts-cols-${t.key});animation-delay:${s(at)}" data-box="n17b.counts.${t.key}">` +
+        `<div class="lab">${t.lab}</div>` +
+        `<div class="num" style="--at:${s(at)}" data-box="n17b.counts.${t.key}.num" data-kind="number">${counter(t.v, t.from || 0)}` +
+        (t.unit ? `<span class="unit">${t.unit}</span>` : "") + `</div>` +
+        t.sub.map((x) => `<div class="sub" data-kind="note">${x}</div>`).join("") + `</div>`;
+    }).join("");
+    document.querySelectorAll(".tile").forEach((el, i) => {
+      el.querySelectorAll(".rows").forEach((st) => { st.style.animationDelay = s(T.counts_s + i * C.stagger_s); });
+    });
+    const at = D.counted_at.replace("T", " ").replace(/\+.*$/, "");
+    document.querySelector(".stamp").textContent = `数えた日時 ${at} (git の ${D.ref})`;
+
+    window.n17b = { sweep, reach, dots: dots.length, merges: merges.length, tiles: tiles.map((t) => [t.key, t.v]) };
+  })();
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>

@@ -57,7 +57,9 @@ class FrameMesh(unittest.TestCase):
         checker.designs[self.design["design_version"]] = (-1, self.design)
         checker.recs["mesh"]["mesh-0001"] = (0, self.mesh)
         checker.check_meshes()
-        self.assertEqual([str(f) for f in checker.findings], [])
+        # warnings (e.g. walls facing opposite ways across an edge) are for people to look at
+        self.assertEqual([str(f) for f in checker.findings if f.level == "error"], [],
+                         "\n".join(str(f) for f in checker.findings))
 
     def test_each_tube_member_with_its_wall_thickness(self):
         named = set(self.mesh["element_member"])

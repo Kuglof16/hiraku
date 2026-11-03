@@ -106,6 +106,15 @@ FOLLOW_UP = {"HK1_prediction_first": "prediction.recorded", "HK3_cause_before_co
 VERSION_DIR_RE = re.compile(r"^v([0-9]{3})$")
 # tools/<name>-<n>.py and tools/<name>-<n>.check.json: one attempt at a tool made in the run
 TOOL_FILE_RE = re.compile(r"^(\w+)-([0-9]+)(\.py|\.check\.json)$")
+# mesh quality metrics measured apart (qa.mesh_quality) and how; a worst value off by more than 1 %
+# (0.5 deg for angles) is a warning, since a solver may define them a little differently
+MESH_MEASURES = {"aspect_ratio": "longest / shortest edge", "min_angle_deg": "smallest corner angle",
+                 "max_angle_deg": "largest corner angle", "warp_deg": "angle between the triangles of a diagonal",
+                 "jacobian_ratio": "min / max corner jacobian"}
+# the solver's topology counts and the measure each is held against (flipped_normals: only zero or not)
+TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes",
+               "unconnected_groups": "unconnected_groups", "flipped_normals": "orientation_conflicts",
+               "negative_volume": "inverted"}
 # inbox/<n>-<kind>.json: one request from the screen to a running run
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
 REL = 1e-9
@@ -764,6 +773,8 @@ class RunChecker:
             strangers = sorted({str(x) for x in members if not self._names_a_thing(x, ids)})
             if strangers:
                 self.warn("mesh.members", w, f"{mid}: {', '.join(strangers[:5])} not in design v{v}")
+            if not any(f.rule == "mesh.elements" and f.where == w for f in self.findings):  # measurable
+                self._check_mesh_quality(mid, w, m)
         for aid, (i, a) in self.recs["analysis"].items():
             w, ran = self.where_of[i], self.started.get(aid, i)
             for k, f in enumerate(a.get("fields") or []):
@@ -777,12 +788,72 @@ class RunChecker:
                 if rec[0] > ran:
                     self.error("field.mesh", w, f"{tag} names {mid}, created after the analysis started ({self.where_of[rec[0]]})")
                 m = rec[1]
+                if (m.get("quality") or {}).get("verdict") == "fail" and a.get("status") == "ok":
+                    self.error("mesh.quality", w, f"{tag}: {aid} is ok on {mid}, whose quality verdict is fail "
+                                                  f"(the solver must not solve it)")
                 if m.get("design_version") != a.get("design_version"):
                     self.error("field.mesh", w, f"{tag} names {mid} of version {m.get('design_version')} "
                                                 f"in an analysis of version {a.get('design_version')}")
                 for key, n in (("per_element", len(m.get("elements") or [])), ("per_mesh_node", len(m.get("nodes_mm") or []))):
                     if isinstance(f.get(key), list) and len(f[key]) != n:
                         self.error("field.mesh", w, f"{tag}: {len(f[key])} {key} values for {n} in {mid}")
+
+    def _check_mesh_quality(self, mid: str, w: str, m: dict) -> None:
+        """Measure the mesh apart from the solver (qa.mesh_quality); its own quality must hold together
+        and not miss what the measures find."""
+        from qa import mesh_quality
+
+        mine = mesh_quality.measure(m.get("nodes_mm") or [], m.get("elements") or [], m.get("element_member"))
+        topo, n_el = mine["topology"], len(m.get("elements") or [])
+        bad = [k for k in range(n_el) if mine["degenerate"][k] or mine["jacobian_ratio"][k] <= 0]
+        if bad:
+            self.error("mesh.quality", w, f"{mid}: {topo['degenerate']} element(s) with no area or a zero edge and "
+                                          f"{topo['inverted']} folded back (jacobian ratio <= 0), e.g. element {bad[0]}")
+        if topo["coincident_nodes"]:
+            self.warn("mesh.quality", w, f"{mid}: {topo['coincident_nodes']} nodes lie on another node "
+                                         f"(within {mesh_quality.TOL_MM} mm) without being merged")
+        if topo["orientation_conflicts"]:
+            self.warn("mesh.quality", w, f"{mid}: {topo['orientation_conflicts']} edges within one member run the "
+                                         f"same way in both elements (an element faces the other side)")
+        q = m.get("quality")
+        if not isinstance(q, dict):
+            return
+        verdict = q.get("verdict")
+        if bad and verdict == "ok":
+            self.error("mesh.quality", w, f"{mid}: quality verdict ok with {len(bad)} collapsed or folded elements")
+        for name, values in (q.get("per_element") or {}).items():
+            if len(values) != n_el:
+                self.error("mesh.quality", w, f"{mid}: quality.per_element.{name} has {len(values)} values for {n_el} elements")
+        for name, met in (q.get("metrics") or {}).items():
+            if not isinstance(met, dict):
+                continue
+            low_is_bad = name.startswith("min_") or name == "jacobian_ratio"
+            we = met.get("worst_element")
+            if we is not None and not 0 <= we < n_el:
+                self.error("mesh.quality", w, f"{mid}: {name} worst_element {we} is not an element (0..{n_el - 1})")
+            per = (q.get("per_element") or {}).get(name)
+            if isinstance(per, list) and len(per) == n_el and per:
+                worst = min(per) if low_is_bad else max(per)
+                if not _close(worst, met["worst"]):
+                    self.error("mesh.quality", w, f"{mid}: {name} worst {met['worst']} but its per_element gives {worst}")
+                if isinstance(met.get("limit"), (int, float)) and "over_limit" in met:
+                    over = sum(1 for x in per if (x < met["limit"] if low_is_bad else x > met["limit"]))
+                    if over != met["over_limit"]:
+                        self.error("mesh.quality", w, f"{mid}: {name} over_limit {met['over_limit']} but "
+                                                      f"{over} per_element values are past {met['limit']}")
+            if met.get("over_limit") and verdict == "ok":
+                self.error("mesh.quality", w, f"{mid}: verdict ok with {met['over_limit']} elements past the "
+                                              f"{name} limit (warn or fail)")
+            if name in MESH_MEASURES and n_el:
+                got = float(mine[name].min() if low_is_bad else mine[name].max())
+                if not math.isclose(met["worst"], got, rel_tol=0.01, abs_tol=0.5 if name.endswith("_deg") else 1e-6):
+                    self.warn("mesh.quality", w, f"{mid}: {name} worst {met['worst']:.6g} but measured apart "
+                                                 f"{got:.6g} ({MESH_MEASURES[name]})")
+        for name, theirs in (q.get("topology") or {}).items():
+            ours = topo.get(TOPOLOGY_OF.get(name, name))
+            if ours is not None and (ours != theirs if name != "flipped_normals" else bool(ours) != bool(theirs)):
+                self.warn("mesh.quality", w, f"{mid}: topology {name} {theirs} but measured apart "
+                                             f"{TOPOLOGY_OF.get(name, name)} {ours}")
 
     def check_tool_specs(self) -> None:
         for name, specs in self.tool_checks.items():

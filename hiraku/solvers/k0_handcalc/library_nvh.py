@@ -107,6 +107,51 @@ def all_formulas() -> list[Formula]:
         requires=[(sp.And(s["I0"] > 0, s["r_x"] > 0, s["L"] > 0), "I0, r_x and L must be positive")],
         symbols=s,
     ))
+    s = _sym("E", "rho", "L", "D", "t")
+    E, rho, L, D, t = (s[x] for x in ("E", "rho", "L", "D", "t"))
+    d = D - 2 * t
+    I = sp.pi * (D**4 - d**4) / 64 * 1e-12  # m^4
+    A = sp.pi * (D**2 - d**2) / 4 * 1e-6  # m^2
+    Lm = L / 1000
+    out.append(Formula(
+        formula_id="modal.tube_shaft_bending",
+        title="両端を支えた丸パイプの軸 (ドライブシャフト) の 1 次の曲げの固有振動数",
+        domain="nvh",
+        expression="I = pi (D^4 - d^4) / 64, A = pi (D^2 - d^2) / 4, d = D - 2 t; f1 = (pi / (2 L^2)) sqrt(E I / (rho A))",
+        inputs={"E": _in("MPa", "Young's modulus", min=0), "rho": _in("kg/m^3", "density", min=0),
+                "L": _in("mm", "joint to joint", min=0), "D": _in("mm", "tube outer diameter", min=0),
+                "t": _in("mm", "tube wall", min=0)},
+        outputs={"f1": ("Hz", "first bending frequency", sp.pi / (2 * Lm**2) * sp.sqrt(E * 1e6 * I / (rho * A)))},
+        assumptions=["Euler-Bernoulli beam, held across at both joints and free to turn there (simply supported)",
+                     "the tube's own mass only (the joints' mass sits at the supports)"],
+        source="first mode of a simply supported uniform beam (textbook vibration)",
+        requires=[(sp.And(2 * t < D, rho > 0, L > 0), "the wall t must be less than half of D; rho and L positive")],
+        symbols=s,
+    ))
+    s = _sym("E", "nu", "L", "D", "t", "J_1", "J_2")
+    d = s["D"] - 2 * s["t"]
+    Jp = sp.pi * (s["D"]**4 - d**4) / 32 * 1e-12  # m^4
+    k_t = s["E"] * 1e6 / (2 * (1 + s["nu"])) * Jp / (s["L"] / 1000)  # N*m per rad
+    J1, J2 = s["J_1"], s["J_2"]
+    out.append(Formula(
+        formula_id="modal.two_inertia_torsion",
+        title="2 つの回る質量を軸のねじりでつないだ固有振動数 (モーターと減速機・車輪とドライブシャフト)",
+        domain="nvh",
+        expression="k = G J_p / L, G = E / (2 (1 + nu)), J_p = pi (D^4 - d^4) / 32, d = D - 2 t; "
+                   "f = sqrt(k (J_1 + J_2) / (J_1 J_2)) / (2 pi)",
+        inputs={"E": _in("MPa", "Young's modulus", min=0), "nu": _in("1", "Poisson's ratio", min=0, max=0.5),
+                "L": _in("mm", "shaft length, joint to joint", min=0), "D": _in("mm", "tube outer diameter", min=0),
+                "t": _in("mm", "tube wall", min=0),
+                "J_1": _in("kg*m^2", "turning inertia at one end (motor and reducer as seen at this shaft)", min=0),
+                "J_2": _in("kg*m^2", "turning inertia at the other end (the wheel)", min=0)},
+        outputs={"f": ("Hz", "torsion frequency of the two inertias on the shaft", sp.sqrt(k_t * (J1 + J2) / (J1 * J2)) / (2 * sp.pi)),
+                 "k": ("N*m", "torsion stiffness of the shaft (torque per radian of twist)", k_t)},
+        assumptions=["the shaft's own turning inertia is left out (small next to the two ends)",
+                     "both ends turn free (no grip of the tyre on the road)"],
+        source="two-disc torsional vibration on a massless shaft; Saint-Venant torsion of a round tube (textbook vibration)",
+        requires=[(sp.And(2 * s["t"] < s["D"], J1 > 0, J2 > 0, s["L"] > 0), "t < D/2, J_1, J_2 and L positive")],
+        symbols=s,
+    ))
     s = _sym("v", "r", "i")
     v, r, i = s["v"], s["r"], s["i"]
     f_wheel = (v / 3.6) / (2 * sp.pi * r / 1000)

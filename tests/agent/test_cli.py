@@ -42,6 +42,14 @@ class RunCommandTest(RunCase, unittest.TestCase):
             main(["run", str(REQUIREMENTS), "--scripted", "--runs", str(self.root), "--no-intake"])
         self.assertEqual([c.kwargs["intake"] for c in start.call_args_list], [True, False])
 
+    def test_intake_events_done_before_the_run_come_from_a_file(self):
+        given = intake_for(load_requirements(REQUIREMENTS)).events
+        path = self.root / "intake.json"
+        path.write_text(json.dumps(given, ensure_ascii=False), encoding="utf-8")
+        with mock.patch("hiraku.agent.session.start_run", return_value=self.ctx) as start, redirect_stdout(io.StringIO()):
+            main(["run", str(REQUIREMENTS), "--scripted", "--runs", str(self.root), "--intake-events", str(path)])
+        self.assertEqual(start.call_args.kwargs["intake_events"], given)
+
     def test_end_shows_run_id_status_and_cost(self):
         code, out = self.run_cli()
         p = self.ctx.project
@@ -156,6 +164,19 @@ class StartInterruptTest(unittest.TestCase):
             out = io.StringIO()
             with redirect_stdout(out):
                 self.assertEqual(main(["check", str(ctx.store.path)]), 0, out.getvalue())
+
+    def test_intake_events_given_are_emitted_as_they_are_and_only_the_intakes_kinds(self):
+        given = intake_for(load_requirements(REQUIREMENTS)).events
+        with tempfile.TemporaryDirectory() as tmp:
+            design = Path(tmp) / "design.json"
+            design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+            kw = dict(design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf())
+            ctx = start_run(REQUIREMENTS, intake_events=given, **kw)
+            events = ctx.store.events()[1:len(given) + 1]
+            self.assertEqual([(e["kind"], e["data"]) for e in events], [(e["kind"], e["data"]) for e in given])
+            for bad in ({"kind": "verdict.recorded", "data": {}}, {"kind": "domains.picked"}, "x"):
+                with self.subTest(bad=bad), self.assertRaises(ValueError):
+                    start_run(REQUIREMENTS, intake_events=[bad], **kw)
 
 
 class CheckCommandTest(RunCase, unittest.TestCase):

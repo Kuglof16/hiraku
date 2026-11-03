@@ -40,28 +40,51 @@ window.PROMO_LAYOUT = {
       "h": 2,
       "_note": "centred"
     },
-    "row": {
-      "y": 500,
-      "gap_px": 34
+    "tagline": {
+      "y": 458,
+      "size_px": 36,
+      "text": "作る前に、CAE で確かめる AI エージェント",
+      "_note": "added 2026-11-03: one line under the rule that says what HIRAKU is (the logo and the pets alone did not say it). Centred, ink-soft; bottom about 458 + 1.3 x 36 = 505, above pets.y"
     },
-    "agent": {
-      "w": 196
+    "pets": {
+      "y": 544,
+      "w": 160,
+      "h": 180,
+      "pitch_px": 168,
+      "group_gap_px": 36,
+      "_note": "added 2026-11-03: the ten 3D pets of promo/pets/pet3d.js (v7, packager = six-piece burr) in one row, in pet3d's ROLES order: lead, designer, packager, then the seven CAE domains in the order the chips light. Box i is w x h at y, centred on cx_i = 960 - span / 2 + w / 2 + i x pitch_px (+ group_gap_px from the fourth on), span = 9 x pitch_px + group_gap_px + w = 1708 (x 106 to 1814, inside safe). Each box is a 2D canvas: one WebGL renderer off the page (the size of one box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box"
     },
-    "pet": {
-      "size_px": 184,
-      "shift_px": 18
+    "camera": {
+      "fov_deg": 24,
+      "azimuth_deg": 24,
+      "elevation_deg": 12,
+      "_note": "every pet is seen the same way: a camera fitted to pet3d's FRAME box as promo/pets/viewer.html does (distance = max(FRAME.h / 2, FRAME.w / 2 / aspect) / tan(fov / 2) x 1.04 + 0.6), turned azimuth_deg about the vertical and raised elevation_deg"
     },
     "chip": {
-      "gap_above_px": 14,
-      "h": 52,
-      "size_px": 27
+      "gap_above_px": 12,
+      "h": 46,
+      "size_px": 24,
+      "_note": "the seven domain chips, centred under their pets. 27 px until 2026-11-03; 24 px (story body_text_px) so 強度信頼性 (about 178 px wide) clears its neighbours at pitch 168"
+    },
+    "tag": {
+      "gap_above_px": 12,
+      "h": 40,
+      "size_px": 24,
+      "_note": "name tags of lead, designer and packager (no domain chip, never lit): thin faint border, ink-soft"
+    },
+    "motion": {
+      "pass_dur_s": 0.9,
+      "hop_period_s": 0.9,
+      "_note": "a domain's pet is idle until its chip lights at light_s + k x step_s, then does one pass hop (pass_dur_s) and stays in report (leans to tell). hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager stay idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) with t from timeline.js only",
+      "idle_shift_s": 1.3
     },
     "times": {
       "name_s": 0.25,
-      "row_s": 1.1,
+      "tagline_s": 1.0,
+      "row_s": 1.4,
       "light_s": 2.0,
       "step_s": 0.42,
-      "_note": "name: first letter; row: agents and chips come in, unlit; light: first chip lights; step: gap between chips"
+      "_note": "name: first letter; tagline: the line under the rule fades in (0.6 s); row: pets, chips and tags come in, unlit (0.5 s; 1.1 s until 2026-11-03, moved for the tagline); light: first chip lights; step: gap between chips (light_s and step_s are read by bgm.py)"
     }
   },
   "n01": {
@@ -70,16 +93,16 @@ window.PROMO_LAYOUT = {
     "view": {
       "x": 96,
       "y": 96,
-      "w": 1200,
+      "w": 1400,
       "h": 790,
       "_note": "the 3D view; bottom 886, above the subtitle band"
     },
     "pane": {
-      "x": 1328,
+      "x": 1520,
       "y": 96,
-      "w": 496,
+      "w": 304,
       "h": 790,
-      "_note": "result cards on the right"
+      "_note": "result cards in a narrow column on the right (the 3D is what is read)"
     },
     "card": {
       "gap": 20,
@@ -118,11 +141,11 @@ window.PROMO_LAYOUT = {
       "y": 96,
       "cols": 3,
       "rows": 2,
-      "tile_w": 400,
+      "tile_w": 560,
       "tile_h": 383,
       "gap_x": 24,
       "gap_y": 24,
-      "_note": "five tests and the legend; bottom 886, above the subtitle band"
+      "_note": "five tests and the legend over the full width (right edge 1824); bottom 886, above the subtitle band"
     },
     "panes": [
       "tilt",
@@ -142,18 +165,11 @@ window.PROMO_LAYOUT = {
       },
       "rate": {
         "size_px": 18
+      },
+      "verdict": {
+        "of_label": 2,
+        "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane"
       }
-    },
-    "result": {
-      "x": 1392,
-      "y": 96,
-      "w": 432,
-      "h": 790,
-      "title_px": 30,
-      "text_px": 20,
-      "row_gap": 16,
-      "rows": 2,
-      "_note": "limit values on the right; rows: result lines per test"
     },
     "times": {
       "lead_s": 0.3
@@ -190,6 +206,24 @@ window.PROMO_LAYOUT = {
       "gap_x": 24,
       "gap_y": 24,
       "_note": "seven domains and assembly; bottom 886, above the subtitle band"
+    },
+    "feature": {
+      "x": 96,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "_note": "the one domain shown large"
+    },
+    "list": {
+      "x": 972,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "cols": 2,
+      "rows": 4,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)"
     },
     "tests": [
       "handling",
@@ -266,6 +300,24 @@ window.PROMO_LAYOUT = {
       "gap_y": 24,
       "_note": "seven domains and assembly; bottom 886, above the subtitle band"
     },
+    "feature": {
+      "x": 96,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "_note": "the one domain shown large"
+    },
+    "list": {
+      "x": 972,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "cols": 2,
+      "rows": 4,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)"
+    },
     "tests": [
       "handling",
       "powertrain",
@@ -319,26 +371,26 @@ window.PROMO_LAYOUT = {
     "view": {
       "x": 96,
       "y": 96,
-      "w": 1200,
+      "w": 1400,
       "h": 790,
       "_note": "the 3D assembly, the same box as n01.view; bottom 886"
     },
     "seek": {
       "x": 120,
       "y": 814,
-      "w": 1152,
+      "w": 1352,
       "h": 48,
       "_note": "the seek bar over the lower edge of the view, 24 px inside its sides and bottom"
     },
     "steps": {
-      "x": 1328,
+      "x": 1520,
       "y": 96,
-      "w": 496,
+      "w": 304,
       "h": 790,
       "title_px": 30,
       "text_px": 22,
       "row_gap": 12,
-      "_note": "the list of assembly steps on the right"
+      "_note": "the list of assembly steps in a narrow column on the right"
     },
     "times": {
       "lead_s": 0.3,
@@ -411,12 +463,18 @@ window.PROMO_LAYOUT = {
     },
     "title": {
       "name": {
-        "y": 62,
+        "y": 58,
         "size_px": 124
       },
       "tag": {
-        "y": 200,
+        "y": 186,
         "size_px": 42
+      },
+      "gloss": {
+        "y": 244,
+        "size_px": 24,
+        "text": "CAE = コンピュータで設計を試す技術",
+        "_note": "added 2026-11-03: says in small type what CAE is, under the tag line, fading in at times.gloss_s. Bottom 244 + 1.2 x 24 = 272.8, above grid.y (280); the tag (bottom 186 + 1.2 x 42 = 236.4) and the name (58 to 182) moved up 14 and 4 px to make room (they were at 200 and 62)"
       }
     },
     "times": {
@@ -426,10 +484,16 @@ window.PROMO_LAYOUT = {
       "tile_stagger_s": 0.05,
       "name_s": 1.75,
       "tag_s": 2.3,
+      "gloss_s": 2.4,
+      "_gloss_note": "added 2026-11-03: the small line under the tag (title.gloss) fades up over 0.6 s, 0.1 s after the tag starts",
       "door_open_s": 0.55,
       "latch_s": 0.38,
       "mesh_in_s": 0.2,
       "mesh_out_s": 0.78,
+      "points_s": 0.0,
+      "hero_in_s": 0.3,
+      "points_out_s": 0.36,
+      "_points_note": "added 2026-11-03 (v5). points: the cloud of nodes starts to gather onto the vehicle (hero_points); hero_in: the vehicle's picture fades in over hero_points.hero_in_dur_s once the points have gathered (in by 0.46 s); points_out: the points fade over hero_points.fade_dur_s, handing over to the mesh lines (mesh_in_s). Before v5 the picture was there from 0 s",
       "_note": "burst: flash of light as the door has swung out; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed door starts to part (door.crack_*). burst, tiles, name and tag were 0.3 s earlier until 2026-11-03; they moved to leave the door closed a while first. latch: the bolt slides back and the leaves jolt (door.latch_*), the seam light flickers; mesh_in: the triangle mesh starts to show over the vehicle (hero_mesh.in_dur_s); mesh_out: its first elements come apart (hero_mesh.*)"
     },
     "door": {
@@ -536,6 +600,114 @@ window.PROMO_LAYOUT = {
       "end_scale": 0.15,
       "_note": "the vehicle comes apart as a finite-element mesh. Triangles of side size_px (rows of nodes, every other row shifted half a side, each node moved by up to jitter x size_px, seeded) cover the hero box; their lines show only where the vehicle's picture is (the PNG's alpha as an SVG mask), line_px wide, fading in over in_dur_s from times.mesh_in_s. From times.mesh_out_s each element flares, shrinks to end_scale about its centre and vanishes over el_dur_s, taking its piece of the picture with it; an element starts spread_dur_s x min(1, distance from fly_from / reach_px) later, plus up to jitter_dur_s (seeded). The last ends by times.mesh_out_s + spread_dur_s + jitter_dur_s + el_dur_s, inside the swing's start + door.hero_fade_dur_s. Only with a picture (hero.src or ?hero=); the line drawing fades as before. size_px was 34 at first (about 2400 triangles, each drawn twice with its own animation): the same t shot twice then differed in 1 to 4 of 6 tries (headless Chromium had not finished painting); at 50 (about 1100) 24 of 24 tries were identical"
     },
+    "hero_points": {
+      "seed": 13,
+      "outline_keep": 0.8,
+      "jitter": 0.35,
+      "scatter_min_px": 160,
+      "scatter_max_px": 760,
+      "margin_px": 24,
+      "gather_dur_s": 0.22,
+      "stagger_s": 0.08,
+      "ease": [
+        0.12,
+        0.75,
+        0.3,
+        1
+      ],
+      "dot_px": 4.6,
+      "node_dot_px": 6.4,
+      "start_alpha": 0.35,
+      "fade_dur_s": 0.22,
+      "hero_in_dur_s": 0.16,
+      "mask": {
+        "cell_px": 10,
+        "cols": 150,
+        "rows": 75,
+        "src": "media/n05_hero_2x.png",
+        "threshold": 128,
+        "cover": 0.5,
+        "rows_hex": [
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000003000000000000000000000",
+          "00000000000000007800000000000000000000",
+          "0000000000000000fc00000000000000000000",
+          "00000000000000007801e00000000000000000",
+          "00000000000000007803e00000000000000000",
+          "00000000000000003003f00000000000000000",
+          "00000000000000007c03e60000000000000000",
+          "0000000000000000fc01fff000000000000000",
+          "0000000000000000fc01ffffc0000000000000",
+          "0000000000000000fc1ffffffe000000000000",
+          "0000000000000038feffffffff000000000000",
+          "0000000000000040fcffffffff000000000000",
+          "0000000000000044fcffffffff000000000000",
+          "00000000000000007cffffffff000000000000",
+          "00000000000000687fffffffff000000000000",
+          "00000000000000707fffffffff000000000000",
+          "00000000000000007fffffffff800000000000",
+          "0000000000000080ffffffffffe00000000000",
+          "0000000000000007fffffffffff00000000000",
+          "000000000000013ffffffffffff00000000000",
+          "000000000000027ffff7ffffffb00000000000",
+          "00000000003ff8ffffffffffff100000000000",
+          "00000000007fffffffffffff7e500000000000",
+          "0000000001fffffffffffffc7e900000000000",
+          "0000000001fffffffffffff1fd900000000000",
+          "0000000003ffffffffffffe0ff900000000000",
+          "0000000007fffffffffffff0fd300000000000",
+          "0000000007ffffffffffffc0fd200000000000",
+          "0000000007ffffffffffff007d600000000000",
+          "000000000ffffffffffffc007f400000000000",
+          "000000000ffffffffffff0007fc00000000000",
+          "000000000fffffffffff00003f800000000000",
+          "000000000ffffffffffe000006000000000000",
+          "0000000007ffffffffff000000000000000000",
+          "0000000007ffffffffff000000000000000000",
+          "0000000003fffff3ffe7000000000000000000",
+          "0000000003ffdfcfff87000000000000000000",
+          "0000000000fff63fff89800000000000000000",
+          "00000000003c7cfeff51800000000000000000",
+          "0000000000001ff8ff71000000000000000000",
+          "00000000000003e1ffe1000000000000000000",
+          "0000000000000081fef3000000000000000000",
+          "0000000000000001ffeb000000000000000000",
+          "0000000000000001fe43000000000000000000",
+          "0000000000000001fc46000000000000000000",
+          "0000000000000001fc46000000000000000000",
+          "0000000000000000fe0c000000000000000000",
+          "0000000000000000ffb8000000000000000000",
+          "00000000000000007ff0000000000000000000",
+          "00000000000000003fe0000000000000000000",
+          "00000000000000000fc0000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000",
+          "00000000000000000000000000000000000000"
+        ],
+        "_note": "where the vehicle's picture is, cell by cell in the hero box (cols x rows cells of cell_px design px; the picture fitted in the box as the page draws it, contain). A cell is set when at least cover of its pixels have alpha above threshold. One hex string per row, the first column in the high bit of the first digit, padded to whole digits. Computed from src by hero_mask() in promo/tests/test_layout.py, which checks it against the PNG (the page cannot read the PNG's pixels: a file:// picture taints the canvas)"
+      },
+      "_note": "the vehicle gathers from a cloud of nodes (v5): the points are the nodes of hero_mesh (same seed and rows, so they land where the mesh lines will run) that fall on a set cell of mask, plus points on the outline (set cells next to an unset one, each kept with outline_keep and moved by up to jitter x cell_px about the cell's centre, seeded). Each starts at a seeded place scatter_*_px from where it lands (margin_px inside the stage and above the subtitle band; a place outside is drawn again, so no points pile up on the edges), at start_alpha, and comes in over gather_dur_s (ease) after a seeded delay of up to stagger_s from times.points_s, growing to full brightness. dot_px / node_dot_px: radius of an outline point / a node. All are in by points_s + stagger_s + gather_dur_s = times.hero_in_s; then the picture fades in (times.hero_in_s, hero_in_dur_s) and the points fade from times.points_out_s over fade_dur_s. Only with a picture; the line drawing has no points"
+    },
     "tile_fx": {
       "ghosts": 2,
       "ghost_lag_s": 0.035,
@@ -587,7 +759,8 @@ window.PROMO_LAYOUT = {
       "h": 790,
       "title_px": 30,
       "text_px": 22,
-      "_note": "battery charge and temperature, then speed, as graphs in the right column"
+      "reading_of_title": 2,
+      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)"
     },
     "times": {
       "lead_s": 0.3,
@@ -619,6 +792,24 @@ window.PROMO_LAYOUT = {
       "gap_x": 24,
       "gap_y": 24,
       "_note": "bottom 886, above the subtitle band"
+    },
+    "feature": {
+      "x": 96,
+      "y": 96,
+      "w": 1104,
+      "h": 790,
+      "_note": "the one design shown large"
+    },
+    "list": {
+      "x": 1224,
+      "y": 96,
+      "w": 600,
+      "h": 790,
+      "cols": 2,
+      "rows": 3,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247"
     },
     "tests": [
       "step_break",
@@ -677,7 +868,8 @@ window.PROMO_LAYOUT = {
       "x": 120,
       "y": 120,
       "size_px": 30,
-      "_note": "inside the view, top left: 補強の前 / 補強の後"
+      "of_view_h": 0.08,
+      "_note": "inside the view, top left: 補強の前 / 補強の後. Text size: view.h x of_view_h (63 px), at least size_px"
     },
     "times": {
       "lead_s": 0.3,
@@ -702,6 +894,256 @@ window.PROMO_LAYOUT = {
       "bg": "#f4f1ea",
       "panel": "#fbf9f4",
       "rule": "#c9c3b6"
+    }
+  },
+  "n08": {
+    "duration_s": 6.4,
+    "_duration_note": "6.4 s is N08's slot. Voice from 0.3 s to 6.29 s; parts measured from its pauses: ただ、 about 0.3-0.9 s; CAE のツールは気軽に買えるものではなく、 about 0.9-3.5 s; 使いこなすのも about 3.6-4.8 s; 簡単ではありません。 about 4.9-6.0 s",
+    "_note": "an ordinary CAE tool, not HIRAKU: a cool grey business application on a dark ground, tilted a little. The licence windows pile up while the voice says it is not easy to buy, the settings windows while it says 使いこなすのも, the warnings and the stack of manuals while it says 簡単ではありません. No product names, logos or figures (no prices, no counts in the warnings). Every box below is in stage px before the camera's rotation and scale",
+    "camera": {
+      "rotate_from_deg": -1.4,
+      "rotate_to_deg": -2.4,
+      "from_scale": 0.96,
+      "to_scale": 1.0,
+      "move_dur_s": 6.4,
+      "ease": [
+        0.3,
+        0,
+        0.6,
+        1
+      ],
+      "_note": "the application (main window and its dialogs) turns and grows slowly about the centre of the area above the subtitle band (960, 455) over the whole cut. At from_scale 0.96 the smallest text (19 px) is drawn at 18.2 px"
+    },
+    "main": {
+      "x": 70,
+      "y": 40,
+      "w": 1780,
+      "h": 800,
+      "bar_h": 38,
+      "menu_h": 38,
+      "tool_h": 50,
+      "status_h": 34,
+      "tree_w": 330,
+      "props_w": 340,
+      "_note": "the main window: title bar, menu bar, tool bar, model tree on the left, the 3D view, properties on the right, status bar"
+    },
+    "view": {
+      "seed": 3,
+      "unit_px": 44,
+      "depth_x_px": 150,
+      "depth_y_px": 90,
+      "origin_x": 170,
+      "origin_y": 590,
+      "jitter": 0.22,
+      "_note": "the mesh of an L-shaped bracket in the 3D view (an oblique drawing, in the view's own px): grid cells of half a unit, interior nodes moved by up to jitter x cell (seeded); the faces seen from the upper right are drawn as quads"
+    },
+    "chrome": {
+      "bar_h": 40,
+      "pad_px": 16,
+      "row_h": 40,
+      "label_w": 220,
+      "field_h": 30,
+      "tab_h": 38,
+      "btn_h": 34,
+      "radius_px": 4
+    },
+    "text": {
+      "title_px": 20,
+      "menu_px": 20,
+      "tree_px": 20,
+      "label_px": 20,
+      "field_px": 19,
+      "tab_px": 19,
+      "btn_px": 19,
+      "status_px": 19,
+      "warn_px": 24,
+      "warn_sub_px": 20,
+      "book_px": 21,
+      "view_px": 19,
+      "_note": "smaller than the HIRAKU screens on purpose (dense business software); the smallest is 19 px so that at camera.from_scale it stays at 18 px or more"
+    },
+    "win": {
+      "license": {
+        "x": 300,
+        "y": 150,
+        "w": 660,
+        "h": 440,
+        "z": 10
+      },
+      "modules": {
+        "x": 1010,
+        "y": 96,
+        "w": 640,
+        "h": 600,
+        "z": 11
+      },
+      "nolicense": {
+        "x": 600,
+        "y": 580,
+        "w": 700,
+        "h": 220,
+        "z": 12
+      },
+      "mesh": {
+        "x": 150,
+        "y": 110,
+        "w": 580,
+        "h": 520,
+        "z": 20
+      },
+      "material": {
+        "x": 400,
+        "y": 160,
+        "w": 580,
+        "h": 590,
+        "z": 21
+      },
+      "bc": {
+        "x": 680,
+        "y": 120,
+        "w": 580,
+        "h": 470,
+        "z": 22
+      },
+      "contact": {
+        "x": 960,
+        "y": 200,
+        "w": 580,
+        "h": 510,
+        "z": 23
+      },
+      "solver": {
+        "x": 1240,
+        "y": 130,
+        "w": 600,
+        "h": 560,
+        "z": 24
+      },
+      "warn_shape": {
+        "x": 330,
+        "y": 330,
+        "w": 720,
+        "h": 210,
+        "z": 30
+      },
+      "warn_conv": {
+        "x": 620,
+        "y": 455,
+        "w": 740,
+        "h": 220,
+        "z": 31
+      },
+      "warn_rigid": {
+        "x": 240,
+        "y": 600,
+        "w": 700,
+        "h": 200,
+        "z": 32
+      },
+      "_note": "the dialogs, in the order they open; z: stacking order (higher in front). nolicense was at y 470 in the first stills, where it hid the licence window's price line (お見積もりはお問い合わせください); at 580 the line stays in sight"
+    },
+    "books": {
+      "x": 1440,
+      "y": 470,
+      "w": 430,
+      "h": 410,
+      "seed": 9,
+      "shift_px": 14,
+      "tilt_deg": 1.6,
+      "drop_px": 160,
+      "heights_px": [
+        74,
+        62,
+        70,
+        56,
+        66,
+        60
+      ],
+      "book_w": 360,
+      "_note": "the stack of thick manuals at the right, in front of the application (not turned with it); bottom book first, each shifted by up to shift_px and turned by up to tilt_deg (seeded). Bottom 880, above the band"
+    },
+    "pointer": {
+      "size_px": 30,
+      "ring_px": 44,
+      "click_dur_s": 0.3,
+      "path": [
+        {
+          "t_s": 0.0,
+          "x": 1480,
+          "y": 760
+        },
+        {
+          "t_s": 1.8,
+          "x": 1480,
+          "y": 760
+        },
+        {
+          "t_s": 2.45,
+          "x": 1100,
+          "y": 375
+        },
+        {
+          "t_s": 3.95,
+          "x": 1100,
+          "y": 375
+        },
+        {
+          "t_s": 4.75,
+          "x": 1752,
+          "y": 660
+        },
+        {
+          "t_s": 6.4,
+          "x": 1752,
+          "y": 660
+        }
+      ],
+      "_note": "the mouse pointer, turned with the application: it moves (eased) from one point to the next of path (t_s, tip x, y) and clicks (a ring) at times.select_s on the fatigue row of the module list and at times.run_s on the solver window's 計算を始める button; the warnings follow the second click"
+    },
+    "anim": {
+      "pop_dur_s": 0.16,
+      "pop_from_scale": 0.94,
+      "row_dur_s": 0.14,
+      "book_dur_s": 0.28,
+      "shake_dur_s": 0.3,
+      "pop_ease": [
+        0.2,
+        0.8,
+        0.3,
+        1
+      ],
+      "book_ease": [
+        0.5,
+        0,
+        0.75,
+        0.4
+      ]
+    },
+    "dim": {
+      "peak_alpha": 0.55,
+      "fade_dur_s": 0.5,
+      "_note": "from times.dim_s the whole picture darkens towards colors.night (to peak_alpha) over fade_dur_s, ending with the cut, to hand over to N08b's dark screen"
+    },
+    "times": {
+      "license_s": 1.0,
+      "modules_s": 1.6,
+      "module_rows_s": 1.75,
+      "module_step_s": 0.11,
+      "select_s": 2.55,
+      "nolicense_s": 2.75,
+      "mesh_s": 3.6,
+      "material_s": 3.8,
+      "bc_s": 4.0,
+      "contact_s": 4.2,
+      "solver_s": 4.4,
+      "run_s": 4.85,
+      "books_s": 4.9,
+      "book_step_s": 0.08,
+      "warn_shape_s": 4.95,
+      "warn_conv_s": 5.25,
+      "warn_rigid_s": 5.55,
+      "dim_s": 5.9,
+      "_note": "license ... nolicense: during CAE のツールは気軽に買えるものではなく (0.9-3.5 s); the ten module rows come in one per module_step (the last at 2.74 s); select: the pointer clicks the fatigue row, and the no-licence dialog answers. mesh ... solver: one settings window every 0.2 s during 使いこなすのも (3.6-4.8 s). run: the pointer clicks 計算を始める, and the warnings follow. books: the manuals drop one per book_step from 4.9 s (they were at 4.5 s in the first stills, where they hid the pointer clicking 計算を始める). warn_*: the warnings during 簡単ではありません (4.9-6.0 s). dim: the darkening, to the end"
     }
   },
   "n08b": {
@@ -797,6 +1239,11 @@ window.PROMO_LAYOUT = {
       "size_px": 20,
       "_note": "two lines (1.5 line height) end at 896, above the band"
     },
+    "wait": {
+      "text": "これから確かめる",
+      "size_px": 22,
+      "_note": "added 2026-11-03: replaces the '?' placeholders. One line in the HIRAKU hand cell of each row until its value comes in (data-kind note: a placeholder, not body text); the analysis and difference cells stay empty until theirs (the difference column, 170 px, is too narrow for the line)"
+    },
     "times": {
       "title_s": 0.15,
       "head_s": 0.3,
@@ -822,8 +1269,11 @@ window.PROMO_LAYOUT = {
       "h": 806,
       "title_px": 34,
       "text_px": 22,
-      "_note": "centred; bottom 886"
+      "change_of_title": 1.5,
+      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)"
     },
+    "dim_opacity": 0.3,
+    "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
     "times": {
       "lead_s": 0.3,
       "light_s": 5.8,
@@ -835,13 +1285,119 @@ window.PROMO_LAYOUT = {
       "rule": "#c9c3b6"
     }
   },
+  "n17b": {
+    "duration_s": 5.8,
+    "_duration_note": "5.8 s is N17b's slot. Voice: 構想は 10 万行。 at 0.30-2.08 s, その道を、Claude Code が拓きました。 at about 2.43-5.54 s. The subtitles are burnt in later; the voice's words are not on the screen",
+    "_note": "how HIRAKU was built: one lane per Claude Code session (the lead and the departments), commits as dots along the time axis, the departments' merges into main as curves up to the lead's lane, then the actual counts. All figures come from promo/screens/n17b.data.js (written by promo/n17b_data.py from git); 100,000 is the first estimate of the plan (構想の見通し), not lines written, and it is gone before the counts come in",
+    "vision": {
+      "x": 340,
+      "y": 150,
+      "w": 1460,
+      "h": 380,
+      "num_size_px": 230,
+      "unit_size_px": 64,
+      "cap_size_px": 32,
+      "peak_alpha": 0.26,
+      "drift_scale": 1.03,
+      "in_dur_s": 0.7,
+      "out_dur_s": 0.45,
+      "_note": "the planned size, faint behind the lanes: 100,000 行 with 構想の見通し above it, centred in this box. Rises to peak_alpha over in_dur_s from times.vision_s while it grows slowly to drift_scale, fades out over out_dur_s from times.vision_out_s"
+    },
+    "lanes": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 540,
+      "label_w": 220,
+      "label_size_px": 24,
+      "top": 14,
+      "pitch_px": 60,
+      "graph_x": 244,
+      "graph_w": 1460,
+      "dot_r_px": 4,
+      "line_px": 2,
+      "main_line_px": 3,
+      "curve_dx_px": 46,
+      "axis_y": 500,
+      "axis_size_px": 20,
+      "_note": "inside the lanes box (x, y relative to it): lane names right-aligned in the first label_w px, the graph from graph_x, graph_w wide (stage x 340-1800). Lane i's centre is at top + (i + 0.5) x pitch_px (eight lanes, 14-494). A commit's x is its author time on a linear axis from the first commit to the newest; a merge into main is a curve from the department's lane, curve_dx_px before the merge, to the lead's lane at the merge. axis: the dates under the graph"
+    },
+    "counts": {
+      "x": 96,
+      "y": 664,
+      "w": 1728,
+      "h": 226,
+      "head_h": 40,
+      "head_size_px": 22,
+      "stamp_size_px": 20,
+      "label_size_px": 24,
+      "num_size_px": 72,
+      "unit_size_px": 30,
+      "sub_size_px": 20,
+      "gap_px": 22,
+      "cols": {
+        "days": 280,
+        "commits": 330,
+        "lines": 700,
+        "tests": 352
+      },
+      "_note": "the four actual counts in a row under a heading, with when they were counted at the right of the heading. Bottom 664 + 226 = 890, above the subtitle band. cols: widths of the four, adding up to w with three gaps"
+    },
+    "flow": {
+      "first_frac": 0.12,
+      "a_ease": [
+        0.4,
+        0,
+        0.6,
+        1
+      ],
+      "b_ease": [
+        0.5,
+        0,
+        0.3,
+        1
+      ],
+      "step_s": 0.05,
+      "dot_dur_s": 0.3,
+      "merge_dur_s": 0.35,
+      "glow_out_dur_s": 0.5,
+      "_note": "the reveal edge (with a soft light on it) sweeps the time axis: to first_frac between times.lanes_s and lanes_to_s (a_ease), still until flow_s, then to the end by flow_to_s (b_ease). The page samples it every step_s into keyframes; a dot pops in over dot_dur_s and a merge curve draws over merge_dur_s when the edge reaches them"
+    },
+    "count": {
+      "dur_s": 1.9,
+      "stagger_s": 0.15,
+      "in_dur_s": 0.4,
+      "ease": [
+        0.12,
+        0.6,
+        0.2,
+        1
+      ],
+      "steps": 32,
+      "_note": "each figure counts up over dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. Tiles start stagger_s apart from times.counts_s. Digit wheels were tried first: mid-roll they showed half digits and a wrong day count (8 日目)"
+    },
+    "times": {
+      "vision_s": 0.3,
+      "labels_s": 0.5,
+      "label_step_s": 0.05,
+      "lanes_s": 0.6,
+      "lanes_to_s": 2.1,
+      "vision_out_s": 1.85,
+      "flow_s": 2.4,
+      "flow_to_s": 4.4,
+      "counts_s": 2.9,
+      "calm_s": 4.6,
+      "_note": "vision: 100,000 comes in with 構想は 10 万行 (0.30-2.08 s) and is gone by vision_out_s + vision.out_dur_s = 2.3 s; lanes: the lanes start to grow from the left; flow: with その道を、Claude Code が拓きました (2.43-5.54 s) the commits stream in and the merges join main; counts: the actual counts roll up, the last stopping at counts_s + 3 x count.stagger_s + count.dur_s = 5.25 s; calm: the light on the reveal edge has faded and the lead's lane brightens a little. From 5.5 s to the end the picture holds still"
+    }
+  },
   "n18": {
     "duration_s": 9.0,
     "light": {
       "y": 40,
       "w": 130,
       "h": 470,
-      "_note": "centred"
+      "grow_dur_s": 0.4,
+      "_note": "centred. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s (title.css grows it over 0.6 s; N18 sets its own since v2)"
     },
     "vehicle": {
       "y": 130,
@@ -859,27 +1415,257 @@ window.PROMO_LAYOUT = {
       }
     },
     "url": {
-      "y": 856,
-      "size_px": 30
+      "y": 826,
+      "size_px": 30,
+      "_note": "was at y 856 until v2; moved up 30 px to leave room for the credit under it"
+    },
+    "credit": {
+      "y": 872,
+      "size_px": 20,
+      "alpha": 0.62,
+      "fade_dur_s": 0.8,
+      "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band"
+    },
+    "gather": {
+      "count": 150,
+      "seed": 21,
+      "w": 1640,
+      "h": 760,
+      "cy": 440,
+      "margin_px": 24,
+      "dot_min_px": 2.0,
+      "dot_max_px": 5.0,
+      "gather_dur_s": 0.3,
+      "stagger_s": 0.1,
+      "ease": [
+        0.55,
+        0,
+        0.85,
+        0.45
+      ],
+      "start_alpha": 0.55,
+      "seed_glow_alpha": 0.5,
+      "_note": "before the line (v2, after the reference's closing): count motes at seeded places in a w x h ellipse about (stage centre, cy), kept margin_px inside the stage and above the subtitle band, each of a seeded radius dot_*_px, are drawn in to seeded points on the line (x = stage centre, y within the light box, more towards its middle) over gather_dur_s (ease: slow, then fast) after a seeded delay of up to stagger_s from times.gather_s; they brighten from start_alpha and go out as they reach the line. A faint glow on the line's place rises to seed_glow_alpha meanwhile and hands over to the light at times.line_s. All motes are in by gather_s + stagger_s + gather_dur_s = times.line_s"
+    },
+    "name_bloom": {
+      "peak_blur_px": 54,
+      "rest_blur_px": 14,
+      "peak_alpha": 0.95,
+      "rest_alpha": 0.28,
+      "settle_dur_s": 1.6,
+      "halo_w": 1180,
+      "halo_h": 300,
+      "halo_peak_alpha": 0.2,
+      "halo_rest_alpha": 0.06,
+      "_note": "the name comes up in a bloom of light (v2): each letter, as it rises (title.css letter-in), wears a warm glow (text-shadow) of peak_blur_px at peak_alpha, held for the first 30 % of settle_dur_s (while the letter fades in), that settles to rest_blur_px at rest_alpha by the end of settle_dur_s; behind the name a soft halo (halo_w x halo_h, centred on the name) rises to halo_peak_alpha at 45 % of settle_dur_s (as the last letters come in) and settles to halo_rest_alpha. The first stills had it peak at 18 % and 0.3: a bright patch ran ahead of the letters on the right"
     },
     "times": {
-      "line_s": 0.15,
+      "gather_s": 0.0,
+      "line_s": 0.4,
       "open_s": 0.8,
       "draw_s": 1.1,
       "name_s": 2.3,
       "tag_s": 3.0,
       "url_s": 3.6,
+      "credit_s": 4.2,
       "out_s": 8.2,
-      "_note": "line: thin vertical line grows; open: it opens into a band; draw: vehicle strokes start; out: fade to black"
+      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: it opens into a band; draw: vehicle strokes start; credit: the small line under the URL; out: fade to black. line was 0.15 until v2 (2026-11-03): it moved to 0.4 to leave the motes time to gather first; open_s (read by bgm.py) and the order did not change"
+    }
+  },
+  "labels": {
+    "_note": "small numbered labels over the opening quick looks N01-N04 (labels.html?cut=n01, or the entry pages labels_n01.html ... labels_n04.html), on a transparent ground over the app's cut. The cut's length is n01..n04.duration_s. A label comes in at times.in_s from the start of the cut over in_dur_s and is gone times.out_before_end_s before its end (fading over out_dur_s, ending then). Words follow the voice (narration draft 6)",
+    "box": {
+      "x": 112,
+      "y": 822,
+      "w": 620,
+      "h": 46,
+      "_note": "bottom left, inside the lower-left corner of the cut's view or tile (they end at y 886 and start at x 96 in n01-n04), 16 px in from the left and 18 px above their bottom edge; bottom 868, above the subtitle band. The label is as wide as its words, up to w. At y 842 (first stills) it straddled the boxes' bottom border"
+    },
+    "num_size_px": 20,
+    "text_size_px": 24,
+    "line_px": 1.5,
+    "pad_x_px": 16,
+    "gap_px": 14,
+    "rule_w": 28,
+    "in_dur_s": 0.35,
+    "out_dur_s": 0.25,
+    "times": {
+      "in_s": 0.2,
+      "out_before_end_s": 0.3
+    },
+    "cuts": {
+      "n01": {
+        "num": "01",
+        "text": "段差を越える",
+        "_voice": "段差を越えられるか。"
+      },
+      "n02": {
+        "num": "02",
+        "text": "倒れない",
+        "_voice": "でこぼこ道でも、傾いても、風を受けても、急にハンドルを切っても、倒れないか。"
+      },
+      "n03": {
+        "num": "03",
+        "text": "長く・速く",
+        "_voice": "長く走っても、オーバーヒートしないか、どこまで速く走れるか。"
+      },
+      "n04": {
+        "num": "04",
+        "text": "衝突・振動・組み立て",
+        "_voice": "衝突も、振動も、組み立ての順番も。"
+      }
+    }
+  },
+  "story": {
+    "_note": "What each cut must get across in about 3 seconds (one message), and how much it may show. The maker on 2026-11-03: the screens are too busy to come across in the demo. Counts are of things on screen at one time t; elements say what they are with data-kind (label, graph, legend, number, moving) so layout_check can count them. A cut's limits are the defaults unless it lists its own, each with a why.",
+    "defaults": {
+      "label": 3,
+      "graph": 1,
+      "legend": 1,
+      "number": 1,
+      "moving": 3,
+      "body_text_px": 24,
+      "_note": "label: name tags and ticks; graph: plots; legend: colour bars; number: emphasised figures; moving: things in motion at once; body_text_px: smallest size of text the viewer must read (the global min_text_px 18 stays for notes and sources)"
+    },
+    "cuts": {
+      "n00": {
+        "message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)",
+        "limits": {
+          "label": 10,
+          "moving": 12,
+          "why": "the seven domain chips under the pets are the point of the cut; lead, designer and packager carry a small name tag each (7 + 3 = 10). Since 2026-11-03 the ten pets are 3D (data-kind moving): all ten breathe in one row as one family, so they count 10, plus the name or a chip as it lights (12)"
+        }
+      },
+      "n01": {
+        "message": "越えられる段差 (100 mm) と、越えられない段差 (250 mm)",
+        "limits": {
+          "number": 2,
+          "why": "the two step heights are the comparison"
+        }
+      },
+      "n02": {
+        "message": "傾き・風・悪路・急ハンドル・急ブレーキの、どれで倒れるかが分かる",
+        "limits": {
+          "label": 5,
+          "why": "one tag per test; no figures in the panes"
+        }
+      },
+      "n03": {
+        "message": "長く走っても熱くならず、どこまで速いかが分かる"
+      },
+      "n04": {
+        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)",
+        "limits": {
+          "label": 8,
+          "moving": 8,
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+        }
+      },
+      "n05": {
+        "message": "HIRAKU — CAE を、すべての作り手へ拓く",
+        "limits": {
+          "label": 12,
+          "moving": 12,
+          "why": "the title over the twelve preset tests; the tiles carry pictures, no figures"
+        }
+      },
+      "n06": {
+        "message": "作ってみると、うまくいかない",
+        "limits": {
+          "label": 6,
+          "why": "six failures, one tag each, no figures"
+        }
+      },
+      "n07": {
+        "message": "つなぎ目が弱く、補強で直る (CAE が作る前に見つける)"
+      },
+      "n08": {
+        "message": "CAE のツールは高く、使いこなすのが難しい",
+        "limits": {
+          "label": 40,
+          "moving": 12,
+          "body_text_px": 18,
+          "why": "the clutter is the message: a plain CAE tool buried in windows; nothing on it needs to be read"
+        }
+      },
+      "n08b": {
+        "message": "小さな会社の CAE の導入率は 16 %",
+        "limits": {
+          "number": 2,
+          "graph": 1,
+          "why": "99 % and 16 % side by side, then the two bars"
+        }
+      },
+      "n09": {
+        "message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)",
+        "limits": {
+          "label": 7,
+          "why": "the seven domains light up"
+        }
+      },
+      "n10": {
+        "message": "AI の答えも、CAE ツールで確かめる (3 問とも ✓)",
+        "limits": {
+          "number": 3,
+          "label": 3,
+          "why": "one emphasised figure per question (the difference); the rest is small"
+        }
+      },
+      "n11": {
+        "message": "予測を書くまで、解析は動かない (hooks が止める)"
+      },
+      "n12": {
+        "message": "手計算と解析が食い違ったら、原因 (単位の間違い) を突き止める",
+        "limits": {
+          "number": 2,
+          "why": "the predicted and the analysed value"
+        }
+      },
+      "n13": {
+        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う"
+      },
+      "n14": {
+        "message": "渡したノウハウが、設計のチェックの規則になる"
+      },
+      "n15": {
+        "message": "全部の分野が緑になるまで、設計を直す",
+        "limits": {
+          "label": 8,
+          "moving": 8,
+          "why": "the same eight tiles as N04, all turning green"
+        }
+      },
+      "n16": {
+        "message": "組み立ての順番まで、3D で確かめる"
+      },
+      "n17": {
+        "message": "結果だけでなく、次に何を変えればよいかを示す"
+      },
+      "n17b": {
+        "message": "部署ごとの Claude Code のセッションが、並んで作った",
+        "limits": {
+          "label": 8,
+          "number": 4,
+          "moving": 8,
+          "why": "one lane per session; the four counts at the end"
+        }
+      },
+      "n18": {
+        "message": "解析の前に予測し、理由を説明する — HIRAKU"
+      }
     }
   },
   "check": {
     "times": {
       "n00": [
         0.6,
+        1.2,
         1.8,
+        2.5,
         3.5,
-        6.5
+        4.5,
+        6.5,
+        8.0
       ],
       "n03": [
         0.5,
@@ -920,6 +1706,9 @@ window.PROMO_LAYOUT = {
       ],
       "n05": [
         0,
+        0.15,
+        0.3,
+        0.45,
         0.5,
         0.8,
         1.0,
@@ -927,6 +1716,15 @@ window.PROMO_LAYOUT = {
         1.4,
         2.9,
         4.5
+      ],
+      "n08": [
+        0.5,
+        2.0,
+        2.9,
+        4.6,
+        5.0,
+        5.8,
+        6.4
       ],
       "n08b": [
         1.5,
@@ -942,11 +1740,47 @@ window.PROMO_LAYOUT = {
         5.6,
         8.3
       ],
+      "n17b": [
+        0.5,
+        1.5,
+        2.5,
+        3.5,
+        4.5,
+        5.8
+      ],
       "n18": [
+        0,
+        0.3,
+        0.6,
         1.0,
+        1.2,
+        2.5,
         3.2,
+        3.8,
         5.0,
+        7.0,
         8.5
+      ],
+      "labels_n01": [
+        0,
+        0.25,
+        2.0,
+        3.8
+      ],
+      "labels_n02": [
+        0.25,
+        3.5,
+        6.8
+      ],
+      "labels_n03": [
+        0.25,
+        2.5,
+        4.8
+      ],
+      "labels_n04": [
+        0.25,
+        2.0,
+        3.8
       ],
       "app": [
         2,
@@ -971,7 +1805,7 @@ window.PROMO_LAYOUT = {
     "allow_overflow": [
       {
         "cut": "*",
-        "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url",
+        "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url, .credit, .label-text, .tagline, .gloss, .wait",
         "axis": "y",
         "max_em": 0.25,
         "why": "line-height (1 to 1.3) is shorter than the font's content box (ascent + descent), so scrollHeight runs a few px past the line box. Measured 2-7 px (0.06-0.23 em). The glyphs stay inside and no ancestor clips them; a taller line-height would move the text"
@@ -997,6 +1831,18 @@ window.PROMO_LAYOUT = {
         "a": "n05.door",
         "b": "n05.hero",
         "why": "the vehicle stands in front of the closed door on purpose; it fades out as the door swings open"
+      },
+      {
+        "cut": "n08",
+        "a": "n08.*",
+        "b": "n08.*",
+        "why": "N08's dialogs, warnings and the stack of manuals pile up over one another and over the main window on purpose: the pile is the picture (too much to learn)"
+      },
+      {
+        "cut": "n17b",
+        "a": "n17b.vision*",
+        "b": "n17b.lanes*",
+        "why": "the planned 100,000 is drawn faint behind the lanes on purpose while they start to grow; it is gone (2.3 s) before the commits stream in"
       }
     ]
   }

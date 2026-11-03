@@ -29,7 +29,7 @@ from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, REPO_ROOT, beyond_plans, external_builders, is_beyond, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, trusted_analysis, write_report)
+                                    revise_design, rule_check, trusted_analysis, write_report)
 from hiraku.tools.judge import verdict_line
 from hiraku.tools.summary import design_summary
 
@@ -63,15 +63,44 @@ def load_plan(product: str, requirements: str | None = None) -> Record:
     return {**base, **mine, "steps": steps}
 
 
+def has_plan(product: str, requirements: str | None = None) -> bool:
+    """Whether data/catalog/scripted.yaml has steps for this requirements file (its name without
+    .yaml) or product. Without them a scripted run has only the builders' default steps."""
+    return bool(load_plan(product, requirements).get("steps"))
+
+
 def plan_of(ctx: RunContext) -> Record:
     """This run's plan: its requirements file's entry, else its product's (load_plan)."""
     path = getattr(ctx, "requirements_path", None)
     return load_plan(ctx.project["product"], path.stem if path else None)
 
 
+def _joint_wall_inputs(design: Record, load_case: Record) -> Record:
+    """frame_static.joint_wall_bending's inputs off the design for this load case's loading and step
+    (hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs, at the joint where it is largest)."""
+    from hiraku.solvers.k0_handcalc.frame_inputs import joint_wall_inputs
+    from hiraku.solvers.shelf.frame_static import front_supports
+
+    params = load_case.get("params") or {}
+    step = params.get("step_height")
+    if step is not None and step.get("unit") != "mm":
+        raise ScriptError(f"{load_case['load_case_id']}: step_height must be in mm, got {step.get('unit')!r}")
+    # the supports on the step as frame_shell takes them: the load case's step_supports, else the front-most
+    on = params.get("step_supports")
+    on = [s.strip() for s in on.split(",")] if isinstance(on, str) else on or front_supports(design)
+    return joint_wall_inputs(design, loading=loading_of(load_case), step_mm=step["value"] if step else None,
+                             step_supports=on if step else None)["inputs"]
+
+
+# Readers a plan may name in inputs_from that are not in hiraku.catalog.builders.
+READERS = {"joint_wall_inputs": _joint_wall_inputs}
+
+
 def _reader(name: str) -> Any:
-    """A plan's inputs_from written by name in scripted.yaml: "<module>.<function>" of
-    hiraku.catalog.builders (the builders' readers of formula inputs off a design)."""
+    """A plan's inputs_from written by name in scripted.yaml: one of READERS, or "<module>.<function>"
+    of hiraku.catalog.builders (the builders' readers of formula inputs off a design)."""
+    if name in READERS:
+        return READERS[name]
     module, _, func = name.rpartition(".")
     if not module or not re.fullmatch(r"[a-z0-9_]+", module):
         raise ScriptError(f"inputs_from {name!r}: write <module>.<function> of hiraku.catalog.builders")
@@ -370,11 +399,10 @@ def _answer_drop(ctx: RunContext, drop: Record) -> None:
 
 
 def _check_rules(ctx: RunContext, agent: str) -> Record | None:
-    """The intake's rule_check on this version's parts (rule_check.recorded), said in one line."""
-    from hiraku.intake.tools import TOOLS
-
+    """The intake's rule_check on this version's parts (rule_check.recorded), said in one line; the
+    assembly tile follows the system rules (functions.rule_check)."""
     try:
-        out = TOOLS["rule_check"]["function"](ctx, {}, agent)
+        out = rule_check(ctx, {}, agent)
     except ToolError as e:
         ctx.store.emit("agent.said", agent=agent, text=f"規則を当てられませんでした: {e}")
         return None

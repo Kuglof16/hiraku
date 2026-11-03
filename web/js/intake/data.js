@@ -202,6 +202,10 @@ export const CATEGORIES = [
   {
     "name": "manufacturing",
     "ja": "製造"
+  },
+  {
+    "name": "system",
+    "ja": "系"
   }
 ];
 

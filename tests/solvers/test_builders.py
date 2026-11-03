@@ -161,19 +161,23 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
 
     def test_r3_plan_on_version_2(self):
-        """Wider track (the wheels further outboard of the rails): still within the tolerance."""
+        """Wider track (the wheels further outboard of the rails), and that with thicker rails (stiffer in torsion:
+        the ladder twists less, but the end cross member's moment stays): still within the tolerance."""
         from hiraku import designgen
 
-        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -200, "unit": "mm"}})
-        lc = BUILDERS["R3"](spec("R3"), REQ, v2)
-        got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
-        preds = {}
-        for p in PLANS["R3"]["predictions"]:
-            extra = p["inputs_from"](v2, lc)
-            out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
-            preds[p["quantity"]] = out["outputs"][p["output"]]
-        hand = preds["fatigue_damage"]["value"]
-        self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        wide = {"track": mm(1220), "steering_x": mm(-200)}
+        for changes in (wide, dict(wide, rail_t=mm(4.5))):
+            v2 = designgen.regenerate(DESIGN, changes)
+            lc = BUILDERS["R3"](spec("R3"), REQ, v2)
+            got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
+            preds = {}
+            for p in PLANS["R3"]["predictions"]:
+                extra = p["inputs_from"](v2, lc)
+                out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
+                preds[p["quantity"]] = out["outputs"][p["output"]]
+            hand = preds["fatigue_damage"]["value"]
+            self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"{sorted(changes)}: hand {hand:.4f}, tool {got:.4f}")
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
@@ -214,6 +218,67 @@ class BuildersTest(unittest.TestCase):
     def test_catalog_tolerance_wins(self):
         spec = dict(CATALOG.test("C1"), tolerance_rel=0.07)
         self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
+
+
+class RopsBuilderTest(unittest.TestCase):
+    """R4: no tool on the shelf and no plan (HIRAKU's Claude makes the tool in the run); the load case alone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-rollbar.json").read_text(encoding="utf-8"))
+        cls.lc = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+
+    def test_load_case_fits_the_contract(self):
+        contract.validate("load_case", self.lc)
+        self.assertEqual(self.lc["load_case_id"], "R4-rops")
+        self.assertEqual(self.lc["domain"], CATALOG.test("R4")["domain"])
+
+    def test_values_are_code_4_at_the_reference_mass(self):
+        from hiraku.catalog.builders.analysis import R4_CODE4, R4_REFERENCE_MASS_KG
+
+        p = self.lc["params"]
+        self.assertEqual((p["side_energy"], p["rear_energy"], p["crush_force"]),
+                         ({"value": 875.0, "unit": "J"}, {"value": 700.0, "unit": "J"}, {"value": 10000.0, "unit": "N"}))
+        self.assertEqual(p["side_energy"]["value"], R4_CODE4["side"] * R4_REFERENCE_MASS_KG)
+        self.assertAlmostEqual(p["rear_fraction"]["value"], 1 / 6)
+        self.assertEqual(p["loading"], "two_cargo")
+        given = dict(CATALOG.test("R4"), params={"crush_force": {"value": 12, "unit": "kN"}})
+        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
+
+    def test_criterion_is_the_occupant_space(self):
+        c = self.lc["criterion"]
+        self.assertEqual((c["quantity"], c["op"], c["limit"]), ("rops_occupant_clearance", ">=", {"value": 0.0, "unit": "mm"}))
+        self.assertIn("Code 4", c["basis"])
+        self.assertIn("Q31", self.lc["requirement_keys"])
+
+    def test_requirement_keys_from_the_catalog_entry(self):
+        self.assertNotIn("Q64", self.lc["requirement_keys"])  # the demo file has no Q64 yet
+        req = copy.deepcopy(REQ)
+        req["requirements"].append({"key": "Q64", "name": "ROPS", "value": "あり", "source": "default", "trust": 1,
+                                    "basis": "assumption (test)"})
+        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+        self.assertEqual(lc["requirement_keys"][:2], ["Q64", "Q31"])
+        self.assertEqual(lc["criterion"]["requirement_keys"], ["Q64", "Q31"])
+        req["requirements"][-1]["value"] = "なし"
+        with self.assertRaisesRegex(BuildError, "Q64"):
+            BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+
+    def test_no_plan_and_no_shelf_tool(self):
+        self.assertNotIn("R4", PLANS)
+        self.assertFalse([t for t in TOOLS.values() if "R4" in t.tests])
+
+    def test_hand_formulas_named_for_the_prediction_evaluate(self):
+        """The formulas the builder's comment names, with frame_inputs and the load case's params."""
+        from hiraku.solvers.k0_handcalc.frame_inputs import portal_frame_inputs
+
+        pi = portal_frame_inputs(self.rb)
+        p = self.lc["params"]
+        side = FORMULAS.evaluate("frame_static.portal_frame_side", {**pi["side"], "E_in": p["side_energy"]})
+        rear = FORMULAS.evaluate("frame_static.portal_frame_rear", {**pi["rear"], "E_in": p["rear_energy"],
+                                                                     "f": p["rear_fraction"]})
+        top = FORMULAS.evaluate("frame_static.portal_frame_top", {**pi["top"], "F": p["crush_force"]})
+        for r in (side, rear, top):
+            self.assertTrue(all(v["value"] == v["value"] for v in r["outputs"].values()))
 
 
 if __name__ == "__main__":

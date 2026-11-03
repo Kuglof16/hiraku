@@ -2,7 +2,7 @@ import copy
 import unittest
 from unittest import mock
 
-from hiraku.agent.scripted import ScriptError, _reader, load_plan, resolve, run_scripted
+from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, resolve, run_scripted
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
@@ -224,6 +224,7 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         plan = load_plan("offroad-4w")
         self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],
                          [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
+                          ("R1s-step100", "frame_shell"),  # only where R1s is built
                           ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
                           ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
                           ("P1-step250-beyond", "step_climb_dynamic"),
@@ -303,6 +304,12 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
         self.assertEqual([s["say"] for s in plan["steps"]], ["a", "B", "C"])  # replaced in place, then the new one
         self.assertEqual((plan["show_hk1"], plan["revise"], plan["rule_check"]), (True, ["r"], True))
         self.assertNotIn("extends", plan)
+
+    def test_has_plan(self):
+        self.assertTrue(has_plan("offroad-4w"))
+        self.assertTrue(has_plan("offroad-4w", "offroad-4w-n14"))
+        self.assertFalse(has_plan("serving-robot"))
+        self.assertFalse(has_plan("serving-robot", "requirements"))
 
     def test_inputs_from_by_name_reads_only_the_builders(self):
         from hiraku.catalog.builders import k2_tests

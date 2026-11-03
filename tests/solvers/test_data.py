@@ -45,7 +45,8 @@ class DemoDesignTest(unittest.TestCase):
         self.assertTrue(all(s["position_mm"][0] == 0.0 for s in front))
         rear = [s for s in self.design["supports"] if not s["actuation"]["steer"]]
         self.assertTrue(all(s["position_mm"][0] < 0.0 for s in rear))
-        self.assertFalse(any(p["kind"] == "rollbar" for p in parts.values()))
+        # the roll bar is on by default: its part weighs 0 kg (the members carry the mass)
+        self.assertEqual([p["mass_kg"] for p in parts.values() if p["kind"] == "rollbar"], [0.0])
 
 
 class MaterialsTest(unittest.TestCase):
