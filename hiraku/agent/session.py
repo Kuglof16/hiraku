@@ -28,22 +28,24 @@ def resolve_design_path(req: Record, design_path: Path | str | None) -> Path | N
     return REPO_ROOT / req["design_file"]
 
 
-def intake_events_for(req: Record) -> list[Record]:
-    """The intake steps' events for a requirements file (hiraku.intake.pipeline): the domains its
-    flags pick, the hearing on what it already settles (a product HIRAKU has a file for lends its
-    values as the defaults) and the built-in knowledge."""
+def intake_for(req: Record) -> Any:
+    """The intake steps for a run from a requirements file (hiraku.intake.pipeline, from_file):
+    the domains its flags pick; a hearing that asks nothing the file settles and fills the rest
+    with the item defaults (a product HIRAKU has a file for lends its values); the built-in
+    knowledge. Returns the IntakeResult: .events, and the merged requirements in
+    .requirements_file["requirements"]."""
     from hiraku.intake.pipeline import intake
     from hiraku.intake.products import product_files
 
     product = req["product"] if req["product"] in product_files() else None
     return intake(req["want"], req["flags"], req.get("speed_class"), product=product,
-                  requirements=req["requirements"]).events
+                  requirements=req["requirements"], from_file=True)
 
 
 def start_run(requirements_path: Path | str, *, design_path: Path | str | None = None,
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
-              designgen: Any = None, intake_events: list[Record] | None = None, **store_kw: Any) -> RunContext:
+              designgen: Any = None, intake: bool = False, **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
@@ -51,12 +53,21 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     roles lead and designer: the designer makes the first version (propose_design),
     and the load cases, picks and roles follow in project.updated.
 
-    Events: run.started, the intake_events given (intake_events_for: domains.picked,
-    hearing.*, knowledge.imported), agent.said (tests left out, if any), design.created,
-    tool.checked (one per tool), judgement.updated (pending tiles); without a
-    design file no design.created or judgement.updated.
+    intake: run the intake steps on the file first (intake_for): the run's requirements are
+    the merged ones (the file's, and the defaults the hearing added), and its events follow
+    run.started.
+
+    Events: run.started, with intake domains.picked, hearing.* and knowledge.imported,
+    agent.said (tests left out, if any), design.created, tool.checked (one per tool),
+    judgement.updated (pending tiles); without a design file no design.created or
+    judgement.updated.
     """
     req = load_requirements(requirements_path)
+    intake_events: list[Record] = []
+    if intake:
+        got = intake_for(req)
+        req = {**req, "requirements": got.requirements_file["requirements"]}
+        intake_events = got.events
     catalog = load_catalog()
     path = resolve_design_path(req, design_path)
     design = None
@@ -84,7 +95,7 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req)
-    for e in intake_events or ():
+    for e in intake_events:
         store.emit(e["kind"], agent=e.get("agent"), text=e.get("text"), data=e["data"])
     if skipped:
         store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
