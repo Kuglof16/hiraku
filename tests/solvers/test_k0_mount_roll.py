@@ -107,7 +107,7 @@ class MountRollTest(unittest.TestCase):
             self.assertLess(self.no_cross["K"][i, i], self.mr["K"][i, i])
 
     def test_chain_shares_moment_with_the_mounts(self):
-        args = dict(loading="two_cargo", step_mm=100.0, step_supports=["FL", "FR"])
+        args = dict(loading="two_cargo", step_mm=100.0, step_supports=["FL", "FR"], wheel_mounts=False)
         with_m = frame_inputs.joint_wall_inputs(V1, **args)
         without = frame_inputs.joint_wall_inputs(V1, mounts=False, **args)
         self.assertEqual(without["mount_moments_Nmm"], {})

@@ -1359,7 +1359,7 @@ export const DEMOS = {
       "value": 10000000.0,
       "unit": "1"
      },
-     "fatigue_slope_after_knee": {
+     "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
       "unit": "1"
      },
@@ -13470,7 +13470,7 @@ export const DEMOS = {
       "value": 10000000.0,
       "unit": "1"
      },
-     "fatigue_slope_after_knee": {
+     "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
       "unit": "1"
      },

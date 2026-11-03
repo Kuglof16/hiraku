@@ -232,7 +232,7 @@ class DemoConvergenceTest(unittest.TestCase):
         mesh = dict(solvers.frame_mesh(design), mesh_id="mesh-0001")
         lc = {"load_case_id": "R1-step100", "test_id": "R1", "domain": "strength", "title": "R1",
               "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
-        rec = tool("frame_shell").run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh})
+        rec = tool("frame_shell").run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh, "mesh_convergence": "3"})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
         conv = rec["mesh_convergence"]

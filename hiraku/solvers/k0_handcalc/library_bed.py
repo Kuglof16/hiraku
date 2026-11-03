@@ -186,7 +186,191 @@ def use_damage(v: dict) -> dict:
     for weld, uses in USE_WELDS.items():
         out[f"D_{weld}"] = sum(out[f"D{i}"] for i in uses)
     out["D_worst"] = max(out[f"D_{w}"] for w in USE_WELDS)
+    ranges = {w: max(v[f"dS{i}"] for i in uses) for w, uses in USE_WELDS.items()}
+    # the worst weld by damage; with no damage anywhere, the weld of the largest range
+    worst = max(USE_WELDS, key=lambda w: (out[f"D_{w}"], ranges[w]))
+    out["dS_worst"] = ranges[worst]
     return out
+
+
+# ---------------------------------------------------------------- the side rail pushed outward
+
+GUSSET_STEPS = 4  # the tapered gusset is taken as this many steps, each at its middle's depth
+
+
+def _tube(D: float, Di: float) -> tuple[float, float, float]:
+    """A, I, J of a round tube D outside, Di inside."""
+    A = math.pi / 4.0 * (D**2 - Di**2)
+    I = math.pi / 64.0 * (D**4 - Di**4)
+    return A, I, 2.0 * I
+
+
+def rail_post_steps(H: float, d: float, t: float, s: float, t_s: float, g: float, t_g: float) -> list[dict]:
+    """The post from its socket (z = 0) to the top bar (z = H) in steps of one section each: the post alone
+    (d, t); in the sleeve (z < s) one tube from the post's inside to the sleeve's outside; along the gusset
+    (z < g) two plates t_g thick flanking the tube, as deep (along the push) as the tube's outside at the root
+    and tapering to nothing at z = g, each step at its middle's depth. Bending in the push's plane: I = the tube's
+    + 2 t_g h^3 / 12, extreme fibre max(D / 2, h / 2); torsion: J = the tube's + 2 h t_g^3 / 3, the shear taken in
+    the tube alone (D / 2 over the tube's J)."""
+    cuts = {0.0, H}
+    if s > 0:
+        cuts.add(s)
+    if g > 0:
+        cuts.update(g * k / GUSSET_STEPS for k in range(1, GUSSET_STEPS + 1))
+    zs = sorted(z for z in cuts if z <= H)
+    root = d + 2.0 * t_s if s > 0 else d
+    out = []
+    for z0, z1 in zip(zs, zs[1:]):
+        zm = (z0 + z1) / 2.0
+        D, wall = (d + 2.0 * t_s, t + t_s) if zm < s else (d, t)
+        A, I, J = _tube(D, D - 2.0 * wall)
+        h = root * (1.0 - zm / g) if 0 < zm < g else 0.0
+        step = {"z0": z0, "z1": z1, "D": D, "wall": wall, "h": h, "tube_J": J,
+                "A": A + 2.0 * t_g * h, "I": I + 2.0 * t_g * h**3 / 12.0, "J": J + 2.0 * h * t_g**3 / 3.0,
+                "c": max(D / 2.0, h / 2.0), "tau_per_T": (D / 2.0) / J}
+        out.append(step)
+    return out
+
+
+def side_rail_push(v: dict) -> dict:
+    """bed.side_rail_push: the top bar (span S between the end posts, n posts at 0, u2, u3, S) as a beam in the
+    level plane on the posts: each post a spring along the push (a stepped cantilever H long) and a spring about the
+    vertical axis (its torsion); the push F at S / 2. Each post's foot moment R H goes into its socket stub (a
+    square tube b_k, wall t_k, along the push) with the post's torque; the post's bending R (H - z) over each step's
+    section with the torque's shear."""
+    E, G, F, H, S = v["E"], v["G"], v["F"], v["H"], v["S"]
+    n = int(round(v["n"]))
+    steps = rail_post_steps(H, v["d"], v["t"], v["s"], v["t_s"], v["g"], v["t_g"])
+    # each post a stepped cantilever: tip force R (along the push) and tip moment M (in the push's plane) against the
+    # tip's deflection w and rotation phi (flexibility by M(z) = R (H - z) + M), and its torsion against the bar's
+    # turn theta about the vertical axis
+    f_ww = sum(((H - st["z0"]) ** 3 - (H - st["z1"]) ** 3) / (3.0 * E * st["I"]) for st in steps)
+    f_wp = sum(((H - st["z0"]) ** 2 - (H - st["z1"]) ** 2) / (2.0 * E * st["I"]) for st in steps)
+    f_pp = sum((st["z1"] - st["z0"]) / (E * st["I"]) for st in steps)
+    k_t = 1.0 / sum((st["z1"] - st["z0"]) / (G * st["J"]) for st in steps)
+    posts = [0.0, S] if n == 2 else [0.0, v["u2"], S] if n == 3 else [0.0, v["u2"], v["u3"], S]
+    # the foot turns with the upper rail's twist (k_f: the foot moment R H + M per radian; 0: held rigid): the whole
+    # post turns with it
+    k_f = [v[f"k_f{i + 1}"] for i in range(n)]
+    K_posts = []
+    for kf in k_f:
+        c = 1.0 / kf if kf > 0 else 0.0
+        K_posts.append(np.linalg.inv(np.array([[f_ww + H * H * c, f_wp + H * c], [f_wp + H * c, f_pp + c]])))
+    xs = sorted(set(posts) | {S / 2.0})
+    _, I_b, J_b = _tube(v["d"], v["d"] - 2.0 * v["t"])
+    EI, GJ = E * I_b, G * J_b
+    N = len(xs)
+    # degrees of freedom per bar node: w (along the push), theta (turn about the vertical axis), phi (the bar's twist,
+    # the posts' tip rotation in the push's plane)
+    K = np.zeros((3 * N, 3 * N))
+    for i in range(N - 1):
+        L = xs[i + 1] - xs[i]
+        k = EI / L**3 * np.array([[12, 6 * L, -12, 6 * L], [6 * L, 4 * L**2, -6 * L, 2 * L**2],
+                                  [-12, -6 * L, 12, -6 * L], [6 * L, 2 * L**2, -6 * L, 4 * L**2]])
+        idx = [3 * i, 3 * i + 1, 3 * i + 3, 3 * i + 4]
+        K[np.ix_(idx, idx)] += k
+        tw = [3 * i + 2, 3 * i + 5]
+        K[np.ix_(tw, tw)] += GJ / L * np.array([[1.0, -1.0], [-1.0, 1.0]])
+    at = {x: i for i, x in enumerate(xs)}
+    for x, Kp in zip(posts, K_posts):
+        j = 3 * at[x]
+        K[np.ix_([j, j + 2], [j, j + 2])] += Kp
+        K[j + 1, j + 1] += k_t
+    if np.any(np.abs(np.diag(K)) <= 0):
+        raise ValueError("bed.side_rail_push: a bar node is held in no direction")
+    f = np.zeros(3 * N)
+    f[3 * at[S / 2.0]] = F
+    u = np.linalg.solve(K, f)
+    # bar moments at the nodes (linear between them): element end moments from the element stiffness
+    M_bar = 0.0
+    for i in range(N - 1):
+        L = xs[i + 1] - xs[i]
+        ue = u[[3 * i, 3 * i + 1, 3 * i + 3, 3 * i + 4]]
+        m1 = EI / L**2 * (6 * ue[0] + 4 * L * ue[1] - 6 * ue[2] + 2 * L * ue[3])
+        m2 = EI / L**2 * (6 * ue[0] + 2 * L * ue[1] - 6 * ue[2] + 4 * L * ue[3])
+        M_bar = max(M_bar, abs(m1), abs(m2))
+    s_bar = M_bar * (v["d"] / 2.0) / I_b
+    bk, tk = v["b_k"], v["t_k"]
+    A_k = bk**2 - (bk - 2 * tk) ** 2
+    Z_k = (bk**4 - (bk - 2 * tk) ** 4) / 12.0 / (bk / 2.0)
+    s_post = s_sock = 0.0
+    R = []
+    for x, Kp in zip(posts, K_posts):
+        j = 3 * at[x]
+        Ri, Mi = Kp @ u[[j, j + 2]]
+        Ti = k_t * u[j + 1]
+        R.append(Ri)
+        for st in steps:
+            sig = abs(Ri * (H - st["z0"]) + Mi) * st["c"] / st["I"]
+            s_post = max(s_post, math.sqrt(sig**2 + 3.0 * (abs(Ti) * st["tau_per_T"]) ** 2))
+        s_sock = max(s_sock, abs(Ri) / A_k + (abs(Ri * H + Mi) + abs(Ti)) / Z_k)
+    return {"sigma": max(s_post, s_bar, s_sock), "sigma_post": s_post, "sigma_bar": s_bar, "sigma_socket": s_sock,
+            "R_max": max(abs(r) for r in R), "k_post": 1.0 / f_ww, "k_end": k_t}
+
+
+def _side_rail_formula() -> Formula:
+    names = ("F", "H", "S", "n", "u2", "u3", "d", "t", "s", "t_s", "g", "t_g", "b_k", "t_k", "E", "G",
+             "k_f1", "k_f2", "k_f3", "k_f4")
+
+    def ok(v):
+        n = round(v["n"])
+        return (abs(v["n"] - n) < 1e-9 and 2 <= n <= 4 and 2 * v["t"] < v["d"] and 0 <= v["s"] < v["H"]
+                and 0 <= v["g"] < v["H"] and v["S"] > 0 and 2 * v["t_k"] < v["b_k"] and v["E"] > 0 and v["G"] > 0
+                and (n < 3 or 0 < v["u2"] < v["S"]) and (n < 4 or v["u2"] < v["u3"] < v["S"])
+                and (v["s"] == 0 or v["t_s"] > 0) and (v["g"] == 0 or v["t_g"] > 0))
+
+    return Formula(
+        formula_id="bed.side_rail_push",
+        title="サイドレールの上の棒の真ん中を外へ押したときの柱 (差し込みの筒・ガセット)、受け口、棒の曲げ",
+        domain="strength",
+        expression=("top bar = beam (E I, G J of d, t; bending in the level plane and twist) on n posts at 0, u2, u3, "
+                    "S; push F at S / 2; each post a stepped cantilever (tip force R and moment M against deflection and "
+                    "rotation: flexibilities sum over the steps of (H - z)^2, (H - z), 1 over E I_step) and a torsion "
+                    "spring k_t = 1 / sum(dz / (G J_step)); the foot's turn (R H + M) / k_f adds H^2 / k_f, H / k_f, "
+                    "1 / k_f to the flexibilities; stiffness method -> R_i, M_i, T_i; sigma_post = max over posts "
+                    "and steps sqrt(((R_i (H - z0) + M_i) c / I)^2 + 3 (T_i tau_per_T)^2); sigma_socket = R / A_k + "
+                    "(|R H + M| + |T|) / Z_k; sigma_bar = the bar's largest moment / Z; sigma = the largest"),
+        inputs={"F": _in("N", "outward push at the top bar's middle", min=0),
+                "H": _in("mm", "post length, socket's centre line to the top bar", min=0),
+                "S": _in("mm", "top bar span, end post to end post", min=0),
+                "n": _in("1", "posts on the side (2, 3 or 4)", min=2, max=4),
+                "u2": _in("mm", "second post from the head-end post (n >= 3; else not used)", min=0),
+                "u3": _in("mm", "third post from the head-end post (n = 4; else not used)", min=0),
+                "d": _in("mm", "round tube outside diameter", min=0), "t": _in("mm", "tube wall", min=0),
+                "s": _in("mm", "sleeve the post is inserted in: its length up from the socket (0: none)", min=0),
+                "t_s": _in("mm", "sleeve wall (its inside diameter is d)", min=0),
+                "g": _in("mm", "gusset's leg up the post (0: none)", min=0),
+                "t_g": _in("mm", "gusset plate thickness (two plates)", min=0),
+                "b_k": _in("mm", "socket stub's width (square tube)", min=0),
+                "t_k": _in("mm", "socket stub's wall", min=0),
+                "E": _in("MPa", "Young's modulus of the tubes", min=0),
+                "G": _in("MPa", "shear modulus of the tubes", min=0),
+                **{f"k_f{i}": _in("N*mm", f"post {i}'s foot (head to foot): the upper rail's stiffness against its turn in "
+                                          "the push's plane, per radian (0: held rigid; not used past n)", min=0)
+                   for i in range(1, 5)}},
+        outputs={"sigma": ("MPa", "the largest of the posts', the sockets' and the bar's", None),
+                 "sigma_post": ("MPa", "posts' von Mises (bending in the push's plane and the torque's shear)", None),
+                 "sigma_bar": ("MPa", "top bar's bending", None),
+                 "sigma_socket": ("MPa", "socket stubs' (the post's foot moment and torque, and its force along the stub)",
+                                  None),
+                 "R_max": ("N", "largest post force", None),
+                 "k_post": ("N/mm", "each post's stiffness along the push at its top", None),
+                 "k_end": ("N*mm", "each post's torsional stiffness at its top, per radian", None)},
+        assumptions=["the posts are cantilevers from their sockets; each foot turns with the upper rail's twist "
+                     "(k_f, given) and the socket stub itself does not bend",
+                     "the top bar is held by the posts along the push, about the vertical axis (the posts' torsion) "
+                     "and in its twist (the posts' tips turning in the push's plane, against the bar's torsion)",
+                     "in the sleeve the post and the sleeve bend and twist together as one tube (no gap between them)",
+                     f"the gusset: two plates flanking the post, as deep as the tube at the root, tapering to nothing at "
+                     f"g; taken in {GUSSET_STEPS} steps at each step's middle depth, checked at each step's lower end; "
+                     "its shear in torsion taken in the tube alone",
+                     "the socket stub: square tube along the push, its stress at its end (no length effect)"],
+        source=("cantilever bending, torsion of a round tube (J = 2 I), Euler-Bernoulli beam on springs by the "
+                "stiffness method (textbook)"),
+        requires=[(ok, "n is 2, 3 or 4 with 0 < u2 < u3 < S as needed; t < d / 2; s, g less than H; t_k < b_k / 2; "
+                       "t_s, t_g positive when used; E, G, S positive")],
+        fn=lambda v: side_rail_push({k: v[k] for k in names}),
+    )
 
 
 # ---------------------------------------------------------------- everything else
@@ -215,54 +399,7 @@ def all_formulas() -> list[Formula]:
         requires=[(ys > 0, "y_s must be positive")],
         symbols=s,
     ))
-    s = {n: sp.Symbol(n, real=True) for n in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G")}
-    F, H, S, d, t, sl, ts, E, G = (s[k] for k in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G"))
-    I = sp.pi * (d**4 - (d - 2 * t) ** 4) / 64
-    Z = 2 * I / d
-    # the sleeve's tube (d .. d + 2 t_s) and the post inside it (d - 2 t .. d) bend together: one tube d - 2 t .. d + 2 t_s
-    d_o = d + 2 * ts
-    I_in = sp.pi * (d_o**4 - (d - 2 * t) ** 4) / 64
-    Z_in = 2 * I_in / d_o
-    s_root = F / 2 * H / Z_in
-    s_top = F / 2 * (H - sl) / Z
-    s_post = sp.Max(s_root, s_top)  # s = 0: s_top = (F / 2) H / Z, larger than s_root (Z_in >= Z)
-    # the top bar bends in the level plane; each end turns about the vertical axis as far as its post twists
-    # (torsion GJ, J = 2 I, over the post above the sleeve and the sleeve's length in series): end moment
-    # M_e = (F S / 8) / (1 + 2 E I / (k S)) (a beam with equal rotational springs k at its ends, central load)
-    k_end = 1 / ((H - sl) / (G * 2 * I) + sl / (G * 2 * I_in))
-    M_end = (F * S / 8) / (1 + 2 * E * I / (k_end * S))
-    s_bar = (F * S / 4 - M_end) / Z
-    out.append(Formula(
-        formula_id="bed.side_rail_push",
-        title="サイドレールの上の棒の真ん中を外へ押したときの柱の根元 (差し込みの筒の根元と上端) と棒の曲げ",
-        domain="strength",
-        expression=("Z = pi (d^4 - (d - 2t)^4) / (32 d); Z_in = pi ((d + 2 t_s)^4 - (d - 2t)^4) / (32 (d + 2 t_s)) "
-                    "(the post in its sleeve, s long, wall t_s); sigma_post = max((F / 2) H / Z_in, (F / 2)(H - s) / Z) "
-                    "(s = 0, no sleeve: (F / 2) H / Z); the bar's ends held by the posts' torsion: 1 / k = (H - s) / "
-                    "(G 2 I) + s / (G 2 I_in), M_end = (F S / 8) / (1 + 2 E I / (k S)), sigma_bar = (F S / 4 - M_end) / Z"),
-        inputs={"F": _in("N", "outward push at the top bar's middle", min=0),
-                "H": _in("mm", "post length, socket to top bar", min=0),
-                "S": _in("mm", "top bar span, post to post", min=0),
-                "d": _in("mm", "round tube outside diameter", min=0), "t": _in("mm", "tube wall", min=0),
-                "s": _in("mm", "sleeve the post is inserted in: its length up from the socket (0: none)", min=0),
-                "t_s": _in("mm", "sleeve wall (its inside diameter is d)", min=0),
-                "E": _in("MPa", "Young's modulus of the tubes", min=0),
-                "G": _in("MPa", "shear modulus of the tubes", min=0)},
-        outputs={"sigma": ("MPa", "the larger of the post's and the bar's", sp.Max(s_post, s_bar)),
-                 "sigma_post": ("MPa", "post's bending: at its foot (in the sleeve) or at the sleeve's top", s_post),
-                 "sigma_bar": ("MPa", "top bar's bending at its middle (its ends held by the posts' torsion)", s_bar),
-                 "k_end": ("N*mm", "rotational stiffness of each bar end (the post's torsion), per radian", k_end)},
-        assumptions=["the two posts share the push equally and bend as cantilevers from their sockets",
-                     "the sockets and the upper rail do not turn",
-                     "the top bar's ends turn as far as the posts twist (the posts' torsion, the sockets rigid)",
-                     "in the sleeve the post and the sleeve bend and twist together as one tube (no gap between them)"],
-        source=("cantilever bending, torsion of a round tube (J = 2 I), a beam with rotational springs at its ends "
-                "(textbook)"),
-        requires=[(sp.And(2 * t < d, d > 0), "t must be less than half of d"),
-                  (sp.And(sl < H, sl >= 0, ts > 0, G > 0, E > 0, S > 0),
-                   "the sleeve must be shorter than the post; t_s, E, G and S positive")],
-        symbols=s,
-    ))
+    out.append(_side_rail_formula())
     s = {n: sp.Symbol(n, real=True) for n in ("W", "y_cg", "F", "h_F", "y_s")}
     W, ycg, F, hF, ys = (s[k] for k in ("W", "y_cg", "F", "h_F", "y_s"))
     R_far = (W * (ys - ycg) - F * hF) / (2 * ys)
@@ -353,12 +490,14 @@ def all_formulas() -> list[Formula]:
                  "D_lug_back": ("1", "damage at the back bracket's lug root (use 2)", None),
                  "D_lug_knee": ("1", "damage at the knee bracket's lug root (use 3)", None),
                  "m2": ("1", "slope below the knee used (2 m - 1)", None),
+                 "dS_worst": ("MPa", "stress range at the worst weld (its largest use's; with no damage anywhere, the "
+                                     "weld of the largest range): what to compare when the damages are next to 0", None),
                  **{f"D{i}": ("1", f"damage of use {i}", None) for i in "1234"}},
         assumptions=["each use is one cycle of its stress range (0 to the loaded stress)",
                      "IIW-type S-N curve (no mean stress correction)", "linear damage accumulation (Miner)",
                      "the uses' ranges differ, so the cycles are a spectrum: below the knee the slope is 2 m - 1 "
                      "(IIW-1823-07 (2008) sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not the constant-"
-                     "amplitude slope of the design variable fatigue_slope_after_knee"],
+                     "amplitude slope of the design variable fatigue_slope_after_knee_constant_amplitude"],
         source=("S-N curve N = 2e6 (FAT / range)^m and Miner's rule: A. F. Hobbacher, Recommendations for Fatigue "
                 "Design of Welded Joints and Components, 2nd ed., Springer 2016 (IIW), not checked in this repository; "
                 "the slope 2 m - 1 below the knee for a spectrum: IIW-1823-07 (2008) sec. 4.3.1, p.110 (read in that "

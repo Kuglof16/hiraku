@@ -71,7 +71,7 @@ from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_H
                            upstream_mount_series)
 
 WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
-               "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
+               "step_mm=<step_height or None>, step_supports=...): the joint (the wheel mounts' joints included) where the "
                "side wall's plate bending is largest; the shell's hot spot is that wall bending at a cross member's end, "
                "read at the weld line")
 # element_size: 5 mm is about half a minute for the demo frame (80,630 elements, 33 s on the development PC);
