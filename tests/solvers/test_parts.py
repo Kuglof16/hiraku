@@ -28,13 +28,10 @@ BEFORE = {"battery": 50.0, "motor": 25.0, "controller": 4.0, "aux": 6.0, "floor_
 
 
 def panel_kg(design, pid):
-    """The footwell floor and the bulkhead weigh ladder_4w.PANEL_KG_M2 per area of their face; the deck the first
-    v1 deck's 18 kg per its 950 x 880 mm."""
+    """The plates (the floors, the deck, the bulkhead) weigh their own sheet: area x thickness x density."""
     s = next(p for p in design["parts"] if p["id"] == pid)["box"]["size_mm"]
-    if pid == "deck":
-        return 18.0 * s[0] * s[1] / (950.0 * 880.0)
-    face = s[0] * s[1] if pid == "floor_front" else s[1] * s[2]
-    return ladder_4w.PANEL_KG_M2 * face * 1e-6
+    rho = design["materials"][ladder_4w.PLATE_STEEL]["density_kg_m3"]
+    return s[0] * s[1] * s[2] * rho * 1e-9
 
 
 def q(v, u):
@@ -126,7 +123,12 @@ class PlacementTest(unittest.TestCase):
         kinds = sorted({p["kind"] for p in d["parts"] if p["kind"] in safety_lamps()})
         self.assertEqual(kinds, sorted(safety_lamps()))
         self.assertEqual(interferences(d), [])
-        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), sum(p["mass_kg"] for p in V1["parts"]), places=9)
+        # the front lamps come out of the front body; the rear ones stand on the deck, a plate that weighs its own sheet
+        deck_x = PARTS["deck"]["box"]["center_mm"][0] + PARTS["deck"]["box"]["size_mm"][0] / 2.0
+        rear = sum(p["mass_kg"] for p in d["parts"] if p["kind"] in safety_lamps() and p["box"]["center_mm"][0] < deck_x)
+        self.assertGreater(rear, 0.0)
+        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), sum(p["mass_kg"] for p in V1["parts"]) + rear,
+                               places=9)
 
 
 class LampsFromTheRequirementsTest(unittest.TestCase):
@@ -158,8 +160,8 @@ class MassTest(unittest.TestCase):
         self.assertAlmostEqual(mass(d, "motor", "reducer", "driveshaft_RL", "driveshaft_RR"), BEFORE["motor"], places=9)
         self.assertAlmostEqual(mass(d, "steering_wheel", "steering_column", "steering_shaft", "steering_rack",
                                     "tie_rod_FL", "tie_rod_FR"), BEFORE["steering"], places=9)
-        self.assertAlmostEqual(mass(d, "floor_front", "pedal_accel", "pedal_brake", "brake_master"),
-                               panel_kg(d, "floor_front"), places=9)
+        for pid in ladder_4w.PLATE_T_MM:  # the plates weigh their own sheet (the pedals and master on top)
+            self.assertAlmostEqual(mass(d, pid), panel_kg(d, pid), places=9)
         for s in ("R", "L"):
             self.assertAlmostEqual(mass(d, f"seat_{s}", f"seat_belt_{s}"), BEFORE["seat"], places=9)
         for sid in ("FL", "FR", "RL", "RR"):
@@ -169,12 +171,13 @@ class MassTest(unittest.TestCase):
 
     def test_total_of_the_parts(self):
         total = (BEFORE["battery"] + BEFORE["motor"] + BEFORE["controller"] + BEFORE["aux"] + panel_kg(V1, "floor_front")
-                 + BEFORE["floor"] + panel_kg(V1, "deck") + BEFORE["front_body"] + BEFORE["steering"] + 2 * BEFORE["seat"]
-                 + 2 * BEFORE["occupant"] + BEFORE["cargo"] + 4 * BEFORE["wheel"] + 4 * BEFORE["suspension"]
-                 + panel_kg(V1, "bulkhead"))
+                 + panel_kg(V1, "floor") + panel_kg(V1, "deck") + BEFORE["front_body"] + BEFORE["steering"]
+                 + 2 * BEFORE["seat"] + 2 * BEFORE["occupant"] + BEFORE["cargo"] + 4 * BEFORE["wheel"]
+                 + 4 * BEFORE["suspension"] + panel_kg(V1, "bulkhead")
+                 + mass(V1, "pedal_accel", "pedal_brake", "brake_master"))  # on the plates, no longer out of them
         brackets = sum(p["mass_kg"] for p in V1["parts"] if p["kind"] == "bracket")  # plates (kit/mounts.py)
         self.assertGreater(brackets, 0.0)
-        for d in (V1, NODS, ladder_4w.build({"lamps": q(1, "1")}), ladder_4w.build({"rollbar": q(0, "1")})):
+        for d in (V1, NODS, ladder_4w.build({"rollbar": q(0, "1")})):  # the lamps: test_lamps_on_public_roads
             self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), total + brackets, places=9)
 
     def test_wider_track_keeps_the_motor(self):
