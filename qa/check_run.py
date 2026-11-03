@@ -130,6 +130,7 @@ TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
 # a rule_check target (and part_id) standing for the whole design, e.g. a system rule finding a part missing
 WHOLE_DESIGN = "design"
+BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
 REL = 1e-9
@@ -1311,7 +1312,10 @@ class RunChecker:
     def check_light_first(self) -> None:
         """HK5 (light first): in a version, an analysis with a tool of stage n starts only when every load
         case with a criterion already checked with a lower-stage tool has a passing verdict. (Lower-stage
-        load cases not analysed yet are not seen in the records; the hook knows them from the tests.)"""
+        load cases not analysed yet are not seen in the records; the hook knows them from the tests.)
+        As the hook counts them (hiraku.tools.rules.lower_stage_left): cases past the limit (load case id
+        ending BEYOND_SUFFIX) are meant to fail and do not count; the load case being analyzed counts
+        only when its latest verdict is red and came from a tool of a lower stage."""
         for aid, (fin, a) in self.recs["analysis"].items():
             at, v, n = self.started.get(aid, fin), a.get("design_version"), self._stage(a.get("tool"))
             lower: dict[str, tuple[str, str]] = {}
@@ -1320,15 +1324,25 @@ class RunChecker:
                         and self._stage(b.get("tool")) < n):
                     lower.setdefault(b.get("load_case_id"), (bid, b.get("tool")))
             for lc_id, (bid, tool) in lower.items():
-                if not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict):
+                if (not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict)
+                        or str(lc_id).endswith(BEYOND_SUFFIX)):
                     continue
                 verdicts = [r for j, r in self.recs["verdict"].values()
                             if j < at and r.get("load_case_id") == lc_id and self.version_of("verdict", r) == v]
                 state = "not judged" if not verdicts else ("red" if not verdicts[-1].get("pass") else None)
+                if lc_id == a.get("load_case_id") and (state != "red" or self._stage(self._verdict_tool(verdicts[-1])) >= n):
+                    continue
                 if state:
                     self.error("HK5_light_first", self.where_of[at],
                                f"{aid} ({a.get('tool')}, stage {n}) started while {lc_id}, checked by {bid} "
                                f"({tool}, stage {self._stage(tool)}), is {state}")
+
+    def _verdict_tool(self, ver: dict) -> str | None:
+        """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""
+        aid = ver.get("analysis_id")
+        if aid is None and ver.get("comparison_id"):
+            aid = (self.recs["comparison"].get(ver["comparison_id"], (None, {}))[1] or {}).get("analysis_id")
+        return (self.recs["analysis"].get(aid, (None, {}))[1] or {}).get("tool") if aid else None
 
     def check_hooks(self) -> None:
         for i, e in enumerate(self.events):
