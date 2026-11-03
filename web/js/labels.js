@@ -14,6 +14,45 @@ export const DOMAIN_JA = {
   assembly: "組み立て",
 };
 
+// The domains in the viewers' words (the video's pages; DOMAIN_JA keeps the trade's short names).
+export const DOMAIN_PLAIN_JA = {
+  handling: "倒れない・よけられる",
+  powertrain: "走る力",
+  aero: "風",
+  crash: "ぶつかったとき",
+  strength: "壊れない",
+  nvh: "揺れ・音",
+  thermal: "熱くなりすぎない",
+  assembly: "組める・手が届く",
+};
+
+
+// The trade's words in the record's sentences, and what the video's pages say instead.
+const SENTENCE_PLAIN = [
+  [/荷重条件の作り方/g, "試し方"],
+  [/荷重条件/g, "試す条件"],
+];
+
+// A test id or a rule id in a sentence ("S2 ", "U1-04", "HU-02", "R1s").
+const ID_RE = /(?<![A-Za-z0-9])(?:[A-Z]{1,3}\d*-\d+|[A-Z]\d+[a-z]?)(?![A-Za-z0-9-])/g;
+
+// A sentence of the record for the viewers: ids taken out, the trade's words replaced.
+export function plainSentence(text) {
+  let s = String(text ?? "").replace(ID_RE, "").replace(/\s{2,}/g, " ");
+  for (const [re, w] of SENTENCE_PLAIN) s = s.replace(re, w);
+  return s.replace(/^[\s・、]+/, "").replace(/\s+([、。」])/g, "$1").trim();
+}
+
+// Why a domain is not looked at, from the record's reason (domains.picked): the sentence
+// that says so (the one ending in "見ない"), else the words before a list (":"), with the
+// tests' ids and the bracketed asides taken out.
+export function plainReason(reason) {
+  const s = String(reason ?? "");
+  const said = s.split("。").map((x) => x.trim()).find((x) => x.includes("見ない"));
+  const line = (said ?? s.split(/[:：]/)[0]).replace(/\s*[（(][^)）]*[)）]/g, "");
+  return plainSentence(line);
+}
+
 export const ROLE_JA = {
   lead: "まとめ役",
   designer: "設計役",
@@ -206,10 +245,54 @@ const PLAIN_JA = {
   min_side_load: "軽い側の輪の重さ",
   first_frame_mode: "フレームのいちばん低い揺れの速さ",
   fatigue_damage: "くり返しの力による傷み",
+  // the known-answer checks of the use-count fatigue tool (N13) and its results
+  cycles_at_FAT: "基準の強さで壊れるまでの回数",
+  seat_stress_range: "人が乗る・降りるときの枠の応力の幅",
+  cycles_counted: "くり返しの回数",
 };
 
 export function plainName(q) {
   return PLAIN_JA[q] ?? quantityName(q);
+}
+
+// Counts read with 回 after them (their unit is 1).
+const COUNT_QUANTITIES = new Set(["cycles_counted", "cycles_at_FAT"]);
+
+// A value for viewers: its unit's sign, or 回 for a count.
+export function plainValue(q, value, unit, sig = 3) {
+  // a count is written out in full (2,000,000 回, not 2.00e+6), rounded to a whole number
+  if (COUNT_QUANTITIES.has(q) && (unit === "1" || !unit) && Number.isFinite(value)) return `${Math.round(value).toLocaleString("ja-JP")} 回`;
+  return fmtVU(value, unit, sig);
+}
+
+// The inputs of a K0 formula in the viewers' words (prediction.inputs, by formula_id). An
+// input not listed has no name (null): a page leaves it out rather than show the symbol.
+const FORMULA_INPUT_JA = {
+  "tilt.spring_roll_angle": {
+    t: "左右の輪の間隔",
+    h: "重心の高さ",
+    e: "重心の横のずれ",
+    m: "全体の重さ",
+    m_s: "ばねの上の重さ",
+    h_s: "ばねの上の重心の高さ",
+    k: "ばねの硬さ",
+    n: "ばねの数",
+  },
+  "tilt.rigid_ssf": { t: "左右の輪の間隔", h: "重心の高さ" },
+};
+
+export function formulaInputName(formulaId, symbol) {
+  return FORMULA_INPUT_JA[formulaId]?.[symbol] ?? null;
+}
+
+// A known-answer check's source, short, for viewers (tool.checked checks[].source is a
+// sentence for the makers): the kinds of source it names; null when none is recognised.
+export function checkSourceShort(source) {
+  const s = String(source ?? "");
+  const out = [];
+  if (/range\s*=|I\s*=|simply supported/i.test(s)) out.push("梁の手計算の式");
+  if (/\bIIW\b/.test(s)) out.push("国際溶接学会 (IIW) の疲労の線");
+  return out.length ? out.join("・") : null;
 }
 
 // The design's numbers that the reports' next steps and sensitivities name, in the viewers'

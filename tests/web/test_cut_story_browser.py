@@ -8,7 +8,8 @@ the page's own corner note ("上限を越えた: ...") is not shown.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The layout is a copy of the promo department's layout.json (the sections the cut pages
-read, without the notes) as of their commit 52d12e9; the check times are its check.times,
+read, without the notes); every value in it is as in their commit 8e295cf. The check
+times are its check.times,
 and for N01 / N02, which have none there, the lead time, the middle and the end. The
 records are the other cut tests' (shape examples); N01 and N02 need a run made by the
 real tools (HIRAKU_WEB_DEV_RUNS, a folder made by tests.web.dev_k2_run) and are skipped
@@ -44,6 +45,9 @@ BOXED_BODY = {"n03", "n04", "n06", "n07", "n15", "n16", "n17"}
 # The promo department's layout.json (as of their commit 52d12e9: 11e1cc7's values, N03's
 # shorter drive (loop_to_s 2.0), N04's own assembly box, n03.popup.ok_of_reading and
 # n17.page.domain_of_title), the sections the cut pages read, without the notes.
+# n11, n12 and n13 are as of their commit cce1262, the story's limits and check.times as of
+# their commit 8e295cf (n09 label 8, n13 label 4, n17b, the check times of n09 and n11-n14);
+# every value here was checked against 8e295cf.
 LAYOUT_JSON = r"""{
   "stage": {"w": 1920, "h": 1080},
   "subtitle_band": {"y": 910, "h": 170},
@@ -61,6 +65,9 @@ LAYOUT_JSON = r"""{
   "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 84, "h": 84, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48}, "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5, "domain_of_title": 1.4}, "dim_opacity": 0.3, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n11": {"duration_s": 14.6, "memo": {"x": 96, "y": 96, "w": 560, "h": 790, "title_px": 30, "text_px": 24}, "log": {"x": 680, "y": 96, "w": 1144, "h": 360, "title_px": 30, "text_px": 24}, "result": {"x": 680, "y": 480, "w": 1144, "h": 406, "title_px": 30, "text_px": 24}, "times": {"lead_s": 0.3, "plausible_s": 1.5, "memo_s": 4.9, "stop_s": 9.6, "run_s": 11.6}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n12": {"duration_s": 9.2, "table": {"x": 96, "y": 96, "w": 1728, "h": 560, "title_px": 30, "text_px": 28, "value_px": 56}, "cause": {"x": 96, "y": 680, "w": 1728, "h": 206, "title_px": 30, "text_px": 28}, "times": {"lead_s": 0.3, "mismatch_s": 1.0, "cause_s": 5.2, "fixed_s": 7.6}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n13": {"duration_s": 12.0, "want": {"x": 96, "y": 96, "w": 1728, "h": 96, "text_px": 30}, "shelf": {"x": 96, "y": 216, "w": 1100, "h": 670, "title_px": 26, "text_px": 22}, "code": {"x": 1220, "y": 216, "w": 604, "h": 300, "text_px": 18}, "check": {"x": 1220, "y": 540, "w": 604, "h": 346, "title_px": 26, "text_px": 24}, "times": {"lead_s": 0.3, "gap_s": 4.0, "write_s": 4.6, "check_s": 7.6, "shelf_s": 10.4}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "story": {
     "defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
     "cuts": {
@@ -74,20 +81,20 @@ LAYOUT_JSON = r"""{
       "n07": {"message": "つなぎ目が弱く、補強で直る (CAE が作る前に見つける)"},
       "n08": {"message": "CAE のツールは高く、使いこなすのが難しい", "limits": {"label": 40, "moving": 12, "body_text_px": 18}},
       "n08b": {"message": "小さな会社の CAE の導入率は 16 %", "limits": {"number": 2, "graph": 1}},
-      "n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 7}},
+      "n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 8}},
       "n10": {"message": "AI の答えも、CAE ツールで確かめる (3 問とも ✓)", "limits": {"number": 3, "label": 3}},
       "n11": {"message": "予測を書くまで、解析は動かない (hooks が止める)"},
       "n12": {"message": "手計算と解析が食い違ったら、原因 (単位の間違い) を突き止める", "limits": {"number": 2}},
-      "n13": {"message": "ツールが無ければ、Claude がその場で作り、照合してから使う"},
+      "n13": {"message": "ツールが無ければ、Claude がその場で作り、照合してから使う", "limits": {"label": 4}},
       "n14": {"message": "渡したノウハウが、設計のチェックの規則になる"},
       "n15": {"message": "全部の分野が緑になるまで、設計を直す", "limits": {"label": 8, "moving": 8}},
       "n16": {"message": "組み立ての順番まで、3D で確かめる"},
       "n17": {"message": "結果だけでなく、次に何を変えればよいかを示す"},
-      "n17b": {"message": "部署ごとの Claude Code のセッションが、並んで作った", "limits": {"label": 8, "number": 4, "moving": 8}},
+      "n17b": {"message": "HIRAKU は量があり、1 回の運転が 7 分野をまたいで予測と解析を照らし合わせて直すほど深い", "limits": {"label": 7, "number": 5, "moving": 4}},
       "n18": {"message": "解析の前に予測し、理由を説明する — HIRAKU"}
     }
   },
-  "check": {"times": {"n00": [0.6, 1.2, 1.8, 2.5, 3.5, 4.5, 6.5, 8.0], "n03": [0.5, 2.0, 4.5], "n04": [0.5, 1.5, 3.5], "n06": [1.0, 4.0, 11.0], "n07": [0.5, 7.5, 12.0, 15.0], "n17": [0.5, 6.0, 8.5], "n15": [0.5, 2.5, 4.8], "n16": [0.5, 3.0, 5.0, 6.2], "n05": [0, 0.15, 0.3, 0.45, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5], "n08": [0.5, 2.0, 2.9, 4.6, 5.0, 5.8, 6.4], "n08b": [1.5, 5.2, 5.8, 7.5, 9.8], "n10": [0.6, 2.4, 4.6, 5.6, 8.3], "n17b": [0.5, 1.5, 2.5, 3.5, 4.5, 5.8], "n18": [0, 0.3, 0.6, 1.0, 1.2, 2.5, 3.2, 3.8, 5.0, 7.0, 8.5], "labels_n01": [0, 0.25, 2.0, 3.8], "labels_n02": [0.25, 3.5, 6.8], "labels_n03": [0.25, 2.5, 4.8], "labels_n04": [0.25, 2.0, 3.8], "app": [2, 8, 15]}}
+  "check": {"times": {"n00": [0.6, 1.2, 1.8, 2.5, 3.5, 4.5, 6.5, 8.0], "n03": [0.5, 2.0, 4.5], "n04": [0.5, 1.5, 3.5], "n06": [1.0, 4.0, 11.0], "n07": [0.5, 7.5, 12.0, 15.0], "n17": [0.5, 6.0, 8.5], "n15": [0.5, 2.5, 4.8], "n16": [0.5, 3.0, 5.0, 6.2], "n05": [0, 0.15, 0.3, 0.45, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5], "n08": [0.5, 2.0, 2.9, 4.6, 5.0, 5.8, 6.4], "n08b": [1.5, 5.2, 5.8, 7.5, 9.8], "n10": [0.6, 2.4, 4.6, 5.6, 8.3], "n17b": [0.5, 1.5, 2.5, 3.5, 4.5, 5.8], "n18": [0, 0.3, 0.6, 1.0, 1.2, 2.5, 3.2, 3.8, 5.0, 7.0, 8.5], "labels_n01": [0, 0.25, 2.0, 3.8], "labels_n02": [0.25, 3.5, 6.8], "labels_n03": [0.25, 2.5, 4.8], "labels_n04": [0.25, 2.0, 3.8], "app": [2, 8, 15], "n09": [0.3, 2.2, 3.6, 4.65, 5.5], "n11": [0.3, 1.5, 4.9, 9.6, 11.6, 14.4], "n12": [0.3, 1.0, 5.2, 7.6, 9.0], "n13": [0.3, 4.0, 4.6, 7.6, 10.4, 11.8], "n14": [0.3, 2.2, 3.6, 5.0, 6.8, 9.6]}}
 }"""
 
 
