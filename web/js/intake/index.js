@@ -41,7 +41,7 @@ export function mountIntake(host, api, options = {}) {
   const ui = {
     screen: options.screen || "A1",
     draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {},
-    onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, litSeen: new Set(), error: "", sending: false,
+    onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, picksFinal: !!options.picksFinal, time: null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };
@@ -51,7 +51,7 @@ export function mountIntake(host, api, options = {}) {
   fill(host, root);
 
   let seen = api.events();
-  let model = buildModel(seen);
+  let model = buildModel(seen, ui);
   let pending = false;
 
   function draw(opts = {}) {
@@ -81,7 +81,7 @@ export function mountIntake(host, api, options = {}) {
     const events = api.events();
     if (events.length < seen.length) ui.litSeen.clear(); // a rewind or another run: let the cards glow again
     seen = events;
-    model = buildModel(events);
+    model = buildModel(events, ui);
     draw();
   }
 
@@ -107,6 +107,13 @@ export function mountIntake(host, api, options = {}) {
     if (ui.screen === "A1") draw();
   }
 
+  // playback time (seconds): the glow of a lit card follows it, so a frame at time t always looks the same
+  // (null = live: the glow plays once as a CSS animation)
+  function setTime(t) {
+    ui.time = typeof t === "number" && Number.isFinite(t) ? t : null;
+    draw();
+  }
+
   draw();
-  return { show, update, setWant, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { show, update, setWant, setTime, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }

@@ -65,7 +65,7 @@ import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, domainCards, hearingRows, allRules, ruleTree }} from "{url('model.js')}";
 const out = {{}};
 for (const slug of Object.keys(DEMOS)) {{
-  const m = buildModel(DEMOS[slug]);
+  const m = buildModel(DEMOS[slug], {{ picksFinal: true }});
   out[slug] = {{
     lit: domainCards(m).filter((c) => c.state === 'lit').length,
     cards: domainCards(m).length,
@@ -109,9 +109,9 @@ import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, hearingRows, domainCards }} from "{url('model.js')}";
 const ev = DEMOS['serving-robot'];
 const upTo = (kind) => ev.slice(0, ev.findIndex((e) => e.kind === kind) + 1);
-const before = buildModel(upTo('hearing.asked'));
-const after = buildModel(upTo('hearing.answered'));
-const start = buildModel(ev.slice(0, 1));
+const before = buildModel(upTo('hearing.asked'), {{ picksFinal: true }});
+const after = buildModel(upTo('hearing.answered'), {{ picksFinal: true }});
+const start = buildModel(ev.slice(0, 1), {{ picksFinal: true }});
 console.log(JSON.stringify({{
   startLit: domainCards(start).filter((c) => c.state === 'lit').length,
   startWait: domainCards(start).filter((c) => c.state === 'wait').length,
@@ -228,7 +228,7 @@ class RuleDetailTest(unittest.TestCase):
 import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, allRules }} from "{url('model.js')}";
 import {{ renderA5 }} from "{url('a5.js')}";
-const m = buildModel(DEMOS[Object.keys(DEMOS)[0]]);
+const m = buildModel(DEMOS[Object.keys(DEMOS)[0]], {{ picksFinal: true }});
 const show = (id) => {{
   const el = new El("div");
   const ui = {{ screen: "A5", mode: "category", filter: "all", query: "", selected: id, collapsed: new Set(), disabled: new Set(),
@@ -312,6 +312,64 @@ intake.update();
 console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
 """)
         self.assertEqual(got, [["MF-01", "asking"], ["SM-01", "asking"]])  # U1-04 was answered: gone
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class DraftAndGlowTest(unittest.TestCase):
+    """The code's first picks are pale candidates; Claude's choice lights the cards, and the glow follows the playback time."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ domainCards }} from "{url('model.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const pick = (d) => ({{ domain: d, shown_name: d, reason: 'r', test_ids: ['T1'] }});
+const first = e(1, 0.03, 'hearing.none', {{}});
+const code = e(1, 0.03, 'domains.picked', {{ want: 'w', flags: {{}}, picks: [pick('strength'), pick('nvh')], off: [], assembly_test_ids: [] }});
+const claude = e(2, 34.0, 'domains.picked', {{ want: 'w', flags: {{}}, flag_reasons: {{ ride: 'x' }}, picks: [pick('strength')], off: [{{ domain: 'nvh', reason: 'no' }}], assembly_test_ids: [] }});
+let events = [code];
+const api = {{ events: () => events, onEvent: () => () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A1' }});
+const states = () => domainCards(intake.model).filter((c) => ['strength', 'nvh'].includes(c.domain)).map((c) => c.state);
+const shadow = (d) => el.all('article').find((a) => a.dataset.domain === d).style.boxShadow || '';
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_codes_first_picks_are_candidates_until_claude_picks(self):
+        got = self.run_body("""
+const a = states(), text = el.text().includes('製品の性質から当てた候補');
+events = [code, claude]; intake.update();
+console.log(JSON.stringify({ a, b: states(), text, gone: !el.text().includes('製品の性質から当てた候補') }));
+""")
+        self.assertEqual(got["a"], ["draft", "draft"])
+        self.assertEqual(got["b"], ["lit", "off"])
+        self.assertTrue(got["text"])
+        self.assertTrue(got["gone"])
+
+    def test_a_sample_made_by_the_code_alone_can_say_its_picks_are_final(self):
+        got = self.run_body("""
+const el2 = new El('div');
+const i2 = mountIntake(el2, api, { screen: 'A1', picksFinal: true });
+console.log(JSON.stringify(domainCards(i2.model).filter((c) => c.domain === 'strength').map((c) => c.state)));
+""")
+        self.assertEqual(got, ["lit"])
+
+    def test_the_glow_is_a_function_of_the_playback_time(self):
+        got = self.run_body("""
+events = [code, claude]; intake.update();
+const at = {};
+for (const t of [33.9, 34.0, 34.25, 34.5, 40]) { intake.setTime(t); at[t] = shadow('strength'); }
+intake.setTime(34.25); const again = shadow('strength');
+console.log(JSON.stringify({ at, again }));
+""")
+        self.assertEqual(got["at"]["33.9"].split("px")[0].split(" ")[-1], "6.00")  # before it is lit the glow is full, as at the pick
+        self.assertIn("6.00px", got["at"]["34"])
+        self.assertIn("3.00px", got["at"]["34.25"])
+        self.assertEqual((got["at"]["34.5"], got["at"]["40"]), ("", ""))
+        self.assertEqual(got["again"], got["at"]["34.25"])  # the same time, the same picture
 
 
 class StaticTest(unittest.TestCase):
