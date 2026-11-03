@@ -1005,6 +1005,35 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got["views"], 5)  # every test has its record in the dev run
             self.assertEqual(got["results"], 5)
             page.close()
+
+            # The result rows end inside their box: with a box shorter than they need, their
+            # text steps down (not below min_text_px) until they do.
+            fit = """() => { const box = document.querySelector('[data-box="n02.result"]');
+                const blocks = [...box.querySelectorAll(".n02-res")];
+                return { px: Number(box.dataset.textPx), top: box.getBoundingClientRect().top,
+                         bottom: Math.max(...blocks.map((b) => b.getBoundingClientRect().bottom)),
+                         sizes: blocks.map((b) => parseFloat(getComputedStyle(b).fontSize)) }; }"""
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            natural = page.evaluate(fit)
+            page.close()
+            R = layout["n02"]["result"]
+            self.assertEqual(natural["px"], R["text_px"])
+            self.assertLessEqual(natural["bottom"], R["y"] + R["h"])
+            # 10 px short: within what text down to min_text_px saves on the dev run's rows
+            layout["n02"]["result"]["h"] = round(natural["bottom"] - natural["top"]) - 10
+            (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            tight = page.evaluate(fit)
+            page.close()
+            self.assertLess(tight["px"], R["text_px"])
+            self.assertGreaterEqual(min(tight["sizes"]), layout["min_text_px"])
+            self.assertLessEqual(tight["bottom"], R["y"] + layout["n02"]["result"]["h"])
         finally:
             server.shutdown()
             server.server_close()
