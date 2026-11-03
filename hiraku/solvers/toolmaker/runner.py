@@ -71,6 +71,9 @@ def main() -> None:
             checks = list(tool.check())
             phase = "spec()"
             result = {"ok": True, "spec": tool.spec(), "checks": checks}
+            if callable(getattr(tool, "describe", None)):  # load case params and predicts, as the shelf's tools give
+                phase = "describe()"
+                result["describe"] = tool.describe()
         else:
             a = req["args"]
             phase = "run()"
