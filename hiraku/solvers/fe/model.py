@@ -412,7 +412,9 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
         # substitute the new dependent DOF out of earlier expressions
         for other in list(users.get(pick, ())):
             e = dep[other]
-            a = e.pop(pick)
+            a = e.pop(pick, None)
+            if a is None:
+                continue
             dep_c[other] += a * const
             for k, v in expr.items():
                 nv = e.get(k, 0.0) + a * v
@@ -421,6 +423,7 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
                     users.setdefault(k, set()).add(other)
                 else:
                     e.pop(k, None)
+                    users.get(k, set()).discard(other)
         users.pop(pick, None)
         dep[pick] = expr
         dep_c[pick] = const
