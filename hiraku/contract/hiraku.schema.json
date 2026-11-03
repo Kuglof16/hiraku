@@ -548,6 +548,36 @@
             "type": "string"
           },
           "description": "Frame nodes that carry this part's weight (split equally unless the solver says otherwise)."
+        },
+        "system": {
+          "type": "string",
+          "description": "The functional system the part belongs to, e.g. drive, steering, brake, suspension, seat, restraint, rops, lighting, battery, control, body, cargo. Written by the code that builds the design."
+        },
+        "connects_to": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "to",
+              "via"
+            ],
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "A part id, member id, support id or '<support>.<hardpoint>'."
+              },
+              "via": {
+                "type": "string",
+                "description": "How it is joined or what passes: bolt, weld, spline, ball_joint, pin, bushing, rest, wire, hose, ..."
+              },
+              "carries": {
+                "type": "string",
+                "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              }
+            }
+          },
+          "description": "What this part is joined to, so code can follow a chain end to end (motor to driven wheels, steering wheel to knuckles)."
         }
       }
     },
@@ -2216,7 +2246,7 @@
       }
     },
     "rule_category": {
-      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造.",
+      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造., system 系 (a product's needed systems are there and connected end to end)",
       "enum": [
         "sheet_metal",
         "fastener",
@@ -2226,7 +2256,8 @@
         "battery",
         "assembly",
         "suspension",
-        "manufacturing"
+        "manufacturing",
+        "system"
       ]
     },
     "rule_id": {
