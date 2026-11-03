@@ -9,6 +9,7 @@ n04 / n15 / n16 (layout.json), with n01's colours and overlay.
 
 import copy
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -45,6 +46,22 @@ def grid_layout():
                 "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
                 "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": dict(COLORS)},
     }
+
+
+def feature_rects(g, n):
+    """As cut_n03.js featureRects: the large box [x, y, w, h] over the first ceil(cols / 2)
+    columns and all rows, and n - 1 small ones filling the columns left, row by row."""
+    W = g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+    H = g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+    bc = min(g["cols"] - 1, -(-g["cols"] // 2))
+    big = [g["x"], g["y"], bc * g["tile_w"] + (bc - 1) * g["gap_x"], H]
+    cols = max(1, g["cols"] - bc)
+    rows = max(1, -(-(n - 1) // cols))
+    left = g["x"] + big[2] + g["gap_x"]
+    w = (W - big[2] - g["gap_x"] - (cols - 1) * g["gap_x"]) / cols
+    h = (H - (rows - 1) * g["gap_y"]) / rows
+    small = [[math.floor(left + (i % cols) * (w + g["gap_x"]) + 0.5), math.floor(g["y"] + (i // cols) * (h + g["gap_y"]) + 0.5), int(w), int(h)] for i in range(n - 1)]
+    return big, small
 
 
 def renumber(events):
@@ -118,7 +135,7 @@ READ = """async (t) => {
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
                tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
-               hits: layer?.dataset.hits ?? null };
+               hits: layer?.dataset.hits ?? null, featured: el.dataset.featured === "1" };
     }),
     charts: document.querySelectorAll(".grid-tile svg.chart").length,
   };
@@ -193,10 +210,14 @@ class GridCutTest(unittest.TestCase):
         g = spec["grid"]
         self.assertIsNone(got["err"])
         self.assertEqual([t["key"] for t in got["tiles"]], [f"{name}.tile.{k}" for k in spec["tests"]])
-        for i, t in enumerate(got["tiles"]):
-            col, row = i % g["cols"], i // g["cols"]
-            x, y = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
-            self.assertEqual([round(v) for v in t["rect"]], [x, y, x + g["tile_w"], y + g["tile_h"]], t["key"])
+        # one tile large, the others as a small list in the grid's box (featureRects)
+        featured = [t for t in got["tiles"] if t["featured"]]
+        self.assertEqual(len(featured), 1)
+        big, small = feature_rects(g, len(spec["tests"]))
+        rest = iter(small)
+        for t in got["tiles"]:
+            r = big if t["featured"] else next(rest)
+            self.assertEqual([round(v) for v in t["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], t["key"])
             self.assertLessEqual(t["rect"][3], BAND_Y, t["key"])
             self.assertIsNone(t["outside"], t["key"])
             self.assertTrue(t["shown"], t["key"])
@@ -238,6 +259,11 @@ class GridCutTest(unittest.TestCase):
         marks = {t["key"].split(".")[-1]: t["mark"] for t in mid["tiles"]}
         for key in TESTS:
             self.assertEqual(marks[key], None if key == "nvh" else "✕" if key in V1_RED else "✓", key)
+        # the large tile is a red one (the message: still red), with its record drawn
+        big = next(t for t in mid["tiles"] if t["featured"])
+        self.assertIn(big["key"].split(".")[-1], V1_RED)
+        self.assertEqual(big["mark"], "✕")
+        self.assertNotIn("記録が無い", big["text"])
         hot = lambda got: {t["key"].split(".")[-1] for t in got["tiles"] if t["hot"]}  # noqa: E731
         self.assertEqual(hot(before), set())
         self.assertEqual(hot(early), {"crash"})  # nvh is red in V1_RED but has no judgement here
@@ -287,6 +313,9 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(marks(shots[4.8]), {k: "✓" for k in TESTS})
         self.assertEqual(shots[4.8]["tiles"][TESTS.index("assembly")]["hits"], "0")
         self.assertEqual(shots[4.8]["header"]["text"], "繰り返し 2 回")
+        # the large tile is one that turned green last (red in version 2, green in 3)
+        big = next(t for t in shots[4.8]["tiles"] if t["featured"])
+        self.assertIn(big["key"].split(".")[-1], V2_RED)
         page.close()
 
     def test_n15_last_version_not_green_stays_as_recorded(self):

@@ -197,7 +197,9 @@ class CutN17BrowserTest(unittest.TestCase):
         got = self.at(page, T["lead_s"])
         self.assertEqual(got["visible"], "visible")
         self.assert_inside(got, layout)
-        self.assertEqual(got["textPx"], layout["n17"]["page"]["text_px"])  # fits without stepping down
+        # the rest steps down to leave room for the large change (not below min_text_px)
+        self.assertLessEqual(got["textPx"], layout["n17"]["page"]["text_px"])
+        self.assertGreaterEqual(got["textPx"], layout["min_text_px"])
         # the words are the report's
         for s in [REPORT["summary"], REPORT["domains"][0]["line"], REPORT["next"][0]["change"], REPORT["next"][0]["reason"]]:
             self.assertIn(s, got["text"])

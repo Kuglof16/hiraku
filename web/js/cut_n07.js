@@ -5,7 +5,9 @@
 // "補強の後" and the stress's name and unit: the difference is shown by the colours and
 // the shape, not by naming the analyses. One tag, one colour bar (its two ends) and one
 // number (the largest value of the state shown), as the story's limits ask; the
-// notes under them are small. Positions, sizes, colours, the length and the
+// notes under them are small. The tag is large (N07_STYLE), and with the version after it
+// says in green "✓ 直った" when the records judge that version a pass on the load case (its
+// verdicts, else the domain's judgement of the version); otherwise nothing is added. Positions, sizes, colours, the length and the
 // times come from layout.json n07; a missing key is named on the page.
 // cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
 //
@@ -25,7 +27,12 @@ import { storyOf } from "./cut_n03.js";
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
+const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
+
+// Not in layout.json (written here until the promo department gives a key for it): the
+// tag's text size as a share of the view's height (at least label.size_px).
+export const N07_STYLE = { label_of_view_h: 0.08 };
 
 const N07_KEYS = [
   "duration_s",
@@ -114,8 +121,24 @@ export class CutN07 {
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
       { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
-      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca }] : []),
+      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca, fixed: this.passes(va) }] : []),
     ];
+  }
+
+  // Does the record judge version v a pass on the cut's load case? Its verdicts on that load
+  // case for an analysis of v (all pass), else the judgement of the load case's domain for v
+  // (green); false when the records say neither.
+  passes(v) {
+    const s = this.s;
+    const lc = this.lc;
+    if (!lc) return false;
+    const vs = Object.values(s.verdicts).filter((x) => {
+      if (x.load_case_id !== lc.load_case_id) return false;
+      const cmp = s.comparisons[x.comparison_id];
+      return s.analyses[cmp?.analysis_id]?.design_version === v;
+    });
+    if (vs.length) return vs.every((x) => x.pass === true);
+    return s.judgements[`${v}|${lc.domain}`]?.state === "green";
   }
 
   place(el, r) {
@@ -208,7 +231,8 @@ export class CutN07 {
     el.className = "n07-label";
     el.dataset.box = "n07.label";
     el.dataset.kind = "label";
-    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${Math.max(this.px(sp.label.size_px), this.story.bodyPx)}px` });
+    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * N07_STYLE.label_of_view_h));
+    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${px}px` });
     this.stage.append(el);
     this.label = el;
     this.labelFor = null;
@@ -218,6 +242,8 @@ export class CutN07 {
     if (this.labelFor === c) return;
     this.labelFor = c;
     this.label.textContent = c.name;
+    if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
+    this.label.dataset.fixed = c.fixed ? "1" : "0";
     // only the state shown has its largest value on the legend (the one emphasised number)
     for (const row of this.legend.querySelectorAll(".row")) {
       const on = Number(row.dataset.version) === c.version;

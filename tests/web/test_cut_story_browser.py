@@ -136,6 +136,56 @@ READ = """async (t) => {
 }"""
 
 
+# The sizes of what is shown large (the representative) and of everything else.
+SIZES = """() => {
+  const shown = (el) => {
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const px = (el) => parseFloat(getComputedStyle(el).fontSize);
+  const area = (el) => { const b = el.getBoundingClientRect(); return b.width * b.height; };
+  const q = (sel) => [...document.querySelectorAll(sel)].filter(shown);
+  const big = ".n03-reading, .verdict, .n17-change, .n07-label";
+  const own = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  return {
+    large: q(big).map(px),
+    others: [...document.querySelectorAll("#stage *")].filter((el) => own(el) && shown(el) && !el.closest(big) && !el.closest(".n06-big") && !el.classList.contains("story-over")).map(px),
+    grid: q(".grid-tile").map((el) => ({ featured: el.dataset.featured === "1", area: area(el) })),
+    n06: { big: q(".n06-big").map(area), small: q(".n06-tile").map(area) },
+    label: document.querySelector(".n07-label")?.textContent ?? null,
+    fixed: q(".n07-label .fixed").map((el) => [el.textContent, getComputedStyle(el).color]),
+  };
+}"""
+
+
+def with_verdict(events, run_id, passed):
+    """N07's run with a comparison and a verdict on version 2's shell analysis (shape
+    example: the values are the analysis's own, the verdict passes or fails as asked)."""
+    out = copy.deepcopy(events)
+    for e in out:
+        e["run_id"] = run_id
+    lc = out[0]["data"]["load_cases"][0]
+    ana = next(e["data"] for e in out if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0004")
+    r = ana["results"][0]
+    lim = lc["criterion"]["limit"]
+    cmp = {"comparison_id": "cmp-0002", "prediction_id": "pred-0002", "analysis_id": "ana-0004", "quantity": r["quantity"],
+           "predicted": {"value": r["value"], "unit": r["unit"]}, "analyzed": {"value": r["value"], "unit": r["unit"]},
+           "diff_abs": 0.0, "diff_rel": 0.0, "tolerance_rel": lc.get("tolerance_rel", 0.1), "status": "match", "cause_id": None}
+    ver = {"verdict_id": "ver-0002", "comparison_id": "cmp-0002", "load_case_id": lc["load_case_id"], "test_id": lc["test_id"],
+           "domain": lc["domain"], "quantity": r["quantity"], "value": {"value": r["value"], "unit": r["unit"]}, "op": lc["criterion"]["op"],
+           "limit": lim, "pass": passed, "margin_pct": round((lim["value"] - r["value"]) / lim["value"] * 100, 3)}
+    end = out.pop()
+    t = end["t"]
+    base = {"run_id": run_id, "ts": end["ts"], "agent": "cae.strength", "domain": lc["domain"], "design_version": 2}
+    out += [{**base, "t": t, "kind": "comparison.recorded", "data": cmp}, {**base, "t": t + 0.1, "kind": "verdict.recorded", "data": ver}]
+    end["t"] = t + 0.2
+    out.append(end)
+    for i, e in enumerate(out):
+        e["seq"] = i
+    return out
+
+
 @unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
 class CutStoryTest(unittest.TestCase):
     @classmethod
@@ -152,11 +202,15 @@ class CutStoryTest(unittest.TestCase):
             "n16_19": "20261103-120000-story-asm19",
             "n17": "20261103-120000-story-report",
             "n17_long": "20261103-120000-story-reportlong",
+            "n07_pass": "20261103-120000-story-n07pass",
+            "n07_fail": "20261103-120000-story-n07fail",
         }
         cls.runs["n06"] = cls.runs["n03"]
         for key, events in (("n03", n03_n06_events()), ("n04", domain_events()), ("n15", three_versions()), ("n07", shell),
                             ("n16", assembly_events()), ("n16_19", many_steps_events(19)),
-                            ("n17", report_events(REPORT)), ("n17_long", report_events(long_report()))):
+                            ("n17", report_events(REPORT)), ("n17_long", report_events(long_report())),
+                            ("n07_pass", with_verdict(shell, "20261103-120000-story-n07pass", True)),
+                            ("n07_fail", with_verdict(shell, "20261103-120000-story-n07fail", False))):
             (runs / cls.runs[key]).mkdir(parents=True)
             (runs / cls.runs[key] / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         cls.layout = story_layout()
@@ -215,6 +269,7 @@ class CutStoryTest(unittest.TestCase):
             self.assertEqual(got["over"], "0", where)
             self.assertEqual(got["page"]["over"], [], where)
             self.assertEqual(got["page"]["counts"], {k: got["counts"].get(k, 0) for k in KINDS}, where)  # the page counts as this test does
+            got["sizes"] = page.evaluate(SIZES)
             seen[t] = got
             if self.shots:
                 self.shots.mkdir(parents=True, exist_ok=True)
@@ -222,6 +277,22 @@ class CutStoryTest(unittest.TestCase):
         self.assertEqual(errors, [], cut)
         page.close()
         return seen
+
+    def assert_larger(self, got, n):
+        """n large words (the representative; None: one or more) shown, each larger than every other text."""
+        sz = got["sizes"]
+        if n is None:
+            self.assertTrue(sz["large"], sz)
+        else:
+            self.assertEqual(len(sz["large"]), n, sz)
+        self.assertGreater(min(sz["large"]), max(sz["others"]), sz)
+
+    def assert_featured(self, got):
+        """One tile large, larger than every other tile."""
+        tiles = got["sizes"]["grid"]
+        big = [x["area"] for x in tiles if x["featured"]]
+        self.assertEqual(len(big), 1)
+        self.assertGreater(big[0], 2 * max(x["area"] for x in tiles if not x["featured"]))
 
     def test_n01(self):
         if not self.dev:
@@ -233,25 +304,32 @@ class CutStoryTest(unittest.TestCase):
         self.assertEqual(got["counts"].get("legend"), 1)
         nums = [x["text"] for x in got["texts"] if x["kind"] == "number"]
         self.assertEqual(nums, ["100 mm", "250 mm"])
+        # one number a card; the verdict words larger than any other text
+        for g in seen.values():
+            self.assert_larger(g, 2)
 
     def test_n02(self):
         if not self.dev:
             self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
         seen = self.check_cut("n02", *self.dev)
         for got in seen.values():
+            self.assert_larger(got, None)  # each pane whose record says it: its verdict, large
             self.assertEqual(got["counts"].get("label"), 5)  # one tag per test
             self.assertNotIn("number", got["counts"])
             self.assertFalse(any(c.isdigit() for x in got["texts"] for c in x["text"]), got["texts"])
 
     def test_n03(self):
         seen = self.check_cut("n03", self.base, self.runs["n03"])
-        for got in seen.values():
+        for t, got in seen.items():
             self.assertEqual(got["counts"].get("graph"), 1)
+            self.assertEqual(got["counts"].get("number"), 1)  # the reading
+            self.assert_larger(got, 1)
 
     def test_n04(self):
         seen = self.check_cut("n04", self.base, self.runs["n04"], "&version=1")
         grid = [g for t, g in seen.items() if t < self.layout["n04"]["times"]["assembly_s"]]
         for got in grid:
+            self.assert_featured(got)
             # pictures and marks only: the one number is the header's
             self.assertLessEqual(got["counts"].get("number", 0), 1)
             tile_text = [x for x in got["texts"] if x["kind"] == "label"]
@@ -271,10 +349,12 @@ class CutStoryTest(unittest.TestCase):
     def test_n06(self):
         seen = self.check_cut("n06", self.base, self.runs["n06"])
         last = seen[max(seen)]
-        self.assertEqual(last["counts"].get("label"), 6)
+        self.assertEqual(last["counts"].get("label"), 6)  # five in the list, one in the large box
         self.assertNotIn("number", last["counts"])
-        # each record played in its turn and holds its end: nothing moves at the last check time
-        self.assertNotIn("moving", last["counts"])
+        for t, got in seen.items():
+            n = got["sizes"]["n06"]
+            self.assertEqual(len(n["big"]), 1, t)  # one at a time, large
+            self.assertGreater(n["big"][0], 4 * max(n["small"]), t)
 
     def test_n07(self):
         seen = self.check_cut("n07", self.base, self.runs["n07"])
@@ -282,11 +362,28 @@ class CutStoryTest(unittest.TestCase):
             self.assertEqual(got["counts"].get("legend"), 1)
             self.assertEqual(got["counts"].get("number"), 1)
             self.assertEqual(got["counts"].get("label"), 1)
+            self.assert_larger(got, 1)
+            self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
+
+    def test_n07_fixed_only_when_the_verdict_passes(self):
+        """補強の後 says "✓ 直った" in green only when the record judges version 2 a pass."""
+        swap_to = self.layout["n07"]["times"]["swap_to_s"]
+        for key, passed in (("n07_pass", True), ("n07_fail", False)):
+            seen = self.check_cut("n07", self.base, self.runs[key], tag=key)
+            for t, got in seen.items():
+                sz = got["sizes"]
+                if t >= swap_to and passed:
+                    self.assertEqual(sz["fixed"], [["✓ 直った", "rgb(47, 125, 79)"]], (key, t))
+                    self.assertEqual(sz["label"], "補強の後 ✓ 直った")
+                else:
+                    self.assertEqual(sz["fixed"], [], (key, t))
+                    self.assertNotIn("直った", sz["label"], (key, t))
 
     def test_n15(self):
         seen = self.check_cut("n15", self.base, self.runs["n15"])
         for got in seen.values():
             self.assertEqual(got["counts"].get("number"), 1)  # the rounds
+            self.assert_featured(got)
 
     def test_n16(self):
         for key in ("n16", "n16_19"):
@@ -301,6 +398,7 @@ class CutStoryTest(unittest.TestCase):
             seen = self.check_cut("n17", self.base, self.runs[key], tag=key)
             for t, got in seen.items():
                 self.assertEqual(got["counts"].get("label"), 1, t)  # the next step
+                self.assert_larger(got, 1)
             lit = [g for t, g in seen.items() if t >= light]
             self.assertTrue(lit)
 

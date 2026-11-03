@@ -22,7 +22,7 @@ import { esc } from "./labels.js";
 import { channelsOf, motionOf, xSeriesOf } from "./series.js";
 import { AssemblyStage, assemblyRecord } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { storyOf } from "./cut_n03.js";
+import { featureRects, storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -166,6 +166,43 @@ export class CutGrid {
     this.build();
   }
 
+  // The tile shown large, chosen for the cut's message (layout.json story):
+  //   N04 "まだ赤が 2 枚": a red tile, the first the voice names (times.crash_s, nvh_s, in
+  //     time order) when it is red, else the first red tile in the layout's order;
+  //   N15 "全部の分野が緑になるまで": the tile that turned green last, the one the rounds
+  //     were for (the first version from which it stays green to the last is the latest);
+  //   else the first tile. A tile with a record to draw for the last version shown comes
+  //   before one without (a large empty tile says nothing).
+  featuredKey() {
+    const keys = this.spec.tests;
+    const v = this.versions.at(-1);
+    const state = (x, k) => this.s.judgements[`${x}|${k}`]?.state ?? null;
+    const drawn = (k) => {
+      const def = TILES[k];
+      if (!def) return false;
+      return def.assembly ? !!assemblyFor(this.s, v) : !!recordFor(this.s, k, def, v);
+    };
+    const first = (list) => list.find(drawn) ?? list[0];
+    if (this.name === "n04") {
+      const T = this.spec.times;
+      const named = [["crash", T.crash_s], ["nvh", T.nvh_s]].sort((a, b) => a[1] - b[1]).map(([k]) => k);
+      const reds = [...new Set([...named, ...keys])].filter((k) => keys.includes(k) && state(v, k) === "red");
+      return first(reds) ?? keys[0];
+    }
+    const vs = this.versions;
+    // the first version from which each green tile stays green, the latest first
+    const greens = keys
+      .filter((k) => state(vs.at(-1), k) === "green")
+      .map((k) => {
+        let from = vs.length - 1;
+        while (from > 0 && state(vs[from - 1], k) === "green") from -= 1;
+        return { k, from };
+      })
+      .sort((a, b) => b.from - a.from);
+    const latest = greens.filter((g) => g.from === greens[0]?.from).map((g) => g.k);
+    return first(latest) ?? first(greens.map((g) => g.k)) ?? keys[0];
+  }
+
   // Rounds it took to reach a version: the versions before it in the run (as roundsUsed).
   roundsTo(v) {
     return this.s.versions.filter((x) => x < v).length;
@@ -193,8 +230,13 @@ export class CutGrid {
     Object.assign(this.header.style, { left: `${H.x}px`, top: `${H.y}px`, width: `${H.w}px`, height: `${H.h}px`, fontSize: `${Math.max(H.size_px, this.story.bodyPx)}px`, lineHeight: `${H.h}px` });
     this.stage.append(this.header);
 
-    const rects = gridRects(sp.grid);
-    if (sp.tests.length > rects.length) throw new Error(`layout.json の ${this.name}.tests は ${sp.tests.length} 枚、grid は ${rects.length} 枚分`);
+    const cells = gridRects(sp.grid);
+    if (sp.tests.length > cells.length) throw new Error(`layout.json の ${this.name}.tests は ${sp.tests.length} 枚、grid は ${cells.length} 枚分`);
+    // one representative tile large, the others as a small list in the grid's box
+    this.featured = this.featuredKey();
+    const fr = featureRects(sp.grid, sp.tests.length);
+    let j = 0;
+    const rects = sp.tests.map((key) => (key === this.featured ? fr.big : fr.small[j++]));
     this.tiles = sp.tests.map((key, i) => {
       const r = rects[i];
       const def = TILES[key];
@@ -203,6 +245,7 @@ export class CutGrid {
       el.className = "tile grid-tile";
       el.dataset.box = box;
       el.dataset.domain = key;
+      if (key === this.featured) el.dataset.featured = "1";
       Object.assign(el.style, {
         left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px`,
         background: this.colors.panel, border: `${st.border_px}px solid ${this.colors.rule}`, borderRadius: `${st.radius_px}px`,

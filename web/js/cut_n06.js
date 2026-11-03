@@ -12,21 +12,25 @@
 // what happened, read from the record's results, criteria and interferences (the test's
 // name only when there is nothing to say); no number is shown.
 //
-// With the story's limit on things moving at once (layout.json story), a tile moves while
-// it comes in and while its record plays, and each record plays over limits.moving x
-// times.tile_stagger_s less times.tile_in_s from its landing, then holds its end: so no more
-// than limits.moving tiles move at one time. Without a story the records play to the end
-// of the cut.
+// One at a time, large (the story: one representative large, the rest a small list): the
+// tiles come in one after another as a small list (featureRects: the grid's last columns),
+// and each takes its turn in the large box (the grid's first columns), in the layout's order
+// — the message is "作ってみると、うまくいかない", every failure in turn, so none is the
+// representative of the others. The cut from times.tiles_s to its end is shared equally by
+// the turns; in its turn the record plays in the large box (from tile_in_s after the turn
+// starts to its end), then holds its end there until the next turn. In the list a tile holds
+// the record's first pose until its turn is over, then its last pose; its tag is hidden while
+// the large box shows it. So two things move at most: the large picture and a tile coming in.
 //
 // Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS).
 
 import * as THREE from "three";
-import { clearOfBand, cubicBezier, gridRects, squeeze } from "./compose.js";
+import { clearOfBand, cubicBezier, squeeze } from "./compose.js";
 import { contourOf, fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { requireKeys, storyOf } from "./cut_n03.js";
+import { featureRects, requireKeys, storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -106,9 +110,6 @@ export class CutN06 {
     this.spec = requireKeys(layout, "n06", N06_KEYS);
     this.layout = layout;
     this.story = storyOf(layout, "n06");
-    const T = this.spec.times;
-    // how long each record plays from its landing (to the end of the cut without a limit)
-    this.play = this.story.limits ? Math.max(0, this.story.limits.moving * T.tile_stagger_s - T.tile_in_s) : null;
     this.s = s;
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -194,15 +195,16 @@ export class CutN06 {
   build() {
     const sp = this.spec;
     const st = sp.tile;
-    const rects = gridRects(sp.grid);
-    if (sp.tests.length > rects.length) throw new Error(`layout.json の n06.tests は ${sp.tests.length} 枚、grid は ${rects.length} 枚分`);
-    this.tiles = sp.tests.map((key, i) => {
-      const r = rects[i];
-      const def = TILES[key];
-      const box = `n06.tile.${key}`;
+    const T = sp.times;
+    const n = sp.tests.length;
+    // the large box and one small slot per tile
+    const fr = featureRects(sp.grid, n + 1);
+    this.big = fr.big;
+    const turn = (sp.duration_s - T.tiles_s) / Math.max(1, n);
+    const box = (cls, key, r) => {
       const el = document.createElement("div");
-      el.className = "n06-tile";
-      el.dataset.box = box;
+      el.className = cls;
+      el.dataset.box = key;
       Object.assign(el.style, {
         left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px`,
         background: sp.colors.panel, border: `${st.border_px}px solid ${sp.colors.rule}`, borderRadius: `${st.radius_px}px`,
@@ -210,9 +212,16 @@ export class CutN06 {
       if (!clearOfBand(r, this.layout)) el.dataset.outside = "1";
       el.innerHTML = `<canvas></canvas>`;
       this.stage.append(el);
-      const inner = { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px };
-      const tile = { key, def, el, rect: r, inner, canvas: el.querySelector("canvas"), start: sp.times.tiles_s + i * sp.times.tile_stagger_s };
-      tile.land = tile.start + sp.times.tile_in_s;
+      return { el, rect: r, inner: { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px }, canvas: el.querySelector("canvas") };
+    };
+    this.tiles = sp.tests.map((key, i) => {
+      const def = TILES[key];
+      const small = box("n06-tile", `n06.tile.${key}`, fr.small[i]);
+      const big = box("n06-big", `n06.big.${key}`, fr.big);
+      const tile = { key, def, small, big, el: small.el, start: T.tiles_s + i * T.tile_stagger_s };
+      tile.land = tile.start + T.tile_in_s;
+      tile.turn = { from: T.tiles_s + i * turn, to: i === n - 1 ? sp.duration_s : T.tiles_s + (i + 1) * turn };
+      tile.play = { from: tile.turn.from + T.tile_in_s, to: T.tiles_s + (i + 1) * turn };
       let words = [];
       let c = null;
       let clash = null;
@@ -224,27 +233,33 @@ export class CutN06 {
         if (c) words = this.outcome(c, def);
       }
       tile.miss = words.length > 0;
-      el.dataset.miss = tile.miss ? "1" : "0";
-      this.labelTile(tile, def ? def.name : key, words);
-      if (!def) this.note(tile, `この札の中身はまだ決めていない (${key})`);
-      else if (def.assembly) {
-        if (clash) this.makeAssembly(tile, clash);
-        else this.note(tile, "記録がまだ無い (組み立ての干渉)");
-      } else if (!c) this.note(tile, `記録がまだ無い (${def.tests.join("・")} の限界の外)`);
-      else this.makeView(tile, c, def);
+      small.el.dataset.miss = tile.miss ? "1" : "0";
+      // the large box's tag: as much larger as the box is taller than a grid tile
+      const L = st.label;
+      const px = Math.max(L.size_px, this.story.bodyPx);
+      small.label = this.labelTile(small, def ? def.name : key, words, px);
+      big.label = this.labelTile(big, def ? def.name : key, words, Math.round(px * (fr.big.h / sp.grid.tile_h)));
+      for (const pane of [small, big]) {
+        if (!def) this.note(pane, `この札の中身はまだ決めていない (${key})`);
+        else if (def.assembly) {
+          if (clash) this.makeAssembly(pane, clash);
+          else this.note(pane, "記録がまだ無い (組み立ての干渉)");
+        } else if (!c) this.note(pane, `記録がまだ無い (${def.tests.join("・")} の限界の外)`);
+        else this.makeView(pane, c, def);
+      }
       return tile;
     });
   }
 
   // One tag at the top left: ✕ and what happened when the records say it, else the test's name.
-  labelTile(tile, name, words) {
+  labelTile(tile, name, words, px) {
     const sp = this.spec;
     const L = sp.tile.label;
     const box = tile.el.dataset.box;
     const label = document.createElement("b");
     label.dataset.box = `${box}.label`;
     label.dataset.kind = "label";
-    Object.assign(label.style, { left: `${L.x}px`, top: `${L.y}px`, fontSize: `${Math.max(L.size_px, this.story.bodyPx)}px` });
+    Object.assign(label.style, { left: `${L.x}px`, top: `${L.y}px`, fontSize: `${px}px` });
     if (words.length) {
       const mark = document.createElement("span");
       mark.className = "mark";
@@ -259,6 +274,7 @@ export class CutN06 {
     } else label.textContent = name;
     tile.el.append(label);
     this.fitLabel(tile, label);
+    return label;
   }
 
   // The tag ends inside the tile: its text steps down a pixel at a time, not below the
@@ -407,56 +423,70 @@ export class CutN06 {
 
   resize(scale) {
     this.scale = scale;
-    const g = this.spec.grid;
-    this.renderer.setSize(Math.ceil(g.tile_w * scale), Math.ceil(g.tile_h * scale), false);
+    this.renderer.setSize(Math.ceil(this.big.w * scale), Math.ceil(this.big.h * scale), false);
     for (const t of this.tiles) {
-      t.canvas.width = Math.round(t.inner.w * scale);
-      t.canvas.height = Math.round(t.inner.h * scale);
+      for (const pane of [t.small, t.big]) {
+        pane.canvas.width = Math.round(pane.inner.w * scale);
+        pane.canvas.height = Math.round(pane.inner.h * scale);
+      }
     }
+  }
+
+  // A pane's record at its share u of the play (0: its first pose, 1: its last).
+  pose(pane, u) {
+    if (!pane.view) return;
+    if (pane.motion) {
+      const m = pane.motion;
+      const tau = m.t0 + (m.t1 - m.t0) * u;
+      pane.el.dataset.tau = String(tau);
+      pane.view.setFrame(m.frame(tau));
+    }
+    if (pane.asm) {
+      const a = pane.asm;
+      const k = a.stage ? a.n * u : a.n;
+      pane.el.dataset.tau = String(k);
+      a.stage?.pose(k);
+      a.stage?.lineResolution(pane.inner.w, pane.inner.h);
+      let shown = 0;
+      for (const mk of a.marks) {
+        // from when its step starts to go in (step k goes in while u runs from k - 1 to k)
+        mk.mesh.visible = mk.after === 0 || k > mk.after - 1;
+        shown += mk.mesh.visible ? 1 : 0;
+      }
+      pane.el.dataset.marks = String(shown);
+    }
+    pane.view.renderInto(pane.canvas.getContext("2d"), pane.canvas.width, pane.canvas.height, this.scale);
   }
 
   draw(t) {
     const sp = this.spec;
     const A = N06_APPEAR;
+    const share = (a, b) => (b > a ? Math.max(0, Math.min(1, (t - a) / (b - a))) : 1);
     for (const tile of this.tiles) {
+      const { small, big } = tile;
+      // the list: comes in, then the first pose until its turn is over, then the last
       const p = Math.max(0, Math.min(1, (t - tile.start) / sp.times.tile_in_s));
       const e = easeIn(p);
-      tile.el.style.opacity = String(Math.min(1, e));
-      tile.el.style.transform = `scale(${A.from_scale + (1 - A.from_scale) * e})`;
-      tile.el.style.visibility = p > 0 ? "visible" : "hidden";
-      tile.el.dataset.p = String(p);
-      // the record plays from the landing over this.play (to the end of the cut without a limit)
-      const end = this.play === null ? sp.duration_s : tile.land + this.play;
-      const plays = !!(tile.motion || tile.asm?.stage) && t < end;
-      const moving = p > 0 && (p < 1 || plays);
-      // what moves is the tile's picture (its tag is not moving text)
-      if (moving) tile.canvas.dataset.kind = "moving";
-      else delete tile.canvas.dataset.kind;
-      if (!tile.view || p <= 0) continue;
-      // a span of no length holds the record's end
-      const along = (t0, t1) => (end > tile.land ? squeeze(t, tile.land, end, t0, t1).tau : t1);
-      if (tile.motion) {
-        const m = tile.motion;
-        const tau = along(m.t0, m.t1);
-        tile.el.dataset.tau = String(tau);
-        tile.view.setFrame(m.frame(tau));
-      }
-      if (tile.asm) {
-        // the whole order from the landing over the same span
-        const a = tile.asm;
-        const u = a.stage ? along(0, a.n) : a.n;
-        tile.el.dataset.tau = String(u);
-        a.stage?.pose(u);
-        a.stage?.lineResolution(tile.inner.w, tile.inner.h);
-        let shown = 0;
-        for (const mk of a.marks) {
-          // from when its step starts to go in (step k goes in while u runs from k - 1 to k)
-          mk.mesh.visible = mk.after === 0 || u > mk.after - 1;
-          shown += mk.mesh.visible ? 1 : 0;
-        }
-        tile.el.dataset.marks = String(shown);
-      }
-      tile.view.renderInto(tile.canvas.getContext("2d"), tile.canvas.width, tile.canvas.height, this.scale);
+      small.el.style.opacity = String(Math.min(1, e));
+      small.el.style.transform = `scale(${A.from_scale + (1 - A.from_scale) * e})`;
+      small.el.style.visibility = p > 0 ? "visible" : "hidden";
+      small.el.dataset.p = String(p);
+      if (p > 0 && p < 1) small.canvas.dataset.kind = "moving";
+      else delete small.canvas.dataset.kind;
+      const now = t >= tile.turn.from && t < tile.turn.to;
+      small.el.dataset.featured = now ? "1" : "";
+      small.el.style.borderColor = now ? sp.overlay.color : sp.colors.rule;
+      small.label.style.visibility = now ? "hidden" : "";
+      if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : 0);
+      // the large box: in its turn, the record plays, then holds its end
+      big.el.style.visibility = now ? "visible" : "hidden";
+      const q = easeIn(share(tile.turn.from, tile.turn.from + sp.times.tile_in_s));
+      big.el.style.opacity = String(Math.min(1, q));
+      const u = share(tile.play.from, tile.play.to);
+      const plays = !!(big.motion || big.asm?.stage);
+      if (now && (q < 1 || (plays && u < 1))) big.canvas.dataset.kind = "moving";
+      else delete big.canvas.dataset.kind;
+      if (now) this.pose(big, u);
     }
   }
 }

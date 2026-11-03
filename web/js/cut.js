@@ -268,8 +268,38 @@ class Cut {
 // grip arrows and the centre of gravity. The higher step's motion runs on the same clock
 // as a red see-through overlay. Cases: ?ok= and ?over= (load case ids), else the P1 load
 // cases with the lowest and the highest step. The pane says only what the story asks: per
-// case the step's height (the two numbers) and whether it climbed (✓ / ✕), and the colour
-// bar of the stress.
+// case its step's height (one number a card) and, large, "問題なし" or "直しが要る" (verdict),
+// and the colour bar of the stress.
+
+// The large word of a card or pane: "✓ 問題なし" when every check the records allow passes,
+// "✕ 直しが要る" when one fails, nothing when the records say nothing. ok: true / false / null.
+function verdictHtml(ok) {
+  if (ok === null) return "";
+  return ok ? `<span class="ok">✓ 問題なし</span>` : `<span class="miss">✕ 直しが要る</span>`;
+}
+
+// Whether a recorded result meets a criterion ({quantity, op, limit}); null when it cannot say.
+function meetsCriterion(criterion, ana) {
+  const r = (ana?.results ?? []).find((x) => x.quantity === criterion?.quantity);
+  const lim = criterion?.limit;
+  if (!r || !lim || r.unit !== lim.unit) return null;
+  return { "<=": r.value <= lim.value, "<": r.value < lim.value, ">=": r.value >= lim.value, ">": r.value > lim.value }[criterion.op] ?? null;
+}
+
+// The text steps down a pixel at a time from its size until it is no wider than room (not
+// below least): the large words are as large as their box allows.
+function fitWidth(el, room, least) {
+  let px = parseFloat(el.style.fontSize);
+  el.style.whiteSpace = "nowrap";
+  while (el.scrollWidth > room && px > least) {
+    px -= 1;
+    el.style.fontSize = `${px}px`;
+  }
+}
+
+// The size the large words start from: the box's width shared by the longest of them
+// ("✕ 直しが要る", six characters and a space).
+const VERDICT_CHARS = 7;
 
 const N01_KEYS = ["duration_s", "view", "pane", "card", "times", "zoom", "overlay", "colors"];
 const TOP_KEYS = ["min_text_px"];
@@ -364,20 +394,28 @@ class CutN01 {
     this.buildPane();
   }
 
-  // A case's card: the step's height (an emphasised number) and whether the vehicle
-  // climbed it (✓ / ✕ from the record's climbed result), in the overlay's red for the case
-  // past the limit.
+  // A case's verdict from its records: it climbed (the climbed result) and the frame's stress
+  // at the push (the still's max_stress) meets the allowable; null when neither is recorded.
+  verdictOf(c) {
+    const climbed = resultOf(c.dyn, "climbed");
+    const stress = resultOf(c.still, "max_stress");
+    const crit = stress ? this.allowableCriterion(stress.unit) : null;
+    const checks = [climbed ? climbed.value >= 1 : null, crit ? meetsCriterion(crit, c.still) : null].filter((x) => x !== null);
+    return checks.length ? checks.every(Boolean) : null;
+  }
+
+  // A case's card: its step's height (the card's one number) and, large, its verdict; in
+  // the overlay's red for the higher step.
   card(c, kind) {
     const sp = this.spec;
     const h = stepHeightOf(c.lc);
-    const climbed = resultOf(c.dyn, "climbed");
-    const ok = climbed ? climbed.value >= 1 : null;
-    const px = (v) => Math.max(v, this.story.bodyPx);
-    const mark = ok === null ? "" : ok ? `<span class="ok">✓ 登れた</span>` : `<span class="miss">✕ 登れなかった</span>`;
+    const ok = this.verdictOf(c);
+    const px = Math.max(sp.card.text_px, this.story.bodyPx);
+    const big = Math.floor((sp.pane.w - 2 * sp.card.pad - 2 * sp.card.border_px) / VERDICT_CHARS);
     return (
-      `<div class="n01-card ${kind}" data-box="n01.card.${kind}" style="border-color:${kind === "over" ? sp.overlay.color : sp.colors.rule};border-width:${sp.card.border_px}px;border-radius:${sp.card.radius_px}px;padding:${sp.card.pad}px;margin-bottom:${sp.card.gap}px">` +
-      `<h3 style="font-size:${px(sp.card.title_px)}px">段差 <span class="num" data-kind="number">${esc(fmt(h, 3))} mm</span></h3>` +
-      (mark ? `<p data-kind="label" style="font-size:${px(sp.card.text_px)}px">${mark}</p>` : "") +
+      `<div class="n01-card ${kind}" data-box="n01.card.${kind}" data-ok="${ok === null ? "" : ok ? "1" : "0"}" style="border-color:${kind === "over" ? sp.overlay.color : sp.colors.rule};border-width:${sp.card.border_px}px;border-radius:${sp.card.radius_px}px;padding:${sp.card.pad}px;margin-bottom:${sp.card.gap}px">` +
+      `<h3 style="font-size:${px}px">段差 <span class="num" data-kind="number">${esc(fmt(h, 3))} mm</span></h3>` +
+      (ok === null ? "" : `<p class="verdict" data-kind="label" style="font-size:${Math.max(big, this.story.bodyPx)}px">${verdictHtml(ok)}</p>`) +
       `</div>`
     );
   }
@@ -405,6 +443,8 @@ class CutN01 {
       legend +
       `<p class="n01-note" data-box="n01.note" style="font-size:${small}px">半透明の赤: 高い方の段差での動き</p>`;
     this.stage.append(pane);
+    const room = sp.pane.w - 2 * sp.card.pad - 2 * sp.card.border_px;
+    for (const v of pane.querySelectorAll(".verdict")) fitWidth(v, room, this.story.bodyPx);
   }
 
   resize(scale) {
@@ -442,8 +482,10 @@ class CutN01 {
 // One pane per test in the layout's grid (and one for the legend): the motion of the
 // test's load case with the centre of gravity; the load case of the same test whose id
 // ends in -beyond (the K2 team's "限界の外" conditions) runs on the same clock as a red
-// see-through overlay. Each pane has one tag: the test's name, after ✓ / ✕ when the run
-// judged its load case. No figures (the story: which test it falls in, at a glance).
+// see-through overlay. Each pane has one tag: the test's name and, large under it, the
+// verdict of its load case ("問題なし" / "直しが要る": the run's verdicts when it judged the
+// case, else the record's result against the load case's criterion; nothing when neither
+// says). No figures (the story: which test it falls in, at a glance).
 //
 // With the story's limit on things moving at once (layout.json story), the panes play one
 // after another: from times.lead_s to the end is cut in n + m - 1 equal steps (n panes
@@ -527,10 +569,17 @@ class CutN02 {
       const def = N02_TESTS[key] ?? { name: key };
       const { ok, over } = def.test ? this.casesOf(def.test) : {};
       const px = Math.max(st.label.size_px, this.story.bodyPx);
+      const verdict = ok ? this.verdictOf(ok) : null;
+      const big = Math.max(this.story.bodyPx, Math.floor((r.w - 2 * st.border_px - 2 * st.label.x) / VERDICT_CHARS));
+      el.dataset.ok = verdict === null ? "" : verdict ? "1" : "0";
       el.innerHTML =
         `<canvas class="main"></canvas><canvas class="over"></canvas>` +
-        `<b data-box="n02.pane.${key}.label" data-kind="label" style="left:${st.label.x}px;top:${st.label.y}px;font-size:${px}px">${ok ? this.mark(ok.lc) : ""}${esc(def.name)}</b>`;
+        `<b data-box="n02.pane.${key}.label" data-kind="label" style="left:${st.label.x}px;top:${st.label.y}px;font-size:${px}px">${esc(def.name)}` +
+        (verdict === null ? "" : `<span class="verdict" style="font-size:${big}px">${verdictHtml(verdict)}</span>`) +
+        `</b>`;
       const pane = { key, def, el, inner, ok, over, main: el.querySelector("canvas.main"), ghostEl: el.querySelector("canvas.over") };
+      const v = el.querySelector(".verdict");
+      if (v) fitWidth(v, r.w - 2 * st.border_px - 2 * st.label.x, this.story.bodyPx);
       if (!ok) {
         el.insertAdjacentHTML("beforeend", `<span class="none" style="font-size:${this.layout.min_text_px}px">記録がまだ無い (${esc(def.test)})</span>`);
         return pane;
@@ -556,11 +605,12 @@ class CutN02 {
     });
   }
 
-  // ✓ / ✕ from the load case's verdicts when the run judged it, else nothing.
-  mark(lc) {
-    const vs = Object.values(this.s.verdicts).filter((v) => v.load_case_id === lc.load_case_id);
-    if (!vs.length) return "";
-    return vs.every((v) => v.pass) ? `<span class="ok">✓</span> ` : `<span class="miss">✕</span> `;
+  // A case's verdict: the load case's verdicts when the run judged it, else its record's
+  // result against the load case's criterion; null when neither says.
+  verdictOf(c) {
+    const vs = Object.values(this.s.verdicts).filter((v) => v.load_case_id === c.lc.load_case_id);
+    if (vs.length) return vs.every((v) => v.pass);
+    return meetsCriterion(c.lc.criterion, c.ana);
   }
 
   legendHtml() {

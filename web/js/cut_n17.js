@@ -10,16 +10,22 @@
 // times: before lead_s the page is not shown; from light_s the next step is lit.
 //
 // The story (layout.json story): the next step is the one place to read. Its block is the
-// cut's one tag, at least the story's body text size whatever the rest steps down to; from
-// light_s everything else on the page is drawn pale (N17_STYLE.dim_opacity).
+// cut's one tag and holds one change (the report's first next), its sentence large (as
+// large as fits the page's width on one line, up to N17_STYLE.change_of_title x title_px)
+// and its reason at the story's body text size; from light_s everything else on the page
+// is drawn pale (N17_STYLE.dim_opacity). Before / after figures of the change are not
+// shown: the report's next holds only the change and its reason in words, and the
+// effects and sensitivities hold the present values only (no value after the change), so
+// a figure after the change would be a guess.
 
 import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
 import { DOMAIN_JA, esc, fmt, quantityName } from "./labels.js";
 
-// Not in layout.json (written here until the promo department gives a key for it): the
-// opacity of the rest of the page from light_s.
-export const N17_STYLE = { dim_opacity: 0.3 };
+// Not in layout.json (written here until the promo department gives keys for them): the
+// opacity of the rest of the page from light_s, and the largest size of the change's
+// sentence (a multiple of page.title_px).
+export const N17_STYLE = { dim_opacity: 0.3, change_of_title: 1.5 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -109,6 +115,18 @@ export class CutN17 {
       this.nextHtml();
     this.stage.append(el);
     this.el = el;
+    // the change's sentence on one line across the next block, not below the body text size
+    const change = el.querySelector(".n17-change");
+    if (change) {
+      const room = el.querySelector(".n17-next ul").clientWidth;
+      let px = parseFloat(change.style.fontSize);
+      change.style.whiteSpace = "nowrap";
+      while (change.scrollWidth > room && px > this.story.bodyPx) {
+        px -= 1;
+        change.style.fontSize = `${px}px`;
+      }
+      change.style.whiteSpace = "";
+    }
     this.fit();
   }
 
@@ -163,8 +181,10 @@ export class CutN17 {
 
   nextHtml() {
     const next = this.report.next ?? [];
-    const rows = next.length
-      ? next.map((n) => `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b> ${esc(n.change)}<small>${esc(n.reason)}</small></li>`).join("")
+    const n = next[0];
+    const big = Math.round(this.spec.page.title_px * N17_STYLE.change_of_title);
+    const rows = n
+      ? `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b><span class="n17-change" style="font-size:${big}px">${esc(n.change)}</span><small>${esc(n.reason)}</small></li>`
       : `<li class="none">報告に「次」が書かれていない</li>`;
     const px = Math.max(this.spec.page.text_px, this.story.bodyPx);
     return `<div class="n17-next" data-box="n17.next" data-kind="label" style="font-size:${px}px"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
@@ -219,6 +239,20 @@ export class CutN17 {
         body.prepend(note);
       }
       note.textContent = `入りきらない分野 (報告の記録にはある): ${dropped.map((d) => DOMAIN_JA[d] ?? d).join("、")}`;
+    }
+    // still over: the kept domains' notes (assumptions, mismatches) go, then their effects
+    // (their sensitivities, the reason of the change, stay), then the change's sentence
+    // steps down, not below page.title_px (it stays the largest text on the page)
+    for (const n of [...body.querySelectorAll(".n17-domain .n17-note, .n17-domain [data-box$='.effects']")].reverse()) {
+      if (!over()) break;
+      n.remove();
+    }
+    const change = el.querySelector(".n17-change");
+    let cp = change ? parseFloat(change.style.fontSize) : 0;
+    const least = Math.max(this.story.bodyPx, this.spec.page.title_px);
+    while (over() && change && cp > least) {
+      cp -= 1;
+      change.style.fontSize = `${cp}px`;
     }
     el.dataset.textPx = String(px);
     el.dataset.titlePx = String(title);
