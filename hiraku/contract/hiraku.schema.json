@@ -673,7 +673,7 @@
             "properties": {
               "to": {
                 "type": "string",
-                "description": "A part id, member id, support id or '<support>.<hardpoint>'."
+                "description": "A part id, member id, frame node id (an id in nodes, where a part is fixed at a joint of the frame), support id or '<support>.<hardpoint>'."
               },
               "via": {
                 "type": "string",

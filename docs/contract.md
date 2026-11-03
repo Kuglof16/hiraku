@@ -110,7 +110,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い。`hits` と `not_evaluable` の `part_id` はどれも `targets` に入れる (品質保証部の記録の点検が確かめる)。設計の全体に当たる規則 (系の点検で部品が欠けている など) は `part_id` を `design` にし、`targets` にも `design` を入れる
 - 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
-- 系の点検: 部品は任意で `system` (駆動・操舵・制動・サス・座席・拘束・ROPS・灯火など) と `connects_to` ({`to`, `via`, `carries`}) を持ち、設計を作るコードが書く。製品のフラグから要る系を決める規則 (分類 `system`) を、コードがつながりの鎖で当てる (例: 駆動輪のある製品は、モーターから駆動輪まで torque の鎖が切れずにつながる)。結果は `rule_check` の記録で、欠けた所が `hits`
+- 系の点検: 部品は任意で `system` (駆動・操舵・制動・サス・座席・拘束・ROPS・灯火など) と `connects_to` ({`to`, `via`, `carries`}。`to` は部品・部材・フレームの節 (`nodes` の id、部品がフレームのつなぎ目に付くとき)・支持・`<支持>.<取付点>` の id) を持ち、設計を作るコードが書く。製品のフラグから要る系を決める規則 (分類 `system`) を、コードがつながりの鎖で当てる (例: 駆動輪のある製品は、モーターから駆動輪まで torque の鎖が切れずにつながる)。結果は `rule_check` の記録で、欠けた所が `hits`
 - 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は schema の `tool_input.<名前>` (受付部の `hiraku/intake/tools.py` はそこから引く)
 
 ## runs/&lt;run_id&gt;/
