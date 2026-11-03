@@ -17,6 +17,10 @@ class RolesTest(unittest.TestCase):
         self.assertEqual(sdk_name("cae.strength"), "cae-strength")
         self.assertEqual(agent_id_from_sdk("cae-strength"), "cae.strength")
         self.assertEqual(agent_id_from_sdk("designer"), "designer")
+        # the plugin's agents in Claude Code: "<plugin>:<name>"
+        self.assertEqual(agent_id_from_sdk("hiraku:cae-strength"), "cae.strength")
+        self.assertEqual(agent_id_from_sdk("hiraku:packager"), "packager")
+        self.assertIsNone(agent_id_from_sdk("other:designer"))
         for other in (None, "", "general-purpose", "cae-assembly", "cae-made_up"):
             self.assertIsNone(agent_id_from_sdk(other))
 
@@ -55,6 +59,13 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(self.attribution.take("mcp__hiraku__analyze", args), "cae.strength")
         self.assertEqual(self.pre("get_context", {}), {})
         self.assertEqual(self.attribution.take("mcp__hiraku__get_context", {}), "lead")
+
+    def test_the_plugin_names_of_the_tools_are_hirakus(self):
+        args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": []}
+        data = {"tool_name": "mcp__plugin_hiraku_hiraku__analyze", "tool_input": args}
+        out = run(self.hooks.pre_tool_use(data, "tu1", None))
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(self.ctx.store.events()[-1]["data"]["tool"], "mcp__hiraku__analyze")
 
     def test_other_tools_pass(self):
         out = run(self.hooks.pre_tool_use({"tool_name": "Agent", "tool_input": {}}, "tu", None))

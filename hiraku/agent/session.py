@@ -61,7 +61,7 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
               designgen: Any = None, intake: bool = False, intake_events: list[Record] | None = None,
-              **store_kw: Any) -> RunContext:
+              driver: str | None = None, **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
@@ -112,6 +112,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     else:
         load_cases, skipped = [], None
         fields = dict(project_fields(catalog, req, []), agents=first_design_agents(catalog))
+    if driver is not None:  # project.driver: scripted, agent_sdk or claude_code_plugin
+        fields = dict(fields, driver=driver)
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req,

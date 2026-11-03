@@ -41,6 +41,8 @@ def agent_id_from_sdk(agent_type: str | None) -> str | None:
     """Contract agent id for an SDK agent name, or None for agents HIRAKU did not define."""
     if not agent_type:
         return None
+    # Claude Code names a plugin's agents "<plugin>:<name>" (plugins/hiraku/agents/<name>.md)
+    agent_type = agent_type.removeprefix(f"{PLUGIN_NAME}:")
     if agent_type.startswith("cae-") and agent_type[4:] in contract.DOMAINS and agent_type[4:] != "assembly":
         return "cae." + agent_type[4:]
     if agent_type in ("designer", "packager"):
