@@ -290,6 +290,16 @@ export const FACTS = {
     "unit": "1",
     "inDesigns": true
   },
+  "section_ratio_rect_max": {
+    "label": "角形鋼管の外形 / 肉厚 (部材ごとに出して最大。角形鋼管でなければ 0)",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "section_ratio_round_max": {
+    "label": "円形鋼管の外径 / 肉厚 (部材ごとに出して最大。円形鋼管でなければ 0)",
+    "unit": "1",
+    "inDesigns": true
+  },
   "member_count": {
     "label": "部材の数",
     "unit": "1",

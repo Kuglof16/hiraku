@@ -1,5 +1,4 @@
 # Built-in rules: manufacturing (製造). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the product tables; they were not opened for this repository.
 doc_id: KN-MF
 title: 製造の決まり
 category: manufacturing
@@ -10,5 +9,13 @@ rules:
     check: wall_mm >= 1.6
     trust: 2
     basis: >-
-      JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables;
-      not checked in this repository)
+      JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the
+      revision dated 2024-12-20 (資料 16, PDF p.9-12),
+      https://www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf,
+      and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4),
+      https://www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in
+      both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start
+      thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be
+      agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban.
+      The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json)
+      was not reopened for this rule; the draft lists the same 112 sizes

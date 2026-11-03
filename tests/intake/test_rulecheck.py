@@ -14,10 +14,10 @@ class FactsTest(unittest.TestCase):
         self.design = mini_design()
         self.t = by_id(facts.targets(self.design, requirements(Q15=100, Q19=40, Q70="私有地だけ")))
 
-    def test_targets_are_parts_then_the_frame_then_supports(self):
-        self.assertEqual(list(self.t), ["battery", "seat", "floor", "cargo", "frame", "support:FL", "support:FR"])
+    def test_targets_are_parts_then_the_frame_members_then_supports(self):
+        self.assertEqual(list(self.t), ["battery", "seat", "floor", "cargo", "m1", "m2", "support:FL", "support:FR"])
         self.assertEqual([self.t[k]["type"] for k in self.t],
-                         ["part", "part", "part", "part", "frame", "support", "support"])
+                         ["part", "part", "part", "part", "frame", "frame", "support", "support"])
 
     def test_box_facts(self):
         f = self.t["battery"]["facts"]
@@ -27,11 +27,24 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(self.t["floor"]["facts"]["thickness_mm"], 20)
 
     def test_member_facts(self):
-        f = self.t["frame"]["facts"]
-        self.assertEqual((f["wall_mm"], f["outer_mm"], f["member_count"], f["yield_MPa"]), (1.6, 80.0, 2, 235))
-        self.assertEqual(f["member_length_max_mm"], 1000.0)
-        self.assertAlmostEqual(f["section_ratio_max"], 80 / 2.3)  # per member: not 80 / 1.6
-        self.assertNotIn("mass_kg", f)  # the frame is not a box
+        f, g = self.t["m1"]["facts"], self.t["m2"]["facts"]
+        self.assertEqual((f["wall_mm"], f["outer_mm"], f["member_count"], f["yield_MPa"]), (2.3, 80.0, 2, 235))
+        self.assertEqual((g["wall_mm"], g["outer_mm"], g["member_count"]), (1.6, 40.0, 2))
+        self.assertEqual((f["member_length_max_mm"], g["member_length_max_mm"]), (1000.0, 300.0))
+        self.assertAlmostEqual(f["section_ratio_max"], 80 / 2.3)  # each member has its own ratio
+        self.assertAlmostEqual(g["section_ratio_max"], 40 / 1.6)
+        self.assertNotIn("mass_kg", f)  # a member is not a box
+
+    def test_section_ratio_by_shape_is_zero_for_the_other_shape(self):
+        d = mini_design()
+        d["sections"]["rd"] = {"shape": "round_tube", "dims_mm": {"d": 60.0, "t": 2.0}}
+        d["members"].append({"id": "m3", "node_a": "A", "node_b": "C", "section": "rd", "material": "steel", "part": "frame"})
+        t = by_id(facts.targets(d, []))
+        pick = lambda i: (round(t[i]["facts"]["section_ratio_rect_max"], 3), round(t[i]["facts"]["section_ratio_round_max"], 3))
+        self.assertEqual(pick("m1"), (round(80 / 2.3, 3), 0.0))
+        self.assertEqual(pick("m2"), (25.0, 0.0))
+        self.assertEqual(pick("m3"), (0.0, 30.0))
+        self.assertEqual(t["m3"]["facts"]["section_ratio_max"], 30.0)
 
     def test_support_facts(self):
         total = 50 + 12 + 8 + 150
@@ -80,7 +93,7 @@ class CheckRuleTest(unittest.TestCase):
         self.assertTrue(res["pass"])
 
     def test_frame_and_support_are_named_by_type(self):
-        self.assertEqual(rulecheck.check_rule(rule("wall_mm >= 1.6", ["frame"]), self.ts)["targets"], ["frame"])
+        self.assertEqual(rulecheck.check_rule(rule("wall_mm >= 1.6", ["frame"]), self.ts)["targets"], ["m1", "m2"])
         self.assertEqual(rulecheck.check_rule(rule("radius_mm >= 100", ["support"]), self.ts)["targets"],
                          ["support:FL", "support:FR"])
 
@@ -128,8 +141,8 @@ class CheckAllTest(unittest.TestCase):
         thin = mini_design()
         thin["sections"]["rt"]["dims_mm"]["t"] = 2.0  # 80 / 2.0 = 40
         (c,) = rulecheck.check_all(rules, thin, [])
-        self.assertEqual([h["part_id"] for h in c["hits"]], ["frame"])
-        self.assertEqual(c["hits"][0]["values"], {"section_ratio_max": 40.0})
+        self.assertEqual([h["part_id"] for h in c["hits"]], ["m1"])  # the tube that is too thin, not "the frame"
+        self.assertEqual(c["hits"][0]["values"], {"section_ratio_rect_max": 40.0})
 
     def test_disabled_rules_and_id_factory(self):
         rules = knowledge.all_rules(knowledge.load_builtin())
@@ -144,10 +157,10 @@ class CheckAllTest(unittest.TestCase):
         rules = knowledge.all_rules(knowledge.load_builtin())
         checks = rulecheck.check_all(rules, mini_design(), requirements(Q15=100, Q19=40))
         s = rulecheck.summarize(checks)
-        self.assertEqual(s["rules"], 27)
+        self.assertEqual(s["rules"], 28)
         self.assertEqual(s["hits"], sum(len(c["hits"]) for c in checks))
         line = rulecheck.summary_line(checks, rules)
-        self.assertIn("27 規則", line)
+        self.assertIn("28 規則", line)
         self.assertIn("AS-01", line)
 
 

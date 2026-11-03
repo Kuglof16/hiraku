@@ -89,9 +89,9 @@ console.log(JSON.stringify(out));
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])
-        self.assertEqual(got["offroad-4w"]["rules"], 29)  # 27 built in + 2 from the sample notes
-        self.assertEqual(got["care-bed"]["rules"], 27)
-        self.assertEqual(got["offroad-4w"]["checks"], 29)
+        self.assertEqual(got["offroad-4w"]["rules"], 30)  # 28 built in + 2 from the sample notes
+        self.assertEqual(got["care-bed"]["rules"], 28)
+        self.assertEqual(got["offroad-4w"]["checks"], 30)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
         self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
@@ -142,6 +142,23 @@ const m = buildModel([
 console.log(JSON.stringify({{ rules: allRules(m).length, hits: ruleState(m, allRules(m)[0]).hits.length, v: ruleState(m, allRules(m)[0]).designVersion }}));
 """)
         self.assertEqual(got, {"rules": 2, "hits": 1, "v": 2})  # two rules; the version-2 check was not replaced by the older one
+
+    def test_a_rule_says_which_values_it_needs(self):
+        got = node(f"""
+import {{ ruleNeeds }} from "{url('model.js')}";
+const facts = {{ wall_mm: {{ label: "肉厚", inDesigns: true }}, hole_edge_mm: {{ label: "穴の縁", inDesigns: false }} }};
+const names = (check) => ruleNeeds({{ check }}, facts).map((n) => [n.name, n.label, n.inDesigns]);
+console.log(JSON.stringify({{
+  wall: names("wall_mm >= 1.6"),
+  declared: names("hole_edge_mm >= 1.2 * hole_diameter_mm and max(1, wall_mm) > 0"),
+  req: names("req_Q19 <= 55 and var_battery_voltage <= 60"),
+  system: names("system:drive_chain"),
+}}));
+""")
+        self.assertEqual(got["wall"], [["wall_mm", "肉厚", True]])
+        self.assertEqual(got["declared"], [["hole_edge_mm", "穴の縁", False], ["wall_mm", "肉厚", True]])  # unknown names and functions are not values
+        self.assertEqual(got["req"], [["req_Q19", "要件 Q19 の数値", True], ["var_battery_voltage", "設計の変数の値", True]])
+        self.assertEqual(got["system"], [])
 
     def test_the_dom_modules_parse_and_their_imports_resolve(self):
         got = node(f"""
@@ -197,6 +214,28 @@ console.log(JSON.stringify({ second, third, sent, cleared: box(el).value }));
 """)
         self.assertEqual(got, {"second": "介護ベッドを作りたい", "third": "配膳ロボットを作りたい",
                                "sent": ["配膳ロボットを作りたい"], "cleared": ""})
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class RuleDetailTest(unittest.TestCase):
+    def test_the_detail_of_a_rule_lists_the_values_it_needs(self):
+        got = node(f"""{FAKE_DOM}
+import {{ DEMOS }} from "{url('demo-events.js')}";
+import {{ buildModel, allRules }} from "{url('model.js')}";
+import {{ renderA5 }} from "{url('a5.js')}";
+const m = buildModel(DEMOS[Object.keys(DEMOS)[0]]);
+const show = (id) => {{
+  const el = new El("div");
+  const ui = {{ screen: "A5", mode: "category", filter: "all", query: "", selected: id, collapsed: new Set(), disabled: new Set(),
+    dropped: [], litSeen: new Set(), rerender() {{}} }};
+  renderA5(el, m, {{ events: () => [] }}, ui);
+  return el.text();
+}};
+const sm = show("SM-02"), sy = show("SY-01");
+console.log(JSON.stringify({{ sm: [sm.includes("要る値"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計は持っていない値")],
+                              sy: /要る値(?!が)/.test(sy) }}));
+""")
+        self.assertEqual(got, {"sm": [True, True, True], "sy": False})  # a system rule's check is a function, not a list of values
 
 
 class StaticTest(unittest.TestCase):
