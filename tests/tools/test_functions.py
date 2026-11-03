@@ -124,6 +124,45 @@ class PredictionTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.records("prediction"), [])
 
 
+class AppliesToTest(RunCase, unittest.TestCase):
+    """Contract tool_spec.applies_to: a tool for some kinds of design is refused on another kind and on a
+    design of unknown kind; list_tools shows the field."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], applies_to=["space_frame_utv"])
+        load, force = self.predict_p1()
+        self.args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": [force["prediction_id"]]}
+
+    def test_a_design_of_unknown_kind_gets_no_such_tool(self):
+        from hiraku.tools.functions import design_kind
+
+        self.assertIsNone(design_kind(self.ctx))  # the stand-in designgen names no kinds
+        with self.assertRaisesRegex(ToolError, "space_frame_utv.*型が分からない"):
+            analyze(self.ctx, self.args)
+        (line,) = [t for t in list_tools(self.ctx) if t["name"] == "step_climb"]
+        self.assertEqual(line["applies_to"], ["space_frame_utv"])
+
+    def test_the_kind_named_runs_and_another_is_refused(self):
+        from unittest import mock
+
+        from hiraku.tools import functions
+
+        with mock.patch.object(functions, "design_kind", return_value="space_frame_utv"):
+            self.assertEqual(analyze(self.ctx, self.args)["status"], "ok")
+        with mock.patch.object(functions, "design_kind", return_value="ladder_4w"):
+            with self.assertRaisesRegex(ToolError, "この版の設計の型は ladder_4w"):
+                analyze(self.ctx, self.args)
+
+    def test_the_kind_of_a_generated_design(self):
+        import hiraku.designgen as designgen
+        from hiraku.tools.functions import design_kind
+
+        self.ctx.designgen = designgen
+        with mock.patch.object(designgen, "generator_of", return_value=designgen.ARCHETYPES["ladder_4w"]):
+            self.assertEqual(design_kind(self.ctx), "ladder_4w")
+
+
 class LoopTest(RunCase, unittest.TestCase):
     def test_hk1_analyze_needs_a_prediction_of_this_load_case(self):
         with self.assertRaises(ToolError) as cm:
@@ -175,6 +214,59 @@ class LoopTest(RunCase, unittest.TestCase):
         self.assertIn("boom", ana["error"])
         with self.assertRaises(ToolError):
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
+
+
+class CompareWhereTest(RunCase, unittest.TestCase):
+    """compare(where=...) picks the result at one member; a verdict only at the failing end of all places."""
+
+    def _r1_with_cross(self, cross_factor):
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def with_cross(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            rail = out["results"][0]
+            out["results"] = [rail, dict(rail, value=rail["value"] * cross_factor, where="cross_B")]
+            return out
+
+        tool.run = with_cross
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                  "prediction_ids": [r1["prediction_id"]]})
+        return r1, ana2
+
+    def test_a_place_that_is_not_the_failing_end_is_compared_but_not_judged(self):
+        r1, ana = self._r1_with_cross(2.0)
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "where": "rail_L0"})
+        self.assertEqual(out["comparison"]["status"], "match")
+        self.assertEqual(out["where"], "rail_L0")
+        stored = self.ctx.store.get("comparison", out["comparison"]["comparison_id"])
+        self.assertEqual(stored["where"], "rail_L0")  # contract comparison.where
+        self.assertIsNone(out["verdict"])
+        self.assertIn("合否", out["note"])
+        self.assertEqual(self.ctx.store.records("verdict"), [])
+        self.assert_events_fit()  # the record keeps the contract's shape
+
+    def test_the_failing_end_chosen_by_place_is_judged(self):
+        r1, ana = self._r1_with_cross(0.5)
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "where": "rail_L0"})
+        self.assertTrue(out["verdict"]["pass"])
+        self.assertNotIn("note", out)
+
+    def test_an_unknown_place_says_which_places_there_are(self):
+        r1, ana = self._r1_with_cross(2.0)
+        with self.assertRaises(ToolError) as cm:
+            compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"], "where": "rail_R9"})
+        self.assertIn("cross_B, rail_L0", str(cm.exception))
+
+    def test_the_mcp_schema_takes_where(self):
+        from hiraku.tools.mcp import INPUT_SCHEMAS
+
+        self.assertIn("where", INPUT_SCHEMAS["compare"]["properties"])
+        self.assertFalse(INPUT_SCHEMAS["compare"]["additionalProperties"])
 
 
 class PickResultTest(unittest.TestCase):
@@ -261,6 +353,22 @@ class MismatchTest(RunCase, unittest.TestCase):
         resolved = self.ctx.store.get("cause", cause["cause_id"])
         self.assertTrue(resolved["resolved"])
         self.assertEqual(resolved["resolved_by"], out["comparison"]["comparison_id"])
+        self.assert_events_fit()
+
+    def test_a_prediction_recorded_after_the_cause_compares_with_the_same_analysis(self):
+        load, force = self.predict_p1()
+        ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
+                                 "prediction_ids": [load["prediction_id"], force["prediction_id"]]})
+        c1 = compare(self.ctx, {"prediction_id": load["prediction_id"], "analysis_id": ana["analysis_id"]})
+        early, _ = self.predict_p1()  # recorded before the cause: not part of the analysis
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, {"comparison_id": c1["comparison"]["comparison_id"], "cause": "x", "fix": "y"})
+            compare(self.ctx, {"prediction_id": early["prediction_id"], "analysis_id": ana["analysis_id"]})
+        for needle in ("record_prediction", "analyze(tool=\"step_climb\"", early["prediction_id"]):
+            self.assertIn(needle, str(cm.exception))
+        later, _ = self.predict_p1()
+        out = compare(self.ctx, {"prediction_id": later["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertEqual(out["comparison"]["prediction_id"], later["prediction_id"])
         self.assert_events_fit()
 
     def test_match_needs_no_cause(self):
@@ -674,6 +782,128 @@ class JointWallInputsTest(RunCase, unittest.TestCase):
                 get_context(self.ctx, {"sections": ["joint_wall_inputs"], "load_case_id": "R1-step100"})
         self.assertIn("出せません", str(cm.exception))
         self.assertIn(why, str(cm.exception))
+
+
+class FormulaInputsTest(RunCase, unittest.TestCase):
+    """get_context's formula_inputs: the plan's formulas per load case with the inputs the scripted
+    run's own readers and refs work out (hiraku.tools.plan)."""
+
+    def _entries(self, load_case_id):
+        out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": load_case_id})
+        cases = out["formula_inputs"]["load_cases"]
+        self.assertEqual([c["load_case_id"] for c in cases], [load_case_id])
+        return cases[0]["formulas"]
+
+    def test_upstream_inputs_are_missing_until_the_upstream_case_matches_then_come_from_its_analysis(self):
+        from hiraku.tools import plan
+
+        first = next(e for e in self._entries("R1-step100") if e["formula_id"] == "frame_static.rail_step_bending")
+        self.assertEqual(first["role"], "criterion")
+        self.assertIn("P1-step100", first["missing"]["F"])
+        self.assertEqual(first["inputs"]["L"]["from"], "design_summary の wheelbase")
+        ana, _, _ = self.run_p1()
+        got = next(e for e in self._entries("R1-step100") if e["formula_id"] == "frame_static.rail_step_bending")
+        self.assertNotIn("missing", got)
+        force = next(r for r in ana["results"] if r["quantity"] == "front_wheel_force")
+        self.assertEqual(got["inputs"]["F"]["value"], force["value"])
+        self.assertIn(ana["analysis_id"], got["inputs"]["F"]["from"])
+        # the same values the scripted run resolves
+        step = next(s for s in plan.compose_plan(self.ctx)["steps"] if s["load_case"] == "R1-step100")
+        spec = step["predictions"][0]
+        lc = self.ctx.load_case("R1-step100")
+        for name, ref in spec["inputs"].items():
+            want = plan.resolve(self.ctx, ref, lc, plan.given_inputs(self.ctx, spec, lc))
+            self.assertEqual({k: got["inputs"][name][k] for k in ("value", "unit")}, want, name)
+        self.assertNotIn("formula_inputs", get_context(self.ctx))  # only on request
+
+    def test_a_reader_that_does_not_apply_refuses_with_its_reason(self):
+        from hiraku.catalog.builders.common import BuildError
+        from hiraku.tools import plan
+
+        why = "not a ladder frame: no cross members"
+
+        def reader(design, load_case):
+            raise BuildError(why)
+
+        own = {"steps": [{"load_case": "R1-step100", "tool": "frame_static", "predictions": [
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L"}, "inputs_from": reader}]}]}
+        with mock.patch.object(plan, "plan_of", return_value=own):
+            got = self._entries("R1-step100")[0]
+        self.assertIn(why, got["refused"])
+        self.assertIn("当てはまらない", got["refused"])
+        self.assertNotIn("inputs", got)
+
+    def test_a_test_with_no_tool_gets_the_builders_hand_calculation(self):
+        """A test no shelf tool analyses (R4: its tool is made in the run) has no plan step; its
+        predictions kept by the builders (TOOLLESS_PREDICTIONS) are listed with their inputs read by code."""
+        import types
+
+        from hiraku.tools import plan
+
+        def reader(design, load_case):
+            return {"L": {"value": 1800.0, "unit": "mm"}}
+
+        kept = types.SimpleNamespace(PREDICTIONS=[
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L", "F": "pred.front_wheel_force"}, "inputs_from": reader}])
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        with mock.patch.object(plan, "plan_of", return_value=own), \
+                mock.patch.object(plan, "external_builders", return_value=({}, {}, {})), \
+                mock.patch.dict(plan.TOOLLESS_PREDICTIONS, {"R1": ("kept_stand_in", "PREDICTIONS")}), \
+                mock.patch.object(plan.importlib, "import_module", return_value=kept):
+            out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "R1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        self.assertEqual(case["note"], plan.TOOLLESS_NOTE)
+        (entry,) = case["formulas"]
+        self.assertIsNone(entry["tool"])
+        self.assertEqual((entry["formula_id"], entry["role"]), ("frame_static.rail_bending", "criterion"))
+        self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
+        self.assertIn("F", entry["missing"])  # a prediction not recorded yet
+
+    def test_role_facing_text_points_at_the_section_not_at_python(self):
+        from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role
+
+        note = "inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., step_mm=<a (b)>): x"
+        self.assertEqual(for_role({"note": [note]}), {"note": [f"inputs from {CODE_CALL_FOR_ROLE}: x"]})
+
+    def test_refused_before_a_design(self):
+        with mock.patch.object(type(self.ctx), "version", new_callable=mock.PropertyMock, return_value=0):
+            with self.assertRaisesRegex(ToolError, "設計の版"):
+                get_context(self.ctx, {"sections": ["formula_inputs"]})
+
+
+class DesignContextTest(RunCase, unittest.TestCase):
+    """get_context's design: an overview, pages of its parts, and what changed after revise_design."""
+
+    def test_the_design_section_is_an_overview_and_the_parts_come_in_pages(self):
+        design = self.ctx.store.design()
+        got = get_context(self.ctx, {"sections": ["design"]})["design"]
+        self.assertEqual(got["counts"]["members"], len(design["members"]))
+        self.assertEqual(got["ids"]["parts"], [p["id"] for p in design["parts"]])
+        self.assertEqual(got["variables"]["track"], {k: design["variables"]["track"][k] for k in ("value", "unit")})
+        self.assertNotIn("nodes", got)
+        page = get_context(self.ctx, {"sections": ["design"], "design_part": "members", "offset": 1, "limit": 2})["design"]
+        self.assertEqual(page["items"], design["members"][1:3])
+        self.assertEqual((page["total"], page.get("next_offset")), (len(design["members"]), 3 if len(design["members"]) > 3 else None))
+        last = get_context(self.ctx, {"sections": ["design"], "design_part": "members",
+                                      "offset": len(design["members"]) - 1})["design"]
+        self.assertNotIn("next_offset", last)
+        with self.assertRaisesRegex(ToolError, "design_part"):
+            get_context(self.ctx, {"sections": ["design"], "design_part": "wheels"})
+
+    def test_after_revise_design_the_changes_come_first(self):
+        from hiraku.tools.functions import revise_design
+
+        self.assertNotIn("design_changes", get_context(self.ctx))
+        old = dict(self.ctx.store.design()["variables"]["track"])
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "wider"}, "designer")
+        out = get_context(self.ctx)
+        self.assertEqual(list(out)[:5], ["run_id", "want", "product", "design_version", "design_changes"])
+        ch = out["design_changes"]
+        self.assertEqual((ch["from_version"], ch["to_version"]), (1, 2))
+        self.assertEqual(ch["changed"], [{"variable": "track", "old": {"value": old["value"], "unit": old["unit"]},
+                                          "new": {"value": 1400.0, "unit": "mm"}}])
 
 
 class UnpredictableCaseTest(RunCase, unittest.TestCase):

@@ -3,6 +3,7 @@
 自分の Claude Code から HIRAKU を動かすためのプラグインです。要件のファイルから実行を始め、まとめ役・設計役・CAE 役が、手計算で予測してから解析し、照合し、食い違いの原因を書いて合否を出します。中身は HIRAKU の道具 (MCP のサーバー `hiraku`)・hooks (HK1〜HK4)・役 (agents)・手順 (skills)・コマンド `/hiraku:run` です。
 
 - この道筋では、HIRAKU は Claude を呼ばず、Claude Code も起動しません。考えるのは自分の Claude Code のセッション (自分のサインイン) で、HIRAKU は道具と hooks として働くだけです。`ANTHROPIC_API_KEY` は要りません。費用は HIRAKU からは分からないので、記録の `cost_usd` は null です
+- 費用の上限 (要件の `cost_limit_usd`) は、この道筋では HIRAKU が守らせられません。払うのは自分の Claude Code (自分のサインインの枠) で、HIRAKU には使った額が届かないからです (`project.cost_usd` は null のまま)。止まるための守りは、設計を直す回数の上限 `round_limit` (使い切ると HK4 は終わりを止めません) と、ターンの上限 (Claude Code の側の設定) です。HK4 が終わりを止める回数にも上限があります (まとめ役 3 回、役ごと版ごとに 2 回)
 - 実行の記録は、リポジトリの `runs/<run_id>/` に書かれます
 
 ## 用意: リポジトリの venv

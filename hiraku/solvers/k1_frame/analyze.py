@@ -35,7 +35,7 @@ import numpy as np
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import (DesignError, inertia_tensor, mass_summary, resultant, support_contact,
                                    support_loads)
-from .model import FrameModel, build
+from .model import FrameModel, build, stress_dims
 
 BALANCE_TOL = 0.01  # given ground forces must balance the weight (and given inertia) to this fraction; another
 #                     loading or design version is far outside it, small bookkeeping differences go to inertia relief
@@ -282,6 +282,7 @@ def stress_terms(result: dict) -> list[dict]:
     mid = result["worst_member"]
     st = result["stresses"][mid]
     p = fm.props[mid]["section"]
+    stress_dims(p, mid)
     parts = {"axial": abs(st["N"]) / p["A"]}
     if p["round"]:
         parts["bending"] = math.hypot(st["My"], st["Mz"]) * p["cy"] / p["Iz"]

@@ -1230,6 +1230,22 @@
             "type": "string"
           },
           "description": "K0 formula ids that predict this tool's quantities."
+        },
+        "stage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "How heavy the tool is, for the order of checks: 0 layout and rules (geometry, interference, occupants, system chains), 1 light (hand-calc sized models, beams, lumped thermal), 2 dynamics (vehicle time simulations), 3 heavy (shell and solid FE, convergence, fatigue on spectra, time-varying fields). Missing: 1."
+        },
+        "applies_to": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Kinds of design (hiraku.designgen ARCHETYPES keys) whose designs the tool can analyse. Missing: any design."
         }
       }
     },
@@ -2187,6 +2203,10 @@
             "string",
             "null"
           ]
+        },
+        "where": {
+          "type": "string",
+          "description": "Where the compared result is taken when a tool reports more than one place: a member or part id (e.g. rail_L_BE). Absent for a frame-wide or single result."
         }
       }
     },
@@ -4038,7 +4058,8 @@
       "properties": {
         "design_version": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0,
+          "description": "The version the report is about; 0 when the run stopped before version 1 (then the report carries only summary and issues)."
         },
         "agent": {
           "$ref": "#/$defs/agent_id"

@@ -206,6 +206,13 @@ class IntakeTest(unittest.TestCase):
             self.assertEqual(contract.errors("project", {**ev["data"], "driver": driver}), [])
         self.assertNotEqual(contract.errors("project", {**ev["data"], "driver": "proxy"}), [])
 
+    def test_tool_applies_to(self):
+        spec = load("tool_spec.json")
+        self.assertEqual(contract.errors("tool_spec", {**spec, "applies_to": ["space_frame_utv"]}), [])
+        for bad in ([], "space_frame_utv", ["Space Frame"], ["a", "a"]):
+            with self.subTest(applies_to=bad):
+                self.assertNotEqual(contract.errors("tool_spec", {**spec, "applies_to": bad}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}

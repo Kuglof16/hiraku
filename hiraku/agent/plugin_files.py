@@ -72,6 +72,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
    - HIRAKU の道具は {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
    - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
+   - 道具が断り、その理由を道具の入力で直せないとき (道具の誤り・棚に無い道具や式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
 3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
 
 まとめ役の決まり:

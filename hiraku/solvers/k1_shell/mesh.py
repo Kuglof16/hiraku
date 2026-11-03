@@ -101,6 +101,7 @@ strip beside it.
 
 from __future__ import annotations
 
+import copy
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -109,6 +110,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from ..k0_handcalc.vehicle import DesignError, member_props
+from . import cache
 
 ELEMENT_SIZE_MM = 10.0
 FORMULATION = ("MITC4 (Dvorkin & Bathe 1984) on flat 4-node facets; membrane with incompatible modes; "
@@ -908,9 +910,23 @@ def _weld_lines(runs: list[_Run], joints: list[_Joint]) -> list[WeldLine]:
     return out
 
 
+_MESHES = cache.LRU(cache.MESHES)
+
+
 def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
     """Mesh the mid-surfaces of the design's tube members (see the module notes); weld_strips: grid lines at
-    t and 2t from the joints' weld lines (False: the grid without them)."""
+    t and 2t from the joints' weld lines (False: the grid without them).
+
+    The same design frame (cache.design_key), element size and weld_strips give the mesh built before
+    in this process (a copy of it), unless HIRAKU_SHELL_CACHE=0."""
+    if not cache.enabled():
+        return _build_mesh(design, element_size_mm, weld_strips)
+    key = cache.design_key(design, "mesh", float(element_size_mm), bool(weld_strips))
+    mesh, _ = _MESHES.get_or_make(key, lambda: _build_mesh(design, element_size_mm, weld_strips))
+    return copy.deepcopy(mesh)
+
+
+def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
     size = float(element_size_mm)
     if not size > 0:
         raise ValueError("element_size_mm must be positive")

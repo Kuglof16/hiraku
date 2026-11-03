@@ -21,9 +21,9 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
-from hiraku.tools.judge import (OP_JA, init_judgements, judged_quantity, make_verdict, prediction_is_unfavourable,
-                                unfavourable_side, update_judgement)
+from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, unchecked_tools
+from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
+                                prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -68,7 +68,7 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "archetypes", "joint_wall_inputs")
+                    "design_variables", "archetypes", "joint_wall_inputs", "formula_inputs")
 DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
@@ -99,12 +99,103 @@ def joint_wall_inputs(ctx: RunContext, load_case_id: str | None) -> Record:
     }
 
 
+def _design_section(ctx: RunContext, args: Record) -> Record | None:
+    if not ctx.version:
+        return None
+    design = ctx.store.design()
+    if args.get("design_part"):
+        return design_page(design, args["design_part"], int(args.get("offset") or 0),
+                           int(args["limit"]) if args.get("limit") is not None else None)
+    return design_overview(design)
+
+
+FORMULA_INPUTS_HOW = (
+    "荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、台本の運転と同じコードが"
+    "この版の設計と荷重条件と記録から出した値・単位・出どころ (from) で並べたもの。record_prediction の inputs には"
+    "この値をそのまま入れ、式の出力は output で選ぶ。refused はこの設計に当てはまらない式 (理由つき)、missing は"
+    "上流の記録が揃ってから値が出る入力、no_reader は入力を読むコードの無い式。自分で別の値を使うときは、"
+    "その値と出どころを assumptions に書く")
+
+
+def formula_inputs_section(ctx: RunContext, load_case_id: str | None = None) -> Record:
+    """get_context's formula_inputs: hiraku.tools.plan.formula_inputs for one load case or all."""
+    from hiraku.tools.plan import formula_inputs
+
+    if not ctx.version:
+        raise ToolError("まだ設計の版がありません。式の入力は設計の版ができてから出せます")
+    return {"design_version": ctx.version, "how": FORMULA_INPUTS_HOW,
+            "load_cases": formula_inputs(ctx, load_case_id, pairs=lambda tool: tool_predicts(ctx, tool))}
+
+
+DESIGN_PARTS = ("nodes", "members", "parts", "supports", "variables", "sections", "materials")
+DESIGN_PAGE = 20  # items per page of design_part when no limit is given
+
+
+def _value_of(v: Any) -> Any:
+    """A design variable as {value, unit} (its other fields are design_variables')."""
+    return {k: v[k] for k in ("value", "unit") if k in v} if isinstance(v, dict) else v
+
+
+def design_overview(design: Record) -> Record:
+    """get_context's design without design_part: the version, the counts and ids of each part of the
+    record, the variables' values, the sections and materials (what the formulas take), and how to page
+    the rest. The whole record can pass Claude Code's limit on a tool's output."""
+    lists = {k: design[k] for k in ("nodes", "members", "parts", "supports") if isinstance(design.get(k), list)}
+    out: Record = {k: design[k] for k in ("design_version", "parent_version", "name", "change_reason") if k in design}
+    out["counts"] = {k: len(v) for k, v in lists.items()}
+    out["ids"] = {k: [x.get("id") for x in v if isinstance(x, dict)] for k, v in lists.items()}
+    out["variables"] = {k: _value_of(v) for k, v in (design.get("variables") or {}).items()}
+    for k in ("sections", "materials"):
+        if k in design:
+            out[k] = design[k]
+    out["pages"] = (f"部品・部材・節・支持の中身は get_context(sections=[\"design\"], design_part=<{'|'.join(DESIGN_PARTS)}>, "
+                    f"offset=0, limit={DESIGN_PAGE}) で少しずつ読む。手計算の入力は design_summary と formula_inputs にある")
+    return out
+
+
+def design_page(design: Record, part: str, offset: int = 0, limit: int | None = None) -> Record:
+    """One page of a part of the design record (a list, or a dict's items in order)."""
+    if part not in DESIGN_PARTS:
+        raise ToolError(f"design_part は {', '.join(DESIGN_PARTS)} のどれかです: {part!r}")
+    whole = design.get(part)
+    if whole is None:
+        raise ToolError(f"この設計には {part} がありません")
+    items = list(whole.items()) if isinstance(whole, dict) else list(whole)
+    limit = DESIGN_PAGE if limit is None else limit
+    if offset < 0 or limit < 1:
+        raise ToolError(f"offset は 0 以上、limit は 1 以上です (offset {offset}, limit {limit})")
+    page = items[offset:offset + limit]
+    out: Record = {"design_version": design.get("design_version"), "design_part": part, "total": len(items),
+                   "offset": offset, "items": dict(page) if isinstance(whole, dict) else page}
+    if offset + limit < len(items):
+        out["next_offset"] = offset + limit
+    return out
+
+
+def design_changes(ctx: RunContext) -> Record | None:
+    """What changed from the previous version (the version this one was revised from): the variables
+    whose value or unit changed, old and new, and the designer's reason. None on version 0 and 1."""
+    if ctx.version < 2:
+        return None
+    new = ctx.store.design()
+    parent = new.get("parent_version") or ctx.version - 1
+    old = ctx.store.design(parent)
+    was, now = old.get("variables") or {}, new.get("variables") or {}
+    changed = [{"variable": k, "old": _value_of(was.get(k)), "new": _value_of(now.get(k))}
+               for k in [*now, *[k for k in was if k not in now]] if _value_of(was.get(k)) != _value_of(now.get(k))]
+    return {"from_version": parent, "to_version": ctx.version, "changed": changed,
+            "reason": new.get("change_reason"),
+            "note": (f"版 {ctx.version} の値は前の版 {parent} から変わっている。前の版で読んだ値・予測を使い回さず、"
+                     f"design_summary・formula_inputs をこの版でもう一度読む")}
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """The run so far: always the run, design version, picked domains and open mismatches;
     `sections` adds parts (default: requirements, load_cases with the role that owns each,
-    judgements, records). design_summary (inputs for hand calculations), design (the whole
-    record), design_variables (what the designer may change) and joint_wall_inputs (the joint wall
-    formula's inputs for `load_case_id`) come only when asked."""
+    judgements, records). design_summary (inputs for hand calculations), design (an overview of the
+    record; with design_part, offset and limit one page of a part of it), design_variables (what the designer may change), joint_wall_inputs (the joint wall
+    formula's inputs for `load_case_id`) and formula_inputs (every planned formula's inputs worked out
+    by code, for `load_case_id` or all load cases) come only when asked."""
     p = ctx.project
     s = ctx.store
     wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
@@ -113,6 +204,11 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "want": p["want"],
         "product": p["product"],
         "design_version": ctx.version,
+    }
+    changes = design_changes(ctx)
+    if changes is not None:  # first, so a role of a revised version sees what changed before anything else
+        out["design_changes"] = changes
+    out |= {
         "round_limit": p["round_limit"],
         "domain_picks": p["domain_picks"],
         "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
@@ -130,10 +226,11 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
             "verdicts": s.records("verdict"),
         },
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
-        "design": lambda: s.design() if ctx.version else None,
+        "design": lambda: _design_section(ctx, args or {}),
         "design_variables": lambda: design_variables(ctx),
         "archetypes": lambda: archetypes(ctx),
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),
+        "formula_inputs": lambda: formula_inputs_section(ctx, (args or {}).get("load_case_id")),
     }
     for name in wanted:
         out[name] = parts[name]()
@@ -163,6 +260,24 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
     return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
 
 
+# A tool's notes may name the Python function that reads a formula's inputs off the design; a role
+# cannot call it, so what the roles read points at get_context's formula_inputs instead.
+_CODE_CALL = re.compile(r"hiraku\.[a-z0-9_.]+\((?:[^()]|\([^()]*\))*\)")
+CODE_CALL_FOR_ROLE = "get_context(sections=[\"formula_inputs\"], load_case_id=...) (the values code worked out from the design)"
+
+
+def for_role(obj: Any) -> Any:
+    """`obj` with every call of a hiraku Python function in its strings replaced by the
+    get_context section that gives the same values (CODE_CALL_FOR_ROLE)."""
+    if isinstance(obj, str):
+        return _CODE_CALL.sub(CODE_CALL_FOR_ROLE, obj)
+    if isinstance(obj, list):
+        return [for_role(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: for_role(v) for k, v in obj.items()}
+    return obj
+
+
 def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
     """The tool's describe()["predicts"]: {quantity, formula_id, output, note?} per pairing."""
     describe = getattr(ctx.tools.get(name), "describe", None)
@@ -173,25 +288,51 @@ def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
     except Exception:  # a tool made in the run may describe itself badly; the formulas still list
         return []
     keys = ("quantity", "formula_id", "output", "note")
-    return [{k: p[k] for k in keys if k in p} for p in got if isinstance(p, dict)]
+    return [for_role({k: p[k] for k in keys if k in p}) for p in got if isinstance(p, dict)]
 
 
 def _tool_line(spec: Record) -> Record:
     checks = spec.get("checks") or []
-    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable") if k in spec},
+    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable", "applies_to") if k in spec},
             "checks_passed": f"{sum(1 for c in checks if c.get('pass'))}/{len(checks)}"}
+
+
+def design_kind(ctx: RunContext) -> str | None:
+    """The kind of the version's design: the hiraku.designgen ARCHETYPES key of the generator that made it
+    (designgen.generator_of); None for a design no generator made (one written by hand) or without designgen."""
+    gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
+    if not ctx.version or gen_of is None or not kinds:
+        return None
+    try:
+        gen = gen_of(ctx.store.design())
+    except ValueError:  # DesignGenError: its variables match no generator
+        return None
+    return next((k for k, m in kinds.items() if m is gen), None)
+
+
+def _check_applies_to(ctx: RunContext, name: str) -> None:
+    """Contract tool_spec.applies_to: a tool that names kinds of design is used only on a design of one of them."""
+    kinds = (ctx.specs.get(name) or {}).get("applies_to")
+    if not kinds:
+        return
+    kind = design_kind(ctx)
+    if kind in kinds:
+        return
+    what = f"この版の設計の型は {kind} です" if kind else "この版の設計は、型から作った設計ではありません (型が分からない)"
+    raise ToolError(f"道具 {name} は、設計の型 {', '.join(kinds)} のための道具です。{what}。"
+                    f"list_tools で、applies_to の無い道具か、この型を含む道具を選んでください")
 
 
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
     """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
     `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
-    lines = {n: _unchecked_line(n, ctx.tools[n]) for n in unchecked_tools(ctx)}
+    lines = {n: _unchecked_line(n, ctx.tools[n], ctx.version) for n in unchecked_tools(ctx)}
     if args.get("tool"):
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
             raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
-        return [spec]
+        return [for_role(spec)]
     out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
         out = [s for s in out if s.get("domain") == args["domain"]]
@@ -200,14 +341,14 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     return [s if "not_checked" in s else _tool_line(s) for s in out]
 
 
-def _unchecked_line(name: str, tool: Any) -> Record:
+def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
     """list_tools' line for a tool this run did not check (check_shelf): not usable, and why."""
     line: Record = {"name": name}
     for key in ("title", "domain", "base", "tests"):
         value = getattr(tool, key, None)
         if value is not None:
             line[key] = list(value) if key == "tests" else value
-    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED}
+    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED if version else NOT_YET}
 
 
 # ---------------------------------------------------------------------------- prediction
@@ -312,6 +453,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if name not in ctx.tools:
         raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
+    _check_applies_to(ctx, name)
     _gate(ctx, "analyze", args, agent)
 
     upstream = {}
@@ -388,11 +530,12 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 
 
 def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None,
-                 predicted_quantity: str | None = None) -> Record:
+                 predicted_quantity: str | None = None, where: str | None = None) -> Record:
     """The analysis result of a quantity. Given at several places, the unfavourable one: when the
     comparison is for the criterion (the criterion's quantity is this result's name or the
     prediction's quantity, predicted_quantity, as when result_quantity names the result) the
-    largest under <= and <, the smallest under >= and >; otherwise the largest in size."""
+    largest under <= and <, the smallest under >= and >; otherwise the largest in size.
+    With `where`, only the results at that place (a member, node, support or part id)."""
     hits = [r for r in analysis["results"] if r["quantity"] == quantity]
     if not hits:
         have = ", ".join(sorted({r["quantity"] for r in analysis["results"]})) or "なし"
@@ -400,6 +543,13 @@ def _pick_result(analysis: Record, quantity: str, criterion: Record | None = Non
             f"解析 {analysis['analysis_id']} の結果に {quantity!r} がありません (結果: {have})。"
             f"名前が違うだけなら result_quantity で解析の側の名前を指定してください"
         )
+    if where is not None:
+        at = [r for r in hits if r.get("where") == where]
+        if not at:
+            places = ", ".join(sorted({r["where"] for r in hits if r.get("where")})) or "なし (場所の無い結果だけ)"
+            raise ToolError(f"解析 {analysis['analysis_id']} の {quantity} に、場所 {where!r} の結果はありません "
+                            f"(場所: {places})。where を外すと、全部の場所のうち不利な方と照合します")
+        hits = at
     if criterion is not None and criterion["quantity"] in (quantity, predicted_quantity):
         if unfavourable_side(criterion["op"]) == "larger":
             return max(hits, key=lambda r: r["value"])
@@ -421,6 +571,27 @@ def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> N
                                  design_version=v, agent=agent, domain=pred["domain"])
 
 
+def revised_after_cause(ctx: RunContext, pred: Record, ana: Record) -> bool:
+    """A prediction of the analysis's version and load case, recorded after a cause was written for a
+    mismatch on that analysis: the agreed way to fix a hand calculation (cause, new formula, compare
+    again on the same analysis). qa/check_run.py tolerates the same."""
+    if pred["design_version"] != ana["design_version"] or pred["load_case_id"] != ana["load_case_id"]:
+        return False
+    on_it = {c["comparison_id"] for c in ctx.store.records("comparison")
+             if c["analysis_id"] == ana["analysis_id"] and c["status"] == "mismatch"}
+    causes = {c["cause_id"] for c in ctx.store.records("cause") if c["comparison_id"] in on_it}
+    if not causes:
+        return False
+    first_cause, pred_seq = None, None
+    for e in ctx.store.events():
+        data = e.get("data") or {}
+        if e["kind"] == "cause.recorded" and data.get("cause_id") in causes and first_cause is None:
+            first_cause = e["seq"]
+        elif e["kind"] == "prediction.recorded" and data.get("prediction_id") == pred["prediction_id"]:
+            pred_seq = e["seq"]
+    return first_cause is not None and pred_seq is not None and first_cause < pred_seq
+
+
 def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Compare a prediction with an analysis result. A match against a load case
     with a criterion also makes the verdict and updates the domain's judgement.
@@ -428,7 +599,11 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     diff_rel = (analysed - predicted) / |predicted|. A prediction of 0 (zero predictions can be
     legitimate, e.g. an interference of 0 mm) divides by |analysed| instead (0 when both are 0),
     which the contract does not define."""
-    _check_input("compare", args)
+    where = args.get("where")
+    if where is not None and not (isinstance(where, str) and where):
+        raise ToolError(f"compare の where は部材か部品の ID (文字列) です: {where!r}")
+    # tool_input.compare has no `where` (it goes in the comparison record, contract comparison.where)
+    _check_input("compare", {k: v for k, v in args.items() if k != "where"})
     pred = ctx.prediction(args["prediction_id"])
     if pred is None:
         raise ToolError(f"予測 {args['prediction_id']!r} はありません (get_context の records.predictions)")
@@ -439,19 +614,28 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     _gate(ctx, "compare", args, agent)
     if ana["status"] != "ok":
         raise ToolError(f"解析 {ana['analysis_id']} は失敗しています: {ana.get('error', '')}。照合できません")
-    if pred["prediction_id"] not in ana["prediction_ids"]:
+    if pred["prediction_id"] not in ana["prediction_ids"] and not revised_after_cause(ctx, pred, ana):
+        same = pred["design_version"] == ana["design_version"] and pred["load_case_id"] == ana["load_case_id"]
+        how = ("この解析の照合の食い違いに record_cause を書いたあとに記録した予測なら、この解析と照合できます。"
+               if same else f"この予測は {pred['load_case_id']} (版 {pred['design_version']}) のものです。")
         raise ToolError(
-            f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids'])} に対して走らせたもので、"
-            f"{pred['prediction_id']} は入っていません"
+            f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids']) or 'なし'} に対して走らせたもので、"
+            f"{pred['prediction_id']} は入っていません。{how}そうでなければ、record_prediction で予測を記録してから、"
+            f"analyze(tool=\"{ana['tool']}\", load_case_id=\"{pred['load_case_id']}\", "
+            f"prediction_ids=[\"{pred['prediction_id']}\"]) で解析し直し、その analysis_id と照合してください"
         )
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"])
+    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"], where)
     # the result a verdict may come from (docs/contract.md 判定に使う量: frame_shell judges max_stress on
     # max_hot_spot_stress, never on its element max_stress)
     judged = judged_quantity(ctx, ana["tool"], crit["quantity"]) if crit else None
     for_verdict = bool(crit) and (res["quantity"] == judged
                                   or (judged == crit["quantity"] and pred["quantity"] == crit["quantity"]))
+    if for_verdict and where is not None:  # a verdict only on the failing end over all places, never on one chosen
+        worst = failing_end([r for r in ana["results"] if r["quantity"] == res["quantity"]
+                             and r["unit"] == res["unit"]], crit["op"])
+        for_verdict = worst["value"] == res["value"]
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
@@ -478,9 +662,15 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         "tolerance_rel": tol,
         "status": "match" if abs(diff_rel) <= tol else "mismatch",
         "cause_id": None,
+        **({"where": where} if where else {}),  # contract comparison.where: the place the result was taken
     }
     ctx.store.add_record("comparison", cmp, design_version=v, agent=agent, domain=lc["domain"])
     out: Record = {"comparison": cmp, "verdict": None}
+    if where is not None:
+        out["where"] = where
+        if not for_verdict and crit and res["quantity"] == judged:
+            out["note"] = (f"{where} の値は、全部の場所のうち不合格に近い方の値ではないので、この照合からは合否を作りません。"
+                           f"合否は where を外した照合 (全部の場所の不利な方) で作ります")
     if cmp["status"] == "match":
         _resolve_causes(ctx, cmp, pred, agent)
         if for_verdict and crit["limit"]["unit"] == res["unit"]:
@@ -659,6 +849,8 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
                              text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
     if skipped:
         ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
+    # the tools of version 1's tests that the start did not check (a run whose tests were not fixed then)
+    check_shelf(ctx, list(dict.fromkeys(lc["test_id"] for lc in load_cases)), skip_checked=True)
     init_judgements(ctx)
     return {
         "design_version": 1,

@@ -26,7 +26,10 @@ from tests.tools.helpers import REQUIREMENTS
 def requirements_without_design(folder: Path, tests: list[str]) -> Path:
     req = read_data(REQUIREMENTS)
     req.pop("design_file")
-    req["tests"] = tests
+    if tests is None:  # the tests are not fixed: the catalog picks them on version 1 (a products file's run)
+        req.pop("tests", None)
+    else:
+        req["tests"] = tests
     path = folder / "requirements.json"
     path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
     return path
@@ -98,6 +101,45 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         for e in events:
             self.assertEqual(contract.errors("event", e), [], e["kind"])
 
+    def test_a_refused_first_version_lets_the_run_end_with_the_refusal(self):
+        """A propose_design the tool refuses is kept in the record; HK4 then lets the lead's stop through
+        and the run ends not_judged with the refusal as its reason (the roles cannot fix it)."""
+        import asyncio
+
+        from hiraku.agent.runner import end_status
+        from hiraku.tools.mcp import HANDLERS, make_handler
+
+        hooks = Hooks(self.ctx, Attribution())
+        self.assertEqual(hooks.decide_stop({})["decision"], "block")  # nothing tried yet: HK4 asks for the design
+        args = {"archetype": "tricycle", "reason": "要件から"}
+        att = Attribution()
+        att.push(contract.mcp_name("propose_design"), args, "designer")
+        out = asyncio.run(make_handler(self.ctx, att, "propose_design", HANDLERS["propose_design"])(args))
+        self.assertTrue(out["is_error"])
+        (said,) = [e for e in self.ctx.store.events() if (e.get("data") or {}).get("refused") == "propose_design"]
+        self.assertEqual((said["agent"], said["data"]["agent"]), ("system", "designer"))
+        self.assertIn("ladder_4w", rules.design_refusal(self.ctx))
+        self.assertEqual(Hooks(self.ctx, Attribution()).decide_stop({}), {})
+        status, reason, code = end_status(self.ctx)
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        self.assertIn("propose_design が断られました", reason)
+        for e in self.ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+
+    def test_a_report_before_the_first_version(self):
+        from hiraku.tools.functions import write_report
+
+        issue = {"kind": "tool_error", "what": "最初の版を組めない", "where": "propose_design"}
+        rep = write_report(self.ctx, {"summary": "版 1 を作れずに止まった", "next": [], "issues": [issue]}, "lead")
+        self.assertEqual((rep["design_version"], rep["domains"], rep["next"], rep["issues"]), (0, [], [], [issue]))
+        self.assertEqual(contract.errors("report", rep), [])
+        last = self.ctx.store.events()[-1]
+        self.assertEqual(last["kind"], "report.written")
+        self.assertNotIn("design_version", last)  # an event's design_version is 1 or more
+        self.assertEqual(contract.errors("event", last), [])
+        with self.assertRaisesRegex(ToolError, "next"):
+            write_report(self.ctx, {"summary": "x", "next": [{"domain": "strength", "change": "x", "reason": "y"}]}, "lead")
+
     def test_the_hearings_answers_reach_the_first_version(self):
         """ask_user writes the answers into project.requirements; the design and its load cases are built
         from those values, not from the file as it was at the start."""
@@ -106,6 +148,28 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual(next(r for r in self.ctx.requirements_file["requirements"] if r["key"] == "Q15")["value"], 100)
         out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "答えの段差で"}, "designer")
         self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["P1-step120", "R1-step120"])
+
+
+class DeferredChecksTest(FirstDesignCase, unittest.TestCase):
+    """No tests in the file (Claude picks them): no tool is checked at the start; version 1's tests'
+    tools are checked when propose_design builds the load cases."""
+    tests = None
+
+    def test_the_tools_are_checked_once_version_1_has_its_tests(self):
+        from hiraku.tools.functions import list_tools
+        from hiraku.tools.shelf import DEFERRED_TEXT, NOT_YET
+
+        self.assertNotIn("tool.checked", self.kinds())
+        self.assertIn(DEFERRED_TEXT, [e.get("text") for e in self.ctx.store.events()])
+        self.assertTrue(all(line.get("not_checked") == NOT_YET for line in list_tools(self.ctx)))
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+        tests = {lc["test_id"] for lc in self.ctx.load_cases}
+        checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
+        self.assertTrue(checked)
+        self.assertTrue(all(set(self.ctx.tools[n].tests) & tests for n in checked))
+        self.assertEqual(out["design_version"], 1)
+        for e in self.ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
 
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):

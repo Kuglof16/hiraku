@@ -15,10 +15,21 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
   - `tolerance_rel`: 予測と解析の差をどこまで許すか。決まっているので変えられない
   - `feeds`: この荷重条件の結果を入力に使う、下流の荷重条件
 - 上流 (自分を `feeds` で指している荷重条件) があれば、そちらを先に照合で一致させる。一致していない上流があると `analyze` は止まる
-- `design_summary` (と、そこに無い値が要るときだけ `sections=["design"]` で設計の全体): 入力はここから写す
+- `design_summary` (と、そこに無い値が要るときだけ `sections=["design"]`。返るのは設計の要約 (数・ID・変数の値・断面・材料) で、部品・部材・節・支持の中身は `design_part`・`offset`・`limit` で少しずつ読む): 入力はここから写す
+- 設計を直した版 (版 2 から) では、get_context の最初に `design_changes` (前の版から変わった変数の前と後、理由) が付く。前の版の値を使い回さない
   - `design_summary.loadings.<loading>`: 車全体の質量 (`mass`、フレームの部材の重さと、その組で載っている部品の和) と重心 (`cg_x`・`cg_y`・`cg_z`)。荷重条件の `loading` と同じ組を使う。`frame_mass` はこの中に入っているので、足さない
   - `design_summary.loadings.<loading>.rail_joint`: 式 `frame_static.rail_joint_stress` の入力のうち F と W 以外 (設計から読んだもの)。`support` は W にどの車輪の荷重を使うか (上流の解析の `wheel_load_<support>`)
   - ホイールベース・前輪の数・トレッド・部材の長さ (`member_length`)。断面の寸法は `design.sections`
+
+## 1b. 式の入力を読む (record_prediction の前に必ず)
+
+- `get_context(sections=["formula_inputs"], load_case_id=...)`: 荷重条件ごとに、計画の式 (`formulas`) と、その入力を、台本の運転と同じコードがこの版の設計・荷重条件・記録から出した値と単位で返す。入力ごとの `from` は値の出どころ (読み手の関数・design_summary・荷重条件の params・上流の照合で一致した解析など)
+  - `role`: `criterion` は判定の量の式、`intermediate` は途中の量 (前輪の荷重など) の式
+  - `refused`: その式はこの設計に当てはまらない (読み手の理由つき)。その式は使わない
+  - `missing`: 上流の記録 (上流の解析・同じ荷重条件の前の予測) が揃ってから値が出る入力。揃えたあとにもう一度読む
+  - `no_reader`: 入力をコードで読む手順が無い式。list_formulas で入力を見て自分で入れ、出どころを `assumptions` に書く
+- 入力はここから写す。別の荷重条件・別の製品 (介護ベッドなど) の式や値を借りない
+- 設計を直した版では、値は新しい版のもの。前の版で読んだ値を使い回さない
 
 ## 2. 道具と式を選ぶ
 
@@ -42,7 +53,7 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 ## 3. 予測を記録する
 
 - `record_prediction(load_case_id, quantity, formula_id, inputs, assumptions, output?)`
-  - `inputs` は `{"名前": {"value": 数, "unit": "単位"}}`。値と単位は get_context か前の記録から写す。単位は式の一覧の単位に合わせて選ぶ (換算は K0 がする。次元が違えば K0 が理由つきで断る)
+  - `inputs` は `{"名前": {"value": 数, "unit": "単位"}}`。値と単位は get_context の `formula_inputs` (無ければ design_summary か前の記録) から写す。単位は式の一覧の単位に合わせて選ぶ (換算は K0 がする。次元が違えば K0 が理由つきで断る)
   - 出力が 2 つ以上ある式では `output` でどれを予測にするか選ぶ
   - `quantity` は解析の結果と同じ名前にする (照合は同じ名前どうし)
   - 中間の量 (前輪の荷重など) も予測として記録し、その値を次の予測の入力に写してよい
@@ -56,6 +67,8 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 ## 5. 照合する
 
 - `compare(prediction_id, analysis_id)`。結果の名前が予測と違うときだけ `result_quantity` を付ける
+- 結果が場所ごとに出ている (results の `where` が部材・部品の ID) とき、予測が 1 つの場所の式 (レールの曲げの式ならレールの部材) なら `where` にその ID を付ける。その場所の結果と比べる。付けないと全部の場所のうち不利な方 (別の部材、たとえば横の部材の最大) と比べてしまい、式の食い違いに見える
+  - 合否は、全部の場所のうち不合格に近い方 (判定の量の最大か最小) の結果でしか作られない。選んだ場所がそこでなければ、照合は記録されるが合否は付かない (答えの `note`)。合否には、判定の量の予測を `where` なしでも照合する
 - 一致して `criterion` があれば、合否 (`verdict`、値は解析) と分野の判定が付く
 - 食い違ったら、その分野は `record_cause` を書くまで止まる。手順は skill `hiraku:find-the-cause`。原因で差が説明でき、予測が安全側から押さえていると判断できるときだけ、`safe_side` を付けて予測の値で合否を出せる (同じ skill の 5)
 

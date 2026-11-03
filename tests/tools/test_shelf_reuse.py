@@ -83,6 +83,14 @@ class ShelfReuseTest(unittest.TestCase):
         self.assertEqual(tool.checked, 2)
         self.assertEqual(list((self.root / "runs").glob(shelf.TOOL_CHECK_GLOB)), [])
 
+    def test_reuse_can_be_switched_off(self):
+        tool = HirakuTool()
+        self.run_with(tool)
+        with mock.patch.dict("os.environ", {shelf.REUSE_ENV: "0"}):
+            second = self.run_with(tool)
+        self.assertEqual(tool.checked, 2)
+        self.assertNotIn("cached_from", self.checked(second)["data"]["checks"][0])
+
     def test_the_hash_changes_with_any_source_file(self):
         code = shelf.source_hash()
         self.assertEqual(len(code), 64)

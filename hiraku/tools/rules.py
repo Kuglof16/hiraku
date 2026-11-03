@@ -21,8 +21,9 @@ HK1 = "HK1_prediction_first"
 HK2 = "HK2_tool_usable"
 HK3 = "HK3_cause_before_continue"
 HK4 = "HK4_no_stop_before_judged"
+HK5 = "HK5_light_first"  # the contract's rule (tool stages, layout first); its check comes next
 
-assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4}
+assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4, HK5}
 
 Record = dict[str, Any]
 
@@ -198,6 +199,13 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     return "done", None, "done"
 
 
+def revisions_used_up(ctx: RunContext) -> bool:
+    """The design revisions are used up (version - 1 >= round_limit): HK4 lets the lead's stop through
+    (contract HOOK_RULES HK4: unless the round limit is reached). runner.end_status then ends the run
+    not_judged (a domain without a verdict) or round_limit (a red tile)."""
+    return bool(ctx.version) and ctx.version - 1 >= ctx.project["round_limit"]
+
+
 def red_left_reason(ctx: RunContext) -> str | None:
     """Why the lead may not stop yet although every picked domain is judged: a tile is red and design
     revisions are left (version - 1 < round_limit). Names the red domains, their failing verdicts
@@ -281,8 +289,26 @@ def cannot_judge_text(ctx: RunContext) -> str | None:
             f"(予測が無いと解析も照合もできない)")
 
 
+def design_refusal(ctx: RunContext) -> str | None:
+    """Before the first version: the reason the designer's last propose_design was refused (an
+    agent.said of system with data.refused, hiraku.tools.mcp RECORDED_REFUSALS), or None. HK4 lets
+    the lead's stop through on it: the roles could not fix what the tool refused."""
+    if ctx.version:
+        return None
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "design.created":
+            return None
+        if e["kind"] == "agent.said" and (e.get("data") or {}).get("refused") == "propose_design":
+            return e["data"].get("reason") or e.get("text") or ""
+    return None
+
+
 def unjudged_reason(ctx: RunContext) -> str | None:
     """Why a run that ends now ends not judged: stop_reason, and the load cases it cannot judge
-    (cannot_judge_text). None when every picked domain is judged."""
+    (cannot_judge_text); before the first version, the refusal of propose_design if that is why.
+    None when every picked domain is judged."""
+    refused = design_refusal(ctx)
+    if refused is not None:
+        return f"最初の版を作れませんでした。設計役の propose_design が断られました: {refused}"
     parts = [x for x in (stop_reason(ctx), cannot_judge_text(ctx)) if x]
     return " ".join(parts) or None

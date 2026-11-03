@@ -208,7 +208,8 @@ class RunStore:
         with self._lock:
             contract.validate("report", report)
             _write_json(self.path / layout.REPORT_FILE, report)
-            self.emit("report.written", agent=agent, design_version=report["design_version"], data=report)
+            # a report before the first version says design_version 0; an event's design_version is 1 or more
+            self.emit("report.written", agent=agent, design_version=report["design_version"] or None, data=report)
             return report
 
     def stop_requested(self) -> bool:
