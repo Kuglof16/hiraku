@@ -150,19 +150,25 @@ def _mesh_files(folder: Path, a: Record, meshes: dict[str, Record]) -> list[Path
     return out
 
 
-def write_fields(store: RunStore, folder: Path, versions: Iterable[int] | None = None) -> list[Path]:
-    """VTK files of every analysis with fields: vtk/v<NNN>/<analysis_id>-frame.vtk (beams),
-    <analysis_id>-<mesh_id>.vtk (shell) and its moments; and each mesh alone, <mesh_id>.vtk."""
+def write_fields(store: RunStore, folder: Path, versions: Iterable[int] | None = None,
+                 domains: Iterable[str] | None = None) -> list[Path]:
+    """VTK files of every analysis with fields (of the chosen domains): vtk/v<NNN>/<analysis_id>-frame.vtk
+    (beams), <analysis_id>-<mesh_id>.vtk (shell) and its moments; and each mesh they use alone,
+    <mesh_id>.vtk (every mesh when no domain is chosen)."""
+    from hiraku.export.tables import in_domains
+
     out = []
     for v in _versions(store, versions):
         sub = folder / f"v{v:03d}"
-        meshes = {m["mesh_id"]: m for m in store.records("mesh", v)}
+        analyses = [a for a in store.records("analysis", v) if in_domains(store, a["load_case_id"], domains)]
+        used = {f.get("mesh_id") for a in analyses for f in a.get("fields", [])}
+        meshes = {m["mesh_id"]: m for m in store.records("mesh", v) if domains is None or m["mesh_id"] in used}
         for m in meshes.values():  # the mesh alone, each element with its member's wall thickness
             thickness = [m["member_thickness_mm"].get(mid) for mid in m["element_member"]]
             out.append(write_vtk(sub / f"{m['mesh_id']}.vtk", f"{m['mesh_id']} design version {v}", m["nodes_mm"],
                                  m["elements"], None, {"thickness_mm": thickness}))
         design = store.design(v)
-        for a in store.records("analysis", v):
+        for a in analyses:
             got = _frame_file(sub / f"{a['analysis_id']}-frame.vtk", a, design)
             if got:
                 out.append(got)

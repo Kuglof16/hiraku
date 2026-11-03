@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import html
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -35,14 +35,19 @@ def report_record(store: RunStore) -> Record | None:
     return None
 
 
-def _causes(store: RunStore) -> list[str | list[list[str]]]:
-    """Every cause record (load cases without a verdict too), with the comparison it explains."""
+def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str | list[list[str]]]:
+    """Every cause record (load cases without a verdict too) of the chosen domains, with the
+    comparison it explains."""
+    from hiraku.export.tables import in_domains
+
     rows = [["原因", "版", "照合", "荷重条件", "量", "差", "原因の文", "直し方", "安全側"]]
     for v in sorted(store.project.get("design_versions") or []):
         cmps = {c["comparison_id"]: c for c in store.records("comparison", v)}
         for c in store.records("cause", v):
             cmp = cmps.get(c["comparison_id"], {})
             pred = store.get("prediction", cmp.get("prediction_id", "")) or {}
+            if not in_domains(store, pred.get("load_case_id"), domains):
+                continue
             safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side") else "")
             rows.append([c["cause_id"], str(v), c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
                          f"{cmp['diff_rel'] * 100:+.1f} %" if "diff_rel" in cmp else "", " ".join(c["cause"].split()),
@@ -50,7 +55,9 @@ def _causes(store: RunStore) -> list[str | list[list[str]]]:
     return [rows] if len(rows) > 1 else ["食い違いはありません"]
 
 
-def sections(store: RunStore) -> list[Section]:
+def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Section]:
+    """The report's sections. With domains, only those domains and their causes; the values not
+    checked and the requirements with their sources are always there."""
     p = store.project
     rep = report_record(store)
     out: list[Section] = [("実行", [
@@ -64,6 +71,8 @@ def sections(store: RunStore) -> list[Section]:
         out.append(("まとめ", [rep["summary"], f"報告の版: {rep['design_version']}"]))
         causes = {c["cause_id"]: c for c in store.records("cause")}
         for d in rep["domains"]:
+            if domains is not None and d["domain"] not in set(domains):
+                continue
             body: list[str | list[list[str]]] = [f"{STATE_JA.get(d['state'], d['state'])}: {d['line']}"]
             if d.get("verdict_ids"):
                 body.append("判定の記録: " + "、".join(d["verdict_ids"]))
@@ -86,7 +95,7 @@ def sections(store: RunStore) -> list[Section]:
                                                                 for n in rep["next"]]]))
         out.append(("確かめていない値", [[["項目", "出どころ"]] + [[u["item"], u["source"]] for u in rep["unchecked"]]]
                     if rep["unchecked"] else ["なし"]))
-    out.append(("食い違いと原因", _causes(store)))
+    out.append(("食い違いと原因", _causes(store, domains)))
     out.append(("要件と出典", [[["番号", "項目", "値", "出どころ", "信頼度", "出典・根拠"]] + [
         [r["key"], r.get("name", ""), f"{r.get('value')}" + (f" {r['unit']}" if r.get("unit") else ""),
          r.get("source", ""), str(r.get("trust", "")), " ".join(str(r.get("basis", "")).split())]
@@ -132,9 +141,9 @@ def to_html(secs: list[Section], title: str) -> str:
     return "\n".join(parts)
 
 
-def write_report(store: RunStore, folder: Path) -> list[Path]:
+def write_report(store: RunStore, folder: Path, domains: Iterable[str] | None = None) -> list[Path]:
     """report.md and report.html in folder."""
-    secs = sections(store)
+    secs = sections(store, domains)
     title = f"HIRAKU の報告 {store.project['run_id']}"
     folder.mkdir(parents=True, exist_ok=True)
     md, page = folder / "report.md", folder / "report.html"

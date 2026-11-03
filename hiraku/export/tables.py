@@ -46,7 +46,16 @@ def _versions(store: RunStore, versions: Iterable[int] | None) -> list[int]:
     return [v for v in have if versions is None or v in set(versions)]
 
 
-def comparison_rows(store: RunStore, versions: Iterable[int] | None = None) -> list[Record]:
+def in_domains(store: RunStore, load_case_id: str | None, domains: Iterable[str] | None) -> bool:
+    """Whether a load case is in the chosen domains (every one when domains is None)."""
+    if domains is None:
+        return True
+    lc = next((x for x in store.project.get("load_cases", []) if x["load_case_id"] == load_case_id), None)
+    return lc is not None and lc["domain"] in set(domains)
+
+
+def comparison_rows(store: RunStore, versions: Iterable[int] | None = None,
+                    domains: Iterable[str] | None = None) -> list[Record]:
     load_cases = {lc["load_case_id"]: lc for lc in store.project.get("load_cases", [])}
     rows = []
     for v in _versions(store, versions):
@@ -56,6 +65,8 @@ def comparison_rows(store: RunStore, versions: Iterable[int] | None = None) -> l
             pred = store.get("prediction", c["prediction_id"]) or {}
             ana = store.get("analysis", c["analysis_id"]) or {}
             lc = load_cases.get(pred.get("load_case_id") or ana.get("load_case_id"), {})
+            if not in_domains(store, lc.get("load_case_id"), domains):
+                continue
             ver = verdicts.get(c["comparison_id"], {})
             cause = causes.get(c.get("cause_id") or "", {})
             rows.append({
@@ -75,14 +86,46 @@ def comparison_rows(store: RunStore, versions: Iterable[int] | None = None) -> l
     return rows
 
 
-def result_rows(store: RunStore, versions: Iterable[int] | None = None) -> list[Record]:
+def result_rows(store: RunStore, versions: Iterable[int] | None = None,
+                domains: Iterable[str] | None = None) -> list[Record]:
     rows = []
     for v in _versions(store, versions):
         for a in store.records("analysis", v):
+            if not in_domains(store, a["load_case_id"], domains):
+                continue
             for r in a.get("results", []):
                 rows.append({"analysis_id": a["analysis_id"], "design_version": v, "load_case_id": a["load_case_id"],
                              "tool": a["tool"], "base": a.get("base"), "status": a["status"],
                              "quantity": r["quantity"], "value": r["value"], "unit": r["unit"], "where": r.get("where")})
+    return rows
+
+
+DIFF_COLUMNS = ("load_case_id", "tool", "quantity", "where", "unit", "version_from", "value_from", "version_to",
+                "value_to", "change", "change_rel")
+
+
+def diff_rows(store: RunStore, base: int, versions: Iterable[int], domains: Iterable[str] | None = None) -> list[Record]:
+    """The same result (load case, tool, quantity, where) in version `base` and in each of `versions`,
+    the newest analysis of each: the two values, their difference and its share of the first."""
+    def latest(v: int) -> dict[tuple, Record]:
+        out: dict[tuple, Record] = {}
+        for r in result_rows(store, [v], domains):
+            if r["status"] == "ok":
+                out[(r["load_case_id"], r["tool"], r["quantity"], r["where"])] = r
+        return out
+
+    first, rows = latest(base), []
+    for v in versions:
+        if v == base:
+            continue
+        for key, r in latest(v).items():
+            b = first.get(key)
+            if b is None or b["unit"] != r["unit"]:
+                continue
+            change = r["value"] - b["value"]
+            rows.append({"load_case_id": key[0], "tool": key[1], "quantity": key[2], "where": key[3], "unit": r["unit"],
+                         "version_from": base, "value_from": b["value"], "version_to": v, "value_to": r["value"],
+                         "change": change, "change_rel": change / abs(b["value"]) if b["value"] else None})
     return rows
 
 
@@ -99,12 +142,15 @@ def _axis(s: Record) -> tuple[str, list[Any]]:
     return "index", list(range(len(s["values"])))
 
 
-def write_series(store: RunStore, folder: Path, versions: Iterable[int] | None = None) -> list[Path]:
+def write_series(store: RunStore, folder: Path, versions: Iterable[int] | None = None,
+                 domains: Iterable[str] | None = None) -> list[Path]:
     """Per analysis, one CSV for each axis its series share (<analysis_id>-series-<k>.csv): the
     axis in the first column, then one column per channel ("channel [unit]")."""
     out = []
     for v in _versions(store, versions):
         for a in store.records("analysis", v):
+            if not in_domains(store, a["load_case_id"], domains):
+                continue
             groups: dict[tuple, list[Record]] = {}
             for s in a.get("series", []):
                 head, axis = _axis(s)

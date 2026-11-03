@@ -138,11 +138,42 @@ class ExportTest(RunCase, unittest.TestCase):
         self.assertTrue({"export/comparisons.csv", "export/report.md", "project.json", "events.jsonl"} <= names)
         self.assertFalse([n for n in names if n.endswith(".zip")])
 
-    def test_range_and_refusals(self):
-        export_run(self.ctx.store.path, self.out, parts=["comparisons"], versions=[2])
-        self.assertEqual(read_csv(self.out / "comparisons.csv"), [])  # no version 2 in this run
-        with self.assertRaises(ExportError):
-            export_run(self.ctx.store.path, self.out, parts=["pictures"])
+    def test_refusals_name_what_the_run_has(self):
+        cases = [({"parts": ["pictures"]}, "選べるのは"), ({"versions": [2]}, "ある版: 1"),
+                 ({"domains": ["nvh"]}, "ある分野"), ({"diff_from": 1}, "同じです"), ({"diff_from": 5}, "ある版")]
+        for kw, needle in cases:
+            with self.subTest(kw=kw), self.assertRaises(ExportError) as cm:
+                export_run(self.ctx.store.path, self.out, **kw)
+            self.assertIn(needle, str(cm.exception))
+
+    def test_only_the_chosen_domains(self):
+        load_cases = {lc["load_case_id"]: lc["domain"] for lc in self.ctx.project["load_cases"]}
+        domain = load_cases["R1-step100"]
+        got = export_run(self.ctx.store.path, self.out, parts=["comparisons", "results", "series", "vtk"],
+                         domains=[domain])
+        rows = read_csv(self.out / "comparisons.csv")
+        self.assertTrue(rows)
+        self.assertEqual({r["domain"] for r in rows}, {domain})
+        self.assertEqual({load_cases[r["load_case_id"]] for r in read_csv(self.out / "results.csv")}, {domain})
+        self.assertIn(f"vtk/v001/{self.shell['analysis_id']}-frame.vtk", got["files"])
+        other = sorted(set(load_cases.values()) - {domain})
+        if other:  # another domain: nothing of R1's
+            got = export_run(self.ctx.store.path, Path(self.tmp.name) / "other", parts=["vtk"], domains=other[:1])
+            self.assertFalse([f for f in got["files"] if self.shell["analysis_id"] in f])
+
+    def test_diff_from_sets_the_same_results_side_by_side(self):
+        s = self.ctx.store
+        s.write_design(dict(s.design(1), design_version=2, parent_version=1, change_reason="test"))
+        r1 = next(p["prediction_id"] for p in s.records("prediction", 1) if p["load_case_id"] == "R1-step100")
+        s.add_record("analysis", {**{k: self.shell[k] for k in ("tool", "base", "load_case_id", "status")},
+                                  "analysis_id": s.next_id("analysis"), "design_version": 2, "prediction_ids": [r1],
+                                  "results": [{"quantity": "max_stress", "value": 100.0, "unit": "MPa", "where": "rail_L"}]},
+                     design_version=2, agent="cae.strength", domain="strength")
+        got = export_run(s.path, self.out, parts=["results"], versions=[2], diff_from=1)
+        self.assertIn("results_diff.csv", got["files"])
+        (row,) = [r for r in read_csv(self.out / "results_diff.csv") if r["tool"] == "frame_shell"]
+        self.assertEqual((float(row["value_from"]), float(row["value_to"]), float(row["change"])), (123.25, 100.0, -23.25))
+        self.assertAlmostEqual(float(row["change_rel"]), -23.25 / 123.25)
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the demo's scripted run takes a minute (HIRAKU_SLOW_TESTS=1)")
