@@ -1045,6 +1045,18 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
         self.assertIn("F", entry["missing"])  # a prediction not recorded yet
 
+    def test_the_retried_formula_comes_first_for_the_roles(self):
+        """P1's scripted scene predicts with the lever rule on purpose and misses; a role is given the
+        couple's formula first, and the lever rule after it with the scene's cause."""
+        out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "P1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        ids = [e["formula_id"] for e in case["formulas"]]
+        self.assertEqual(ids[0], "step_climb.pushed_wheel_load")
+        lever = next(e for e in case["formulas"] if e["formula_id"] == "mass_props.front_wheel_load")
+        self.assertIn("台本の場面", lever["when"])
+        self.assertIn("偶力", lever["when"])
+        self.assertLess(ids.index("step_climb.pushed_wheel_load"), ids.index("mass_props.front_wheel_load"))
+
     def test_a_tool_made_in_the_run_replaces_the_no_tool_note(self):
         """Once a made tool for the test is on the shelf, formula_inputs names it instead of saying there is none."""
         import types

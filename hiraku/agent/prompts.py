@@ -126,4 +126,10 @@ def lead_task(ctx) -> str:
         f"選んだ分野: {picks}\n"
         f"荷重条件: {cases}\n"
         f"設計は版 {ctx.version} があります。get_context から始めて、選んだ分野の判定を全部出してください。"
+        + HEARING_CLAUDE_TEXT * (p.get("hearing") == "claude")
     )
+
+
+# docs/contract.md hearing claude: start_run left the items the file does not settle open
+HEARING_CLAUDE_TEXT = ("\n要件のファイルで決まっていない項目は、埋めずに残してあります。始めに ask_user で人に聞いてください "
+                       "(画面の答えを待つので wait_seconds を付ける)。答えの無い項目を推測で埋めない")

@@ -355,6 +355,20 @@ def _specs(step: Record, when: str | None = None) -> list[tuple[Record, str | No
     return out
 
 
+def _specs_for_roles(step: Record) -> list[tuple[Record, str | None]]:
+    """A step's predictions in the order a role should try them: a scripted scene that predicts with one
+    formula on purpose, misses (expected_mismatch) and predicts again (retry) lists the retry's first;
+    the first try follows with what the scene found (its cause), so the role sees why it misses."""
+    exp = step.get("expected_mismatch") or {}
+    if not exp.get("retry"):
+        return _specs(step)
+    cause = " ".join(str(exp.get("cause") or "").split())
+    missed = f"台本の場面でわざと先に使い、{exp.get('quantity')} が食い違った式 (原因: {cause})"
+    first = {id(p) for p in step.get("predictions") or []}
+    retried = [(p, None) for p, _ in _specs(exp["retry"])]
+    return retried + [(p, missed) for p in step.get("predictions") or [] if id(p) in first]
+
+
 # Hand calculations the builders keep for a test no shelf tool analyses yet (its tool is made in the run,
 # make_tool), so no plan step carries them: test id -> (module, name of its list of predictions). The
 # predictions read their inputs by code like any plan's (inputs_from), e.g. R4's portal frame and gaps.
@@ -424,7 +438,7 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
         steps = [s for s in plan["steps"] if s["load_case"] == lc["load_case_id"]]
         entries: list[Record] = []
         for step in steps:
-            for spec, when in _specs(step):
+            for spec, when in _specs_for_roles(step):
                 entries.append(_entry(ctx, lc, step["tool"], spec, when))
         seen = {e["formula_id"] for e in entries}
         known = None
