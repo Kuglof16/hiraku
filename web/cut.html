@@ -88,6 +88,20 @@
   .grid-tile .tag small { font-size: 1em; font-weight: 400; margin-left: 4px; font-family: Consolas, monospace; }
   .grid-tile .tag.over { color: #c8402a; border-color: #c8402a; }
   .grid-tile .asm { position: absolute; box-sizing: border-box; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  /* N03 (js/cut_n03.js) and N06 (js/cut_n06.js): sizes and colours from layout.json n03 / n06 (set inline) */
+  .n03-view { position: absolute; box-sizing: border-box; overflow: hidden; border: 1px solid; }
+  .n03-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n03-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
+  .n03-popup { position: absolute; box-sizing: border-box; overflow: hidden; border: 1px solid; border-radius: 8px; box-shadow: 0 6px 18px rgba(27, 26, 23, 0.18); }
+  .n03-popup h3 { margin: 0; line-height: 1; font-weight: 700; }
+  .n03-popup .chart { display: block; }
+  .n03-popup .none { margin: 0; color: #a8a49a; }
+  .n06-tile { position: absolute; box-sizing: border-box; overflow: hidden; transform-origin: 50% 50%; }
+  .n06-tile canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n06-tile b { position: absolute; font-weight: 700; line-height: 1.15; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile b .why { font-weight: 700; }
+  .n06-tile .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile .none { position: absolute; color: #a8a49a; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>
