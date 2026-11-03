@@ -9,8 +9,13 @@ The model (frame_model):
   node to the frame node by a stiff link in the same way. That the bracket is rigid over the mount length
   is an assumption, not checked;
 - masses: the shell's own (consistent or lumped element mass); parts carried by frame nodes as point masses,
-  each node's share (the part's mass over its carried_by nodes, as k1_frame.modal.add_masses) spread
-  equally over that node's joint nodes; parts carried by a support (wheel, suspension) on the wheel node;
+  each node's share (the part's mass over its carried_by nodes, as k1_frame.modal.add_masses) summed on a
+  mass node at the design node's position, joined to that node's joint nodes by a distributing link (RBE3
+  type: it adds no stiffness). The joint nodes of a T joint are the branch's ring on the host's wall, whose
+  centroid lies off the design node (13 to 16 mm inside the rail on offroad-4w-v1); masses spread over them
+  put the parts' inertia there: the third body-on-springs mode was 2.684 Hz against the beam model's
+  2.61 Hz (+2.8 %), 2.607 Hz with the mass nodes (20 mm mesh, roll bar off);
+  parts carried by a support (wheel, suspension) on the wheel node;
   parts the shell elements already carry (k1_shell.frame.shell_parts: gussets, through parts) are left out;
   parts carried by members are the tubes' own mass, which the shell elements carry. Part rotational
   inertia is not included (nor in the beam model).
@@ -37,7 +42,7 @@ from ..k1_shell.frame import shell_parts
 from ..k1_shell.mesh import ELEMENT_SIZE_MM, build_mesh
 from ..k1_shell.solve import ShellModel
 from . import eigen
-from .connect import Spring, rigid_link
+from .connect import Spring, distributing_link, rigid_link
 from .model import FEModel, StaticSolver
 from .shell import from_shell_model
 
@@ -54,7 +59,7 @@ def frame_model(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, springs:
                 masses: bool = True) -> dict:
     """The fe shell model of the frame (see the module docstring). Returns {"model", "group", "mesh",
     "wheel" {support: node}, "frame_point" {support: node}, "joint_nodes" {design node: mesh nodes},
-    "part_mass_kg", "shell_mass_kg"}."""
+    "mass_node" {design node: its part-mass node}, "part_mass_kg", "shell_mass_kg"}."""
     ms = build_mesh(design, element_size_mm)
     sm = ShellModel.from_mesh(ms, design)
     model, g = from_shell_model(sm)
@@ -68,6 +73,8 @@ def frame_model(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, springs:
         model.add(rigid_link(w, list(mount) + [p], model.nodes, name=f"mount {s['id']}"))
         wheel[s["id"]], point[s["id"]] = w, p
     part_mass = 0.0
+    node_mass: dict[str, float] = {}
+    mass_node: dict[str, int] = {}
     if masses:
         skip = shell_parts(design, ms)
         for it in mass_summary(design)["items"]:
@@ -80,10 +87,13 @@ def frame_model(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, springs:
             else:
                 share = m_t / len(it.carried_by)
                 for fn in it.carried_by:
-                    jn = ms.joints[fn]
-                    for n in jn:
-                        model.point_masses[int(n)] = model.point_masses.get(int(n), 0.0) + share / len(jn)
+                    node_mass[fn] = node_mass.get(fn, 0.0) + share
             part_mass += it.mass_kg
+        for fn, m_t in node_mass.items():
+            ref = model.add_node(xyz[fn])
+            model.add(distributing_link(ref, [int(n) for n in ms.joints[fn]], model.nodes, name=f"mass {fn}"))
+            model.point_masses[ref] = m_t
+            mass_node[fn] = ref
     if springs:
         for s in design["supports"]:
             susp = s.get("suspension", {})
@@ -97,7 +107,8 @@ def frame_model(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, springs:
     model.fix(point[b], [1])
     joint_nodes = {n: np.asarray(v, int) for n, v in ms.joints.items()}
     return {"model": model, "group": g, "mesh": ms, "wheel": wheel, "frame_point": point, "joint_nodes": joint_nodes,
-            "part_mass_kg": part_mass, "shell_mass_kg": float(g.mass_total(model.nodes) * 1000.0)}
+            "mass_node": mass_node, "part_mass_kg": part_mass,
+            "shell_mass_kg": float(g.mass_total(model.nodes) * 1000.0)}
 
 
 def node_shapes(fmod: dict, U: np.ndarray, frame_nodes: list[str]) -> np.ndarray:

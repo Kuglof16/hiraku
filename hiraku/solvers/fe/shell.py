@@ -40,6 +40,7 @@ class MITC4(ElementGroup):
         self.drill_factor = drill_factor
         self.incompatible = incompatible
         self.name = name
+        self.kg_options: dict = {}  # defaults of geometric_stiffness (at, thickness_terms) when eigen calls it
 
     def stiffness(self, nodes: np.ndarray) -> np.ndarray:
         return mitc4.global_stiffness_blocks(nodes[self.conn], self.t, self.E, self.nu, self.drill_factor,
@@ -113,23 +114,99 @@ class MITC4(ElementGroup):
         D = mitc4.plane_stress_matrix(self.E, self.nu)
         return self.t[:, None] * np.einsum("eab,eb->ea", D, eps)
 
-    def geometric_stiffness(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
+    def gauss_membrane_strains(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
+        """Membrane strains (E, 4, 3) in the local axes at the 2 x 2 Gauss points (mitc4.GAUSS_2x2 order),
+        with the incompatible modes: their amplitudes are recovered from the nodal displacements as the
+        condensation in k1_shell.element.local_stiffness eliminates them, alpha = -Kii^-1 Kmi^T u_m (the same
+        matrices, rebuilt here: Wilson's modes with Taylor's centre-Jacobian correction)."""
+        xyz = nodes[self.conn]
+        R, xl, _, _ = mitc4.local_frames(xyz)
+        ne = len(xyz)
+        um = np.einsum("eij,enj->eni", R, ue.reshape(ne, 8, 3)).reshape(ne, 24)[:, mitc4._MEM]
+        _, dN0 = mitc4.shape(0.0, 0.0)
+        _, det0, inv0 = mitc4._jacobian(dN0, xl)
+        Dm = mitc4.plane_stress_matrix(self.E, self.nu) * self.t[:, None, None]
+        Bms, Bis = [], []
+        Kmi = np.zeros((ne, 8, 4))
+        Kii = np.zeros((ne, 4, 4))
+        for xi, eta in mitc4.GAUSS_2x2:
+            _, dN = mitc4.shape(xi, eta)
+            _, det, inv = mitc4._jacobian(dN, xl)
+            Bm = mitc4.membrane_B(np.einsum("eab,bk->eak", inv, dN))
+            dP = np.array([[-2.0 * xi, 0.0], [0.0, -2.0 * eta]])
+            dPx = np.einsum("eab,bk->eak", inv0, dP) * (det0 / det)[:, None, None]
+            Bi = np.zeros((ne, 3, 4))
+            Bi[:, 0, 0:2] = dPx[:, 0]
+            Bi[:, 1, 2:4] = dPx[:, 1]
+            Bi[:, 2, 0:2] = dPx[:, 1]
+            Bi[:, 2, 2:4] = dPx[:, 0]
+            Kmi += np.einsum("eaj,eab,ebk,e->ejk", Bm, Dm, Bi, det)
+            Kii += np.einsum("eaj,eab,ebk,e->ejk", Bi, Dm, Bi, det)
+            Bms.append(Bm)
+            Bis.append(Bi)
+        if self.incompatible:
+            alpha = -np.linalg.solve(Kii, np.einsum("ejk,ej->ek", Kmi, um)[:, :, None])[:, :, 0]
+        else:
+            alpha = np.zeros((ne, 4))
+        return np.stack([np.einsum("eak,ek->ea", Bm, um) + np.einsum("eak,ek->ea", Bi, alpha)
+                         for Bm, Bi in zip(Bms, Bis)], axis=1)
+
+    def gauss_membrane_forces(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
+        """(nx, ny, nxy) N/mm (E, 4, 3) at the 2 x 2 Gauss points, local axes; thermal as membrane_forces
+        (with nodal temperatures interpolated bilinearly to each point)."""
+        eps = self.gauss_membrane_strains(nodes, ue)
+        if thermal is not None:
+            alpha, Tm, _, nodal = _thermal_args(thermal)
+            Tc = self._temperatures(Tm, nodal)
+            a = np.broadcast_to(np.asarray(alpha, float), (len(self.conn),))
+            for g, (xi, eta) in enumerate(mitc4.GAUSS_2x2):
+                N, _ = mitc4.shape(xi, eta)
+                eps[:, g] -= (a * (Tc @ N))[:, None] * np.array([1.0, 1.0, 0.0])
+        D = mitc4.plane_stress_matrix(self.E, self.nu)
+        return self.t[:, None, None] * np.einsum("eab,egb->ega", D, eps)
+
+    def geometric_stiffness(self, nodes: np.ndarray, ue: np.ndarray, thermal=None, at: str | None = None,
+                            thickness_terms: bool | None = None) -> np.ndarray:
         """Initial-stress stiffness (E, 24, 24) in global axes from the membrane forces of ue:
-        K_G = integral over the element of grad(N_a)^T [[nx, nxy], [nxy, ny]] grad(N_b) dA times I on the
-        three translations (the membrane part of the initial-stress matrix of a plate or shell: Cook, Malkus,
-        Plesha & Witt 2002, chapter on buckling; Bathe 1996 section 6.3 - neither checked here). The sum over
-        the three displacement components is the same in any axes, so the global translations are used
-        directly. The membrane forces are the element-centre values (constant over the element); the
-        rotational DOFs get no initial-stress terms (the t^2 / 12 terms of a thick shell are left out)."""
-        n = self.membrane_forces(nodes, ue, thermal)
-        S = np.stack([np.stack([n[:, 0], n[:, 2]], 1), np.stack([n[:, 2], n[:, 1]], 1)], 1)
-        pts, _, _ = self._gauss(nodes)
-        kg = sum(np.einsum("eia,eij,ejb,e->eab", dNx, S, dNx, det) for _, dNx, det in pts)
+        K_G = integral over the element of grad(N_a)^T S grad(N_b) dA, S = [[nx, nxy], [nxy, ny]], times I on
+        the three translations (the membrane part of the initial-stress matrix of a plate or shell: Cook,
+        Malkus, Plesha & Witt 2002, chapter on buckling; Bathe 1996 section 6.3 - neither checked here). The
+        sum over the three displacement components is the same in any axes, so the global translations are
+        used directly.
+        at: "gauss" (default) uses the membrane forces at each 2 x 2 Gauss point (gauss_membrane_forces), so a
+        stress that varies inside the element (in-plane bending of a wall) is followed; "centre" uses the
+        element-centre value for the whole element (the earlier form, kept for comparison).
+        thickness_terms: a point at height z moves z beta in plane, beta = (ry, -rx) in local axes, so the
+        initial stress also does work on the rotations: t^2 / 12 integral grad(N_a)^T S grad(N_b) dA on the
+        local rx and ry (the block (I - n n^T) in global axes; drilling none). Derived here from the
+        displacement field of the shell; the same kind of term as the rotational initial-stress terms of
+        degenerated shells (Bathe 1996, not checked here). Small for thin walls (of order (t / wavelength)^2).
+        Left as None, at and thickness_terms come from self.kg_options (default "gauss", True)."""
+        at = self.kg_options.get("at", "gauss") if at is None else at
+        thickness_terms = self.kg_options.get("thickness_terms", True) if thickness_terms is None else thickness_terms
+        pts, R, _ = self._gauss(nodes)
         ne = len(self.conn)
+        if at == "gauss":
+            n = self.gauss_membrane_forces(nodes, ue, thermal)
+        elif at == "centre":
+            n = np.repeat(self.membrane_forces(nodes, ue, thermal)[:, None, :], 4, axis=1)
+        else:
+            raise ValueError(f"at must be 'gauss' or 'centre', not {at!r}")
+        kg = np.zeros((ne, 4, 4))
+        for g, (_, dNx, det) in enumerate(pts):
+            S = np.stack([np.stack([n[:, g, 0], n[:, g, 2]], 1), np.stack([n[:, g, 2], n[:, g, 1]], 1)], 1)
+            kg += np.einsum("eia,eij,ejb,e->eab", dNx, S, dNx, det)
         Kg = np.zeros((ne, 24, 24))
         for k in range(3):
             idx = 6 * np.arange(4) + k
             Kg[:, idx[:, None], idx[None, :]] = kg
+        if thickness_terms:
+            nrm = R[:, 2]
+            P = np.eye(3)[None] - np.einsum("ei,ej->eij", nrm, nrm)
+            blk = np.einsum("eab,eij,e->eaibj", kg, P, self.t ** 2 / 12.0)
+            for a in range(4):
+                for b in range(4):
+                    Kg[:, 6 * a + 3:6 * a + 6, 6 * b + 3:6 * b + 6] += blk[:, a, :, b, :]
         return Kg
 
     def thermal_forces(self, nodes: np.ndarray, alpha, T_mid, dT=0.0, nodal: bool = False) -> np.ndarray:
