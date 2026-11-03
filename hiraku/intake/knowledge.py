@@ -22,7 +22,7 @@ from typing import Any
 
 from hiraku import contract
 from hiraku.catalog import REPO_ROOT, read_data
-from hiraku.intake import expression, facts
+from hiraku.intake import expression, facts, systems
 from hiraku.intake.domains import IntakeError
 
 Record = dict[str, Any]
@@ -38,13 +38,7 @@ CHECK_BY = (None, "code", "claude")
 # --------------------------------------------------------------------------------------- rules
 
 
-def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *, origin: str, check_by: str | None,
-              trust: int, basis: str, kinds: list[str] | None = None) -> Record:
-    """A validated rule record. Raises IntakeError when the category, the formula or its names are wrong."""
-    if category not in CATEGORIES:
-        raise IntakeError(f"分類 {category!r} はありません。使えるのは {', '.join(CATEGORIES)} です")
-    if not text or not text.strip():
-        raise IntakeError(f"{rule_id}: 規則の文が空です")
+def _check_expression(rule_id: str, check: str) -> None:
     try:
         names = expression.names(check)
     except expression.ExprError as e:
@@ -54,6 +48,20 @@ def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *
         known = ", ".join(n for n in facts.FACTS)
         raise IntakeError(f"{rule_id}: 式 {check!r} の名前 {', '.join(bad)} は使えません。使える名前: {known}、"
                           "req_Qnn (要件の数値)、var_<設計の変数名>")
+
+
+def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *, origin: str, check_by: str | None,
+              trust: int, basis: str, kinds: list[str] | None = None) -> Record:
+    """A validated rule record. Raises IntakeError when the category, the formula or its names are wrong."""
+    if category not in CATEGORIES:
+        raise IntakeError(f"分類 {category!r} はありません。使えるのは {', '.join(CATEGORIES)} です")
+    if not text or not text.strip():
+        raise IntakeError(f"{rule_id}: 規則の文が空です")
+    if systems.is_system_check(check):  # a function of hiraku.intake.systems, only for the built-in rules of the system category
+        if origin != "builtin" or category != "system" or systems.check_name(check) not in systems.CHECKS:
+            raise IntakeError(f"{rule_id}: {check!r} は系の点検の名前ではありません ({', '.join(systems.PREFIX + n for n in systems.CHECKS)})")
+    else:
+        _check_expression(rule_id, check)
     if check_by not in CHECK_BY or origin not in ("builtin", "dropped"):
         raise ValueError(f"{rule_id}: bad origin or check_by")
     rule: Record = {"rule_id": rule_id, "doc_id": doc_id, "category": category, "text": text.strip(), "check": check.strip(),
