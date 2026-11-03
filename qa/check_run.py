@@ -1424,7 +1424,10 @@ class RunChecker:
         if ending is None or not self.project:
             return
         if not self.designs:
-            if ending == "done":
+            # a run that ends on purpose after the domain picks and the hearing (requirements stop_after: picks)
+            # makes no design: done with domains.picked and no version is that run, not an unjudged stop
+            picks_only = any(e.get("kind") == "domains.picked" for e in self.events)
+            if ending == "done" and not picks_only:
                 self.error("HK4_no_stop_before_judged", w, "done without any design version")
             return
         last = max(self.designs)
