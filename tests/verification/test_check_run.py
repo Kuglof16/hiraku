@@ -834,6 +834,15 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
         self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
 
+    def test_rule_check_on_the_whole_design(self):
+        rc = self._example("rule_check")
+        whole = dict(targets=["design"], hits=[dict(rc["hits"][0], part_id="design")], not_evaluable=[])
+        events = self._rule_check(knowledge=True, **whole)
+        self.assertEqual(self.rules(events), set())
+        self.assertNotIn("rule_check.targets", self.rules(events, "warn"))  # "design" is not a missing part
+        self.assertFlags(self._rule_check(**dict(whole, targets=["battery"])), "rule_check.targets")
+        self.assertNotIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "design"]), "warn"))
+
     def _mesh(self, field=None, after="design.created", **change):
         m = self._example("mesh")
         m.update(element_member=["rail_L0", "rail_L0"], member_thickness_mm={"rail_L0": 2.3})
