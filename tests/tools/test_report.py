@@ -56,6 +56,17 @@ class ReportTest(RunCase, unittest.TestCase):
         self.assertEqual((last["kind"], last["agent"], last["data"]), ("report.written", "lead", rep))
         self.assert_events_fit()
 
+    def test_issues_are_kept_as_the_lead_wrote_them(self):
+        issues = [{"kind": "missing_tool", "what": "横転の保護枠を当てる道具が棚に無い", "where": "R4-rops",
+                   "workaround": "make_tool で作った"},
+                  {"kind": "unexplained_mismatch", "what": "差の原因を言えない", "record_ids": ["cmp-0001"]}]
+        rep = write_report(self.ctx, {"summary": "強度は合格", "next": [], "issues": issues}, "lead")
+        self.assertEqual(rep["issues"], issues)
+        self.assertNotIn("issues", write_report(self.ctx, {"summary": "強度は合格", "next": []}, "lead"))
+        with self.assertRaisesRegex(ToolError, "入力の形"):
+            write_report(self.ctx, {"summary": "x", "next": [], "issues": [{"kind": "complaint", "what": "y"}]}, "lead")
+        self.assert_events_fit()
+
     def test_unchecked_values_are_listed(self):
         got = {u["what"].split()[0] for u in unchecked(self.ctx)}
         items = {u["item"].split()[0] for u in build_report(self.ctx, {"summary": "x", "next": []}, "lead")["unchecked"]}

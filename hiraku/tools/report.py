@@ -218,4 +218,6 @@ def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
         "unchecked": [{"item": u["what"], "source": u["basis"] or "not given"} for u in unchecked(ctx)],
         "next": [{"domain": n["domain"], "change": n["change"], "reason": n["reason"]} for n in args.get("next") or []],
         "summary": args.get("summary", "").strip(),
+        # where HIRAKU itself got in the way of the run, in the lead's words (contract report.issues)
+        **({"issues": [dict(i) for i in args["issues"]]} if args.get("issues") else {}),
     }
