@@ -70,7 +70,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic"])
+                                 "step_climb_dynamic", "kc_bench"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -117,10 +117,11 @@ class Declarations(unittest.TestCase):
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
+        no_k0_yet = {"kc_bench"}  # K0 has no K&C formula (roll centre, compliance steer) yet
         for name, tool in TOOLS.items():
             desc = tool.describe()
             declared = {p["name"]: p for p in desc["params"]}
-            self.assertTrue(desc["predicts"], name)
+            self.assertEqual(bool(desc["predicts"]), name not in no_k0_yet, name)
             self.assertEqual(tool.spec()["formulas"], desc["formulas"])
             for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):

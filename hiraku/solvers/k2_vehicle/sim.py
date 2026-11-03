@@ -141,6 +141,7 @@ class Sim:
         self.toe0 = [c.path.toe0 if c.path is not None else 0.0 for c in cs]
         self.s_lo = [c.path.s_lo if c.path is not None else -1.0 for c in cs]
         self.s_hi = [c.path.s_hi if c.path is not None else 1.0 for c in cs]
+        self.comp = [c.path.comp.tolist() if c.path is not None and c.path.comp is not None else None for c in cs]
         pos = {i: k for k, i in enumerate(self.dofidx)}
         self.pairs = []
         for i, c in enumerate(cs):
@@ -179,11 +180,13 @@ class Sim:
         self.om = [0.0] * n
         self.dx = [0.0] * n
         self.dy = [0.0] * n
+        self.ct = [0.0] * n  # toe and camber from the compliance (rad), from the forces of the step before
+        self.cc = [0.0] * n
         self.out = {}
         defl = [c.static_load / c.k_z for c in veh.corners]
         self.p[2] -= sum(defl) / n
 
-    _STATE = ("t", "p", "q", "v", "w", "s", "sd", "om", "dx", "dy")
+    _STATE = ("t", "p", "q", "v", "w", "s", "sd", "om", "dx", "dy", "ct", "cc")
 
     def state(self) -> dict:
         return {k: (list(getattr(self, k)) if isinstance(getattr(self, k), list) else getattr(self, k)) for k in self._STATE}
@@ -198,7 +201,8 @@ class Sim:
     # ------------------------------------------------------------- geometry
     def _path(self, i: int, s: float):
         """Body-frame wheel centre, its first and second travel derivatives, the
-        knuckle rotation per travel (x and z), camber and toe of corner i."""
+        knuckle rotation per travel (x and z), camber and toe of corner i (on a K&C
+        table, with the compliance's toe and camber of the forces of the step before)."""
         hx, hy, hz = self.hard[i]
         if not self.dof[i]:
             return hx, hy, hz, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.camber0[i], self.toe0[i]
@@ -222,7 +226,7 @@ class Sim:
         (x, x1, x2), (y, y1, y2), (z, z1, z2), (cb, cb1, _), (te, te1, _) = vals
         side = self.side[i]
         return (hx + x, hy + sd_ * y, hz + z, x1, sd_ * y1, z1, x2, sd_ * y2, z2,
-                -side * cb1, -side * te1, self.camber0[i] + cb, self.toe0[i] + te)
+                -side * cb1, -side * te1, self.camber0[i] + cb + self.cc[i], self.toe0[i] + te + self.ct[i])
 
     def _kinematics(self, rot):
         """Per corner: (path values, wheel-centre position and velocity in world axes), and the centres."""
@@ -286,6 +290,7 @@ class Sim:
         self._integrate(sol, gx, gy, gz, h)
         self.om = om_new
         self._relax_tyres(geo, keep, o_ntot, rot, h)
+        self._comply(keep, o_fx, o_fy, o_mz, rot)
         self.t += h
 
         self.out = {"ntot": o_ntot, "fx": o_fx, "fy": o_fy, "mz": o_mz, "gamma": o_gamma, "f": o_f, "p": o_p,
@@ -639,6 +644,35 @@ class Sim:
                                                        vsl - on * arl, lim, h)
         self.dx = new_dx
         self.dy = new_dy
+
+    def _comply(self, keep, fl, ft, mz, rot):
+        """Toe and camber of the K&C compliance for the next step: the table's compliance at the
+        travel times this step's tyre force at the contact (body x, y) and aligning moment. The
+        tables are for a left wheel, so a right wheel's Fy and Mz go in mirrored."""
+        for i in range(self.n):
+            rows = self.comp[i]
+            if rows is None or keep[i] is None:
+                continue
+            lo, hi = self.s_lo[i], self.s_hi[i]
+            s = self.s[i]
+            sc = lo if s < lo else (hi if s > hi else s)
+            vals = []
+            for row in rows:
+                v = row[0]
+                for ck in row[1:]:
+                    v = v * sc + ck
+                vals.append(v)
+            lx, ly, lz, tx, ty, tz = keep[i][:6]
+            lbx, lby, _ = _to_body(rot, lx, ly, lz)
+            tbx, tby, _ = _to_body(rot, tx, ty, tz)
+            fx = fl[i] * lbx + ft[i] * tbx
+            fy = fl[i] * lby + ft[i] * tby
+            m = mz[i]
+            if self.side[i] < 0:
+                fy, m = -fy, -m
+            # COMPLIANCE_KEYS: toe and camber per fx, per fy, per mz
+            self.ct[i] = vals[0] * fx + vals[2] * fy + vals[4] * m
+            self.cc[i] = vals[1] * fx + vals[3] * fy + vals[5] * m
 
     def _psum(self, rows: list) -> list:
         """Column sums of the per-corner rows: each mirror pair (L + R) first, then the pairs

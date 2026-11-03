@@ -24,6 +24,7 @@ base.py holds K2Tool and the shared params and helpers; each scenario has its ow
 from .base import CD, FRONT_AREA, LOADING, MOTOR, MU, RHO, SIDE_AREA, SIDE_CP_HEIGHT, TIPPED_ROLL, K2Tool, P, Pair
 from .braking import BrakingTool, brake_stop
 from .crosswind import CrosswindTool, wind_ramp
+from .kc_bench import KcBenchTool
 from .lane_change import DLC_LANE_WIDTH, DLC_OFFSET, DLC_SECTIONS, LaneChangeTool, dlc_path, dlc_scene, path_run
 from .launch import LaunchTool, launch_run
 from .offroad import OffroadRollTool
@@ -31,9 +32,9 @@ from .step import StepClimbTool, step_push
 from .tilt import TiltTool, tilt_closed_form
 
 TOOLS = {t.name: t for t in (TiltTool(), CrosswindTool(), BrakingTool(), LaunchTool(), LaneChangeTool(),
-                             OffroadRollTool(), StepClimbTool())}
+                             OffroadRollTool(), StepClimbTool(), KcBenchTool())}
 
 __all__ = ["TOOLS", "K2Tool", "P", "Pair", "LOADING", "MU", "RHO", "CD", "FRONT_AREA", "SIDE_AREA", "SIDE_CP_HEIGHT",
            "MOTOR", "TIPPED_ROLL", "TiltTool", "CrosswindTool", "BrakingTool", "LaunchTool", "LaneChangeTool",
-           "OffroadRollTool", "StepClimbTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
+           "OffroadRollTool", "StepClimbTool", "KcBenchTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
            "path_run", "dlc_path", "dlc_scene", "step_push", "DLC_SECTIONS", "DLC_OFFSET", "DLC_LANE_WIDTH"]

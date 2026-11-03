@@ -8,8 +8,10 @@ the builder had to assume is listed in Vehicle.assumptions.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 import numpy as np
 
@@ -46,6 +48,12 @@ DEFAULTS = {
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
     "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
                                                    "max_steer_angle)"),
+    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed; the "
+                                             "design has no bushing_radial_stiffness)"),
+    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed; the "
+                                              "design has no bushing_axial_stiffness)"),
+    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed; the design has no "
+                                       "tie_rod_stiffness)"),
 }
 
 
@@ -84,6 +92,7 @@ class Corner:
     static_load: float = 0.0
     mirror: int = -1
     mf: MF61 | None = None  # the wheel's Magic Formula tyre (None: legs and casters)
+    table: dict | None = None  # the K&C table the path was fitted to (kc_table supports)
 
     @property
     def dof(self) -> bool:
@@ -355,14 +364,30 @@ def _corner(s: dict, mirror: int, st: _Settings, design: dict, notes: list[str])
         if ref.startswith("builtin:"):
             hp_pos = pos.copy()
             hp_pos[1] = abs(hp_pos[1])
-            table = kinematics.build_table(kinematics.generic_sla(hp_pos, radius), max(travel, 0.02) * 0.6)
-            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle)")
+            bushings = kinematics.Bushings(_var(design, "bushing_radial_stiffness", "N/m", notes),
+                                           _var(design, "bushing_axial_stiffness", "N/m", notes),
+                                           _var(design, "tie_rod_stiffness", "N/m", notes))
+            table = _builtin_table(hp_pos, radius, max(travel, 0.02) * 0.6, bushings)
+            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle), with its "
+                         "compliance from the bushings and the tie rod; longitudinal forces taken at the contact point")
         else:
             table = kinematics.load_table(ref)
         c.path = kinematics.PathPoly.from_table(table)
+        c.table = table
     else:
         c.path = kinematics.PathPoly.vertical()
     return c
+
+
+@lru_cache(maxsize=32)
+def _table_of(key: tuple) -> str:
+    wc, radius, travel, bushings = key
+    return json.dumps(kinematics.build_table(kinematics.generic_sla(np.array(wc), radius), travel, bushings=bushings))
+
+
+def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinematics.Bushings) -> dict:
+    """The builtin K&C table of a corner (computed once per geometry and bushings in a process)."""
+    return json.loads(_table_of((tuple(float(x) for x in wc), float(radius), float(travel), bushings)))
 
 
 def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
