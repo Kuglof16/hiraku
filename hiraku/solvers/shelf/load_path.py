@@ -498,7 +498,7 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
     lp = build(design, contacts, exclude=frozenset(free), holds=holds) if free else full
     parts = {p["id"]: p for p in design.get("parts", [])}
     effects: list[Record] = []
-    results = [result("free_parts", len(free), "1", _where(free)), result("contacts", len(lp.contacts), "1")]
+    results = [result("contacts", len(lp.contacts), "1")]
     results += [result(f"free_part.{pid}", 1.0, "1", pid) for pid in free]
     if free:
         effects.append({"name": f"どこにも繋がらない部品 {len(free)} 個 (自由な剛体、解析から外した): " + ", ".join(free),
@@ -582,6 +582,8 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         results += _push(design, lp, values, on_part, vectors, effects)
     else:
         raise DesignError(f"load_kind must be one of {', '.join(LOAD_KINDS)}, got {kind!r}")
+    loaded = [pid for pid in dict.fromkeys(lost) if pid in free]  # the free parts this load case loads, named first
+    results.insert(0, result("free_parts", len(free), "1", _where(loaded + [p for p in free if p not in loaded])))
     for pid in dict.fromkeys(lost):
         effects.append({"name": f"{pid} はどこにも繋がらないので、{pid} に掛かる荷重は枠まで届かない (この荷重は解析に入れていない)"})
     return {"results": results, "effects": effects, "vectors": vectors, "contacts": lp.contacts, "free": free}
