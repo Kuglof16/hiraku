@@ -155,11 +155,49 @@ class FrameTubes(BuiltinTool):
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
     needs_mesh = True
+    applies_to = "space_frame_utv"  # the kind of design (hiraku.designgen ARCHETYPES key) the tool is for
+    stage = 3  # contract tool_spec.stage: shell and solid finite elements
 
     def known_answers(self) -> list[Record]:
         return tube_known_answers()
 
+    def describe(self) -> Record:
+        return dict(super().describe(), applies_to=self.applies_to, stage=self.stage)
+
+    def spec(self) -> Record:
+        """The tool_spec; applies_to and stage only when the contract's tool_spec has those fields (it allows no
+        others)."""
+        from hiraku import contract
+
+        out = super().spec()
+        fields = contract.schema().get("$defs", {}).get("tool_spec", {}).get("properties", {})
+        if "applies_to" in fields:
+            out["applies_to"] = [self.applies_to]
+        if "stage" in fields:
+            out["stage"] = self.stage
+        return out
+
+    def applies(self, design: Record) -> str | None:
+        """None for a design this tool is for: every support on a double wishbone (a K&C table with hardpoints)
+        whose six body-side pickups are frame nodes, as space_frame_utv builds them; else why not, saying what
+        the tool is for and what to use instead."""
+        nodes = [np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])]
+        missing = []
+        for s in design.get("supports", []):
+            hp = (s.get("suspension") or {}).get("hardpoints_mm") or {}
+            for k in tubes.MOUNT_KEYS:
+                if k not in hp or not any(float(np.linalg.norm(p - np.asarray(hp[k], float))) < 1e-6 for p in nodes):
+                    missing.append(f"{s.get('id')}.{k}")
+        if not design.get("supports") or missing:
+            where = f" (not at a frame node: {', '.join(missing[:4])}{', ...' if len(missing) > 4 else ''})" if missing else ""
+            return ("frame_tubes は立体フレーム (space_frame_utv) の設計に使います。この設計のサスペンションの取付点はフレームの"
+                    f"節にありません{where}。梯子フレームなら frame_shell を使ってください")
+        return None
+
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
+        why = self.applies(design)
+        if why:
+            raise LoadCaseError(why)
         design = on_board(design, load_case)
         g = g_factor(load_case)
         size = run_param(params, ELEMENT_SIZE)
