@@ -24,7 +24,8 @@ mounts.
 
 Run parameters (analyze's params): element_size, the shell elements' target
 edge (the version's mesh record is made at the default, so another size is
-solved but not drawn on it); mesh_convergence "3" (default) solves the same
+solved but not drawn on it); mesh_convergence "3" (asked for once, on the
+version that looks final; the default is "off") solves the same
 design on three meshes, coarse to fine by a ratio of 2 (2s, s, s/2; 4s, 2s, s
 when s/2 would be under 5 mm), and writes analysis.mesh_convergence for the
 judged hot spot read at the same weld line on every level (change, Richardson
@@ -82,8 +83,9 @@ ELEMENT_SIZE = Param("element_size", "mm", "target edge of the shell elements (t
 MESH_CONVERGENCE = Param("mesh_convergence", None, "'3': also solve on two more meshes (three levels coarse to fine by "
                          f"a ratio of {REFINE_RATIO:g}: 2s, s, s/2, or 4s, 2s, s when s/2 is under "
                          f"{ELEMENT_SIZE_RANGE_MM[0]:g} mm) and write mesh_convergence for max_hot_spot_stress at the "
-                         "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off': not",
-                         default="3", choices=("off", "3"))
+                         "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off' (default): one mesh. "
+                         "Ask for '3' once, on the judged load cases of the version that looks final (HK5)",
+                         default="off", choices=("off", "3"))
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
 MOUNT_NOTE = "車輪の取付の当て板の要素も含む (max_stress はそれを外した最大)"
 LABELS = {
