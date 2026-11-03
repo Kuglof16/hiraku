@@ -211,6 +211,15 @@ def _domain_record(part: Record, sens: list[Record]) -> Record:
     return out
 
 
+def rule_hits(ctx: RunContext) -> list[str]:
+    """Rule ids whose latest rule_check of the current version has hits (a next item answering one
+    may name a domain the run did not pick)."""
+    latest: dict[str, Record] = {}
+    for rc in ctx.store.records("rule_check", ctx.version):
+        latest[rc["rule_id"]] = rc
+    return [r for r, rc in latest.items() if rc["hits"]]
+
+
 def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
     """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
     and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
@@ -226,15 +235,22 @@ def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
                         + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
     parts = domain_parts(ctx)
     domains = {d["domain"] for d in parts}
-    wrong = [n.get("domain") for n in args.get("next") or [] if n.get("domain") not in domains]
+    hit = rule_hits(ctx)
+    not_hit = [n["rule_id"] for n in args.get("next") or [] if n.get("rule_id") and n["rule_id"] not in hit]
+    if not_hit:
+        raise ToolError(f"next の rule_id {not_hit} は、版 {ctx.version} の最後の rule_check で当たった規則ではありません"
+                        f" (当たった規則: {', '.join(hit) or 'なし'})")
+    wrong = [n.get("domain") for n in args.get("next") or [] if n.get("domain") not in domains and not n.get("rule_id")]
     if wrong:
-        raise ToolError(f"next の domain {wrong} は、この実行で選んだ分野 ({', '.join(sorted(domains))}) ではありません")
+        raise ToolError(f"next の domain {wrong} は、この実行で選んだ分野 ({', '.join(sorted(domains))}) ではありません。"
+                        f"rule_check で当たった規則に答える変更なら、その規則の rule_id を付けてください")
     return {
         "design_version": ctx.version,
         "agent": agent,
         "domains": [_domain_record(p, sens) for p in parts],
         "unchecked": [{"item": u["what"], "source": u["basis"] or "not given"} for u in unchecked(ctx)],
-        "next": [{"domain": n["domain"], "change": n["change"], "reason": n["reason"]} for n in args.get("next") or []],
+        "next": [{"domain": n["domain"], "change": n["change"], "reason": n["reason"],
+                  **({"rule_id": n["rule_id"]} if n.get("rule_id") else {})} for n in args.get("next") or []],
         "summary": args.get("summary", "").strip(),
         # where HIRAKU itself got in the way of the run, in the lead's words (contract report.issues)
         **({"issues": [dict(i) for i in args["issues"]]} if args.get("issues") else {}),
