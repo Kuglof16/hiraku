@@ -173,6 +173,7 @@ OWNERS = {
     "qa": [  # 品質保証部: verification tests, Rapier cross-check, reviews
         "tests/verification/",
         "qa/",
+        ".github/",  # the light test run on GitHub Actions
     ],
     "promo": [  # 広報部: title and explainer screens, video prep
         "promo/",
