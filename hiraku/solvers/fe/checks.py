@@ -341,8 +341,10 @@ def rect_t_joint(size: float = 10.0, tied: bool = True, L: float = 400.0, Lb: fl
 
 
 def round_tube_shell(R: float, length: float, n_c: int, n_l: int, x0: float = 0.0):
-    """Shell mesh of a round tube along x (mid-surface radius R, nodes on the circle), quads counter-clockwise
-    seen from outside. Returns nodes (N, 3), quads, end rings (start, end)."""
+    """Shell mesh of a round tube along x (mid-surface radius R, nodes on the circle). The quads are
+    counter-clockwise seen from inside: the element normal (k1_shell.element.local_frames) points to the
+    axis (measured: n . radial = -1). eigen_checks.tube_shell makes outward-facing tubes. Returns nodes (N, 3),
+    quads, end rings (start, end)."""
     a = 2 * np.pi * np.arange(n_c) / n_c
     xs = x0 + np.linspace(0, length, n_l + 1)
     nodes = np.array([[x, R * np.cos(t), R * np.sin(t)] for x in xs for t in a])
