@@ -202,6 +202,11 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
              "見つかりません)。同じ入力でもう一度呼んでください")
 
 
+# Refusals kept in the record as an agent.said of system (data.refused, data.reason): a refused first
+# version leaves the run with nothing to judge, and HK4 lets the stop through on it (rules.design_refusal).
+RECORDED_REFUSALS = ("propose_design",)
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
@@ -212,6 +217,9 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
         try:
             result = await asyncio.to_thread(fn, ctx, args, agent)
         except ToolError as e:
+            if name in RECORDED_REFUSALS:  # HK4 reads it (rules.design_refusal): the run may end on it
+                ctx.store.emit("agent.said", agent="system", text=f"{name} は断られました: {e}",
+                               data={"refused": name, "agent": agent, "reason": str(e)})
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
         return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 

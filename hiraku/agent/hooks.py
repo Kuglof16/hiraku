@@ -240,6 +240,8 @@ class Hooks:
             return {}
         if rules.revisions_used_up(self.ctx):  # HK4 holds no stop past the round limit (HOOK_RULES)
             return self._end()
+        if rules.design_refusal(self.ctx) is not None:  # no first version: the designer's last try was refused
+            return self._end()
         # HK4: a pending domain, or (red_left) a red tile while design revisions are left
         reason = rules.stop_reason(self.ctx) or rules.red_left_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:

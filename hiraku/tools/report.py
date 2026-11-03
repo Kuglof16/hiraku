@@ -220,13 +220,34 @@ def rule_hits(ctx: RunContext) -> list[str]:
     return [r for r, rc in latest.items() if rc["hits"]]
 
 
+def _report_before_a_design(ctx: RunContext, args: Record, agent: str) -> Record:
+    """design_version 0: why the run stopped before its first version, in the summary and issues."""
+    if args.get("next") or args.get("sensitivity"):
+        raise ToolError("設計の版がまだ無いので、next と sensitivity は書けません。summary と issues だけで報告してください")
+    bad = sorted(set(unknown_numbers(args.get("summary", ""), recorded_numbers(ctx))))
+    if bad:
+        raise ToolError("報告の文に、記録に無い数があります: " + "、".join(bad)
+                        + "。数は記録 (要件) の値をそのまま引くか、数を書かずに記録の ID で指してください")
+    return {
+        "design_version": 0,
+        "agent": agent,
+        "domains": [],
+        "unchecked": [{"item": u["what"], "source": u["basis"] or "not given"} for u in unchecked(ctx)],
+        "next": [],
+        "summary": args.get("summary", "").strip(),
+        **({"issues": [dict(i) for i in args["issues"]]} if args.get("issues") else {}),
+    }
+
+
 def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Record] | None = None) -> Record:
     """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
     and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
     names them; not in the contract's tool input yet). computed: sensitivities already computed
-    by sensitivities() (the scripted driver's next items, scripted_next), added to those asked."""
+    by sensitivities() (the scripted driver's next items, scripted_next), added to those asked.
+    Before the first version (a run that stopped there), the report has design_version 0 and only the
+    summary and issues: there are no domains, sensitivities or next changes to give."""
     if not ctx.version:
-        raise ToolError("設計の版がまだ無いので、報告は書けません")
+        return _report_before_a_design(ctx, args, agent)
     sens = list(computed or []) + sensitivities(ctx, args.get("sensitivity") or [])
     texts = [args.get("summary", "")] + [f"{n.get('change', '')} {n.get('reason', '')}" for n in args.get("next") or []]
     allowed = recorded_numbers(ctx, sens)

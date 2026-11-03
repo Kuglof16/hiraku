@@ -288,8 +288,26 @@ def cannot_judge_text(ctx: RunContext) -> str | None:
             f"(予測が無いと解析も照合もできない)")
 
 
+def design_refusal(ctx: RunContext) -> str | None:
+    """Before the first version: the reason the designer's last propose_design was refused (an
+    agent.said of system with data.refused, hiraku.tools.mcp RECORDED_REFUSALS), or None. HK4 lets
+    the lead's stop through on it: the roles could not fix what the tool refused."""
+    if ctx.version:
+        return None
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "design.created":
+            return None
+        if e["kind"] == "agent.said" and (e.get("data") or {}).get("refused") == "propose_design":
+            return e["data"].get("reason") or e.get("text") or ""
+    return None
+
+
 def unjudged_reason(ctx: RunContext) -> str | None:
     """Why a run that ends now ends not judged: stop_reason, and the load cases it cannot judge
-    (cannot_judge_text). None when every picked domain is judged."""
+    (cannot_judge_text); before the first version, the refusal of propose_design if that is why.
+    None when every picked domain is judged."""
+    refused = design_refusal(ctx)
+    if refused is not None:
+        return f"最初の版を作れませんでした。設計役の propose_design が断られました: {refused}"
     parts = [x for x in (stop_reason(ctx), cannot_judge_text(ctx)) if x]
     return " ".join(parts) or None
