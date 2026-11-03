@@ -103,6 +103,26 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
 
+    def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
+        from unittest import mock
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+        from hiraku.designgen import driver_fit
+
+        found = {"changes": {"steering_x": {"value": -509.5, "unit": "mm"}, "seat_height": {"value": 317.0, "unit": "mm"}},
+                 "smallest": {"name": "knee_room", "value": 12.0, "unit": "mm", "where": "steering_column"}}
+        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit:
+            changes, reason = scripted.fit_driver(self.ctx, {"track": {"value": 1220, "unit": "mm"},
+                                                             "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
+        self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
+        self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
+        self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
+        self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
+        self.assertEqual(changes["track"]["value"], 1220)
+        self.assertIn("driver_fit", reason)
+        self.assertIn("knee_room 12.0 mm", reason)
+
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["notes"] = ["R4 は回していません"]

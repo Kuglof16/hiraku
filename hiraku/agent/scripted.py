@@ -40,7 +40,26 @@ Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
-REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
+FIT_TIME_S = 120.0  # the driver fit's time limit when the plan gives none
+
+
+def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None) -> tuple[dict, str]:
+    """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
+    with them (hiraku.designgen.driver_fit.best_driver_place: the smallest of the H3 margins made the largest).
+    Returns the changes with the fit's added (the fit's win for its variables) and the reason with the margins."""
+    from hiraku import designgen
+    from hiraku.designgen import driver_fit
+
+    base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
+    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S))
+    small = got["smallest"]
+    found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
+    text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
+            f"いちばん小さい余裕は {small['name']} {small['value']:.1f} {small['unit']} ({small.get('where') or '-'})")
+    return {**changes, **got["changes"]}, text
+
+
+REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
 
 
 def scripted_summary(ctx: RunContext) -> str:
@@ -358,8 +377,11 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         rev = revisions.pop(0)
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
+        changes, reason = dict(rev.get("changes") or {}), rev["reason"]
+        if rev.get("fit") == "driver":  # the seat, steering and pedals searched by code (designgen.driver_fit)
+            changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"))
         try:
-            out = revise_design(ctx, {"changes": rev["changes"], "reason": rev["reason"]}, "designer")
+            out = revise_design(ctx, {"changes": changes, "reason": reason}, "designer")
         except ToolError as e:
             s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
             raise Stop(f"revise_design refused: {e}") from None

@@ -49,7 +49,9 @@
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   # The designer's revisions, one per round, used when a tile comes out red
-  # (revise_design: the variables of hiraku.designgen, absolute values).
+  # (revise_design: the variables of hiraku.designgen, absolute values). With `fit: driver` the seat,
+  # steering and pedals are searched by code on the design with the entry's changes
+  # (hiraku.designgen.driver_fit, `fit_time_s` its time limit) and added to them.
   revise:
     # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
