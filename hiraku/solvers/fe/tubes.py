@@ -30,6 +30,17 @@ Meshing (frame_shells):
   that meet the host side by side may overlap each other near the wall; they are tied to the host,
   not to each other (assumption: the weld cluster is not modelled). A branch under MIN_BRANCH_DEG to
   its host is refused.
+- Weld strips (weld_strips=True, the default; for hot_spots, the IIW structural hot-spot stress by
+  k1_shell.stress.hot_spots' rule): a tied end's first two rows lie one and two wall thicknesses from the
+  cut, square to it (strip_steps: t / cos of the cut's slant on each generator line); a host's grid has
+  lines at each footprint's four extremes (along the host and around it) and t and 2t beyond them; for a
+  rect branch also k1_shell's corner lines at t, 2t and 3t from the footprint's corners (on the host's and
+  the branch's wall). Grid lines closer than MERGE_T t are merged, and a ring node that falls on a host
+  node shares it. A round host's facets are then uneven (their corners stay at facet_radius_factor of the
+  total count, an approximation of the circle's second moment of area). On the rect T of k1_shell's tests
+  the hot spot moves 2 % from 10 to 5 mm; on round tubes the crown and saddle are read at the branch's facet
+  corners, which move with the facet count, and the space-frame UTV's hot spots wander by up to 12 % over
+  30 / 20 / 14 / 10 mm elements (not converged).
 - Mounts: a hardpoint's node is joined by a distributing link (RBE3, fe.connect.distributing_link) to
   the host wall's nodes within PATCH_FACTOR x the host's radius of the hardpoint along the host and
   around it (assumption: a bracket about as long as the tube is wide).
@@ -55,7 +66,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..k1_shell.mesh import facet_radius_factor, k1_axes
+from ..k1_shell.mesh import CORNER_LINES, facet_radius_factor, k1_axes
+from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, axis_name, extrapolate_hot_spot
 from .connect import distributing_link, rbe3_forces, rigid_link, tie
 from .model import FEModel, StaticSolver
 from .shell import MITC4
@@ -66,6 +78,7 @@ MIN_BRANCH_DEG = 12.0
 PATCH_FACTOR = 1.0
 ELEMENT_SIZE_MM = 20.0
 MIN_ROUND_FACETS = 8
+MERGE_T = 0.4  # weld strips: grid lines closer than this many wall thicknesses are merged
 
 
 class TubeMeshError(ValueError):
@@ -272,29 +285,97 @@ def resolve_joints(tubes: dict, joints: dict) -> dict:
 # ---------------------------------------------------------------- sections and cuts
 
 
-def section_points(tb: Tube, size: float, facet: bool = True) -> tuple[np.ndarray, int]:
-    """Offsets (n_c, 3) of the generator lines from the axis, counter-clockwise about d (from ey to ez)."""
-    ey, ez = tb.axes()
+def perimeter(tb: Tube) -> float:
+    """Length of the mid-surface's section line: the circle 2 pi R, or the mid-line rectangle."""
     if tb.shape == "round_tube":
-        R = tb.R
-        n = max(MIN_ROUND_FACETS, 4 * math.ceil(2.0 * math.pi * R / size / 4.0 - 1e-9))
-        rho = R * (facet_radius_factor(n) if facet else 1.0)
-        a = 2.0 * math.pi * np.arange(n) / n
-        return rho * (np.cos(a)[:, None] * ey + np.sin(a)[:, None] * ez), n
-    hy, hz = (tb.dims["h"] - tb.t) / 2.0, (tb.dims["b"] - tb.t) / 2.0
-    ny, nz = max(2, math.ceil(2 * hy / size - 1e-9)), max(2, math.ceil(2 * hz / size - 1e-9))
-    pts = []
-    # counter-clockwise about d seen with ey right and ez up: start at (+hy, -hz)
-    for k in range(nz):
-        pts.append((hy, -hz + 2 * hz * k / nz))
-    for k in range(ny):
-        pts.append((hy - 2 * hy * k / ny, hz))
-    for k in range(nz):
-        pts.append((-hy, hz - 2 * hz * k / nz))
-    for k in range(ny):
-        pts.append((-hy + 2 * hy * k / ny, -hz))
-    P = np.array(pts)
-    return P[:, 0:1] * ey + P[:, 1:2] * ez, len(P)
+        return 2.0 * math.pi * tb.R
+    return 2.0 * (tb.dims["h"] - tb.t) + 2.0 * (tb.dims["b"] - tb.t)
+
+
+def _rect_half(tb: Tube) -> tuple[float, float]:
+    return (tb.dims["h"] - tb.t) / 2.0, (tb.dims["b"] - tb.t) / 2.0
+
+
+def _rect_corners(tb: Tube) -> np.ndarray:
+    """Perimeter coordinates of the mid-line rectangle's corners, from (+hy, -hz) counter-clockwise."""
+    hy, hz = _rect_half(tb)
+    return np.array([0.0, 2 * hz, 2 * hz + 2 * hy, 4 * hz + 2 * hy])
+
+
+def perimeter_point(tb: Tube, c) -> np.ndarray:
+    """Offsets (n, 3) from the axis of the mid-surface points at perimeter coordinates c (counter-clockwise
+    about d from ey; a rect tube's from its corner (+hy, -hz))."""
+    ey, ez = tb.axes()
+    c = np.mod(np.atleast_1d(np.asarray(c, float)), perimeter(tb))
+    if tb.shape == "round_tube":
+        a = c / tb.R
+        return tb.R * (np.cos(a)[:, None] * ey + np.sin(a)[:, None] * ez)
+    hy, hz = _rect_half(tb)
+    k = _rect_corners(tb)
+    y = np.where(c < k[1], hy, np.where(c < k[2], hy - (c - k[1]), np.where(c < k[3], -hy, -hy + (c - k[3]))))
+    z = np.where(c < k[1], -hz + c, np.where(c < k[2], hz, np.where(c < k[3], hz - (c - k[2]), -hz)))
+    return y[:, None] * ey + z[:, None] * ez
+
+
+def perimeter_coord(tb: Tube, w: np.ndarray) -> np.ndarray:
+    """Perimeter coordinate (as perimeter_point) of points offset w (n, 3) from the axis (on or near the wall)."""
+    ey, ez = tb.axes()
+    y, z = w @ ey, w @ ez
+    if tb.shape == "round_tube":
+        return np.mod(np.arctan2(z, y), 2.0 * math.pi) * tb.R
+    hy, hz = _rect_half(tb)
+    k = _rect_corners(tb)
+    face = np.argmax(np.stack([y / hy, z / hz, -y / hy, -z / hz]), axis=0)
+    c = np.choose(face, [z + hz, k[1] + (hy - y), k[2] + (hz - z), k[3] + (y + hy)])
+    return np.mod(c, perimeter(tb))
+
+
+def section_points(tb: Tube, size: float, facet: bool = True, forced=None) -> tuple[np.ndarray, int]:
+    """Offsets (n_c, 3) of the generator lines from the axis, counter-clockwise about d (from ey to ez).
+
+    forced: [(perimeter coordinate, keep-clear half width)]: generator lines put there (weld strips); the even
+    lines within the half width, or within half their spacing, of a forced line are left out (a rect tube keeps
+    its corners; a forced line within a quarter of the least half width of a corner is the corner). A round
+    tube's corners stay at facet_radius_factor(n) x R for the total count n (exact for even facets only)."""
+    forced = list(forced or [])
+    P = perimeter(tb)
+    if tb.shape == "round_tube":
+        n = max(MIN_ROUND_FACETS, 4 * math.ceil(2.0 * math.pi * tb.R / size / 4.0 - 1e-9))
+        base = P * np.arange(n) / n
+        keep_always = np.zeros(0)
+        spacing = P / n
+    else:
+        hy, hz = _rect_half(tb)
+        ny, nz = max(2, math.ceil(2 * hy / size - 1e-9)), max(2, math.ceil(2 * hz / size - 1e-9))
+        k = _rect_corners(tb)
+        # counter-clockwise about d seen with ey right and ez up: start at (+hy, -hz)
+        base = np.concatenate([k[0] + 2 * hz * np.arange(nz) / nz, k[1] + 2 * hy * np.arange(ny) / ny,
+                               k[2] + 2 * hz * np.arange(nz) / nz, k[3] + 2 * hy * np.arange(ny) / ny])
+        keep_always = k
+        spacing = min(2 * hy / ny, 2 * hz / nz)
+    cs = base
+    if forced:
+        gap = MERGE_T * tb.t  # lines closer than this are one line (no sliver elements)
+        fc = np.mod(np.array([f for f, _ in forced], float), P)
+        if len(keep_always):
+            for i, c in enumerate(fc):
+                dk = np.abs((keep_always - c + P / 2) % P - P / 2)
+                if dk.min() < gap:
+                    fc[i] = keep_always[int(np.argmin(dk))]
+        clear = np.array([max(w, 0.5 * spacing) for _, w in forced])
+        dist = np.abs((base[:, None] - fc[None, :] + P / 2) % P - P / 2)
+        drop = np.any(dist < clear[None, :] - 1e-9, axis=1) & ~np.isin(base, keep_always)
+        # corners first, then the forced lines in order, then the even lines left: each kept unless within gap
+        # of one already kept
+        kept: list[float] = []
+        for c in list(keep_always) + list(fc) + list(base[~drop]):
+            if all(abs((c - k + P / 2) % P - P / 2) >= gap for k in kept):
+                kept.append(float(c))
+        cs = np.sort(np.mod(np.array(kept), P))
+    off = perimeter_point(tb, cs)
+    if tb.shape == "round_tube" and facet:
+        off = off * facet_radius_factor(len(cs))
+    return off, len(cs)
 
 
 def exit_param(host: Tube, node: np.ndarray, q: np.ndarray, d: np.ndarray) -> np.ndarray:
@@ -347,9 +428,117 @@ def _cuts(tubes: dict, tb: Tube, offs: np.ndarray) -> tuple[np.ndarray, np.ndarr
     return s["a"], tb.L - s["b"]
 
 
+@dataclass
+class Footprint:
+    """Where a branch's tied ring lies on its host's wall: the ring's points (on the host's mid-surface) and
+    their host coordinates s (along the host from p0) and c (perimeter coordinate, unwrapped about the first
+    point so the footprint is one interval)."""
+
+    host: str
+    branch: str
+    end: str
+    node: str
+    pts: np.ndarray
+    s: np.ndarray
+    c: np.ndarray
+
+    def limits(self) -> tuple[float, float, float, float]:
+        return float(self.s.min()), float(self.s.max()), float(self.c.min()), float(self.c.max())
+
+
+def _ring_at(tb: Tube, offs: np.ndarray, s0: np.ndarray, s1: np.ndarray, end: str) -> np.ndarray:
+    return tb.p0 + offs + (s0 if end == "a" else s1)[:, None] * tb.d
+
+
+def host_coords(host: Tube, X: np.ndarray, ref: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """(s, c) of points X on the host's wall: along its axis from p0, and the perimeter coordinate (unwrapped to
+    within half the perimeter of ref when given)."""
+    w = X - host.p0
+    s = w @ host.d
+    c = perimeter_coord(host, w - np.outer(s, host.d))
+    if ref is not None:
+        P = perimeter(host)
+        c = ref + ((c - ref + P / 2) % P - P / 2)
+    return s, c
+
+
+def footprints(tubes: dict, offsets: dict, cuts: dict) -> list:
+    out = []
+    for tb in tubes.values():
+        for end in ("a", "b"):
+            e = tb.ends[end]
+            if e["kind"] != "branch":
+                continue
+            host = tubes[e["host"]]
+            ring = _ring_at(tb, offsets[tb.id], *cuts[tb.id], end)
+            s, c = host_coords(host, ring)
+            P = perimeter(host)
+            c = c[0] + ((c - c[0] + P / 2) % P - P / 2)
+            out.append(Footprint(host.id, tb.id, end, e["node"], ring, s, c))
+    return out
+
+
+def _strip_lines(fps: list, tubes: dict) -> tuple[dict, dict]:
+    """Per tube: the forced generator lines [(c, keep-clear half width)] and forced rows [s] of the weld strips:
+    on a host at each footprint's four extremes and t and 2t beyond (t the host's wall); for a rect branch,
+    k1_shell's corner lines at t, 2t and 3t (t the larger wall) from the footprint's corners along its edges,
+    on the host's wall and on the branch's, so the first pair read past a corner square (CORNER_SKIP_T) lies
+    2.5 t from the corner whatever the element size."""
+    cols: dict[str, list] = {}
+    rows: dict[str, list] = {}
+    for fp in fps:
+        host, br = tubes[fp.host], tubes[fp.branch]
+        t = host.t
+        smin, smax, cmin, cmax = fp.limits()
+        cols.setdefault(fp.host, []).extend([(cmin, 0.5 * t), (cmin - t, t), (cmin - 2 * t, 0.5 * t),
+                                             (cmax, 0.5 * t), (cmax + t, t), (cmax + 2 * t, 0.5 * t)])
+        rows.setdefault(fp.host, []).extend([smin - 2 * t, smin - t, smin, smax, smax + t, smax + 2 * t])
+        if br.shape == "rect_tube":
+            tc = max(t, br.t)
+            ks = [k * tc for k in CORNER_LINES]
+            rows[fp.host].extend([smin + k for k in ks] + [smax - k for k in ks])
+            cols[fp.host].extend([(cmin + k, 0.25 * tc) for k in ks] + [(cmax - k, 0.25 * tc) for k in ks])
+            cols.setdefault(fp.branch, []).extend((float(c) + sg * k, 0.25 * tc) for c in _rect_corners(br)
+                                                  for k in ks for sg in (-1.0, 1.0))
+    return cols, rows
+
+
+def strip_steps(tb: Tube, ring: np.ndarray) -> np.ndarray:
+    """Per generator line, the distance along it that is one wall thickness square to the cut line (the cut's
+    tangent from the two neighbouring generator lines' cut points): t / sqrt(1 - (d . T)^2), at most 4 t."""
+    T = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
+    T = T / np.linalg.norm(T, axis=1, keepdims=True)
+    cos = np.sqrt(np.clip(1.0 - (T @ tb.d) ** 2, 0.0, 1.0))
+    return tb.t / np.maximum(cos, 0.25)
+
+
+def _row_positions(tb: Tube, s0: np.ndarray, s1: np.ndarray, size: float, step_a, step_b, forced: list) -> np.ndarray:
+    """Axial positions (rows + 1, n_c) of the grid rows: at the end cuts, at one and two strip steps from a tied
+    end (step_a / step_b; None: none), at the forced rows (absolute, the same on every generator line) between
+    those, and evenly in between (pieces no longer than size; at least two rows of elements)."""
+    head = [s0] if step_a is None else [s0, s0 + step_a, s0 + 2 * step_a]
+    tail = [s1] if step_b is None else [s1 - 2 * step_b, s1 - step_b, s1]
+    if float((tail[0] - head[-1]).min()) <= 1e-6:  # no room for the strips: plain rows
+        head, tail = [s0], [s1]
+    lo, hi = float(head[-1].max()), float(tail[0].min())
+    mids: list[float] = []
+    gap = MERGE_T * tb.t
+    for f in sorted(forced):
+        if lo + gap < f < hi - gap and (not mids or f - mids[-1] >= gap):
+            mids.append(f)
+    knots = head + [np.full(len(s0), f) for f in mids] + tail
+    rows = [knots[0]]
+    for k0, k1 in zip(knots, knots[1:]):
+        n = max(1, math.ceil(float((k1 - k0).max()) / size - 1e-9))
+        rows += [k0 + (k1 - k0) * i / n for i in range(1, n + 1)]
+    if len(rows) < 3:
+        rows = [s0, 0.5 * (s0 + s1), s1]
+    return np.array(rows)
+
+
 def _host_extensions(tubes: dict, size: float, offsets: dict) -> None:
     """Length each host end runs on past its node: the furthest point of its branches' cuts beyond the node
-    along its axis, plus one element."""
+    along its axis, plus one element (and room for the weld strips' rows at t and 2t)."""
     for tb in tubes.values():
         for end in ("a", "b"):
             e = tb.ends[end]
@@ -364,7 +553,7 @@ def _host_extensions(tubes: dict, size: float, offsets: dict) -> None:
                     s = exit_param(host, node, node + offsets[tb.id], u)
                     pts = node + offsets[tb.id] + s[:, None] * u
                     beyond = (pts - node) @ (-_out_dir(host, hend))
-                    he["ext"] = max(he["ext"], float(beyond.max()) + size)
+                    he["ext"] = max(he["ext"], float(beyond.max()) + max(size, 3.0 * host.t))
 
 
 # ---------------------------------------------------------------- the mesh
@@ -381,6 +570,8 @@ class FrameShells:
     size: float
     stub_mass_kg: float = 0.0
     refs: dict = field(default_factory=dict)  # hardpoint node -> ref node
+    footprints: list = field(default_factory=list)
+    weld_strips: bool = False
 
     def tube_of_element(self) -> list:
         out = []
@@ -406,29 +597,46 @@ class FrameShells:
 
 
 def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True, members: list | None = None,
-                 max_gap: float | None = None) -> FrameShells:
+                 max_gap: float | None = None, weld_strips: bool = True) -> FrameShells:
     """The shell model of the frame's tubes (see the module docstring): MITC4 group per tube, ties at the
-    joints. No supports, loads or mounts yet."""
+    joints. No supports, loads or mounts yet. weld_strips: grid lines for the hot-spot read-out (hot_spots)."""
     tubes, joints = tubes_of(design, members)
     hosts = resolve_joints(tubes, joints)
-    offsets, counts = {}, {}
-    for tb in tubes.values():
-        offsets[tb.id], counts[tb.id] = section_points(tb, size, facet)
-    _host_extensions(tubes, size, offsets)
+    forced_cols: dict[str, list] = {}
+    forced_rows: dict[str, list] = {}
+    for _ in range(4):  # a host's own cut moves with its forced lines when it is also a branch: settle them
+        offsets, cuts = {}, {}
+        for tb in tubes.values():
+            offsets[tb.id], _n = section_points(tb, size, facet, forced_cols.get(tb.id))
+            for end in ("a", "b"):
+                if tb.ends[end]["kind"] == "host":
+                    tb.ends[end]["ext"] = 0.0
+        _host_extensions(tubes, size, offsets)
+        for tb in tubes.values():
+            cuts[tb.id] = _cuts(tubes, tb, offsets[tb.id])
+        fps = footprints(tubes, offsets, cuts)
+        if not weld_strips:
+            break
+        cols, forced_rows = _strip_lines(fps, tubes)
+        key = lambda cs: {k: [round(c, 6) for c, _ in v] for k, v in cs.items()}  # noqa: E731
+        if key(cols) == key(forced_cols):
+            break
+        forced_cols = cols
     mats = design["materials"]
     model = FEModel(np.zeros((0, 3)))
     stub = 0.0
     for tb in tubes.values():
         offs = offsets[tb.id]
-        n_c = counts[tb.id]
-        s0, s1 = _cuts(tubes, tb, offs)
+        s0, s1 = cuts[tb.id]
         if np.any(s1 - s0 <= 1e-6):
             raise TubeMeshError(f"tube {tb.id}: its end cuts overlap (too short for its joints)")
-        rows = max(2, math.ceil(float((s1 - s0).max()) / size - 1e-9))
-        f = np.linspace(0.0, 1.0, rows + 1)
-        S = s0[None, :] + f[:, None] * (s1 - s0)[None, :]
+        steps = {}
+        for end in ("a", "b"):
+            tied = tb.ends[end]["kind"] in ("branch", "mitre")
+            steps[end] = strip_steps(tb, _ring_at(tb, offs, s0, s1, end)) if weld_strips and tied else None
+        S = _row_positions(tb, s0, s1, size, steps["a"], steps["b"], forced_rows.get(tb.id, []))
         P = tb.p0[None, None, :] + offs[None, :, :] + S[:, :, None] * tb.d[None, None, :]
-        tb.ids = model.add_nodes(P.reshape(-1, 3)).reshape(rows + 1, n_c)
+        tb.ids = model.add_nodes(P.reshape(-1, 3)).reshape(S.shape[0], len(offs))
     # a mitre's second ring: nodes that fall on the first ring's nodes become those nodes; the rest are tied
     for tb in tubes.values():
         for end in ("a", "b"):
@@ -442,6 +650,19 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
                     if dist.min() < 1e-6 * size:
                         tb.ids[row, j] = mring[int(np.argmin(dist))]
                 e["merged"] = int(np.sum(np.isin(tb.ids[row], mring)))
+    # a branch's ring node that falls on a node of its host's grid (the weld strips' lines pass through the
+    # footprint's extremes) is that node: shared, not tied
+    for tb in tubes.values():
+        for end in ("a", "b"):
+            e = tb.ends[end]
+            if e["kind"] != "branch":
+                continue
+            hids = tubes[e["host"]].ids.ravel()
+            row = 0 if end == "a" else -1
+            for j, n in enumerate(tb.ids[row]):
+                dist = np.linalg.norm(model.nodes[hids] - model.nodes[n], axis=1)
+                if dist.min() < 1e-6 * size:
+                    tb.ids[row, j] = hids[int(np.argmin(dist))]
     # branch rings at one joint that meet on a line (the two halves of a split X brace) share those nodes
     rings_at: dict[str, list] = {}
     for tb in tubes.values():
@@ -488,6 +709,8 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
             if e["kind"] == "mitre":
                 mring = tubes[e["mate"][0]].ids[0] if e["mate"][1] == "a" else tubes[e["mate"][0]].ids[-1]
                 ring = ring[~np.isin(ring, mring)]
+            else:
+                ring = ring[~np.isin(ring, master.ids.ravel())]  # nodes shared with the host are not tied
             if not len(ring):
                 continue
             node = xyz[e["node"]]
@@ -500,7 +723,7 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
             except ValueError as err:
                 raise TubeMeshError(f"tube {tb.id} at node {e['node']}: {err}") from None
             ties.append(c)
-    return FrameShells(model, tubes, joints, hosts, ties, xyz, size, stub)
+    return FrameShells(model, tubes, joints, hosts, ties, xyz, size, stub, footprints=fps, weld_strips=weld_strips)
 
 
 def _wall_area(tb: Tube) -> float:
@@ -715,29 +938,39 @@ def analyse(design: dict, size: float = ELEMENT_SIZE_MM, states: dict | None = N
     over the sum of the load magnitudes, and its moment over that times the model size: what of the K2
     loads does not balance) and equilibrium_residual (the model's load vector plus the reactions, the same
     scales: what was lost on the way into the model)."""
+    states = states or k2_states(design, step_height_mm)
+    veh = states["veh"]
+    r = analyse_loads(design, {name: body_loads(design, veh, states[name]) for name in ("static", "lift")}, size,
+                      facet)
+    for name in ("static", "lift"):
+        r["cases"][name]["t_s"] = float(states[name]["t"])
+    return r
+
+
+def analyse_loads(design: dict, cases_loads: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True,
+                  weld_strips: bool = True) -> dict:
+    """The frame shell under load cases {name: [BodyLoad]} (as analyse, which gives K2's two), held 3-2-1. Per
+    case also the structural hot spots (hot_spots, outside the mount patches and the holds) and the largest."""
     from . import analysis
     from .shell import shell_stresses
 
-    states = states or k2_states(design, step_height_mm)
-    veh = states["veh"]
-    fs = frame_shells(design, size, facet)
+    fs = frame_shells(design, size, facet, weld_strips=weld_strips)
     mounts = sorted({n for s in design["supports"] for n in _mount_nodes(design, s).values()})
     for n in mounts:
         add_mount(fs, n)
     held = hold_321(fs, design)
     mt = member_tube_map(fs)
     patch_nodes = set(np.concatenate([fs.patch(n) for n in mounts]).tolist())
+    excluded = patch_nodes | {int(k) for k in held}
     cases, solutions = {}, {}
     size_mm = float(np.ptp(fs.model.nodes, axis=0).max())
-    for name in ("static", "lift"):
-        loads = body_loads(design, veh, states[name])
+    for name, loads in cases_loads.items():
         F = shell_load_vector(fs, loads, mt)
         res = analysis.run_static(fs.model, F)
         # run_static's equilibrium_residual divides by the larger of the applied and reacted resultants,
         # both near zero for a balanced free body: left out, this record's own residuals below replace it
         out = {"status": res["status"], "reasons": res["reasons"], "quality": res["quality"],
-               "results": [x for x in res["results"] if x["quantity"] != "equilibrium_residual"],
-               "t_s": float(states[name]["t"])}
+               "results": [x for x in res["results"] if x["quantity"] != "equilibrium_residual"]}
         applied = resultant_of(loads)
         scale_f = sum(float(np.linalg.norm(l.force_N)) for l in loads)
         out["applied_resultant"] = applied
@@ -775,11 +1008,13 @@ def analyse(design: dict, size: float = ELEMENT_SIZE_MM, states: dict | None = N
                                            "distance_to_joint_mm": float(np.linalg.norm(fs.xyz[joint_of_point(fs, c)] - c)),
                                            "point_mm": c.tolist()}
             out["mount_displacement_mm"] = {n: U[fs.refs[n], :3].tolist() for n in mounts}
+            out["hot_spots"] = hot_spots(fs, sol, excluded)
+            out["hot_spot_max"] = hot_spot_max(out["hot_spots"])
         cases[name] = out
     return {"cases": cases, "n_nodes": int(len(fs.model.nodes)), "n_elements": int(sum(len(t.quads) for t in fs.tubes.values())),
             "n_ties": len(fs.ties), "stub_mass_kg": fs.stub_mass_kg,
             "shell_mass_kg": float(sum(t.group.mass_total(fs.model.nodes) for t in fs.tubes.values()) * 1000.0),
-            "held": held, "shells": fs, "solutions": solutions}
+            "held": held, "shells": fs, "solutions": solutions, "excluded_nodes": excluded}
 
 
 # ---------------------------------------------------------------- the beam model under the same loads
@@ -896,6 +1131,230 @@ def design_xyz(design: dict) -> dict:
     return {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
 
 
+# ---------------------------------------------------------------- structural hot spots on the tie lines
+
+STRIP_TOL_T = 0.15  # a strip element's centre within this many t of its read distance (curved cut lines)
+CONTACT_TOL_T = 0.05  # ring points within this many t of a footprint's extreme line touch it
+
+
+def member_at(tb: Tube, fs: FrameShells, p: np.ndarray) -> str:
+    """The design member of a tube at a point (by its position along the tube)."""
+    s = float((np.asarray(p) - tb.p0) @ tb.d)
+    for m, nb in zip(tb.members, tb.nodes[1:]):
+        if s <= float((fs.xyz[nb] - tb.p0) @ tb.d) + 1e-9:
+            return m
+    return tb.members[-1]
+
+
+def _along(st, idx: np.ndarray, dirs: np.ndarray, surface: str) -> np.ndarray:
+    """Surface stress of elements idx along per-element directions dirs (k, 3), projected on each plane."""
+    dl = np.einsum("kij,kj->ki", st.frames[idx], dirs)
+    nrm = np.linalg.norm(dl[:, :2], axis=1)
+    c, s = dl[:, 0] / nrm, dl[:, 1] / nrm
+    sx, sy, txy = st.components(surface)[idx].T
+    return c * c * sx + s * s * sy + 2 * c * s * txy
+
+
+def _ring_corners(ring: np.ndarray, deg: float = 30.0) -> np.ndarray:
+    """Indices of the points where the closed polyline turns by more than deg (a rect section's corners)."""
+    a = ring - np.roll(ring, 1, axis=0)
+    b = np.roll(ring, -1, axis=0) - ring
+    cos = np.einsum("ij,ij->i", a, b) / (np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1))
+    return np.nonzero(cos < math.cos(math.radians(deg)))[0]
+
+
+def hot_spots(fs: FrameShells, sol, excluded=None) -> list:
+    """IIW structural hot-spot stresses along the tie lines of a frame meshed with weld strips, by the rule of
+    k1_shell.stress.hot_spots (HOT_SPOT_SOURCE there): the surface stress square to the weld line in the
+    strips one wall thickness t wide beside it, at HOT_SPOT_READ_T (0.5 t and 1.5 t), outer (top) and inner
+    (bottom) surface, extrapolated to the line (1.5 sigma(0.5 t) - 0.5 sigma(1.5 t)).
+
+    - branch side (and each side of a mitre): every pair of strip elements along the cut ring (the tube's
+      first two rows, graded t square to the cut by strip_steps); for a rect branch not within CORNER_SKIP_T t
+      of a corner of its section (k1_shell's corner squares);
+    - host side: beyond the four extremes of each footprint on the host's wall (along the host: before and
+      after; around it: one side and the other), where the grid has lines at the extreme and t and 2t beyond.
+      Where the ring touches the extreme line over 2 CORNER_SKIP_T t or more (a rect footprint's edge) the
+      pairs along it outside the corner squares are read; where it touches at a point (a round branch's
+      crown or saddle) the pair over that point.
+    Pairs with an element on a node in `excluded` (the mount patches, the holds) are not read, nor pairs whose
+    centres are not within STRIP_TOL_T t of 0.5 t and 1.5 t (a strip cut by another joint's lines, elements
+    smaller than t).
+
+    Returns dicts like k1_shell's: value (MPa, signed), surface, joint (design node), kind ("tie", "mitre"),
+    side ("host", "branch"), place, tube, member, position_mm (the pair's foot on the weld line), sigma_05t,
+    sigma_15t, elements ((tube, index) at 0.5 t, at 1.5 t), t_mm, direction (into the strip), towards."""
+    from .shell import shell_stresses
+
+    if not fs.weld_strips:
+        return []
+    a_t, b_t = HOT_SPOT_READ_T
+    st = {tid: shell_stresses(sol, tb.group) for tid, tb in fs.tubes.items()}
+    ex = None
+    if excluded is not None and len(excluded):
+        ex = np.zeros(len(fs.model.nodes), bool)
+        ex[np.asarray(sorted(excluded), int)] = True
+    out = []
+
+    def emit(tb, e1, e2, dirs, feet, joint, kind, side, place):
+        if ex is not None:
+            keep = ~(ex[tb.quads[e1]].any(axis=1) | ex[tb.quads[e2]].any(axis=1))
+            e1, e2, dirs, feet = e1[keep], e2[keep], dirs[keep], feet[keep]
+        if len(e1) == 0:
+            return
+        s = st[tb.id]
+        for surface in ("top", "bottom"):
+            s1, s2 = _along(s, e1, dirs, surface), _along(s, e2, dirs, surface)
+            hs = extrapolate_hot_spot(s1, s2)
+            for i in range(len(e1)):
+                out.append({"value": float(hs[i]), "surface": surface, "joint": joint, "kind": kind, "side": side,
+                            "place": place, "tube": tb.id, "member": member_at(tb, fs, feet[i]),
+                            "position_mm": feet[i], "sigma_05t": float(s1[i]), "sigma_15t": float(s2[i]),
+                            "elements": ((tb.id, int(e1[i])), (tb.id, int(e2[i]))), "t_mm": tb.t,
+                            "direction": dirs[i], "towards": axis_name(dirs[i])})
+
+    for tb in fs.tubes.values():
+        n_c, rows = tb.ids.shape[1], tb.ids.shape[0] - 1
+        for end in ("a", "b"):
+            e = tb.ends[end]
+            if e["kind"] not in ("branch", "mitre"):
+                continue
+            i1, i2 = (0, 1) if end == "a" else (rows - 1, rows - 2)
+            ring = fs.model.nodes[tb.ids[0] if end == "a" else tb.ids[-1]]
+            j = np.arange(n_c)
+            e1, e2 = i1 * n_c + j, i2 * n_c + j
+            A, B = ring, np.roll(ring, -1, axis=0)
+            seg = np.linalg.norm(B - A, axis=1)
+            T = (B - A) / seg[:, None]
+            din = tb.d if end == "a" else -tb.d
+            m = din[None, :] - (T @ din)[:, None] * T
+            m /= np.linalg.norm(m, axis=1, keepdims=True)
+            mid = 0.5 * (A + B)
+            c = st[tb.id].centres
+            d1 = np.einsum("ij,ij->i", c[e1] - mid, m)
+            d2 = np.einsum("ij,ij->i", c[e2] - mid, m)
+            ok = (np.abs(d1 - a_t * tb.t) < STRIP_TOL_T * tb.t) & (np.abs(d2 - b_t * tb.t) < STRIP_TOL_T * tb.t)
+            if tb.shape == "rect_tube":
+                arc = np.concatenate([[0.0], np.cumsum(seg)])
+                L = arc[-1]
+                corners = arc[_ring_corners(ring)]
+                if len(corners):
+                    at = arc[:-1] + 0.5 * seg
+                    dc = np.abs((at[:, None] - corners[None, :] + L / 2) % L - L / 2).min(axis=1)
+                    ok &= dc > CORNER_SKIP_T * tb.t - 1e-9
+            kind = "mitre" if e["kind"] == "mitre" else "tie"
+            place = f"{tb.id} end {end}" + (f" on {e['host']}" if e["kind"] == "branch" else f" (mitre with {e['mate'][0]})")
+            emit(tb, e1[ok], e2[ok], m[ok], mid[ok], e["node"], kind, "branch", place)
+
+    for fp in fs.footprints:
+        host = fs.tubes[fp.host]
+        t = host.t
+        c_el = st[host.id].centres
+        s_el, cc_el = host_coords(host, c_el, ref=float(fp.c[0]))
+        smin, smax, cmin, cmax = fp.limits()
+        for coord, lim, sign, label in (("s", smin, -1.0, "before"), ("s", smax, 1.0, "after"),
+                                        ("c", cmin, -1.0, "one side"), ("c", cmax, 1.0, "other side")):
+            x, y = (s_el, cc_el) if coord == "s" else (cc_el, s_el)
+            xr, yr = (fp.s, fp.c) if coord == "s" else (fp.c, fp.s)
+            touch = np.abs(xr - lim) < CONTACT_TOL_T * t
+            ya, yb = float(yr[touch].min()), float(yr[touch].max())
+            dist = sign * (x - lim)
+            one = np.nonzero(np.abs(dist - a_t * t) < STRIP_TOL_T * t)[0]
+            two = np.nonzero(np.abs(dist - b_t * t) < STRIP_TOL_T * t)[0]
+            if not len(one) or not len(two):
+                continue
+            if yb - ya >= 2.0 * CORNER_SKIP_T * t - 1e-9:
+                one = one[(y[one] > ya + CORNER_SKIP_T * t - 1e-9) & (y[one] < yb - CORNER_SKIP_T * t + 1e-9)]
+            else:  # a point of contact: the strip element over it
+                ym = 0.5 * (ya + yb)
+                one = one[[int(np.argmin(np.abs(y[one] - ym)))]]
+                qs, qc = host_coords(host, fs.model.nodes[host.quads[one[0]]], ref=float(fp.c[0]))
+                span = qc if coord == "s" else qs
+                if not span.min() - 1e-9 <= ym <= span.max() + 1e-9:
+                    continue  # no strip element over the point
+            pairs = []
+            for k in one:
+                cand = two[np.abs(y[two] - y[k]) < CONTACT_TOL_T * t]
+                if len(cand):
+                    pairs.append((int(k), int(cand[np.argmin(np.abs(y[cand] - y[k]))])))
+            if not pairs:
+                continue
+            e1 = np.array([p for p, _ in pairs])
+            e2 = np.array([q for _, q in pairs])
+            if coord == "s":
+                dirs = np.tile(sign * host.d, (len(e1), 1))
+            else:
+                dirs = c_el[e2] - c_el[e1]
+                dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+            feet = c_el[e1] - a_t * t * dirs
+            emit(host, e1, e2, dirs, feet, fp.node, "tie", "host",
+                 f"{host.id}, {label} of the footprint of {fp.branch} ({'along' if coord == 's' else 'around'} the host)")
+    return out
+
+
+def hot_spot_max(hs: list) -> dict | None:
+    return max(hs, key=lambda h: abs(h["value"])) if hs else None
+
+
+# ---------------------------------------------------------------- loads from given mount forces
+
+MOUNT_KEYS = ("lca_front", "lca_rear", "uca_front", "uca_rear", "damper_upper", "tie_inner")
+
+
+def unsprung_items(design: dict) -> list:
+    """(kg, centre mm, support id) of what K2 leaves off the sprung body (wheel kinds, half of suspension kinds),
+    each given to the support nearest its centre."""
+    from ..k2_vehicle.mass import member_items, part_items
+
+    unsprung, half = _k2_kinds()
+    pos = {s["id"]: np.asarray(s["position_mm"], float) for s in design["supports"]}
+    out = []
+    for m, c, _, rec in part_items(design.get("parts") or []) + member_items(design):
+        kind = str(rec.get("kind", "")).lower()
+        k = 1.0 if kind in unsprung else 0.5 if kind in half else 0.0
+        if k:
+            cm = np.asarray(c, float) * 1000.0
+            out.append((m * k, cm, min(pos, key=lambda sid: float(np.linalg.norm(pos[sid] - cm)))))
+    return out
+
+
+def relieved_loads(design: dict, mounts: dict, gravity_mps2) -> list:
+    """BodyLoads of given mount forces ({support: {mount: force N}}, design axes, at the hardpoints) and of every
+    sprung item (sprung_items) under gravity (m/s^2, design axes), with the inertia relief that balances them:
+    the sprung body's rigid acceleration a and angular acceleration alpha from the forces' resultant about its
+    centre of mass; each item gets m (g - a - alpha x r) and -I alpha."""
+    gvec = np.asarray(gravity_mps2, float)
+    sup = {s["id"]: s for s in design["supports"]}
+    out = []
+    for sid, fm in mounts.items():
+        nodes = _mount_nodes(design, sup[sid])
+        hp = sup[sid]["suspension"]["hardpoints_mm"]
+        for mount, f in fm.items():
+            if mount not in nodes:
+                continue
+            out.append(BodyLoad("mount", f"{sid}.{mount}", np.asarray(hp[mount], float), np.asarray(f, float),
+                                np.zeros(3), [nodes[mount]]))
+    items = sprung_items(design)
+    m_s = sum(m for m, *_ in items)
+    cg = sum(m * c for m, c, *_ in items) / m_s * 1000.0
+    J = np.zeros((3, 3))
+    for m, c, inertia, _ in items:
+        r = c * 1000.0 - cg
+        J += np.asarray(inertia, float) * 1e6 + m * (float(r @ r) * np.eye(3) - np.outer(r, r))
+    F = sum((l.force_N for l in out), np.zeros(3)) + m_s * gvec
+    M = sum((np.cross(l.point_mm - cg, l.force_N) for l in out), np.zeros(3))
+    a = F / m_s  # m/s^2
+    alpha = np.linalg.solve(J, M) * 1e3  # (N mm) / (kg mm^2) = 1e3 rad/s^2
+    for m, c, inertia, rec in items:
+        p = c * 1000.0
+        f = m * (gvec - a - np.cross(alpha, p - cg) * 1e-3)
+        mo = -(np.asarray(inertia, float) @ alpha) * 1000.0
+        carriers = ([f"tube:{rec['id']}"] if rec.get("kind") == "frame_member" else
+                    list(rec["carried_by"]) if rec.get("carried_by") else _nearest_corner_mounts(design, p))
+        out.append(BodyLoad("item", rec["id"], p, f, mo, carriers))
+    return out
+
+
 # ---------------------------------------------------------------- one joint's stress
 
 
@@ -932,6 +1391,8 @@ def joint_stress(fs: FrameShells, sol, node: str, radius_factor: float = 3.0, of
     return {"MPa": best[0], "where": best[1]}
 
 
-__all__ = ["BodyLoad", "FrameShells", "Tube", "TubeMeshError", "add_mount", "analyse", "body_loads", "exit_param",
-           "frame_shells", "hold_321", "k2_states", "member_tube_map", "resolve_joints", "resultant_of",
-           "section_points", "shell_load_vector", "spread", "sprung_items", "tubes_of"]
+__all__ = ["BodyLoad", "Footprint", "FrameShells", "MOUNT_KEYS", "Tube", "TubeMeshError", "add_mount", "analyse",
+           "analyse_loads", "body_loads", "exit_param", "footprints", "frame_shells", "hold_321", "host_coords",
+           "hot_spot_max", "hot_spots", "k2_states", "member_at", "member_tube_map", "perimeter", "perimeter_coord",
+           "perimeter_point", "relieved_loads", "resolve_joints", "resultant_of", "section_points",
+           "shell_load_vector", "spread", "sprung_items", "strip_steps", "tubes_of", "unsprung_items"]
