@@ -254,12 +254,15 @@ class AgainstK1(unittest.TestCase):
                     node = fm.model.nodes[n]
                     theirs = np.array([node.RxnFX[combo], node.RxnFY[combo], node.RxnFZ[combo]])
                     self.assertLess(np.linalg.norm(theirs - rx[:3]), 1e-6 * max(1.0, res["weight_N"]), n)
+                # within 1e-6 of the frame's largest member stress: a ratio says nothing for a member near zero
+                scale_s = max(res["stresses"][mid]["max"] for mid in secs)
                 for mid, (p, m) in secs.items():
                     L = m.L()
                     mine = max(corner_stress(p, *(lambda q: (q[0], q[4], q[5], q[3]))(Frame3D.internal(r, mid, s)))
                                for s in np.linspace(0.0, L, 41))
                     theirs = res["stresses"][mid]["max"]
-                    self.assertAlmostEqual(mine / theirs, 1.0, places=6, msg=f"{mid}: {mine:.6g} vs K1 {theirs:.6g} MPa")
+                    self.assertLess(abs(mine - theirs), 1e-6 * scale_s,
+                                    f"{mid}: {mine:.6g} vs K1 {theirs:.6g} MPa (largest {scale_s:.4g} MPa)")
 
 
 if __name__ == "__main__":

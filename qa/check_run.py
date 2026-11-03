@@ -1113,6 +1113,8 @@ class RunChecker:
             # the latest comparison of the judged quantity holds the case when it is a mismatch whose cause
             # is not written, or neither resolved nor safe-side; earlier ones it replaced do not
             latest: dict[str, tuple[str, dict]] = {}
+            stand_in = crit.get("stand_in_quantity")
+            latest_stand_in = None
             for cid, (j, c) in self.recs["comparison"].items():
                 p = self.recs["prediction"].get(c.get("prediction_id"))
                 a = self.recs["analysis"].get(c.get("analysis_id"))
@@ -1121,6 +1123,16 @@ class RunChecker:
                 judged = JUDGED_AS.get(((a[1] if a else {}).get("tool"), crit.get("quantity")), crit.get("quantity"))
                 if c.get("quantity") == judged:
                     latest[judged] = (cid, c)
+                elif stand_in and c.get("quantity") == stand_in:
+                    latest_stand_in = (cid, c)
+            # contract (stand_in_quantity): when the judged quantity's prediction and result are both below
+            # 1e-6 of the limit, its latest stand-in comparison decides (b) instead (the verdict stays judged)
+            lim = (crit.get("limit") or {}).get("value")
+            for q, (cid, c) in list(latest.items()):
+                pv, av = (c.get("predicted") or {}).get("value"), (c.get("analyzed") or {}).get("value")
+                if (latest_stand_in and isinstance(lim, (int, float)) and isinstance(pv, (int, float))
+                        and isinstance(av, (int, float)) and abs(pv) < 1e-6 * abs(lim) and abs(av) < 1e-6 * abs(lim)):
+                    latest[q] = latest_stand_in
             for cid, c in latest.values():
                 if c.get("status") != "mismatch":
                     continue

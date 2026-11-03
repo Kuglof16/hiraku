@@ -50,6 +50,16 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rec["ran"], 1)
         self.assertIn("\u2014", rec["failures"][0]["last"])
 
+    def test_the_summary_prints_what_the_console_code_page_lacks(self):
+        from unittest import mock
+        out = io.TextIOWrapper(io.BytesIO(), encoding="cp932")
+        with mock.patch.object(sys, "stdout", out):
+            rt._utf8_out()
+            print("FAIL: x\n    AssertionError: 1.2 not ≥ 2 — ✓")
+            out.flush()
+            text = out.buffer.getvalue().decode("utf-8")
+        self.assertIn("≥ 2 — ✓", text)
+
     def test_a_class_skipped_in_setupclass_is_named(self):
         def skip(cls):
             raise unittest.SkipTest("not here")
