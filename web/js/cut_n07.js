@@ -9,16 +9,18 @@
 // else the domain's judgement of the version); otherwise nothing is added. Positions,
 // sizes, colours, the length and the times come from layout.json n07; a missing key is
 // named on the page.
-// cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>][&paint=element|member]
+// cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
 //
-// paint (two ways to colour the plates, both from the record only):
-//   element (the default): each element's shell stress (the surface "max" field), on bands
-//     whose top is the allowable value. Elements above it keep the colour past the top,
-//     with no words added.
-//   member: each element takes its member's value of the quantity the load case is judged
-//     on (a per-member field, see judgedMemberField): red above the allowable, green at or
-//     under it, so the plates say what the verdict says. Without that field for a version
-//     shown, the page says "記録に部材ごとの値が無い" and paints as element.
+// The colours: each element's shell stress (the surface "max" field, from the record), on
+// bands whose top is the allowable value. Elements above it keep the colour past the top
+// (also in the version after, e.g. an inside corner), with no words added.
+//
+// The weak spot: a ring round the element with the largest recorded value of the version
+// before (its contour's maxAt), no number or word with it. It is shown from lead_s to the
+// end: small while the vehicle turns, growing with the zoom, held at zoom.fill of the
+// view's height from zoom_to_s through the swap (so the eye can follow the weak spot), and
+// green once the version after is shown and judged a pass. It carries no data-kind (it
+// marks the picture, as the colours do).
 //
 // times: lead_s..turn_to_s the turn (turn_deg in all); zoom_s..zoom_to_s the camera
 // comes to the largest element (its neighbourhood then takes zoom.fill of the view's
@@ -26,7 +28,7 @@
 // camera, same scale). Before lead_s and after each step the picture holds still.
 
 import * as THREE from "three";
-import { BAND_COLORS, BANDS, GRAY } from "./colormap.js";
+import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
 import { esc, fmt, unitLabel } from "./labels.js";
@@ -38,33 +40,9 @@ const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
-const NO_MEMBER_JA = "記録に部材ごとの値が無い";
 // Not in layout.json (written here until the promo department gives a key): the ring's
 // size while the vehicle turns, a share of the view's height (it grows to zoom.fill).
 const MARK_SMALL = 0.08;
-const OPS = { "<=": (v, L) => v <= L, "<": (v, L) => v < L, ">=": (v, L) => v >= L, ">": (v, L) => v > L };
-
-// The per-member field of the quantity a criterion judges, in an analysis: a field
-// without a mesh with per_member values, of the element field's kind, and either
-// carrying the criterion's quantity (field.quantity, when a record has it) or, as the
-// contract's field has no quantity key, the one whose largest value is the analysis's
-// recorded result of that quantity (same unit; equal to the digits the field's value is
-// written with: the record keeps 472.04 in the field and 472.0421… in the result). Found
-// by kind and the recorded quantity, never by the label's words; exactly one must match,
-// else null.
-export function judgedMemberField(ana, kind, crit) {
-  if (!ana || !crit?.quantity) return null;
-  const cands = fieldsOf(ana, { mesh: false }).filter((f) => f.kind === kind && !f.mesh_id && f.per_member && Object.keys(f.per_member).length);
-  const tagged = cands.filter((f) => f.quantity === crit.quantity);
-  if (tagged.length) return tagged.length === 1 ? tagged[0] : null;
-  const r = (ana.results ?? []).find((x) => x.quantity === crit.quantity);
-  if (!r || !Number.isFinite(r.value)) return null;
-  const top = (f) => Math.max(...Object.values(f.per_member).filter(Number.isFinite));
-  // half a unit of the last decimal the value is written with (472.04: 0.005)
-  const half = (v) => 0.5 * 10 ** -((String(v).split(".")[1] ?? "").length) + 1e-9 * Math.max(1, Math.abs(v));
-  const same = cands.filter((f) => f.unit === r.unit && Math.abs(top(f) - r.value) <= half(top(f)));
-  return same.length === 1 ? same[0] : null;
-}
 
 const N07_KEYS = [
   "duration_s",
@@ -150,37 +128,12 @@ export class CutN07 {
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
     if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
-    // A: the element stress (the "max" surface first, preferredField) on the allowable's band
+    // the element stress (the "max" surface first, preferredField) on the allowable's band
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
       { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
       ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca, fixed: this.passes(va) }] : []),
     ];
-    // B: each version's per-member field of the judged quantity, painted onto the plates
-    this.paint = "element";
-    this.paintNote = null;
-    if (params.get("paint") === "member") {
-      const fields = this.cases.map((c) => judgedMemberField(c.ana, fb.kind, crit));
-      const limit = crit?.limit;
-      const test = OPS[crit?.op];
-      if (fields.every(Boolean) && limit && test && fields.every((f) => f.unit === limit.unit)) {
-        this.paint = "member";
-        this.cases.forEach((c, i) => (c.ct = this.memberPaint(c.ct, fields[i], (v) => test(v, limit.value))));
-      } else this.paintNote = NO_MEMBER_JA;
-    }
-  }
-
-  // A contour that colours each element of the mesh by its member's value in a per-member
-  // field: green where the criterion holds, the overlay's red where it does not, the
-  // neutral gray where the member has no value. The mesh, its scale and the element the
-  // camera goes to are the element contour's (the turn and the zoom are the same in A and B).
-  memberPaint(ct, field, holds) {
-    const mesh = ct.mesh.rec;
-    const red = this.spec.overlay.color;
-    const per = field.per_member;
-    const states = (mesh.element_member ?? []).map((m) => (Number.isFinite(per[m]) ? (holds(per[m]) ? "pass" : "over") : "none"));
-    const colors = states.map((x) => (x === "pass" ? GREEN : x === "over" ? red : GRAY));
-    return { ...ct, key: `${ct.key}|member ${field.label ?? ""}`, mesh: { ...ct.mesh, colors, states }, memberField: field };
   }
 
   // Does the record judge version v a pass on the cut's load case? Its verdicts on that load
@@ -250,7 +203,7 @@ export class CutN07 {
   }
 
   // A tall legend of two things: the stress's name and unit, and the colour bar upright
-  // with the allowable value where it applies (A: its top; B: where red meets green).
+  // with the allowable value at its top (the bands' top).
   buildLegend() {
     const sp = this.spec;
     const L = sp.legend;
@@ -268,32 +221,15 @@ export class CutN07 {
     // the allowable value is the load case's criterion limit (in the field's unit)
     const lim = this.lc?.criterion?.limit;
     const allowable = lim && lim.unit === f.unit && Number.isFinite(lim.value) ? lim.value : null;
-    // A: the bands, the allowable at the top. B: green under the allowable, red above it,
-    // the allowable where they meet. Without an allowable: the bands and the top value.
-    const OVER_SHARE = 20; // % of the bar above the allowable in B
-    const bar = this.paint === "member"
-      ? `linear-gradient(0deg, ${GREEN} 0% ${100 - OVER_SHARE}%, ${this.spec.overlay.color} ${100 - OVER_SHARE}% 100%)`
-      : `linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})`;
-    const tickAt = this.paint === "member" ? OVER_SHARE : 0;
+    // the bands, the allowable at the top (without an allowable: the top value)
+    const bar = `linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})`;
     const tick = allowable !== null ? `許容 ${fmt(allowable, 4)}` : fmt(ct.max, 3);
-    el.dataset.paint = this.paint;
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
       `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:${bar}"></i>` +
-      `<div class="ticks"><span class="allowable" style="top:${tickAt}%">${esc(tick)}</span></div></div>`;
+      `<div class="ticks"><span class="allowable" style="top:0%">${esc(tick)}</span></div></div>`;
     this.stage.append(el);
     this.legend = el;
-    // B without its field: the page says so, in the view's bottom left (small, not a label)
-    if (this.paintNote) {
-      const n = document.createElement("div");
-      n.className = "n07-note";
-      n.dataset.box = "n07.note";
-      const V = sp.view;
-      Object.assign(n.style, { left: `${V.x + 24}px`, top: `${V.y + V.h - 24 - Math.ceil(this.minPx * 1.4)}px`, fontSize: `${this.minPx}px` });
-      n.textContent = this.paintNote;
-      this.stage.append(n);
-      this.note = n;
-    }
   }
 
   buildLabel() {
