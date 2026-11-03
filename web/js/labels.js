@@ -173,6 +173,20 @@ const QUANTITY_JA = {
   steps_out_of_reach: "手が届かない手順の数",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
+  // the K&C bench (kc_bench): abscissas (series x.quantity) and channels
+  travel: "ストローク",
+  lateral_force: "横力",
+  longitudinal_force: "前後力",
+  aligning_moment: "セルフアライニングトルク",
+  camber: "キャンバーの変化",
+  toe: "トーの変化",
+  roll_center_height: "ロールセンターの高さ",
+  track_change: "輪の中心の横の動き",
+  toe_lateral: "横力によるトー",
+  camber_lateral: "横力によるキャンバー",
+  toe_longitudinal: "前後力によるトー",
+  camber_longitudinal: "前後力によるキャンバー",
+  toe_aligning: "アライニングトルクによるトー",
 };
 
 const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力" };

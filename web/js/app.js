@@ -403,7 +403,12 @@ function renderLegend(ct) {
     rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
   rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
-  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>` : "";
+  const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
+  const over = ct.limitKnown
+    ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
+    : ct.partLimit
+      ? `<div class="lim">${swatch}${esc(ct.partLimit.part)} の許容 ${fmt(ct.partLimit.value, 4)} ${esc(unit)} を超えたとき</div>`
+      : "";
   const chips =
     (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
     (ct.variants.length > 1 ? `<div class="kinds variants">${ct.variants.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>` : "");
