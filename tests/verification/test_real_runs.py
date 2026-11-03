@@ -1,7 +1,8 @@
 """qa.check_run on real run records.
 
 1. The scripted run from the command line (`python -m hiraku run <requirements>
-   --scripted --runs <tmp>`, no API key), once the solvers are in.
+   --scripted --runs <tmp>`, no API key), once the solvers are in. The video
+   requirements are run twice and the two runs compared (qa.compare_runs).
 2. The scripted plan driven with the design dept's fake solvers
    (tests/tools/fakes.py), so the store's output is checked before the real
    solvers land: a run that ends done, one stopped by a mismatch, one stopped
@@ -23,6 +24,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.contract import layout
 from qa import check_run as cr
+from qa import compare_runs
 
 from ._solvers import tool_or_skip
 
@@ -55,6 +57,13 @@ class ScriptedRunCommand(unittest.TestCase):
                 raise unittest.SkipTest(f"scripted run cannot start yet: {proc.stderr.strip()[-300:]}")
             folders = sorted(p for p in out.iterdir() if p.is_dir()) if out.is_dir() else []
             cls.runs[req.name] = (folders[0] if len(folders) == 1 else None, proc)
+        cls.again = None  # a second run of the video requirements, for determinism
+        video = ROOT / "data" / "requirements" / "offroad-4w-video.yaml"
+        if video.name in cls.runs and cls.runs[video.name][0] is not None:
+            try:
+                cls.again = compare_runs.scripted_run(video, Path(cls._tmp.name) / "again")
+            except RuntimeError as e:
+                cls.again = e
 
     @classmethod
     def tearDownClass(cls):
@@ -87,6 +96,16 @@ class ScriptedRunCommand(unittest.TestCase):
                     self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
                 else:
                     self.assertEqual(project["status"], "done", why)
+
+    def test_scripted_run_gives_the_same_records_twice(self):
+        # Within 1e-6, and mode shapes up to their sign: the modal tool's eigen solver
+        # (PyNite -> scipy eigsh) starts from a random vector, so its frequencies differ
+        # by about 1e-10 and its mode shapes may change sign from one process to the next.
+        if self.again is None:
+            self.skipTest("no run of offroad-4w-video.yaml to repeat")
+        self.assertNotIsInstance(self.again, RuntimeError, str(self.again))
+        r = compare_runs.compare(self.runs["offroad-4w-video.yaml"][0], self.again, rel=1e-6)
+        self.assertTrue(r.same, "\n".join(r.lines + [r.summary()]))
 
     def test_each_denial_is_followed_as_the_hook_asks(self):
         for name, (run, proc) in self.runs.items():

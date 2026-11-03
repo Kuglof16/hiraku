@@ -4,10 +4,11 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 
 | ファイル | すること |
 |---|---|
-| `known_answers.py` | 解析の道具が合わせるべき閉じた式の答え (段差越え・輪の荷重・梁・門形・固有振動数・傾斜台・制動・単位の換算)。値はすべて式から計算し、式の出どころを関数ごとに書いた |
+| `known_answers.py` | 解析の道具が合わせるべき閉じた式の答え (段差越え・輪の荷重・梁・門形・固有振動数・傾斜台・制動・単位の換算、シェルの穴あき板の Kt・片持ちの角パイプ・Bredt のねじり)。値はすべて式から計算し、式の出どころを関数ごとに書いた |
 | `frame2d.py` | 平面の骨組みの剛性法。閉じた式の無い骨組みで K1 と比べる二つ目の意見。`hiraku.solvers` とはコードを共有しない |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
+| `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方
 
@@ -23,9 +24,25 @@ python -m qa.judge_scan --ref main                   # 公開する前に main �
 
 `check_run` は誤りがあると終了コード 1、`--strict` で注意も 1 にする。`judge_scan` は公開してはいけないものがあると 1。
 
+直す前と後で台本の運転の記録が変わらないことを見るとき (API キーは要らない):
+
+```
+python -m qa.compare_runs --make-baseline data/requirements/offroad-4w-video.yaml   # 直す前に 1 回
+python -m qa.compare_runs --check data/requirements/offroad-4w-video.yaml --rel 1e-6  # 直したあと
+python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml --rel 1e-6  # 2 回回して比べる (決定的か)
+python -m qa.compare_runs runs/<run_a> runs/<run_b>                                  # 2 つのフォルダを比べる
+```
+
+- 比べないもの: 時刻 (event の `ts`・`t`、`created_at`・`wall_time_s`)、`run_id` (文の中の run id と実行のフォルダも)、費用 `cost_usd`
+- 違えば、ファイル (記録は ID の名前)・`events.jsonl` の行・欄の道を出して終了コード 1。比べられないとき (基準の運転が無い、など) は 2
+- `--rel` が無ければ 1 バイトでも違えば違い (キーの順・空白・数の書き方も)。`--rel 1e-6` は数 (文の中の数も) の相対差 1e-6 までと、向きが逆なだけのモードの形 (`mode_shape`) を同じとみて、その数を最後の行に出す
+- `--rel` が要る理由: modal の道具は PyNite の固有値計算 (scipy の `eigsh`) を使い、始めのベクトルが毎回 OS の乱数で決まる。そのため、振動数は 1e-10 ほど違い、モードの形は向きが変わることがある。ほかの記録は 2 回の運転でバイトまで同じ
+- 基準の運転は `runs/baseline/<要件の名前>/`、`--check` と `--twice` の運転は `runs/compare/` に残る (`--baseline`・`--out` で変えられる)
+
 ## 照合の考え方
 
-- 正解は閉じた式と手計算。`known_answers.py` の式は `tests/verification/test_known_answers.py` で別の道筋 (sympy で梁の微分方程式を解く、剛性法、差分、数値積分) からもう一度出して確かめている
+- 正解は閉じた式と手計算。`known_answers.py` の式は `tests/verification/test_known_answers.py` で別の道筋 (sympy で梁の微分方程式を解く、Kirsch の応力関数から応力を出して穴の縁と遠方の条件を確かめる、剛性法、差分、数値積分、Bredt のせん断流のモーメントと仕事) からもう一度出して確かめている
+- 有限の幅の穴あき板の Kt は、Pilkey の近似式 (amesweb.info が Pilkey, Formulas for Stress, Strain, and Structural Matrices, 2nd ed., 2005 から引くもの) を使う。本そのものは確かめていない。d/W = 0 で Kirsch の 3、小さな穴の総断面の Kt が 3 に近いことは試験で確かめている
 - 解析部の道具がまだ無い間、その試験は「何が無いか」を書いた理由で skip する。道具があって約束 (`hiraku/contract/protocols.py`) を満たさないときは skip ではなく失敗にする
 - 道具の `check()` の `pass` は、`expected`・`got`・`tolerance_rel` から計算し直して確かめる (書いてある合否を信じない)
 
