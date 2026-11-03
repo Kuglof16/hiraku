@@ -102,6 +102,14 @@
   const SHAPE = { sx: 1.0, sy: 0.93, sz: 0.9, egg: 0.07 };
   // Box the viewer frames: covers feet, prop and the marks above the head.
   const FRAME = { cx: 0.32, cy: 1.87, w: 3.6, h: 4.0 };
+  // Legs for walking and sitting (pose terms legs, drop, sit): hip_y is the
+  // height of the hips over the soles (the legs turn about the hips: the
+  // torso pivot at BODY_Y - 0.92 SHAPE.sy, plus 0.22); swing the largest
+  // walking swing (radians); waddle the side tilt of a step; sit_legs the
+  // legs' swing forward when sitting (the body then drops hip_y (1 - cos)
+  // and the bottom of the body comes down to about the soles); sit_lean
+  // the lean back when sitting.
+  const LEG = { hip_y: BODY_Y - SHAPE.sy * 0.92 + 0.22, swing: 0.75, waddle: 0.1, sit_legs: 1.13, sit_lean: 0.1 };
 
   // ---- contour colours: same values as web/js/colormap.js ------------------
   const BANDS = 10;
@@ -3200,6 +3208,10 @@
     //   o.report  0..1: mixes in report's lean (to ease into report from idle)
     //   o.check   true / false: show / hide the tick (default: state "pass")
     //   o.shadow  scale of the contact shadow (default 1)
+    //   o.legs    walking: the right foot swung forward (radians), the left back
+    //   o.arms    walking: swing of the free arm (radians; the prop arm a little against it)
+    //   o.drop    walking: how far the hips come down (body units; anim.walkLegs)
+    //   o.sit     0..1: sits down (legs forward by LEG.sit_legs, body lowered onto the soles)
     function update(t, state, camera, o) {
       state = STATES.includes(state) ? state : "idle";
       const ex = o || {};
@@ -3215,9 +3227,13 @@
       const run = state === "run" ? runPose(t, across) : null;
       mover.position.x = run ? run.x : 0;
       hop.rotation.y = (run ? run.yaw : 0) + (ex.turn || 0);
-      for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : 0;
-      shoulders.L.rotation.x = run ? 0.75 * run.swing : 0;
-      shoulders.R.rotation.x = (run ? -0.3 * run.swing : 0) + (ex.arm || 0);
+      // walk and sit pose terms (zero when not given): legs swings the right
+      // foot forward by that angle and the left back; sit (0..1) swings both
+      // forward by LEG.sit_legs and lowers the body so the feet stay on the ground
+      const legSit = run ? 0 : (ex.sit || 0) * LEG.sit_legs;
+      for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : -h.sx * (ex.legs || 0) - legSit;
+      shoulders.L.rotation.x = (run ? 0.75 * run.swing : 0) + (ex.arms || 0);
+      shoulders.R.rotation.x = (run ? -0.3 * run.swing : 0) + (ex.arm || 0) - 0.4 * (ex.arms || 0);
       if (run) {
         hopY = run.hopY;
         lean = run.lean;
@@ -3234,7 +3250,8 @@
       lean += ex.lean || 0;
       tilt += ex.tilt || 0;
       squash += ex.squash || 0;
-      hop.position.y = hopY;
+      lean -= LEG.sit_lean * (ex.sit || 0);
+      hop.position.y = hopY - (ex.drop || 0) - LEG.hip_y * (1 - Math.cos(legSit));
       torso.position.y = PIVOT_Y + (state === "pass" || run ? 0 : bob);
       // bodies that lean by themselves (handling rolls in the corner)
       torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
@@ -3469,7 +3486,196 @@
     r.end = end;
     return r;
   }
-  const anim = { smooth: easeIo, out: easeOut, back: easeBack, hump, jumpY, hop, HOP };
+  // The legs at d pet units into a walk of D units (L: hip height, swing: the
+  // wanted largest swing, radians), in n whole steps so the feet are together
+  // at the start and at the end. The foot on the ground goes from c in front
+  // of the hips to c behind them (c = D / (2 n)) while the body moves 2c over
+  // it, so it does not slide; then it lifts and the other foot, which swung
+  // the opposite way, takes the ground. Returns legs (the right foot's swing
+  // forward, radians; the page passes it to update), drop (how far the hips
+  // come down, L (1 - cos)), tilt (a waddle towards the foot on the ground,
+  // none on the first and last half step), n and the step's fraction f.
+  function walkLegs(d, D, L, swing) {
+    let n = Math.max(1, Math.round(D / (2 * L * Math.sin(swing))));
+    while (D / (2 * n) > L * Math.sin(LEG.swing)) n++;
+    const c = D / (2 * n);
+    d = clamp(d, 0, D);
+    const k = Math.floor((d + c) / (2 * c));
+    const m = Math.max(0, d + c - k * 2 * c);     // (one step's k and m, so they switch together)
+    const th = Math.asin(clamp((c - m) / L, -1, 1));
+    const side = k % 2 ? -1 : 1;
+    const env = Math.min(1, d / c, (D - d) / c);
+    return { legs: side * th, drop: L * (1 - Math.cos(th)), tilt: LEG.waddle * side * Math.sin((Math.PI * m) / (2 * c)) * env,
+             n, f: m / (2 * c), p: c - m, k };
+  }
+  // Distance (0..1) at u (0..1) of a move that speeds up over the first ramp
+  // of its time and slows down over the last ramp (the speed rises and falls
+  // linearly, so it neither starts nor stops with a jerk).
+  function travel(u, ramp) {
+    const r = clamp(ramp, 1e-3, 0.5);
+    u = c01(u);
+    const v = 1 / (1 - r);                     // the top speed
+    if (u < r) return (v * u * u) / (2 * r);
+    if (u > 1 - r) return 1 - (v * (1 - u) ** 2) / (2 * r);
+    return v * (u - r / 2);
+  }
+  // The shape of a move out and back (0..1): out with an overshoot by the
+  // fraction inn, held, and back from 1 - outt (stay: it stays out).
+  function outBack(u, inn, outt, over, stay) {
+    if (u <= 0) return 0;
+    if (u < inn) return easeBack(u / inn, over);
+    if (stay || u < 1 - outt) return 1;
+    return u >= 1 ? 0 : 1 - easeIo((u - (1 - outt)) / outt);
+  }
+  const rad = (d) => (d * Math.PI) / 180;
+  const BEAT_KINDS = ["walk", "hop", "hops", "turn", "sit", "act", "fade", "tick"];
+  // How long a beat lasts (s).
+  function beatDur(b) {
+    if (b.do === "hop") return hop(0, b).end;
+    if (b.do === "hops") return (b.n - 1) * b.every_s + hop(0, b).end;
+    return b.dur_s || 0;
+  }
+  // The time at which every beat of a route is over.
+  function routeEnd(beats) {
+    return beats.reduce((m, b) => Math.max(m, b.t + beatDur(b)), 0);
+  }
+  // Where a pet is at t and how it stands, from a start and a list of beats
+  // in time order (pages that move pets about; a function of t only).
+  // start: {at, h, yaw_deg, alpha, sit}. A place (at, to) is whatever the
+  // page's ctx.place(place, t) turns into the feet {x, y} in its px ([x, y],
+  // or a seat on a letter that moves). Each beat is {do, t (its start, s), ...}:
+  //   walk {to, dur_s, ramp, swing, carry_deg}: there on foot in whole steps
+  //        (walkLegs), the speed easing in and out (travel); the pet is
+  //        turned so that its heading on the screen points along the way
+  //        (ctx.yawTo(dx, dy, h) -> {yaw, px}: px = screen px per pet unit
+  //        along that heading for a box h high), so the steps match the
+  //        ground it covers. It turns into the walk over turn_s; carry_deg
+  //        holds the prop up in front while walking
+  //   hop  {to, h, yaw_deg, ...anim.hop values}: one jump there (x even in
+  //        time, y on its parabola, the box going to h high); hops: n equal
+  //        hops there, one every every_s
+  //   turn {yaw_deg, dur_s, over}, sit {to (0..1), dur_s, over, thump}
+  //   act  {kind, dur_s, amp_deg, ...}: look, nod, sway, fiddle, bow, peek
+  //        (leans out by roll_deg and dx_px and looks, back unless stay)
+  //   fade {to, dur_s}: the pet's opacity; tick {dur_s}: the tick over its head
+  // Returns {x, y (feet), h, yaw, roll, alpha, check, air, pose (update's
+  // terms)}.
+  function route(t, start, beats, ctx) {
+    const pose = { legs: 0, arms: 0, drop: 0, sit: start.sit || 0, squash: 0, lean: 0, antenna: 0, tilt: 0, turn: 0,
+                   arm: 0, lookX: 0, lookY: 0 };
+    const r = { h: start.h, yaw: rad(start.yaw_deg || 0), roll: 0, alpha: start.alpha ?? 1, check: false, air: false, pose };
+    let at = start.at, dx = 0;
+    let foot = ctx.place(at, t);
+    const addHop = (h) => { pose.squash += h.squash; pose.lean += h.lean; pose.antenna += h.antenna; };
+    for (const b of beats) {
+      const tau = t - b.t;
+      if (tau <= 0) break;
+      const dur = beatDur(b), u = dur > 0 ? tau / dur : 1;
+      if (b.do === "walk") {
+        const to = ctx.place(b.to, t);
+        const wx = to.x - foot.x, wy = to.y - foot.y, D = Math.hypot(wx, wy);
+        if (D < 1e-6) { at = b.to; continue; }
+        const head = ctx.yawTo(wx / D, wy / D, r.h);
+        if (u >= 1) { at = b.to; foot = to; r.yaw = head.yaw; continue; }
+        const s = travel(u, b.ramp ?? 0.3);
+        const ts = Math.min(b.turn_s ?? 0.25, 0.3 * dur);
+        r.yaw += (head.yaw - r.yaw) * easeIo(tau / ts);
+        const lg = walkLegs((s * D) / head.px, D / head.px, LEG.hip_y, b.swing ?? 0.55);
+        pose.legs += lg.legs;
+        pose.arms -= 0.9 * lg.legs;
+        pose.drop += lg.drop;
+        pose.tilt += lg.tilt;
+        if (b.carry_deg) pose.arm -= rad(b.carry_deg) * outBack(u, 0.15, 0.12, 0, false);
+        foot = { x: foot.x + wx * s, y: foot.y + wy * s };
+        // the foot on the ground (step k of the walk), where it stands on the screen
+        r.plant = { k: lg.k, x: foot.x + (wx / D) * lg.p * head.px, y: foot.y + (wy / D) * lg.p * head.px };
+        continue;
+      }
+      if (b.do === "hop" || b.do === "hops") {
+        const n = b.do === "hops" ? b.n : 1;
+        const from = foot, to = ctx.place(b.to, t);
+        const k = Math.min(n - 1, Math.floor(tau / (b.every_s || 1e9)));
+        const a = { x: from.x + ((to.x - from.x) * k) / n, y: from.y + ((to.y - from.y) * k) / n };
+        const z = { x: from.x + ((to.x - from.x) * (k + 1)) / n, y: from.y + ((to.y - from.y) * (k + 1)) / n };
+        const J = Object.assign({}, b, { rise_px: a.y - z.y });
+        const h = hop(tau - k * (b.every_s || 0), J);
+        addHop(h);
+        if (b.yaw_deg !== undefined) {
+          const y1 = rad(b.yaw_deg);
+          r.yaw += (y1 - r.yaw) * easeIo(tau / Math.max(1e-3, (b.crouch_s || 0) + 0.3 * (b.air_s || 0)));
+        }
+        if (b.h !== undefined) {
+          // the box takes its new size over the first 60 % of the way (a pet
+          // jumping away from the viewer is small by the time it is high up)
+          const q = (k + h.q) / n;
+          r.h += (b.h - r.h) * easeIo(q / 0.6);
+        }
+        r.air = h.air;
+        if (u >= 1) { at = b.to; foot = to; continue; }
+        foot = { x: a.x + (z.x - a.x) * h.q, y: a.y - h.y };
+        if (h.air && b.shadow_air !== undefined) pose.shadow = b.shadow_air;
+        if (b.look_up && !h.air && h.q === 0) pose.lookY += b.look_up * easeIo(tau / Math.max(1e-3, b.crouch_s || 0));
+        continue;
+      }
+      if (b.do === "turn") {
+        r.yaw += (rad(b.yaw_deg) - r.yaw) * easeBack(u, b.over ?? 0.08);
+        continue;
+      }
+      if (b.do === "sit") {
+        const s0 = pose.sit;
+        pose.sit = s0 + (b.to - s0) * easeBack(u, b.over ?? 0.1);
+        const v = (u - 0.55) / 0.45;
+        if (b.thump && v > 0 && v < 1) pose.squash += b.thump * Math.sin(Math.PI * v) * (1 - v);
+        continue;
+      }
+      if (b.do === "fade") {
+        const a0 = r.alpha;
+        r.alpha = a0 + (b.to - a0) * easeIo(u);
+        continue;
+      }
+      if (b.do === "tick") {
+        if (u < 1) r.check = true;
+        continue;
+      }
+      if (b.do === "act" && u < 1) {
+        const amp = rad(b.amp_deg || 0), hm = hump(u), eye = b.eye ?? 0.035;
+        if (b.kind === "look") {             // turns to one side, then the other
+          const s = Math.sin(2 * Math.PI * u) * hm;
+          pose.turn += amp * s;
+          pose.lookX += eye * s;
+        } else if (b.kind === "nod") {       // nods twice
+          pose.lean += amp * Math.sin(2 * Math.PI * u) ** 2;
+        } else if (b.kind === "sway") {      // rocks side to side twice
+          pose.tilt += amp * Math.sin(4 * Math.PI * u) * hm;
+        } else if (b.kind === "fiddle") {    // lifts its prop and turns it about, looking at it
+          pose.arm += -amp * hm + 0.3 * amp * Math.sin(6 * Math.PI * u) * hm;
+          pose.lookX += eye * hm;
+          pose.lookY -= eye * hm;
+        } else if (b.kind === "bow") {       // bends forward, holds, comes back up past upright
+          const s = outBack(u, 0.3, 0.35, 0, false);
+          const back = u > 0.65 ? -0.15 * hump((u - 0.65) / 0.35) : 0;
+          pose.lean += amp * (s + back);
+          pose.lookY += eye * s;
+        }
+      }
+      if (b.do === "act" && b.kind === "peek") {   // leans out from behind something
+        const s = outBack(Math.min(u, 1), 0.3, 0.3, b.over ?? 0.12, !!b.stay);
+        r.roll += rad(b.roll_deg || 0) * s;
+        dx += (b.dx_px || 0) * s;
+        if (u < 1) {
+          const lk = Math.sin(2 * Math.PI * u) * hump(u);
+          pose.turn += rad(b.amp_deg || 0) * lk;
+          pose.lookX += (b.eye ?? 0.035) * lk;
+        }
+      }
+    }
+    r.x = foot.x + dx;
+    r.y = foot.y;
+    r.at = at;
+    return r;
+  }
+  const anim = { smooth: easeIo, out: easeOut, back: easeBack, hump, jumpY, hop, HOP, walkLegs, travel, outBack, route,
+                 routeEnd, beatDur, BEAT_KINDS };
 
-  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create, anim };
+  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, LEG, loadFactor, create, anim };
 })();
