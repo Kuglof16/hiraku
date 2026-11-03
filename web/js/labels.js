@@ -89,7 +89,7 @@ export const STOP_CODE_JA = {
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
-  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみの道具だけ" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみのツールだけ" },
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },

@@ -376,7 +376,7 @@ export function applyEvent(s, ev) {
     }
     case "tool.checked": {
       s.tools[d.name] = d;
-      log(s, ev, d.usable ? "ok" : "warn", `道具「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
+      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
       break;
     }
     case "hook.denied": {
