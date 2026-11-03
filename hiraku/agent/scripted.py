@@ -20,6 +20,7 @@ import re
 from typing import Any
 
 from hiraku import contract
+from hiraku.agent import inbox
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
@@ -175,6 +176,10 @@ class StopRequested(Stop):
 
 
 def _check_stop(ctx: RunContext) -> None:
+    """Where the run looks at what the screen put: the inbox (no Claude here, so nothing is
+    passed on to a lead), then stop.request."""
+    if inbox.take(ctx):
+        ctx.store.emit("agent.said", agent="system", text="台本の運転なので、Claude には渡しません")
     if ctx.store.stop_requested():
         raise StopRequested(STOPPED_BY_BUTTON)
 
