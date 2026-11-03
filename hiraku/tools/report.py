@@ -142,7 +142,7 @@ def domain_parts(ctx: RunContext) -> list[Record]:
             cases.append({
                 "load_case_id": lc["load_case_id"],
                 "verdict_id": ver["verdict_id"] if ver else None,
-                "line": verdict_line(ver) if ver else "まだ判定していない",
+                "line": verdict_line(ver) if ver else unjudged_line(ctx, lc, v),
                 "effects": _effects(ana),
                 "assumptions": list((pred or {}).get("assumptions", [])),
                 "differences": [{"comparison_id": c["comparison_id"], "quantity": c["quantity"], "diff_rel": c["diff_rel"],
@@ -152,6 +152,18 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         out.append({"domain": domain, "state": tile.get("state", "pending"), "summary": tile.get("summary", ""),
                     "cases": cases})
     return out
+
+
+def unjudged_line(ctx: RunContext, lc: Record, version: int) -> str:
+    """The report's line for a load case without a verdict: what holds it (an analysis result past the
+    criterion, an unexplained mismatch), and that no K0 formula predicts it when none does, so a result
+    past the limit is not hidden behind 'not judged'."""
+    from hiraku.tools.judge import NO_FORMULA_NOTE, blockers, no_formula_cases
+
+    why = blockers(ctx, lc, version)
+    if lc["load_case_id"] in no_formula_cases(ctx):
+        why.append(NO_FORMULA_NOTE)
+    return "まだ判定していない" + (f": {'、'.join(why)}" if why else "")
 
 
 def verdict_sources(ctx: RunContext, ver: Record | None) -> tuple[Record | None, Record | None]:

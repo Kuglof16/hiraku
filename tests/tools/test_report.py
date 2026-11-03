@@ -63,6 +63,32 @@ class PersonsChoiceTest(RunCase, unittest.TestCase):
                 write_report(self.ctx, {"summary": "HU-02 は人が設計を直すを選んだ", "next": []}, "lead")
 
 
+class PastTheLimitWithoutFormulaTest(RunCase, unittest.TestCase):
+    """610ad75 kept visible: a case no K0 formula predicts, with a result past its limit, ends without a verdict;
+    the tile and the report still say the result is past the limit and why there is no verdict."""
+
+    def test_the_tile_and_the_report_say_it(self):
+        from unittest import mock
+
+        from hiraku.tools import rules
+        from hiraku.tools.functions import analyze
+        from hiraku.tools.judge import NO_FORMULA_NOTE, compute_judgement
+        from hiraku.tools.report import domain_parts
+
+        ana, _, _ = self.run_p1()
+        self.tools["frame_static"].factor = 50.0  # far past the limit
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        with mock.patch.object(rules, "unpredictable_cases", return_value={"R1-step100": "max_stress"}):
+            tile = compute_judgement(self.ctx, "strength")
+            case = next(c for p in domain_parts(self.ctx) if p["domain"] == "strength"
+                        for c in p["cases"] if c["load_case_id"] == "R1-step100")
+        for text in (tile["summary"], case["line"]):
+            self.assertIn("基準", text)
+            self.assertIn("超えている", text)
+            self.assertIn(NO_FORMULA_NOTE, text)
+
+
 class ReportTest(RunCase, unittest.TestCase):
     frame_factor = (1.5, 1.8, 1.03)  # R1: rail_step_bending mismatches, then the rail joint is judged safe side
 
