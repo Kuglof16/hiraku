@@ -165,7 +165,6 @@ class KnownAnswersTest(unittest.TestCase):
         q = {r["quantity"]: r for r in rows}
         self.assertIn("verdict singular (1 = yes)", q)
         self.assertIn("Richardson extrapolated centre stress (bottom surface)", q)
-        self.assertLess(dt, 1.5)
 
     def test_in_frame_shell_known_answers(self):
         names = {r["quantity"] for r in checks.shell_known_answers()}

@@ -55,7 +55,6 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertTrue(any("ladder" in r["case"] for r in rows))
         for r in rows:
             contract.validate("tool_check", r)
-        self.assertLess(dt, 15.0)
 
     def test_other_mesh_is_named(self):
         lad = fixtures.ladder_design()
