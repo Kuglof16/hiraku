@@ -209,11 +209,47 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
         hooks.load_state(state)
-        hooks.on_end = lambda: notes.append({"op": "end"})
+        ended: list[bool] = []
+        hooks.on_end = lambda: (notes.append({"op": "end"}), ended.append(True))
         out = hooks.decide(event, input_data)
-        write_state(run_dir, {**state, **hooks.state()})
-        put_notes(run_dir, notes)
+        new_state = {**state, **hooks.state(), **({END_KEY: True} if ended else {})}
+        write_state(run_dir, new_state)
+        if ended and not server_alive(run_dir):
+            # the lead's stop is let through and no server serves the run (Claude Code stopped it first):
+            # the hook command is the only one left to write, so it ends the run itself, under the lock
+            finish_without_server(run_dir, ctx, new_state, notes)
+        else:
+            put_notes(run_dir, notes)
     return out
+
+
+END_KEY = "end_requested"  # in STATE_FILE: the Stop hook let the lead's stop through; the run is to end
+
+
+def server_alive(run_dir: Path) -> bool:
+    """A server serves the run: its layout.PLUGIN_ALIVE_FILE is younger than layout.PLUGIN_ALIVE_S."""
+    try:
+        return time.time() - (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).stat().st_mtime < layout.PLUGIN_ALIVE_S
+    except OSError:
+        return False
+
+
+def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: list[Record]) -> None:
+    """End a run whose server is gone (call with the lock held): the notes no server read, then the
+    roles still running and the lead stop, and run.finished as runner.end_status decides it."""
+    from hiraku.agent.runner import end_status
+
+    store = ctx.store
+    for n in take_notes(run_dir) + [n for n in notes if n.get("op") == "emit"]:
+        if n.get("op") == "emit":
+            store.emit(n["kind"], agent=n.get("agent"), domain=n.get("domain"), text=n.get("text"), data=n.get("data"))
+    for agent in sorted(set((state.get("running") or {}).values())):
+        domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
+        store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+    store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
+    store.finish(status, stop_reason=reason, stop_code=code)
+    (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
 
 
 def hook_main(event: str, runs: Path | None = None, stdin: Any = None, stdout: Any = None) -> int:
@@ -510,10 +546,18 @@ class PluginServer:
         self._poller.start()
 
     def shutdown(self) -> None:
-        """The session closed (stdin ended): read the last notes, then stop a run still running."""
+        """The session closed (stdin ended, or the process exits: atexit): read the last notes; a run whose
+        lead's stop the Stop hook let through (END_KEY in the hooks' state) ends as runner.end_status
+        decides; any other run still running stops as user_stop. Safe to call more than once."""
         self._stop_polling.set()
         try:
             self.drain()
+            ctx = self.ctx
+            if ctx is not None and ctx.project["status"] == "running":
+                with locked(ctx.store.path):
+                    requested = bool(read_state(ctx.store.path).get(END_KEY))
+                if requested:
+                    self.end()
         finally:
             self.close("stopped", STOPPED_SESSION_CLOSED, "user_stop")
 
@@ -537,6 +581,10 @@ def serve(runs: Path | None = None) -> int:
                                     is_error=bool(out.get("is_error")))
 
     server = Server(contract.MCP_SERVER, version="0.1.0", on_list_tools=list_tools, on_call_tool=call_tool)
+
+    import atexit
+
+    atexit.register(plugin.shutdown)  # also when the process is told to exit before stdin ends
 
     async def main() -> None:
         plugin.start_polling()
