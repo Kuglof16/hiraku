@@ -146,7 +146,7 @@ class BrokenChainTest(unittest.TestCase):
 class MissingPartsTest(unittest.TestCase):
     def test_no_rops(self):
         rec = check("SY-06", without(vehicle(), "rops"))
-        self.assertEqual((hit_ids(rec), rec["targets"]), (["design"], []))
+        self.assertEqual((hit_ids(rec), rec["targets"]), (["design"], ["design"]))
         self.assertIn("ROPS", rec["hits"][0]["message"])
         self.assertEqual(hit_ids(check("SY-06", unlink(vehicle(), "rops", "rail_R"))), ["rops"])  # there, not joined
         d = vehicle()  # a bar made of members of its own: joined to its own tubes is not joined to the frame
@@ -203,6 +203,59 @@ class NoLinksTest(unittest.TestCase):
         self.assertEqual(hit_ids(check("SY-09", self.bare("fuse1"))), ["battery"])
         self.assertEqual(hit_ids(check("SY-03", self.bare("pedal"))), ["design"])
         self.assertEqual(len(check("SY-07", self.bare("headlamp"))["hits"]), 1)
+
+
+class TargetsTest(unittest.TestCase):
+    """Contract: every part_id in hits and not_evaluable is among targets; "design" stands for the whole design."""
+
+    def designs(self):
+        base = vehicle()
+        yield "complete", base
+        for p in base["parts"]:
+            yield f"without {p['id']}", without(base, p["id"])
+        for p in base["parts"]:
+            for x in p["connects_to"]:
+                yield f"{p['id']} not to {x['to']}", unlink(base, p["id"], x["to"])
+        bare = copy.deepcopy(base)
+        for p in bare["parts"]:
+            p["connects_to"] = []
+        yield "bare", bare
+        for p in base["parts"]:
+            yield f"bare without {p['id']}", without(bare, p["id"])
+        yield "empty", {"design_version": 1, "parts": [], "supports": [], "members": [], "nodes": []}
+        yield "no frame", {**base, "members": [], "nodes": []}
+
+    def test_every_hit_and_every_gap_is_a_target(self):
+        for name, design in self.designs():
+            for flags in (ALL, {}, None):
+                for rid in RULES:
+                    rec = check(rid, design, flags)
+                    where = f"{rid} on {name} with flags {flags}"
+                    named = {x["part_id"] for x in rec["hits"]} | {x["part_id"] for x in rec["not_evaluable"]}
+                    self.assertLessEqual(named, set(rec["targets"]), where)
+                    self.assertEqual(len(rec["targets"]), len(set(rec["targets"])), where)
+                    self.assertEqual(rec["pass"], not rec["hits"], where)
+                    self.assertFalse({x["part_id"] for x in rec["hits"]} & {x["part_id"] for x in rec["not_evaluable"]}, where)
+                    self.assertEqual(contract.errors("rule_check", {**rec, "rule_check_id": "rchk-0001", "design_version": 1}), [], where)
+
+    def test_a_chain_names_the_parts_it_looked_at(self):
+        bare = copy.deepcopy(vehicle())
+        for p in bare["parts"]:
+            p["connects_to"] = []
+        self.assertEqual(set(check("SY-01", bare)["targets"]), {"motor", "support:RL", "support:RR"})
+        self.assertEqual(set(check("SY-02", bare)["targets"]), {"steering", "support:FL", "support:FR"})
+        self.assertEqual(set(check("SY-08", bare)["targets"]), {"battery", "motor"})
+        self.assertEqual(set(check("SY-05", bare)["targets"]), {"seat_R", "seat_L", "belt_R", "belt_L"})
+        self.assertEqual(set(check("SY-09", bare)["targets"]), {"battery", "fuse1"})
+        self.assertIn("motor", check("SY-01", bare)["targets"])
+
+    def test_a_hit_on_the_whole_design_puts_design_among_the_targets(self):
+        for rid, gone in (("SY-01", "motor"), ("SY-02", "steering"), ("SY-03", "pedal"), ("SY-06", "rops"), ("SY-08", "battery")):
+            rec = check(rid, without(vehicle(), gone))
+            self.assertEqual(hit_ids(rec), ["design"], rid)
+            self.assertIn("design", rec["targets"], rid)
+        self.assertEqual(check("SY-01", vehicle(), None)["targets"], ["design"])
+        self.assertEqual(check("SY-01", vehicle(), {})["targets"], [])
 
 
 class RulesFileTest(unittest.TestCase):

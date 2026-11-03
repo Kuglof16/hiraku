@@ -15,6 +15,9 @@ What is missing is a hit: the part where the chain stops, the two sides of the g
 design where no part has a connects_to cannot be followed: the parts the chain would run between are
 reported as not evaluable (missing connects_to). A part that is not there at all is a hit either way.
 The whole product ("design") stands for a hit that belongs to no part.
+
+targets (contract: every part_id in hits and not_evaluable is among them): the parts a chain looks at (its
+sources and its ends, or the seats and what holds them), and "design" when a hit belongs to the whole design.
 """
 
 from __future__ import annotations
@@ -110,7 +113,7 @@ def _ends(ids: set[str] | list[str], limit: int = 6) -> str:
 def _chain(net: Net, sources: list[str], ends: list[str], carries: str, from_label: str, to_label: str) -> Result:
     """Every end reached from the sources through links that carry `carries`; else a hit saying where it stops."""
     if not net.linked:
-        return list(ends), [], _missing_links(*sources, *ends)
+        return [*sources, *ends], [], _missing_links(*sources, *ends)
     reached = net.reach(sources, carries)
     hits = []
     for end in ends:
@@ -121,7 +124,7 @@ def _chain(net: Net, sources: list[str], ends: list[str], carries: str, from_lab
             f"{from_label} ({_ends(sources)}) から{to_label} {end} まで、{CARRIES[carries]}を伝える鎖 (carries: {carries}) が切れています。"
             f"{from_label}の側でつながっているのは {_ends(reached)}、{end} の側は {_ends(other_side)} です。"
             f"この間をつなぐ部品を足し、両側の部品の connects_to に carries: {carries} で書いてください"), connected=0))
-    return list(ends), hits, []
+    return [*sources, *ends], hits, []
 
 
 # ------------------------------------------------------------------------------------------- the checks
@@ -131,9 +134,9 @@ def drive_chain(net: Net) -> Result:
     driven = net.supports_with("drive")
     sources = net.of_kind(*POWER_KINDS)
     if not driven:
-        return [], [_hit(WHOLE, "駆動輪がありません (actuation.drive が true の接地点が 1 つもありません)。駆動する接地点を決めてください", driven=0)], []
+        return [WHOLE], [_hit(WHOLE, "駆動輪がありません (actuation.drive が true の接地点が 1 つもありません)。駆動する接地点を決めてください", driven=0)], []
     if not sources:
-        return driven, [_hit(WHOLE, "動力源がありません (kind が motor か engine の部品)。足して、駆動輪まで torque の鎖でつないでください", sources=0)], []
+        return [*driven, WHOLE], [_hit(WHOLE, "動力源がありません (kind が motor か engine の部品)。足して、駆動輪まで torque の鎖でつないでください", sources=0)], []
     return _chain(net, sources, driven, "torque", "動力源", "駆動輪")
 
 
@@ -141,9 +144,9 @@ def steer_chain(net: Net) -> Result:
     steered = net.supports_with("steer")
     inputs = net.of_kind(*STEER_INPUT)
     if not steered:
-        return [], [_hit(WHOLE, "操舵輪がありません (actuation.steer が true の接地点が 1 つもありません)。操舵する接地点を決めてください", steered=0)], []
+        return [WHOLE], [_hit(WHOLE, "操舵輪がありません (actuation.steer が true の接地点が 1 つもありません)。操舵する接地点を決めてください", steered=0)], []
     if not inputs:
-        return steered, [_hit(WHOLE, "ハンドルがありません (kind が steering の部品)。足して、操舵輪まで steer の鎖でつないでください", inputs=0)], []
+        return [*steered, WHOLE], [_hit(WHOLE, "ハンドルがありません (kind が steering の部品)。足して、操舵輪まで steer の鎖でつないでください", inputs=0)], []
     return _chain(net, inputs, steered, "steer", "ハンドル", "操舵輪")
 
 
@@ -151,9 +154,9 @@ def brake_chain(net: Net) -> Result:
     braked = net.supports_with("brake")
     inputs = net.of_kind(*BRAKE_INPUT)
     if not braked:
-        return [], [_hit(WHOLE, "制動する輪がありません (actuation.brake が true の接地点が 1 つもありません)。制動する接地点を決めてください", braked=0)], []
+        return [WHOLE], [_hit(WHOLE, "制動する輪がありません (actuation.brake が true の接地点が 1 つもありません)。制動する接地点を決めてください", braked=0)], []
     if not inputs:
-        return braked, [_hit(WHOLE, "制動の入力がありません (kind が brake_pedal・brake_lever・brake_controller のどれかの部品)。"
+        return [*braked, WHOLE], [_hit(WHOLE, "制動の入力がありません (kind が brake_pedal・brake_lever・brake_controller のどれかの部品)。"
                                     "足して、制動する輪まで brake の鎖でつないでください", inputs=0)], []
     return _chain(net, inputs, braked, "brake", "制動の入力", "制動する輪")
 
@@ -161,7 +164,7 @@ def brake_chain(net: Net) -> Result:
 def seat_attach(net: Net) -> Result:
     seats = net.of_kind("seat")
     if not seats:
-        return [], [_hit(WHOLE, "座席がありません (kind が seat の部品)。足して、骨組みにつないでください", seats=0)], []
+        return [WHOLE], [_hit(WHOLE, "座席がありません (kind が seat の部品)。足して、骨組みにつないでください", seats=0)], []
     if not net.frame:
         return seats, [], [{"part_id": s, "missing": ["frame"]} for s in seats]
     if not net.linked:
@@ -182,7 +185,7 @@ def restraint(net: Net) -> Result:
         return seats, [_hit(s, f"座席 {s} に拘束 (シートベルトなど。system が restraint の部品) がありません。足して、座席と骨組みにつないでください",
                             restraints=0) for s in seats], []
     if not net.linked:
-        return seats, [], _missing_links(*seats, *belts)
+        return [*seats, *belts], [], _missing_links(*seats, *belts)
     hits = []
     for s in seats:
         mine = [b for b in belts if b in net.neighbours(s)]
@@ -198,7 +201,7 @@ def restraint(net: Net) -> Result:
 def rops(net: Net) -> Result:
     bars = list(dict.fromkeys([*net.of_system("rops"), *net.of_kind("rollbar", "rops")]))
     if not bars:
-        return [], [_hit(WHOLE, "乗員を囲む転倒保護の枠 (ROPS。system が rops の部品) がありません。足して、骨組みにつないでください", rops=0)], []
+        return [WHOLE], [_hit(WHOLE, "乗員を囲む転倒保護の枠 (ROPS。system が rops の部品) がありません。足して、骨組みにつないでください", rops=0)], []
     if not net.linked:
         return bars, [], _missing_links(*bars)
     own = {m for m, p in net.member_part.items() if p in bars}  # the bar's own tubes are not the frame it stands on
@@ -219,7 +222,7 @@ def power_chain(net: Net) -> Result:
     batteries = net.of_kind("battery")
     motors = net.of_kind("motor")
     if not batteries:
-        return motors, [_hit(WHOLE, "電池がありません (kind が battery の部品)。足して、モーターまで power の鎖でつないでください", batteries=0)], []
+        return [*motors, WHOLE], [_hit(WHOLE, "電池がありません (kind が battery の部品)。足して、モーターまで power の鎖でつないでください", batteries=0)], []
     if not motors:
         return [], [], []  # nothing to feed
     return _chain(net, batteries, motors, "power", "電池", "モーター")
@@ -228,13 +231,13 @@ def power_chain(net: Net) -> Result:
 def disconnect(net: Net) -> Result:
     batteries = net.of_kind("battery")
     if not batteries:
-        return [], [_hit(WHOLE, "電池がありません (kind が battery の部品)", batteries=0)], []
+        return [WHOLE], [_hit(WHOLE, "電池がありません (kind が battery の部品)", batteries=0)], []
     protectors = net.of_kind(*PROTECTORS)
     if not protectors:
         return batteries, [_hit(b, f"電池 {b} の電力を切る部品 (kind が {'・'.join(PROTECTORS)} のどれか) がありません。足して、"
                                    "電池の power の鎖に入れてください", protectors=0) for b in batteries], []
     if not net.linked:
-        return batteries, [], _missing_links(*batteries, *protectors)
+        return [*batteries, *protectors], [], _missing_links(*batteries, *protectors)
     inside = net.reach(batteries, "power")
     if any(p in inside for p in protectors):
         return batteries, [], []
@@ -284,11 +287,13 @@ def check_rule(rule: Record, design: Record, flags: dict[str, Any] | None) -> Re
     """One system rule against a design: the rule_check record without its id and design version."""
     base: Record = {"rule_id": rule["rule_id"], "targets": [], "hits": [], "not_evaluable": [], "pass": True}
     if flags is None:  # which systems the product needs is not known
-        return {**base, "not_evaluable": [{"part_id": WHOLE, "missing": ["flags"]}]}
+        return {**base, "targets": [WHOLE], "not_evaluable": [{"part_id": WHOLE, "missing": ["flags"]}]}
     spec = specs().get(rule["rule_id"])
     if spec is None:
         raise ValueError(f"{rule['rule_id']} is not in {SPEC_FILE.name}")
     if not applies(spec["when"], flags):
         return base
     targets, hits, not_evaluable = CHECKS[check_name(rule["check"])](Net(design))
-    return {**base, "targets": targets, "hits": hits, "not_evaluable": not_evaluable, "pass": not hits}
+    named = [r["part_id"] for r in (*hits, *not_evaluable)]
+    return {**base, "targets": list(dict.fromkeys([*targets, *named])), "hits": hits, "not_evaluable": not_evaluable,
+            "pass": not hits}
