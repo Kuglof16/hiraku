@@ -91,6 +91,45 @@ class SpaceFrameDesignTest(unittest.TestCase):
         self.assertLess(gap, 0.0)
         self.assertIn("in_the_way", where)
 
+    def test_tyres_clear_the_frame(self):
+        gap, where = sf.tyre_clearance(self.d)
+        self.assertGreaterEqual(gap, sf.ARM_CLEARANCE_MM, where)
+        # a tube put through the front left tyre's place is found
+        fl = next(s for s in self.d["supports"] if s["id"] == "FL")
+        c = np.asarray(fl["position_mm"], float)
+        d2 = dict(self.d, nodes=self.d["nodes"] + [{"id": "Xa", "xyz_mm": (c + [0.0, -400.0, 0.0]).tolist()},
+                                                   {"id": "Xb", "xyz_mm": (c + [0.0, 0.0, 0.0]).tolist()}],
+                  members=self.d["members"] + [dict(self.d["members"][0], id="in_the_way", node_a="Xa", node_b="Xb")])
+        gap, where = sf.tyre_clearance(d2)
+        self.assertLess(gap, 0.0)
+        self.assertIn("in_the_way", where)
+        # a tube across, 40 mm behind the straight tyre's tread: steered, the tyre's corner comes nearer
+        # (r cos a + w/2 sin a behind the centre, largest at the sampled lock nearest atan(w / 2r))
+        r = fl["radius_mm"]
+        d3 = dict(self.d, nodes=self.d["nodes"] + [{"id": "Ya", "xyz_mm": (c + [-r - 40.0, -300.0, 0.0]).tolist()},
+                                                   {"id": "Yb", "xyz_mm": (c + [-r - 40.0, 300.0, 0.0]).tolist()}],
+                  members=self.d["members"] + [dict(self.d["members"][0], id="behind", node_a="Ya", node_b="Yb")])
+        gap, where = sf.tyre_clearance(d3)
+        self.assertIn("behind", where)
+        rt = self.d["sections"][self.d["members"][0]["section"]]["dims_mm"]["d"] / 2.0
+        lock = self.d["variables"]["max_steer_angle"]["value"]
+        reach = max(r * math.cos(a) + fl["width_mm"] / 2 * abs(math.sin(a))
+                    for a in np.radians(np.linspace(-lock, lock, sf.TYRE_STEER_SAMPLES)))
+        self.assertGreater(reach, r + 10.0)
+        self.assertAlmostEqual(gap, r + 40.0 - reach - rt, delta=0.1)
+
+    def test_dash_bar_has_its_own_tube(self):
+        sec = {m["id"]: m["section"] for m in self.d["members"]}
+        self.assertEqual(sec["dash_bar_L"], "ct48.6x3.2")
+        self.assertEqual(sec["dash_bar_R"], "ct48.6x3.2")
+        self.assertEqual(sec["front_upper_link_L"], "ct34x2.3")
+        ends = {m["id"]: (m["node_a"], m["node_b"]) for m in self.d["members"]}
+        self.assertEqual(ends["front_upper_link_L"], ("LA_uca_rear", "D0"))
+        steering = next(p for p in self.d["parts"] if p["id"] == "steering")
+        top = steering["box"]["center_mm"][2] + steering["box"]["size_mm"][2] / 2
+        dash_z = next(n["xyz_mm"][2] for n in self.d["nodes"] if n["id"] == "D0")
+        self.assertAlmostEqual(dash_z - top, 48.6 / 2 + sf.ON_TUBES_MM)  # hangs below the heavier dash bar
+
     def test_the_layout_follows_the_variables(self):
         d2 = sf.build({"wheelbase": {"value": 2100.0, "unit": "mm"}, "seat_x": -950.0, "head_clearance": 150.0,
                        "cage_tube_d": 48.6})

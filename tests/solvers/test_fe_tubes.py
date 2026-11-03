@@ -220,6 +220,14 @@ class SpaceFrameShellTest(unittest.TestCase):
         self.assertGreater(self.st["lift"]["t"], 0.0)
         self.assertEqual(self.r["n_ties"], sum(1 for _ in self.r["shells"].ties))
 
+    def test_margin_to_yield(self):
+        # the dash bar's middle (where the front upper links meet) was the weak point with the brace tube:
+        # 89 to 91 MPa (yield / stress 2.4); with its own tube every joint keeps yield / stress >= 3 here
+        yield_mpa = self.d["materials"][sf.MATERIAL]["yield_MPa"]
+        for case in ("static", "lift"):
+            vm = self.r["cases"][case]["von_mises_max"]
+            self.assertGreaterEqual(yield_mpa / vm["MPa"], 3.0, (case, vm))
+
     def test_shell_mass(self):
         from hiraku.solvers.k2_vehicle.mass import member_items
 

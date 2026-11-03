@@ -14,7 +14,7 @@ occupant in the parts list, as in ladder_4w). The frame is made of three pieces 
   cross tubes join the left and right subframes. Tubes from the subframes reach the floor's front
   and rear cross tubes and the cage;
 - the cage around the occupants: A-pillars from the floor's front corners to the roof (with a node
-  at the dash height for the dash bar and the front subframe's top tube), the main hoop behind the
+  at the dash height for the dash bar and the front subframe's upper link), the main hoop behind the
   seats (with a node at the deck height for the deck rails and the seat back bar), roof rails, roof
   and hoop cross tubes, an X in the roof and in the hoop's upper bay, and stays from the hoop's top
   to the rear damper tops.
@@ -92,6 +92,9 @@ VARIABLES: dict[str, Var] = {
     "cage_tube_t": Var("mm", 2.3, 2.0, 4.0, "cage (pillars, hoop, roof), wall"),
     "brace_tube_d": Var("mm", 34.0, 21.7, 60.5, "subframes, diagonals and stays, outside diameter"),
     "brace_tube_t": Var("mm", 2.3, 2.0, 4.0, "subframes, diagonals and stays, wall"),
+    "dash_tube_d": Var("mm", 48.6, 27.2, 76.3, "dash bar (the front subframe's upper links meet at its middle), "
+                       "outside diameter"),
+    "dash_tube_t": Var("mm", 3.2, 2.0, 4.0, "dash bar, wall"),
     **{k: LADDER_VARIABLES[k] for k in SHARED},
 }
 # A design built here carries these; ladder_4w's signature (rail_spacing, ...) is not among them.
@@ -399,7 +402,13 @@ def _frame(v: dict[str, float], hp: dict[str, dict], secs: dict[str, tuple[str, 
     # subframes to the floor and the cage
     both("front_lower_link", "A_lca_rear", "Q1", "brace")
     both("front_diagonal", "A_uca_rear", "Q1", "brace")
-    # to the dash bar's middle: inboard of the steered tyre and of the steering ahead of the driver
+    # to the dash bar's middle: inboard of the steered tyre and of the steering ahead of the driver. The two
+    # links' force bends the dash bar across its span, so the dash bar has its own (heavier) tube: with the
+    # brace tube (34 x 2.3) it reached 91 MPa there, with 48.6 x 3.2 52 MPa (shell at 20 mm). Routes
+    # tried and not taken (shell at 20 mm, K2 standing still): to the A-pillar's dash node, the largest stress
+    # falls from 91 to 45 MPa but the link passes 10 mm from the front tyre at full lock and full bump
+    # (tyre_clearance), against the 60 mm the floor's front cross tube keeps; to a pillar node higher up or
+    # the roof's front corner, the driver's link passes through the steering's box.
     frame.member("front_upper_link_L", "LA_uca_rear", "D0", sec["brace"])
     frame.member("front_upper_link_R", "RA_uca_rear", "D0", sec["brace"])
     both("rear_lower_link", "B_lca_front", "Q3", "brace")
@@ -426,8 +435,8 @@ def _frame(v: dict[str, float], hp: dict[str, dict], secs: dict[str, tuple[str, 
     both("roof_rail", "H1", "H2", "cage")
     across("roof_front_cross", "H1", "cage")
     across("roof_rear_cross", "H2", "cage")
-    frame.member("dash_bar_L", "LAd", "D0", sec["brace"])
-    frame.member("dash_bar_R", "D0", "RAd", sec["brace"])
+    frame.member("dash_bar_L", "LAd", "D0", sec["dash"])
+    frame.member("dash_bar_R", "D0", "RAd", sec["dash"])
     across("seat_back_bar", "Hm", "brace")
     frame.member("hoop_diag_L1", "LHm", "C2", sec["brace"])
     frame.member("hoop_diag_R2", "C2", "RH2", sec["brace"])
@@ -506,6 +515,63 @@ def occupant_clearance(design: Record) -> tuple[float, str]:
     return best, where
 
 
+TYRE_STEER_SAMPLES = 9  # steer angles checked, evenly over +-max_steer_angle (steered wheels only)
+TYRE_SEGMENT_SAMPLES = 80  # points along each tube's centre line (the best one refined by golden section)
+
+
+def _cylinder_distance(p: np.ndarray, c: np.ndarray, axis: np.ndarray, r: float, half_w: float) -> np.ndarray:
+    """Least distance from each point p (n, 3) to solid cylinders (centres c (k, 3), unit axes (k, 3), radius r,
+    half width); 0 inside."""
+    w = p[None, :, :] - c[:, None, :]
+    h = np.einsum("kni,ki->kn", w, axis)
+    rho = np.linalg.norm(w - h[:, :, None] * axis[:, None, :], axis=2)
+    return np.hypot(np.maximum(rho - r, 0.0), np.maximum(np.abs(h) - half_w, 0.0)).min(axis=0)
+
+
+def tyre_clearance(design: Record) -> tuple[float, str]:
+    """Least gap (mm) between the frame tubes' surfaces and the tyres, and where. Each tyre is a solid
+    cylinder (radius_mm, width_mm) at its wheel centre moved over +-travel/2 vertically (TRAVEL_SAMPLES) and,
+    when steered, turned about the vertical through the wheel centre over +-max_steer_angle (assumption: the
+    kingpin's offset, the camber change and the tyre's bulge are not modelled)."""
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    steer = float(design["variables"]["max_steer_angle"]["value"])
+    best, where = math.inf, ""
+    for s in design["supports"]:
+        c0 = np.asarray(s["position_mm"], float)
+        r, hw = float(s["radius_mm"]), float(s["width_mm"]) / 2.0
+        travel = float(s["suspension"]["travel_mm"])
+        angles = np.radians(np.linspace(-steer, steer, TYRE_STEER_SAMPLES)) if s["actuation"].get("steer") else [0.0]
+        poses = [(c0 + [0.0, 0.0, dz], np.array([-math.sin(a), math.cos(a), 0.0]))
+                 for dz in np.linspace(-travel / 2.0, travel / 2.0, TRAVEL_SAMPLES) for a in angles]
+        C, AX = np.array([p for p, _ in poses]), np.array([q for _, q in poses])
+        reach = math.hypot(r, hw) + travel / 2.0  # every pose lies within this of the wheel centre
+        for m in design["members"]:
+            a, b = nodes[m["node_a"]], nodes[m["node_b"]]
+            rt = design["sections"][m["section"]]["dims_mm"]["d"] / 2.0
+            if segment_distance(a, b, c0, c0) - reach - rt > best:
+                continue  # cannot come closer than the least gap found so far
+
+            def gap(t: np.ndarray) -> np.ndarray:
+                p = a + np.asarray(t)[:, None] * (b - a)
+                return _cylinder_distance(p, C, AX, r, hw) - rt
+
+            ts = np.linspace(0.0, 1.0, TYRE_SEGMENT_SAMPLES)
+            g = gap(ts)
+            k = int(np.argmin(g))
+            lo, hi = ts[max(k - 1, 0)], ts[min(k + 1, len(ts) - 1)]
+            phi = (math.sqrt(5.0) - 1.0) / 2.0
+            for _ in range(40):
+                x1, x2 = hi - phi * (hi - lo), lo + phi * (hi - lo)
+                if gap(np.array([x1]))[0] < gap(np.array([x2]))[0]:
+                    hi = x2
+                else:
+                    lo = x1
+            v = min(float(g[k]), float(gap(np.array([(lo + hi) / 2.0]))[0]))
+            if v < best:
+                best, where = v, f"tyre of {s['id']} and tube {m['id']}"
+    return best, where
+
+
 def connected(design: Record) -> bool:
     """True when the members join every node into one piece."""
     ids = [n["id"] for n in design["nodes"]]
@@ -532,7 +598,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     v = _values(values)
     wb, track, r, ww = v["wheelbase"], v["track"], v["wheel_radius"], v["wheel_width"]
     secs = {"floor": tube(v["floor_tube_d"], v["floor_tube_t"]), "cage": tube(v["cage_tube_d"], v["cage_tube_t"]),
-            "brace": tube(v["brace_tube_d"], v["brace_tube_t"])}
+            "brace": tube(v["brace_tube_d"], v["brace_tube_t"]), "dash": tube(v["dash_tube_d"], v["dash_tube_t"])}
 
     def spring(rate: float) -> Suspension:
         return Suspension("kc_table", rate, 1.2, v["suspension_travel"], "builtin:double_wishbone")
@@ -589,9 +655,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     from hiraku.solvers.k4_geometry.people import AIST
 
     ad = frame.nodes["LAd"]
+    rd = secs["dash"][1]["dims_mm"]["d"] / 2.0
     steer_rear = seat_x - SEAT_SIZE[0] / 2 + AIST["buttock_knee_m95"] + KNEE_MARGIN_MM
     lay.put(Item("steering", "ハンドルとペダル (ダッシュの横パイプから吊る)", "steering", STEERING_SIZE, 12.0),
-            x=steer_rear + STEERING_SIZE[0] / 2, y=-seat_y, z=top_at(ad[2] - rb - ON_TUBES_MM),
+            x=steer_rear + STEERING_SIZE[0] / 2, y=-seat_y, z=top_at(ad[2] - rd - ON_TUBES_MM),
             carried_by=["RAd", "D0"])
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
         lay.put(Item(pid, label, "seat", SEAT_SIZE, 12.0), x=seat_x, y=y, z=bottom_at(batt_top),
@@ -640,4 +707,4 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
 
 __all__ = ["CHOICES", "DESCRIPTION", "SIGNATURE", "TITLE", "VARIABLES", "applies", "apply_choices", "arm_clearance",
            "build", "choices_of", "choose_hardpoints", "connected", "links_through_travel", "occupant_clearance",
-           "segment_box_distance", "segment_distance", "spec", "tube", "values_of"]
+           "segment_box_distance", "segment_distance", "spec", "tube", "tyre_clearance", "values_of"]
