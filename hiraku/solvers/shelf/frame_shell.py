@@ -45,7 +45,7 @@ from ..k1_frame.surface import wall_von_mises
 from ..k1_shell.convergence import (LIMIT_PCT, REFINE_RATIO, convergence_assumption, convergence_record, verdict_of,
                                     zz_assumption, zz_error)
 from ..k1_shell.frame import analyze_shell, element_place, membrane_bending
-from ..k1_shell.mesh import ELEMENT_SIZE_MM
+from ..k1_shell.mesh import ELEMENT_SIZE_MM, build_mesh
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from . import scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
@@ -398,6 +398,12 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
     }
 
 
+# A finer level with more elements than this is left out (the study keeps its other levels): the sparse LU of the
+# shell fills about 400 nonzeros per degree of freedom with the orderings scipy has, and the demo frame at 5 mm
+# (about 130000 elements) took 30 s to 5 min to factorise on the development PC (an assumption, no source).
+MAX_LEVEL_ELEMENTS = 100_000
+
+
 def convergence_sizes(size: float) -> list[float]:
     """Element sizes of the three levels, coarse to fine: 2s, s, s/2, or 4s, 2s, s when s/2 is under the range."""
     r = REFINE_RATIO
@@ -458,10 +464,17 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     size = res["mesh"].element_size_mm
     levels_res = {}
     times = {}
+    left_out = []
     for s in convergence_sizes(size):
         if abs(s - size) < 1e-9:
             levels_res[s] = res
             continue
+        if s < size:
+            n = build_mesh(design, s).n_elements
+            if n > MAX_LEVEL_ELEMENTS:
+                left_out.append(f"the {s:g} mm level ({n} elements) is left out: more than {MAX_LEVEL_ELEMENTS} "
+                                f"elements (its factorisation takes minutes; an assumption)")
+                continue
         r = analyze_shell(design, element_size_mm=s, **solve)
         times[s] = r["timings"].get("total_s", 0.0)
         levels_res[s] = r
@@ -502,6 +515,7 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
         levels.append(lv)
     where = _where_hot(key) if quantity == "max_hot_spot_stress" else "the largest element stress"
     notes.insert(0, f"read at {where} on every level")
+    notes += left_out
     if quantity == "max_hot_spot_stress":
         notes.append("the strip elements it is read on are t x t on every level (IIW); the levels refine the mesh "
                      "around them")
@@ -516,7 +530,8 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
         if "error_pct" in rec:
             rich += f" (finest {rec['error_pct']:.1f} % from it)"
     effects = [{"name": (f"mesh convergence of {quantity} at {where}: {sz} mm -> {vs} {unit}; change between the two "
-                         f"finest {rec['change_pct']:.1f} % (limit {LIMIT_PCT:g} %){rich}; {rec['verdict']}"),
+                         f"finest {rec['change_pct']:.1f} % (limit {LIMIT_PCT:g} %){rich}; {rec['verdict']}"
+                         + "".join(f"; {x}" for x in left_out)),
                 "value": float(rec["change_pct"]), "unit": "%"}]
     if rec["verdict"] == "singular":
         effects.append({"name": (f"{quantity} keeps rising as the elements shrink (singular): it cannot be judged as it "
