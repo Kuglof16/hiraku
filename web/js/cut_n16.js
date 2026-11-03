@@ -1,7 +1,7 @@
 // N16: the assembly order. The parts go in one after another along their recorded
 // paths in the 3D view, the bar over the view's lower edge follows, and the list at
-// the right marks the step going in with its checks (interference, tool clearance,
-// hand reach) as recorded. Then the bar is moved back and forth as a hand would drag
+// the right shows the step going in, with the one before and after it, and their checks
+// (interference, tool clearance, hand reach) as recorded. Then the bar is moved back and forth as a hand would drag
 // it (the state follows, step by step) and stops on the last step. Positions, sizes,
 // colours and times come from layout.json n16; a missing key is named on the page.
 //
@@ -10,9 +10,9 @@
 // again to the last one; lead_s is when the caption (the step's sentence) appears.
 
 import * as THREE from "three";
-import { AssemblySeek, AssemblyStage, assemblyRecord, partNames, shortName, stepAt, stepRowsHtml, summaryText } from "./assembly.js";
+import { AssemblySeek, AssemblyStage, assemblyRecord, partNames, shortName, stepAt, stepRowsHtml } from "./assembly.js";
 import { clearOfBand } from "./compose.js";
-import { esc } from "./labels.js";
+import { storyOf } from "./cut_n03.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +26,10 @@ const N16_KEYS = [
   "times.lead_s", "times.steps_from_s", "times.steps_to_s", "times.scrub_s", "times.scrub_to_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
+
+// The list shows the step going in and this many steps before and after it (the story:
+// the list is not read, the 3D is).
+const AROUND = 1;
 
 // How far the scrub drags the bar back: this share of the steps (at least one step).
 const SCRUB_BACK = 0.4;
@@ -61,6 +65,7 @@ export class CutN16 {
     this.spec = layout.n16;
     this.minPx = layout.min_text_px;
     this.textPx = Math.max(this.minPx, this.spec.steps.text_px);
+    this.story = storyOf(layout, "n16");
     this.rec = assemblyRecord(s);
     if (!this.rec?.design) throw new Error("組み立ての記録がまだ無い (analysis.finished の data.assembly)");
     this.stage = $("stage");
@@ -88,7 +93,9 @@ export class CutN16 {
     this.caption = document.createElement("div");
     this.caption.className = "n16-caption";
     this.caption.dataset.box = "n16.caption";
-    this.caption.style.fontSize = `${this.textPx}px`;
+    this.caption.dataset.kind = "label";
+    this.caption.style.fontSize = `${Math.max(this.textPx, this.story.bodyPx)}px`;
+    this.canvas.dataset.kind = "moving";
     view.append(this.canvas, this.caption);
     this.stage.append(view);
     this.view = new Workbench3D(null, "zu", { renderer: this.renderer });
@@ -118,7 +125,6 @@ export class CutN16 {
     this.place(list, sp.steps);
     list.innerHTML =
       `<h3 class="n16-title" data-box="n16.steps.title" style="font-size:${Math.max(this.minPx, sp.steps.title_px)}px">組み立ての手順</h3>` +
-      `<div class="n16-head" style="font-size:${this.minPx}px">${esc(summaryText(this.rec))}</div>` +
       `<ol class="asm-steps compact"></ol>`;
     this.stage.append(list);
     this.list = list;
@@ -128,9 +134,10 @@ export class CutN16 {
     this.fitList();
   }
 
-  // The rows' text steps down a pixel at a time (not below min_text_px) until every row
-  // ends inside the box; if they still do not, only the rows around the current step
-  // are shown (window).
+  // Only the rows around the current step are shown (window: AROUND before and after).
+  // Their text steps down a pixel at a time (not below min_text_px) until they end inside
+  // the box and no row is wider than it; if they still do not end inside, fewer rows are
+  // shown.
   fitList() {
     const box = this.spec.steps;
     const rows = () => [...this.ol.children];
@@ -144,16 +151,17 @@ export class CutN16 {
       this.ol.style.fontSize = `${px}px`;
       for (const r of rows()) r.style.marginBottom = `${box.row_gap}px`;
     };
+    // a row is cut short at its right edge when its number, name and checks are wider than the box
+    const wide = () => rows().some((r) => r.style.display !== "none" && r.scrollWidth > r.clientWidth + 0.5);
+    this.window = Math.min(this.rec.steps.length, 2 * AROUND + 1);
+    this.showWindow();
     apply();
-    while (bottom() > box.h && px > this.minPx) {
+    while ((bottom() > box.h || wide()) && px > this.minPx) {
       px -= 1;
       apply();
     }
     this.rowPx = px;
     this.list.dataset.textPx = String(px);
-    // when some rows must still be left out: as many as end inside the box, around the current step
-    this.window = this.rec.steps.length;
-    this.showWindow();
     while (bottom() > box.h && this.window > 1) {
       this.window -= 1;
       this.showWindow();
