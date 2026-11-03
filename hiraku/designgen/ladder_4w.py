@@ -456,7 +456,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                       if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
     variables["tyre_relaxation_length"] = _q(r, "mm")
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
-    return {
+    design = {
         "design_version": version,
         "parent_version": parent,
         "name": name or f"offroad-4w v{version}: {DESCRIPTION}",
@@ -467,6 +467,24 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         **frame.part(),
         "materials": materials,
     }
+    write_hardpoints(design)
+    return design
+
+
+def write_hardpoints(design: dict) -> None:
+    """Each support on the builtin K&C table carries its double-wishbone hard points (suspension.hardpoints_mm,
+    the points K2 lays out for that wheel), so that K2, the frame and the screens read the same points."""
+    from hiraku.solvers.k2_vehicle.model import hardpoints_of
+
+    for s in design["supports"]:
+        sus = s.get("suspension", {})
+        if sus.get("type") == "kc_table" and str(sus.get("kc_table", "")).startswith("builtin:"):
+            try:
+                points = hardpoints_of(design, s["id"])
+            except ValueError as e:  # K2's layout of the arms does not close for these wheel and travel sizes
+                raise DesignGenError(f"the suspension of {s['id']} cannot be laid out ({e}); change the wheel radius, "
+                                     f"the track or the travel") from None
+            sus["hardpoints_mm"] = {k: [float(x) for x in p] for k, p in points.items() if k not in ("axle", "radius_mm")}
 
 
 ROLLBAR_STATION = "H"  # the rail nodes LH, RH under the roll bar; LHO, RHO the outriggers' ends; LHT, RHT the top corners
