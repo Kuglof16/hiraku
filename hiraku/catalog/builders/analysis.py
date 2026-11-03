@@ -395,7 +395,7 @@ T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculate
 def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
     """thermal.loop_steady_temperature with the plan's inputs (_LOOP_INPUTS) for this load case."""
     from hiraku.solvers import formula_registry
-    from hiraku.tools.summary import design_summary
+    from hiraku.catalog.summary import design_summary
 
     vals = {}
     for name, ref in _LOOP_INPUTS.items():
@@ -451,7 +451,20 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str, ou
 
 
 t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=", "T_battery")
-t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<", "T_controller")
+# T2 is the motor and the controller: one load case per part, each judged on its own limit (a load
+# case has one criterion), ids T2-<ambient>C-motor and T2-<ambient>C-controller.
+T2_PARTS = (("motor", "モーター", "motor_max_temperature", "<", "T_motor"),
+            ("controller", "制御器", "controller_max_temperature", "<", "T_controller"))
+
+
+def t2_thermal(spec: Record, req: Record, design: Record) -> list[Record]:
+    out = []
+    for part, what, limit_var, op, output in T2_PARTS:
+        lc = _thermal("T2", what, f"temp_{part}_max", limit_var, op, output)(spec, req, design)
+        head, beyond, tail = lc["load_case_id"].partition("-beyond")
+        lc["load_case_id"] = f"{head}-{part}{beyond}{tail}"
+        out.append(lc)
+    return out
 
 _LOOP_INPUTS = {
     "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",
@@ -467,21 +480,22 @@ _T_ASSUME = ["周回の区間ごとに目標の速さで一定に走るとみる
              "部品は温度 1 つの熱容量と、空気への熱抵抗"]
 
 
-def _t_plan(what: str, quantity: str, output: str) -> Record:
+def _t_plan(what: str, parts: tuple[tuple[str, str], ...]) -> Record:
+    """parts: (quantity, output) of each part temperature predicted, then drive_time."""
     return {
         "tool": "thermal",
         "say": f"周回を区間ごとの一定の速さで走るとみて損失を出し、{what}の温度の上がり方を先に見積もります",
         "predictions": [
             {"quantity": quantity, "formula_id": "thermal.loop_steady_temperature", "output": output,
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
-            {"quantity": "drive_time", "formula_id": "thermal.loop_steady_temperature", "output": "t",
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
+             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)}
+            for quantity, output in (*parts, ("drive_time", "t"))
         ],
     }
 
 
-T1_PLAN = _t_plan("電池", "temp_battery_max", "T_battery")
-T2_PLAN = _t_plan("制御器", "temp_controller_max", "T_controller")
+T1_PLAN = _t_plan("電池", (("temp_battery_max", "T_battery"),))
+# one plan for both T2 load cases (the plans are per test): it predicts both parts
+T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output) for part, _, _, _, output in T2_PARTS))
 
 # ---------------------------------------------------------------- H1, H3, H5 assembly
 
