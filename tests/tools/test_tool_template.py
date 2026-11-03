@@ -95,6 +95,14 @@ class ToolTemplateTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             get_tool_template(self.ctx, {"api_of": "hiraku.solvers.k4_geometry"})
 
+    def test_a_made_tool_lists_its_predicts(self):
+        from hiraku.tools.functions import list_formulas
+
+        t = get_tool_template(self.ctx, {}, "cae.strength")
+        self.assertTrue(make_tool(self.ctx, {"code": t["code"], "reason": "test"}, "cae.strength")["usable"])
+        got = list_formulas(self.ctx, {"tool": "example_midspan_bending"})["predicts"]
+        self.assertEqual(got, [{"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma"}])
+
     def test_a_long_print_keeps_its_start_and_its_end(self):
         from hiraku.tools.functions import PRINTED_HEAD, PRINTED_TAIL, _printed
 

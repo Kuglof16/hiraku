@@ -309,6 +309,12 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s = ctx.store
     s.emit("agent.started", agent="lead", data={"agent_id": "lead", **NO_MODEL})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
+    if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
+        s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
+        s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        status, reason, code = rules.judged_end(ctx)
+        s.finish(status, stop_reason=reason, stop_code=code)
+        return status
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
         first = (plan if plan is not None else plan_of(ctx)).get("propose") or {}
         s.emit("agent.started", agent="designer", data={"agent_id": "designer", **NO_MODEL})
