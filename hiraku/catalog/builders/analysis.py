@@ -1,6 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN).
+H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
+are in load_path.py and joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
 predict). A prediction's inputs_from works out by code the values its from.<name>
@@ -753,9 +754,9 @@ R4_REFERENCE_MASS_KG = 500.0
 # Code 4 3.5.2: one sixth of the top's width in from the outside corner. Here the width is taken as the posts'
 # centre-to-centre span (assumption: Code 4 measures it to the outside of the structure).
 R4_REAR_FRACTION = 1.0 / 6.0
-# A tool's crushed roll bar against the hand calculation's bilinear portal: the deflection at the required energy
-# is long on the plastic plateau and sensitive to the collapse load (the hinges form one by one, not together),
-# and the clearance is a difference of that deflection and the gap: 25 % (assumption).
+# A tool's crushed roll bar against the hand calculation's roll bar on its feet (portal_pushover): the deflection at
+# the required energy is long on the plastic plateau and sensitive to the collapse load and to how the feet are
+# held, and the clearance is a difference of that deflection and the gap: 25 % (assumption).
 R4_TOL = 0.25
 
 # No PLAN: the tool that loads the roll bar and judges it is not on the shelf (HIRAKU's Claude writes it in the run).
@@ -765,34 +766,54 @@ R4_TOL = 0.25
 #   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top)
 #   frame_static.portal_frame_rear  E_in = lc.rear_energy, f = lc.rear_fraction -> delta_E (along the vehicle)
 #   frame_static.portal_frame_top   F = lc.crush_force               -> delta (down at mid-span)
-#   frame_static.rops_occupant_clearance  g_* = from.g_*, d_* = pred.rops_*_deflection -> rops_occupant_clearance
-# (the gaps from k4_geometry.occupant_spaces and the roll bar's members as k4_geometry.occupant_clearance measures
-# them, along each loading's motion of the top corners; rops_inputs says how).
+#   frame_static.rops_occupant_clearance  g_*, s_*, d0_* = from.*, d_* = pred.rops_*_deflection
+#                                         -> rops_occupant_clearance = min(s_*)
+# (s_*: the shortest distance between the roll bar's members and k4_geometry.occupant_spaces, as
+# k4_geometry.occupant_clearance measures it, with the top corners moved by each loading's motion at the deflection
+# d0_* the portal formulas give, which must equal d_*; g_*: the travel to contact along the motion; rops_inputs).
 R4_DEFLECTIONS = (("side", "frame_static.portal_frame_side", "delta_E", {"E_in": "lc.side_energy"}),
                   ("rear", "frame_static.portal_frame_rear", "delta_E", {"E_in": "lc.rear_energy", "f": "lc.rear_fraction"}),
                   ("top", "frame_static.portal_frame_top", "delta", {"F": "lc.crush_force"}))
-R4_PORTAL_INPUTS = {"side": ("E", "h", "w", "I_c", "I_b", "theta_f", "M_pf", "M_pt"),
-                    "rear": ("E", "h", "I_c", "theta_f", "M_pf"),
-                    "top": ("E", "h", "w", "I_c", "I_b", "I_min", "A_c", "theta_f", "M_pb", "M_pt", "f_y")}
+
+
+def _r4_portal_inputs() -> dict:
+    from hiraku.solvers.k0_handcalc.library_portal import COMMON
+    return {"side": COMMON, "rear": COMMON, "top": COMMON + ("f_y",)}
+
+
+# The portal formulas' inputs (library_portal.COMMON_INPUTS: the roll bar, its outriggers and the rail pieces to
+# where the rail is held, as frame_inputs.portal_frame_inputs reads them); the top adds the posts' yield stress.
+R4_PORTAL_INPUTS = _r4_portal_inputs()
 
 
 def r4_inputs(design: Record, load_case: Record) -> Record:
-    """R4_PREDICTIONS' from.<name> values: the portal formulas' inputs off the roll bar and the gaps to the
-    occupants' space of the load case's loading (rops_inputs.rops_inputs)."""
+    """R4_PREDICTIONS' from.<name> values: the portal formulas' inputs off the roll bar, the gaps to the occupants'
+    space of the load case's loading, and the shortest distances to it at the portal formulas' deflections
+    (rops_inputs.rops_inputs; the rear motion's corner shares from portal_frame_rear at the load case's rear_energy).
+    A param the load case lacks is taken from Code 4 and the reference mass, as r4_rops sets it."""
     from hiraku.contract.loading import loading_of
     from hiraku.solvers.k0_handcalc import units
     from hiraku.solvers.k0_handcalc.rops_inputs import rops_inputs
     from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
     p = load_case.get("params") or {}
-    f = units.to_unit(p["rear_fraction"], "1", "rear_fraction") if "rear_fraction" in p else R4_REAR_FRACTION
+
+    def param(name: str, unit: str, default: float) -> float:
+        return units.to_unit(p[name], unit, name) if name in p else default
+
+    M = R4_REFERENCE_MASS_KG
     try:
-        return rops_inputs(design, loading=loading_of(load_case), rear_fraction=f)["inputs"]
-    except DesignError as e:
+        return rops_inputs(design, loading=loading_of(load_case),
+                           rear_fraction=param("rear_fraction", "1", R4_REAR_FRACTION),
+                           rear_energy_J=param("rear_energy", "J", R4_CODE4["rear"] * M),
+                           side_energy_J=param("side_energy", "J", R4_CODE4["side"] * M),
+                           crush_force_N=param("crush_force", "N", R4_CODE4["crush"] * M))["inputs"]
+    except (DesignError, ValueError) as e:
         raise BuildError(str(e)) from None
 
 
-_R4_ASSUME = ["ロールバーは門形の梁 (柱 2 本と上の梁)、横と後ろはエネルギーを吸うまで弾性・完全塑性の折れ線",
+_R4_ASSUME = ["ロールバーは柱 2 本と上の梁の骨組で、足は張り出しとレール (車輪の所まで) に立つ。塑性ヒンジを一つずつ入れて押し、"
+              "横と後ろはエネルギーを吸うまで、上は力まで (力の前に崩れれば柱の長さ)",
               "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)"]
 R4_PREDICTIONS = [
     {"quantity": f"rops_{d}_deflection", "formula_id": fid, "output": out, "assumptions": list(_R4_ASSUME),
@@ -801,8 +822,9 @@ R4_PREDICTIONS = [
 ] + [
     {"quantity": "rops_occupant_clearance", "formula_id": "frame_static.rops_occupant_clearance",
      "output": "rops_occupant_clearance",
-     "assumptions": _R4_ASSUME + ["隙間は、荷重の向きに上の角を動かしたとき乗員の空間に触れるまでの、荷重の点の動き"],
-     "inputs": {**{f"g_{d}": f"from.g_{d}" for d, *_x in R4_DEFLECTIONS},
+     "assumptions": _R4_ASSUME + ["隙間は、荷重ごとに上の角をたわみの分だけ動かした (柱は足のまわりにまっすぐ回る) ロールバーと、"
+                                  "乗員の空間のいちばん近い距離"],
+     "inputs": {**{f"{x}_{d}": f"from.{x}_{d}" for d, *_x in R4_DEFLECTIONS for x in ("g", "s", "d0")},
                 **{f"d_{d}": f"pred.rops_{d}_deflection" for d, *_x in R4_DEFLECTIONS}},
      "inputs_from": r4_inputs},
 ]
@@ -859,7 +881,11 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
+from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
+from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+
 BUILDERS = {
+    **_LOAD_PATH_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
@@ -872,5 +898,5 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN,
-         "H3": H3_PLAN, "H5": H5_PLAN}
+         "H3": H3_PLAN, "H5": H5_PLAN, **_LOAD_PATH_PLANS}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results

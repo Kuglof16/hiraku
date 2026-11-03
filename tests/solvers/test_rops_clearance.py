@@ -13,7 +13,7 @@ from hiraku.catalog.builders.analysis import R4_PREDICTIONS, r4_inputs
 from hiraku.contract.loading import on_board
 from hiraku.solvers.k0_handcalc.frame_inputs import portal_frame_inputs
 from hiraku.solvers.k0_handcalc.rops_inputs import displacements, motions, rops_gaps, rops_inputs
-from hiraku.solvers.k0_handcalc.rops_inputs import _rollbar  # the geometry the gaps are measured on
+from hiraku.solvers.k0_handcalc.rops_inputs import _end_of_travel, _rollbar  # the geometry the gaps are measured on
 from hiraku.solvers.k0_handcalc.vehicle import DesignError
 from hiraku.solvers.k4_geometry import occupant_clearance, occupant_spaces
 from tests.solvers.test_builders import requirements
@@ -34,8 +34,25 @@ def out(formula, **inputs):
     return {k: v["value"] for k, v in FORMULAS.evaluate(formula, inputs)["outputs"].items()}
 
 
-def clearance(g, d):
-    return out(FID, **{f"g_{k}": q(g[k], "mm") for k in g}, **{f"d_{k}": q(d[k], "mm") for k in d})
+def clearance(g, d, s=None):
+    """The formula with the travels g, the deflections d (also as d0) and the shortest distances s (default g - d)."""
+    s = s or {k: g[k] - d[k] for k in g}
+    return out(FID, **{f"g_{k}": q(g[k], "mm") for k in g}, **{f"d_{k}": q(d[k], "mm") for k in d},
+               **{f"d0_{k}": q(d[k], "mm") for k in d}, **{f"s_{k}": q(s[k], "mm") for k in s})
+
+
+def frame(**kw):
+    """library_portal inputs of a portal of the module's tubes on fixed feet (no outrigger, no rail); kw overrides."""
+    from hiraku.solvers.k0_handcalc.library_portal import COMMON
+
+    v = {"E": E, "nu": 0.3, "h": H, "w": W, "e": 0.0, "L_a": 0.0, "L_b": 0.0}
+    for g in ("c", "b", "o", "r"):
+        v.update({f"A_{g}": 1e6, f"Iy_{g}": I, f"Iz_{g}": I, f"J_{g}": 2 * I, f"Mpy_{g}": 8e5, f"Mpz_{g}": 8e5,
+                  f"Tp_{g}": 8e5})
+    v.update(kw)
+    units = {"E": "MPa", "nu": "1"}
+    head = {"A": "mm^2", "Iy": "mm^4", "Iz": "mm^4", "J": "mm^4", "Mpy": "N*mm", "Mpz": "N*mm", "Tp": "N*mm"}
+    return {k: q(v[k], units.get(k, head.get(k.split("_")[0], "mm"))) for k in COMMON}
 
 
 def portal(box_lo, box_hi):
@@ -65,24 +82,37 @@ class FormulaTest(unittest.TestCase):
     def test_contract_and_ledger(self):
         f = {x["formula_id"]: x for x in FORMULAS.list_formulas()}[FID]
         contract.validate("formula", f)
-        self.assertEqual(set(f["inputs"]), {"g_side", "g_rear", "g_top", "d_side", "d_rear", "d_top"})
+        dirs = ("side", "rear", "top")
+        self.assertEqual(set(f["inputs"]), {f"{x}_{d}" for x in ("g", "d", "s", "d0") for d in dirs})
         self.assertTrue(all(v["unit"] == "mm" for v in f["inputs"].values()))
-        self.assertEqual(set(f["outputs"]), {"rops_occupant_clearance", "c_side", "c_rear", "c_top", "governing"})
+        self.assertEqual(set(f["outputs"]), {"rops_occupant_clearance", "governing",
+                                             *(f"{x}_{d}" for x in ("c", "t") for d in dirs)})
 
     def test_smallest_direction_is_the_primary_output(self):
-        for g, d, worst, gov in (({"side": 100, "rear": 300, "top": 200}, {"side": 10, "rear": 20, "top": 30}, 90, 1),
-                                 ({"side": 100, "rear": 300, "top": 200}, {"side": 10, "rear": 290, "top": 30}, 10, 2),
-                                 ({"side": 100, "rear": 300, "top": 50}, {"side": 10, "rear": 20, "top": 80}, -30, 3)):
-            r = clearance(g, d)
+        g = {"side": 100, "rear": 300, "top": 200}
+        d = {"side": 10, "rear": 20, "top": 30}
+        for s, worst, gov in (({"side": 90, "rear": 50, "top": 70}, 50, 2), ({"side": 5, "rear": 50, "top": 70}, 5, 1),
+                              ({"side": 90, "rear": 50, "top": -30}, -30, 3)):
+            r = clearance(g, d, s)
             self.assertAlmostEqual(r["rops_occupant_clearance"], worst)
             self.assertEqual(r["governing"], gov)
             for k in g:
-                self.assertAlmostEqual(r[f"c_{k}"], g[k] - d[k])
-        ev = FORMULAS.evaluate(FID, {**{f"g_{k}": q(100, "mm") for k in ("side", "rear", "top")},
-                                     **{f"d_{k}": q(0.01, "m") for k in ("side", "rear", "top")}})
-        self.assertAlmostEqual(ev["outputs"]["rops_occupant_clearance"]["value"], 90.0)  # units converted
+                self.assertAlmostEqual(r[f"c_{k}"], s[k])
+                self.assertAlmostEqual(r[f"t_{k}"], g[k] - d[k])
+        dirs = ("side", "rear", "top")
+        ev = FORMULAS.evaluate(FID, {**{f"{x}_{k}": q(100, "mm") for x in ("g", "s") for k in dirs},
+                                     **{f"{x}_{k}": q(0.01, "m") for x in ("d", "d0") for k in dirs}})
+        self.assertAlmostEqual(ev["outputs"]["t_side"]["value"], 90.0)  # units converted
         with self.assertRaisesRegex(ValueError, "below the range"):
             clearance({"side": 1, "rear": 1, "top": 1}, {"side": -1, "rear": 0, "top": 0})
+
+    def test_distances_must_be_at_the_predicted_deflections(self):
+        dirs = ("side", "rear", "top")
+        vals = {**{f"{x}_{k}": q(100, "mm") for x in ("g", "s") for k in dirs},
+                **{f"{x}_{k}": q(10, "mm") for x in ("d", "d0") for k in dirs}}
+        FORMULAS.evaluate(FID, vals)
+        with self.assertRaisesRegex(ValueError, "measured at d0"):
+            FORMULAS.evaluate(FID, {**vals, "d_rear": q(11, "mm")})
 
 
 class KnownAnswerTest(unittest.TestCase):
@@ -95,10 +125,9 @@ class KnownAnswerTest(unittest.TestCase):
         g = rops_gaps(d)
         self.assertAlmostEqual(g["g_top"]["value"], gap, places=5)
         # stiff posts: the top beam fixed at both ends, delta = F w^3 / (192 E I)
-        top = out("frame_static.portal_frame_top", E=q(E, "MPa"), h=q(H, "mm"), w=q(W, "mm"), I_c=q(I * 1e9, "mm^4"),
-                  I_b=q(I, "mm^4"), I_min=q(I, "mm^4"), A_c=q(1e12, "mm^2"), theta_f=q(0, "rad"), M_pb=q(8e5, "N*mm"),
-                  M_pt=q(8e5, "N*mm"), f_y=q(235, "MPa"), F=q(3000, "N"))
-        self.assertAlmostEqual(top["delta"] / (3000 * W**3 / (192 * E * I)), 1.0, places=6)
+        top = out("frame_static.portal_frame_top", **frame(Iy_c=I * 1e6, Iz_c=I * 1e6, Mpy_c=8e11, Mpz_c=8e11),
+                  f_y=q(235, "MPa"), F=q(3000, "N"))
+        self.assertAlmostEqual(top["delta"] / (3000 * W**3 / (192 * E * I)), 1.0, places=4)
         c = clearance({"side": g["g_side"]["value"], "rear": g["g_rear"]["value"], "top": gap},
                       {"side": 0, "rear": 0, "top": top["delta"]})
         self.assertAlmostEqual(c["c_top"], moved(d, "top", top["delta"]), places=5)
@@ -112,9 +141,8 @@ class KnownAnswerTest(unittest.TestCase):
         self.assertAlmostEqual(g["g_side"]["value"], gap, places=5)
         self.assertEqual([m["contact"] for m in g["motions"] if m["direction"] == "side"], [True, False])  # +y, -y
         # rigid beam, fixed feet: two fixed-guided posts, k = 24 E I / h^3; small energy: elastic
-        s = out("frame_static.portal_frame_side", E=q(E, "MPa"), h=q(H, "mm"), w=q(W, "mm"), I_c=q(I, "mm^4"),
-                I_b=q(I * 1e9, "mm^4"), theta_f=q(0, "rad"), M_pf=q(8e5, "N*mm"), M_pt=q(8e5, "N*mm"), E_in=q(20, "J"))
-        self.assertAlmostEqual(s["k"] / (24 * E * I / H**3), 1.0, places=6)
+        s = out("frame_static.portal_frame_side", **frame(Iz_b=I * 1e6), E_in=q(20, "J"))
+        self.assertAlmostEqual(s["k"] / (24 * E * I / H**3), 1.0, places=4)
         self.assertEqual(s["plastic"], 0.0)
         self.assertAlmostEqual(s["delta_E"], math.sqrt(2 * 20e3 / s["k"]))
         c = clearance({"side": gap, "rear": g["g_rear"]["value"], "top": g["g_top"]["value"]},
@@ -128,9 +156,8 @@ class KnownAnswerTest(unittest.TestCase):
         g = rops_gaps(d, rear_fraction=0.5)
         self.assertAlmostEqual(g["g_rear"]["value"], gap, places=5)
         # load at mid-span: the two posts as cantilevers side by side, k = 2 * 3 E I / h^3
-        r = out("frame_static.portal_frame_rear", E=q(E, "MPa"), h=q(H, "mm"), I_c=q(I, "mm^4"), theta_f=q(0, "rad"),
-                M_pf=q(8e5, "N*mm"), f=q(0.5, "1"), E_in=q(5, "J"))
-        self.assertAlmostEqual(r["k"], 6 * E * I / H**3)
+        r = out("frame_static.portal_frame_rear", **frame(Iy_b=I * 1e6), f=q(0.5, "1"), E_in=q(5, "J"))
+        self.assertAlmostEqual(r["k"] / (6 * E * I / H**3), 1.0, places=4)
         c = clearance({"side": g["g_side"]["value"], "rear": gap, "top": g["g_top"]["value"]},
                       {"side": 0, "rear": r["delta_E"], "top": 0})
         self.assertAlmostEqual(c["c_rear"], moved(d, "rear", r["delta_E"], rear_fraction=0.5,
@@ -193,7 +220,7 @@ class DemoRollbarTest(unittest.TestCase):
         cls.r = rops_inputs(RB, loading=cls.lc["params"]["loading"])
 
     def test_same_space_and_same_clearance_as_k4(self):
-        g = self.r["gaps"]
+        g = rops_gaps(self.on)  # the lever rule's rear shares: some motions reach the space
         self.assertEqual(g["spaces"], occupant_spaces(self.on))
         self.assertAlmostEqual(g["as_built_clearance_mm"], occupant_clearance(self.on)["clearance_mm"], places=9)
         geo = _rollbar(self.on)
@@ -228,8 +255,22 @@ class DemoRollbarTest(unittest.TestCase):
             preds[p["quantity"]] = ev["outputs"][p["output"]]
             self.assertEqual(set(p["inputs"]), set(FORMULAS.get(p["formula_id"]).inputs))
         c = preds["rops_occupant_clearance"]["value"]
-        expect = min(given[f"g_{d}"]["value"] - preds[f"rops_{d}_deflection"]["value"] for d in ("side", "rear", "top"))
-        self.assertAlmostEqual(c, expect)
+        self.assertAlmostEqual(c, min(given[f"s_{d}"]["value"] for d in ("side", "rear", "top")))
+        for d in ("side", "rear", "top"):
+            self.assertAlmostEqual(given[f"d0_{d}"]["value"], preds[f"rops_{d}_deflection"]["value"])
+
+    def test_shortest_distances_are_k4s_at_the_moved_bar(self):
+        """s_* (clearances_at) is k4_geometry.occupant_clearance with the corners moved by the motion at d0_*."""
+        geo = _rollbar(self.on)
+        given = r4_inputs(RB, self.lc)
+        p = self.lc["params"]
+        shares = rops_inputs(RB, loading=p["loading"], rear_energy_J=p["rear_energy"]["value"])["rear_shares"]
+        for d in ("side", "rear", "top"):
+            d0 = given[f"d0_{d}"]["value"]
+            k4 = [occupant_clearance(self.on, displacements=displacements(geo, m, min(d0, _end_of_travel(geo, m))))
+                  ["clearance_mm"] for m in motions(geo["corners"], p["rear_fraction"]["value"], shares)
+                  if m["direction"] == d]
+            self.assertAlmostEqual(given[f"s_{d}"]["value"], min(k4), places=6)
 
 
 if __name__ == "__main__":

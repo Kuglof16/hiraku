@@ -376,6 +376,15 @@ def _side_rail_formula() -> Formula:
 # ---------------------------------------------------------------- everything else
 
 
+def _side_push_caster(v: dict) -> dict:
+    sf = min(max((v["x_F"] - v["x_r"]) / v["L_x"], 0.0), 1.0)
+    wf = v["W"] * (v["x_cg"] - v["x_r"]) / v["L_x"]
+    lean = (v["y_s"] - v["y_cg"]) / (2.0 * v["y_s"])
+    roll = v["F"] * v["h_F"] / (2.0 * v["y_s"])
+    front, rear = wf * lean - sf * roll, (v["W"] - wf) * lean - (1.0 - sf) * roll
+    return {"R_min": min(front, rear), "R_front": front, "R_rear": rear}
+
+
 def all_formulas() -> list[Formula]:
     out = [_deck_frame_formula(), _lever_formula()]
     s = {n: sp.Symbol(n, real=True) for n in ("W", "y_cg", "F", "y_F", "y_s")}
@@ -420,6 +429,35 @@ def all_formulas() -> list[Formula]:
         source="moment balance about the pushed side's caster line (textbook statics), as bed.edge_load_tipping",
         requires=[(ys > 0, "y_s must be positive")],
         symbols=s,
+    ))
+    out.append(Formula(
+        formula_id="bed.side_push_caster",
+        title="サイドレールを外へ押したとき、遠い側でいちばん軽いキャスターに残る力 (1 輪でも浮くか)",
+        domain="handling",
+        expression=("s_f = (x_F - x_r) / L_x; W_f = W (x_cg - x_r) / L_x, W_r = W - W_f; "
+                    "R_f = W_f (y_s - y_cg) / (2 y_s) - s_f F h_F / (2 y_s), R_r = W_r (y_s - y_cg) / (2 y_s) - "
+                    "(1 - s_f) F h_F / (2 y_s); R_min = min(R_f, R_r)"),
+        inputs={"W": _in("N", "weight of the bed and what is on it", min=0),
+                "y_cg": _in("mm", "centre of gravity's offset toward the pushed side"),
+                "F": _in("N", "push, level and outward", min=0),
+                "h_F": _in("mm", "push's height above the floor", min=0),
+                "y_s": _in("mm", "caster line's offset from the centre line (half the caster track)", min=0),
+                "x_cg": _in("mm", "centre of gravity along the bed"),
+                "x_F": _in("mm", "push point along the bed"),
+                "x_r": _in("mm", "the rear (lower x) casters along the bed"),
+                "L_x": _in("mm", "caster base: front casters ahead of the rear ones", min=0)},
+        outputs={"R_min": ("N", "load on the lighter caster of the far side; below 0 that caster lifts", None),
+                 "R_front": ("N", "load on the far side's front caster", None),
+                 "R_rear": ("N", "load on the far side's rear caster", None)},
+        assumptions=["rigid in bending, the bed's frame twists: the push's roll moment F h_F goes to the front and rear "
+                     "caster pairs as a torque on a shaft held at both ends, in the shares (x_F - x_r) / L_x and the rest",
+                     "the weight splits between the pairs by the lever of its centre of gravity, and within a pair by "
+                     "its sideways offset", "the casters do not slide (the floor takes the push at the contact points)",
+                     "a push point outside the caster base is taken at the nearer pair (share 0 or 1)"],
+        source=("moment balance about each caster pair's line, with the roll moment split as a point torque on a "
+                "shaft held at both ends (textbook statics and torsion)"),
+        requires=[(lambda v: v["y_s"] > 0 and v["L_x"] > 0, "y_s and L_x must be positive")],
+        fn=_side_push_caster,
     ))
     s = {n: sp.Symbol(n, real=True) for n in ("F", "h_p", "w", "t", "d")}
     F, hp, w, t, d = (s[k] for k in ("F", "h_p", "w", "t", "d"))
