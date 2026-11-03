@@ -441,6 +441,147 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
     return out
 
 
+# ------------------------------------------------------------------ mesh convergence and error estimate
+
+SRC_NAVIER_M = ("simply supported square plate, uniform pressure: Navier double series for the bending moment at the "
+                "centre, M_x = D sum a_mn ((m pi/a)^2 + nu (n pi/a)^2) sin(m pi/2) sin(n pi/2), a_mn = 16 q / (pi^6 D m n "
+                "(m^2/a^2 + n^2/a^2)^2) (Timoshenko & Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. 1959; "
+                "the series is summed here, the book's table not checked), surface stress 6 M_x / t^2")
+SRC_WILLIAMS = ("re-entrant corner of 270 degrees in plane stress: the stress grows as r^(lambda - 1) with lambda the "
+                "smallest root of lambda sin(2 alpha) + sin(2 alpha lambda) = 0, 2 alpha = 3 pi / 2 (symmetric mode; "
+                "M. L. Williams, J. Appl. Mech. 19 (1952) 526-528, not checked here; the root is found here), so the "
+                "corner element's value grows by 2^(1 - lambda) each time the elements halve")
+
+
+def navier_centre_moment(a: float, q: float, nu: float, terms: int = 2001) -> float:
+    """Bending moment M_x per length (N*mm/mm) at the centre of a simply supported square plate, Navier series."""
+    m = np.arange(1, terms, 2, dtype=float)
+    M, N = np.meshgrid(m, m, indexing="ij")
+    sign = np.sin(M * np.pi / 2) * np.sin(N * np.pi / 2)
+    amn_D = 16.0 * q / (np.pi**6 * M * N * (M**2 / a**2 + N**2 / a**2) ** 2)
+    return float(np.sum(sign * amn_D * ((M * np.pi / a) ** 2 + nu * (N * np.pi / a) ** 2)))
+
+
+def williams_lambda(wedge: float = 1.5 * np.pi) -> float:
+    """Smallest root in (0, 1) of lambda sin(wedge) + sin(wedge lambda) = 0 (bisection), wedge the interior angle."""
+    f = lambda lam: lam * math.sin(wedge) + math.sin(wedge * lam)  # noqa: E731
+    lo, hi = 0.5, 0.99  # brackets the root for 270 degrees (f(0.5) > 0 > f(0.99))
+    if f(lo) * f(hi) > 0:
+        raise ValueError("no root bracketed")
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if f(lo) * f(mid) <= 0:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
+
+
+def plate_centre_stress(n: int, a: float = 100.0, t: float = 1.0, q: float = 0.01) -> dict:
+    """square_plate's model (n x n, hard simple support, uniform q): sigma_xx on the bottom (tension) surface, the
+    mean of the four element centres around the plate centre, and the error estimate (k1_shell.convergence)."""
+    from .convergence import zz_error
+
+    xy, quads, idx = grid(n, n, a, a)
+    model = flat_model(xy, quads, t)
+    alln = np.arange(len(xy))
+    fixed = [dofs_of(alln, "xy"), 6 * alln + 5]
+    xe = np.concatenate([idx[0], idx[-1]])
+    ye = np.concatenate([idx[:, 0], idx[:, -1]])
+    fixed += [dofs_of(xe, "z"), 6 * xe + 3, dofs_of(ye, "z"), 6 * ye + 4]
+    F = np.zeros(model.n_dof)
+    for e in quads:
+        F[6 * e + 2] -= q * (a / n) ** 2 / 4.0
+    U = StaticSolver(model, np.unique(np.concatenate(fixed))).solve(F)
+    st = element_stresses(model, U)
+    near = np.argsort(np.linalg.norm(st.centres[:, :2] - a / 2.0, axis=1))[:4]
+    zz = zz_error(model, st)
+    return {"sigma": float(st.components("bottom")[near, 0].mean()), "zz_global": zz["global_pct"],
+            "zz_max": float(zz["per_element"].max())}
+
+
+def l_plate_corner(n: int, a: float = 100.0, t: float = 1.0, sigma: float = 10.0) -> dict:
+    """L-shaped plate in its plane: [0, 2a]^2 without [a, 2a]^2, n elements per a. Rollers on x = 0 (ux) and y = 0
+    (uy); tension sigma on the free arm ends (y = 2a pulled in +y, x = 2a pulled in +x). Returns the largest element
+    von Mises (mid surface), whether it is the element at the re-entrant corner (a, a), and the error estimate."""
+    from .convergence import zz_error
+
+    xy, quads, _ = grid(2 * n, 2 * n, 2 * a, 2 * a)
+    cen = xy[quads].mean(axis=1)
+    quads = quads[~((cen[:, 0] > a) & (cen[:, 1] > a))]
+    used = np.unique(quads)
+    remap = np.full(len(xy), -1)
+    remap[used] = np.arange(len(used))
+    xy, quads = xy[used], remap[quads]
+    model = flat_model(xy, quads, t)
+    alln = np.arange(len(xy))
+    on = lambda k, v: np.nonzero(np.abs(xy[:, k] - v) < 1e-9)[0]  # noqa: E731
+    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, dofs_of(on(1, 0.0), "y"), dofs_of(on(0, 0.0), "x")]
+    F = np.zeros(model.n_dof)
+    for k, comp in ((1, 1), (0, 0)):  # edge y = 2a pulled along y, edge x = 2a along x
+        edge = on(k, 2 * a)
+        edge = edge[np.argsort(xy[edge, 1 - k])]
+        for p, r in zip(edge[:-1], edge[1:]):
+            l = xy[r, 1 - k] - xy[p, 1 - k]
+            F[6 * p + comp] += sigma * t * l / 2.0
+            F[6 * r + comp] += sigma * t * l / 2.0
+    U = StaticSolver(model, np.unique(np.concatenate(fixed))).solve(F)
+    st = element_stresses(model, U)
+    vm = st.von_mises("mid")
+    e = int(np.argmax(vm))
+    at_corner = bool(np.all(np.abs(st.centres[e, :2] - a) <= a / n / 2.0 + 1e-9))
+    zz = zz_error(model, st)
+    return {"max": float(vm[e]), "at_corner": at_corner, "zz_global": zz["global_pct"],
+            "zz_max": float(zz["per_element"].max())}
+
+
+def convergence_checks(plate_n=(4, 8, 16), l_n=(8, 16, 32)) -> list[Record]:
+    """Known answers of k1_shell.convergence: Richardson on the plate centre stress against Navier, the error
+    estimate falling as the plate mesh is refined, and the singular verdict at the L plate's re-entrant corner."""
+    from .convergence import REFINE_RATIO, SINGULAR_ORDER, convergence_record
+
+    out = []
+    a, t, q = 100.0, 1.0, 0.01
+    exact = 6.0 * navier_centre_moment(a, q, NU_ST) / t**2
+    plates = [plate_centre_stress(n, a, t, q) for n in plate_n]
+    sizes = [a / n for n in plate_n]
+    levels = [{"element_size_mm": s, "value": p["sigma"]} for s, p in zip(sizes, plates)]
+    rec = convergence_record("sigma_xx at the centre", "MPa", levels)
+    case = (f"simply supported square plate {a:g} x {a:g} x {t:g}, uniform {q:g} MPa, meshes "
+            f"{' / '.join(f'{n} x {n}' for n in plate_n)}")
+    out.append(check_record(case, "Richardson extrapolated centre stress (bottom surface)", exact,
+                            rec.get("extrapolated"), "MPa", 0.005,
+                            SRC_NAVIER_M + "; FE: mean of the four element centres around the plate centre; "
+                                           "Richardson with the observed order (k1_shell.convergence)"))
+    out.append(check_record(case, "observed order of the centre stress", 2.0, rec.get("observed_order"), "1", 0.05,
+                            "the centre stress of bilinear plate elements converges as h^2 (element-centre values "
+                            "around a symmetry point); HIRAKU's expectation, no source"))
+    out.append(check_record(case, "verdict converged (1 = yes)", 1.0, float(rec["verdict"] == "converged"), "1", 0.0,
+                            "change between the two finest levels below the 5 % limit and not singular"))
+    zz = [p["zz_global"] for p in plates]
+    out.append(check_record(case, "error estimate falls with each refinement (finest / coarsest, global %)",
+                            (1.0 / REFINE_RATIO) ** (len(plate_n) - 1), zz[-1] / zz[0], "1", 0.15,
+                            "the Zienkiewicz-Zhu estimate of constant-stress elements on a smooth field falls as h^1 "
+                            f"(halves per halving); got {' / '.join(f'{z:.1f}' for z in zz)} %. Expectation from the "
+                            "element's order, tolerance HIRAKU's choice"))
+    # L plate: the re-entrant corner
+    lp = [l_plate_corner(n) for n in l_n]
+    lev = [{"element_size_mm": 100.0 / n, "value": r["max"]} for n, r in zip(l_n, lp)]
+    lrec = convergence_record("largest element von Mises", "MPa", lev)
+    lcase = (f"L-shaped plate 200 x 200 without a 100 x 100 corner, tension on both arms, meshes "
+             f"{' / '.join(f'{n}' for n in l_n)} elements per 100 mm")
+    out.append(check_record(lcase, "peak at the re-entrant corner element on every mesh (1 = yes)", 1.0,
+                            float(all(r["at_corner"] for r in lp)), "1", 0.0, "the singular point is the corner"))
+    out.append(check_record(lcase, "verdict singular (1 = yes)", 1.0, float(lrec["verdict"] == "singular"), "1", 0.0,
+                            f"values growing with d2/d1 at or above 2^-{SINGULAR_ORDER:g} are singular "
+                            "(k1_shell.convergence); the corner has no finite stress"))
+    lam = williams_lambda()
+    d = [lp[i + 1]["max"] - lp[i]["max"] for i in range(len(lp) - 1)]
+    out.append(check_record(lcase, "growth of the corner peak per halving (d2 / d1)", REFINE_RATIO ** (1.0 - lam),
+                            d[-1] / d[-2], "1", 0.05, SRC_WILLIAMS + f"; lambda {lam:.4f}"))
+    return out
+
+
 # ------------------------------------------------------------------ the routine set
 
 
@@ -466,4 +607,5 @@ def shell_known_answers() -> list[Record]:
                             SRC_HEYWOOD + "; FE value: element-centre sigma_yy of the two rings next to the hole "
                                           "on the x axis, extrapolated linearly in r to the edge"))
     out += ladder_frame_checks()
+    out += convergence_checks()
     return out

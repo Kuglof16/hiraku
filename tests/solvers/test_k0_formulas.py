@@ -135,7 +135,10 @@ class FormulaLedgerTest(unittest.TestCase):
 
         from hiraku.solvers.k0_handcalc.frame_inputs import overhang_moment, rail_joint_inputs
 
-        design = json.loads((Path(__file__).resolve().parents[2] / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        from hiraku.designgen import ladder_4w
+
+        # the ladder alone: the roll bar (on by default) splits the rail S2B at its node H
+        design = ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
         ji = rail_joint_inputs(design, loading="two_cargo")
         self.assertEqual((ji["rail_member"][-3:], ji["cross_member"]), ("S2B", "cross_B"))
         ins = {k: v["value"] for k, v in ji["inputs"].items()}

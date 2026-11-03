@@ -55,21 +55,21 @@ class Param:
     def filled(self) -> Any:
         return self.default if self.unit is None else units.quantity(float(self.default), self.unit)
 
-    def check(self, value: Any) -> None:
+    def check(self, value: Any, what: str = "load case parameter") -> None:
         if self.unit is None:
             if not isinstance(value, str):
-                raise LoadCaseError(f"load case parameter {self.name!r} must be a string, got {value!r}")
+                raise LoadCaseError(f"{what} {self.name!r} must be a string, got {value!r}")
             if self.choices and value not in self.choices:
-                raise LoadCaseError(f"load case parameter {self.name!r} must be one of {', '.join(self.choices)}, got {value!r}")
+                raise LoadCaseError(f"{what} {self.name!r} must be one of {', '.join(self.choices)}, got {value!r}")
             return
         if not isinstance(value, dict) or not isinstance(value.get("unit"), str):
-            raise LoadCaseError(f"load case parameter {self.name!r} must be a quantity with a unit, got {value!r}")
+            raise LoadCaseError(f"{what} {self.name!r} must be a quantity with a unit, got {value!r}")
         try:
             dim = units.dimension(value["unit"])
         except ValueError as e:
-            raise LoadCaseError(f"load case parameter {self.name!r}: {e}") from None
+            raise LoadCaseError(f"{what} {self.name!r}: {e}") from None
         if dim not in {units.dimension(u) for u in (self.unit, *self.also)}:
-            raise LoadCaseError(f"load case parameter {self.name!r} must be in {' or '.join((self.unit, *self.also))} "
+            raise LoadCaseError(f"{what} {self.name!r} must be in {' or '.join((self.unit, *self.also))} "
                                 f"(or a unit of the same kind), got {value['unit']!r}")
 
 
@@ -153,6 +153,21 @@ def param_value(load_case: Record, name: str, unit: str, default: float | None =
         raise LoadCaseError(f"load case parameter {e}") from None
 
 
+def run_param(params: dict, p: Param) -> Any:
+    """A run parameter (analyze's params.<name>, declared in the tool's run_params): a quantity in p.unit, or the
+    string; p's default when absent."""
+    if p.name not in params:
+        return p.default
+    v = params[p.name]
+    p.check(v, "run parameter")
+    if p.unit is None:
+        return v
+    try:
+        return units.to_unit(v, p.unit, p.name)
+    except ValueError as e:
+        raise LoadCaseError(f"run parameter {e}") from None
+
+
 def param_list(load_case: Record, name: str) -> list[str] | None:
     """A comma-separated string parameter as a list (None when absent)."""
     v = param_text(load_case, name)
@@ -211,8 +226,9 @@ class BuiltinTool(ABC):
 
     load_case_params declares every load case parameter the tool reads (name,
     unit, default, required); run() checks the given ones against it and fills
-    in the defaults. predicts pairs the tool's result quantities with the K0
-    formula outputs that predict them; upstream says which other analyses the
+    in the defaults. run_params declares the settings analyze's params may carry
+    (run_param reads them). predicts pairs the tool's result quantities with the
+    K0 formula outputs that predict them; upstream says which other analyses the
     tool takes from run params["upstream_analyses"]. describe() returns all of
     it (the contract's tool_spec has no field for it).
     """
@@ -224,6 +240,7 @@ class BuiltinTool(ABC):
     tests: list[str] = []
     formulas: list[str] = []
     load_case_params: tuple[Param, ...] = ()
+    run_params: tuple[Param, ...] = ()
     predicts: tuple[Predicts, ...] = ()
     upstream = ""
 
@@ -256,6 +273,8 @@ class BuiltinTool(ABC):
                        "params": [p.describe() for p in self.load_case_params],
                        "predicts": [p.describe() for p in self.predicts],
                        "formulas": list(self.formulas)}
+        if self.run_params:
+            out["run_params"] = [p.describe() for p in self.run_params]
         if self.upstream:
             out["upstream"] = self.upstream
         return out

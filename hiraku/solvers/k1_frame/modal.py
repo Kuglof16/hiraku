@@ -104,8 +104,10 @@ def modes(design: dict, n_modes: int = 10) -> dict:
     if not np.all(np.isfinite(f)):
         raise DesignError("the modal analysis returned NaN frequencies; the mass or stiffness is not valid (check member sizes and part masses)")
     order = np.argsort(f)
-    shapes, flex = [], []
+    shapes, flex, ladder_flex = [], [], []
     pts = [fm.node_xyz(n) for n in fm.frame_nodes]
+    ladder = ladder_nodes(design, fm.frame_nodes)
+    lpts = [fm.node_xyz(n) for n in ladder]
     for i in order:
         combo = f"Mode {i + 1}"
         u = {}
@@ -118,5 +120,19 @@ def modes(design: dict, n_modes: int = 10) -> dict:
         resid = [u[n] - (t + np.cross(th, p)) for n, p in zip(fm.frame_nodes, pts)]
         total = math.sqrt(sum(float(v @ v) for v in u.values())) or 1.0
         flex.append(math.sqrt(sum(float(r @ r) for r in resid)) / total)
+        if len(ladder) == len(fm.frame_nodes):
+            ladder_flex.append(flex[-1])
+        else:  # the ladder's own bending, over the whole frame's motion (a roll bar swaying on a still ladder: small)
+            t, th = rigid_fit(lpts, [u[n] for n in ladder])
+            lres = [u[n] - (t + np.cross(th, p)) for n, p in zip(ladder, lpts)]
+            ladder_flex.append(math.sqrt(sum(float(r @ r) for r in lres)) / total)
         shapes.append(u)
-    return {"frequencies": f[order], "shapes": shapes, "flexibility": np.array(flex), "model": fm}
+    return {"frequencies": f[order], "shapes": shapes, "flexibility": np.array(flex),
+            "ladder_flexibility": np.array(ladder_flex), "model": fm}
+
+
+def ladder_nodes(design: dict, nodes: list[str]) -> list[str]:
+    """The frame nodes on a member of the frame itself: those only on members of another part
+    (member.part, e.g. the roll bar's posts and top) are left out."""
+    on_frame = {n for m in design.get("members", []) if m.get("part", "frame") == "frame" for n in (m["node_a"], m["node_b"])}
+    return [n for n in nodes if n in on_frame] or list(nodes)
