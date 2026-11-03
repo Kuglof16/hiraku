@@ -255,7 +255,7 @@ def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: 
 def hook_main(event: str, runs: Path | None = None, stdin: Any = None, stdout: Any = None) -> int:
     """`python -m hiraku hook <Event>`: hook input JSON on stdin, the answer as JSON on stdout.
     A failure lets the call through (exit 0, {}) and says why on stderr: the tools check
-    HK1-HK3 again themselves (hiraku.tools.functions._gate). Claude Code sends UTF-8; the
+    HK1-HK3 and HK5 again themselves (hiraku.tools.functions._gate). Claude Code sends UTF-8; the
     process's own stdin encoding (cp932 on a Japanese Windows) is not used, or a Japanese
     argument would not match the server's Attribution key."""
     stdout = stdout or sys.stdout

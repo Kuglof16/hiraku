@@ -310,5 +310,5 @@ tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3,
 # friction 0.8 to 1.6 and 50 to 80 km/h).
 beyond: [P1, R1, T1, F1, S4, S5]
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 1
+round_limit: 2  # as offroad-4w.yaml (HK5: the layout first, then the motor)
 cost_limit_usd: 2.0

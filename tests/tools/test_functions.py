@@ -385,6 +385,47 @@ class CompareWhereTest(RunCase, unittest.TestCase):
         self.assertFalse(INPUT_SCHEMAS["compare"]["additionalProperties"])
 
 
+class UnsupportedLoadTest(RunCase, unittest.TestCase):
+    """Contract 046c13c / 01ddb8a: a load point with no path gives result unsupported_load; analyze turns it into
+    the load case's failing verdict (basis unsupported_load, analysis_id), so HK4 does not wait on it."""
+
+    def test_unsupported_load_fails_the_load_case_and_hk4_does_not_wait(self):
+        from hiraku.contract import errors
+        from hiraku.tools import rules
+
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def floating(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            if load_case["load_case_id"] == "R1-step100":
+                out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": 2.0, "unit": "1",
+                                                    "where": "steering_column"}]
+            return out
+
+        tool.run = floating
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        (ver,) = [v for v in self.ctx.store.records("verdict") if v["load_case_id"] == "R1-step100"]
+        self.assertEqual(errors("verdict", ver), [])
+        self.assertEqual((ver["basis"], ver["analysis_id"], ver["pass"]), ("unsupported_load", a2["analysis_id"], False))
+        self.assertEqual((ver["value"], ver["limit"], ver["margin_pct"]), ({"value": 2.0, "unit": "1"},
+                                                                          {"value": 0.0, "unit": "1"}, None))
+        self.assertNotIn("comparison_id", ver)
+        from hiraku.tools.judge import compute_judgement
+
+        self.assertEqual(compute_judgement(self.ctx, "strength")["state"], "red")
+        self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        self.assert_events_fit()
+
+    def test_no_unsupported_load_no_verdict(self):
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        self.assertEqual([v for v in self.ctx.store.records("verdict") if v["load_case_id"] == "R1-step100"], [])
+
+
 class PickResultTest(unittest.TestCase):
     def test_several_places_give_the_unfavourable_one(self):
         from hiraku.tools.functions import _pick_result
@@ -810,6 +851,10 @@ class RunToolsOnlyTest(RunCase, unittest.TestCase):
         self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
+        (ev,) = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and "確かめない道具" in e["text"]]
+        self.assertEqual(ev["data"], {"tests": ["P1", "R1"], "checked": ["step_climb", "frame_static", "frame_shell"],
+                                      "not_checked": ["tilt"]})
+        self.assert_events_fit()
         self.assertEqual(self.extra["tilt"].runs, [])
         line = next(t for t in list_tools(self.ctx) if t["name"] == "tilt")
         self.assertFalse(line["usable"])
@@ -999,6 +1044,40 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertEqual((entry["formula_id"], entry["role"]), ("frame_static.rail_bending", "criterion"))
         self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
         self.assertIn("F", entry["missing"])  # a prediction not recorded yet
+
+    def test_the_retried_formula_comes_first_for_the_roles(self):
+        """P1's scripted scene predicts with the lever rule on purpose and misses; a role is given the
+        couple's formula first, and the lever rule after it with the scene's cause."""
+        out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "P1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        ids = [e["formula_id"] for e in case["formulas"]]
+        self.assertEqual(ids[0], "step_climb.pushed_wheel_load")
+        lever = next(e for e in case["formulas"] if e["formula_id"] == "mass_props.front_wheel_load")
+        self.assertIn("台本の場面", lever["when"])
+        self.assertIn("偶力", lever["when"])
+        self.assertLess(ids.index("step_climb.pushed_wheel_load"), ids.index("mass_props.front_wheel_load"))
+
+    def test_a_tool_made_in_the_run_replaces_the_no_tool_note(self):
+        """Once a made tool for the test is on the shelf, formula_inputs names it instead of saying there is none."""
+        import types
+
+        from hiraku.tools import plan
+
+        kept = types.SimpleNamespace(PREDICTIONS=[
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L"}, "inputs_from": lambda design, lc: {"L": {"value": 1800.0, "unit": "mm"}}}])
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        self.ctx.specs["made_r1"] = {"name": "made_r1", "origin": "claude", "usable": True, "tests": ["R1"]}
+        try:
+            with mock.patch.object(plan, "plan_of", return_value=own),                     mock.patch.object(plan, "external_builders", return_value=({}, {}, {})),                     mock.patch.dict(plan.TOOLLESS_PREDICTIONS, {"R1": ("kept_stand_in", "PREDICTIONS")}),                     mock.patch.object(plan.importlib, "import_module", return_value=kept):
+                out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "R1-step100"})
+        finally:
+            del self.ctx.specs["made_r1"]
+        (case,) = out["formula_inputs"]["load_cases"]
+        self.assertEqual(case["note"], plan.MADE_TOOL_NOTE.format(tools="made_r1"))
+        (entry,) = case["formulas"]
+        self.assertEqual(entry["tool"], "made_r1")
+        self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
 
     def test_role_facing_text_points_at_the_section_not_at_python(self):
         from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role

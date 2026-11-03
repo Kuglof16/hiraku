@@ -1,6 +1,6 @@
-"""SDK hooks: the contract's HK1-HK4, agent start/stop events and next-step hints.
+"""SDK hooks: the contract's HK1-HK5, agent start/stop events and next-step hints.
 
-- PreToolUse: HK1-HK3 (hiraku.tools.rules.check_call). A denial is recorded as a
+- PreToolUse: HK1-HK3 and HK5 (hiraku.tools.rules.check_call). A denial is recorded as a
   hook.denied event and its reason (what is missing, what to call next) goes to Claude.
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.

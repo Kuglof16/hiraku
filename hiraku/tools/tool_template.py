@@ -25,7 +25,8 @@ Record = dict[str, Any]
 TEMPLATE_CODE = '''\
 import math
 
-from hiraku.solvers.shelf.base import BuiltinTool, LoadCaseError, Param, check_record, param_text, param_value, result
+from hiraku.solvers.shelf.base import (BuiltinTool, LoadCaseError, Param, Predicts, check_record, param_text, param_value,
+                                       result)
 
 
 def midspan_stress(F, L, b, h, t):
@@ -45,6 +46,8 @@ class MidspanBending(BuiltinTool):
     base = "K0"
     tests = ["R1"]
     formulas = ["frame_static.rail_bending"]
+    # which result each formula output predicts (list_formulas(tool=...) shows these pairs to the roles)
+    predicts = (Predicts("max_stress", "frame_static.rail_bending", "sigma"),)
     # every load case parameter analyse() reads (others cannot be read); unit None is a string
     load_case_params = (
         Param("force", "N", "load at mid-span", default=1000.0),
@@ -213,8 +216,79 @@ def allowed_api() -> Record:
                 api[n] = type(v).__name__
         hiraku_api[name] = api
     return {"modules": others, "hiraku": hiraku_api,
-            "note": ("hiraku.* はその下のモジュールも import できる (上はパッケージが出す名前)。"
+            "note": ("hiraku.* はその下のモジュールも import できる (上はパッケージが出す名前)。関数の入出力と説明 (docstring) は、"
+                     "check_tool か get_tool_template に api_of (名前の配列。モジュールか、その中の関数・クラス) を付けると返る。"
                      f"使えない組み込み: {', '.join(guard.DENIED_BUILTINS)}")}
+
+
+API_OF_LIMIT = 20  # names one api_of asks for
+DOC_CHARS = 1500  # of each docstring
+
+
+def _allowed(dotted: str) -> bool:
+    from hiraku.solvers.toolmaker import guard
+
+    if any(dotted == d or dotted.startswith(d + ".") for d in guard.DENIED_MODULES):
+        return False
+    return any(dotted == a or dotted.startswith(a + ".") for a in guard.ALLOWED_MODULES if a.startswith("hiraku."))
+
+
+def _doc(obj: Any) -> str:
+    doc = inspect.getdoc(obj) or ""
+    return doc if len(doc) <= DOC_CHARS else doc[:DOC_CHARS] + " ..."
+
+
+def api_doc(names: Any) -> Record:
+    """For each dotted name a made tool may import from HIRAKU (a module, or a function or class in one):
+    its signature and docstring; for a module, its public functions and classes with their signatures
+    and the first line of their docstrings. Read here, in this process, so the tool's code needs no
+    __doc__ or __name__ (which the toolmaker's guard does not let it read)."""
+    import importlib
+
+    if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
+        raise ValueError("api_of は名前 (文字列) の配列です。例: [\"hiraku.solvers.k4_geometry.rollbar\"]")
+    out: Record = {}
+    for name in names[:API_OF_LIMIT]:
+        if not _allowed(name):
+            out[name] = {"error": "道具が import できる HIRAKU のモジュールの下にありません (api.hiraku の一覧)"}
+            continue
+        mod, attr = None, None
+        try:
+            mod = importlib.import_module(name)
+        except ImportError:
+            head, _, attr = name.rpartition(".")
+            try:
+                mod = importlib.import_module(head) if head else None
+            except ImportError:
+                mod = None
+        if mod is None:
+            out[name] = {"error": "そのモジュールはありません"}
+            continue
+        if attr:
+            obj = getattr(mod, attr, None)
+            if obj is None or attr.startswith("_"):
+                out[name] = {"error": f"{mod.__name__} に {attr} はありません"}
+                continue
+            entry: Record = {"kind": "class" if inspect.isclass(obj) else "function" if callable(obj) else type(obj).__name__}
+            if callable(obj):
+                entry["signature"] = _signature(obj)
+            entry["doc"] = _doc(obj) if callable(obj) else repr(obj)[:300]
+            out[name] = entry
+            continue
+        members = {}
+        for n, v in vars(mod).items():
+            if n.startswith("_") or not (inspect.isfunction(v) or inspect.isclass(v))                     or getattr(v, "__module__", "") != mod.__name__:
+                continue
+            members[n] = {"signature": _signature(v), "doc": ((inspect.getdoc(v) or "").splitlines() or [""])[0]}
+        subs = []
+        if hasattr(mod, "__path__"):
+            import pkgutil
+
+            subs = sorted(m.name for m in pkgutil.iter_modules(mod.__path__) if not m.name.startswith("_"))
+        out[name] = {"kind": "module", "doc": _doc(mod), "members": members, **({"submodules": subs} if subs else {})}
+    if len(names) > API_OF_LIMIT:
+        out["_more"] = f"一度に {API_OF_LIMIT} 個まで。残りはもう一度 api_of で"
+    return out
 
 
 # The rule this department's make_tool and check_tool add to the toolmaker's checks (functions.made_refusals).

@@ -309,6 +309,12 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s = ctx.store
     s.emit("agent.started", agent="lead", data={"agent_id": "lead", **NO_MODEL})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
+    if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
+        s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
+        s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        status, reason, code = rules.judged_end(ctx)
+        s.finish(status, stop_reason=reason, stop_code=code)
+        return status
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
         first = (plan if plan is not None else plan_of(ctx)).get("propose") or {}
         s.emit("agent.started", agent="designer", data={"agent_id": "designer", **NO_MODEL})
@@ -335,6 +341,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if plan["unshelved"]:
         s.emit("agent.said", agent="lead", text="道具が棚に無いので回さない手順: "
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
+    for note in plan.get("notes") or []:  # what the plan leaves out on purpose, said in the record
+        s.emit("agent.said", agent="lead", text=note)
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
     drop, dropped, asked = plan.get("knowledge_drop"), False, False
@@ -440,7 +448,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         nxt, computed = list(rep.get("next") or []), []
         if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
             nxt, computed = scripted_next(ctx)
-        write_report(ctx, {"summary": rep.get("summary") or scripted_summary(ctx), "next": nxt}, "lead",
+        summary = rep.get("summary") or scripted_summary(ctx)
+        if plan.get("notes"):  # the report says it too
+            summary = summary + " " + " ".join(plan["notes"])
+        write_report(ctx, {"summary": summary, "next": nxt}, "lead",
                      computed=computed)
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})

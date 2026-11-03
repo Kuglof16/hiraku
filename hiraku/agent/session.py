@@ -40,8 +40,20 @@ def intake_for(req: Record) -> Any:
     from hiraku.intake.products import product_files
 
     product = req["product"] if req["product"] in product_files() else None
+    kw = {}
+    mode = req.get("hearing", "code")
+    if mode != "code":  # docs/contract.md hearing claude: the items the file leaves open stay open for ask_user
+        import inspect
+
+        if "hearing_mode" not in inspect.signature(intake).parameters:  # an intake without the claude hearing yet
+            got = intake(req["want"], req["flags"], req.get("speed_class"), product=product,
+                         requirements=req["requirements"], from_file=True)
+            got.events = [e for e in got.events if not e["kind"].startswith("hearing.")]
+            got.requirements_file["requirements"] = list(req["requirements"])
+            return got
+        kw["hearing_mode"] = mode
     return intake(req["want"], req["flags"], req.get("speed_class"), product=product,
-                  requirements=req["requirements"], from_file=True)
+                  requirements=req["requirements"], from_file=True, **kw)
 
 
 INTAKE_KINDS = ("domains.picked", "hearing.asked", "hearing.answered", "knowledge.imported")

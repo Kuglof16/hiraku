@@ -59,6 +59,18 @@ def compare_input_schema() -> Record:
     return schema
 
 
+API_OF = {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": (
+    "入出力と説明 (docstring) を見たい名前: 道具が import できる HIRAKU のモジュール (例 hiraku.solvers.k4_geometry.rollbar) "
+    "か、その中の関数・クラス (例 hiraku.solvers.k4_geometry.rollbar.occupant_clearance)。モジュールなら中の関数の一覧")}
+
+
+def check_tool_input_schema() -> Record:
+    """tool_input.check_tool and `api_of` (the contract's input has no api_of; the tool takes it)."""
+    schema = contract_input_schema("check_tool")
+    schema["properties"] = {**schema["properties"], "api_of": API_OF}
+    return schema
+
+
 def _domain_filter(extra: Record | None = None) -> Record:
     props: Record = {"domain": {"enum": list(contract.DOMAINS), "description": "この分野だけ"}}
     props.update(extra or {})
@@ -86,7 +98,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
         "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
-    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
+    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {"api_of": API_OF}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
     "list_tools": _domain_filter({
         "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
@@ -99,7 +111,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "revise_design": contract_input_schema("revise_design"),
     "propose_design": contract_input_schema("propose_design"),
     "make_tool": contract_input_schema("make_tool"),
-    "check_tool": contract_input_schema("check_tool"),
+    "check_tool": check_tool_input_schema(),
     "write_report": contract_input_schema("write_report"),
 }
 
@@ -168,7 +180,8 @@ DESCRIPTIONS = {
     "check_tool": (
         "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
         "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api は道具が import して"
-        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。make_tool の前の試しに使う"
+        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。api_of に名前を付けると、その関数の入出力と説明が返る。"
+        "make_tool の前の試しに使う"
     ),
     "make_tool": (
         "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
@@ -219,6 +232,29 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
 RECORDED_REFUSALS = ("propose_design",)
 
 
+TOOL_ERRORS_FILE = "tool.errors.log"  # in the run folder: the traceback of each exception a tool let out
+
+
+def tool_failure(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None, e: BaseException) -> str:
+    """Write the exception's traceback to <run>/TOOL_ERRORS_FILE, say it in the record (agent.said of system,
+    data.tool_error), and give the caller a sentence to act on (the same call can be tried again)."""
+    import traceback
+    from datetime import datetime
+
+    what = f"{type(e).__name__}: {e}"
+    try:
+        with (ctx.store.path / TOOL_ERRORS_FILE).open("a", encoding="utf-8") as f:
+            f.write(f"--- {datetime.now().isoformat(timespec='seconds')} {name} by {agent or '?'}\n"
+                    f"args: {json.dumps(args, ensure_ascii=False, default=str)[:2000]}\n"
+                    + "".join(traceback.format_exception(type(e), e, e.__traceback__)))
+        ctx.store.emit("agent.said", agent="system", text=f"道具 {name} の中で思わぬ失敗がありました ({what[:300]})",
+                       data={"tool_error": name, "agent": agent, "error": what[:2000], "log": TOOL_ERRORS_FILE})
+    except Exception:  # the answer below still goes back
+        pass
+    return (f"道具 {name} の中で思わぬ失敗がありました ({what[:500]})。HIRAKU の側の不具合で、記録 ({TOOL_ERRORS_FILE}) に"
+            "残しました。同じ入力でもう一度呼んでください。同じ失敗が続くときは、そう報告して先へ進んでください")
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
@@ -233,6 +269,8 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
                 ctx.store.emit("agent.said", agent="system", text=f"{name} は断られました: {e}",
                                data={"refused": name, "agent": agent, "reason": str(e)})
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:  # a bug in a tool: kept with its traceback in the run folder, the caller told
+            return {"content": [{"type": "text", "text": tool_failure(ctx, name, args, agent, e)}], "is_error": True}
         return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 
     return handler

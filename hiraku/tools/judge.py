@@ -70,6 +70,37 @@ def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case
     }
 
 
+UNSUPPORTED_LOAD = "unsupported_load"  # docs/contract.md 荷重の通り道が無いとき
+
+
+def unsupported_load_verdict(verdict_id: str, analysis: Record, load_case: Record) -> Record | None:
+    """The failing verdict of a load case whose analysis found load points with no path to the frame
+    (result unsupported_load > 0, docs/contract.md 荷重の通り道が無いとき); None when there are none.
+    A gap in the design, so the load case counts as judged (HK4 does not wait on it)."""
+    hits = [r for r in analysis.get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
+    if analysis.get("status") != "ok" or not hits:
+        return None
+    count = float(max(r["value"] for r in hits))
+    crit = load_case.get("criterion") or {}
+    return {
+        "verdict_id": verdict_id,
+        "analysis_id": analysis["analysis_id"],
+        "load_case_id": load_case["load_case_id"],
+        "test_id": load_case["test_id"],
+        "domain": load_case["domain"],
+        "quantity": UNSUPPORTED_LOAD,
+        "value": {"value": count, "unit": "1"},
+        "op": "<=",
+        "limit": {"value": 0.0, "unit": "1"},
+        "pass": False,
+        "margin": {"value": -count, "unit": "1"},
+        "margin_pct": None,
+        "requirement_keys": list(crit.get("requirement_keys", [])),
+        "basis": UNSUPPORTED_LOAD,
+        "value_from": "analysis",
+    }
+
+
 def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     """The newest verdict per load case for one design version."""
     out: dict[str, Record] = {}
