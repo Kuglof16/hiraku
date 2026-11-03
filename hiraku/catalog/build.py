@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
 from hiraku.catalog.loading import CARGO, LOADING_JA, OCCUPANTS, parts_on_board
+from hiraku.contract.loading import person_of
 from hiraku.contract.protocols import DEFAULT_LOADING, LOADINGS
 
 Record = dict[str, Any]
@@ -58,14 +59,19 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
         on = parts_on_board(design, loading)
     except ValueError as e:  # occupant parts, but fewer than the loading names
         raise CatalogError(f"the design does not carry the requirements' load: {e}") from None
-    people = [p for p in on if p["kind"] == "occupant"]
+    # a person may be split into body parts (hiraku.contract.loading.person_of): their masses add up
+    people: dict[str, float] = {}
+    for p in on:
+        if p["kind"] == "occupant":
+            people[person_of(p)] = people.get(person_of(p), 0.0) + float(p["mass_kg"])
     cargo = [p for p in on if p["kind"] == "cargo"]
     problems = []
     if len(people) != OCCUPANTS[loading]:
-        problems.append(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {len(people)}")
+        problems.append(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts (people: the parts sharing the id "
+                        f"before the first '.' are one), the design has {len(people)}")
     if people:
         m = requirement(req, "Q33", "kg")["value"]
-        off = [f"{p['id']} {p['mass_kg']:g} kg" for p in people if not math.isclose(p["mass_kg"], m, rel_tol=1e-6)]
+        off = [f"{who} {kg:g} kg" for who, kg in people.items() if not math.isclose(kg, m, rel_tol=1e-6)]
         if off:
             problems.append(f"occupant parts must weigh Q33 = {m:g} kg: {', '.join(off)}")
     if CARGO[loading]:

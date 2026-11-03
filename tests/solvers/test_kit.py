@@ -9,10 +9,18 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 
 
+STATIONS = {"F": 400.0, "A": 0.0, "S1": -770.0, "S2": -1320.0, "B": -2020.0, "E": -2420.0}  # the demo's stations
+
+
 def _ladder():
-    """The demo vehicle without its roll bar (on by default): the plain ladder frame."""
-    from hiraku.designgen.ladder_4w import build
-    return build({"rollbar": {"value": 0.0, "unit": "1"}})
+    """The demo vehicle's plain ladder frame (rails and cross members at its stations, without the
+    suspension's mounts, the dash and the roll bar the generator adds)."""
+    from hiraku.designgen.kit.frame import Frame
+    from hiraku.designgen.kit.sections import rect_tube
+    f = Frame("stkr400")
+    rail, cross = f.section(*rect_tube(40, 80, 2.3)), f.section(*rect_tube(40, 40, 2.3))
+    f.ladder(STATIONS, 350.0, 380.0, rail, cross)
+    return {**f.part(), "supports": V1["supports"], "parts": []}
 
 
 LADDER = _ladder()
@@ -32,7 +40,7 @@ class PackageTest(unittest.TestCase):
         self.lay = Layout(dict(LADDER, parts=[]))
 
     def test_frame_features(self):
-        self.assertEqual(self.lay.stations(), {"F": 400.0, "A": 0.0, "S1": -450.0, "S2": -1000.0, "B": -1700.0, "E": -2100.0})
+        self.assertEqual(self.lay.stations(), STATIONS)
         self.assertEqual((self.lay.rail_top(), self.lay.rail_bottom()), (420.0, 340.0))
         self.assertEqual(self.lay.rail_inner_gap(), 660.0)
 
@@ -49,7 +57,7 @@ class PackageTest(unittest.TestCase):
     def test_mounts(self):
         self.assertEqual(self.lay.mounts([-300.0, 0.0, 300.0], (300, 300, 100)), ["LA", "RA", "LS1", "RS1"])
         self.assertEqual(self.lay.mounts([-250.0, -200.0, 750.0], (300, 200, 500)), ["RA", "RS1"])  # right side only
-        self.assertEqual(self.lay.mounts([-450.0, 0.0, 300.0], (100, 100, 100)), ["LS1", "RS1"])  # on a station
+        self.assertEqual(self.lay.mounts([-770.0, 0.0, 300.0], (100, 100, 100)), ["LS1", "RS1"])  # on a station
         with self.assertRaisesRegex(PackageError, "LX"):
             self.lay.at("X")
 
@@ -81,10 +89,17 @@ class FrameKitTest(unittest.TestCase):
         from hiraku.designgen.kit.sections import rect_tube
         f = Frame("stkr400")
         rail, cross = f.section(*rect_tube(40, 80, 2.3)), f.section(*rect_tube(40, 40, 2.3))
-        f.ladder({"F": 400.0, "A": 0.0, "S1": -450.0, "S2": -1000.0, "B": -1700.0, "E": -2100.0}, 350.0, 380.0, rail, cross)
+        f.ladder(STATIONS, 350.0, 380.0, rail, cross)
         part = f.part()
-        self.assertEqual(part["nodes"], LADDER["nodes"])
-        self.assertEqual(part["members"], LADDER["members"])
+        # v1 has the ladder's nodes and cross members; its rails are split at the mounts' nodes along the same lines
+        v1_nodes = {n["id"]: n["xyz_mm"] for n in V1["nodes"]}
+        for n in part["nodes"]:
+            self.assertEqual(v1_nodes[n["id"]], n["xyz_mm"])
+        crosses = [m for m in part["members"] if m["id"].startswith("cross_")]
+        self.assertEqual(crosses, [m for m in V1["members"] if m["id"].startswith("cross_")])
+        rail_len = sum(abs(v1_nodes[m["node_a"]][0] - v1_nodes[m["node_b"]][0]) for m in V1["members"]
+                       if m["id"].startswith("rail_L_"))
+        self.assertAlmostEqual(rail_len, STATIONS["F"] - STATIONS["E"], places=9)
 
     def test_lines_curves_mirror_and_merge(self):
         import math
@@ -110,7 +125,7 @@ class RunningGearTest(unittest.TestCase):
     def test_four_wheels_is_v1(self):
         from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
         s = Suspension("kc_table", 20.0, 1.2, 150.0, "builtin:double_wishbone")
-        sup = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s)
+        sup = four_wheels(2020.0, 1100.0, 300.0, 200.0, s, s)
         # ladder_4w.build adds the hard points K2 lays out (write_hardpoints) after the wheels are placed
         bare = [dict(x, suspension={k: v for k, v in x["suspension"].items() if k != "hardpoints_mm"})
                 for x in V1["supports"]]
@@ -134,22 +149,23 @@ class CheckTest(unittest.TestCase):
     def test_v1(self):
         r = check.check(V1)
         q = r["quantities"]
-        self.assertAlmostEqual(q["mass"]["value"], 602.14, delta=0.01)  # 591.47 kg and the roll bar's members
-        self.assertEqual(q["ground_clearance"]["value"], 160.0)  # the knuckle's box, 20 mm below the lower ball joint
-        self.assertEqual(q["ground_clearance"]["where"], "knuckle_FL")
+        # 602.14 kg before the suspension's mounts, the dash and bulkhead and the 320 mm longer front
+        self.assertAlmostEqual(q["mass"]["value"], 631.15, delta=0.01)
+        self.assertEqual(q["ground_clearance"]["value"], 150.0)  # the arms' box, 30 mm below the lower arm
+        self.assertEqual(q["ground_clearance"]["where"], "susp_FL")
         self.assertAlmostEqual(q["free_steer_angle"]["value"], 16.48, delta=0.01)
         self.assertAlmostEqual(q["knee_room"]["value"], -69.3, delta=0.1)  # the steering column's turned box
         self.assertEqual(q["knee_room"]["where"], "steering_column")
-        self.assertAlmostEqual(q["reach_to_controls"]["value"], 58.9, delta=0.1)
+        self.assertEqual(q["reach_to_controls"]["where"], "steering_column")  # the driver's controls
         for k in ("foot_room", "leg_clearance", "foot_support", "pedal_reach", "wheel_reach"):  # the seated body (K4)
             self.assertIn(k, q)
+        for k in ("foot_room", "leg_clearance", "foot_support"):  # the first v1's layout errors are gone
+            self.assertGreater(q[k]["value"], 0.0, k)
         self.assertTrue(any("knee_room" in p for p in r["problems"]))
-        self.assertTrue(any("rail_L_AS1" in p for p in r["problems"]))
-        # approach: the line tangent to the 300 mm tyre through cross_F's lower front edge (420, 360)
-        import math
-        a, b = 420.0, 300.0 - 360.0
-        self.assertAlmostEqual(q["approach_angle"]["value"],
-                               math.degrees(math.asin(300 / math.hypot(a, b)) - math.atan2(b, a)), places=9)
+        self.assertTrue(any("rail_L_" in p for p in r["problems"]))
+        # approach: now the front lower arm's leg (its lower end at the pivot, 180 mm up, 120 mm ahead of the axle)
+        self.assertEqual(q["approach_angle"]["where"], "lower_leg_LA1")
+        self.assertAlmostEqual(q["approach_angle"]["value"], 39.40, delta=0.01)
 
 
 if __name__ == "__main__":

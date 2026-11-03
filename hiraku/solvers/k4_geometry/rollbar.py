@@ -52,11 +52,14 @@ def _box(p: Record) -> tuple[np.ndarray, np.ndarray]:
 
 
 def occupant_spaces(design: Record) -> list[Record]:
-    """The space of each occupant part: {"occupant", "lo_mm", "hi_mm", "basis"} (an upright box)."""
+    """The space of each occupant (one per person, people.occupants: the trunk of a body in segments):
+    {"occupant", "lo_mm", "hi_mm", "basis"} (an upright box)."""
+    from .people import occupants
+
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
     out = []
-    for o in (p for p in parts if p["kind"] == "occupant"):
+    for o in occupants(design):
         lo, hi = _box(o)
         c = np.asarray(o["box"]["center_mm"], float)
         under = [s for s in seats if _box(s)[0][1] < c[1] < _box(s)[1][1] and _box(s)[0][0] < c[0] < _box(s)[1][0]]

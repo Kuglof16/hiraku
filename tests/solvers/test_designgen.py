@@ -67,13 +67,13 @@ class DesignGenTest(unittest.TestCase):
         with self.assertRaisesRegex(designgen.DesignGenError, "rails reach the wheels"):
             GEN.build({"rail_spacing": mm(900), "track": mm(900)})
         with self.assertRaisesRegex(designgen.DesignGenError, "stations"):
-            GEN.build({"seat_x": mm(-1100), "wheelbase": mm(1400)})
+            GEN.build({"seat_x": mm(-1300), "wheelbase": mm(1400)})
 
     def test_variables_fix_the_known_defects(self):
         """v1: the front wheels touch the rails before 30 deg of steer, the driver's knees hit
-        the steering by 41 mm. A wider track and the steering 50 mm forward clear both."""
+        the steering column by 69 mm. A wider track and the steering 90 mm forward clear both."""
         tool = {t.name: t for t in solvers.builtin_tools()}["assembly"]
-        d = GEN.build({**GEN.values_of(V1), "track": mm(1220), "steering_x": mm(-200)}, version=2, parent=1, reason="fix")
+        d = GEN.build({**GEN.values_of(V1), "track": mm(1220), "steering_x": mm(-480)}, version=2, parent=1, reason="fix")
         contract.validate("design", d)
         r = results(tool.run(d, {"load_case_id": "H", "test_id": "H1", "domain": "assembly", "title": "H", "params": {},
                                  "tolerance_rel": 0.05}, PRED, {}))
@@ -87,8 +87,10 @@ class DesignGenTest(unittest.TestCase):
         self.assertEqual([s["position_mm"][1] for s in d["supports"]], [610.0, -610.0, 610.0, -610.0])
         for k in ("design_version", "parent_version", "name", "change_reason"):
             self.assertEqual(d[k], V1[k])
-        self.assertEqual({k: v for k, v in d["variables"].items() if k != "track"},
-                         {k: v for k, v in V1["variables"].items() if k != "track"})
+        # the driveshafts' inner joints are lowered as far as the (wider) track's shafts need: derived, not an input
+        moved = ("track", "driveshaft_inner_drop")
+        self.assertEqual({k: v for k, v in d["variables"].items() if k not in moved},
+                         {k: v for k, v in V1["variables"].items() if k not in moved})
         with self.assertRaisesRegex(ValueError, "cannot be changed"):
             designgen.regenerate(V1, {"occupant_mass": {"value": 60, "unit": "kg"}})
         with self.assertRaisesRegex(ValueError, "outside 900 to 1400 mm"):
@@ -104,10 +106,10 @@ class DesignGenTest(unittest.TestCase):
         for k in ("tyre_damping_ratio", "seat_x", "wheel_inertia"):
             del old["variables"][k]
         got = {v["name"]: v for v in designgen.variables(old)}
-        self.assertEqual(got["seat_x"]["value"], -725.0)  # the default
+        self.assertEqual(got["seat_x"]["value"], -1045.0)  # the default
         self.assertNotIn("wheel_inertia", got)
         d = designgen.regenerate(old, {"track": mm(1220)})
-        self.assertEqual(d["variables"]["seat_x"]["value"], -725.0)
+        self.assertEqual(d["variables"]["seat_x"]["value"], -1045.0)
         self.assertEqual(d["variables"]["track"]["value"], 1220.0)
 
     def test_archetypes_and_propose(self):
@@ -124,7 +126,11 @@ class DesignGenTest(unittest.TestCase):
         check_design_loading(req, d, "two_cargo")
         heavy = dict(req, requirements=[dict(r, value=90) if r["key"] == "Q33" else r for r in req["requirements"]])
         d2 = designgen.propose("ladder_4w", {}, {"track": mm(1220)}, heavy)
-        self.assertEqual({p["mass_kg"] for p in d2["parts"] if p["kind"] == "occupant"}, {90.0})
+        people: dict = {}  # each person's body parts add up to the requirement
+        for p in d2["parts"]:
+            if p["kind"] == "occupant":
+                people[p["id"].split(".", 1)[0]] = people.get(p["id"].split(".", 1)[0], 0.0) + p["mass_kg"]
+        self.assertEqual({round(m, 9) for m in people.values()}, {90.0})
         self.assertEqual(d2["variables"]["track"]["value"], 1220.0)
         with self.assertRaisesRegex(ValueError, "comes from requirement Q33"):
             designgen.propose("ladder_4w", {}, {"occupant_mass": {"value": 70, "unit": "kg"}}, req)

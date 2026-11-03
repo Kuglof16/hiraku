@@ -218,8 +218,8 @@ class SampleNotesTest(unittest.TestCase):
         design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
         checks = {c["rule_id"]: c for c in rulecheck.check_all(got.record["rules"], design, load_product("offroad-4w")["requirements"])}
         self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"]}, {"U1-04": ["battery"]})
-        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same four plates as SM-01 and judge none of them
-            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body"])
+        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same plates as SM-01 and judge none of them
+            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body", "bulkhead"])
             self.assertEqual([n["part_id"] for n in checks[rid]["not_evaluable"]], checks[rid]["targets"])
 
 

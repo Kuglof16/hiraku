@@ -14,6 +14,7 @@ from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_poi
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
 from ..k4_geometry.obb import from_box, overlap
+from ..k4_geometry.people import PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
 from .base import LOADING, BuiltinTool, Predicts, Record, check_record, on_board, result
 
@@ -150,10 +151,21 @@ class Assembly(BuiltinTool):
                  for a, b, o in static]
         found += [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "motion", "condition": c}
                   for a, b, o, c in sw["hits"]]
-        out = {"results": results, "assembly": seq, "interferences": found}
+        out = {"results": results, "assembly": seq, "interferences": found, "assumptions": [HAND_WAY_RULE]}
+        if any(p["kind"] in PEDAL_KINDS for p in design.get("parts", [])):
+            out["assumptions"].insert(0, PEDAL_RULE)
         if people:
             out["effects"] = [{"name": f"body sizes: {AIST_SOURCE}"}]
         return out
+
+
+# Rules decided for now (no source), written into the record so that the reader knows they shape the numbers.
+PEDAL_RULE = ("仮の規則 (出典なし): ペダルの踏む板は、大きい人 (AIST の若年男性 95 パーセンタイル) の右足の母指球の下に置くが、"
+              "外の端はフレームのレールの外の面で止める (足元は前輪の掃引の内側。設計を作るコードの kit/body.place_pedals)。"
+              "足がそれより外にあるときも、脚の形は動かさずに板だけ内へ寄せる")
+HAND_WAY_RULE = ("仮の規則 (出典なし): 組み立ての手の道 (両手と短い工具が外から留め具まで真っすぐ入る道) は、留める節の部材と、"
+                 "その留め具のそばで終わる部材 (継ぎ目で分かれた隣の部材。手の開き 200 mm の半分と部材の太さの内) にはふさがれない。"
+                 "外から腕の届く長さ (AIST C3 606 mm) より先にある物も、腕が回り込むとみて道をふさがない")
 
 
 def _name(body_id: str) -> str:

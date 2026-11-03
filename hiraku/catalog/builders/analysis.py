@@ -270,6 +270,18 @@ R3_PLAN = {
                     "N_knee": "design.var.fatigue_knee_cycles", "m2": "design.var.fatigue_slope_after_knee"},
          "inputs_from": r3_calc},
     ],
+    # Run on the demo vehicle with the suspension's mounts (towers, legs and lower cross members on the rails):
+    # the tool's worst weld is the front lower arm's rear leg (lower_leg_LA2, damage 0.287), not the end cross
+    # member the hand calculation looks at (0.091 for it): +215 %.
+    "expected_mismatch": {
+        "quantity": "fatigue_damage",
+        "source": "the analysis department's run of R3 on offroad-4w v1 with the suspension's mounts, 2026-11-03",
+        "cause": ("サスの取付 (タワー・下の腕の脚と横の部材) がフレームに付いて、K2 の取付点の力が脚とタワーに入る。"
+                  "いちばん傷む溶接は前の下の腕の後ろの付け根を持つ脚 (lower_leg_LA2、片持ち) になり、手計算が見ている"
+                  "後ろの張り出しの端の横の部材ではない"),
+        "fix": "脚の根元の溶接の応力を出す手計算を足す (K0 の式の仕事)。設計では脚を太くする (50 x 3.2 で損傷 0.13)",
+        "end": True,
+    },
 }
 
 # ---------------------------------------------------------------- P4, T1, T2 on the forest loop
@@ -564,7 +576,7 @@ H3_PLAN = {
 NOT_ASSEMBLED = ("occupant", "cargo")  # people and load ride in, they are not assembled (as in k4_geometry)
 # Parts welded into the frame (gussets, through pieces, the roll bar's part) are in place before
 # assembly, as the frame is (k4_geometry.model.WELDED): not assembly steps either.
-NOT_ASSEMBLED += ("frame", "gusset", "rollbar")
+NOT_ASSEMBLED += ("frame", "gusset", "rollbar", "bracket")
 
 
 def _assembled(design: Record) -> int:

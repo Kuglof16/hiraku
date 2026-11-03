@@ -6,7 +6,9 @@ driven wheel.
 Where the parts go (each rule from the K2 hard points of the driven supports and the frame):
 - each driveshaft's outer joint is its wheel's centre (hard point wheel_center) and its inner
   joint is at the y of the lower arm's inner pivots (the middle of lca_front and lca_rear), at
-  that middle's x and at the wheel centre's height in the design position;
+  that middle's x and at the wheel centre's height in the design position, less the design
+  variable driveshaft_inner_drop when the design has it (the generator sets it with
+  drop_to_clear, so that the shafts pass under the rails at full bump);
 - the reducer sits between the two inner joints (its side faces at the joints, its output on
   their line), its top REDUCER_BELOW_MM below the frame's cross member at the axle station;
 - the motor sits ahead of the reducer, its back face on the reducer's front face, on the same
@@ -37,6 +39,7 @@ from hiraku.designgen.kit.package import Item, Layout, rear_at
 
 Record = dict[str, Any]
 
+DROP_VARIABLE = "driveshaft_inner_drop"  # design variable (mm): the inner joints below the wheel centres
 CV_JOINT_KG = 0.8  # one constant velocity joint with its boot (assumption)
 REDUCER_SHARE = 0.4  # the reducer's share of the motor and reducer, without the shafts (assumption)
 REDUCER_LENGTH_MM = 160.0  # reducer case along x (assumption)
@@ -55,14 +58,41 @@ def driven(design: Record) -> list[Record]:
     return [s for s in design.get("supports", []) if s["actuation"]["drive"]]
 
 
-def driveshaft_joints(design: Record, sid: str) -> tuple[list[float], list[float]]:
-    """(inner joint, outer joint) of the driveshaft of support sid, mm (see the module doc)."""
+def inner_drop(design: Record) -> float:
+    """How far (mm) the inner joints sit below the wheel centres: the design variable
+    driveshaft_inner_drop (written by the generator), else 0."""
+    q = (design.get("variables") or {}).get(DROP_VARIABLE)
+    return float(q["value"]) if q else 0.0
+
+
+def driveshaft_joints(design: Record, sid: str, drop: float | None = None) -> tuple[list[float], list[float]]:
+    """(inner joint, outer joint) of the driveshaft of support sid, mm (see the module doc); drop:
+    the inner joint this far below the wheel centre (None: inner_drop(design))."""
     from hiraku.solvers.k2_vehicle.model import hardpoints_of
 
     hp = hardpoints_of(design, sid)
     mid = (np.asarray(hp["lca_front"], float) + np.asarray(hp["lca_rear"], float)) / 2.0
     wc = [float(v) for v in hp["wheel_center"]]
-    return [float(mid[0]), float(mid[1]), wc[2]], wc
+    dz = inner_drop(design) if drop is None else drop
+    return [float(mid[0]), float(mid[1]), wc[2] - dz], wc
+
+
+def drop_to_clear(design: Record, rail_y: float, rail_bottom: float, shaft_radius: float, gap: float) -> float:
+    """The least drop (mm, at least 0) of the inner joints below the wheel centres that keeps each driven
+    wheel's driveshaft `gap` below the rail bottom where it passes under the rail's outer face
+    (|y| = rail_y) at full bump (the wheel half its suspension travel up, as K4 sweeps it; the inner joint
+    stays). Straight shafts; the rail runs past the axle along x."""
+    out = 0.0
+    for s in driven(design):
+        (xi, yi, zi), (xo, yo, zo) = driveshaft_joints(design, s["id"], drop=0.0)
+        bump = float((s.get("suspension") or {}).get("travel_mm") or 0.0) / 2.0
+        f = (abs(rail_y) - abs(yi)) / (abs(yo) - abs(yi))
+        if not 0.0 < f < 1.0:
+            continue
+        # z at the rail face: (zi - d) + (zo + bump - zi + d) f <= rail_bottom - r - gap
+        need = ((zi + (zo + bump - zi) * f) + shaft_radius + gap - rail_bottom) / (1.0 - f)
+        out = max(out, need)
+    return float(out)
 
 
 def tube_mass(length_mm: float, od_mm: float, wall_mm: float, rho: float) -> float:
@@ -99,7 +129,8 @@ def place(lay: Layout, total_mass: float, station: str, shaft: tuple[float, floa
           shafts: bool = True, reference_shafts: float | None = None) -> Record:
     """Put the motor, the reducer and (with shafts) the driveshafts in; returns their masses and the
     turning inertias (kg*m^2): {"motor", "reducer", "shafts" (those placed), "rotor_inertia", "gear_inertia"}.
-    reference_shafts: the shafts' mass the total was split with (None: these shafts' own mass)."""
+    reference_shafts: the shafts' mass the total was split with (None: these shafts' own mass).
+    The inner joints' drop is read from lay.design's variables (inner_drop)."""
     od, wall = shaft
     sups = driven(lay.design)
     if not sups:

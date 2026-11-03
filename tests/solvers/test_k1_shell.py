@@ -26,10 +26,23 @@ SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # the long demo runs (as HIRA
 
 
 def demo_design() -> dict:
-    """The demo vehicle's ladder frame without the roll bar (on by default; the roll bar's shell: test_rollbar)."""
+    """The demo vehicle's ladder frame without the roll bar (on by default; the roll bar's shell: test_rollbar),
+    and without the suspension's mounts and the dash (towers, legs, lower cross members: oblique joints, tied;
+    the demo's own shell runs are in test_frame_shell and test_k1_hot_spot): the rails and the cross members."""
     from hiraku.designgen import ladder_4w
 
-    return ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
+    return ladder_only(ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}}))
+
+
+def ladder_only(d: dict) -> dict:
+    """The design with only its rails and cross members (see demo_design)."""
+    d["members"] = [m for m in d["members"] if m["id"].startswith(("rail_", "cross_"))]
+    used = {m[k] for m in d["members"] for k in ("node_a", "node_b")}
+    d["nodes"] = [n for n in d["nodes"] if n["id"] in used]
+    for p in d["parts"]:  # parts on the mounts' nodes (column, bulkhead) ride on the rail nodes below
+        if p.get("carried_by"):
+            p["carried_by"] = [n for n in p["carried_by"] if n in used] or ["LS1", "RS1"]
+    return d
 
 
 def report(rows) -> None:
@@ -405,7 +418,7 @@ class ThroughMeshTest(unittest.TestCase):
         self.assertLess(warp.max(), 1e-9)
         rail = np.array([m.startswith("rail_L_") for m in ms.element_member])
         inner = rail & np.isclose(c[:, 1], 350.0 - 18.85)
-        for x in (0.0, -450.0, -1000.0, -1700.0):
+        for x in (0.0, -770.0, -1320.0, -2020.0):  # the T joints' stations A, S1, S2, B
             hole = inner & (np.abs(c[:, 0] - x) < 18.85) & (np.abs(c[:, 2] - 380.0) < 18.85)
             self.assertFalse(hole.any(), x)
 
@@ -420,7 +433,7 @@ class ThroughMeshTest(unittest.TestCase):
     def test_through_parts_are_the_mass_change(self):
         """designgen's through parts weigh what the shell gains by running the cross members through."""
         from hiraku import designgen
-        d = designgen.regenerate(demo_design(), {"cross_members_through": {"value": 1, "unit": "1"}})
+        d = ladder_only(designgen.regenerate(demo_design(), {"cross_members_through": {"value": 1, "unit": "1"}}))
         parts = sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("through_"))
         m = lambda ms: ShellModel.from_mesh(ms, d).total_mass() * 1000.0  # noqa: E731
         self.assertAlmostEqual(m(build_mesh(d, 10.0)) - m(self.butt), parts, places=9)
@@ -439,7 +452,7 @@ class GussetMeshTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from hiraku import designgen
-        cls.design = designgen.regenerate(demo_design(), {"joints": "gusset"})
+        cls.design = ladder_only(designgen.regenerate(demo_design(), {"joints": "gusset"}))
         cls.gussets = {p["id"]: p for p in cls.design["parts"] if p["kind"] == "gusset"}
         cls.mesh = build_mesh(cls.design, 10.0)
 

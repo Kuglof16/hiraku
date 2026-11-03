@@ -152,19 +152,22 @@ class BuildersTest(unittest.TestCase):
                 else:
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
 
-    def test_r3_predicts_the_end_cross_member(self):
-        """The hand calculation looks at the weld the fatigue tool finds worst: the overhang's end cross member."""
+    def test_r3_names_its_mismatch(self):
+        """The hand calculation looks at the overhang's end cross member; with the suspension's mounts on the frame
+        the fatigue tool finds a front lower arm's leg worse, and the plan says so."""
         from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
 
-        self.assertNotIn("expected_mismatch", PLANS["R3"])
+        self.assertEqual(PLANS["R3"]["expected_mismatch"]["quantity"], "fatigue_damage")
+        self.assertTrue(PLANS["R3"]["expected_mismatch"]["end"])
         worst = next(r for r in self.runs["R3"]["results"] if r["quantity"] == "fatigue_damage")
-        self.assertEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
+        self.assertNotEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
+        self.assertTrue(worst["where"].startswith("lower_leg_"), worst["where"])
 
     def test_r3_plan_on_version_2(self):
-        """Wider track (the wheels further outboard of the rails): still within the tolerance."""
+        """Wider track (the wheels further outboard of the rails): the plan's mismatch stays (the same cause)."""
         from hiraku import designgen
 
-        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -200, "unit": "mm"}})
+        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -480, "unit": "mm"}})
         lc = BUILDERS["R3"](spec("R3"), REQ, v2)
         got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
         preds = {}
@@ -173,7 +176,7 @@ class BuildersTest(unittest.TestCase):
             out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
             preds[p["quantity"]] = out["outputs"][p["output"]]
         hand = preds["fatigue_damage"]["value"]
-        self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
+        self.assertGreater(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
@@ -221,7 +224,7 @@ class RopsBuilderTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-rollbar.json").read_text(encoding="utf-8"))
+        cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))  # has the roll bar
         cls.lc = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
 
     def test_load_case_fits_the_contract(self):

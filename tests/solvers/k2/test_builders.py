@@ -115,8 +115,9 @@ class Builders(unittest.TestCase):
             h[above] = tilt_inputs(self.design, lc)["h"]["value"]
         # the demo design's cargo box stands on its floor with its centre 150 mm up
         self.assertAlmostEqual(h[150.0], h[None], places=6)
-        # 712.7 mm before the roll bar was on by default (its tubes raise the centre of gravity)
-        self.assertAlmostEqual(h[620.0], 718.8, delta=0.5)
+        # 712.7 mm before the roll bar was on by default (its tubes raise the centre of gravity), 718.8 mm before
+        # the suspension towers, the dash and the occupants' bodies as parts
+        self.assertAlmostEqual(h[620.0], 726.5, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:
