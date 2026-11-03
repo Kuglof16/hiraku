@@ -158,6 +158,29 @@ class DemoV1Test(unittest.TestCase):
                 rel = abs(got[q]["value"] - pred[q]) / abs(pred[q])
                 self.assertLessEqual(rel, lc["tolerance_rel"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
 
+    def test_column_held_two_ways_on_version_1(self):
+        # version 1's column touches bracket_column (0.8 mm gap) and steering_shaft; without the bracket the shaft
+        # and rack still hold it, so the hand case keeps a deflection
+        d = copy.deepcopy(V1)
+        d["parts"] = [p for p in d["parts"] if p["id"] != "bracket_column"]
+        rec = LoadPath().run(d, self.cases["R7-hand-300N"], PRED, {})
+        self.assertIn("grip_deflection", results(rec))
+        self.assertNotIn("steering_column", results(rec)["free_parts"]["where"])
+
+    def test_floating_column_is_found(self):
+        # with neither the bracket nor the shaft, the column and the wheel float: no grip deflection, both named first
+        d = copy.deepcopy(V1)
+        d["parts"] = [p for p in d["parts"] if p["id"] not in ("bracket_column", "steering_shaft")]
+        lc = self.cases["R7-hand-300N"]
+        rec = LoadPath().run(d, lc, PRED, {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        r = results(rec)
+        self.assertNotIn("grip_deflection", r)
+        self.assertTrue(r["free_parts"]["where"].startswith("steering_wheel"))
+        free = {x["where"] for x in rec["results"] if x["quantity"].startswith("free_part.")}
+        self.assertTrue({"steering_column", "steering_wheel"} <= free)
+        self.assertEqual(predict(PLANS["R7"], d, lc)["free_parts"], r["free_parts"]["value"])
+
     def test_pedals_moved_to_touch_pass(self):
         d = touch_nearest(V1, "pedal_brake", "part:bulkhead")
         d = touch_nearest(d, "pedal_accel", "member:tower_post_RA2")
