@@ -63,6 +63,12 @@ def load_plan(product: str, requirements: str | None = None) -> Record:
     return {**base, **mine, "steps": steps}
 
 
+def has_plan(product: str, requirements: str | None = None) -> bool:
+    """Whether data/catalog/scripted.yaml has steps for this requirements file (its name without
+    .yaml) or product. Without them a scripted run has only the builders' default steps."""
+    return bool(load_plan(product, requirements).get("steps"))
+
+
 def plan_of(ctx: RunContext) -> Record:
     """This run's plan: its requirements file's entry, else its product's (load_plan)."""
     path = getattr(ctx, "requirements_path", None)

@@ -42,10 +42,26 @@ def intake_for(req: Record) -> Any:
                   requirements=req["requirements"], from_file=True)
 
 
+INTAKE_KINDS = ("domains.picked", "hearing.asked", "hearing.answered", "knowledge.imported")
+
+
+def check_intake_events(events: Any) -> list[Record]:
+    """Events of intake steps done before the run (read from a file): a list of
+    {kind, agent?, text?, data} of the intake's kinds only. Raises ValueError saying what is wrong."""
+    if not isinstance(events, list):
+        raise ValueError("the intake events must be a JSON list of {kind, agent, text, data}")
+    for i, e in enumerate(events):
+        if not isinstance(e, dict) or e.get("kind") not in INTAKE_KINDS or not isinstance(e.get("data"), dict):
+            raise ValueError(f"intake event {i} must be {{kind, agent, text, data}} with kind one of "
+                             f"{', '.join(INTAKE_KINDS)}")
+    return events
+
+
 def start_run(requirements_path: Path | str, *, design_path: Path | str | None = None,
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
-              designgen: Any = None, intake: bool = False, **store_kw: Any) -> RunContext:
+              designgen: Any = None, intake: bool = False, intake_events: list[Record] | None = None,
+              **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
@@ -55,7 +71,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
 
     intake: run the intake steps on the file first (intake_for): the run's requirements are
     the merged ones (the file's, and the defaults the hearing added), and its events follow
-    run.started.
+    run.started. intake_events: the events of intake steps already done (a requirements
+    file the intake pipeline wrote, A1 to A2 on the screen), emitted as they are instead.
 
     Events: run.started, with intake domains.picked, hearing.* and knowledge.imported,
     agent.said (tests left out, if any), design.created, tool.checked (one per tool),
@@ -63,11 +80,14 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     judgement.updated.
     """
     req = load_requirements(requirements_path)
-    intake_events: list[Record] = []
-    if intake:
+    if intake_events is not None:
+        intake_events = check_intake_events(intake_events)
+    elif intake:
         got = intake_for(req)
         req = {**req, "requirements": got.requirements_file["requirements"]}
         intake_events = got.events
+    else:
+        intake_events = []
     catalog = load_catalog()
     path = resolve_design_path(req, design_path)
     design = None
