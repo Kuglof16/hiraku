@@ -25,6 +25,8 @@ runs/<run_id>/
     plugin.outbox.jsonl               claude_code_plugin runs only: hook notes waiting for the MCP server to emit
     plugin.lock                       claude_code_plugin runs only: a short lock around reading or writing the plugin state and outbox (not a sign that a session holds the run)
     plugin.alive                      claude_code_plugin runs only: touched by the MCP server every poll while a Claude Code session serves the run
+    tool.errors.log                   present only when a tool let an exception out: its traceback, appended per error
+                                      (the run also says it in an agent.said of system with data.tool_error)
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Only the run process appends to events.jsonl (seq has no gaps and one writer);
@@ -63,6 +65,7 @@ PLUGIN_OUTBOX_FILE = "plugin.outbox.jsonl"  # claude_code_plugin runs: hook note
 PLUGIN_LOCK_FILE = "plugin.lock"  # claude_code_plugin runs: held only while the plugin state or the outbox is read or written
 PLUGIN_ALIVE_FILE = "plugin.alive"  # claude_code_plugin runs: the MCP server touches it every poll while it serves the run
 PLUGIN_ALIVE_S = 10.0  # a plugin run is held by a session while plugin.alive is younger than this (seconds)
+TOOL_ERRORS_FILE = "tool.errors.log"  # tracebacks of exceptions a tool let out (only when there was one)
 
 RECORD_DIRS = {
     "prediction": "predictions",

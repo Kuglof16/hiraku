@@ -6,7 +6,7 @@ setlocal
 cd /d "%~dp0"
 set "PY=%~dp0.venv\Scripts\python.exe"
 if not exist "%PY%" (
-  echo HIRAKU: .venv\Scripts\python.exe was not found. Make the venv first (see README).
+  echo HIRAKU: .venv\Scripts\python.exe was not found. Make the venv first, as the README says.
   pause
   exit /b 1
 )
