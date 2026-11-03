@@ -299,6 +299,72 @@ def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "t
 # ------------------------------------------------------------------ RBE3
 
 
+def is_collinear(xyz: np.ndarray, weights=None, tol: float = 1e-9) -> bool:
+    """True when the points (with positive weights) lie on one line or coincide, so their translations do not
+    fix a rotation about that line."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    c = (w[:, None] * x).sum(axis=0) / w.sum()
+    rho = x - c
+    A = np.einsum("i,ij,ik->jk", w, rho, rho)
+    A = np.trace(A) * np.eye(3) - A
+    return bool(np.linalg.matrix_rank(A, tol=tol * max(np.trace(A), 1e-300)) < 3)
+
+
+def rbe3_full_matrices(ref_xyz, xyz: np.ndarray, weights=None, rotation_weights=None):
+    """Coefficients of the distributing link with the connected nodes' rotations:
+        u_ref = sum_i (H_i u_i + Hr_i theta_i),  theta_ref = sum_i (G_i u_i + Gr_i theta_i)   (3 x 3 each).
+
+    The reference motion is the weighted least-squares rigid motion (u_c, theta) of the connected nodes,
+    now with their rotations as well:
+        minimise sum_i w_i |u_i - u_c - theta x rho_i|^2 + sum_i v_i |theta_i - theta|^2,
+    rho_i = x_i - c about the weighted centroid c of the translations. Setting the derivatives to zero
+    (derived here): u_c = sum w_i u_i / sum w_i, and
+        A theta = sum_i w_i rho_i x u_i + sum_i v_i theta_i,   A = sum_i w_i (|rho_i|^2 I - rho_i rho_i^T) + (sum v_i) I,
+    then u_ref = u_c + theta x (x_ref - c). The rotation weights v_i (N mm^2 per N, i.e. length^2 times the
+    translation weight's unit) make A invertible when the nodes lie on one line: the twist about the line
+    then comes from the nodes' own rotations. A rigid motion of the connected nodes (u_i = a + omega x x_i,
+    theta_i = omega) is fitted exactly, so the transpose spreads a force and moment at the reference with
+    the same resultant, and the link adds no stiffness (the reference is the dependent node). Nastran's
+    RBE3 also lets the connected nodes' rotational components carry weights (as commonly described; the
+    program's documentation not checked here).
+
+    rotation_weights: per node or one value; None = 0 (translations only, as rbe3_matrices)."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    v = np.zeros(len(x)) if rotation_weights is None else np.broadcast_to(np.asarray(rotation_weights, float),
+                                                                         (len(x),)).copy()
+    W = w.sum()
+    c = (w[:, None] * x).sum(axis=0) / W
+    rho = x - c
+    A = np.einsum("i,ij,ik->jk", w, rho, rho)
+    A = np.trace(A) * np.eye(3) - A + v.sum() * np.eye(3)
+    scale = max(np.trace(A), 1e-300)
+    if np.linalg.matrix_rank(A, tol=1e-9 * scale) < 3:
+        raise ValueError("a distributing link needs at least three connected nodes not on one line, or rotation "
+                         "weights on the connected nodes")
+    Ainv = np.linalg.inv(A)
+    G = np.array([wi * Ainv @ skew(r) for wi, r in zip(w, rho)])  # theta = sum G_i u_i + Gr_i theta_i
+    Gr = np.array([vi * Ainv for vi in v])
+    d = np.asarray(ref_xyz, float) - c
+    Sd = skew(d)
+    H = np.array([(wi / W) * np.eye(3) - Sd @ Gi for wi, Gi in zip(w, G)])  # theta x d = -[d]x theta
+    Hr = np.array([-Sd @ Gi for Gi in Gr])
+    return H, Hr, G, Gr
+
+
+def default_rotation_weights(xyz: np.ndarray, weights=None, factor: float = 1e-3) -> np.ndarray:
+    """Rotation weights for a line of nodes: factor * w_i * l^2, l the RMS distance of the nodes from their
+    centroid (or 1 mm when they coincide). The perpendicular rotations then come almost wholly from the
+    translations (factor small); the twist about the line comes only from the nodes' rotations, shared in
+    proportion to the weights whatever the factor."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    c = (w[:, None] * x).sum(axis=0) / w.sum()
+    l2 = float(np.sum(w * np.sum((x - c) ** 2, axis=1)) / w.sum()) or 1.0
+    return factor * w * l2
+
+
 def rbe3_matrices(ref_xyz, xyz: np.ndarray, weights=None):
     """Coefficients of the distributing link: u_ref = sum_i H_i u_i, theta_ref = sum_i G_i u_i (3 x 3 each).
 
@@ -325,23 +391,52 @@ def rbe3_matrices(ref_xyz, xyz: np.ndarray, weights=None):
     return H, G
 
 
-def distributing_link(ref: int, nodes_ids, nodes: np.ndarray, weights=None, name: str = "rbe3") -> Constraint:
+def _rotation_weights(xyz, weights, rotation_weights):
+    """None: zero when the translations fix the rotations, default_rotation_weights when the nodes are on one
+    line; otherwise the values given."""
+    if rotation_weights is None:
+        return default_rotation_weights(xyz, weights) if is_collinear(xyz, weights) else None
+    return rotation_weights
+
+
+def distributing_link(ref: int, nodes_ids, nodes: np.ndarray, weights=None, name: str = "rbe3",
+                      rotation_weights=None) -> Constraint:
     """Distributing link (RBE3 type): the reference node (6 DOFs, dependent) moves with the weighted average
-    rigid motion of the connected nodes' translations (rbe3_matrices). A load on the reference reaches the
-    connected nodes without making them stiffer."""
+    rigid motion of the connected nodes (rbe3_full_matrices). A load on the reference reaches the connected
+    nodes without making them stiffer.
+
+    rotation_weights: None = translations only when the connected nodes span a plane or a volume, and the
+    nodes' rotations with default_rotation_weights when they lie on one line (then they must carry
+    rotations: shell or beam nodes); or values per node / one value (0 = translations only)."""
     ref = int(ref)
     ids = [int(i) for i in np.atleast_1d(nodes_ids)]
-    H, G = rbe3_matrices(nodes[ref], nodes[ids], weights)
-    eqs = []
-    for k in range(3):
-        terms = [(ref, k, 1.0)]
-        terms += [(i, l, -H[n, k, l]) for n, i in enumerate(ids) for l in range(3) if H[n, k, l] != 0.0]
-        eqs.append(Equation(terms, prefer=(ref, k), source=name))
-    for k in range(3):
-        terms = [(ref, 3 + k, 1.0)]
-        terms += [(i, l, -G[n, k, l]) for n, i in enumerate(ids) for l in range(3) if G[n, k, l] != 0.0]
-        eqs.append(Equation(terms, prefer=(ref, 3 + k), source=name))
-    return Constraint(name, eqs, needs_rotation=(ref,), nodes=tuple([ref] + ids))
+    v = _rotation_weights(nodes[ids], weights, rotation_weights)
+    H, Hr, G, Gr = rbe3_full_matrices(nodes[ref], nodes[ids], weights, v)
+    use_rot = [bool(np.any(Hr[n] != 0.0) or np.any(Gr[n] != 0.0)) for n in range(len(ids))]
+
+    def make(counts):
+        bad = [i for i, u in zip(ids, use_rot) if u and counts[i] < 6]
+        if bad:
+            raise ValueError(f"{name}: connected node(s) {bad[:5]} have no rotations, which a link to nodes on one "
+                             f"line needs (connect shell or beam nodes, or give three nodes off one line)")
+        eqs = []
+        for k in range(3):
+            terms = [(ref, k, 1.0)]
+            terms += [(i, l, -H[n, k, l]) for n, i in enumerate(ids) for l in range(3) if H[n, k, l] != 0.0]
+            terms += [(i, 3 + l, -Hr[n, k, l]) for n, i in enumerate(ids) if use_rot[n] for l in range(3)
+                      if Hr[n, k, l] != 0.0]
+            eqs.append(Equation(terms, prefer=(ref, k), source=name))
+        for k in range(3):
+            terms = [(ref, 3 + k, 1.0)]
+            terms += [(i, l, -G[n, k, l]) for n, i in enumerate(ids) for l in range(3) if G[n, k, l] != 0.0]
+            terms += [(i, 3 + l, -Gr[n, k, l]) for n, i in enumerate(ids) if use_rot[n] for l in range(3)
+                      if Gr[n, k, l] != 0.0]
+            eqs.append(Equation(terms, prefer=(ref, 3 + k), source=name))
+        return eqs
+
+    c = Constraint(name, needs_rotation=(ref,), nodes=tuple([ref] + ids), maker=make)
+    c.rotation_weights = None if v is None else np.broadcast_to(np.asarray(v, float), (len(ids),)).copy()
+    return c
 
 
 def rbe3_forces(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights=None) -> np.ndarray:
@@ -349,3 +444,15 @@ def rbe3_forces(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights
     reference: f_i = H_i^T F + G_i^T M."""
     H, G = rbe3_matrices(ref_xyz, xyz, weights)
     return np.einsum("nkl,k->nl", H, np.asarray(force, float)) + np.einsum("nkl,k->nl", G, np.asarray(moment, float))
+
+
+def rbe3_loads(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights=None, rotation_weights=None
+               ) -> np.ndarray:
+    """Nodal forces and moments (n, 6) that a distributing link (with the same rotation_weights rule as
+    distributing_link) gives the connected nodes: f_i = H_i^T F + G_i^T M, m_i = Hr_i^T F + Gr_i^T M."""
+    v = _rotation_weights(xyz, weights, rotation_weights)
+    H, Hr, G, Gr = rbe3_full_matrices(ref_xyz, xyz, weights, v)
+    F, M = np.asarray(force, float), np.asarray(moment, float)
+    f = np.einsum("nkl,k->nl", H, F) + np.einsum("nkl,k->nl", G, M)
+    m = np.einsum("nkl,k->nl", Hr, F) + np.einsum("nkl,k->nl", Gr, M)
+    return np.concatenate([f, m], axis=1)
