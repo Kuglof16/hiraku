@@ -9,7 +9,7 @@
 - an unknown cost (project.cost_usd null) said as unknown, and the run list's driver tag
 
 The values put in the records are shape examples (not results); the counts checked are
-computed here from the shapes. Browser tests need HIRAKU_WEB_BROWSER=1 and Playwright.
+computed here from the shapes. Browser tests: python -m tests.web.browser (needs Playwright).
 """
 
 import copy
@@ -106,7 +106,7 @@ class FixturesFitTheContract(unittest.TestCase):
         self.assertTrue(all(o["size_mm"][0] == 0 and o["size_mm"][2] == 0 and o["size_mm"][1] > 0 for o in gates))
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class ReviewFixesBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

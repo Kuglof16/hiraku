@@ -6,7 +6,7 @@ limits (story.defaults, overridden by story.cuts.<cut>.limits); text inside an e
 with a kind is at least limits.body_text_px, every other text at least min_text_px; and
 the page's own corner note ("上限を越えた: ...") is not shown.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The layout is a copy of the promo department's layout.json (the sections the cut pages
 read, without the notes) as of their commit with the feature / list boxes and the size
 keys; the check times are its check.times,
@@ -240,7 +240,7 @@ def with_verdict(events, run_id, passed):
     return out
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class CutStoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

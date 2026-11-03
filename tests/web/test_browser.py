@@ -1,6 +1,6 @@
 """Open the screen in a headless browser and replay the contract sample.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (it is not
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (it is not
 in requirements.txt: it brings a browser, and three.js comes from the CDN, so
 this test also needs the network).
 """
@@ -135,7 +135,7 @@ def n05_layout():
     }
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
