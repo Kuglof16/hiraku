@@ -85,11 +85,12 @@ SIZES: dict[str, dict[str, float]] = {
 BIG, SMALL = "m95", "f5"
 # Posture (assumptions, no source): the sole tilted up toward the toe, resting on the pedals and the
 # toe board; the knee angle (between thigh and shank) of a person sitting with the feet forward on
-# the floor, used to place the pedals and the feet of a seat without pedals; the largest knee angle
-# a person reaches a pedal with.
+# the floor, used to place the pedals and the feet of a seat without pedals. pedal_reach measures
+# against the straight leg (180 deg, the links' geometry): whether the foot reaches the pedal at all;
+# how comfortable the knee is, is knee_angle_room's (KNEE_COMFORT_DEG).
 FOOT_ANGLE_DEG = 20.0
 KNEE_ANGLE_DEG = 100.0
-KNEE_MAX_DEG = 150.0
+KNEE_MAX_DEG = 180.0
 # The comfortable range of the knee angle (between thigh and shank) in the driving posture: 99-138 deg,
 # Porter and Gyi 1998 (Int. J. Vehicle Design 19(3) 255-266; 55 drivers' preferred postures, goniometer on the
 # right side), as Schmidt et al. 2014 reproduce it (Applied Ergonomics 45, 247-260, Table 1, p. 251). Read in
@@ -415,7 +416,8 @@ def body_fit(design: dict) -> dict[str, tuple[float, str]]:
     foot_room (the big person's feet to the nearest body other than what they rest on), foot_support
     (how far inside the floor's edge in plan the feet are), leg_clearance (the big person's thighs and
     shanks to the nearest body, as capsules), pedal_reach (the small person's ball of the foot onto the
-    pedal: the hip-ankle distance with the knee at KNEE_MAX_DEG less the distance needed), knee_angle_room (the
+    pedal: the hip-ankle distance of the straight leg less the distance needed; negative only when the foot
+    does not reach), knee_angle_room (the
     smaller of knee_angle_margins over the big and the small person: the pedal foot's knee angle inside
     KNEE_COMFORT_DEG, as mm of the hip-ankle distance) and wheel_reach
     (the small person's arm reach, C3 - C16, less the distance from the shoulder to the grip on the
@@ -471,7 +473,7 @@ def body_fit(design: dict) -> dict[str, tuple[float, str]]:
 
 def pedal_margin(pose: Pose, knee_max: float = KNEE_MAX_DEG) -> float:
     """How much closer (mm, negative: farther) the right ankle is to the hip than the leg reaches
-    with the knee at knee_max."""
+    with the knee at knee_max (default: straight, so negative only when the foot does not reach)."""
     s = SIZES[pose.size]
     l1, l2 = _links(s)
     g = pose.legs["R"]

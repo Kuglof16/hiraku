@@ -224,9 +224,10 @@ class KneeRoomClosedFormTest(unittest.TestCase):
     def test_run10_is_the_columns_box(self):
         d = build()
         self.assertAlmostEqual(self.check(d), -39.25, delta=0.005)
-        # what the experiment read off its run 10: knee room -39.25 mm at the column, pedal reach -22.36 mm
+        # what the experiment read off its run 10: knee room -39.25 mm at the column, pedal reach -22.36 mm (then
+        # against a 150 deg knee); pedal reach is now against the straight leg: the small person reaches, 2.93 mm
         f = people.fit(d)
-        self.assertAlmostEqual(f["pedal_reach.occupant_R"][0], -22.36, delta=0.005)
+        self.assertAlmostEqual(f["pedal_reach.occupant_R"][0], 2.93, delta=0.005)
 
     def test_along_x_and_the_angle(self):
         """While the column is the part at knee height: +1 mm per mm of steering_x, -1 per mm of seat_x, and

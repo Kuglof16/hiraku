@@ -72,7 +72,7 @@ class V1Test(unittest.TestCase):
         res = {r["quantity"]: r for r in rec["results"]}
         self.assertAlmostEqual(res["knee_angle_room"]["value"], v, places=9)
         self.assertEqual(res["knee_angle_room"]["unit"], "mm")
-        self.assertAlmostEqual(res["pedal_reach"]["value"], -22.36, delta=0.005)
+        self.assertAlmostEqual(res["pedal_reach"]["value"], 2.93, delta=0.005)  # the straight leg reaches
         self.assertAlmostEqual(res["knee_room"]["value"], -69.3, delta=0.05)
 
 
