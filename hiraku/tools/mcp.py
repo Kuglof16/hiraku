@@ -161,8 +161,8 @@ def for_agent(name: str, result: Any) -> Any:
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
 ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "write_report")
-NO_CALLER = ("{tool} は呼んだ役が分からないので断りました (PreToolUse の hook がこの呼び出しを記録していません)。"
-             "同じ入力でもう一度呼んでください。続けて断られるときは、hooks がつながっているかを確かめてください")
+NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
+             "見つかりません)。同じ入力でもう一度呼んでください")
 
 
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:

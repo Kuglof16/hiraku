@@ -272,6 +272,22 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(denied["text"], out["hookSpecificOutput"]["permissionDecisionReason"])
         self.assert_events_fit()
 
+    def test_japanese_arguments_reach_the_server_as_sent(self):
+        """Claude Code sends the hook input as UTF-8 bytes (not \\u escapes). Read in the process's code
+        page (cp932 on a Japanese Windows) they would give another Attribution key than the server's, and
+        the server would refuse write_report for want of a caller."""
+        args = {"summary": "強度は合格 (判定は記録の ID で)", "next": []}
+        body = json.dumps({"hook_event_name": "PreToolUse", "tool_name": TOOL("write_report"), "tool_input": args},
+                          ensure_ascii=False).encode("utf-8")
+        env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "PYTHONUTF8")}
+        env["PYTHONIOENCODING"] = "cp932"  # the console code page a Japanese Windows gives a piped stdin
+        p = subprocess.run([sys.executable, "-m", "hiraku", "hook", "PreToolUse", "--runs", str(self.runs)],
+                           cwd=REPO_ROOT, input=body, capture_output=True, timeout=120, env=env)
+        self.assertEqual(p.returncode, 0, p.stderr.decode("utf-8", "replace"))
+        self.assertEqual(json.loads(p.stdout.decode("utf-8")), {})
+        self.server.drain()
+        self.assertEqual(self.server.attribution.take(contract.mcp_name("write_report"), args), "lead")
+
     def test_hk3_deny(self):
         pred = self.predict()
         ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",

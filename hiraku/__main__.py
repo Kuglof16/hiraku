@@ -186,8 +186,11 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     # a piped stdout on Windows defaults to the locale code page (cp932 here), which cannot
-    # write the summaries' "≤"; write UTF-8 so pipes and files get every character
+    # write the summaries' "≤"; write UTF-8 so pipes and files get every character. stdin too:
+    # Claude Code sends the plugin's hook commands UTF-8
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
     sys.exit(main())
