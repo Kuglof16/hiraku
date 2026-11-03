@@ -212,7 +212,7 @@ class R3StressRangeTest(unittest.TestCase):
         self.assertEqual(q, "stress_range")
         self.assertLess(r["fatigue_damage"]["value"], bed.R3_TINY_DAMAGE)
         self.assertEqual(bed.r3_compared_quantity(1e-13, 2e-14), "stress_range")
-        self.assertEqual(bed.r3_compared_quantity(1e-13, 2e-9), "fatigue_damage")
+        self.assertEqual(bed.r3_compared_quantity(1e-13, 2e-5), "fatigue_damage")  # 1e-6 x the limit 1
 
 
 if __name__ == "__main__":

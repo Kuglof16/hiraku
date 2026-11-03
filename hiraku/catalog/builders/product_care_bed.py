@@ -338,7 +338,9 @@ R5_RAIL_STEP = {
                      "assumptions": ["上の棒は柱の上に載った梁 (柱は押す向きのばねと、ねじりのばね)", "柱の根元 (受け口) は回らない",
                                      "差し込みの筒の中では柱と筒が 1 本の管として曲がる",
                                      "ガセットは柱の両わきの 2 枚の板、根元で柱の太さ、先で 0 (4 段に分けて段の真ん中の深さ)",
-                                     "受け口は柱の根元のモーメントとねじりを受ける角管"],
+                                     "受け口は柱の根元のモーメントとねじりを受ける角管",
+                                     "床の枠の横の部材は入れない: 柱をとても強くすると (柱 4 本とガセット 150 mm など) いちばん大きい"
+                                     "応力が横の部材に移り、この式の届く範囲の外になる"],
                      "inputs": {k: f"from.{k}" for k in RAIL_INPUTS}, "inputs_from": r5_rail_inputs}],
 }
 
@@ -486,7 +488,7 @@ def r3_uses(spec: Record, req: Record, design: Record) -> Record:
         "requirement_keys": ["Q92", *keys],
         "criterion": {"quantity": "fatigue_damage", "op": "<", "limit": q(1.0, "1"),
                       "basis": "Miner's rule over the counts of Q92: the welds last while the damage stays below 1",
-                      "requirement_keys": ["Q92"]},
+                      "requirement_keys": ["Q92"], "stand_in_quantity": "stress_range"},
         "tolerance_rel": tolerance(spec, R3_TOL),
     }
 
@@ -538,8 +540,8 @@ R3_PREDICTIONS = [{"quantity": "fatigue_damage", "formula_id": "bed.use_damage",
                    "inputs": {k: f"from.{k}" for k in R3_INPUTS}, "inputs_from": r3_inputs}]
 
 # When the K0 and the tool damages are both below this, their ratio means nothing (a range far below the knee): the
-# comparison is made on stress_range instead (HIRAKU's choice)
-R3_TINY_DAMAGE = 1e-12
+# comparison is made on stress_range instead. The contract's criterion.stand_in_quantity rule: 1e-6 x the limit (1)
+R3_TINY_DAMAGE = 1e-6 * 1.0
 
 
 def r3_compared_quantity(k0_damage: float, tool_damage: float) -> str:

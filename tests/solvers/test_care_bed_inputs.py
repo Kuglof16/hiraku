@@ -60,6 +60,11 @@ class BedInputsTest(unittest.TestCase):
         self.assertIn("H1", picked)
         self.assertNotIn("H3", picked)
 
+    def test_r3_names_its_stand_in(self):
+        crit = self.cases["R3-uses"]["criterion"]
+        self.assertEqual(crit["stand_in_quantity"], "stress_range")
+        self.assertEqual(bed.R3_TINY_DAMAGE, 1e-6 * crit["limit"]["value"])  # the contract's 1e-6 x the limit
+
     def test_other_load_cases_have_none(self):
         self.assertEqual(bed.predictions_for({"load_case_id": "R1-rest", "test_id": "R1"}), [])
         self.assertEqual(bed.inputs_for(self.design, {"load_case_id": "R1-rest", "test_id": "R1"}), {})
