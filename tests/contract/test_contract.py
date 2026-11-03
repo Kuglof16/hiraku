@@ -193,6 +193,13 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_element": [1.0]}), [])
         self.assertNotEqual(contract.errors("mesh", {**m, "elements": [[0, 1]]}), [])
 
+    def test_report_issues(self):
+        issue = {"kind": "missing_tool", "what": "no tool for the roll-over cage load", "where": "R4-rops",
+                 "record_ids": ["ana-0003"], "workaround": "made a tool in the run"}
+        self.assertEqual(contract.errors("issue", issue), [])
+        self.assertNotEqual(contract.errors("issue", {**issue, "kind": "bug"}), [])
+        self.assertEqual(contract.errors("tool_input.write_report", {"summary": "s", "next": [], "issues": [issue]}), [])
+
     def test_project_driver(self):
         ev = next(e for e in events() if e["kind"] == "run.started")
         for driver in ("scripted", "agent_sdk", "claude_code_plugin"):

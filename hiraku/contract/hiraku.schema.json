@@ -4136,6 +4136,12 @@
         },
         "summary": {
           "type": "string"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
         }
       }
     },
@@ -4206,6 +4212,13 @@
               }
             }
           }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          },
+          "description": "Optional: where HIRAKU itself was in the way during this run."
         }
       }
     },
@@ -4521,6 +4534,47 @@
           },
           "uniqueItems": true,
           "description": "使わない規則の番号"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "what"
+      ],
+      "description": "Where the run got stuck or had to work around HIRAKU itself (not a design result): input for improving HIRAKU.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "missing_tool",
+            "missing_formula",
+            "assumed_value",
+            "unexplained_mismatch",
+            "tool_error",
+            "unclear_instruction",
+            "other"
+          ]
+        },
+        "what": {
+          "type": "string",
+          "description": "What was missing or went wrong, in one or two sentences."
+        },
+        "where": {
+          "type": "string",
+          "description": "Load case, tool or step."
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Records that show it (ana-, pred-, cmp-, cause-, tool ids)."
+        },
+        "workaround": {
+          "type": "string",
+          "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
         }
       }
     }
