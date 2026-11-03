@@ -248,6 +248,15 @@ class IntakeTest(unittest.TestCase):
         req = load("requirements_file.json")
         self.assertEqual(contract.errors("requirements_file", {**req, "stop_after": "picks"}), [])
         self.assertNotEqual(contract.errors("requirements_file", {**req, "stop_after": "design"}), [])
+        ev = next(e for e in events() if e["kind"] == "run.started")
+        self.assertEqual(contract.errors("project", {**ev["data"], "stop_after": "picks"}), [])
+
+    def test_hearing_by_claude(self):
+        req = load("requirements_file.json")
+        self.assertEqual(contract.errors("requirements_file", {**req, "hearing": "claude"}), [])
+        self.assertNotEqual(contract.errors("requirements_file", {**req, "hearing": "person"}), [])
+        ev = next(e for e in events() if e["kind"] == "run.started")
+        self.assertEqual(contract.errors("project", {**ev["data"], "hearing": "claude"}), [])
 
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")

@@ -211,7 +211,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `tests/` の下で `def test_` を数えると、149 ファイルに 1,910 個ある (全部の部署を合わせた試しの取り込み fdc7948 の時点)。
+  - `tests/` の下の試験の関数 (`def test_`) は、149 ファイルに 1,909 個ある (全部の部署を合わせた試しの取り込み fdc7948 の時点。文字列の中にある 1 つ、`tests/verification/test_run_tests.py` が一時の試験を書くための見本は数えない)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
@@ -274,7 +274,9 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 
 - 空の HDRI「Kloofendal 48d Partly Cloudy (Pure Sky)」1k (https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky)
 - 地面の質感「Dirt Floor」と「Brushed Concrete」の 1k の JPG (diff・nor_gl・arm) (https://polyhaven.com/a/dirt_floor、https://polyhaven.com/a/brushed_concrete)
-- 置き場所は `web/assets/polyhaven/`。一覧はそのフォルダの `NOTES.md`
+- 地平の見える空の HDRI「Kloofendal 48d Partly Cloudy」1k (https://polyhaven.com/a/kloofendal_48d_partly_cloudy)
+- 砂利道の質感「Gravel Road」の 1k の JPG 3 枚 (https://polyhaven.com/a/gravel_road)
+- 置き場所は `web/assets/polyhaven/` (合計 10.3 MB、1 ファイルの最大 1.64 MB)。一覧はそのフォルダの `NOTES.md`
 
 ### 出典の本文を確かめた値
 

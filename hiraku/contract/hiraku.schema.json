@@ -282,6 +282,13 @@
             "picks"
           ],
           "description": "A run that ends on purpose after an early step. picks: after domains.picked and the hearing (records for picking domains only; no design is made). The run ends done, with the reason saying so."
+        },
+        "hearing": {
+          "enum": [
+            "code",
+            "claude"
+          ],
+          "description": "Who settles the missing requirement items. code (missing = code): start_run fills them from the file and defaults before the agents start. claude: start_run leaves them open and the lead asks the person with ask_user (wait_seconds). Copied to the project when the run starts."
         }
       }
     },
@@ -3121,6 +3128,19 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "stop_after": {
+          "enum": [
+            "picks"
+          ],
+          "description": "Copied from the requirements file's stop_after when the run starts, so every process that opens the run reads it."
+        },
+        "hearing": {
+          "enum": [
+            "code",
+            "claude"
+          ],
+          "description": "Who settles the missing requirement items. code (missing = code): start_run fills them from the file and defaults before the agents start. claude: start_run leaves them open and the lead asks the person with ask_user (wait_seconds). Copied to the project when the run starts."
         }
       }
     },
