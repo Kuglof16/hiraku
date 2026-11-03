@@ -137,18 +137,23 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
     crit = load_case.get("criterion")
     if crit is None:
         return []
-    latest: dict[str, Record] = {}
+    latest: dict[tuple[str, str | None], Record] = {}
     stand_in_name, stand_in = crit.get("stand_in_quantity"), None
     for c in ctx.store.records("comparison", version):
         pred = ctx.prediction(c["prediction_id"])
         if pred is None or pred["load_case_id"] != load_case["load_case_id"]:
             continue
         tool = (ctx.store.get("analysis", c["analysis_id"]) or {}).get("tool")
+        q = c["quantity"].partition(".")[0]  # a per-place result <q>.<place> is q at that place
         if stand_in_name and c["quantity"] == stand_in_name:
             stand_in = c  # the result compared is the stand-in quantity (comparisons come in order)
-        elif c["quantity"] in (crit["quantity"], judged_quantity(ctx, tool, crit["quantity"])) \
-                or pred["quantity"] == crit["quantity"]:
-            latest[c["quantity"]] = c  # comparisons come in the order they were made
+        elif q in (crit["quantity"], judged_quantity(ctx, tool, crit["quantity"])) \
+                or pred["quantity"].partition(".")[0] == crit["quantity"]:
+            latest[(q, c.get("where"))] = c  # comparisons come in the order they were made
+    if any(place for _, place in latest):
+        # docs/contract.md 場所ごとの予測: with per-place comparisons, the hand calculation's own maximum compared
+        # with the tool's maximum (no place) is kept in the record but does not decide (b)
+        latest = {k: c for k, c in latest.items() if k[1]}
     if stand_in is not None:
         tiny = STAND_IN_BELOW * abs(crit["limit"]["value"])
         for q, c in list(latest.items()):

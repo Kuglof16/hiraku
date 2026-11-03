@@ -325,6 +325,59 @@ class CompareWhereTest(RunCase, unittest.TestCase):
             compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"], "where": "rail_R9"})
         self.assertIn("cross_B, rail_L0", str(cm.exception))
 
+    def _per_place(self, r1, place):
+        from hiraku.tools.functions import record_prediction
+
+        inputs = self.ctx.prediction(r1["prediction_id"])["inputs"]
+        return record_prediction(self.ctx, {
+            "load_case_id": "R1-step100", "quantity": f"max_stress.{place}", "formula_id": "frame_static.rail_bending",
+            "output": "sigma", "inputs": inputs, "assumptions": ["test"]})
+
+    def test_a_per_place_prediction_is_compared_at_its_place(self):
+        r1, _ = self._r1_with_cross(1.05)  # cross_B is the failing end, within the tolerance of the rail's sigma
+        own = self._per_place(r1, "cross_B")
+        ana = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                 "prediction_ids": [r1["prediction_id"], own["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": own["prediction_id"], "analysis_id": ana["analysis_id"]})
+        cross = next(r for r in ana["results"] if r.get("where") == "cross_B")
+        self.assertEqual(out["comparison"]["where"], "cross_B")
+        self.assertEqual(out["comparison"]["analyzed"]["value"], cross["value"])
+        self.assertEqual(out["comparison"]["status"], "match")
+        self.assertIsNotNone(out["verdict"])  # a match at the failing end makes the verdict
+        self.assert_events_fit()
+
+    def test_a_whole_prediction_uses_the_per_place_one_at_the_failing_end(self):
+        r1, _ = self._r1_with_cross(2.0)
+        own = self._per_place(r1, "cross_B")
+        ana = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                 "prediction_ids": [r1["prediction_id"], own["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertEqual(out["comparison"]["where"], "cross_B")
+        self.assertEqual(out["comparison"]["prediction_id"], own["prediction_id"])
+
+    def test_a_per_place_prediction_outside_the_analysis_is_not_used(self):
+        r1, ana = self._r1_with_cross(2.0)
+        self._per_place(r1, "cross_B")  # recorded after the analysis ran
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertEqual(out["comparison"]["prediction_id"], r1["prediction_id"])
+
+    def test_max_against_max_does_not_decide_b_once_places_are_compared(self):
+        from hiraku.tools.judge import held_cases
+
+        r1, _ = self._r1_with_cross(2.0)
+        own = self._per_place(r1, "cross_B")
+        ana = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                 "prediction_ids": [r1["prediction_id"], own["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": own["prediction_id"], "analysis_id": ana["analysis_id"]})
+        base = out["comparison"]
+        match = dict(base, comparison_id="cmp-9998", status="match", predicted=dict(base["analyzed"]), diff_rel=0.0)
+        self.ctx.store.add_record("comparison", match, design_version=1, agent="cae.strength", domain="strength")
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", 1))
+        maxes = {k: v for k, v in match.items() if k != "where"}  # K0's own maximum against the tool's, no place
+        miss = dict(maxes, comparison_id="cmp-9999", status="mismatch", analyzed={"value": 1e4, "unit": "MPa"}, diff_rel=9.0)
+        self.ctx.store.add_record("comparison", miss, design_version=1, agent="cae.strength", domain="strength")
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", 1))  # kept in the record, not used for (b)
+
     def test_the_mcp_schema_takes_where(self):
         from hiraku.tools.mcp import INPUT_SCHEMAS
 
