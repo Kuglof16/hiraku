@@ -99,7 +99,7 @@ console.log(JSON.stringify(out));
         self.assertEqual(got["offroad-4w"]["checks"], 31)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
-        self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
+        self.assertEqual(got["offroad-4w"]["open"], 0)  # the sample answers cover every question
         self.assertEqual(got["care-bed"]["open"], 0)
         self.assertGreater(got["care-bed"]["reqs"], 15)
 
