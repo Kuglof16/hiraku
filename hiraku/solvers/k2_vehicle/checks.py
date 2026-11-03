@@ -15,8 +15,11 @@
 
 from __future__ import annotations
 
+import json
 import math
+import os
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -293,13 +296,61 @@ def check_tyre() -> list[dict]:
     ]
 
 
+CACHE_ENV = "HIRAKU_CHECK_CACHE"  # "1": the tests' runs keep check results on disk (never a real HIRAKU run)
+FROM_CACHE: set[str] = set()       # the check sets this process took from the disk cache
+
+
+@lru_cache(maxsize=1)
+def code_key() -> str:
+    """Hash of everything K2's checks depend on: the K2 package, the K0 helpers it calls, the
+    loading rule, the tyre data, and the numpy and scipy versions."""
+    import hashlib
+
+    import scipy
+
+    here = Path(__file__).resolve().parent
+    repo = here.parents[2]
+    files = sorted(here.rglob("*.py")) + [repo / "hiraku" / "solvers" / "k0_handcalc" / n for n in ("rigid.py", "sections.py")]
+    files += [repo / "hiraku" / "contract" / "loading.py"] + sorted((repo / "data" / "tyres").glob("*.json"))
+    h = hashlib.sha256()
+    for p in files:
+        h.update(p.relative_to(repo).as_posix().encode())
+        h.update(p.read_bytes())
+    h.update(f"numpy {np.__version__} scipy {scipy.__version__}".encode())
+    return h.hexdigest()[:20]
+
+
+def cached(name: str, compute) -> list[dict]:
+    """compute(), or with HIRAKU_CHECK_CACHE=1 the records kept for the same code_key under
+    runs/.check_cache (made there the first time). Only the tests set the variable: a real
+    HIRAKU run computes its checks every time."""
+    if os.environ.get(CACHE_ENV) != "1":
+        return compute()
+    path = Path(__file__).resolve().parents[3] / "runs" / ".check_cache" / f"k2-{code_key()}-{name}.json"
+    try:
+        out = json.loads(path.read_text(encoding="utf-8"))
+        FROM_CACHE.add(name)
+        return out
+    except (OSError, ValueError):
+        pass
+    out = compute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(out), encoding="utf-8")
+    os.replace(tmp, path)
+    return out
+
+
 @lru_cache(maxsize=1)
 def _base() -> tuple:
-    out = []
-    for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt, check_parked_on_slope,
-               check_tyre):
-        out += fn()
-    return tuple(out)
+    def compute():
+        out = []
+        for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt,
+                   check_parked_on_slope, check_tyre):
+            out += fn()
+        return out
+
+    return tuple(cached("base", compute))
 
 
 def base_checks() -> list[dict]:
