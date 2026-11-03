@@ -315,7 +315,11 @@ class Runs(unittest.TestCase):
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")
         v = 35.0 / 3.6
-        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * 0.6 * 9.80665), delta=0.05 * r["braking_distance"])
+        # the wheels lock: the Magic Formula tyre slides at kappa = -1, below its peak mu 0.6
+        veh = build_vehicle(on_board(demo_design(), "two_cargo"), {"mu": 0.6})
+        mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / veh.m_total / 9.80665
+        self.assertLess(mu_lock, 0.6)
+        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * mu_lock * 9.80665), delta=0.05 * r["braking_distance"])
         self.assertEqual(r["min_rear_wheel_load"], r["min_wheel_load"])  # load moves forward: a rear wheel is lightest
         self.assertGreater(r["max_pitch"], 0.0)  # nose down
 

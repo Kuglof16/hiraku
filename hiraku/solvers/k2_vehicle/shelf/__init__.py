@@ -1,6 +1,6 @@
 """K2 scenarios as contract AnalysisTools (hiraku.contract.protocols.AnalysisTool).
 
-Each tool: spec() -> tool_spec, check() -> tool_check list (the six pre-run
+Each tool: spec() -> tool_spec, check() -> tool_check list (the seven pre-run
 checks plus the tool's own known answers), run(design, load_case,
 predictions, params) -> analysis record without analysis_id.
 

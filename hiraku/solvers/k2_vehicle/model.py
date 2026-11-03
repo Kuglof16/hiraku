@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import kinematics
+from .magic_formula import DEFAULT_TYRE, MF61, load_coefficients
 from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
@@ -82,6 +83,7 @@ class Corner:
     c_rr: float = 0.015
     static_load: float = 0.0
     mirror: int = -1
+    mf: MF61 | None = None  # the wheel's Magic Formula tyre (None: legs and casters)
 
     @property
     def dof(self) -> bool:
@@ -247,6 +249,7 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     m_total, cg_total, m_s, cg_s, i_s = _body(items, sprung_items, symmetric)
     loads = _static_loads(corners, m_total, cg_total, symmetric)
     _settle(corners, loads, sups, design, st, notes)
+    _tyres(corners, notes)
     side_area, side_cp, front_area, front_cp = _aero(items, corners, symmetric, notes)
     x_ref, l_steer = _steering(corners, cg_total)
     return Vehicle(
@@ -495,6 +498,31 @@ def _settle(corners: list[Corner], loads: np.ndarray, sups: list[dict], design: 
                 c.c_lat = _var(design, "tire_cornering_coeff", "1", notes) * f
     if _given(design, "tyre_relaxation_length") is None:
         notes.append(DEFAULTS["tyre_relaxation_length"][2])
+
+
+def _tyres(corners: list[Corner], notes: list[str], name: str = DEFAULT_TYRE):
+    """The Magic Formula tyre of every wheel: one coefficient file scaled to the vehicle.
+
+    Nominal load = the mean static load of the wheels (one tyre size for the vehicle),
+    R0 = the wheel's radius; the scaling factors make, at each wheel's static load, the
+    peak friction mu (both directions), the slip stiffness c_long and the cornering
+    stiffness c_lat, so that the hand calculations (K0), which take those numbers, see the
+    same tyre at small slip."""
+    wheels = [c for c in corners if c.kind == "wheel"]
+    if not wheels:
+        return
+    coeffs = load_coefficients(name)
+    fz0 = sum(c.static_load for c in wheels) / len(wheels)
+    for c in wheels:
+        base = MF61(coeffs, fz0=fz0, r0=c.radius)
+        fz = c.static_load
+        c.mf = MF61(coeffs, fz0=fz0, r0=c.radius, lmux=c.mu / base.mu_x(fz), lmuy=c.mu / base.mu_y(fz),
+                    lkx=c.c_long / base.kxk(fz), lky=c.c_lat / abs(base.kya(fz)))
+    notes.append(f"tyre forces: Magic Formula 6.1 with the coefficients of the {coeffs['tyre']} tyre "
+                 f"({coeffs['source']['title']}; not checked against the book), scaled to this vehicle: nominal "
+                 f"load {fz0:.0f} N (the mean static wheel load), R0 = the wheel radius, and at each wheel's static "
+                 "load the peak friction = mu and the slopes at zero slip = the stiffnesses K2 took (design or "
+                 "defaults above)")
 
 
 def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):
