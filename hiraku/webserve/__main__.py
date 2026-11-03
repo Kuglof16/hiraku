@@ -1,9 +1,10 @@
-"""python -m hiraku.webserve [--port 8765] [--host 127.0.0.1] [--runs runs] [--saved showcase] [--default-run ID]"""
+"""python -m hiraku.webserve [--port 8765] [--host 127.0.0.1] [--runs runs] [--saved showcase] [--default-run ID] [--open]"""
 
 from __future__ import annotations
 
 import argparse
 import sys
+import webbrowser
 from pathlib import Path
 
 from hiraku.webserve.launch import KEY_NAME
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--web", default=str(WEB_DIR), help="folder of the screen files (default: web/ of this repository)")
     p.add_argument("--layout", default=str(LAYOUT_FILE), help="the video's layout rules served as /layout.json (default: promo/screens/layout.json)")
     p.add_argument("--quiet", action="store_true", help="do not log each request")
+    p.add_argument("--open", action="store_true", help="open the screen in the default browser once the server listens")
     args = p.parse_args(argv)
 
     server = make_server(args.host, args.port, Path(args.runs), Path(args.web), quiet=args.quiet,
@@ -36,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     if launcher:
         claude = "and with Claude" if launcher.claude_ready() else f"(with Claude only when {KEY_NAME} is set in this window)"
         print(f"  start a run from the screen: scripted {claude}: http://{host}:{port}/?list=1", flush=True)
+    if args.open:
+        # the socket already listens (make_server binds it), so the page finds the server
+        webbrowser.open(f"http://{'127.0.0.1' if host in ('0.0.0.0', '') else host}:{port}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

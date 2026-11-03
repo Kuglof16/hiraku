@@ -2,7 +2,7 @@ import copy
 import unittest
 from unittest import mock
 
-from hiraku.agent.scripted import ScriptError, _reader, load_plan, resolve, run_scripted
+from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, resolve, run_scripted
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
@@ -304,6 +304,12 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
         self.assertEqual((plan["show_hk1"], plan["revise"], plan["rule_check"]), (True, ["r"], True))
         self.assertNotIn("extends", plan)
 
+    def test_has_plan(self):
+        self.assertTrue(has_plan("offroad-4w"))
+        self.assertTrue(has_plan("offroad-4w", "offroad-4w-n14"))
+        self.assertFalse(has_plan("serving-robot"))
+        self.assertFalse(has_plan("serving-robot", "requirements"))
+
     def test_inputs_from_by_name_reads_only_the_builders(self):
         from hiraku.catalog.builders import k2_tests
 
@@ -338,11 +344,17 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
         checked = self.ctx.store.records("rule_check")
         self.assertTrue(any(r["rule_id"].startswith(dropped[0]["data"]["doc"]["doc_id"]) for r in checked))
         # a part hit by a rule: the lead asks the person, once, naming the rule and the part from the record
-        hit = next(r for r in checked if r["hits"])
+        doc = dropped[0]["data"]["doc"]["doc_id"]
+        hits = [r for r in checked if r["hits"]]
+        mine = [r for r in hits if r["rule_id"].startswith(doc + "-")]
         asks = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and "規則に当たる部品" in e["text"]]
         self.assertEqual(len(asks), 1)
-        self.assertIn(hit["rule_id"], asks[0])
-        self.assertIn(hit["hits"][0]["part_id"], asks[0])
+        # the dropped file's rules are the ones asked about when they hit; else every hit
+        for r in mine or hits:
+            self.assertIn(r["rule_id"], asks[0])
+            self.assertIn(r["hits"][0]["part_id"], asks[0])
+        if mine:
+            self.assertFalse([r["rule_id"] for r in hits if r not in mine and r["rule_id"] in asks[0]])
         self.assert_events_fit()
 
 
