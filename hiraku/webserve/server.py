@@ -68,6 +68,8 @@ CONTENT_TYPES = {
     ".jsonl": "application/x-ndjson; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".hdr": "application/octet-stream",
     ".ico": "image/x-icon",
     ".txt": "text/plain; charset=utf-8",
 }
@@ -237,6 +239,24 @@ class _NullWriter:
         self._raw.flush()
 
 
+ASSET_DIR = "assets/polyhaven"  # web/js/look.js ASSET_DIR: Poly Haven files the user put there
+ASSET_SUFFIXES = {".hdr", ".exr", ".jpg", ".jpeg", ".png"}
+
+
+def list_assets(web_dir: Path) -> list[str]:
+    """The asset files under web/assets/polyhaven/, as '<id>/<file>' (sorted). They are
+    added by hand (web/assets/polyhaven/NOTES.md); the real look draws its own textures
+    when this is empty."""
+    root = Path(web_dir) / ASSET_DIR
+    if not root.is_dir():
+        return []
+    return sorted(
+        f"{p.parent.name}/{p.name}"
+        for p in root.glob("*/*")
+        if p.is_file() and p.suffix.lower() in ASSET_SUFFIXES
+    )
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "HirakuWebserve/0.1"
     web_dir: Path = WEB_DIR
@@ -247,6 +267,7 @@ class Handler(BaseHTTPRequestHandler):
     layout_file: Path = LAYOUT_FILE
     shelf: Shelf = Shelf()
     quiet: bool = False
+    assets: bool = True  # /api/assets lists the Poly Haven files (False: none, for the fall-back)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
         if not self.quiet:
@@ -272,6 +293,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/shelf":
             self._send_json(self.shelf.get())
+            return
+        if path == "/api/assets":
+            self._send_json({"files": list_assets(self.web_dir) if self.assets else []})
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:
@@ -456,12 +480,15 @@ def make_server(
     launcher: Launcher | bool | None = None,
     layout_file: Path | str = LAYOUT_FILE,
     shelf: Shelf | None = None,
+    assets: bool = True,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
     launcher: None starts runs into runs_dir with this process' environment;
     False turns starting runs off; or a Launcher to use. shelf: what /api/shelf
     answers (by default the solvers' shelf, computed on the first request).
+    assets: False makes /api/assets answer none (the screen then draws its own textures,
+    as without the files).
     """
     if launcher is None:
         launcher = Launcher(Path(runs_dir))
@@ -477,6 +504,7 @@ def make_server(
             "layout_file": Path(layout_file),
             "shelf": shelf or Shelf(),
             "quiet": quiet,
+            "assets": assets,
         },
     )
     return Server((host, port), handler)

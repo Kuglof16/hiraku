@@ -423,7 +423,8 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertGreater(got["step"]["x0"], 0.0)  # the step stands ahead of the front axle (x = 0)
                 self.assertFalse(got["limitButton"])  # climbing lifts a wheel: not a limit on a step
                 self.assertEqual(got["shadows"], look == "real")
-                self.assertEqual(got["standard"], "MeshStandardMaterial" if look == "real" else "MeshLambertMaterial")
+                # the real look's painted steel tubes have a clearcoat (look.js MATERIAL_OF)
+                self.assertEqual(got["standard"], "MeshPhysicalMaterial" if look == "real" else "MeshLambertMaterial")
                 page.close()
         finally:
             server.shutdown()
