@@ -20,12 +20,12 @@ from typing import Any, Callable
 
 MESHES = 4  # meshes kept (the demo frame's 10 mm mesh is about 30 MB in memory)
 FRAMES = 1  # factorised frames kept
-# A factorised frame is kept only when its estimated memory is at most FRAME_MAX_BYTES: SuperLU keeps
-# what it reserved while factorising, about FRAME_BYTES_PER_ELEMENT of committed memory per element
-# (the demo frame at 10 mm: 7.6 GB for 49,612 elements, of which about 2.7 GB is touched; measured
-# here with scipy's splu, an estimate for other frames). Larger frames are factorised for each use.
+# A factorised frame is kept only when its estimated memory is at most FRAME_MAX_BYTES: about
+# FRAME_BYTES_PER_ELEMENT of committed memory per element while it is kept (the demo frame at 10 mm: 1.8 GB
+# for 49,612 elements, 1.56 GB of it the factors; measured here with hiraku.solvers.sparse_lu, an estimate
+# for other frames). Larger frames are factorised for each use.
 FRAME_MAX_BYTES = 2_000_000_000
-FRAME_BYTES_PER_ELEMENT = 160_000
+FRAME_BYTES_PER_ELEMENT = 37_000
 
 
 def keep_frame(n_elements: int) -> bool:

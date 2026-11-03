@@ -40,14 +40,21 @@ class FrameCache(unittest.TestCase):
             _, hit2 = frame.shared_frame(lad, 40.0)
         self.assertEqual((hit1, hit2, len(frame._FRAMES)), (False, False, 0))
 
-    def test_demo_frame_estimate_is_not_kept(self):
-        self.assertFalse(cache.keep_frame(49_612))  # the demo frame at 10 mm: about 7.9 GB of factors
+    def test_demo_frame_estimate(self):
+        self.assertTrue(cache.keep_frame(49_612))  # the demo frame at 10 mm: about 1.8 GB
+        self.assertFalse(cache.keep_frame(4 * 49_612))  # and at 5 mm
 
 
 class ParallelBudget(unittest.TestCase):
-    def test_demo_base_alone_is_over_the_budget(self):
+    def test_demo_levels_fit_beside_the_base(self):
         with mock.patch.object(frame_shell, "_memory", return_value=(60e9, 0.3e9)):
-            ok, why = frame_shell.parallel_memory(49_612, [20.0, 5.0], 10.0)
+            ok, why = frame_shell.parallel_memory(49_612, [20.0, 5.0], 10.0)  # the 5 mm level is left out
+        self.assertTrue(ok, why)
+        self.assertIn("about 3.3 GB", why)
+
+    def test_large_base_is_over_the_budget(self):
+        with mock.patch.object(frame_shell, "_memory", return_value=(60e9, 0.3e9)):
+            ok, why = frame_shell.parallel_memory(90_000, [20.0], 10.0)
         self.assertFalse(ok)
         self.assertIn("over the 5.0 GB", why)
 

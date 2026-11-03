@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 
+from ..sparse_lu import superlu
 from . import element
 
 DOF_NAMES = ("ux", "uy", "uz", "rx", "ry", "rz")
@@ -250,8 +250,8 @@ def solver_assumption(name: str) -> str:
                 f"{PARDISO_REL_TOL:g} of each quantity's largest absolute value in the model (round-off of "
                 "two direct solvers; an assumption)")
     if name == "superlu":
-        return ("linear solver: SuperLU (scipy.sparse.linalg.splu, MMD_AT_PLUS_A ordering, symmetric mode, "
-                "no pivoting threshold)")
+        return ("linear solver: SuperLU (scipy.sparse.linalg.spilu with no dropping, the complete LU; "
+                "MMD_AT_PLUS_A ordering, symmetric mode, no pivoting threshold)")
     return f"linear solver: {name}"
 
 
@@ -307,8 +307,7 @@ class StaticSolver:
             if mod is not None:
                 self.lu = _Pardiso(Kr, mod)
             else:
-                self.lu = spla.splu(Kr, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0,
-                                    options={"SymmetricMode": True})
+                self.lu = superlu(Kr)
         except (RuntimeError, ValueError, ArithmeticError) as e:
             raise ValueError(f"the shell model cannot be solved ({e}): it is not held against all rigid-body "
                              f"motions or a part is not connected") from None

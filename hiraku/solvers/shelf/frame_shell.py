@@ -484,13 +484,13 @@ def zz_effects(res: dict, zz: dict) -> list[Record]:
 # memory, so the levels go to other processes only when this process's memory now plus the estimated
 # peak of every level solved at once stays within MEMORY_BUDGET (and within MEMORY_SHARE of the free
 # memory). The estimate of one level's peak is BYTES_PER_ELEMENT x its elements, measured on the demo
-# frame (10 mm, 49,612 elements: 8.0 GB of committed memory at the peak of one shell solve in one process
-# with one BLAS thread, 7.6 GB of it what SuperLU reserves while factorising, about 3 GB touched); an
-# estimate for other frames. With it the demo frame's 10 mm base alone is over the budget, so its levels
-# are solved one after another, each before the base level.
+# frame (10 mm, 49,612 elements: 2.3 GB of committed memory at the peak of one shell solve in one process
+# with one BLAS thread, factorised by hiraku.solvers.sparse_lu); an estimate for other frames. With it the
+# demo frame's 20 mm level goes to another process beside its 10 mm base (its 5 mm level is over
+# MAX_LEVEL_ELEMENTS).
 WORKERS = 2
 PARALLEL_MIN_ELEMENTS = 10_000  # a smaller base level is solved in a few seconds: no processes for it
-BYTES_PER_ELEMENT = 160_000
+BYTES_PER_ELEMENT = 48_000
 MEMORY_BUDGET = 5_000_000_000
 MEMORY_SHARE = 0.6
 THREAD_ENV = {"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"}  # the levels' processes: one BLAS thread

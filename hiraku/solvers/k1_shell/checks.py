@@ -43,6 +43,17 @@ SRC_HEYWOOD = ("finite-width plate with a central hole in tension: Kt_net = 2 + 
 # ------------------------------------------------------------------ flat helpers
 
 
+def drilling_held(xy: np.ndarray) -> np.ndarray:
+    """rz of the node nearest the origin and of the node nearest to it. A flat quad grid loaded in its own plane
+    has two zero-energy patterns of the drilling rotation alone: opposite corners of every element turning equal
+    and opposite, rz(i, j) = (-1)^j g(i - j) with g of period 2, gives each element's centre and hourglass terms
+    nothing. Holding rz at two neighbouring nodes removes both; u, v and the stresses do not change."""
+    a = int(np.argmin(np.hypot(xy[:, 0], xy[:, 1])))
+    d = np.hypot(*(xy - xy[a]).T)
+    d[a] = np.inf
+    return 6 * np.array([a, int(np.argmin(d))]) + 5
+
+
 def flat_model(xy: np.ndarray, quads: np.ndarray, t: float, E: float = E_ST, nu: float = NU_ST,
                **kw) -> ShellModel:
     n = len(quads)
@@ -125,7 +136,8 @@ def inplane_cantilever(nx: int = 8, ny: int = 2, incompatible: bool = True, L: f
     mid = root[np.argmin(np.abs(xy[root, 1]))]
     alln = np.arange(len(xy))
     # in-plane problem: hold w, rx, ry everywhere; root free to contract (only ux, and uy at the middle)
-    fixed = np.concatenate([dofs_of(root, "x"), dofs_of(mid, "y"), dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4])
+    fixed = np.concatenate([dofs_of(root, "x"), dofs_of(mid, "y"), dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4,
+                            drilling_held(xy)])
     I = t * h**3 / 12.0
     M = 1.0e5
     F = np.zeros(model.n_dof)
@@ -356,7 +368,7 @@ def holed_plate_kt(W: float = 100.0, d: float = 25.0, length: float = 300.0, n_q
     xy, quads, col = holed_plate_mesh(W, d, length, n_quarter, n_radial, grading)
     model = flat_model(xy, quads, t)
     alln = np.arange(len(xy))
-    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4,
+    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, drilling_held(xy),
              dofs_of(np.nonzero(np.abs(xy[:, 0]) < 1e-9)[0], "x"), dofs_of(np.nonzero(np.abs(xy[:, 1]) < 1e-9)[0], "y")]
     F = np.zeros(model.n_dof)
     edge = np.nonzero(np.abs(xy[:, 1] - length / 2.0) < 1e-9)[0]
@@ -520,7 +532,8 @@ def l_plate_corner(n: int, a: float = 100.0, t: float = 1.0, sigma: float = 10.0
     model = flat_model(xy, quads, t)
     alln = np.arange(len(xy))
     on = lambda k, v: np.nonzero(np.abs(xy[:, k] - v) < 1e-9)[0]  # noqa: E731
-    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, dofs_of(on(1, 0.0), "y"), dofs_of(on(0, 0.0), "x")]
+    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, drilling_held(xy), dofs_of(on(1, 0.0), "y"),
+             dofs_of(on(0, 0.0), "x")]
     F = np.zeros(model.n_dof)
     for k, comp in ((1, 1), (0, 0)):  # edge y = 2a pulled along y, edge x = 2a along x
         edge = on(k, 2 * a)
