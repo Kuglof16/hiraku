@@ -7,14 +7,17 @@
   After any tool call of the lead's, it also carries what the person sent through
   the screen (inbox, hiraku.agent.inbox) and the lead has not been told yet.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
-  (hook.blocked_stop); blocks are counted and capped so a run always ends. The
+  (hook.blocked_stop); the lead's stop also while a tile is red and design revisions
+  are left (rules.red_left_reason); blocks are counted and capped so a run always
+  ends. A role's stop is blocked only on its own domain's pending cases. The
   lead's stop while a role is still running is neither blocked nor counted: the
   run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
   with a message from the person not yet told is blocked once with that message
   (not counted either).
 - The stop button (stop.request in the run folder): every tool call is denied
   and every stop is let through, so the run winds down (runner.converse).
-- SubagentStart / SubagentStop: agent.started / agent.stopped.
+- SubagentStart / SubagentStop: agent.started / agent.stopped. agent.started carries the
+  role's model and effort (models, filled by hiraku.agent.runner from the options).
 
 The decisions are plain methods (decide, one per event) shared by two drivers: the
 Agent SDK run (the async methods below, registered by matchers()) and the Claude Code
@@ -55,6 +58,7 @@ class Hooks:
         self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
         self.stop_requested = False  # set once stop.request is seen; it stays set
         self.for_lead: list[str] = []  # what the screen sent for the lead (inbox), not told yet
+        self.models: dict[str, dict[str, Any]] = {}  # contract agent id -> {"model", "effort"} for agent.started
         self.on_end: Callable[[], None] | None = None  # the lead's stop was let through (the plugin ends the run)
 
     # ------------------------------------------------------------------ state kept between calls
@@ -203,7 +207,8 @@ class Hooks:
             return {"decision": "block", "reason": told}
         if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
             return {}
-        reason = rules.stop_reason(self.ctx)
+        # HK4: a pending domain, or (red_left) a red tile while design revisions are left
+        reason = rules.stop_reason(self.ctx) or rules.red_left_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
             return self._end()
         self.stop_blocks += 1
@@ -223,7 +228,7 @@ class Hooks:
             return {}
         self.running[input_data.get("agent_id", "")] = agent
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        self.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
+        self.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **self.models.get(agent, {})})
         return {}
 
     async def subagent_stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
@@ -239,7 +244,7 @@ class Hooks:
             n = self.subagent_stop_blocks.get(agent, 0)
             if left and n < self.max_subagent_stop_blocks:
                 self.subagent_stop_blocks[agent] = n + 1
-                reason = rules.stop_reason(self.ctx) or ""
+                reason = rules.stop_reason(self.ctx, domain) or ""  # the role's own domain only
                 self.emit("hook.blocked_stop", agent=agent, domain=domain, text=reason, data={
                     "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })

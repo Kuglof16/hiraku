@@ -167,6 +167,20 @@ class PickResultTest(unittest.TestCase):
         self.assertEqual(_pick_result(ana, "max_stress")["where"], "a")  # no criterion: the largest in size
         self.assertEqual(_pick_result(ana, "free_steer_angle", at_most)["where"], "FR")  # criterion on another quantity
 
+    def test_a_result_named_by_result_quantity_gives_the_failing_end(self):
+        from hiraku.tools.functions import _pick_result
+
+        # the prediction is of the criterion's quantity; the analysis names it otherwise (result_quantity)
+        ana = {"analysis_id": "ana-0001", "results": [
+            {"quantity": "stress_at_joint", "value": -150.0, "unit": "MPa", "where": "a"},
+            {"quantity": "stress_at_joint", "value": 120.0, "unit": "MPa", "where": "b"},
+        ]}
+        at_most = {"quantity": "max_stress", "op": "<=", "limit": {"value": 160.0, "unit": "MPa"}}
+        self.assertEqual(_pick_result(ana, "stress_at_joint", at_most, "max_stress")["where"], "b")  # <=: the largest
+        at_least = dict(at_most, op=">=")
+        self.assertEqual(_pick_result(ana, "stress_at_joint", at_least, "max_stress")["where"], "a")  # >=: the smallest
+        self.assertEqual(_pick_result(ana, "stress_at_joint", at_most, "other")["where"], "a")  # not the criterion's
+
 
 class LeverRuleTest(RunCase, unittest.TestCase):
     def test_lever_rule_at_rest_overestimates_the_climbing_wheel(self):

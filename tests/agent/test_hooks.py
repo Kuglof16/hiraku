@@ -5,6 +5,7 @@ from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import agent_id_from_sdk, sdk_name
 from hiraku.tools import Attribution, rules
 from hiraku.tools.functions import analyze, compare
+from tests.agent.test_builders_revise import BuildersCase
 from tests.tools.helpers import RunCase
 
 
@@ -102,6 +103,52 @@ class HooksTest(RunCase, unittest.TestCase):
         compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})
         self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
 
+    def make_red(self):
+        """P1 matched, then R1 matched far past its limit: the strength tile is red, every case judged."""
+        ana, _, _ = self.run_p1()
+        orig = self.tools["frame_static"].run
+
+        def scaled(design, lc, preds, params):
+            out = orig(design, lc, preds, params)
+            out["results"][0]["value"] *= 100
+            return out
+
+        self.tools["frame_static"].run = scaled
+        r1 = self.predict_r1({"value": ana["results"][1]["value"] * 100, "unit": "N"})
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        ver = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})["verdict"]
+        self.assertFalse(ver["pass"])
+        return ver
+
+    def test_red_with_revisions_left_blocks_the_stop_up_to_the_cap(self):
+        from hiraku.agent.runner import end_status
+
+        ver = self.make_red()
+        self.assertIsNone(rules.stop_reason(self.ctx))  # every case judged
+        self.assertEqual(self.ctx.project["round_limit"], 1)  # version 1: one revision left
+        out = run(self.hooks.stop({"stop_hook_active": False}, None, None))
+        self.assertEqual(out["decision"], "block")
+        for needle in (ver["verdict_id"], "R1-step100", "あと 1 回", "revise_design", "強度信頼性"):
+            self.assertIn(needle, out["reason"])
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None))["decision"], "block")
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})  # cap reached
+        blocked = [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"]
+        self.assertEqual([(e["data"]["rule"], e["data"]["count"]) for e in blocked], [(rules.HK4, 1), (rules.HK4, 2)])
+        status, reason, code = end_status(self.ctx, self.hooks.stop_blocks)
+        self.assertEqual((status, code), ("stopped", "red_left"))
+        self.assertIn("止めるのを 2 回断ったあと", reason)
+        self.assertEqual(rules.judged_end(self.ctx)[2], "done")  # the scripted driver's end is unchanged
+        self.assert_events_fit()
+
+    def test_red_with_no_revision_left_may_stop(self):
+        from hiraku.agent.runner import end_status
+
+        self.make_red()
+        self.ctx.project["round_limit"] = 0
+        self.assertIsNone(rules.red_left_reason(self.ctx))
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
+        self.assertEqual(end_status(self.ctx)[::2], ("stopped", "round_limit"))
+
     def test_subagent_events(self):
         run(self.hooks.subagent_start({"agent_id": "a1", "agent_type": "cae-strength"}, None, None))
         run(self.hooks.subagent_start({"agent_id": "a2", "agent_type": "general-purpose"}, None, None))
@@ -120,6 +167,18 @@ class HooksTest(RunCase, unittest.TestCase):
     def test_matchers(self):
         m = self.hooks.matchers()
         self.assertEqual(set(m), {"PreToolUse", "PostToolUse", "Stop", "SubagentStart", "SubagentStop"})
+
+
+class RoleStopReasonTest(BuildersCase, unittest.TestCase):
+    def test_a_roles_stop_reason_names_its_own_domain_only(self):
+        hooks = Hooks(self.ctx, Attribution())
+        self.assertEqual({d for d, _ in rules.pending(self.ctx)}, {"strength", "assembly"})
+        run(hooks.subagent_start({"agent_id": "a1", "agent_type": "cae-strength"}, None, None))
+        out = run(hooks.subagent_stop({"agent_id": "a1", "agent_type": "cae-strength", "stop_hook_active": False},
+                                      None, None))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("R1-step100", out["reason"])
+        self.assertNotIn("H1-steer30", out["reason"])  # assembly's case is not the strength role's
 
 
 if __name__ == "__main__":

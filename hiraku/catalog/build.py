@@ -12,7 +12,7 @@ import math
 from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
-from hiraku.catalog.loading import CARGO, LOADING_JA, OCCUPANTS, parts_on_board
+from hiraku.catalog.loading import CARGO, LOADING_JA, OCCUPANTS, parts_on_board, person_of
 from hiraku.contract.protocols import DEFAULT_LOADING, LOADINGS
 
 Record = dict[str, Any]
@@ -52,22 +52,29 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
 
     Occupants and cargo live in the design as parts, but their masses come
     from the requirements; a design that disagrees would be judged under a
-    load nobody asked for.
+    load nobody asked for. A person may be split into body segments
+    (hiraku.contract.loading.person_of): the people on board are counted, and
+    each person's parts summed must weigh Q33.
     """
     try:
         on = parts_on_board(design, loading)
     except ValueError as e:  # occupant parts, but fewer than the loading names
         raise CatalogError(f"the design does not carry the requirements' load: {e}") from None
-    people = [p for p in on if p["kind"] == "occupant"]
+    people: dict[str, list[Record]] = {}
+    for p in on:
+        if p["kind"] == "occupant":
+            people.setdefault(person_of(p), []).append(p)
     cargo = [p for p in on if p["kind"] == "cargo"]
     problems = []
     if len(people) != OCCUPANTS[loading]:
-        problems.append(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {len(people)}")
+        problems.append(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts (people; a person may be "
+                        f"split into body segments), the design has {len(people)}")
     if people:
         m = requirement(req, "Q33", "kg")["value"]
-        off = [f"{p['id']} {p['mass_kg']:g} kg" for p in people if not math.isclose(p["mass_kg"], m, rel_tol=1e-6)]
+        weights = {who: sum(p["mass_kg"] for p in parts) for who, parts in people.items()}
+        off = [f"{who} {w:g} kg" for who, w in weights.items() if not math.isclose(w, m, rel_tol=1e-6)]
         if off:
-            problems.append(f"occupant parts must weigh Q33 = {m:g} kg: {', '.join(off)}")
+            problems.append(f"each person's occupant parts must weigh Q33 = {m:g} kg in total: {', '.join(off)}")
     if CARGO[loading]:
         m = requirement(req, "Q40", "kg")["value"]
         total = sum(p["mass_kg"] for p in cargo)
@@ -157,13 +164,14 @@ def _p1_step(spec: Record, req: Record, design: Record) -> Record | list[Record]
         "requirement_keys": ["Q15", *keys],
         "tolerance_rel": spec["tolerance_rel"],
     }
-    return [lc, _p1_wall(spec, design, loading, keys)] if suffix else lc
+    return [lc, _p1_wall(spec, design, loading, keys, taken=(lc["load_case_id"],))] if suffix else lc
 
 
-def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str]) -> Record:
+def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str], taken: tuple[str, ...] = ()) -> Record:
     """P1 past the limit at a step higher than the front wheel radius (WALL_STEP_RATIO r): judged on
     climbable (1 = climbs, by the push or at speed: step_climb_dynamic's result, predicted by
-    step_climb.climb_limit), which the case is meant to fail."""
+    step_climb.climb_limit), which the case is meant to fail. Its id is P1-step{h}-beyond, or
+    P1-wall{h}-beyond when that id is in `taken` (h rounds to BEYOND_STEP_MM, r about 227 mm)."""
     from hiraku.catalog.summary import design_summary
 
     r = design_summary(design).get("front_wheel_radius", {}).get("value")
@@ -171,8 +179,11 @@ def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str]) -> Rec
         raise CatalogError("the design has no wheels, so a step higher than the wheel cannot be set")
     h = round(WALL_STEP_RATIO * r)
     speed = spec["params"]["speed"]
+    lc_id = f"P1-step{h:g}{BEYOND_SUFFIX}"
+    if lc_id in taken:
+        lc_id = f"P1-wall{h:g}{BEYOND_SUFFIX}"
     return {
-        "load_case_id": f"P1-step{h:g}{BEYOND_SUFFIX}",
+        "load_case_id": lc_id,
         "test_id": "P1",
         "domain": spec["domain"],
         "title": f"{BEYOND_TITLE}: 車輪の半径 {r:g} mm より高い段差 {h:g} mm を{LOADING_JA[loading]}で越える",
@@ -316,7 +327,8 @@ def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: li
     catalog spec with variant "beyond"; P1 gives two). A test without a builder, or whose
     builder cannot build from these requirements and this design (CatalogError, or the
     builders' BuildError: both ValueError), raises; with `skipped` given it is
-    left out and (test id, reason) is appended there. Feeds join load cases of
+    left out and (test id, reason) is appended there. Two load cases with one id
+    raise CatalogError (always). Feeds join load cases of
     the same kind (_feeds): a case past the limit feeds the downstream case past the limit
     of the same step."""
     out = []
@@ -327,6 +339,12 @@ def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: li
             if skipped is None:
                 raise
             skipped.append((tid, f"{BEYOND_TITLE}: {e}" if past else str(e)))
+    seen: dict[str, str] = {}
+    for lc in out:
+        if lc["load_case_id"] in seen:
+            raise CatalogError(f"two load cases have the id {lc['load_case_id']} (tests {seen[lc['load_case_id']]} "
+                               f"and {lc['test_id']}); each load case needs its own id")
+        seen[lc["load_case_id"]] = lc["test_id"]
     feeds_of = feeds_map()
     for lc in out:
         feeds = [d["load_case_id"] for t in feeds_of.get(lc["test_id"], []) for d in out
