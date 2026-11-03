@@ -80,14 +80,15 @@ class Spring(ElementGroup):
         self.n_comp = 6 if rotations else 3
         self.name = name
 
-    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+    def relative_motion(self, nodes: np.ndarray) -> np.ndarray:
+        """L = R6 B (E, nc, 2 nc): the relative motion at p in the spring's local axes, L ue."""
         ne = len(self.conn)
         a, b = self.conn[:, 0], self.conn[:, 1]
         xa = nodes[a]
         xb = np.where((b >= 0)[:, None], nodes[np.where(b >= 0, b, 0)], xa)
         p = 0.5 * (xa + xb) if self.points is None else self.points
         nc = self.n_comp
-        K = np.zeros((ne, 2 * nc, 2 * nc))
+        L = np.zeros((ne, nc, 2 * nc))
         for e in range(ne):
             R = self.frames[e]
             if nc == 6:
@@ -101,24 +102,22 @@ class Spring(ElementGroup):
                 R6 = np.zeros((6, 6))
                 R6[:3, :3] = R
                 R6[3:, 3:] = R
-                L = R6 @ Bm
-                K[e] = L.T @ np.diag(self.k[e]) @ L
+                L[e] = R6 @ Bm
             else:
-                Bm = np.hstack([-np.eye(3), np.eye(3)])
-                L = R @ Bm
-                K[e] = L.T @ np.diag(self.k[e, :3]) @ L
-        return K
+                L[e] = R @ np.hstack([-np.eye(3), np.eye(3)])
+        return L
+
+    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+        L = self.relative_motion(nodes)
+        k = self.k[:, : self.n_comp]
+        return np.einsum("eai,ea,eaj->eij", L, k, L)
 
     def forces(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
-        """Spring forces and moments in local axes (E, 6) (or (E, 3)): k times the local relative motion."""
-        Ke = self.stiffness(nodes)
-        f = np.einsum("eij,ej->ei", Ke, ue)  # nodal forces; node b's part is +k * relative motion in global axes
-        nc = self.n_comp
-        fb = f[:, nc:]
-        if nc == 6:
-            return np.concatenate([np.einsum("eij,ej->ei", self.frames, fb[:, :3]),
-                                   np.einsum("eij,ej->ei", self.frames, fb[:, 3:])], axis=1)
-        return np.einsum("eij,ej->ei", self.frames, fb)
+        """Spring forces and moments in local axes (E, 6) (or (E, 3)): diag(k) R6 B ue, k times the local
+        relative motion at p. (Node b's nodal moment is not used: when the nodes are apart it also holds
+        (p - x_b) x F.)"""
+        L = self.relative_motion(nodes)
+        return self.k[:, : self.n_comp] * np.einsum("eij,ej->ei", L, ue)
 
 
 # ------------------------------------------------------------------ shell to solid

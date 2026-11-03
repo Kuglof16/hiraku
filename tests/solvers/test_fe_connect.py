@@ -463,6 +463,37 @@ class SpringTest(unittest.TestCase):
         r = precheck.rigid_body_energy(m)
         self.assertLess(r["energy_ratio"], 1e-14)
 
+    def test_offset_bushing_forces_are_k_times_relative_motion(self):
+        """Nodes 54 mm apart, p the mid-point, local axes turned: forces = k R du and moments = k_r R dtheta,
+        du the relative translation at p, for a translation only, a rotation only and both. Node b's nodal
+        moment is not the bushing's moment: it holds R ((p - x_b) x F) as well."""
+        xa, xb = np.array([0.0, 0.0, 0.0]), np.array([30.0, 40.0, -20.0])
+        p = 0.5 * (xa + xb)
+        R = np.linalg.qr(np.array([[1.0, 2.0, 0.5], [0.3, -1.0, 2.0], [1.0, 0.0, 1.0]]))[0].T
+        k = np.array([1e3, 2e3, 3e3, 1e5, 2e5, 3e5])
+        s = Spring([[0, 1]], k, frames=R)
+        nodes = np.array([xa, xb])
+        d, w = np.array([0.02, -0.05, 0.03]), np.array([1e-3, -2e-3, 4e-4])
+        cases = {
+            "translation": (np.zeros(6), np.r_[d, 0, 0, 0]),
+            # theta_b = w and u_b carrying p along: no translation at p, only the rotation
+            "rotation": (np.zeros(6), np.r_[-np.cross(w, p - xb), w]),
+            "both": (np.r_[0.01, 0.0, -0.02, 2e-4, 0.0, -1e-4], np.r_[d, w]),
+        }
+        for name, (ua, ub) in cases.items():
+            with self.subTest(name):
+                du = (ub[:3] + np.cross(ub[3:], p - xb)) - (ua[:3] + np.cross(ua[3:], p - xa))
+                dth = ub[3:] - ua[3:]
+                expect = k * np.r_[R @ du, R @ dth]
+                got = s.forces(nodes, np.r_[ua, ub][None, :])[0]
+                np.testing.assert_allclose(got, expect, rtol=1e-12, atol=1e-12 * np.abs(expect).max())
+                nodal_b = (s.stiffness(nodes)[0] @ np.r_[ua, ub])[6:]
+                F = R.T @ expect[:3]
+                np.testing.assert_allclose(R @ nodal_b[3:], expect[3:] + R @ np.cross(p - xb, F),
+                                           rtol=1e-12, atol=1e-12 * np.abs(expect).max())
+                if name != "rotation":
+                    self.assertGreater(np.abs(R @ nodal_b[3:] - expect[3:]).max(), 1e-3 * np.abs(expect[3:]).max())
+
 
 if __name__ == "__main__":
     unittest.main()
