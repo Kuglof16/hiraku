@@ -689,6 +689,34 @@ def _knee_length(design: dict, o: dict, seat: dict | None, seat_back: float) -> 
     return float(_extent(first)[0][0] - seat_back), first["id"]
 
 
+def slide_ends(design: dict) -> list[tuple[str, dict, set[str]]]:
+    """The design with the driver's seat (the seat of each occupant with a pedal) at each end of its slide:
+    [("front" | "rear", design copy, {seat part ids moved})]; [] without a slide. The seat's box is at the middle
+    of the travel in the design itself, so the interference at rest there does not see its ends."""
+    import copy
+
+    slide = seat_slide(design)
+    parts = design.get("parts", [])
+    if slide <= 0.0 or not any(p["kind"] in PEDAL_KINDS for p in parts):
+        return []
+    seats = [p for p in parts if p["kind"] == "seat"]
+    moved = {s["id"] for o in occupants(design) for s in [_seat_of(o, seats)]
+             if s is not None and _drives(design, o)}
+    out = []
+    for label, dx in (("front", slide / 2.0), ("rear", -slide / 2.0)):
+        d = copy.deepcopy(design)
+        for p in d["parts"]:
+            if p["id"] in moved:
+                p["box"]["center_mm"][0] = float(p["box"]["center_mm"][0]) + dx
+        out.append((label, d, moved))
+    return out
+
+
+def _drives(design: dict, occupant: dict) -> bool:
+    """Whether the occupant has a pedal in front of them (the driver)."""
+    return occupant["id"] in knee_angles(design)
+
+
 def knee_space(design: dict, ps: dict | None = None) -> dict[str, tuple[float, str]]:
     """For each occupant: (length mm from the seat back to the nearest part ahead at knee
     height, that part's id). Occupants with nothing ahead are left out. Parts turned by

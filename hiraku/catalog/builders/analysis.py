@@ -840,7 +840,8 @@ def r4_inputs(design: Record, load_case: Record) -> Record:
 
 _R4_ASSUME = ["ロールバーは柱 2 本と上の梁の骨組で、足は張り出しとレール (車輪の所まで) に立つ。塑性ヒンジを一つずつ入れて押し、"
               "横と後ろはエネルギーを吸うまで、上は力まで (力の前に崩れれば柱の長さ)",
-              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)"]
+              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)",
+              "運転席が前後にスライドする設計 (seat_slide) では、運転者の体の部分の箱は、H3 が大きい人 (AIST の若年男性 95 パーセンタイル) を座らせたスライドの中の位置にある。その位置で数が決まる"]
 R4_PREDICTIONS = [
     {"quantity": f"rops_{d}_deflection", "formula_id": fid, "output": out, "assumptions": list(_R4_ASSUME),
      "inputs": {**{k: f"from.{d}_{k}" for k in R4_PORTAL_INPUTS[d]}, **extra}, "inputs_from": r4_inputs}

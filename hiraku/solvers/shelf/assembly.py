@@ -13,6 +13,7 @@ from ..k4_geometry.assembly import is_attach
 from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
+from ..k4_geometry.people import slide_ends
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
@@ -127,6 +128,13 @@ class Assembly(BuiltinTool):
         design = on_board(design, load_case)
         bs = bodies(design)
         static = interferences(design, bs)
+        # the driver's seat at both ends of its slide (its box is at the middle): the overlaps of the moved seat
+        ends = []
+        for label, d_end, moved in slide_ends(design):
+            keys = {f"part:{pid}" for pid in moved}
+            ends += [(a, b, o, f"seat at the slide's {label} end") for a, b, o in interferences(d_end, bodies(d_end))
+                     if a in keys or b in keys]
+        static = sorted(static + [(a, b, o) for a, b, o, _ in ends], key=lambda t: -t[2])
         sw = sweep(design, bs)
         seq = steps(design, bs)
         people = fit(design)
@@ -155,8 +163,9 @@ class Assembly(BuiltinTool):
                 groups[g] = (float(v), where)
         for g, (v, where) in groups.items():
             results.append(result(g, v, "mm", where))
-        found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest", "condition": "at rest"}
-                 for a, b, o in static]
+        at_ends = {(a, b, o): c for a, b, o, c in ends}
+        found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest",
+                  "condition": at_ends.get((a, b, o), "at rest")} for a, b, o in static]
         found += [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "motion", "condition": c}
                   for a, b, o, c in sw["hits"]]
         out = {"results": results, "assembly": seq, "interferences": found, "assumptions": [HAND_WAY_RULE]}
