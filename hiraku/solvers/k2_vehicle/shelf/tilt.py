@@ -41,7 +41,8 @@ class TiltTool(K2Tool):
     """Tilt table (S1): turn the table slowly until the upper-side wheels carry no load.
 
     Results: tilt_angle (deg, the smaller side), tilt_angle_right, tilt_angle_left (deg),
-    static_stability_factor (1, T/2h on the settled vehicle), body_roll_at_tip (deg),
+    static_stability_factor (1, T/2h of the vehicle as designed: the supports' design
+    positions and the design CG, not the vehicle settled on its springs), body_roll_at_tip (deg),
     cg_shift_at_tip (mm, lateral CG shift against the contact line from suspension roll),
     friction_demand_at_tip (1, tan of the tip angle), slides_first (1: 1 if mu < the demand).
     """
@@ -101,8 +102,8 @@ class TiltTool(K2Tool):
             res.append(_res(f"tilt_angle_{side}", math.degrees(angles[side]), "deg"))
         ys = sorted(set(round(float(c[1]), 9) for c in cps))
         track = max(ys) - min(ys)
-        ssf_sim = _ssf(veh)
-        res.append(_res("static_stability_factor", ssf_sim, "1"))
+        ssf_design = _ssf(veh)
+        res.append(_res("static_stability_factor", ssf_design, "1"))
         roll_series = rec.ch["roll"]
         tip_i = len(rec.t) - 1
         for k, tt in enumerate(rec.t):

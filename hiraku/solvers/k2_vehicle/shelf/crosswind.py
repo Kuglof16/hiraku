@@ -16,7 +16,12 @@ from .base import (CD, FRONT_AREA, MU, RHO, SIDE_AREA, SIDE_CP_HEIGHT, TIPPED_RO
 
 def wind_ramp(veh, aero: Aero, from_left: bool = True, dt: float = 1e-3, fast: float = 5.0, slow: float = 1.0,
               slow_below: float = 0.4, v_max: float = 200.0, stop_on_slide: bool = False) -> dict:
-    """Vehicle held at rest; the side wind grows until the upwind wheels carry no load."""
+    """Vehicle held at rest; the side wind grows until the upwind wheels carry no load.
+
+    v_crit is the first step at which the upwind wheels have lost all load (a wheel's load
+    is never negative, so there is no crossing to interpolate); it lies at most one step
+    (slow * dt) past the true crossing.
+    """
     sim = new_sim(veh, dt=dt, settle_s=1.5)
     ctl = hold(sim)
     up = _side_ids(sim, from_left)
@@ -33,8 +38,7 @@ def wind_ramp(veh, aero: Aero, from_left: bool = True, dt: float = 1e-3, fast: f
             if stop_on_slide:
                 break
         if nu <= 0.0:
-            v0, n_prev = prev
-            crit = v0 + (v - v0) * n_prev / (n_prev - nu) if n_prev > nu else v
+            crit = v
             break
         prev = (v, nu)
     return {"v_crit": crit, "slide_speed": slide}

@@ -9,6 +9,12 @@
     "checked": false,
     "note": "Copied from that .tir file (FITTYP 61, TYRESIDE LEFT, ISO signs), whose header says the values are from the book's Appendix 3. Not checked against the book. The repository has no licence file; the numbers are cited as data from the book. Only the groups K2 uses are copied (pure and combined slip, aligning moment, the valid slip ranges); pressure terms are left out because K2 runs at the nominal pressure, where they vanish."
   },
+  "usage": {
+    "measured_tyre": "205/60R15 91 V passenger car tyre at 2.2 bar (the book's reference tyre). It is not a measured UTV tyre: no published MF coefficients of a 25x8-12 UTV tyre were found.",
+    "what_k2_takes_from_it": "Only the shapes of the curves: C, E, how the peak and the stiffness change with load, the combined-slip weighting and the pneumatic trail's shape.",
+    "what_k2_sets_from_the_design": "FNOMIN (the mean static wheel load), UNLOADED_RADIUS (the wheel radius), and per wheel lambda_mux, lambda_muy, lambda_Kx, lambda_Ky so that at the static load the peaks equal mu and the slopes at zero slip equal the design's slip and cornering stiffness.",
+    "inflation_pressure": "Not used. The tyre was fitted at 2.2 bar; a 25x8-12 UTV tyre runs at about 0.5 bar (7 psi), far outside it, so K2 keeps every coefficient at its nominal pressure (dpi = 0) and does not extrapolate with pressure terms. This file has none; magic_formula.MF61 reads only the longitudinal, lateral and aligning groups, so pressure terms added to a file would not be read."
+  },
   "FNOMIN": 4000.0,
   "UNLOADED_RADIUS": 0.3135,
   "ranges": {

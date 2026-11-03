@@ -2,7 +2,7 @@
 
 import unittest
 
-from hiraku.solvers.k2_vehicle.magic_formula import MF61, load_coefficients
+from hiraku.solvers.k2_vehicle.magic_formula import MF61, PRESSURE_TERMS_READ, load_coefficients
 from hiraku.solvers.k2_vehicle.model import box_design, build_vehicle
 from hiraku.solvers.k2_vehicle.tyre import MFTyre
 
@@ -15,6 +15,32 @@ class MagicFormula(unittest.TestCase):
         self.assertFalse(c["source"]["checked"])
         self.assertIn("Pacejka", c["source"]["title"])
         self.assertTrue(c["source"]["read_from"].startswith("https://"))
+
+    def test_the_coefficient_file_says_it_is_not_a_measured_utv_tyre(self):
+        u = load_coefficients()["usage"]
+        self.assertIn("not a measured UTV tyre", u["measured_tyre"])
+        self.assertIn("shapes", u["what_k2_takes_from_it"])
+        for name in ("FNOMIN", "UNLOADED_RADIUS", "lambda_mux", "lambda_Ky"):
+            self.assertIn(name, u["what_k2_sets_from_the_design"])
+        self.assertIn("dpi = 0", u["inflation_pressure"])
+
+    def test_pressure_terms_are_not_read(self):
+        c = load_coefficients()
+        self.assertFalse(PRESSURE_TERMS_READ)
+        self.assertFalse(any(k.startswith(("NOMPRES", "INFLPRES", "PP")) for g in c.values() if isinstance(g, dict)
+                             for k in g))
+        # a file with pressure terms gives the same tyre: they are not read
+        with_p = dict(c, longitudinal=dict(c["longitudinal"]), pressure={"NOMPRES": 220000.0, "PPX1": -0.3})
+        a, b = MF61(c, fz0=2000.0, r0=0.3), MF61(with_p, fz0=2000.0, r0=0.3)
+        self.assertFalse(hasattr(b, "PPX1"))
+        self.assertEqual(a.forces(2500.0, 0.05, 0.03, 0.01), b.forces(2500.0, 0.05, 0.03, 0.01))
+
+    def test_the_assumption_says_the_tyre_is_not_a_measured_utv_tyre(self):
+        veh = build_vehicle(box_design(wheel_mass=20.0))
+        text = next(a for a in veh.assumptions if "Magic Formula 6.1" in a)
+        self.assertIn("205/60R15", text)
+        self.assertIn("Not a measured UTV tyre", text)
+        self.assertIn("nominal inflation pressure", text)
 
     def test_scaled_tyre_matches_the_design_numbers_at_its_static_load(self):
         veh = build_vehicle(box_design(wheel_mass=20.0, variables={"tire_mu": {"value": 0.7, "unit": "1"}}))
