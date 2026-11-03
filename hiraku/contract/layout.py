@@ -144,6 +144,7 @@ OWNERS = {
         "hiraku/designgen/",  # design from its variables (for revise_design)
         "data/designs/",
         "data/materials/",
+        "data/tyres/",  # tyre model coefficients (K2 team)
         "tests/solvers/",
     ],
     "screen": [  # 画面部: three.js screens and replay

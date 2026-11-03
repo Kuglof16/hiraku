@@ -1266,7 +1266,6 @@
       "required": [
         "channel",
         "unit",
-        "t_s",
         "values"
       ],
       "additionalProperties": false,
@@ -1289,8 +1288,44 @@
           "items": {
             "type": "number"
           }
+        },
+        "x": {
+          "type": "object",
+          "required": [
+            "quantity",
+            "unit",
+            "values"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "quantity": {
+              "type": "string"
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
         }
-      }
+      },
+      "description": "Values against time (t_s) or against another quantity (x, e.g. wheel travel or lateral force on a K&C bench). Exactly one of t_s and x; its values have the same length as values.",
+      "oneOf": [
+        {
+          "required": [
+            "t_s"
+          ]
+        },
+        {
+          "required": [
+            "x"
+          ]
+        }
+      ]
     },
     "analysis": {
       "description": "One analysis run (RUN in the ER diagram). It cannot exist without at least one prediction.",

@@ -109,6 +109,14 @@ class SchemaTest(unittest.TestCase):
             self.assertNotEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
         self.assertEqual(contract.errors("event", {**ev, "data": {"status": "stopped"}}), [])  # stop_code optional
 
+    def test_series_against_time_or_another_quantity(self):
+        base = {"channel": "toe.FL", "unit": "deg", "values": [0.0, 0.1]}
+        self.assertEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0]}), [])
+        x = {"quantity": "wheel_travel", "unit": "mm", "values": [-50.0, 50.0]}
+        self.assertEqual(contract.errors("series", {**base, "x": x}), [])
+        self.assertNotEqual(contract.errors("series", base), [])
+        self.assertNotEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0], "x": x}), [])
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []

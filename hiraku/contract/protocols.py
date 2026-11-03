@@ -16,6 +16,9 @@ Record = dict[str, Any]
 #   formula_registry() -> FormulaRegistry
 #   builtin_tools()    -> list[AnalysisTool]
 SOLVER_ENTRY_POINTS = ("formula_registry", "builtin_tools")
+# Optional entry point (callers check hasattr first):
+#   frame_mesh(design) -> a `mesh` record without mesh_id (the shell mesh of the frame)
+OPTIONAL_SOLVER_ENTRY_POINTS = ("frame_mesh",)
 
 # params["loading"] of a load case: who and what is on board (catalog Q30).
 LOADINGS = ("empty", "driver", "two", "two_cargo")
@@ -42,6 +45,9 @@ class AnalysisTool(Protocol):
     """One CAE-stage tool on the shelf (frame_static, step_climb, tilt, ...)."""
 
     name: str
+    # Optional attribute needs_mesh (False when absent): True when run() draws
+    # on the version's shell mesh (params["mesh"]). Not a protocol member, so
+    # tools without it still pass isinstance(tool, AnalysisTool).
 
     def spec(self) -> Record:
         """The `tool_spec` record, with `checks` filled by check()."""
@@ -55,6 +61,13 @@ class AnalysisTool(Protocol):
         params["upstream_analyses"] = {load_case_id: analysis} carries the
         matched analyses of the load cases that feed this one (e.g. the P1
         wheel force into R1). The caller adds their ids to inputs_from.
+
+        params["mesh"] is the version's `mesh` record (with mesh_id) when the
+        tool needs_mesh: the caller (analyze) makes it once per design version
+        with frame_mesh() and records it (mesh.created) before the first run.
+        The tool checks it was made from this design, and names its mesh_id in
+        the fields it draws on it. Without params["mesh"] (known-answer checks,
+        unit tests) the tool returns results without mesh fields.
 
         Returns an `analysis` record without analysis_id (the store assigns it).
         Must not raise for a physically bad design: return status "failed"
