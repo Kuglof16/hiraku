@@ -165,6 +165,50 @@ class SpaceFrameDesignTest(unittest.TestCase):
                 self.assertIn(n, {x["id"] for x in self.d["nodes"]})
 
 
+def _registered() -> bool:
+    from hiraku import designgen
+
+    return "space_frame_utv" in designgen.ARCHETYPES
+
+
+@unittest.skipUnless(_registered(), "space_frame_utv is not in hiraku.designgen.ARCHETYPES yet")
+class ArchetypeTest(unittest.TestCase):
+    """Once registered: an offroad product's flags give both kinds of design, and either builds a design the
+    contract takes."""
+
+    FLAGS = {"self_propelled": True, "ride": True, "cargo": True, "rough": True, "battery": True}
+
+    def test_two_kinds_for_offroad(self):
+        from hiraku import designgen
+
+        names = [a["name"] for a in designgen.archetypes(self.FLAGS)]
+        self.assertIn("ladder_4w", names)
+        self.assertIn("space_frame_utv", names)
+        for a in designgen.archetypes(self.FLAGS):
+            self.assertTrue(a["title"])
+            self.assertTrue(a["variables"])
+
+    def test_both_propose_designs_the_contract_takes(self):
+        from hiraku import designgen
+
+        req = {"product": "offroad-4w", "flags": self.FLAGS,
+               "requirements": [{"key": "Q33", "value": 80.0, "unit": "kg"}]}
+        for name in ("ladder_4w", "space_frame_utv"):
+            d = designgen.propose(name, {}, {}, req)
+            self.assertEqual(contract.errors("design", d), [], name)
+            self.assertEqual(d["variables"]["occupant_mass"]["value"], 80.0)
+        # the demo product's generator stays the ladder
+        self.assertIs(designgen.GENERATORS["offroad-4w"], ladder_4w)
+
+    def test_a_space_frame_design_is_revised_by_its_own_generator(self):
+        from hiraku import designgen
+
+        d = designgen.propose("space_frame_utv", {}, {}, {"product": "utv", "flags": self.FLAGS, "requirements": []})
+        self.assertIs(designgen.generator_of(d), sf)
+        d2 = designgen.regenerate(d, {"dash_tube_t": {"value": 4.0, "unit": "mm"}})
+        self.assertEqual(contract.errors("design", d2), [])
+
+
 class SpaceFrameK2Test(unittest.TestCase):
     def test_k2_builds_and_the_push_lifts_the_front(self):
         from hiraku.solvers.k2_vehicle.model import build_vehicle
