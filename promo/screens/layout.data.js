@@ -250,11 +250,15 @@ window.PROMO_LAYOUT = {
         "_note": "the tick or cross of the tile"
       },
       "pet": {
-        "w": 96,
-        "h": 96,
+        "w": 84,
+        "h": 84,
         "right": 12,
         "bottom": 12,
-        "_note": "the corner of the tile where the role's pet stands"
+        "feature": {
+          "w": 160,
+          "h": 160
+        },
+        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only"
       },
       "rate": {
         "size_px": 18
@@ -265,7 +269,7 @@ window.PROMO_LAYOUT = {
       "crash_s": 0.5,
       "nvh_s": 1.2,
       "assembly_s": 2.0,
-      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). The crash and NVH tiles are red mid iteration; from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
+      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
     },
     "overlay": {
       "color": "#c8402a",
@@ -343,11 +347,15 @@ window.PROMO_LAYOUT = {
         "_note": "the tick or cross of the tile"
       },
       "pet": {
-        "w": 96,
-        "h": 96,
+        "w": 84,
+        "h": 84,
         "right": 12,
         "bottom": 12,
-        "_note": "the corner of the tile where the role's pet stands"
+        "feature": {
+          "w": 160,
+          "h": 160
+        },
+        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only"
       },
       "rate": {
         "size_px": 18
@@ -812,13 +820,14 @@ window.PROMO_LAYOUT = {
       "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247"
     },
     "tests": [
-      "step_break",
       "tilt_over",
       "step_stuck",
+      "step_break",
       "battery_hot",
       "parts_clash",
-      "rollover"
+      "wind"
     ],
+    "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -873,12 +882,12 @@ window.PROMO_LAYOUT = {
     },
     "times": {
       "lead_s": 0.3,
-      "turn_to_s": 6.5,
-      "zoom_s": 6.5,
-      "zoom_to_s": 8.5,
+      "turn_to_s": 5.5,
+      "zoom_s": 5.5,
+      "zoom_to_s": 7.5,
       "swap_s": 11.0,
       "swap_to_s": 13.0,
-      "_note": "the vehicle turns with the stress colours during sentences 1-2 (0.30-4.22, 4.57-8.89 s); it moves in on the highest element as sentence 2 says 突き止める; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (9.24-15.28 s) and stay while it says それが CAE です"
+      "_note": "the vehicle turns with the stress colours during sentences 1-2 (the maker's recorded voice, from the cut's start: 0.30-3.76, 4.11-8.05 s); it moves in on the highest element during sentence 2 (突き止める) and is in by 7.5 s, before sentence 2 ends; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (8.40-14.42 s) and stay while it says それが CAE です"
     },
     "turn_deg": 90,
     "zoom": {
@@ -1287,85 +1296,59 @@ window.PROMO_LAYOUT = {
   },
   "n17b": {
     "duration_s": 5.8,
-    "_duration_note": "5.8 s is N17b's slot. Voice: 構想は 10 万行。 at 0.30-2.08 s, その道を、Claude Code が拓きました。 at about 2.43-5.54 s. The subtitles are burnt in later; the voice's words are not on the screen",
-    "_note": "how HIRAKU was built: one lane per Claude Code session (the lead and the departments), commits as dots along the time axis, the departments' merges into main as curves up to the lead's lane, then the actual counts. All figures come from promo/screens/n17b.data.js (written by promo/n17b_data.py from git); 100,000 is the first estimate of the plan (構想の見通し), not lines written, and it is gone before the counts come in",
-    "vision": {
-      "x": 340,
-      "y": 150,
-      "w": 1460,
-      "h": 380,
-      "num_size_px": 230,
-      "unit_size_px": 64,
-      "cap_size_px": 32,
-      "peak_alpha": 0.26,
-      "drift_scale": 1.03,
-      "in_dur_s": 0.7,
-      "out_dur_s": 0.45,
-      "_note": "the planned size, faint behind the lanes: 100,000 行 with 構想の見通し above it, centred in this box. Rises to peak_alpha over in_dur_s from times.vision_s while it grows slowly to drift_scale, fades out over out_dur_s from times.vision_out_s"
-    },
-    "lanes": {
+    "_duration_note": "5.8 s is N17b's slot. Voice (sixth version, the recorded cues of N17b: at and seconds from the cut's start): 構想は 10 万行。 0.30-1.93 s, その道を、Claude Code が拓きました。 2.28-5.01 s. The subtitles are burnt in later; the voice's words are not on the screen",
+    "_note": "how much and how deep: with sentence 1 the amount of HIRAKU (lines of code written, with the commits, the days and the tests under it, all counted from git main); with sentence 2, under 1 回の運転で, four cards in the order of one run (the areas judged, the analysis tools and the known-answer cases they were checked on, hand calculation set against analysis, fixed and passed). Every figure comes from promo/screens/n17b.data.js (promo/n17b_data.py, from git and one run's events.jsonl); the 100,000 of the voice is the plan and is not drawn",
+    "amount": {
       "x": 96,
-      "y": 96,
+      "y": 110,
       "w": 1728,
-      "h": 540,
-      "label_w": 220,
-      "label_size_px": 24,
-      "top": 14,
-      "pitch_px": 60,
-      "graph_x": 244,
-      "graph_w": 1460,
-      "dot_r_px": 4,
-      "line_px": 2,
-      "main_line_px": 3,
-      "curve_dx_px": 46,
-      "axis_y": 500,
-      "axis_size_px": 20,
-      "_note": "inside the lanes box (x, y relative to it): lane names right-aligned in the first label_w px, the graph from graph_x, graph_w wide (stage x 340-1800). Lane i's centre is at top + (i + 0.5) x pitch_px (eight lanes, 14-494). A commit's x is its author time on a linear axis from the first commit to the newest; a merge into main is a curve from the department's lane, curve_dx_px before the merge, to the lead's lane at the merge. axis: the dates under the graph"
+      "h": 300,
+      "cap_h": 48,
+      "cap_size_px": 30,
+      "num_h": 196,
+      "num_size_px": 172,
+      "unit_size_px": 56,
+      "sub_h": 52,
+      "sub_size_px": 34,
+      "dim_alpha": 0.6,
+      "dim_dur_s": 0.45,
+      "_note": "centred in this box, top to bottom: the caption (cap_h), lines written (num_h, counting up), the commits, the days and the tests (sub_h). Once the cards come in it dims to dim_alpha over dim_dur_s from times.dim_s, so the cards are the place to read"
     },
-    "counts": {
+    "head": {
       "x": 96,
-      "y": 664,
+      "y": 458,
       "w": 1728,
-      "h": 226,
-      "head_h": 40,
-      "head_size_px": 22,
-      "stamp_size_px": 20,
-      "label_size_px": 24,
-      "num_size_px": 72,
-      "unit_size_px": 30,
-      "sub_size_px": 20,
-      "gap_px": 22,
-      "cols": {
-        "days": 280,
-        "commits": 330,
-        "lines": 700,
-        "tests": 352
-      },
-      "_note": "the four actual counts in a row under a heading, with when they were counted at the right of the heading. Bottom 664 + 226 = 890, above the subtitle band. cols: widths of the four, adding up to w with three gaps"
+      "h": 46,
+      "size_px": 28,
+      "_note": "the heading over the cards (1 回の運転で), left-aligned"
     },
-    "flow": {
-      "first_frac": 0.12,
-      "a_ease": [
-        0.4,
-        0,
-        0.6,
-        1
-      ],
-      "b_ease": [
-        0.5,
-        0,
-        0.3,
-        1
-      ],
-      "step_s": 0.05,
-      "dot_dur_s": 0.3,
-      "merge_dur_s": 0.35,
-      "glow_out_dur_s": 0.5,
-      "_note": "the reveal edge (with a soft light on it) sweeps the time axis: to first_frac between times.lanes_s and lanes_to_s (a_ease), still until flow_s, then to the end by flow_to_s (b_ease). The page samples it every step_s into keyframes; a dot pops in over dot_dur_s and a merge curve draws over merge_dur_s when the edge reaches them"
+    "depth": {
+      "x": 96,
+      "y": 516,
+      "w": 1728,
+      "h": 300,
+      "card_w": 402,
+      "gap_px": 40,
+      "rule_px": 2,
+      "pad_top": 20,
+      "label_size_px": 30,
+      "num_size_px": 112,
+      "unit_size_px": 36,
+      "sub_size_px": 25,
+      "arrow_px": 12,
+      "_note": "four cards in a row (4 x card_w + 3 x gap_px = w) in the order of a run: the areas, the tools, hand calculation set against analysis, fixed and passed. Each is a rule on top, a label, one figure with its unit and a line or two that says what it means; a small arrow (arrow_px) sits on the rule in each gap. Bottom 516 + 300 = 816"
+    },
+    "stamp": {
+      "x": 96,
+      "y": 858,
+      "w": 1728,
+      "h": 32,
+      "size_px": 19,
+      "_note": "when the figures were counted, the git ref and the run, right-aligned, small; bottom 890, above the subtitle band"
     },
     "count": {
-      "dur_s": 1.9,
-      "stagger_s": 0.15,
+      "amount_dur_s": 1.3,
+      "card_dur_s": 0.9,
       "in_dur_s": 0.4,
       "ease": [
         0.12,
@@ -1374,20 +1357,17 @@ window.PROMO_LAYOUT = {
         1
       ],
       "steps": 32,
-      "_note": "each figure counts up over dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. Tiles start stagger_s apart from times.counts_s. Digit wheels were tried first: mid-roll they showed half digits and a wrong day count (8 日目)"
+      "_note": "each figure counts up over its dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. in_dur_s: how long a card or caption takes to come in"
     },
     "times": {
-      "vision_s": 0.3,
-      "labels_s": 0.5,
-      "label_step_s": 0.05,
-      "lanes_s": 0.6,
-      "lanes_to_s": 2.1,
-      "vision_out_s": 1.85,
-      "flow_s": 2.4,
-      "flow_to_s": 4.4,
-      "counts_s": 2.9,
-      "calm_s": 4.6,
-      "_note": "vision: 100,000 comes in with 構想は 10 万行 (0.30-2.08 s) and is gone by vision_out_s + vision.out_dur_s = 2.3 s; lanes: the lanes start to grow from the left; flow: with その道を、Claude Code が拓きました (2.43-5.54 s) the commits stream in and the merges join main; counts: the actual counts roll up, the last stopping at counts_s + 3 x count.stagger_s + count.dur_s = 5.25 s; calm: the light on the reveal edge has faded and the lead's lane brightens a little. From 5.5 s to the end the picture holds still"
+      "amount_s": 0.3,
+      "amount_count_s": 0.35,
+      "amount_sub_s": 1.0,
+      "dim_s": 2.2,
+      "cards_s": 2.35,
+      "card_step_s": 0.4,
+      "stamp_s": 4.5,
+      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
     }
   },
   "n18": {
@@ -1554,11 +1534,11 @@ window.PROMO_LAYOUT = {
         "message": "長く走っても熱くならず、どこまで速いかが分かる"
       },
       "n04": {
-        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)",
+        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)",
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only. The tiles' 3D pets are not counted as moving: they hold still and react only for a moment when their tile changes"
         }
       },
       "n05": {
@@ -1632,7 +1612,7 @@ window.PROMO_LAYOUT = {
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the same eight tiles as N04, all turning green"
+          "why": "the same eight tiles as N04, all turning green. The pets react only when their tile changes, as in N04"
         }
       },
       "n16": {
@@ -1642,12 +1622,12 @@ window.PROMO_LAYOUT = {
         "message": "結果だけでなく、次に何を変えればよいかを示す"
       },
       "n17b": {
-        "message": "部署ごとの Claude Code のセッションが、並んで作った",
+        "message": "HIRAKU は量があり、1 回の運転が 7 分野をまたいで予測と解析を照らし合わせて直すほど深い",
         "limits": {
-          "label": 8,
-          "number": 4,
-          "moving": 8,
-          "why": "one lane per session; the four counts at the end"
+          "label": 7,
+          "number": 5,
+          "moving": 4,
+          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once"
         }
       },
       "n18": {
@@ -1820,6 +1800,18 @@ window.PROMO_LAYOUT = {
       }
     ],
     "allow_overlap": [
+      {
+        "cut": "n07",
+        "a": "n07.view",
+        "b": "n07.label",
+        "why": "the before / after label sits inside the view's top left on purpose (n07.label)"
+      },
+      {
+        "cut": "n16",
+        "a": "n16.view",
+        "b": "n16.seek",
+        "why": "the seek bar sits over the view's lower edge on purpose (n16.seek)"
+      },
       {
         "cut": "n18",
         "a": "n18.light",

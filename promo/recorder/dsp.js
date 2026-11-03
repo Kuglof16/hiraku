@@ -4,13 +4,17 @@
 // a live AudioContext (to listen while tuning) and in an OfflineAudioContext
 // (to render the export):
 //
-//   input -> highpass -> mud cut (peaking) -> presence (peaking)
+//   input -> highpass -> low cut (2 highpass + mains notches)
+//         -> mud cut (peaking) -> presence (peaking)
 //         -> de-esser (worklet) -> noise gate (worklet)
 //         -> compressor -> makeup gain -> output
 //   input -> (dry) ---------------------------------------> output
 //
 // A stage that is off is made an identity: biquads become a 0 dB peaking
 // filter, the worklets pass the signal through, the compressor gets ratio 1.
+// Web Audio reads Q of a highpass biquad in dB (checked with
+// getFrequencyResponse in Chromium: Q -3.01 gives -3.01 dB at the cutoff),
+// so the Butterworth Q values below are given in dB.
 // exportTake() renders a take through the chain at 44.1 kHz, trims silence at
 // the head and tail, sets the loudness and encodes 16-bit mono WAV.
 
@@ -169,6 +173,7 @@ async function ensureWorklet(ctx) {
 const PRESETS = {
   clear: {
     hp: { on: true, freq: 80 },
+    hum: { on: true, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: true, freq: 300, gain: -4, q: 1.0 },
     presence: { on: true, freq: 3500, gain: 4, q: 0.9 },
     deess: { on: true, freq: 7000, threshold: -32, ratio: 4, maxCut: 10 },
@@ -178,6 +183,7 @@ const PRESETS = {
   },
   soft: {
     hp: { on: true, freq: 70 },
+    hum: { on: true, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: true, freq: 280, gain: -1.5, q: 0.8 },
     presence: { on: true, freq: 3000, gain: 1.5, q: 0.7 },
     deess: { on: true, freq: 6500, threshold: -30, ratio: 3, maxCut: 8 },
@@ -187,6 +193,7 @@ const PRESETS = {
   },
   raw: {
     hp: { on: false, freq: 80 },
+    hum: { on: false, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: false, freq: 300, gain: 0, q: 1.0 },
     presence: { on: false, freq: 3500, gain: 0, q: 0.9 },
     deess: { on: false, freq: 7000, threshold: -32, ratio: 4, maxCut: 10 },
@@ -221,9 +228,19 @@ function mono(node) {
   return node;
 }
 
+// The low cut: a 4th-order Butterworth highpass as two biquads (Q 0.5412 and
+// 1.3066, as dB), then a narrow notch on the mains frequency and each of its
+// harmonics up to MAX_HARMONICS.
+const BUTTER4_Q_DB = [20 * Math.log10(0.5412), 20 * Math.log10(1.3066)];
+const BUTTER2_Q_DB = 20 * Math.log10(Math.SQRT1_2);
+const NOTCH_Q = 30;
+const MAX_HARMONICS = 12;
+
 function buildChain(ctx, settings) {
   const input = mono(ctx.createGain());
   const hp = mono(ctx.createBiquadFilter());
+  const low = BUTTER4_Q_DB.map(() => mono(ctx.createBiquadFilter()));
+  const notches = Array.from({ length: MAX_HARMONICS }, () => mono(ctx.createBiquadFilter()));
   const mud = mono(ctx.createBiquadFilter());
   const pres = mono(ctx.createBiquadFilter());
   const deess = new AudioWorkletNode(ctx, "hiraku-deesser", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
@@ -233,7 +250,9 @@ function buildChain(ctx, settings) {
   const wet = mono(ctx.createGain());
   const dry = mono(ctx.createGain());
   const output = mono(ctx.createGain());
-  input.connect(hp); hp.connect(mud); mud.connect(pres); pres.connect(deess);
+  input.connect(hp);
+  [hp, ...low, ...notches, mud].reduce((a, b) => { a.connect(b); return b; });
+  mud.connect(pres); pres.connect(deess);
   deess.connect(gate); gate.connect(comp); comp.connect(makeup); makeup.connect(wet);
   wet.connect(output);
   input.connect(dry); dry.connect(output);
@@ -252,7 +271,9 @@ function buildChain(ctx, settings) {
   };
 
   function update(s) {
-    setBiquad(hp, "highpass", s.hp.on, s.hp.freq, undefined, 0.707);
+    setBiquad(hp, "highpass", s.hp.on, s.hp.freq, undefined, BUTTER2_Q_DB);
+    low.forEach((n, i) => setBiquad(n, "highpass", s.hum.on, s.hum.cut, undefined, BUTTER4_Q_DB[i]));
+    notches.forEach((n, i) => setBiquad(n, "notch", s.hum.on && i < s.hum.harmonics, s.hum.mains * (i + 1), undefined, NOTCH_Q));
     setBiquad(mud, "peaking", s.mud.on, s.mud.freq, s.mud.gain, s.mud.q);
     setBiquad(pres, "peaking", s.presence.on, s.presence.freq, s.presence.gain, s.presence.q);
     const dp = deess.parameters;
@@ -458,7 +479,7 @@ function wavSeconds(arrayBuffer) {
 }
 
 window.HirakuDSP = {
-  PRESETS, cloneSettings, completeSettings, ensureWorklet, buildChain,
+  PRESETS, cloneSettings, completeSettings, ensureWorklet, buildChain, MAX_HARMONICS,
   integratedLoudness, kWeightCoeffs, trimBounds, peakOf, renderChain, processTake,
   encodeWav16, wavSeconds, OUT_RATE,
 };
