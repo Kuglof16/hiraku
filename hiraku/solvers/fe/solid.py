@@ -233,23 +233,101 @@ class _Hex(ElementGroup):
     def mass_total(self, nodes: np.ndarray) -> float:
         return float(np.sum(self.rho * self.volumes(nodes)))
 
-    def gauss_stresses(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
-        """Stresses (E, 8, 6) at the 2 x 2 x 2 Gauss points ordered like the corners (point i has the signs
-        of corner i times 1/sqrt(3))."""
+    def mass(self, nodes: np.ndarray, lumped: bool = False) -> np.ndarray:
+        """Element mass matrices (E, 3n, 3n): consistent rho integral(N_a N_b) dV I (3 x 3 x 3 Gauss points),
+        or lumped by the HRZ rule - the diagonal of the consistent matrix scaled so that each direction
+        carries the element mass (Hinton, Rock & Zienkiewicz 1976, Earthquake Eng. Struct. Dyn. 4, 245-249;
+        not checked here). Row sums are not used: for the 20-node brick they give negative corner masses."""
         X = nodes[self.conn]
-        D = elasticity_matrix(self.E, self.nu)
-        g = 1.0 / math.sqrt(3.0)
-        out = np.zeros((len(X), 8, 6))
-        for i, sgn in enumerate(CORNER_SIGNS):
-            _, dN = self.shape(*(g * sgn))
-            _, _, dNx = jacobian(dN, X)
-            eps = np.einsum("eak,ek->ea", strain_matrix(dNx), ue)
-            out[:, i] = np.einsum("eab,eb->ea", D, eps)
+        ne, n = X.shape[:2]
+        P, W = gauss_3d(3)
+        mm = np.zeros((ne, n, n))
+        for p, w in zip(P, W):
+            N, dN = self.shape(*p)
+            det = np.linalg.det(np.einsum("an,enb->eab", dN, X))
+            mm += np.einsum("a,b,e->eab", N, N, det * w)
+        mm *= self.rho[:, None, None]
+        if lumped:
+            d = np.einsum("eaa->ea", mm)
+            total = mm.sum(axis=(1, 2))
+            d = d * (total / np.maximum(d.sum(axis=1), 1e-300))[:, None]
+            mm = np.zeros_like(mm)
+            mm[:, np.arange(n), np.arange(n)] = d
+        M = np.zeros((ne, 3 * n, 3 * n))
+        for k in range(3):
+            M[:, k::3, k::3] = mm
+        return M
+
+    def _nodal_field(self, values) -> np.ndarray:
+        """(E, n) element-node values of a per-node array, or of a per-element / single value."""
+        v = np.asarray(values, float)
+        if v.ndim == 1 and len(v) != len(self.conn):
+            return v[self.conn]
+        return np.broadcast_to(v.reshape(-1, 1) if v.ndim else v, self.conn.shape).astype(float)
+
+    def _thermal_strain(self, N: np.ndarray, thermal) -> np.ndarray:
+        """Free thermal strain alpha T (1, 1, 1, 0, 0, 0) at a point with shape values N; (E, 6)."""
+        alpha, T = thermal
+        Tp = self._nodal_field(T) @ N
+        a = np.broadcast_to(np.asarray(alpha, float), Tp.shape)
+        out = np.zeros((len(Tp), 6))
+        out[:, :3] = (a * Tp)[:, None]
         return out
 
-    def element_nodal_stresses(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
+    def point_stresses(self, nodes: np.ndarray, ue: np.ndarray, points: np.ndarray, thermal=None) -> list:
+        """[(sigma (E, 6), dNx (E, 3, n), det (E,))] at natural points (P, 3); thermal = (alpha, T) takes off
+        the free thermal strain (T per node (N,), per element (E,) or one value)."""
+        X = nodes[self.conn]
+        D = elasticity_matrix(self.E, self.nu)
+        out = []
+        for p in points:
+            N, dN = self.shape(*p)
+            _, det, dNx = jacobian(dN, X)
+            eps = np.einsum("eak,ek->ea", strain_matrix(dNx), ue)
+            if thermal is not None:
+                eps = eps - self._thermal_strain(N, thermal)
+            out.append((np.einsum("eab,eb->ea", D, eps), dNx, det))
+        return out
+
+    def geometric_stiffness(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
+        """Initial-stress stiffness (E, 3n, 3n) from the stresses of ue at the integration points:
+        K_G = integral grad(N_a)^T S grad(N_b) dV times I3, S the 3 x 3 Cauchy stress (Bathe, Finite Element
+        Procedures, 1996, section 6.3, the linearised updated/total Lagrangian K_NL term; not checked here)."""
+        P, W = gauss_3d(self.integration)
+        ne, n = self.conn.shape
+        kg = np.zeros((ne, n, n))
+        for (s, dNx, det), w in zip(self.point_stresses(nodes, ue, P, thermal), W):
+            S = np.stack([np.stack([s[:, 0], s[:, 3], s[:, 5]], 1), np.stack([s[:, 3], s[:, 1], s[:, 4]], 1),
+                          np.stack([s[:, 5], s[:, 4], s[:, 2]], 1)], 1)
+            kg += np.einsum("eia,eij,ejb,e->eab", dNx, S, dNx, det * w)
+        K = np.zeros((ne, 3 * n, 3 * n))
+        for k in range(3):
+            K[:, k::3, k::3] = kg
+        return K
+
+    def thermal_forces(self, nodes: np.ndarray, alpha, T) -> np.ndarray:
+        """Equivalent element forces (E, 3n) of a temperature change: f = integral B^T D alpha T (1,1,1,0,0,0) dV,
+        T interpolated from the nodes (per node (N,)) or uniform per element (E,) / one value."""
+        X = nodes[self.conn]
+        D = elasticity_matrix(self.E, self.nu)
+        P, W = gauss_3d(self.integration)
+        f = np.zeros((len(X), 3 * self.conn.shape[1]))
+        for p, w in zip(P, W):
+            N, dN = self.shape(*p)
+            _, det, dNx = jacobian(dN, X)
+            f += np.einsum("eak,eab,eb,e->ek", strain_matrix(dNx), D, self._thermal_strain(N, (alpha, T)), det * w)
+        return f
+
+    def gauss_stresses(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
+        """Stresses (E, 8, 6) at the 2 x 2 x 2 Gauss points ordered like the corners (point i has the signs
+        of corner i times 1/sqrt(3)). thermal = (alpha, T): sigma = D (eps - eps_thermal)."""
+        g = 1.0 / math.sqrt(3.0)
+        pts = self.point_stresses(nodes, ue, g * CORNER_SIGNS, thermal)
+        return np.stack([s for s, _, _ in pts], axis=1)
+
+    def element_nodal_stresses(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
         """Stresses extrapolated to each element's own nodes (E, n, 6)."""
-        sg = self.gauss_stresses(nodes, ue)
+        sg = self.gauss_stresses(nodes, ue, thermal)
         r3 = math.sqrt(3.0)
         Ex = np.array([shape_hex8(*(r3 * c))[0] for c in CORNER_SIGNS])  # (corner, gauss point)
         corners = np.einsum("cg,egk->eck", Ex, sg)
@@ -258,9 +336,9 @@ class _Hex(ElementGroup):
         mids = 0.5 * (corners[:, EDGES[:, 0]] + corners[:, EDGES[:, 1]])
         return np.concatenate([corners, mids], axis=1)
 
-    def nodal_stresses(self, nodes: np.ndarray, ue: np.ndarray, n_nodes_total: int | None = None):
+    def nodal_stresses(self, nodes: np.ndarray, ue: np.ndarray, n_nodes_total: int | None = None, thermal=None):
         """Nodal-averaged stresses (N, 6) and the number of elements behind each node (N,)."""
-        en = self.element_nodal_stresses(nodes, ue)
+        en = self.element_nodal_stresses(nodes, ue, thermal)
         n = n_nodes_total or len(nodes)
         acc = np.zeros((n, 6))
         cnt = np.zeros(n)
@@ -316,12 +394,12 @@ def surface_load(nodes: np.ndarray, faces: np.ndarray, traction, n_nodes: int | 
     return out
 
 
-def solid_stresses(sol, group) -> dict:
+def solid_stresses(sol, group, thermal=None) -> dict:
     """Nodal-averaged stresses (N, 6) and von Mises (N,) of one solid group in a Solution
-    (nodes that the group does not touch get 0)."""
+    (nodes that the group does not touch get 0). thermal = (alpha, T) for a solution with thermal loads."""
     g = sol.model.groups[group] if isinstance(group, int) else group
     ue = sol.element_displacements(g)
-    s, cnt = g.nodal_stresses(sol.model.nodes, ue)
+    s, cnt = g.nodal_stresses(sol.model.nodes, ue, thermal=thermal)
     return {"stress": s, "von_mises": von_mises(s), "count": cnt}
 
 
