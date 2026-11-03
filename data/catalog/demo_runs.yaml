@@ -41,7 +41,11 @@ runs:
       要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、照合で
       手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
     file: offroad-4w-n12.yaml
-    modes: [claude, scripted]
+    # scripted only: in the first Claude run of this file (driver claude_code_plugin, 2026-11-03) the lead
+    # predicted first and took the loaded centre of gravity from design_summary (the design's cargo at its
+    # real height), not the requirement's 62 mm, so it matched with no HK1 denial and no unit mistake. The
+    # mistake here is the script's choice of input, which a Claude run need not repeat.
+    modes: [scripted]
     # python -m hiraku.catalog.cost <run folder>: 7 calls (cae.handling 7) in scripted run 20261103-153411-offroad-4w-scripted
     estimates_usd:
       default: {usd: 1.07, upper_usd: 1.07}
