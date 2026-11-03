@@ -198,6 +198,13 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     return "done", None, "done"
 
 
+def revisions_used_up(ctx: RunContext) -> bool:
+    """The design revisions are used up (version - 1 >= round_limit): HK4 lets the lead's stop through
+    (contract HOOK_RULES HK4: unless the round limit is reached). runner.end_status then ends the run
+    not_judged (a domain without a verdict) or round_limit (a red tile)."""
+    return bool(ctx.version) and ctx.version - 1 >= ctx.project["round_limit"]
+
+
 def red_left_reason(ctx: RunContext) -> str | None:
     """Why the lead may not stop yet although every picked domain is judged: a tile is red and design
     revisions are left (version - 1 < round_limit). Names the red domains, their failing verdicts
