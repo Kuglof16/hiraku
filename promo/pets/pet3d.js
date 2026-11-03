@@ -10,9 +10,13 @@
 //
 // v3: every role has its own body, drawn the way a result of that analysis
 // looks in a post-processor (BODIES below): a flow body with streamlines for
-// aero, a crushed shell mesh for crash, a mode shape for NVH, and so on. The
-// eyes, the antenna with the role colour, the legs, the arms and the prop are
+// aero, a stress wave for crash, a mode shape for NVH, and so on. The eyes,
+// the antenna with the role colour, the legs, the arms and the prop are
 // shared, so the ten pets stay one family.
+// v4: lead is the v2 body again (triangles, stress from the limb loads);
+// packager is an assembly drawing without a contour; handling, powertrain
+// (combustion) and crash are new bodies; designer has no dimension lines;
+// the strength arrow sits outside the surface.
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -54,14 +58,15 @@
   ];
 
   // One body per role: what analysis picture it is and what the colour shows.
+  // quantity null = no contour on that body (and no legend).
   const BODIES = {
-    "lead": { kind: "quad-sphere", quantity: "相対の応力 (自重)", analysis: "四角の要素の素直な球。自重と足の荷重の応力" },
-    "designer": { kind: "cad-surface", quantity: "曲率 (相対)", analysis: "CAD のなめらかな面とアイソパラメトリックの線・寸法の線" },
-    "packager": { kind: "assembly", quantity: "部品どうしの近さ (相対)", analysis: "箱の部品をボルトで組んだ組立。少し分解した隙間" },
-    "cae.handling": { kind: "multibody", quantity: "ロールの振れ (相対)", analysis: "剛体 2 つをジョイントとばねでつないだマルチボディ。走った軌跡とヨーの矢印" },
-    "cae.powertrain": { kind: "cell", quantity: "電流密度 (相対)", analysis: "円柱のセル。端子から流れる電流の線" },
+    "lead": { kind: "fe-sphere", quantity: "相対の応力 (自重と手足)", analysis: "三角の要素の丸い体 (v2 の体)。節点の荷重から計算した応力" },
+    "designer": { kind: "cad-surface", quantity: "曲率 (相対)", analysis: "CAD のなめらかな面とアイソパラメトリックの線" },
+    "packager": { kind: "assembly", quantity: null, analysis: "色ちがいの部品をボルトとナットで組んだ組立図。少し分解した隙間" },
+    "cae.handling": { kind: "vehicle-dynamics", quantity: "荷重移動 (相対)", analysis: "コーナーで傾く体と重心の印・横加速度の矢印、足もとの摩擦円、ダブルレーンチェンジの走った線" },
+    "cae.powertrain": { kind: "combustion", quantity: "燃焼の温度 (相対)", analysis: "エンジンの燃焼室。点火プラグから広がる火炎面の温度、下はピストン、脇に電池のセル" },
     "cae.aero": { kind: "flow", quantity: "速さ (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の速度)" },
-    "cae.crash": { kind: "crushed-shell", quantity: "塑性ひずみ (相対)", analysis: "前が潰れて座屈した殻の要素のメッシュ" },
+    "cae.crash": { kind: "impact-wave", quantity: "衝撃の応力 (相対)", analysis: "前の面に当たった所から広がる応力の波、小さなへこみ、衝撃の輪、減速度の線" },
     "cae.strength": { kind: "stress-solid", quantity: "相対の応力", analysis: "三角の要素の角ばった塊。荷重から計算した応力" },
     "cae.nvh": { kind: "mode-shape", quantity: "変位 (相対)", analysis: "固有モードで揺れる網目と、変形前の形の薄い線" },
     "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
@@ -665,106 +670,50 @@
   // surface(dir), deforms, counts, caption, update(t, state), contour(t, state) }
   // in body coordinates (body centre at the origin).
 
-  // lead: a plain, regular sphere of quad elements under internal pressure.
-  // Membrane stress of a pressurised shell, sigma = p r / (2 t), with r the
-  // distance from the centre; shown against an allowable value (max / 0.62),
-  // so the settled body is one calm, nearly even band.
-  function bodyLead(ctx) {
-    const { THREE } = ctx;
-    const nu = ctx.fine ? 16 : 12, nv = ctx.fine ? 10 : 8;
-    const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
-    const R = revolve(THREE, prof, nu, (lat, phi) => shapePoint(THREE, latDir(THREE, lat, phi)));
-    const fe = feMesh(THREE, R.pts, R.elems);
-    const group = new THREE.Group();
-    addFe(ctx, group, fe, { line: 1, self: 0.5 });
-    addDots(ctx, group, fe, ctx.fine ? 0.028 : 0.034);
-    const rr = R.pts.map((p) => p.length());
-    const allow = Math.max(...rr) / 0.62;
-    const settled = rr.map((r) => r / allow);
-    // mismatch: the whole body weight on the left leg root, as for strength
-    const legL = ctx.roots.legL;
-    const mismatch = R.pts.map((p, i) => {
-      const q = p.distanceTo(legL) / LOAD.spread;
-      return settled[i] + 0.9 / Math.pow(1 + q * q, 1.5);
-    });
-    const vals = (t, s) => (s === "mismatch" ? mismatch : settled.map((v) => v * loadFactor(t, s)));
-    return {
-      group, surface: (d) => fe.surface(d), top: R.pts[R.pts.length - 1].clone(),
-      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
-      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} (四角)`,
-      update(t, s) { fe.setValues(vals(t, s)); },
-      contour(t, s) {
-        const load = loadFactor(t, s);
-        return Object.assign(stats(vals(t, s)), {
-          load, loadCase: s === "mismatch" ? "mismatch" : "settled",
-          info: [s === "mismatch" ? "左足に体重が偏る (食い違い)" : `内圧 ${Math.round(load * 100)} %` + (s === "working" ? " (増分)" : ""), "許容値を 1.0 とした膜の応力"],
-        });
-      },
-    };
-  }
-
-  // strength: the v2 body made boxy (a faceted block); stress from the loads.
-  // Like a pre-processor picture, the load on the prop arm root is drawn as an
-  // arrow and the leg supports as constraint triangles on the ground.
-  function bodyStrength(ctx) {
+  // Nodes of a jittered icosphere (three.js IcosahedronGeometry, one vertex on
+  // +y so the antenna grows from a node), each placed on the body by place(d).
+  // The jitter is seeded by the role id, as in v2.
+  function icoNodes(ctx, place) {
     const { THREE, opts } = ctx;
     const detail = DETAIL[opts.mesh] ?? DETAIL.coarse;
     const ico = new THREE.IcosahedronGeometry(1, detail);
-    // put one vertex of the icosahedron on +y so the antenna grows from a node
     ico.rotateX(-Math.atan2((1 + Math.sqrt(5)) / 2, 1));
     const w = weld(ico.attributes.position.array);
     ico.dispose();
+    // edge length of the subdivided icosahedron on the unit sphere
     const edge = 1.0515 / (detail + 1);
     const rnd = mulberry32(ctx.seed);
-    const blocky = (d) => {
-      const q = superDir(d, 5);
-      return shapePoint(THREE, q.multiplyScalar(0.93), 0);
-    };
     const pts = [];
     for (const n of w.nodes) {
       const d = new THREE.Vector3(n[0], n[1], n[2]).normalize();
       if (d.y > 0.9999) {
-        pts.push(blocky(d));
+        pts.push(place(d));
         continue;
       }
       const r = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1);
       r.addScaledVector(d, -r.dot(d)).multiplyScalar(0.16 * edge);
       const radial = 1 + (rnd() - 0.5) * 0.03;
-      pts.push(blocky(d.clone().add(r).normalize()).multiplyScalar(radial));
+      pts.push(place(d.clone().add(r).normalize()).multiplyScalar(radial));
     }
-    const fe = feMesh(THREE, pts, w.tris.map((t) => ({ n: t })));
+    return { pts, tris: w.tris };
+  }
+
+  // A triangle-element body whose stress comes from the limb loads (the v2
+  // model, stressFields): settled = both legs share the weight, the prop arm
+  // root carries the prop; mismatch = the weight on the left leg; working
+  // steps the load up in increments.
+  function stressBody(ctx, pts, tris) {
+    const { THREE, opts } = ctx;
+    const fe = feMesh(THREE, pts, tris.map((t) => ({ n: t })));
     const group = new THREE.Group();
     addFe(ctx, group, fe, { line: 1, self: 0.5 });
     addDots(ctx, group, fe, opts.mesh === "fine" ? 0.028 : 0.034);
     const field = stressFields(pts, ctx.roots, ctx.propMass);
     const vals = (t, s) => (s === "mismatch" ? field.mismatch : field.settled.map((v) => v * loadFactor(t, s)));
     const top = pts.reduce((b, p) => (p.y > b.y ? p : b), pts[0]);
-    // load arrow onto the prop arm root
-    const red = new THREE.MeshBasicMaterial({ color: C.miss });
-    const loadArrow = new THREE.Group();
-    const at = ctx.roots.armR.clone();
-    const from = at.clone().add(new THREE.Vector3(0.1, 0.62, 0.12));
-    const dir = at.clone().sub(from).normalize();
-    loadArrow.add(rodBetween(THREE, from, at.clone().addScaledVector(dir, -0.17), 0.028, red, 8));
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.2, 12), red);
-    cone.position.copy(at).addScaledVector(dir, -0.1);
-    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    loadArrow.add(cone);
-    group.add(loadArrow);
-    // constraint triangles beside the feet
-    const ground = new THREE.Group();
-    const bcMat = new THREE.MeshBasicMaterial({ color: C.s[0] });
-    for (const sx of [-1, 1]) {
-      for (const dz of [-0.16, 0.36]) {
-        const tri = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.13, 3), bcMat);
-        tri.position.set(sx * 0.37, 0.065, 0.1 + dz);
-        ground.add(tri);
-      }
-    }
     return {
-      group, ground, surface: (d) => fe.surface(d), top: top.clone(),
+      fe, group, surface: (d) => fe.surface(d), top: top.clone(),
       counts: { nodes: fe.nodeCount, elements: fe.elemCount },
-      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} · 矢印 = 荷重 · 三角 = 拘束`,
       field: { nodes: pts.map((p) => [p.x, p.y, p.z]), settled: field.settled, mismatch: field.mismatch, loads: field.loads, mismatchLoads: field.mismatchLoads },
       update(t, s) { fe.setValues(vals(t, s)); },
       contour(t, s) {
@@ -773,6 +722,64 @@
         return Object.assign(stats(vals(t, s)), { load, loadCase: s === "mismatch" ? "mismatch" : "settled", info: lines });
       },
     };
+  }
+
+  // lead: the v2 body. A round, slightly egg shaped body of triangle
+  // elements; stress from the weight on the legs and the prop on the arm.
+  function bodyLead(ctx) {
+    const { THREE } = ctx;
+    const N = icoNodes(ctx, (d) => shapePoint(THREE, d));
+    const B = stressBody(ctx, N.pts, N.tris);
+    B.caption = `節点 ${B.counts.nodes} · 要素 ${B.counts.elements} (三角) · 手足の荷重から計算`;
+    const base = B.contour;
+    B.contour = (t, s) => {
+      const c = base(t, s);
+      c.info = c.info.concat(["足 2 本が体重を分け、右腕が小道具を持つ"]);
+      return c;
+    };
+    return B;
+  }
+
+  // strength: the v2 body made boxy (a faceted block); stress from the loads.
+  // As in a pre-processor, the load is an arrow that stops at the surface
+  // (it points along the inward face normal; its tip touches the face), and
+  // the supports are flat triangles on the ground under the feet.
+  function bodyStrength(ctx) {
+    const { THREE } = ctx;
+    const N = icoNodes(ctx, (d) => shapePoint(THREE, superDir(d, 5).multiplyScalar(0.93), 0));
+    const B = stressBody(ctx, N.pts, N.tris);
+    // load arrow onto the shoulder above the prop arm
+    const red = new THREE.MeshBasicMaterial({ color: C.miss });
+    const hit = B.fe.surface(new THREE.Vector3(0.62, 0.42, 0.42));
+    const n = hit.normal.clone().normalize();
+    const tipAt = hit.point.clone().addScaledVector(n, 0.015);
+    const loadArrow = new THREE.Group();
+    const CONE = 0.24;
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.085, CONE, 14), red);
+    cone.position.copy(tipAt).addScaledVector(n, CONE / 2);
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n.clone().negate());
+    loadArrow.add(cone);
+    loadArrow.add(rodBetween(THREE, tipAt.clone().addScaledVector(n, CONE * 0.9), tipAt.clone().addScaledVector(n, 0.82), 0.03, red, 10));
+    B.group.add(loadArrow);
+    B.arrow = { tip: tipAt.clone(), dir: n.clone().negate(), length: 0.82 };
+    // supports: a flat triangle on the ground under each foot, pointing forward
+    const ground = new THREE.Group();
+    const bcMat = new THREE.MeshBasicMaterial({ color: C.s[0], side: THREE.DoubleSide });
+    const triShape = new THREE.Shape();
+    triShape.moveTo(0, 0.36);
+    triShape.lineTo(-0.24, -0.16);
+    triShape.lineTo(0.24, -0.16);
+    triShape.closePath();
+    for (const sx of [-1, 1]) {
+      const tri = new THREE.Mesh(new THREE.ShapeGeometry(triShape), bcMat);
+      tri.rotation.x = -Math.PI / 2;
+      tri.position.set(sx * 0.37, 0.006, 0.12);
+      tri.renderOrder = -1;
+      ground.add(tri);
+    }
+    B.ground = ground;
+    B.caption = `節点 ${B.counts.nodes} · 要素 ${B.counts.elements} · 矢印 = 荷重 · 三角 = 拘束`;
+    return B;
   }
 
   // aero: a teardrop of translucent fluid; surface streamlines run from the
@@ -883,96 +890,117 @@
     };
   }
 
-  // crash: a rounded-box shell of quad elements whose front (the face side)
-  // is crushed: shortened, folded in two lobes along the sides and crumpled
-  // at the front plate. Plastic strain per node = 0.35 * membrane strain
-  // (mean |l / l0 - 1| of the element edges at the node) + bending (change of
-  // the normal angle to the neighbours per unit length, times a shell
-  // thickness 0.25), normalised by the 90 % point of the full symmetric
-  // crush. The fold hinges carry the largest values.
+  // crash: the body is not crushed. A rounded-box shell of quad elements is
+  // hit on the bottom front edge (well below the face); a stress wave runs out from the
+  // impact point over the shell, a small dent stays there, shock rings leave
+  // the point and a deceleration pulse is plotted beside the feet.
+  // Stress at a node, d = distance to the impact point, tau = time since the
+  // impact: residual 0.3 exp(-(d / 0.25)^2) + wave a exp(-((d - c tau) / w)^2)
+  // exp(-d / 3) + a second, weaker wave 0.5 s later (0.4 a), w = 0.22,
+  // c = 1.1 per s (1.6 when working). Values above 1.0 are red.
   function bodyCrash(ctx) {
     const { THREE } = ctx;
-    const nu = ctx.fine ? 28 : 20, nv = ctx.fine ? 14 : 10;
+    const nu = ctx.fine ? 32 : 24, nv = ctx.fine ? 16 : 12;
     const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
     const R = revolve(THREE, prof, nu, (lat, phi) => {
       const q = superDir(latDir(THREE, lat, phi), 4);
       return new THREE.Vector3(q.x * 0.97, q.y * 0.92, q.z * 0.92);
     });
     const P0 = R.pts;
-    const Z0 = 0.05, ZMAX = 0.92;
-    const rnd = mulberry32(ctx.seed);
-    const jag = P0.map(() => rnd());
-    const deform = (c, asym) => P0.map((p, i) => {
-      if (p.z <= Z0) return p.clone();
-      const s = (p.z - Z0) / (ZMAX - Z0);
-      const cr = 0.42 * c * (1 + asym * p.x * 0.9);
-      const q = p.clone();
-      q.z = Z0 + (p.z - Z0) * (1 - cr);
-      // folds: two lobes along the crushed length, growing to the front
-      const fold = 0.2 * c * Math.sin(2 * Math.PI * s) * Math.min(1, 2 * s);
-      const rxy = Math.hypot(p.x, p.y) || 1;
-      const side = Math.min(1, rxy / 0.6);
-      q.x += (p.x / rxy) * side * (fold + 0.07 * c * s);
-      q.y += (p.y / rxy) * side * (fold * 0.85 + 0.05 * c * s);
-      // crumpled front plate (seeded pattern)
-      if (s > 0.7) q.z -= c * ((s - 0.7) / 0.3) * (0.05 + 0.2 * jag[i]);
-      return q;
-    });
     const fe = feMesh(THREE, P0, R.elems);
-    const edges = fe.edges.map(([i, j]) => [i, j, P0[i].distanceTo(P0[j])]);
-    const tris = fe.tris.map((T) => T.n);
-    const normals = (P) => {
-      const n = P.map(() => new THREE.Vector3());
-      const a = new THREE.Vector3(), b = new THREE.Vector3(), f = new THREE.Vector3();
-      for (const [i, j, k] of tris) {
-        f.crossVectors(a.subVectors(P[j], P[i]), b.subVectors(P[k], P[i]));
-        n[i].add(f); n[j].add(f); n[k].add(f);
-      }
-      return n.map((v) => v.normalize());
-    };
-    const N0 = normals(P0);
-    const strain = (P) => {
-      const N = normals(P);
-      const acc = new Float64Array(P.length), cnt = new Float64Array(P.length);
-      for (const [i, j, l0] of edges) {
-        const mem = Math.abs(P[i].distanceTo(P[j]) / l0 - 1);
-        const bend = (Math.abs(N[i].angleTo(N[j]) - N0[i].angleTo(N0[j])) / l0) * 0.25;
-        const e = 0.35 * mem + bend;
-        acc[i] += e; acc[j] += e; cnt[i]++; cnt[j]++;
-      }
-      return Array.from(acc, (v, i) => v / Math.max(1, cnt[i]));
-    };
-    // 1.0 = the 90 % point of the full symmetric crush (the top tenth is red)
-    const full = strain(deform(1, 0)).slice().sort((a, b) => a - b);
-    const ref = full[Math.floor(full.length * 0.9)];
+    const N0 = fe.nn.map((v) => v.clone());
     const group = new THREE.Group();
-    addFe(ctx, group, fe, { line: 1, self: 0.5 });
-    const crush = (t, s) => (s === "working" ? ramp(t) : 1);
-    let last = null;
-    const solve = (t, s) => {
-      const key = s === "working" ? crush(t, s).toFixed(5) : s;
-      if (last && last.key === key) return last;
-      const P = deform(crush(t, s), s === "mismatch" ? 1 : 0);
-      last = { key, P, v: strain(P).map((v) => v / ref) };
-      return last;
+    addFe(ctx, group, fe, { line: 0.8, self: 0.5 });
+    // impact points: straight on the lower front, or the front right corner
+    // (offset impact, mismatch)
+    const IMPACT = {
+      centre: fe.surface(new THREE.Vector3(0, -0.74, 0.68)),
+      offset: fe.surface(new THREE.Vector3(0.66, -0.55, 0.52)),
     };
-    const body = {
-      group, deforms: true, top: P0[P0.length - 1].clone(),
+    const DENT = { depth: 0.055, radius: 0.3 };
+    const W_WAVE = 0.22;
+    const cWave = (s) => (s === "working" ? 1.6 : 1.1);
+    const cycle = (s) => (s === "working" ? 1.6 : 2.6);
+    const tauOf = (t, s) => (((t % cycle(s)) + cycle(s)) % cycle(s));
+    const ampOf = (t, s) => (s === "working" ? 0.75 + 0.35 * ramp(t) : 0.85);
+    const shapes = {};
+    const shapeFor = (key) => {
+      if (shapes[key]) return shapes[key];
+      const I = IMPACT[key].point;
+      const d = P0.map((p) => p.distanceTo(I));
+      const P = P0.map((p, i) => {
+        const f = Math.max(0, 1 - (d[i] / DENT.radius) ** 2);
+        return p.clone().addScaledVector(N0[i], -DENT.depth * f * f);
+      });
+      shapes[key] = { I, n: IMPACT[key].normal.clone().normalize(), d, P };
+      return shapes[key];
+    };
+    const keyOf = (s) => (s === "mismatch" ? "offset" : "centre");
+    const vals = (t, s) => {
+      const S = shapeFor(keyOf(s));
+      const tau = tauOf(t, s), a = ampOf(t, s);
+      const c = cWave(s);
+      const wave = (d, tt) => (tt < 0 ? 0 : Math.exp(-(((d - c * tt) / W_WAVE) ** 2)) * Math.exp(-d / 3));
+      return S.d.map((d) => 0.3 * Math.exp(-((d / 0.25) ** 2)) + a * wave(d, tau) + 0.4 * a * wave(d, tau - 0.5));
+    };
+    // shock rings: three ripples running out from the impact point
+    const ringMats = [];
+    const rings = [0, 1, 2].map(() => {
+      const m = new THREE.MeshBasicMaterial({ color: C.ink, transparent: true, opacity: 0.8, depthWrite: false });
+      ctx.inkMats.push({ mat: m, paper: C.ink, night: C.onNightSoft });
+      ringMats.push(m);
+      const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 6, 48), m);
+      group.add(r);
+      return r;
+    });
+    // deceleration pulse beside the left foot (stays on the ground)
+    const ground = new THREE.Group();
+    const X0 = -1.42, X1 = -0.74, Y0 = 0.06, Y1 = 0.46, ZP = 0.62, TP = 0.9;
+    const axisMat = new THREE.MeshBasicMaterial({ color: C.ink });
+    ctx.inkMats.push({ mat: axisMat, paper: C.ink, night: C.onNightSoft });
+    ground.add(rodBetween(THREE, new THREE.Vector3(X0, Y0, ZP), new THREE.Vector3(X1 + 0.04, Y0, ZP), 0.009, axisMat, 6));
+    ground.add(rodBetween(THREE, new THREE.Vector3(X0, Y0, ZP), new THREE.Vector3(X0, Y1 + 0.03, ZP), 0.009, axisMat, 6));
+    // pulse: g = sin(pi tau / 0.7)^2 (1 + 0.15 sin(14 tau)) for tau < 0.7, then 0
+    const pulse = (tau) => (tau < 0.7 ? Math.sin((Math.PI * tau) / 0.7) ** 2 * (1 + 0.15 * Math.sin(14 * tau)) : 0);
+    const gMax = Math.max(...Array.from({ length: 141 }, (_, i) => pulse(i * 0.005)));
+    const plotPt = (tau) => new THREE.Vector3(X0 + 0.015 + (Math.min(tau, TP) / TP) * (X1 - X0 - 0.03), Y0 + 0.02 + (pulse(Math.min(tau, TP)) / gMax) * (Y1 - Y0 - 0.04), ZP);
+    const curve = Array.from({ length: 46 }, (_, i) => plotPt((i / 45) * TP));
+    const curveMat = new THREE.MeshBasicMaterial({ color: C.miss });
+    ground.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve), 90, 0.014, 6, false), curveMat));
+    const nowDot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 10), axisMat);
+    ground.add(nowDot);
+    let lastKey = null;
+    return {
+      group, ground, top: P0[P0.length - 1].clone(),
       surface: (d) => fe.surface(d),
       counts: { nodes: fe.nodeCount, elements: fe.elemCount },
-      caption: `節点 ${fe.nodeCount} · 殻の要素 ${fe.elemCount}`,
+      caption: `殻の要素 ${fe.elemCount} · 輪 = 衝撃 · 左下 = 減速度`,
       update(t, s) {
-        const r = solve(t, s);
-        fe.setNodes(r.P);
-        fe.setValues(r.v);
+        const key = keyOf(s);
+        const S = shapeFor(key);
+        if (key !== lastKey) {
+          fe.setNodes(S.P);
+          lastKey = key;
+        }
+        fe.setValues(vals(t, s));
+        const tau = tauOf(t, s);
+        const rate = s === "working" ? 1.4 : 0.8;
+        rings.forEach((r, k) => {
+          const f = (((t * rate + k / 3) % 1) + 1) % 1;
+          const rad = 0.06 + 0.38 * f;
+          r.position.copy(S.I).addScaledVector(S.n, 0.05 + 0.12 * f);
+          r.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), S.n);
+          r.scale.set(rad, rad, rad);
+          ringMats[k].opacity = 0.9 * (1 - f);
+        });
+        nowDot.position.copy(plotPt(tau));
       },
       contour(t, s) {
-        const c = crush(t, s);
-        const info = [s === "mismatch" ? "潰れ方: 右に偏る (食い違い)" : `潰れ ${Math.round(c * 100)} %` + (s === "working" ? " (進行中)" : ""), "ひずみ = 伸び縮み + 折れ曲がり"];
-        return Object.assign(stats(solve(t, s).v), { info });
+        const tau = tauOf(t, s);
+        const info = [s === "mismatch" ? "右の角に当たった (オフセット、食い違い)" : "前の下に当たった (正面)", `当たってから ${tau.toFixed(2)} 秒 · 応力の波が広がる` + (s === "working" ? " (くり返し)" : "")];
+        return Object.assign(stats(vals(t, s)), { info });
       },
     };
-    return body;
   }
 
   // nvh: an eigenmode. The mesh moves with an exaggerated mode shape
@@ -1113,85 +1141,155 @@
     };
   }
 
-  // powertrain: a cylindrical cell. Current enters at the top terminal,
-  // spreads over the cap, runs down the wall and leaves at the bottom.
-  // Current density on a cap ~ I / (2 pi r) (capped at the terminal radius),
-  // on the wall I / (2 pi R).
+  // powertrain: an engine combustion chamber with a battery cell pack beside
+  // it. The upper body is the gas in the cylinder (domed head, straight
+  // liner); the lower body is the piston with ring grooves. A spark plug on
+  // the head lights a flame that spreads through the gas, like the
+  // temperature of a combustion CFD run. Progress at a node,
+  // c = (1 - tanh((d - rf (1 + wrinkle)) / 0.08)) / 2 (d = distance to the
+  // plug, rf = flame radius growing over the burn), T = Tu + (Tb - Tu) c with
+  // Tu = 0.1 and Tb = 0.82 + 0.16 (1 - d / dmax) (gas burnt early is hotter).
+  // Mismatch adds an auto-ignition hot spot in the end gas (knock).
   function bodyPowertrain(ctx) {
-    const { THREE } = ctx;
-    const RC = 0.86, HH = 0.86, F = 0.2, RT = 0.22, DZ = 0.93;
+    const { THREE, role } = ctx;
+    const RC = 0.86, DZ = 0.93, F = 0.18;
+    const YT = 0.9, YD = 0.76, YP = -0.3, YB = -0.86;
+    // profile from the head centre (top pole) down to the piston crown centre
     const prof = [];
-    const capN = 3, filN = 3, sideN = ctx.fine ? 7 : 5;
-    prof.push({ r: 0, y: -HH });
-    for (let k = 1; k <= capN; k++) prof.push({ r: ((RC - F) * k) / capN, y: -HH });
-    for (let k = 1; k <= filN; k++) { const a = -Math.PI / 2 + (Math.PI / 2) * (k / filN); prof.push({ r: RC - F + F * Math.cos(a), y: -HH + F + F * Math.sin(a) }); }
-    for (let k = 1; k < sideN; k++) prof.push({ r: RC, y: -HH + F + ((2 * HH - 2 * F) * k) / sideN });
-    for (let k = 0; k < filN; k++) { const a = (Math.PI / 2) * (k / filN); prof.push({ r: RC - F + F * Math.cos(a), y: HH - F + F * Math.sin(a) }); }
-    for (let k = 0; k <= capN; k++) prof.push({ r: (RC - F) * (1 - k / capN), y: HH });
-    const nu = ctx.fine ? 24 : 16;
+    const capN = 4, filN = 3, sideN = ctx.fine ? 8 : 6;
+    // domed head: y = YD + (YT - YD) (1 - (r / (RC - F))^2)
+    for (let k = 0; k <= capN; k++) {
+      const r = ((RC - F) * k) / capN;
+      prof.push({ r, y: YD + (YT - YD) * (1 - (r / (RC - F)) ** 2) });
+    }
+    for (let k = 1; k <= filN; k++) { const a = (Math.PI / 2) * (k / filN); prof.push({ r: RC - F + F * Math.sin(a), y: YD - F + F * Math.cos(a) }); }
+    for (let k = 1; k < sideN; k++) prof.push({ r: RC, y: YD - F - ((YD - F - YP) * k) / sideN });
+    prof.push({ r: RC, y: YP });
+    for (let k = 1; k <= 3; k++) prof.push({ r: RC * (1 - k / 3), y: YP });
+    prof.reverse(); // bottom pole first, as revolve expects
+    const nu = ctx.fine ? 28 : 20;
     const map = (p, phi) => new THREE.Vector3(p.r * Math.sin(phi), p.y, p.r * Math.cos(phi) * DZ);
     const R = revolve(THREE, prof, nu, map);
     const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
     const group = new THREE.Group();
-    addFe(ctx, group, fe, { line: 0.55, self: 0.5, rough: 0.38, metal: 0.1 });
-    // + terminal on top
-    const term = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.1, 20), ctx.M.metal);
-    term.position.y = HH + 0.05;
-    term.castShadow = true;
-    group.add(term);
-    addHull(THREE, term, 0.022, ctx.hulls);
-    const PHI0 = Math.PI / 2;
-    const density = (p, I, mis) => {
-      const r = Math.hypot(p.x, p.z / DZ);
-      let J = Math.abs(p.y) > HH - F * 0.6 ? RT / Math.max(r, RT) : RT / RC;
-      if (mis && Math.abs(p.y) <= HH - F * 0.6) J *= 1 + 2.6 * Math.pow(Math.max(0, Math.cos(Math.atan2(p.x, p.z) - PHI0)), 4);
-      return J * I;
+    addFe(ctx, group, fe, { line: 0.3, iso: 1, self: 0.5, rough: 0.45 });
+    // piston below the gas: skirt, ring grooves, pin boss
+    const metal = ctx.M.metal;
+    const piston = new THREE.Mesh(new THREE.CylinderGeometry(RC * 0.975, RC * 0.975, YP - YB - 0.015, nu * 2), metal);
+    piston.scale.z = DZ;
+    piston.position.y = (YP + YB) / 2 - 0.0075;
+    piston.castShadow = true;
+    piston.userData.body = true;
+    group.add(piston);
+    addHull(THREE, piston, 0.035, ctx.hulls);
+    const grooveMat = ctx.M.ink;
+    for (const y of [YP - 0.08, YP - 0.15, YP - 0.22]) {
+      const g = new THREE.Mesh(new THREE.TorusGeometry(RC * 0.978, 0.013, 6, nu * 2), grooveMat);
+      g.rotation.x = Math.PI / 2;
+      g.scale.y = DZ;
+      g.position.y = y;
+      group.add(g);
+    }
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 20), ctx.M.inkSoft);
+    boss.rotation.x = Math.PI / 2;
+    boss.position.set(0, -0.6, RC * 0.975 * DZ + 0.005);
+    group.add(boss);
+    // spark plug on the head, off the centre (the antenna is on the centre)
+    const PX = -0.34, PZ = 0.16;
+    const headY = (x, z) => {
+      const r = Math.hypot(x, z / DZ);
+      return YD + (YT - YD) * (1 - (r / (RC - F)) ** 2);
     };
-    const current = (t, s) => (s === "working" ? 0.35 + 0.65 * ramp(t) : s === "pass" ? 0.85 : 0.8);
-    const vals = (t, s) => R.pts.map((p) => density(p, current(t, s), s === "mismatch"));
-    // current lines: from the terminal over the cap, down the wall, out below
-    const paths = [];
-    [45, 135, 225, 315, 90, 270].forEach((deg, k) => {
-      const phi = (deg * Math.PI) / 180;
-      const pts = [], v = [];
-      for (let j = prof.length - 2; j >= 1; j--) {
-        const p = prof[j], q0 = prof[j + 1], q1 = prof[j - 1];
-        const tr = q1.r - q0.r, ty = q1.y - q0.y, tl = Math.hypot(tr, ty) || 1;
-        // outward normal of the profile (walking top -> bottom)
-        const nr = -ty / tl, ny = tr / tl;
-        const pp = map({ r: p.r + 0.03 * nr, y: p.y + 0.03 * ny }, phi);
-        pts.push(pp);
-        v.push(density(map(p, phi), 1, false));
-      }
-      paths.push({ pts, vals: v, s0: k * 0.29 });
+    const plugY = headY(PX, PZ);
+    const plug = new THREE.Group();
+    plug.position.set(PX, plugY, PZ);
+    group.add(plug);
+    const hex = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 6), metal);
+    hex.position.y = 0.035;
+    plug.add(hex);
+    addHull(THREE, hex, 0.014, ctx.hulls);
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.16, 16), ctx.M.paper);
+    ins.position.y = 0.15;
+    plug.add(ins);
+    addHull(THREE, ins, 0.014, ctx.hulls);
+    const capT = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.05, 12), ctx.M.ink);
+    capT.position.y = 0.255;
+    plug.add(capT);
+    // battery cells strapped on the left of the piston (hybrid)
+    const cellMat = std(THREE, C.paper, 0.6);
+    const band = std(THREE, role.color, 0.45);
+    const cells = new THREE.Group();
+    group.add(cells);
+    [0.2, -0.06].forEach((z) => {
+      const x = -RC - 0.1;
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.42, 20), cellMat);
+      c.position.set(x, (YP + YB) / 2 - 0.03, z);
+      c.castShadow = true;
+      cells.add(c);
+      addHull(THREE, c, 0.016, ctx.hulls);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.102, 0.102, 0.1, 20), band);
+      b.position.copy(c.position);
+      cells.add(b);
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 12), metal);
+      tip.position.set(x, c.position.y + 0.23, z);
+      cells.add(tip);
     });
-    const flowMat = flowMaterial(THREE, ctx.U, { speed: 0.9, dens: 3.0, duty: 0.5 });
-    ctx.flowMats.push(flowMat);
-    const lines = new THREE.Mesh(tubes(THREE, paths, 0.022, 5), flowMat);
-    lines.frustumCulled = false;
-    group.add(lines);
+    const bus = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.34), ctx.M.ink);
+    bus.position.set(-RC - 0.1, (YP + YB) / 2 - 0.03 + 0.255, 0.07);
+    cells.add(bus);
+
+    // flame
+    const P0 = new THREE.Vector3(PX, plugY - 0.02, PZ);
+    const dist = R.pts.map((p) => p.distanceTo(P0));
+    const dmax = Math.max(...dist);
+    const wr = R.pts.map((p) => {
+      const v = p.clone().sub(P0);
+      const phi = Math.atan2(v.z, v.x), th = Math.atan2(v.y, Math.hypot(v.x, v.z));
+      return 0.1 * Math.sin(5 * phi + 1.3) * Math.sin(3 * th + 0.7);
+    });
+    const KNOCK = new THREE.Vector3(0.66, -0.12, 0.42);
+    const cycle = (s) => (s === "working" ? { P: 1.6, burn: 1.1 } : { P: 3.0, burn: 2.0 });
+    const progress = (t, s) => {
+      const c = cycle(s);
+      const tau = ((t % c.P) + c.P) % c.P;
+      return Math.min(1, tau / c.burn);
+    };
+    const vals = (t, s) => {
+      const rf = 1.12 * dmax * progress(t, s);
+      return R.pts.map((p, i) => {
+        const c = 0.5 * (1 - Math.tanh((dist[i] - rf * (1 + wr[i])) / 0.08));
+        const Tb = 0.82 + 0.16 * (1 - dist[i] / dmax);
+        let T = 0.1 + (Tb - 0.1) * c;
+        if (s === "mismatch") T += 1.0 * Math.exp(-p.distanceToSquared(KNOCK) / 0.06);
+        return T;
+      });
+    };
+    const sparkMat = new THREE.MeshBasicMaterial({ color: C.s[3] });
+    const spark = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 1), sparkMat);
+    spark.position.copy(P0).add(new THREE.Vector3(0, 0.005, 0));
+    group.add(spark);
     return {
-      group, surface: (d) => fe.surface(d), top: new THREE.Vector3(0, HH + 0.1, 0),
+      group, surface: (d) => fe.surface(d), top: new THREE.Vector3(0, YT, 0),
       counts: { nodes: fe.nodeCount, elements: fe.elemCount },
-      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} · 電流の線 ${paths.length} 本`,
+      caption: `節点 ${fe.nodeCount} · 線 = 等温線 · ピストンと電池のセル`,
       update(t, s) {
         fe.setValues(vals(t, s));
-        const f = flowMat.userData.flow;
-        const I = current(t, s);
-        f.uSpeed.value = 1.6 * I;
-        f.uGain.value = I;
+        const p = progress(t, s);
+        spark.visible = p < 0.25;
       },
       contour(t, s) {
-        const I = current(t, s);
-        const info = [`電流 ${Math.round(I * 100)} %` + (s === "working" ? " (上げている)" : ""), s === "mismatch" ? "右の壁に電流が集まる (食い違い)" : "端子のまわりで濃く、壁は一様"];
+        const p = progress(t, s);
+        const info = [`火炎が燃焼室の ${Math.round(Math.min(1, p * 1.12) * 100)} % まで広がった` + (s === "working" ? " (速い回転)" : ""), s === "mismatch" ? "奥で自己着火 (ノッキング、食い違い)" : "点火プラグから火炎面が広がる"];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
   }
 
-  // designer: a CAD surface (superellipsoid) with isoparametric lines and
-  // dimension lines; no mesh. Colour = curvature from the surface normals,
+  // designer: a CAD surface (superellipsoid) with isoparametric lines; no
+  // mesh and no dimension lines. Colour = curvature from the surface normals,
   // kappa = mean |n_i - n_j| / |p_i - p_j| over neighbouring samples.
+  // Mismatch: the shape parameter jumps off the design value and the
+  // parameter lines turn red.
   function bodyDesigner(ctx) {
     const { THREE } = ctx;
     const nu = 48, nv = 24;
@@ -1204,7 +1302,9 @@
     const R = revolve(THREE, prof, nu, shapeAt(3), (i) => i % 6 === 0, (j) => j % 4 === 0);
     const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
     const group = new THREE.Group();
-    addFe(ctx, group, fe, { line: 0.9, always: true, self: 0.32, rough: 0.3, metal: 0.05, lineColor: 0x2a3a52 });
+    const LINE = 0x2a3a52;
+    const mesh = addFe(ctx, group, fe, { line: 0.9, always: true, self: 0.32, rough: 0.3, metal: 0.05, lineColor: LINE });
+    const lineCol = mesh.material.userData.hk.L.uLineCol.value;
     const nb = R.pts.map(() => []);
     for (const [i, j] of fe.edges) { nb[i].push(j); nb[j].push(i); }
     const curvature = () => fe.pts.map((p, i) => {
@@ -1213,7 +1313,7 @@
       return k / nb[i].length;
     });
     const kRef = Math.max(...curvature()) * 0.85;
-    const expo = (t, s) => (s === "working" ? 3 + 0.9 * Math.sin((TAU * t) / 4.4) : 3);
+    const expo = (t, s) => (s === "working" ? 3 + 0.9 * Math.sin((TAU * t) / 4.4) : s === "mismatch" ? 4.6 : 3);
     let last = null;
     const solve = (t, s) => {
       const n = expo(t, s);
@@ -1223,53 +1323,6 @@
       last = { n, v: curvature().map((k) => k / kRef) };
       return last;
     };
-    // dimension lines (ink): height on the left, width in front at the feet
-    const dimMat = new THREE.MeshBasicMaterial({ color: C.ink });
-    const missMat = new THREE.MeshBasicMaterial({ color: C.miss });
-    ctx.inkMats.push({ mat: dimMat, paper: C.ink, night: C.onNightSoft });
-    const dims = new THREE.Group();
-    group.add(dims);
-    const r = 0.012;
-    const arrow = (g, tip, dir, mat) => {
-      const c = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.11, 10), mat);
-      c.position.copy(tip).addScaledVector(dir, -0.055);
-      c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-      g.add(c);
-    };
-    const dimension = (p0, p1, ext0, ext1, mat) => {
-      const g = new THREE.Group();
-      const d = p1.clone().sub(p0).normalize();
-      g.add(rodBetween(THREE, p0, p1, r, mat, 6));
-      arrow(g, p0, d.clone().negate(), mat);
-      arrow(g, p1, d, mat);
-      g.add(rodBetween(THREE, ext0[0], ext0[1], r * 0.8, mat, 6));
-      g.add(rodBetween(THREE, ext1[0], ext1[1], r * 0.8, mat, 6));
-      // value plate
-      const mid = p0.clone().add(p1).multiplyScalar(0.5);
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.09, 0.012), mat);
-      plate.position.copy(mid);
-      g.add(plate);
-      return g;
-    };
-    const X = -1.32, ZD = -0.1;
-    const hDim = dimension(
-      new THREE.Vector3(X, -HALF.y, ZD), new THREE.Vector3(X, HALF.y, ZD),
-      [new THREE.Vector3(-0.2, -HALF.y, ZD), new THREE.Vector3(X - 0.1, -HALF.y, ZD)],
-      [new THREE.Vector3(-0.2, HALF.y, ZD), new THREE.Vector3(X - 0.1, HALF.y, ZD)], dimMat
-    );
-    hDim.children.forEach((c) => { if (c.geometry.type === "BoxGeometry") c.rotation.z = Math.PI / 2; });
-    dims.add(hDim);
-    const YW = -1.06, ZW = 0.95;
-    dims.add(dimension(
-      new THREE.Vector3(-HALF.x, YW, ZW), new THREE.Vector3(HALF.x, YW, ZW),
-      [new THREE.Vector3(-HALF.x, -0.45, ZW * 0.55), new THREE.Vector3(-HALF.x, YW - 0.08, ZW)],
-      [new THREE.Vector3(HALF.x, -0.45, ZW * 0.55), new THREE.Vector3(HALF.x, YW - 0.08, ZW)], dimMat
-    ));
-    // mismatch: the height dimension does not match the shape
-    const hMis = hDim.clone();
-    hMis.traverse((o) => { if (o.isMesh) o.material = missMat; });
-    hMis.position.y = 0.16;
-    dims.add(hMis);
     return {
       group, deforms: true, top: new THREE.Vector3(0, HALF.y, 0),
       surface: (d) => fe.surface(d),
@@ -1277,253 +1330,333 @@
       caption: "なめらかな面 1 枚 · パラメータの線 u 8 · v 6",
       update(t, s) {
         fe.setValues(solve(t, s).v);
-        hDim.visible = s !== "mismatch";
-        hMis.visible = s === "mismatch";
+        lineCol.setHex(s === "mismatch" ? C.miss : LINE);
       },
       contour(t, s) {
         const n = expo(t, s);
-        const info = [`形のパラメータ n = ${n.toFixed(2)}` + (s === "working" ? " (動かしている)" : ""), s === "mismatch" ? "高さの寸法が形と合わない (食い違い)" : "角の丸みで曲率が大きい"];
+        const info = [`形のパラメータ n = ${n.toFixed(2)}` + (s === "working" ? " (動かしている)" : ""), s === "mismatch" ? "形が設計の値 n = 3 からずれた (食い違い)" : "角の丸みで曲率が大きい"];
         return Object.assign(stats(solve(t, s).v), { info });
       },
     };
   }
 
-  // packager: an assembly of boxes held by bolts, slightly exploded.
-  // Colour = closeness to the nearest other part, max(0, 1 - d / 0.5) (d = distance
-  // to that part's box; inside another part counts as touching or more).
+  // Mix two 0xRRGGBB colours, f = share of b.
+  function mixHex(a, b, f) {
+    const ch = (x, s) => (x >> s) & 255;
+    const m = (s) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * f);
+    return (m(16) << 16) | (m(8) << 8) | m(0);
+  }
+
+  // packager: an assembly drawing, no contour. Three rounded-box parts, each
+  // in its own calm colour (the stress steps --s1 / --s3 / --s4 mixed half
+  // with --paper), their tangent edges drawn as ink lines like a CAD view,
+  // held by four bolts with washers through the lid and four nuts on the base
+  // flange, slightly exploded so the mating faces show.
   function bodyPackager(ctx) {
     const { THREE } = ctx;
-    const f = ctx.fine ? 2 : 1;
+    const nu = ctx.fine ? 40 : 32, nv = ctx.fine ? 24 : 18;
+    const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
     const parts = [
-      { name: "base", h: new THREE.Vector3(0.95, 0.24, 0.85), n: [6 * f, 2 * f, 5 * f] },
-      { name: "main", h: new THREE.Vector3(0.86, 0.4, 0.8), n: [6 * f, 4 * f, 5 * f] },
-      { name: "lid", h: new THREE.Vector3(0.76, 0.2, 0.7), n: [5 * f, 2 * f, 4 * f] },
+      { name: "base", h: new THREE.Vector3(1.04, 0.13, 0.92), n: 10, color: mixHex(C.s[2], C.paper, 0.5) },
+      { name: "main", h: new THREE.Vector3(0.88, 0.47, 0.8), n: 6, color: mixHex(C.s[0], C.paper, 0.5) },
+      { name: "lid", h: new THREE.Vector3(0.8, 0.18, 0.74), n: 8, color: mixHex(C.s[3], C.paper, 0.5) },
     ];
     const group = new THREE.Group();
-    let nodes = 0, elems = 0;
+    const edgeMat = new THREE.MeshBasicMaterial({ color: C.ink });
+    ctx.inkMats.push({ mat: edgeMat, paper: C.ink, night: C.onNightSoft });
+    let nodes = 0;
     for (const p of parts) {
-      const B = boxGrid(THREE, [p.h.x, p.h.y, p.h.z], p.n);
-      p.fe = feMesh(THREE, B.pts, B.elems);
+      const R = revolve(THREE, prof, nu, (lat, phi) => {
+        const q = superDir(latDir(THREE, lat, phi), p.n);
+        return new THREE.Vector3(q.x * p.h.x, q.y * p.h.y, q.z * p.h.z);
+      });
+      p.fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
       p.g = new THREE.Group();
       group.add(p.g);
-      addFe(ctx, p.g, p.fe, { line: 1, self: 0.5 }, 0.03);
+      p.mat = std(THREE, p.color, 0.5, 0.05);
+      const mesh = new THREE.Mesh(p.fe.geom, p.mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.body = true;
+      p.g.add(mesh);
+      const hull = new THREE.Mesh(p.fe.hullGeom, null);
+      hull.userData.hullWidth = 0.03;
+      p.g.add(hull);
+      ctx.hulls.push(hull);
+      // tangent edges: the rings where the top and bottom faces round over
+      for (const sgn of [-1, 1]) {
+        let best = 1, bestD = Infinity;
+        for (let j = 1; j < nv; j++) {
+          const y = R.pts[1 + (j - 1) * nu].y / p.h.y;
+          if (Math.abs(y - sgn * 0.86) < bestD) { bestD = Math.abs(y - sgn * 0.86); best = j; }
+        }
+        const ring = Array.from({ length: nu }, (_, i) => R.pts[1 + (best - 1) * nu + i].clone().multiplyScalar(1.004));
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ring, true), nu * 2, 0.008, 4, true), edgeMat);
+        p.g.add(tube);
+      }
       nodes += p.fe.nodeCount;
-      elems += p.fe.elemCount;
     }
     const [base, main, lid] = parts;
     base.g.position.y = -0.93 + base.h.y;
-    // bolts through the corners, hex heads on the lid
-    const corners = [[0.58, 0.52], [-0.58, 0.52], [0.58, -0.52], [-0.58, -0.52]];
-    const shafts = corners.map(([x, z]) => {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 6), ctx.M.metal);
-      m.position.set(x, 0, z);
-      m.castShadow = true;
-      group.add(m);
-      return m;
+    const metal = ctx.M.metal;
+    const red = std(THREE, C.miss, 0.45);
+    // bolts through the lid corners: hex head and washer on the lid, shaft
+    // seen in the gaps
+    const corners = [[0.56, 0.5], [-0.56, 0.5], [0.56, -0.5], [-0.56, -0.5]];
+    const bolts = corners.map(([x, z]) => {
+      const head = new THREE.Group();
+      head.position.set(x, lid.h.y * 0.98, z);
+      lid.g.add(head);
+      const washer = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 24), metal);
+      washer.position.y = 0.01;
+      head.add(washer);
+      const hex = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 6), metal);
+      hex.position.y = 0.055;
+      hex.castShadow = true;
+      head.add(hex);
+      addHull(THREE, hex, 0.012, ctx.hulls);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 10), metal);
+      shaft.position.set(x, 0, z);
+      group.add(shaft);
+      return { head, hex, shaft, x, z };
     });
-    const heads = corners.map(([x, z]) => {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 6), ctx.M.metal);
-      m.position.set(x, lid.h.y + 0.035, z);
-      m.castShadow = true;
-      lid.g.add(m);
-      addHull(THREE, m, 0.014, ctx.hulls);
-      return m;
-    });
-    const gapOf = (t, s) => (s === "working" ? 0.08 + 0.3 * (0.5 - 0.5 * Math.cos((TAU * t) / 4.4)) : 0.08);
+    // nuts on the base flange, with the stud showing
+    for (const [x, z] of [[0.96, 0.84], [-0.96, 0.84], [0.96, -0.84], [-0.96, -0.84]]) {
+      const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 6), metal);
+      nut.position.set(x, base.h.y * 0.9 + 0.025, z);
+      nut.castShadow = true;
+      base.g.add(nut);
+      addHull(THREE, nut, 0.01, ctx.hulls);
+      const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.05, 8), metal);
+      stud.position.set(x, base.h.y * 0.9 + 0.07, z);
+      base.g.add(stud);
+    }
+    // assembly path of the front bolts (dashed centre lines above the lid)
+    for (const b of bolts.slice(0, 2)) {
+      for (let k = 0; k < 3; k++) {
+        const dash = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, k % 2 ? 0.03 : 0.08, 5), edgeMat);
+        dash.position.set(0, 0.16 + k * 0.08, 0);
+        b.head.add(dash);
+      }
+    }
+    const gapOf = (t, s) => (s === "working" ? 0.08 + 0.28 * (0.5 - 0.5 * Math.cos((TAU * t) / 4.4)) : 0.08);
     const place = (t, s) => {
       const g = gapOf(t, s);
       const baseTop = base.g.position.y + base.h.y;
       main.g.position.y = baseTop + g + main.h.y;
       lid.g.position.set(0, main.g.position.y + main.h.y + g + lid.h.y, 0);
       lid.g.rotation.z = 0;
-      if (s === "mismatch") {
-        lid.g.position.y -= 0.17;
-        lid.g.position.x = 0.1;
-        lid.g.rotation.z = -0.07;
+      const mis = s === "mismatch";
+      if (mis) {
+        // the lid does not fit: shifted, tilted and sunk into the housing
+        lid.g.position.y -= 0.14;
+        lid.g.position.x = 0.12;
+        lid.g.rotation.z = -0.08;
       }
+      bolts[0].hex.material = mis ? red : metal;
+      bolts[0].head.rotation.z = mis ? 0.35 : 0;
       group.updateMatrixWorld(true);
+      const y0 = base.g.position.y + base.h.y - 0.02;
+      const y1 = lid.g.position.y + lid.h.y * 0.9;
+      for (const b of bolts) {
+        b.shaft.position.set(b.x + lid.g.position.x, (y0 + y1) / 2, b.z);
+        b.shaft.scale.y = y1 - y0;
+      }
     };
-    const box3 = (p) => new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), p.h.clone().multiplyScalar(2)).applyMatrix4(p.g.matrix);
-    const v = new THREE.Vector3();
-    const closeness = () => {
-      const boxes = parts.map(box3);
-      return parts.map((p, pi) => p.fe.pts.map((q) => {
-        v.copy(q).applyMatrix4(p.g.matrix);
-        let best = Infinity;
-        boxes.forEach((b, bi) => {
-          if (bi === pi) return;
-          const d = b.distanceToPoint(v);
-          if (d > 0) best = Math.min(best, d);
-          else {
-            const pen = Math.min(v.x - b.min.x, b.max.x - v.x, v.y - b.min.y, b.max.y - v.y, v.z - b.min.z, b.max.z - v.z);
-            best = Math.min(best, -pen);
-          }
-        });
-        return Math.max(0, 1 - best / 0.5);
-      }));
-    };
-    const solve = (t, s) => {
-      place(t, s);
-      return closeness();
-    };
-    const updateBolts = () => {
-      const y0 = base.g.position.y - base.h.y + 0.05;
-      const y1 = lid.g.position.y + lid.h.y;
-      shafts.forEach((m) => { m.position.y = (y0 + y1) / 2; m.scale.y = y1 - y0; });
-    };
-    solve(0, "idle");
+    place(0, "idle");
     return {
       group, anchor: main.g, antennaAnchor: lid.g, top: new THREE.Vector3(0, lid.h.y, 0),
       surface: (d) => main.fe.surface(d),
-      counts: { nodes, elements: elems },
-      caption: `部品 3 · ボルト 4 · 要素 ${elems}`,
-      update(t, s) {
-        const vals = solve(t, s);
-        parts.forEach((p, i) => p.fe.setValues(vals[i]));
-        updateBolts();
-      },
+      parts: parts.map((p) => ({ name: p.name, color: "#" + p.color.toString(16).padStart(6, "0") })),
+      counts: { nodes, elements: parts.reduce((a, p) => a + p.fe.elemCount, 0) },
+      caption: "部品 3 · ボルト 4 · ナット 4 · 少し分解した組立図 (色 = 部品)",
+      update(t, s) { place(t, s); },
       contour(t, s) {
-        const all = solve(t, s).flat();
-        const info = [`隙間 ${gapOf(t, s).toFixed(2)}` + (s === "working" ? " (分解と組立)" : ""), s === "mismatch" ? "ふたが本体に食い込む (食い違い)" : "1.0 = 部品が触れている"];
-        return Object.assign(stats(all), { info });
+        const info = [`部品の隙間 ${gapOf(t, s).toFixed(2)}` + (s === "working" ? " (分解と組立)" : ""), s === "mismatch" ? "ふたがずれて入らない (食い違い)" : "色は部品ごと (コンターではない)"];
+        return { info };
       },
     };
   }
 
-  // handling: a multibody model. Two rigid bodies (chassis and cabin) joined
-  // by a ball joint and two springs; the cabin rolls, the chassis yaws.
-  // Colour = roll / yaw swing, distance from the rotation axis * angle,
-  // normalised by the largest swing of the working (slalom) case. On the
-  // ground: the track driven (colour = lateral acceleration v^2 * curvature)
-  // and a yaw arrow.
+  // handling: what a vehicle dynamics run shows. The body leans (rolls) in
+  // the corner; on its belly the centre-of-gravity mark with the lateral
+  // acceleration arrow; under each foot (the tyres) a friction circle whose
+  // radius follows the tyre load and an arrow for the tyre side force; behind,
+  // the double lane change driven, between cones, coloured by lateral
+  // acceleration. The contour is the lateral load transfer,
+  // v = 0.5 - 0.45 a (x / x_max) (0.6 + 0.4 (-y / y_max)) (a = lateral
+  // acceleration / its peak in the lane change, x = sideways position, more
+  // toward the bottom where the tyres take it), so the outer side is loaded.
+  // Lane change: x(u) = smoothstep(0, 0.25, u) - smoothstep(0.45, 0.7, u)
+  // over one run (4.4 s); a(u) = x''(u) normalised to a peak of 1.
   function bodyHandling(ctx) {
     const { THREE } = ctx;
-    const nu = ctx.fine ? 24 : 16, nv = ctx.fine ? 12 : 8;
+    const nu = ctx.fine ? 24 : 18, nv = ctx.fine ? 14 : 10;
     const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
-    const rounded = (n, h) => (lat, phi) => {
-      const q = superDir(latDir(THREE, lat, phi), n);
-      return new THREE.Vector3(q.x * h[0], q.y * h[1], q.z * h[2]);
-    };
-    const YJ = -0.29;
-    const chH = [1.0, 0.25, 0.9], cbH = [0.86, 0.55, 0.78];
-    const chR = revolve(THREE, prof, nu, rounded(6, chH));
-    const cbR = revolve(THREE, prof, nu, rounded(4, cbH));
-    const chFe = feMesh(THREE, chR.pts, chR.elems, { smooth: true });
-    const cbFe = feMesh(THREE, cbR.pts, cbR.elems, { smooth: true });
+    const R = revolve(THREE, prof, nu, (lat, phi) => shapePoint(THREE, latDir(THREE, lat, phi)));
+    const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
     const group = new THREE.Group();
-    const rig = new THREE.Group();          // yaws
-    group.add(rig);
-    const chassis = new THREE.Group();
-    chassis.position.y = -0.66;
-    rig.add(chassis);
-    addFe(ctx, chassis, chFe, { line: 0.0, self: 0.5, rough: 0.4 }, 0.035);
-    const pivot = new THREE.Group();        // rolls about the joint
-    pivot.position.y = YJ;
-    rig.add(pivot);
-    const cabin = new THREE.Group();
-    cabin.position.y = 0.38 - YJ;
-    pivot.add(cabin);
-    addFe(ctx, cabin, cbFe, { line: 0.0, self: 0.5, rough: 0.4 }, 0.035);
-    // ball joint
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), ctx.M.metal);
-    ball.position.y = YJ;
-    rig.add(ball);
-    addHull(THREE, ball, 0.018, ctx.hulls);
-    // springs (helix tubes), stretched each frame
-    const helix = [];
-    for (let i = 0; i <= 64; i++) {
-      const a = (i / 64) * TAU * 4;
-      helix.push(new THREE.Vector3(0.075 * Math.cos(a), i / 64, 0.075 * Math.sin(a)));
-    }
-    const springGeom = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(helix), 128, 0.016, 5, false);
-    const springs = [-0.68, 0.68].map((x) => {
-      const m = new THREE.Mesh(springGeom, ctx.M.ink);
-      m.position.set(x, -0.41, 0);
-      rig.add(m);
-      return { m, x };
-    });
-    // ground: track and yaw arrow (in the pet's root, not leaning with it)
-    const ground = new THREE.Group();
-    const track = [], tv = [];
-    for (let z = -2.6; z <= 0.21; z += 0.1) {
-      const k = 1.5;
-      track.push(new THREE.Vector3(0.5 * Math.sin(k * z), 0.016, z));
-      tv.push(Math.abs(0.5 * k * k * Math.sin(k * z)) / (0.5 * k * k));
-    }
-    const trackMat = flowMaterial(THREE, ctx.U, { speed: 0.8, dens: 2.0, duty: 0.6 });
-    ctx.flowMats.push(trackMat);
-    const trackMesh = new THREE.Mesh(tubes(THREE, [{ pts: track, vals: tv }], 0.03, 5), trackMat);
-    trackMesh.frustumCulled = false;
-    ground.add(trackMesh);
-    const yawG = new THREE.Group();
-    yawG.position.y = 0.07;
-    ground.add(yawG);
-    const arrowMat = new THREE.MeshBasicMaterial({ color: C.ink });
-    ctx.inkMats.push({ mat: arrowMat, paper: C.ink, night: C.onNightSoft });
-    const arcLen = 4.0, RA = 1.18;
-    const arc = new THREE.Mesh(new THREE.TorusGeometry(RA, 0.024, 6, 64, arcLen), arrowMat);
-    arc.rotation.x = Math.PI / 2;
-    yawG.add(arc);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.2, 12), arrowMat);
-    // torus arc in its xy plane, rotated onto the ground: angle a -> (cos a, 0, sin a)
-    head.position.set(RA * Math.cos(arcLen), 0, RA * Math.sin(arcLen));
-    head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-Math.sin(arcLen), 0, Math.cos(arcLen)));
-    yawG.add(head);
+    addFe(ctx, group, fe, { line: 0.35, self: 0.5, rough: 0.45 });
+    const xmax = Math.max(...R.pts.map((p) => Math.abs(p.x)));
+    const ymax = Math.max(...R.pts.map((p) => Math.abs(p.y)));
 
-    const AMP = {
-      idle: { roll: 0.05, yaw: 0.03, P: 1.8, rate: 0.35 },
-      report: { roll: 0.05, yaw: 0.03, P: 1.8, rate: 0.35 },
-      pass: { roll: 0.035, yaw: 0.02, P: 1.8, rate: 0.35 },
-      mismatch: { roll: 0.13, yaw: 0.06, P: 1.6, rate: -0.5 },
-      working: { roll: 0.13, yaw: 0.06, P: 1.1, rate: 1.1 },
+    // lateral acceleration over time (relative, peak 1 in the lane change)
+    const bump = (u, a, b) => {
+      const v = (u - a) / (b - a);
+      return v < 0 || v > 1 ? 0 : 1 - 2 * v;
     };
-    const W = AMP.working;
-    const rCab = cbFe.pts.map((p) => Math.hypot(p.x, p.y + cabin.position.y));
-    const rCh = chFe.pts.map((p) => Math.hypot(p.x, p.z));
-    const ref = Math.max(...rCab) * W.roll;
-    const vals = (s) => {
-      const A = AMP[s];
-      return [chFe.pts.map((p, i) => (rCh[i] * A.yaw) / ref), cbFe.pts.map((p, i) => (rCab[i] * A.roll) / ref)];
+    const dlcA = (u) => bump(u, 0, 0.25) - bump(u, 0.45, 0.7);
+    const accel = (t, s) => {
+      const u = (((t % 4.4) + 4.4) % 4.4) / 4.4;
+      if (s === "working") return dlcA(u);
+      // mismatch: the same run 0.25 s behind, asking 35 % more than the tyres give
+      if (s === "mismatch") return 1.35 * dlcA((((t - 0.25) % 4.4) + 4.4) % 4.4 / 4.4);
+      return 0.45 * Math.sin((TAU * t) / 3.2);
     };
+    const vals = (t, s) => {
+      const a = accel(t, s);
+      return R.pts.map((p) => Math.max(0, 0.5 - 0.45 * a * (p.x / xmax) * (0.6 + 0.4 * (-p.y / ymax))));
+    };
+
+    // centre-of-gravity mark (quartered disc) on the belly
+    const red = new THREE.MeshBasicMaterial({ color: C.miss });
+    const cgHit = fe.surface(new THREE.Vector3(0, -0.78, 0.62));
+    const cgN = cgHit.normal.clone().normalize();
+    const cg = new THREE.Group();
+    cg.position.copy(cgHit.point).addScaledVector(cgN, 0.012);
+    cg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), cgN);
+    group.add(cg);
+    for (let i = 0; i < 4; i++) {
+      const q = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 12, 1, false, (i * Math.PI) / 2, Math.PI / 2), i % 2 ? ctx.M.white : ctx.M.ink);
+      cg.add(q);
+    }
+    const cgRing = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.012, 6, 32), ctx.M.ink);
+    cgRing.rotation.x = Math.PI / 2;
+    cg.add(cgRing);
+    // lateral acceleration arrow from the mark, sideways (body x)
+    const ayArrow = new THREE.Group();
+    ayArrow.position.copy(cgHit.point).addScaledVector(cgN, 0.05);
+    group.add(ayArrow);
+    const ayRod = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1, 10), red);
+    ayRod.rotation.z = -Math.PI / 2;
+    ayArrow.add(ayRod);
+    const ayHead = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 14), red);
+    ayHead.rotation.z = -Math.PI / 2;
+    ayArrow.add(ayHead);
+
+    // ground: friction circles at the feet, double lane change path, cones
+    const ground = new THREE.Group();
+    const inkMat = new THREE.MeshBasicMaterial({ color: C.ink });
+    ctx.inkMats.push({ mat: inkMat, paper: C.ink, night: C.onNightSoft });
+    const fillMat = new THREE.MeshBasicMaterial({ color: C.s[1], transparent: true, opacity: 0.22, depthWrite: false });
+    const tyres = [-1, 1].map((sx) => {
+      const g = new THREE.Group();
+      g.position.set(sx * 0.42, 0.012, 0.12);
+      ground.add(g);
+      const ring = new THREE.Group();
+      ring.add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 6, 48), inkMat));
+      const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48), fillMat);
+      fill.renderOrder = -1;
+      ring.add(fill);
+      ring.rotation.x = -Math.PI / 2;
+      g.add(ring);
+      const arrow = new THREE.Group();
+      g.add(arrow);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 1, 8), inkMat);
+      rod.rotation.z = -Math.PI / 2;
+      arrow.add(rod);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.11, 12), inkMat);
+      head.rotation.z = -Math.PI / 2;
+      arrow.add(head);
+      return { sx, ring, arrow, rod, head };
+    });
+    const XO = 0.95;
+    const ss = (a, b, z) => {
+      const v = clamp((z - a) / (b - a), 0, 1);
+      return v * v * (3 - 2 * v);
+    };
+    const laneX = (z) => XO * (ss(-3.3, -2.5, z) - ss(-1.6, -0.8, z));
+    const mkPath = (fx) => {
+      const pts = [], v = [];
+      for (let z = -3.6; z <= 0.01; z += 0.08) {
+        pts.push(new THREE.Vector3(fx(z), 0.016, z));
+        const h = 0.02;
+        v.push(Math.min(1, Math.abs(fx(z + h) - 2 * fx(z) + fx(z - h)) / (h * h) / 7.5));
+      }
+      return { pts, vals: v };
+    };
+    const pathMat = flowMaterial(THREE, ctx.U, { speed: 0.8, dens: 2.4, duty: 0.6 });
+    ctx.flowMats.push(pathMat);
+    const pathOk = new THREE.Mesh(tubes(THREE, [mkPath(laneX)], 0.028, 5), pathMat);
+    // mismatch: the car overshoots the return and leaves the lane
+    const pathMiss = new THREE.Mesh(tubes(THREE, [mkPath((z) => laneX(z) - 0.42 * Math.exp(-(((z + 0.55) / 0.35) ** 2)))], 0.028, 5), pathMat);
+    for (const m of [pathOk, pathMiss]) { m.frustumCulled = false; ground.add(m); }
+    const coneMat = std(THREE, mixHex(C.s[4], C.s[3], 0.45), 0.5);
+    const cones = [];
+    for (const [x, z] of [[-0.34, -3.0], [0.34, -3.0], [XO - 0.34, -2.05], [XO + 0.34, -2.05], [-0.36, -0.55]]) {
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.17, 14), coneMat);
+      c.position.set(x, 0.085, z);
+      c.castShadow = true;
+      ground.add(c);
+      cones.push(c);
+    }
+    const knocked = cones[cones.length - 1];
     return {
-      group, ground, anchor: cabin, antennaAnchor: cabin, top: new THREE.Vector3(0, cbH[1], 0),
-      surface: (d) => cbFe.surface(d),
-      shoulders: { R: new THREE.Vector3(0.84, -0.02, 0.24), L: new THREE.Vector3(-0.84, -0.04, 0.2) },
-      counts: { nodes: chFe.nodeCount + cbFe.nodeCount, elements: chFe.elemCount + cbFe.elemCount },
-      caption: "剛体 2 · 球ジョイント 1 · ばね 2",
+      group, ground, top: R.pts[R.pts.length - 1].clone(),
+      surface: (d) => fe.surface(d),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: "重心と横加速度 · 足もと = 摩擦円 · 後ろ = レーンチェンジ",
+      // roll angle added to the torso (leans to the outside of the corner)
+      roll(t, s) { return 0.13 * accel(t, s); },
       update(t, s) {
-        const A = AMP[s];
-        const ph = (TAU * t) / A.P;
-        const roll = A.roll * Math.sin(ph) * (s === "mismatch" ? 1 + 0.4 * Math.sin(ph * 0.5) : 1);
-        pivot.rotation.z = roll;
-        pivot.rotation.x = s === "mismatch" ? 0.05 * Math.sin(ph + 1) : 0;
-        rig.rotation.y = A.yaw * Math.sin(ph + Math.PI / 2);
-        for (const sp of springs) {
-          const yTop = YJ + sp.x * Math.sin(roll) + (-0.17 - YJ) * Math.cos(roll);
-          sp.m.scale.y = yTop - -0.41;
+        const a = accel(t, s);
+        fe.setValues(vals(t, s));
+        const L = 0.3 + 0.55 * Math.min(1.3, Math.abs(a));
+        const sg = a >= 0 ? 1 : -1;
+        ayArrow.scale.x = sg;
+        ayRod.scale.y = L - 0.14;
+        ayRod.position.x = (L - 0.14) / 2;
+        ayHead.position.x = L - 0.08;
+        ayArrow.visible = Math.abs(a) > 0.03;
+        for (const ty of tyres) {
+          // tyre load share: the outer foot (-x for a > 0) carries more
+          const Fz = 0.5 - 0.35 * a * ty.sx;
+          const r = Math.max(0.1, 0.5 * Fz);
+          ty.ring.scale.set(r, r, 1);
+          // side force toward the corner in circle units: at the peak of the
+          // lane change a tyre uses 80 % of its friction (mu Fz = r); the
+          // mismatch case asks for more than the circle
+          const len = Math.max(0.001, 0.8 * Math.abs(a) * r);
+          ty.arrow.scale.x = sg;
+          ty.rod.scale.y = Math.max(0.001, len - 0.1);
+          ty.rod.position.x = Math.max(0.001, len - 0.1) / 2;
+          ty.head.position.x = len - 0.05;
+          ty.arrow.visible = len > 0.05;
+          const over = len > r * 0.98;
+          ty.rod.material = ty.head.material = over ? red : inkMat;
         }
-        yawG.rotation.y = -A.rate * t;
-        const [a, b] = vals(s);
-        chFe.setValues(a);
-        cbFe.setValues(b);
-        trackMat.userData.flow.uSpeed.value = s === "working" ? 1.8 : 0.8;
+        pathOk.visible = s !== "mismatch";
+        pathMiss.visible = s === "mismatch";
+        knocked.rotation.set(s === "mismatch" ? 1.3 : 0, 0, s === "mismatch" ? 0.4 : 0);
+        knocked.position.y = s === "mismatch" ? 0.065 : 0.085;
+        pathMat.userData.flow.uSpeed.value = s === "working" || s === "mismatch" ? 1.8 : 0.8;
       },
       contour(t, s) {
-        const [a, b] = vals(s);
-        const info = [s === "working" ? "スラローム (解析中): ロールが大きい" : s === "mismatch" ? "ロールが予測より大きく、向きも逆 (食い違い)" : "まっすぐ走る: ロールは小さい", "地面の線 = 走った軌跡 (色 = 横加速度)"];
-        return Object.assign(stats(a.concat(b)), { info });
+        const a = accel(t, s);
+        const info = [s === "working" ? "ダブルレーンチェンジ (解析中)" : s === "mismatch" ? "タイヤの力が摩擦円を超え、車線をはみ出す (食い違い)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} (相対) · 0.5 = 左右に同じ荷重`];
+        return Object.assign(stats(vals(t, s)), { info });
       },
     };
   }
 
   const BUILDERS = {
-    "quad-sphere": bodyLead,
+    "fe-sphere": bodyLead,
     "cad-surface": bodyDesigner,
     "assembly": bodyPackager,
-    "multibody": bodyHandling,
-    "cell": bodyPowertrain,
+    "vehicle-dynamics": bodyHandling,
+    "combustion": bodyPowertrain,
     "flow": bodyAero,
-    "crushed-shell": bodyCrash,
+    "impact-wave": bodyCrash,
     "stress-solid": bodyStrength,
     "mode-shape": bodyNvh,
     "heat": bodyThermal,
@@ -2013,7 +2146,8 @@
       }
       hop.position.y = hopY;
       torso.position.y = PIVOT_Y + (state === "pass" ? 0 : bob);
-      torso.rotation.set(lean, 0, tilt);
+      // bodies that lean by themselves (handling rolls in the corner)
+      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
       const sy = 1 + 0.018 * breathe - squash;
       const sxz = 1 - 0.012 * breathe + squash * 0.6;
       torso.scale.set(sxz, sy, sxz);
@@ -2102,8 +2236,11 @@
     applyScale();
     update(0, "idle");
     return {
-      group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption },
-      counts: B.counts, field: B.field || null, update, contour, setPixelScale, setOptions, dispose,
+      group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null },
+      counts: B.counts, field: B.field || null,
+      // strength: the load arrow in body coordinates (frame = the body group)
+      arrow: B.arrow ? Object.assign({ frame: B.group }, B.arrow) : null,
+      update, contour, setPixelScale, setOptions, dispose,
     };
   }
 
