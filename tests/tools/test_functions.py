@@ -834,6 +834,33 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertIn("当てはまらない", got["refused"])
         self.assertNotIn("inputs", got)
 
+    def test_a_test_with_no_tool_gets_the_builders_hand_calculation(self):
+        """A test no shelf tool analyses (R4: its tool is made in the run) has no plan step; its
+        predictions kept by the builders (TOOLLESS_PREDICTIONS) are listed with their inputs read by code."""
+        import types
+
+        from hiraku.tools import plan
+
+        def reader(design, load_case):
+            return {"L": {"value": 1800.0, "unit": "mm"}}
+
+        kept = types.SimpleNamespace(PREDICTIONS=[
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L", "F": "pred.front_wheel_force"}, "inputs_from": reader}])
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        with mock.patch.object(plan, "plan_of", return_value=own), \
+                mock.patch.object(plan, "external_builders", return_value=({}, {}, {})), \
+                mock.patch.dict(plan.TOOLLESS_PREDICTIONS, {"R1": ("kept_stand_in", "PREDICTIONS")}), \
+                mock.patch.object(plan.importlib, "import_module", return_value=kept):
+            out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "R1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        self.assertEqual(case["note"], plan.TOOLLESS_NOTE)
+        (entry,) = case["formulas"]
+        self.assertIsNone(entry["tool"])
+        self.assertEqual((entry["formula_id"], entry["role"]), ("frame_static.rail_bending", "criterion"))
+        self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
+        self.assertIn("F", entry["missing"])  # a prediction not recorded yet
+
     def test_role_facing_text_points_at_the_section_not_at_python(self):
         from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role
 
