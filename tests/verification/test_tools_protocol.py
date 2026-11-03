@@ -27,17 +27,20 @@ class ToolProtocol(unittest.TestCase):
         cls.tools = analysis_tools()
         if not cls.tools:
             raise unittest.SkipTest("builtin_tools() returns no tools yet")
+        # spec() and check() run every known-answer case (the K2 tools simulate): once per class
+        cls.specs = {name: tool.spec() for name, tool in cls.tools.items()}
+        cls.checks = {name: tool.check() for name, tool in cls.tools.items()}
 
     def test_spec_fits_the_contract(self):
-        for name, tool in self.tools.items():
+        for name in self.tools:
             with self.subTest(tool=name):
-                spec = tool.spec()
+                spec = self.specs[name]
                 self.assertEqual(contract.errors("tool_spec", spec), [])
                 self.assertEqual(spec["name"], name)
 
     def test_checks_are_honest(self):
-        for name, tool in self.tools.items():
-            checks = tool.check()
+        for name in self.tools:
+            checks = self.checks[name]
             with self.subTest(tool=name):
                 self.assertTrue(checks, "a tool with no known-answer checks cannot be trusted")
             for c in checks:
@@ -53,11 +56,10 @@ class ToolProtocol(unittest.TestCase):
                     self.assertEqual(c["pass"], within, "pass flag does not follow from expected/got/tolerance")
 
     def test_usable_means_every_check_passes(self):
-        for name, tool in self.tools.items():
+        for name in self.tools:
             with self.subTest(tool=name):
-                spec = tool.spec()
-                checks = tool.check()
-                self.assertEqual(spec["usable"], bool(checks) and all(c["pass"] for c in checks))
+                checks = self.checks[name]
+                self.assertEqual(self.specs[name]["usable"], bool(checks) and all(c["pass"] for c in checks))
 
     def test_frame_tool_on_a_bad_design_returns_failed_not_an_exception(self):
         design = example("design.json")
@@ -66,7 +68,7 @@ class ToolProtocol(unittest.TestCase):
         broken = copy.deepcopy(design)
         for m in broken["members"]:
             m["section"] = "no_such_section"
-        frame_tools = {n: t for n, t in self.tools.items() if t.spec()["base"] == "K1"}
+        frame_tools = {n: t for n, t in self.tools.items() if self.specs[n]["base"] == "K1"}
         if not frame_tools:
             self.skipTest("no K1 (frame) tool yet")
         for name, tool in frame_tools.items():

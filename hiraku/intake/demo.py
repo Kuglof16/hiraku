@@ -54,16 +54,25 @@ class _Stream:
         self.events.append(e)
 
 
-def demo_events(slug: str) -> list[Record]:
-    """The intake events of one product, in the order a run would have them."""
+def demo_events(slug: str, *, from_file: bool = False, label: str | None = None) -> list[Record]:
+    """The intake events of one product, in the order a run would have them.
+
+    from_file: a run started from the product's requirements file (the file stands, nothing is asked).
+    """
     req = load_product(slug)
     own = {r["key"]: r for r in req["requirements"]}
-    is_demo_vehicle = slug == "offroad-4w"
-    start_reqs = copy.deepcopy(req["requirements"]) if is_demo_vehicle else []
+    start_reqs = copy.deepcopy(req["requirements"]) if (slug == "offroad-4w" or from_file) else []
+    base = copy.deepcopy(req)
+    base["requirements"] = start_reqs
+    path = answers_file(slug)
+    answers, note = (hearing.load_answers(path) if path else ({}, None)) if not from_file else ({}, None)
+    prepared = hearing.prepare(base, answers, note, product_defaults=own, ask_confirm=not from_file)
+    # a run started from a file already holds the hearing's result in project.requirements
+    project_reqs = copy.deepcopy(prepared.requirements_file["requirements"]) if from_file else start_reqs
     project: Record = {
-        "run_id": f"20261103-100000-{slug}", "created_at": BASE.isoformat(timespec="milliseconds"), "want": req["want"],
+        "run_id": f"20261103-100000-{label or slug}", "created_at": BASE.isoformat(timespec="milliseconds"), "want": req["want"],
         "product": slug, "flags": req["flags"], "status": "running", "round_limit": req.get("round_limit", 1),
-        "cost_limit_usd": req.get("cost_limit_usd", 2.0), "cost_usd": 0.0, "requirements": start_reqs,
+        "cost_limit_usd": req.get("cost_limit_usd", 2.0), "cost_usd": 0.0, "requirements": project_reqs,
         "domain_picks": [], "load_cases": [], "agents": [], "design_versions": [],
     }
     if "speed_class" in req:
@@ -80,11 +89,6 @@ def demo_events(slug: str) -> list[Record]:
         s.add(3.0 + 0.2 * k, **_unpack(ev.knowledge_event(rec)))
     rules = knowledge.all_rules(docs)
 
-    base = copy.deepcopy(req)
-    base["requirements"] = start_reqs
-    path = answers_file(slug)
-    answers, note = hearing.load_answers(path) if path else ({}, None)
-    prepared = hearing.prepare(base, answers, note, product_defaults=own)
     for k, event in enumerate(ev.hearing_events(prepared)):
         s.add(6.0 + 2 * k, **_unpack(event))
 
@@ -108,6 +112,7 @@ def _unpack(event: Record) -> Record:
 
 def render_js() -> str:
     demos = {slug: demo_events(slug) for slug in product_files()}
+    demos["offroad-4w-file"] = demo_events("offroad-4w", from_file=True, label="offroad-4w-file")  # the video's way: the file stands
     # "\/" is the same character in JSON and in a JavaScript string; it keeps the sources' URLs (in the `basis`
     # texts) from matching the screen's rule that no external URL appears in web/ outside the pinned CDN.
     body = json.dumps(demos, ensure_ascii=False, indent=1).replace("://", ":\\/\\/")

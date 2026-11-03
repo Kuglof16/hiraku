@@ -7,7 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?tab=grid       open on the all-domains grid instead of the workbench
+//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -16,12 +16,15 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, contourOf, fieldsOf, preferredField, variantName, variantOf } from "./fields.js";
+import { FIELD_JA, FIELD_ORDER, contourOf, fieldsOf, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
+import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
+import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
-import { Workbench3D } from "./workbench3d.js";
+import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { AssemblyPanel } from "./assembly.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -33,9 +36,13 @@ const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
+const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
+const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
+let asmPanel = null; // mounted on first show
+
 const ui = {
   pinnedLc: null,
-  pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
+  pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
@@ -43,7 +50,9 @@ const ui = {
   anim: { key: null, local: false, playing: false, tau: 0 },
   graphGroup: null,
   fieldKind: null, // contour field picked in the legend (null: the first one)
-  fieldVariant: null, // among the fields of that kind: the beams, or a mesh and its surface (fields.js variantOf)
+  fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
+  zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
+  compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
 };
@@ -71,9 +80,13 @@ const look = lookFromParams(params); // ?look=real: the photograph-like look (de
 document.body.classList.add(`look-${look}`);
 const bench = new Workbench3D(viewport, look);
 function resize3d() {
-  const w = viewport.clientWidth;
+  const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
+  const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
   const h = viewport.clientHeight;
-  if (w > 0 && h > 0) bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+  if (w > 0 && h > 0) {
+    bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    if (half && cmpView) cmpView.bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+  }
 }
 new ResizeObserver(resize3d).observe(viewport);
 window.addEventListener("resize", fitStage);
@@ -138,7 +151,74 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
+  if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4" || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
+}
+
+// ---- the intake screens (A1, A2, A5) ------------------------------------------
+// Mounted on first show. They draw from the events applied so far (the replay's
+// playhead, or the live run); listeners hear when that changes (a rewind too).
+const intakeListeners = new Set();
+let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
+let intake = null;
+const intakeApi = {
+  events: () => player.events.slice(0, player.applied),
+  onEvent(fn) {
+    intakeListeners.add(fn);
+    return () => intakeListeners.delete(fn);
+  },
+  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
+  // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
+  get answerHearing() {
+    return ownRunGoing() ? answerHearing : undefined;
+  },
+  get dropFile() {
+    return ownRunGoing() ? dropFile : undefined;
+  },
+};
+
+function ownRunGoing() {
+  const s = player.state;
+  return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+}
+
+async function postLaunch(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, ...body }) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+const answerHearing = (body) => postLaunch("/api/launch/hearing", { answer: body });
+
+// A5 shows the returned line next to the file.
+async function dropFile(name, text) {
+  try {
+    const got = await postLaunch("/api/launch/knowledge", { name, text });
+    return `渡しました (knowledge/${got.file})。実行が読んで規則にします`;
+  } catch (e) {
+    return `渡せませんでした: ${e.message}`;
+  }
+}
+
+function renderIntake(tab) {
+  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (intake.screen !== tab) intake.show(tab);
+  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  if (now !== intakeApplied) {
+    intakeApplied = now;
+    const last = player.events[player.applied - 1] ?? null;
+    for (const fn of intakeListeners) fn(last);
+  }
+}
+
+// A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
+let shelf = null;
+function renderShelf() {
+  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId });
+  shelf.render();
 }
 
 function renderTop(s) {
@@ -308,20 +388,79 @@ function renderChain(s, chain) {
   }
 }
 
-// The contour of the shown analysis: the field the viewer picked (ui.fieldKind, then
-// ui.fieldVariant among the fields of that kind: the beams, or a shell mesh and its
-// surface), else the first of stress, damage, temperature, mode shape, displacement,
-// on a mesh when there is one.
+const toolTitle = (s, tool) => s.tools[tool]?.title ?? tool;
+
+// The ok analyses of the shown one's load case and design version, the newest of each
+// tool, in the order their tools first came (e.g. the beam analysis, then the shell one).
+function analysesBeside(s, shown) {
+  if (shown?.status !== "ok") return [];
+  const byTool = new Map(); // keeps the order of first insertion when a tool comes again
+  for (const id of s.order.analyses) {
+    const a = s.analyses[id];
+    if (a.status === "ok" && a.load_case_id === shown.load_case_id && a.design_version === shown.design_version) byTool.set(a.tool, a);
+  }
+  return [...byTool.values()];
+}
+
+// The same field of the same tool and load case in the newest earlier design version that
+// has it (drawable), or null.
+function previousOf(s, ana, field) {
+  const earlier = s.order.analyses
+    .map((id) => s.analyses[id])
+    .filter((a) => a.status === "ok" && a.tool === ana.tool && a.load_case_id === ana.load_case_id && a.design_version < ana.design_version);
+  for (const a of earlier.sort((x, y) => y.design_version - x.design_version || s.order.analyses.indexOf(y.analysis_id) - s.order.analyses.indexOf(x.analysis_id))) {
+    const f = fieldsOf(a).find((g) => sameField(g, field) && (!g.mesh_id || s.meshes[g.mesh_id]));
+    if (f) return { ana: a, field: f };
+  }
+  return null;
+}
+
+// The contour on the workbench: the field the viewer picked (ui.fieldKind, then
+// ui.fieldVariant: the tool and, among its fields of that kind, the beams or a shell
+// mesh and its surface) among the fields of every analysis beside the shown one (the
+// beam and the shell analyses of the same load case and version), else the shown
+// analysis' first of stress, damage, temperature, mode shape, displacement, on a mesh
+// when there is one. With ui.compare, the same field of the previous design version
+// comes along on one shared colour scale (contour.compare).
 function buildContour(s, chain) {
-  const fields = fieldsOf(chain.shown);
-  const kind = fields.some((f) => f.kind === ui.fieldKind) ? ui.fieldKind : fields[0]?.kind;
-  const sameKind = fields.filter((f) => f.kind === kind);
-  const drawable = sameKind.filter((f) => !f.mesh_id || s.meshes[f.mesh_id]);
-  const field = drawable.find((f) => variantOf(f) === ui.fieldVariant) ?? preferredField(drawable, s.meshes);
-  const ct = field ? contourOf(chain.shown, field, chain.loadCase?.criterion, s.meshes) : null;
+  const anas = analysesBeside(s, chain.shown);
+  const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
+  const kinds = FIELD_ORDER.filter((k) => all.some((x) => x.f.kind === k));
+  const kind = kinds.includes(ui.fieldKind) ? ui.fieldKind : fieldsOf(chain.shown)[0]?.kind ?? kinds[0];
+  const drawable = all.filter((x) => x.f.kind === kind && (!x.f.mesh_id || s.meshes[x.f.mesh_id]));
+  const keyOf = (x) => `${x.a.tool}|${variantOf(x.f)}`;
+  const ownPick = preferredField(drawable.filter((x) => x.a === chain.shown).map((x) => x.f), s.meshes);
+  const pick =
+    drawable.find((x) => keyOf(x) === ui.fieldVariant) ??
+    drawable.find((x) => x.f === ownPick) ??
+    drawable.find((x) => x.f === preferredField(drawable.map((y) => y.f), s.meshes)) ??
+    null;
+  if (!pick) return null;
+  let ct = contourOf(pick.a, pick.f, chain.loadCase?.criterion, s.meshes);
   if (!ct) return null;
-  const variants = drawable.map((f) => ({ key: variantOf(f), name: variantName(f, drawable), on: f === field }));
-  return { ...ct, kinds: [...new Set(fields.map((f) => f.kind))], variants };
+  const groups = anas.filter((a) => drawable.some((x) => x.a === a));
+  const many = groups.length > 1;
+  const variants = groups.map((a) => {
+    const own = drawable.filter((x) => x.a === a);
+    return {
+      ana: a.analysis_id,
+      buttons: own.map((x) => {
+        const name = variantName(x.f, own.map((y) => y.f));
+        return { key: keyOf(x), name: many ? `${toolTitle(s, a.tool)}・${name}` : name, on: x === pick };
+      }),
+    };
+  });
+  const prev = previousOf(s, pick.a, pick.f);
+  let compare = null;
+  if (prev && ui.compare) {
+    const before = contourOf(prev.ana, prev.field, chain.loadCase?.criterion, s.meshes);
+    if (before) {
+      const [after, was] = onSharedScale([ct, before]);
+      ct = { ...after, key: `${after.key}|compare ${prev.ana.analysis_id}` };
+      compare = { before: was, ana: prev.ana, version: prev.ana.design_version, nowVersion: pick.a.design_version };
+    }
+  }
+  return { ...ct, kinds, variants, tool: pick.a.tool, toolTitle: toolTitle(s, pick.a.tool), canCompare: !!prev, compare };
 }
 
 function renderLegend(ct) {
@@ -339,21 +478,89 @@ function renderLegend(ct) {
     rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
   rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
-  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>` : "";
+  const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
+  const over = ct.limitKnown
+    ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
+    : ct.partLimit
+      ? `<div class="lim">${swatch}${esc(ct.partLimit.part)} の許容 ${fmt(ct.partLimit.value, 4)} ${esc(unit)} を超えたとき</div>`
+      : "";
+  // one row of buttons per analysis (its tool's title is on each button when there are several)
+  const nButtons = ct.variants.reduce((n, g) => n + g.buttons.length, 0);
   const chips =
     (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
-    (ct.variants.length > 1 ? `<div class="kinds variants">${ct.variants.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>` : "");
+    (nButtons > 1
+      ? ct.variants
+          .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
+          .join("")
+      : "");
+  const acts =
+    (ct.mesh ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : "最大の所に寄る"}</button>` : "") +
+    (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
     : `${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
+  // before / after: each version's largest recorded value on the one scale above
+  const cmp = ct.compare
+    ? `<div class="cmp" data-compare="${ct.compare.version}-${ct.compare.nowVersion}">` +
+      `<div>版 ${ct.compare.version} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
+      `<div>版 ${ct.compare.nowVersion} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
+    : "";
   el.innerHTML =
     chips +
+    (acts ? `<div class="acts">${acts}</div>` : "") +
     `<div class="ttl">${title}</div>` +
     `<div class="bar">${rows.join("")}</div>` +
     over +
-    `<div class="src">${esc(ct.analysisId)}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
+    cmp +
+    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
 }
+
+// ---- before / after (the previous version's same field beside the current one) ----
+// Side by side, not one after the other in time: the colours of the same place are
+// compared at one glance, without holding one picture in memory while the other
+// shows; both views look through the same camera (the right one's), so turning or
+// zooming the right view moves the left with it.
+let cmpView = null; // { el, bench, tags, key }
+function setCompare(s, chain, ct) {
+  const c = ct?.compare ?? null;
+  const was = viewport.classList.contains("compare");
+  viewport.classList.toggle("compare", !!c);
+  if (cmpView) cmpView.el.hidden = !c;
+  if (c) {
+    if (!cmpView) {
+      const el = document.createElement("div");
+      el.className = "cmp-view";
+      const tags = document.createElement("div");
+      tags.className = "cmp-tags";
+      viewport.prepend(el);
+      viewport.append(tags);
+      cmpView = { el, tags, bench: new Workbench3D(el, look) };
+      window.hiraku.cmpBench = cmpView.bench;
+    }
+    const b = cmpView.bench;
+    b.setDesign(s.designs[c.ana.design_version] ?? null);
+    b.setLoading(chain.loadCase?.params?.loading ?? null);
+    b.setScene(chain.loadCase, c.ana);
+    b.setContour(c.before);
+    b.setToggles(ui.toggles);
+    cmpView.tags.innerHTML = `<span data-version="${c.version}">版 ${c.version}</span><span data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
+  }
+  cmpView?.tags && (cmpView.tags.hidden = !c);
+  // The right view keeps clear the strip under the legend (from the legend's left edge to
+  // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
+  // left view looks through the same camera, so its vehicle sits the same way in its half.
+  const lg = $("legend");
+  const room = c && !lg.hidden ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0;
+  if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
+    if (was !== !!c) resize3d();
+    bench.setReserve(room);
+    // the half-wide (or whole) view: frame the vehicle again, or the focus for the new shape
+    if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
+    bench.focusKey = undefined;
+  }
+}
+const LEGEND_GAP_PX = 12;
 
 // A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
@@ -586,11 +793,17 @@ function draw() {
     renderChain(s, chain);
     renderStatus(s);
     renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0);
+    const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
-    $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
+    $("view-intake").hidden = !intakeTab;
+    $("view-shelf").hidden = tab !== "A4";
+    $("view-asm").hidden = tab !== "A7";
+    $("main").classList.toggle("wide", tab === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
+    if (intakeTab) renderIntake(tab);
+    if (tab === "A4") renderShelf();
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
@@ -600,7 +813,11 @@ function draw() {
     const ct = buildContour(s, chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
-    renderLegend(contour);
+    if (!contour?.mesh) ui.zoomMax = false;
+    renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
+    bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
+    cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
@@ -610,8 +827,16 @@ function draw() {
   renderTransient(s, player.playhead, chain);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
-  if (tab === "bench") bench.render();
+  if (tab === "bench") {
+    bench.render();
+    if (cmpView && !cmpView.el.hidden) {
+      cmpView.bench.animate(player.playhead, false);
+      cmpView.bench.copyCamera(bench);
+      cmpView.bench.render();
+    }
+  }
   else if (tab === "grid") board.tick(player.playhead);
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
 }
 
 let lastTs = null;
@@ -705,9 +930,11 @@ $("tests").addEventListener("click", (ev) => {
   drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-field], button[data-variant]");
+  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act]");
   if (!b) return;
-  if (b.dataset.field) ui.fieldKind = b.dataset.field;
+  if (b.dataset.act === "zoom") ui.zoomMax = !ui.zoomMax;
+  else if (b.dataset.act === "compare") ui.compare = !ui.compare;
+  else if (b.dataset.field) ui.fieldKind = b.dataset.field;
   else ui.fieldVariant = b.dataset.variant;
   drawn.rev = -2;
 });

@@ -30,8 +30,9 @@ def _cmd_run(a: argparse.Namespace) -> int:
     from hiraku.tools import SolversMissing
 
     try:
-        slug = load_requirements(a.requirements)["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
-        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug)
+        req = load_requirements(a.requirements)
+        slug = req["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
+        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug, intake=not a.no_intake)
     except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2
@@ -106,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     run.add_argument("--budget", type=float, help="cost limit in USD (default: cost_limit_usd of the requirements)")
     run.add_argument("--max-turns", type=int, default=200)
+    run.add_argument("--no-intake", action="store_true",
+                     help="leave out the intake events at the start (domains picked, hearing, built-in knowledge)")
     run.set_defaults(fn=_cmd_run)
 
     check = sub.add_parser("check", help="check a run folder's events.jsonl against the contract")

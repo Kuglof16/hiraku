@@ -25,14 +25,8 @@ from hiraku.contract import layout
 
 Record = dict[str, Any]
 
-# Event kind emitted when a record of this kind is written.
-RECORD_EVENT = {
-    "prediction": "prediction.recorded",
-    "analysis": "analysis.finished",
-    "comparison": "comparison.recorded",
-    "cause": "cause.recorded",
-    "verdict": "verdict.recorded",
-}
+# Event kind emitted when a record of this kind is written (the contract's one map).
+RECORD_EVENT = layout.RECORD_EVENT
 
 
 class StoreError(RuntimeError):

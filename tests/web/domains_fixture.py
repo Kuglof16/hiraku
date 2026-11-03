@@ -51,8 +51,10 @@ def _analysis(i, domain, version, design):
         a["fields"] = [{"kind": "mode_shape", "label": "1 次", "unit": "1", "frequency_Hz": 23.4,
                         "per_node": {nid: [0.0, 0.0, (1.0 if p[1] > 0 else -1.0) * (p[0] / -1800.0)] for nid, p in nodes.items()}}]
     elif domain == "thermal":
-        a["fields"] = [{"kind": "temperature", "label": "部品の温度", "unit": "degC",
-                        "per_part": {"battery": 43.0 if version > 1 else 63.0, "seat": 31.0}}]
+        battery = 43.0 if version > 1 else 63.0
+        a["fields"] = [{"kind": "temperature", "label": "部品の温度", "unit": "degC", "per_part": {"battery": battery, "seat": 31.0}}]
+        # as the thermal tool records it: the criterion's quantity at the part it limits
+        a["results"] = [{"quantity": "temp_battery_max", "value": battery, "unit": "degC", "where": "battery"}]
     elif domain == "crash":
         a["series"] = [_series("decel", "g", t, [18.0 * math.sin(math.pi * min(x, 2.0) / 2.0) if x <= 2.0 else 0.0 for x in t])]
         a["base"] = "K2"
@@ -81,7 +83,7 @@ def domain_events():
     run, d1_ev = copy.deepcopy(src[0]), copy.deepcopy(src[1])
     run["data"]["load_cases"] = [
         {"load_case_id": f"{tid}-v", "test_id": tid, "domain": d, "title": title, "params": {}, "tolerance_rel": 0.15,
-         **({"criterion": {"quantity": "temperature", "op": "<=", "limit": {"value": 60.0, "unit": "degC"}, "basis": "電池の上限 (形の見本)"}} if d == "thermal" else {}),
+         **({"criterion": {"quantity": "temp_battery_max", "op": "<=", "limit": {"value": 60.0, "unit": "degC"}, "basis": "電池の上限 (形の見本)"}} if d == "thermal" else {}),
          **({"criterion": {"quantity": "max_stress", "op": "<=", "limit": {"value": 156.7, "unit": "MPa"}, "basis": "形の見本"}} if d == "strength" else {})}
         for d, (tid, title) in DOMAIN_TESTS.items()
     ]

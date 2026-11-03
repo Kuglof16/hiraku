@@ -1,0 +1,69 @@
+/* A4 - the tool shelf (js/shelf.js). Colours from css/app.css: unbleached paper, black ink. */
+
+.shelf-view { min-height: 0; overflow: hidden; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); }
+.sh-host { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 16px; line-height: 1.5; }
+.sh-host code { font-family: var(--mono); font-size: 0.85em; color: var(--muted); }
+.sh-dim { color: var(--muted); }
+.sh-err { color: var(--red); }
+
+.sh-bar { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--rule); }
+.sh-search { width: 340px; font: inherit; font-size: 15px; padding: 6px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+.sh-seg { display: flex; border: 1.5px solid var(--line); border-radius: 999px; overflow: hidden; }
+.sh-seg button { padding: 4px 16px; font-size: 15px; background: var(--panel); }
+.sh-seg button + button { border-left: 1px solid var(--line); }
+.sh-seg button.on { background: var(--ink); color: var(--paper); }
+.sh-sum { margin-left: auto; color: var(--muted); font-size: 15px; }
+
+.sh-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; padding: 16px 20px; }
+.sh-left, .sh-right { min-height: 0; overflow: auto; }
+.sh-note { margin: 0 0 10px; padding: 8px 14px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel); }
+
+.sh-tree, .sh-tree ul { list-style: none; margin: 0; padding: 0; }
+.sh-node { margin-bottom: 10px; }
+.sh-head { display: flex; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--ink); font-size: 17px; }
+.sh-caret { width: 14px; color: var(--muted); }
+.sh-n, .sh-nok { font-size: 14px; color: var(--muted); }
+.sh-nok { color: var(--green); }
+
+.sh-tool { padding: 8px 10px 8px 34px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.sh-tool:hover { background: var(--panel); }
+.sh-tool.sel { background: var(--card); box-shadow: inset 4px 0 0 var(--ink); }
+.sh-tool.is-off { opacity: 0.62; }
+.sh-tool.is-off .sh-name b { text-decoration: line-through; text-decoration-color: var(--red); }
+.sh-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sh-cols { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px 96px; gap: 12px; align-items: baseline; margin-top: 4px; font-size: 14px; }
+.sh-tests { display: flex; gap: 4px; flex-wrap: wrap; }
+.sh-tid { border: 1.5px solid var(--ink); border-radius: 4px; padding: 0 6px; font-family: var(--mono); font-size: 13px; }
+.sh-k0 { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-f { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-f code { margin-left: 6px; font-size: 12px; }
+.sh-base b { font-family: var(--mono); }
+
+.sh-mark { font-size: 12px; border-radius: 999px; padding: 0 10px; border: 1.5px solid; }
+.sh-mark.claude { color: var(--purple); border-color: var(--purple); }
+.sh-mark.off { color: var(--red); border-color: var(--red); background: var(--red-pale); }
+.sh-chk { font-size: 13px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--line); white-space: nowrap; justify-self: start; }
+.sh-chk.ok { color: var(--green); border-color: var(--green); }
+.sh-chk.bad { color: var(--red); border-color: var(--red); background: var(--red-pale); }
+.sh-chk.wait { border-style: dashed; border-color: var(--ink); background: var(--orange-pale); }
+.sh-chk.none { color: var(--muted); }
+
+.sh-detail header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1.5px solid var(--ink); padding-bottom: 8px; }
+.sh-detail h3 { margin: 0; font-size: 20px; }
+.sh-detail h4 { margin: 18px 0 8px; font-size: 16px; }
+.sh-detail h4 small { font-weight: 400; color: var(--muted); }
+.sh-detail dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 12px; margin: 12px 0 0; font-size: 15px; }
+.sh-detail dt { color: var(--muted); }
+.sh-detail dd { margin: 0; }
+.sh-fl code { margin-left: 8px; }
+.sh-fl .sh-expr { display: block; margin: 0; color: var(--ink-2); }
+
+.sh-checks { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sh-checks th { text-align: left; font-weight: 600; border-bottom: 1.5px solid var(--ink); padding: 4px 6px; white-space: nowrap; }
+.sh-checks td { border-bottom: 1px solid var(--rule); padding: 4px 6px; vertical-align: top; }
+.sh-checks td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.sh-checks td.src { color: var(--muted); font-size: 13px; }
+.sh-checks tr.bad td { background: var(--red-pale); }
+.sh-checks tr.wait td { background: var(--orange-pale); }
+
+.sh-code { margin: 0; max-height: 420px; overflow: auto; padding: 12px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 8px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; }

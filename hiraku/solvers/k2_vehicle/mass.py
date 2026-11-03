@@ -1,32 +1,16 @@
-"""Mass properties from the design's part boxes (solid boxes, uniform density)."""
+"""Mass properties from the design's part boxes (solid boxes, uniform density).
+
+The box inertia (and its rotation) and the section area are K0's shared helpers
+(hiraku.solvers.k0_handcalc.rigid and .sections), so every department weighs a part
+the same way.
+"""
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 
-
-def rpy_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
-    """R = Rz(yaw) Ry(pitch) Rx(roll), angles in rad."""
-    cr, sr = math.cos(roll), math.sin(roll)
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    return np.array([
-        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-        [-sp, cp * sr, cp * cr],
-    ])
-
-
-def box_inertia(mass: float, size: np.ndarray, rpy: np.ndarray | None = None) -> np.ndarray:
-    """Inertia of a solid box about its own centre: m (b^2 + c^2) / 12 on each axis."""
-    a, b, c = (float(x) for x in size)
-    i0 = np.diag([b * b + c * c, a * a + c * c, a * a + b * b]) * (mass / 12.0)
-    if rpy is None or not np.any(rpy):
-        return i0
-    r = rpy_matrix(*rpy)
-    return r @ i0 @ r.T
+from hiraku.solvers.k0_handcalc.rigid import box_inertia
+from hiraku.solvers.k0_handcalc.sections import area as section_area
 
 
 def point_inertia(mass: float, d: np.ndarray) -> np.ndarray:
@@ -45,28 +29,6 @@ def combine(items: list[tuple[float, np.ndarray, np.ndarray]]) -> tuple[float, n
     for mi, ci, ii in items:
         inertia += ii + point_inertia(mi, np.asarray(ci, dtype=float) - cg)
     return m, cg, inertia
-
-
-def section_area(section: dict) -> float:
-    """Cross-section area (mm^2): A_mm2 if given, else from dims_mm (textbook formulas, sharp corners)."""
-    if "A_mm2" in section:
-        return float(section["A_mm2"])
-    shape = section.get("shape")
-    d = section.get("dims_mm", {})
-    try:
-        if shape == "rect_tube":
-            b, h, t = float(d["b"]), float(d["h"]), float(d["t"])
-            return b * h - (b - 2.0 * t) * (h - 2.0 * t)
-        if shape == "round_tube":
-            o, t = float(d["d"]), float(d["t"])
-            return math.pi / 4.0 * (o * o - (o - 2.0 * t) ** 2)
-        if shape == "rect_solid":
-            return float(d["b"]) * float(d["h"])
-        if shape == "round_solid":
-            return math.pi / 4.0 * float(d["d"]) ** 2
-    except KeyError as e:
-        raise ValueError(f"section {shape} is missing dims_mm {e.args[0]}") from None
-    raise ValueError(f"section shape {shape!r}: give A_mm2 so K2 can weigh the member")
 
 
 def member_items(design: dict) -> list[tuple[float, np.ndarray, np.ndarray, dict]]:
@@ -128,6 +90,5 @@ def part_items(parts: list[dict]) -> list[tuple[float, np.ndarray, np.ndarray, d
         box = p["box"]
         centre = np.asarray(box["center_mm"], dtype=float) / 1000.0
         size = np.asarray(box["size_mm"], dtype=float) / 1000.0
-        rpy = np.radians(np.asarray(box.get("rpy_deg", [0.0, 0.0, 0.0]), dtype=float))
-        out.append((m, centre, box_inertia(m, size, rpy), p))
+        out.append((m, centre, box_inertia(m, size, box.get("rpy_deg")), p))
     return out

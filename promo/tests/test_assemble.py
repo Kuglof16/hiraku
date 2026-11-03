@@ -1,0 +1,277 @@
+import json
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from promo import assemble
+from promo.assemble import Join
+
+REPO_TABLE = Path(__file__).resolve().parents[1] / "assembly.json"
+
+
+def script_text(slots):
+    """A narration script with one row per (cut, start, end)."""
+    def clock(t):
+        return f"{int(t // 60)}:{t % 60:04.1f}"
+    return "".join(f"{c}\t{clock(a)}-{clock(b)}\tja\ten\n" for c, a, b in slots)
+
+
+def table_data(segments, **extra):
+    return {"script": "s.tsv", "default_join": {"kind": "dissolve", "seconds": 0.25},
+            "segments": segments, **extra}
+
+
+def planned(segments, slots, fps=30):
+    data = table_data(segments, fps=fps)
+    table = assemble.load_table(data, {"WORK": "/w"})
+    return assemble.plan(table, assemble.slot_table(script_text(slots)))
+
+
+THREE = [("A", 0, 4), ("B", 4, 9.5), ("C", 9.5, 12)]
+
+
+def three_segments(j1="dissolve", s1=0.4, j2="grain", s2=0.5):
+    return [
+        {"cuts": ["A"], "still": "${WORK}/a.png", "join": {"kind": j1, "seconds": s1}},
+        {"cuts": ["B"], "video": "${WORK}/b.mp4", "join": {"kind": j2, "seconds": s2}},
+        {"cuts": ["C"], "still": "${WORK}/c.png", "look": {"grain": True, "bloom": 0.3}},
+    ]
+
+
+class JoinLength(unittest.TestCase):
+    def test_even_frames(self):
+        self.assertEqual(Join("dissolve", 0.25).frames(30), 8)
+        self.assertEqual(Join("dissolve", 0.3).frames(30), 10)
+        self.assertEqual(Join("grain", 0.5).frames(30), 16)
+        self.assertEqual(Join("light", 0.4).frames(30), 12)
+        self.assertEqual(Join("cut", 0.0).frames(30), 0)
+        self.assertEqual(Join("dissolve", 0.01).frames(30), 2)   # never shorter than one frame a side
+
+
+class Table(unittest.TestCase):
+    def test_substitutes_names(self):
+        t = assemble.load_table(table_data(three_segments()), {"WORK": "/w"})
+        self.assertEqual(t.segments[0].source, "/w/a.png")
+        self.assertEqual(t.segments[1].kind, "video")
+
+    def test_missing_name(self):
+        with self.assertRaises(ValueError):
+            assemble.load_table(table_data(three_segments()), {})
+
+    def test_default_join_and_last(self):
+        segs = three_segments()
+        del segs[0]["join"]
+        t = assemble.load_table(table_data(segs), {"WORK": "/w"})
+        self.assertEqual((t.segments[0].join.kind, t.segments[0].join.seconds), ("dissolve", 0.25))
+        self.assertEqual(t.segments[-1].join.kind, "cut")   # nothing follows the last segment
+
+    def test_rejects_bad_joins_and_sources(self):
+        segs = three_segments(j1="wipe")
+        with self.assertRaises(ValueError):
+            assemble.load_table(table_data(segs), {"WORK": "/w"})
+        segs = three_segments()
+        segs[0]["video"] = "x.mp4"
+        with self.assertRaises(ValueError):
+            assemble.load_table(table_data(segs), {"WORK": "/w"})
+
+    def test_cuts_must_match_script(self):
+        with self.assertRaises(ValueError):
+            planned(three_segments(), [("A", 0, 4), ("B", 4, 9.5), ("D", 9.5, 12)])
+
+    def test_slot_spans_all_rows_of_a_cut(self):
+        text = "A\t0:00-0:03\tx\tx\nA\t0:00-0:03\ty\ty\nB\t0:03-0:05\tz\tz\n"
+        self.assertEqual(assemble.slot_table(text), [("A", 0.0, 3.0), ("B", 3.0, 5.0)])
+
+    def test_join_longer_than_a_slot_is_refused(self):
+        with self.assertRaises(ValueError):
+            planned(three_segments(s1=5.0), THREE)
+
+    def test_repo_table(self):
+        """The sample table covers the 21 cuts in order with the planned joins and looks."""
+        data = json.loads(REPO_TABLE.read_text(encoding="utf-8"))
+        for seg in data["segments"]:   # inputs come through ${WORK}, never a fixed folder
+            src = seg.get("video") or seg.get("still")
+            for p in (src.values() if isinstance(src, dict) else [src] if src else []):
+                self.assertTrue(p.startswith("${WORK}/"), p)
+        table = assemble.load_table(data, {"WORK": "/w"})
+        cuts = [c for s in table.segments for c in s.cuts]
+        self.assertEqual(len(cuts), 21)
+        joins = {s.cuts[-1]: (s.join.kind, s.join.seconds) for s in table.segments}
+        self.assertEqual(joins["N04"], ("grain", 0.5))
+        self.assertEqual(joins["N05"], ("light", 0.5))
+        self.assertEqual(joins["N08"], ("dissolve", 0.4))
+        self.assertEqual(joins["N08b"], ("light", 0.4))
+        self.assertEqual(joins["N17"], ("grain", 0.5))
+        self.assertEqual(joins["N17b"], ("light", 0.6))
+        self.assertEqual(joins["N10"], ("dissolve", 0.25))
+        looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
+        self.assertEqual(looked, ["N05", "N08b", "N17b", "N18"])
+        # tiles a script with these cuts, whatever the slot lengths
+        slots, t = [], 0.0
+        for c in cuts:
+            slots.append((c, t, t + 5.0))
+            t += 5.0
+        assemble.plan(table, assemble.slot_table(script_text(slots)))
+
+
+class Timing(unittest.TestCase):
+    def setUp(self):
+        self.table = planned(three_segments(), THREE)
+        self.sp = assemble.spans(self.table)
+        self.jp = assemble.join_points(self.sp, 30)
+
+    def test_spans_pad_half_a_join_each_side(self):
+        a, b, c = self.sp
+        self.assertEqual((a.pre, a.slot, a.post), (0, 120, 6))
+        self.assertEqual((b.pre, b.slot, b.post), (6, 165, 8))
+        self.assertEqual((c.pre, c.slot, c.post), (8, 75, 0))
+
+    def test_boundary_is_the_middle_of_each_join(self):
+        for jp, boundary in zip(self.jp, (120, 285)):
+            self.assertEqual(jp["boundary"], boundary)
+            self.assertEqual(jp["start"] + jp["end"], 2 * boundary)
+        self.assertEqual((self.jp[0]["start"], self.jp[0]["end"]), (114, 126))
+        self.assertEqual((self.jp[1]["start"], self.jp[1]["end"]), (277, 293))
+
+    def test_offset_is_where_the_join_starts(self):
+        for jp in self.jp:
+            self.assertEqual(jp["offset"], jp["start"])
+
+    def test_total_length_unchanged(self):
+        self.assertEqual(assemble.film_frames(self.sp, 30), 360)
+
+    def test_cuts_add_no_padding(self):
+        t = planned(three_segments(j1="cut", j2="cut"), THREE)
+        sp = assemble.spans(t)
+        self.assertEqual([(s.pre, s.post) for s in sp], [(0, 0), (0, 0), (0, 0)])
+        self.assertEqual(assemble.film_frames(sp, 30), 360)
+
+    def test_slot_off_the_frame_grid(self):
+        with self.assertRaises(ValueError):
+            assemble.frames(1.01, 30)
+
+
+class Commands(unittest.TestCase):
+    def setUp(self):
+        self.table = planned(three_segments(j1="light"), THREE)
+        self.sp = assemble.spans(self.table)
+
+    def graph(self, i, height=1080):
+        seg, span = self.table.segments[i], self.sp[i]
+        return assemble.segment_graph(seg, span, 30, height * 16 // 9, height, 910, "1b1a17")
+
+    def test_light_join_on_both_sides(self):
+        self.assertIn("0xf6ead0", self.graph(0))
+        self.assertIn("0xf6ead0", self.graph(1))
+        self.assertNotIn("0xf6ead0", self.graph(2))
+
+    def test_grain_join_and_look(self):
+        g1, g2 = self.graph(1), self.graph(2)
+        self.assertIn("noise=", g1)          # grain join out of B
+        self.assertIn("noise=", g2)          # grain join into C, and C's grain look
+        self.assertIn(f"all_seed={self.sp[2].first_frame + 1},", g2)   # seeded by the cut's first frame
+        self.assertIn("all_mode=screen", g2)  # bloom
+        self.assertNotIn("all_mode=screen", g1)
+
+    def test_still_pads_and_band(self):
+        self.table.segments[0].paint_band = True
+        g = self.graph(0)
+        self.assertIn("drawbox=x=0:y=910:w=iw:h=170", g)
+        self.assertIn("tpad=stop=126:stop_mode=clone,trim=end_frame=126", g)
+        self.assertIn("drawbox=x=0:y=1820:w=iw:h=340", self.graph(0, 2160))
+
+    def test_video_freezes_on_the_first_frame_before_its_slot(self):
+        self.assertIn("tpad=start=6:start_mode=clone", self.graph(1))
+
+    def test_join_graph(self):
+        g = assemble.join_graph(self.sp, 30)
+        self.assertIn("xfade=transition=fade:duration=0.400000:offset=3.800000", g)
+        # grain is a smooth fade under the swelling grain layer (no patchy break-up)
+        self.assertIn("xfade=transition=fade:duration=0.533333:offset=9.233333", g)
+        self.assertNotIn("transition=custom", g)
+        self.assertNotIn("st(", g)   # xfade evaluates on several threads: no shared registers
+        cut = planned(three_segments(j1="cut"), THREE)
+        self.assertIn("concat=n=2", assemble.join_graph(assemble.spans(cut), 30))
+
+    def test_segment_command(self):
+        cmd = assemble.segment_command(self.table.segments[0], self.sp[0], 30, 1080, Path("o.mp4"),
+                                       910, "1b1a17")
+        self.assertEqual(cmd[cmd.index("-loop") + 1], "1")
+        self.assertEqual(cmd[cmd.index("-frames:v") + 1], str(self.sp[0].total))
+
+    def test_per_height_source(self):
+        seg = assemble.Segment(["A"], "video", {"1080": "a1.mp4", "2160": "a4.mp4"})
+        self.assertEqual(assemble.resolve_source(seg, 2160), Path("a4.mp4"))
+        seg.source = {"1080": "a1.mp4"}
+        self.assertEqual(assemble.resolve_source(seg, 2160), Path("a1.mp4"))
+
+    def test_escape_path(self):
+        self.assertEqual(assemble.escape_path("C:\\Windows\\Fonts\\a.ttc"), "'C\\:/Windows/Fonts/a.ttc'")
+
+
+def ffmpeg_or_none():
+    try:
+        from promo.export import ffmpeg_path
+        return ffmpeg_path()
+    except SystemExit:
+        return None
+
+
+FFMPEG = ffmpeg_or_none()
+
+
+@unittest.skipUnless(FFMPEG and shutil.which("ffprobe"), "needs ffmpeg and ffprobe")
+class Build(unittest.TestCase):
+    """A 3 s film from tiny inputs at 144 px: length, frame count, same pixels twice."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = Path(tempfile.mkdtemp(prefix="assemble_test_"))
+        d = cls.dir
+        lavfi = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"]
+        subprocess.run(lavfi + ["-i", "color=c=0xe8e2d0:s=320x180", "-frames:v", "1", str(d / "a.png")], check=True)
+        subprocess.run(lavfi + ["-i", "testsrc2=s=320x180:r=30:d=0.8", "-pix_fmt", "yuv420p",
+                                str(d / "b.mp4")], check=True)   # shorter than its slot
+        subprocess.run(lavfi + ["-i", "color=c=0x151513:s=320x180", "-frames:v", "1", str(d / "c.png")], check=True)
+        (d / "s.tsv").write_text(script_text([("A", 0, 1), ("B", 1, 2), ("C", 2, 3)]), encoding="utf-8")
+        data = table_data([
+            {"cuts": ["A"], "still": "${WORK}/a.png", "paint_band": True, "join": {"kind": "light", "seconds": 0.2}},
+            {"cuts": ["B"], "video": "${WORK}/b.mp4", "join": {"kind": "grain", "seconds": 0.2}},
+            {"cuts": ["C"], "still": "${WORK}/c.png", "look": {"grain": True, "bloom": 0.3}},
+        ])
+        (d / "t.json").write_text(json.dumps(data), encoding="utf-8")
+        cls.outs = []
+        for n in (1, 2):
+            table = assemble.read_table(d / "t.json", str(d), [])
+            cls.outs.append(assemble.build(table, d / f"out{n}.mp4", 144, None, None, ffmpeg=FFMPEG,
+                                           log=lambda *a: None))
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def probe(self, path, entries):
+        r = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+                            "-show_entries", entries, "-of", "csv=p=0", str(path)],
+                           capture_output=True, text=True, check=True)
+        return r.stdout.strip()
+
+    def test_length(self):
+        self.assertEqual(self.probe(self.outs[0], "stream=nb_read_frames"), "90")
+        self.assertEqual(self.probe(self.outs[0], "stream=width,height"), "256,144")
+
+    def test_same_input_same_pixels(self):
+        def md5s(p):
+            r = subprocess.run([FFMPEG, "-v", "error", "-i", str(p), "-f", "framemd5", "-"],
+                               capture_output=True, text=True, check=True)
+            return [ln.split(",")[-1].strip() for ln in r.stdout.splitlines() if not ln.startswith("#")]
+        a, b = md5s(self.outs[0]), md5s(self.outs[1])
+        self.assertEqual(len(a), 90)
+        self.assertEqual(a, b)
+        self.assertGreater(len(set(a[66:])), 1)   # the grain moves from frame to frame
+
+
+if __name__ == "__main__":
+    unittest.main()

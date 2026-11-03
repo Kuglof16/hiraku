@@ -187,7 +187,10 @@ class LaneChangeTool(K2Tool):
                        "the roll overshoot of the springs"))
 
     def own_checks(self) -> list[dict]:
-        d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="steady cornering check")
+        # rigid supports and stiff tyres: no body roll, so the wheels do not lean and the Magic Formula's
+        # camber force and moment stay out; the pneumatic trail is in the closed form
+        d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, susp="rigid",
+                       variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"}}, name="steady cornering check")
         veh = build_vehicle(d)
         v, delta = 10.0, math.radians(1.5)
         out = []
@@ -203,9 +206,19 @@ class LaneChangeTool(K2Tool):
                 if k >= 6000:
                     ws.append(sim.w[2])
             rates.append(sum(ws) / len(ws))
-        expected = v * math.tan(delta) / veh.l_steer
-        out.append(_check("steady cornering 10 m/s, steer 1.5 deg, cornering stiffness proportional to axle load (neutral steer)",
-                          "yaw_rate", expected, rates[0], "rad/s", 2e-2, "neutral steer: r = v tan(delta) / L"))
+        front = [c for c in veh.corners if c.steer]
+        rear = [c for c in veh.corners if not c.steer]
+        cf, cr = sum(c.c_lat for c in front), sum(c.c_lat for c in rear)
+        x_cg = float(veh.cg_total[0])
+        a, b = float(front[0].pos[0]) - x_cg, x_cg - float(rear[0].pos[0])
+        tf, tr = front[0].mf.trail(front[0].static_load), rear[0].mf.trail(rear[0].static_load)
+        big_l = a + b
+        expected = delta / (big_l / v + veh.m_total * v / (big_l + tr - tf) * ((b + tr) / cf - (a - tf) / cr))
+        out.append(_check(f"steady cornering 10 m/s, steer 1.5 deg, rigid, cornering stiffness proportional to axle load, "
+                          f"pneumatic trail {tf * 1000:.1f} mm front / {tr * 1000:.1f} mm rear",
+                          "yaw_rate", expected, rates[0], "rad/s", 2e-2,
+                          "bicycle model with the side forces acting the trail behind the axles: r = delta / (L / v "
+                          "+ m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))"))
         out.append(_check("steady cornering left + right (bit for bit)", "yaw_rate_mirror_error", 0.0, rates[0] + rates[1],
                           "rad/s", 0.0, "symmetry", passed=rates[0] == -rates[1]))
         return out

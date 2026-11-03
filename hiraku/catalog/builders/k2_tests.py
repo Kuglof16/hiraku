@@ -394,6 +394,19 @@ def park_inputs(design: Record, load_case: Record) -> Record:
     return {"h": _height(veh, ground)}
 
 
+def lock_inputs(design: Record, load_case: Record) -> Record:
+    """mu of a locked wheel: the K2 tyre (Magic Formula, peak mu = the load case's mu) at
+    slip -1, sum |Fx| / sum Fz over the wheels at their static loads."""
+    from hiraku.solvers.k2_vehicle.drive import on_board
+    from hiraku.solvers.k2_vehicle.model import build_vehicle
+    from hiraku.solvers.k2_vehicle.units import si
+    lp = load_case.get("params", {})
+    veh = build_vehicle(on_board(design, lp.get("loading")), {"mu": si(lp["mu"], "1")})
+    wheels = [c for c in veh.corners if c.mf is not None]
+    mu = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in wheels) / sum(c.static_load for c in wheels)
+    return {"mu": q(mu, "1")}
+
+
 def slope_inputs(design: Record, load_case: Record) -> Record:
     """a_y = tan(side_slope) in g (the slope taken as a lateral acceleration); h; e, the CG's
     offset toward the downhill side."""
@@ -464,7 +477,26 @@ PLANS: dict[str, Record] = {
            "predictions": [{
                "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",
                "assumptions": ["全輪が摩擦の限りで減速する", "空走の時間は荷重条件の reaction_time"],
-               "inputs": {"v": "lc.speed", "mu": "lc.mu", "t_r": "lc.reaction_time"}}]},
+               "inputs": {"v": "lc.speed", "mu": "lc.mu", "t_r": "lc.reaction_time"}}],
+           # Run on the demo vehicle (two_cargo, 35 km/h, mu 0.6) with the Magic Formula tyre: K0 8.03 m,
+           # K2 10.75 m (+33.9 %); K0 with the locked-wheel mu 0.442 of lock_inputs: 10.90 m (K2 -1.4 %).
+           # The braking tool's own check (locked wheels from 40 km/h) agrees with that closed form to -1.5 %.
+           "expected_mismatch": {
+               "quantity": "stopping_distance",
+               "source": "the K2 department's run on the demo vehicle with the Magic Formula tyre (two_cargo, "
+                         "35 km/h, mu 0.6) and the braking tool's locked-wheel own check, 2026-11-03",
+               "cause": "ブレーキは全輪をロックする (ABS なし)。ロックした輪はすべり率 -1 で滑り、タイヤの式 "
+                        "(Magic Formula) ではそのときの摩擦が頂点の μ より小さい (デモの車で μ 0.6 に対して約 0.44)。"
+                        "式は頂点の μ で減速するとみている",
+               "fix": "ロックした輪の μ (タイヤの式のすべり率 -1 の値) で予測し直す",
+               "retry": {
+                   "say": "ロックした輪の摩擦で、止まるまでの距離を予測し直します",
+                   "predictions": [{
+                       "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",
+                       "assumptions": ["全輪がロックして滑る (すべり率 -1 のタイヤの摩擦)",
+                                       "空走の時間は荷重条件の reaction_time"],
+                       "inputs": {"v": "lc.speed", "mu": "from.mu", "t_r": "lc.reaction_time"},
+                       "inputs_from": lock_inputs}]}}},
     "S4b": {"tool": "braking", "say": "坂に止めておくのに要る摩擦を、坂の力と輪の荷重の釣り合いで先に見積もります",
             "predictions": [{
                 "quantity": "parking_friction_demand", "formula_id": "braking.parking_friction", "output": "mu_all",
@@ -477,17 +509,19 @@ PLANS: dict[str, Record] = {
                "assumptions": ["斜面を横の加速度 tan β とみる", "凸凹の路面の上下の揺れは平均では消える"],
                "inputs": {"m": "load.mass", "a_y": "from.a_y", "h": "from.h", "t": "summary.track_front"},
                "inputs_from": slope_inputs}],
-           # Run on the demo vehicle (two_cargo, 15 deg): K0 2061.6 N, K2 1835.7 N (-11.0 %). Split by K2
-           # runs on the smooth slope: the exact rigid balance W (cos b (t/2 - e) - sin b h) / t gives
-           # 1970.7 N and K2 with rigid supports 1968.9 N; K2 on its springs 1823.4 N; the rough road
-           # moves the mean by +0.7 % only.
+           # Run on the demo vehicle (two_cargo, 15 deg, double wishbones on the builtin K&C table):
+           # K0 2061.6 N, K2 1849.5 N (-10.3 %). Split by K2 runs on the smooth slope: the exact rigid
+           # balance W (cos b (t/2 - e) - sin b h) / t gives 1970.7 N and K2 with rigid supports
+           # 1968.9 N; K2 on its suspension 1841.8 N; the rough road moves the mean by +0.4 % only.
            "expected_mismatch": {
                "quantity": "mean_uphill_load",
                "source": "the K2 department's split of the gap on the demo vehicle (rigid and sprung K2 runs on "
-                         "the smooth slope against the exact moment balance), 2026-11-03",
+                         "the smooth slope against the exact moment balance), 2026-11-03, again with the double "
+                         "wishbones of the builtin K&C table",
                "cause": "式は斜面を横の加速度 tan β とみて、重さ全部を法線の荷重にしている (15° で 3.5 % 大きい)。"
-                        "重心が下の側へ 4 mm ずれている分 (1 %) も入っていない。さらに、車体がばねの上で下の側へ"
-                        "ロールして重心が下の側へ動く分 (7.4 %) が入っていない。路面の凸凹は平均を 0.7 % しか変えない",
+                        "重心が下の側へ 4 mm ずれている分 (1 %) も入っていない。さらに、車体がサスペンションの上で"
+                        "下の側へロールして重心が下の側へ動く分 (6.5 %) が入っていない。路面の凸凹は平均を 0.4 % "
+                        "しか変えない",
                "fix": "cos β と重心の横のずれを入れた斜面の釣り合い tilt.side_slope_uphill_load で予測し直す "
                       "(ばねのロールの分は式に無いので、その分は残る)",
                "retry": {

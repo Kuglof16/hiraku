@@ -35,7 +35,7 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: "", note: "", answers: {}, litSeen: new Set(),
+    draft: "", note: "", answers: {}, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };

@@ -301,10 +301,11 @@
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-        "type": "spring",
+        "type": "kc_table",
         "stiffness_N_per_mm": 20.0,
         "damping_Ns_per_mm": 1.2,
-        "travel_mm": 150.0
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
         "drive": false,
@@ -324,10 +325,11 @@
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-        "type": "spring",
+        "type": "kc_table",
         "stiffness_N_per_mm": 20.0,
         "damping_Ns_per_mm": 1.2,
-        "travel_mm": 150.0
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
         "drive": false,
@@ -347,10 +349,11 @@
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-        "type": "spring",
+        "type": "kc_table",
         "stiffness_N_per_mm": 20.0,
         "damping_Ns_per_mm": 1.2,
-        "travel_mm": 150.0
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
         "drive": true,
@@ -370,10 +373,11 @@
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-        "type": "spring",
+        "type": "kc_table",
         "stiffness_N_per_mm": 20.0,
         "damping_Ns_per_mm": 1.2,
-        "travel_mm": 150.0
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
         "drive": true,

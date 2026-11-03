@@ -424,6 +424,25 @@
             "kc_table": {
               "type": "string",
               "description": "Path of a K&C table file."
+            },
+            "bushings": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Compliance of the arms' inner bushings and the tie rod (the C of K&C). Missing values are assumed by the solver and written to the analysis assumptions.",
+              "properties": {
+                "radial_N_per_mm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "axial_N_per_mm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "tie_rod_N_per_mm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
             }
           }
         },
@@ -450,6 +469,24 @@
         "frame_node": {
           "type": "string",
           "description": "Frame node that carries this support's load into the frame."
+        },
+        "tire": {
+          "type": "object",
+          "required": [
+            "coefficients"
+          ],
+          "additionalProperties": false,
+          "description": "Tyre model of this support. Without it the K2 team's default tyre file is used.",
+          "properties": {
+            "coefficients": {
+              "type": "string",
+              "description": "Path (relative to the repository) of a tyre coefficient file in data/tyres/."
+            },
+            "relaxation_length_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       }
     },

@@ -113,8 +113,11 @@ class BrakingTool(K2Tool):
               P("cd", "1", 0.0, "drag coefficient (default 0: no air drag)"),
               RHO, FRONT_AREA)
     pairs = (Pair("stopping_distance", "braking.stopping_distance", "s",
-                  (("v", "speed"), ("mu", "mu"), ("t_r", "reaction_time"))),
-             Pair("braking_distance", "braking.stopping_distance", "s_braking", (("v", "speed"), ("mu", "mu"))),
+                  (("v", "speed"), ("mu", "mu"), ("t_r", "reaction_time")),
+                  "mu is the tyre's peak; K2 locks the wheels (no ABS) and they slide at slip -1, below the peak "
+                  "(Magic Formula): the K2 builders' lock_inputs gives the locked-wheel mu of the same tyre"),
+             Pair("braking_distance", "braking.stopping_distance", "s_braking", (("v", "speed"), ("mu", "mu")),
+                  "as stopping_distance: the locked wheels slide below the peak mu"),
              Pair("mean_decel_g", "braking.stopping_distance", "a_x", (("v", "speed"), ("mu", "mu"))),
              Pair("min_rear_axle_load", "braking.load_transfer", "W_rear",
                   note="a_x from braking.stopping_distance; K2 is the minimum while braking, so the pitch "
@@ -134,9 +137,14 @@ class BrakingTool(K2Tool):
         veh = build_vehicle(d)
         v0 = 40.0 / 3.6
         r = brake_stop(veh, v0)
-        expected = v0 * v0 / (2.0 * 0.7 * G0)
-        return [_check("locked wheels from 40 km/h, mu 0.7, no air drag or rolling resistance", "braking_distance",
-                       expected, r["braking"], "m", 1e-2, "s = v^2 / (2 mu g)")]
+        # a locked wheel slides at kappa = -1, past the peak of the Magic Formula
+        mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / sum(
+            c.static_load for c in veh.corners)
+        expected = v0 * v0 / (2.0 * mu_lock * G0)
+        return [_check(f"locked wheels from 40 km/h, peak mu 0.7, locked-wheel mu {mu_lock:.3f} (the tyre at kappa -1), "
+                       "no air drag or rolling resistance", "braking_distance", expected, r["braking"], "m", 2e-2,
+                       "s = v^2 / (2 mu_lock g), mu_lock = sum |Fx(kappa = -1)| / W at the static loads (the load moving "
+                       "to the front while braking is not in it)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)

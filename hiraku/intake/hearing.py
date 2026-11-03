@@ -76,6 +76,7 @@ class Plan:
     questions: list[Record] = field(default_factory=list)  # hearing_asked.questions
     defaulted: list[Record] = field(default_factory=list)  # requirement entries (source default) for `default` items
     unfilled: list[str] = field(default_factory=list)  # `default` items nobody has a value for
+    unasked: list[str] = field(default_factory=list)  # `confirm` items not asked (ask_confirm False) with no default
     present: list[str] = field(default_factory=list)  # keys the file already has
 
 
@@ -85,11 +86,15 @@ def plan_hearing(
     product_defaults: dict[str, Record] | None = None,
     wording: dict[str, str] | None = None,
     choices: dict[str, list[Record]] | None = None,
+    ask_confirm: bool = True,
 ) -> Plan:
     """What is missing from a requirements file.
 
     product_defaults: key -> requirement of the same product's own file (its values come before the
     items' generic defaults). wording / choices: Claude's rewording of a question for this product.
+    ask_confirm False: the requirements came as a file somebody wrote, so a `confirm` item the file lacks is
+    not asked; it takes its default (source default) when it has one, else stays out (plan.unasked). `must`
+    items are asked either way: nothing proceeds without them.
     """
     flags = normalize_flags(req.get("flags", {}))
     have = {r["key"] for r in req.get("requirements", [])}
@@ -103,11 +108,14 @@ def plan_hearing(
             continue
         known = product_defaults.get(key)
         default = _value_part(known) if known and "value" in known else it.get("default")
-        if it["ask"] == "default":
-            if default is None:
+        quiet = it["ask"] == "default" or (it["ask"] == "confirm" and not ask_confirm)
+        if quiet:
+            if default is not None:
+                plan.defaulted.append(_default_requirement(it, default, known))
+            elif it["ask"] == "default":
                 plan.unfilled.append(key)
             else:
-                plan.defaulted.append(_default_requirement(it, default, known))
+                plan.unasked.append(key)
             continue
         q: Record = {
             "req_key": key,
@@ -172,6 +180,7 @@ class Prepared:
     answered: Record  # hearing_answered data
     unresolved: list[str]  # asked, no answer, no default
     unfilled: list[str]  # `default` items with no value anywhere
+    unasked: list[str] = field(default_factory=list)  # `confirm` items left out (ask_confirm False), no value anywhere
 
     @property
     def ready(self) -> bool:
@@ -188,10 +197,15 @@ def prepare(
     product_defaults: dict[str, Record] | None = None,
     wording: dict[str, str] | None = None,
     choices: dict[str, list[Record]] | None = None,
+    ask_confirm: bool = True,
 ) -> Prepared:
-    """Ask what is missing and settle it: answers first, then defaults. The file in is not changed."""
+    """Ask what is missing and settle it: answers first, then defaults. The file in is not changed.
+
+    ask_confirm False is for requirements that arrive as a file somebody wrote (see plan_hearing): nothing is
+    asked but the `must` items the file lacks, and the defaults it takes are in `answered` and in the file out.
+    """
     answers = dict(answers or {})
-    plan = plan_hearing(req, product_defaults=product_defaults, wording=wording, choices=choices)
+    plan = plan_hearing(req, product_defaults=product_defaults, wording=wording, choices=choices, ask_confirm=ask_confirm)
     in_file = {r["key"] for r in req.get("requirements", [])}
     settled: list[Record] = []
     unresolved: list[str] = []
@@ -223,8 +237,9 @@ def prepare(
     answered: Record = {"answers": [*defaulted, *settled]}
     if note and note.strip():
         answered["note"] = note.strip()
+    taken = {r["key"] for r in settled}
     return Prepared(out, {"questions": plan.questions}, answered, unresolved,
-                    [k for k in plan.unfilled if k not in {r["key"] for r in settled}])
+                    [k for k in plan.unfilled if k not in taken], [k for k in plan.unasked if k not in taken])
 
 
 # ------------------------------------------------------------------- waiting for a person in a run
@@ -294,5 +309,8 @@ def hearing_text(prepared: Prepared) -> str:
     by = {"hearing": 0, "default": 0}
     for r in prepared.answered["answers"]:
         by[r["source"]] += 1
+    if not prepared.asked["questions"]:  # nothing to ask: the requirements file stands
+        keys = "・".join(r["key"] for r in prepared.answered["answers"] if r["source"] == "default")
+        return "要件のファイルのまま進みます" + (f" (既定値で足した {by['default']} 件: {keys})" if by["default"] else "")
     left = f"、答えが無いまま {len(prepared.unresolved)} 件" if prepared.unresolved else ""
     return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}"

@@ -569,6 +569,127 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    def test_a_part_limit_holds_only_its_part(self):
+        """Part temperatures against T1's criterion (the battery's limit, recorded at the battery):
+        only the battery is held to it and the scale is the field's own range."""
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async () => {
+              const { contourOf, overOf } = await import("/js/fields.js");
+              // shape example: three parts, a criterion on the battery's highest temperature
+              const ana = { analysis_id: "ana-0001", status: "ok",
+                results: [{ quantity: "temp_battery_max", value: 48.4, unit: "degC", where: "battery" }],
+                fields: [{ kind: "temperature", unit: "degC", per_part: { battery: 48.4, motor: 69.9, controller: 57.9 } }] };
+              const crit = (v) => ({ quantity: "temp_battery_max", op: "<=", limit: { value: v, unit: "degC" }, basis: "shape example" });
+              const ct = contourOf(ana, ana.fields[0], crit(55));
+              const hot = contourOf(ana, ana.fields[0], crit(45));
+              const lost = contourOf({ ...ana, results: [] }, ana.fields[0], crit(55));
+              return { max: ct.max, limitKnown: ct.limitKnown, part: ct.partLimit?.part,
+                       over: ["battery", "motor", "controller"].map((id) => overOf(ct, id, ct.parts[id])),
+                       hot: ["battery", "motor"].map((id) => overOf(hot, id, hot.parts[id])),
+                       lost: [lost.partLimit, lost.limitKnown, overOf(lost, "motor", 69.9)] };
+            }"""
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual((got["max"], got["limitKnown"], got["part"]), (69.9, False, "battery"))
+        self.assertEqual(got["over"], [False, False, False])  # the motor at 69.9 is not held to the battery's 55
+        self.assertEqual(got["hot"], [True, False])
+        self.assertEqual(got["lost"], [None, False, False])  # no recorded part for the limit: no part held to it
+        page.close()
+
+    def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
+        """On a run this screen started and still going, a file given to A5 lands in the run's
+        knowledge/ with a request in its inbox/ (the run turns it into events), and A5 says so."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        # the sample run under this run's id, without its run.finished: still going
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()][:-1]
+        for e in events:
+            e["run_id"] = run_id
+        events[0]["data"]["run_id"] = run_id
+        going = tmp / "going.jsonl"
+        going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            lau.start("offroad-4w.yaml", "scripted")
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?run={run_id}&tab=A5")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.wait_for_selector(".stop-btn")  # the screen knows the run is its own
+            note = tmp / "曲げの決まり.md"
+            note.write_text("曲げの内側の半径は板厚以上\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(note))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('渡しました')")
+            run = tmp / "runs" / run_id
+            self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_bytes(), note.read_bytes())  # kept as given
+            self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_screens_in_their_tabs(self):
+        """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;
+        a replay is read-only (the hearing's buttons are off) and a rewind redraws them."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported")}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        t0 = events[0]["t"]
+        events = events[:1] + [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)] + events[1:]
+        for i, e in enumerate(events):
+            e["seq"] = i
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        read = """() => { const v = document.getElementById("view-intake");
+          const pane = [...v.querySelectorAll(".in-pane")].find((p) => !p.hidden);
+          return { shown: !v.hidden, bench: !document.getElementById("view-bench").hidden, screen: pane?.dataset.screen ?? null,
+                   text: pane?.textContent ?? "", on: document.querySelector(".tab.on")?.dataset.tab,
+                   answer: [...(pane?.querySelectorAll("button") ?? [])].filter((b) => /進める/.test(b.textContent)).map((b) => b.disabled) }; }"""
+        def tab(key):
+            page.click(f'.tab[data-tab="{key}"]')
+            page.wait_for_function(f"document.querySelector('.tab.on')?.dataset.tab === '{key}'")
+            return page.evaluate(read)
+
+        a1 = tab("A1")
+        a2 = tab("A2")
+        a5 = tab("A5")
+        self.assertEqual(errors, [])
+        self.assertEqual((a1["shown"], a1["bench"], a1["screen"], a1["on"]), (True, False, "A1", "A1"))
+        self.assertIn(ex["domains_picked"]["picks"][0]["shown_name"], a1["text"])
+        self.assertEqual((a2["screen"], a2["on"]), ("A2", "A2"))
+        self.assertIn(ex["hearing_asked"]["questions"][0]["text"], a2["text"])
+        self.assertTrue(a2["answer"] and all(a2["answer"]))  # a replay cannot answer
+        self.assertEqual(a5["screen"], "A5")
+        self.assertIn(ex["knowledge_imported"]["rules"][0]["text"], a5["text"])
+        page.evaluate("async () => { await window.hiraku.seek(0); }")  # back before the knowledge came
+        page.wait_for_function(f"!document.querySelector('#view-intake .in-pane[data-screen=A5]').textContent.includes({json.dumps(ex['knowledge_imported']['rules'][0]['text'])})")
+        self.assertEqual(tab("bench")["shown"], False)
+        self.assertEqual(errors, [])
+        page.close()
+
     @unittest.skipUnless("x" in contract.schema()["$defs"]["series"]["properties"], "contract without series against x")
     def test_series_against_another_quantity_are_charted(self):
         """Series with x (a K&C bench) give a graph without a motion: one chart per channel
@@ -576,12 +697,13 @@ class BrowserReplayTest(unittest.TestCase):
         events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
         travel = [float(v) for v in range(-60, 61, 10)]
-        force = [float(v) for v in range(0, 2001, 250)]
-        # shape example: straight lines through made-up slopes, not a result
+        force = [v / 4 for v in range(0, 9)]
+        # shape example: straight lines, not a result (the camber slope is made up; the toe slope is
+        # the K2 team's demo value, -0.056 deg at 1 kN); channel and axis names as kc_bench writes them
         ana["series"] = [
-            {"channel": f"camber.{w}", "unit": "deg", "x": {"quantity": "wheel_travel", "unit": "mm", "values": travel}, "values": [k * v for v in travel]}
+            {"channel": f"camber.{w}", "unit": "deg", "x": {"quantity": "travel", "unit": "mm", "values": travel}, "values": [k * v for v in travel]}
             for w, k in (("FL", -0.02), ("FR", 0.02))
-        ] + [{"channel": "toe.FL", "unit": "deg", "x": {"quantity": "lateral_force", "unit": "N", "values": force}, "values": [1e-4 * v for v in force]}]
+        ] + [{"channel": "toe_lateral", "unit": "deg", "x": {"quantity": "lateral_force", "unit": "kN", "values": force}, "values": [-0.056 * v for v in force]}]
         for e in events:
             self.assertEqual(contract.errors("event", e), [], e["kind"])
         page, errors = self.open("run=sample&pace=0&t=0")
@@ -594,14 +716,14 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(first["toggle"])
         self.assertTrue(first["shown"])
-        self.assertEqual(first["chips"], [["camber", True], ["toe", False]])
-        self.assertEqual(first["unit"], "[°]・wheel_travel [mm]")
+        self.assertEqual(first["chips"], [["キャンバーの変化", True], ["横力によるトー", False]])
+        self.assertEqual(first["unit"], "[°]・ストローク [mm]")
         self.assertEqual(first["lines"], 2)
         self.assertEqual(first["cursor"], 0)
-        page.click("#graph .gr-chips button:text-is('toe')")
-        page.wait_for_function("document.querySelector('#graph .gr-unit')?.textContent.includes('lateral_force')")
+        page.click("#graph .gr-chips button:text-is('横力によるトー')")
+        page.wait_for_function("document.querySelector('#graph .gr-unit')?.textContent.includes('横力')")
         second = page.evaluate(read)
-        self.assertEqual(second["unit"], "[°]・lateral_force [N]")
+        self.assertEqual(second["unit"], "[°]・横力 [kN]")
         self.assertEqual(second["lines"], 1)
         self.assertEqual(errors, [])
         page.close()
@@ -912,6 +1034,35 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got["views"], 5)  # every test has its record in the dev run
             self.assertEqual(got["results"], 5)
             page.close()
+
+            # The result rows end inside their box: with a box shorter than they need, their
+            # text steps down (not below min_text_px) until they do.
+            fit = """() => { const box = document.querySelector('[data-box="n02.result"]');
+                const blocks = [...box.querySelectorAll(".n02-res")];
+                return { px: Number(box.dataset.textPx), top: box.getBoundingClientRect().top,
+                         bottom: Math.max(...blocks.map((b) => b.getBoundingClientRect().bottom)),
+                         sizes: blocks.map((b) => parseFloat(getComputedStyle(b).fontSize)) }; }"""
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            natural = page.evaluate(fit)
+            page.close()
+            R = layout["n02"]["result"]
+            self.assertEqual(natural["px"], R["text_px"])
+            self.assertLessEqual(natural["bottom"], R["y"] + R["h"])
+            # 10 px short: within what text down to min_text_px saves on the dev run's rows
+            layout["n02"]["result"]["h"] = round(natural["bottom"] - natural["top"]) - 10
+            (tmp / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+            page.evaluate("window.hiraku.ready")
+            tight = page.evaluate(fit)
+            page.close()
+            self.assertLess(tight["px"], R["text_px"])
+            self.assertGreaterEqual(min(tight["sizes"]), layout["min_text_px"])
+            self.assertLessEqual(tight["bottom"], R["y"] + layout["n02"]["result"]["h"])
         finally:
             server.shutdown()
             server.server_close()
@@ -1064,8 +1215,9 @@ class BrowserReplayTest(unittest.TestCase):
         )
         self.assertEqual(errors, [])
         self.assertEqual(got["kind"], "temperature")
-        self.assertEqual((got["min"], got["max"]), (31.0, 60.0))  # coldest part up to the criterion limit
-        self.assertIn("許容 60 ℃", got["legend"])
+        # the parts' own range; the criterion is the battery's limit, held to the battery only
+        self.assertEqual((got["min"], got["max"]), (31.0, 43.0))
+        self.assertIn("battery の許容 60 ℃", got["legend"])
         page.close()
 
     def test_pacing_spreads_and_cuts_gaps(self):

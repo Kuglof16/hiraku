@@ -19,6 +19,7 @@ be named, one run at a time. The server refuses a request from another web page
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -29,7 +30,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
-from hiraku.contract.layout import EVENTS_FILE, RUN_ID_RE, STOP_REQUEST_FILE
+from hiraku.contract.layout import EVENTS_FILE, INBOX_DIR, KNOWLEDGE_DIR, RUN_ID_RE, STOP_REQUEST_FILE
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_DIR / "data" / "requirements"
@@ -43,6 +44,30 @@ class LaunchError(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
         self.status = status
+
+
+def knowledge_name(name: Any) -> str:
+    """A dropped file's name as kept in knowledge/: its last part only (no folders, no
+    drive or stream colon, not hidden, not . or ..)."""
+    if not isinstance(name, str):
+        raise LaunchError(400, "name must be the file's name")
+    base = name.replace("\\", "/").split("/")[-1].strip()
+    if not base or base in (".", "..") or base.startswith(".") or ":" in base or len(base) > 200:
+        raise LaunchError(400, f"cannot keep a file named {name!r}")
+    return base
+
+
+def put_inbox(run_dir: Path, kind: str, fields: dict[str, Any]) -> str:
+    """Put a request for a running run as inbox/<n>-<kind>.json (n: one more than the largest
+    there; written to .tmp first so the run never reads half a file). Returns its path in the run."""
+    inbox = run_dir / INBOX_DIR
+    inbox.mkdir(exist_ok=True)
+    taken = [int(m.group(1)) for p in inbox.iterdir() if (m := re.match(r"(\d+)-", p.name))]
+    name = f"{max(taken, default=0) + 1}-{kind}.json"
+    tmp = inbox / (name + ".tmp")
+    tmp.write_text(json.dumps({"kind": kind, **fields}, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(inbox / name)
+    return f"{INBOX_DIR}/{name}"
 
 
 def read_requirements(path: Path) -> dict[str, Any]:
@@ -151,6 +176,37 @@ class Launcher:
         (self.runs_dir / run_id / STOP_REQUEST_FILE).write_bytes(b"")
         self.current["stop_requested"] = True
         return {"run_id": run_id, "stop_requested": True}
+
+    def answer(self, run_id: Any, body: Any) -> dict[str, Any]:
+        """The hearing's answer (A2) for the run started here, while it runs: checked and
+        written as hearing.answer.json in its folder by hiraku.intake.hearing.save_answer."""
+        if not self.running() or not self.current or self.current.get("run_id") != run_id:
+            raise LaunchError(409, "no run started from this screen is going under that id")
+        if not isinstance(body, dict):
+            raise LaunchError(400, "answer must be an object (answers, note, useDefaults)")
+        from hiraku.intake.hearing import save_answer
+
+        try:
+            save_answer(self.runs_dir / run_id, body)
+        except ValueError as e:  # IntakeError: an answer the hearing does not take
+            raise LaunchError(400, str(e)) from e
+        return {"run_id": run_id, "answered": True}
+
+    def knowledge(self, run_id: Any, name: Any, text: Any) -> dict[str, Any]:
+        """A knowledge file dropped on A5, for the run started here while it runs: kept as
+        knowledge/<name> in its folder, and asked for through inbox/<n>-knowledge.json (the run
+        reads it, imports the file and emits the events itself)."""
+        if not self.running() or not self.current or self.current.get("run_id") != run_id:
+            raise LaunchError(409, "no run started from this screen is going under that id")
+        if not isinstance(text, str):
+            raise LaunchError(400, "text must be the file's text")
+        safe = knowledge_name(name)
+        run_dir = self.runs_dir / run_id
+        folder = run_dir / KNOWLEDGE_DIR
+        folder.mkdir(exist_ok=True)
+        (folder / safe).write_bytes(text.encode("utf-8"))  # as given (no newline translation)
+        request = put_inbox(run_dir, "knowledge", {"file": safe})
+        return {"run_id": run_id, "file": safe, "request": request}
 
     @staticmethod
     def _read(proc: subprocess.Popen, info: dict[str, Any], tail: deque[str]) -> None:

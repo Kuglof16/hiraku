@@ -14,10 +14,16 @@ import * as THREE from "three";
 import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
+import { CutN04, CutN15 } from "./cut_grid.js";
 import { esc, fmt, quantityName, resultText, unitLabel } from "./labels.js";
 import { abscissa, channelsOf, extent, lerpAt, motionOf, nearestAt, xSeriesOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { CutN16 } from "./cut_n16.js";
+import { CutN07 } from "./cut_n07.js";
+import { CutN03 } from "./cut_n03.js";
+import { CutN06 } from "./cut_n06.js";
+import { CutN17 } from "./cut_n17.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -637,6 +643,17 @@ class CutN02 {
         )
         .join("");
     this.stage.append(el);
+    // The conditions of the cases past the limit are their load cases' titles as recorded and
+    // can run to several lines: the rows' text steps down a pixel at a time until they end
+    // inside the box, not below layout.min_text_px.
+    const blocks = [...el.querySelectorAll(".n02-res")];
+    const bottom = () => Math.max(0, ...blocks.map((b) => b.offsetTop + b.offsetHeight));
+    let px = R.text_px;
+    while (bottom() > R.h && px > (this.layout.min_text_px ?? R.text_px)) {
+      px -= 1;
+      for (const b of blocks) b.style.fontSize = `${px}px`;
+    }
+    el.dataset.textPx = String(px);
   }
 
   resize(scale) {
@@ -676,7 +693,8 @@ class CutN02 {
   }
 }
 
-const CUTS = { n05: Cut, n01: CutN01, n02: CutN02 };
+// N04 and N15 (the grid of all domains and assembly) are in cut_grid.js; N16 (the assembly order) in cut_n16.js.
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16: CutN16, n07: CutN07, n03: CutN03, n06: CutN06, n17: CutN17 };
 
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;

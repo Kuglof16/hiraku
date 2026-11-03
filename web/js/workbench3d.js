@@ -27,7 +27,8 @@ import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-import { GRAY, colorOf } from "./colormap.js";
+import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
+import { overOf } from "./fields.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
@@ -101,6 +102,50 @@ function supportGeometry(s) {
   if (s.kind === "leg") return { geo: new THREE.CylinderGeometry(w / 2, w / 2, Math.max(r, 50), 16).rotateX(Math.PI / 2), r, w };
   if (s.kind === "caster") return { geo: new THREE.SphereGeometry(r, 20, 12), r, w };
   return { geo: new THREE.CylinderGeometry(r, r, w, 48), r, w };
+}
+
+// How a view looks at one element of a shell mesh (ISO mm): its centre, the face's
+// outward normal, the axis of the member it belongs to and the direction the camera
+// stands in, plus the radius of the neighbourhood to take in.
+//   normal: the cross product of a quad's diagonals (of two sides for a triangle); the
+//     contract lists corners counter-clockwise seen from the outer side, so it points out.
+//   axis: node_a -> node_b of the element's member (element_member), made square to the
+//     normal; an element of a part with no member (e.g. a plate) takes its first side.
+//   direction: the normal turned FOCUS_TILT toward the member's axis, with a little of
+//     ISO up. Straight along the normal the wall's colours read but its bend along the
+//     member is flat; turned toward the axis, the wall runs away from the eye, so the
+//     change of colour along the member (where a wall bends near a joint) is seen
+//     while the face keeps cos(FOCUS_TILT) of its width. The axis' sign is the one on
+//     the default view's side, so the camera does not swing round to the far side.
+//   radius: 1.5 times the larger side of the member's section (the whole tube around
+//     the element), at least 4 element edges.
+const FOCUS_TILT = (35 * Math.PI) / 180;
+const FOCUS_UP = 0.25;
+export function maxElementFocus(rec, elem, design) {
+  const ids = rec.elements[elem];
+  const pts = ids.map((i) => v3(rec.nodes_mm[i]));
+  const center = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+  const normal =
+    pts.length === 4
+      ? pts[2].clone().sub(pts[0]).cross(pts[3].clone().sub(pts[1]))
+      : pts[1].clone().sub(pts[0]).cross(pts[2].clone().sub(pts[0]));
+  normal.normalize();
+  const memberId = rec.element_member?.[elem];
+  const m = (design?.members ?? []).find((x) => x.id === memberId);
+  const nodes = Object.fromEntries((design?.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
+  const axis = m && nodes[m.node_a] && nodes[m.node_b] ? nodes[m.node_b].clone().sub(nodes[m.node_a]) : pts[1].clone().sub(pts[0]);
+  axis.addScaledVector(normal, -axis.dot(normal));
+  if (axis.lengthSq() < 1e-12) axis.set(1, 0, 0).addScaledVector(normal, -normal.x);
+  axis.normalize();
+  if (axis.dot(v3(VIEWS.default)) < 0) axis.negate();
+  const dir = normal.clone().multiplyScalar(Math.cos(FOCUS_TILT)).addScaledVector(axis, Math.sin(FOCUS_TILT));
+  dir.z += FOCUS_UP;
+  dir.normalize();
+  let edge = 0;
+  for (let i = 0; i < pts.length; i += 1) edge = Math.max(edge, pts[i].distanceTo(pts[(i + 1) % pts.length]));
+  const sec = m ? sectionSize(design.sections?.[m.section]) : null;
+  const radius = Math.max(sec ? 1.5 * Math.max(sec.width, sec.height) : 0, 4 * edge);
+  return { elem, member: memberId ?? null, center, normal, axis, dir, radius };
 }
 
 function pushEdges(out, geometry, matrix, threshold = 20) {
@@ -292,8 +337,7 @@ export class Workbench3D {
       this.renderer.setSize(w, h, true);
       this.labelRenderer.setSize(w, h);
     }
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.applyAspect();
     for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
@@ -488,7 +532,7 @@ export class Workbench3D {
         if (!m || m.userData.baseColor === undefined) return;
         const own = !m.userData.sub; // pieces like a spring keep their colour
         const valued = typeof v === "number" && own;
-        m.color.set(valued ? colorOf(v, ct.max, ct.min) : m.userData.baseColor);
+        m.color.set(valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : m.userData.baseColor);
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
@@ -530,7 +574,7 @@ export class Workbench3D {
     else if (this.cgDesign) this.cgPos = this.cgDesign.clone().applyMatrix4(this.body.matrix);
     else this.cgPos = null;
     if (this.cgPos) this.cg.position.copy(this.cgPos);
-    this.cg.visible = !!this.toggles.cg && !!this.cgPos;
+    this.cg.visible = !!this.toggles.cg && !!this.cgPos && !this.closeUp;
   }
 
   // The ground under the vehicle: a ruled grid (diagram look) or earth (real look).
@@ -775,7 +819,7 @@ export class Workbench3D {
     for (const [id, v] of Object.entries(contour?.parts ?? {})) {
       const o = this.partObjs[id];
       if (!o) continue;
-      const over = contour.limitKnown && v > contour.max;
+      const over = overOf(contour, id, v);
       const tag = label(`${esc(o.short)}<small>${esc(fmtVU(v, contour.field.unit))}</small>`, `lbl-val${over ? " lbl-over" : ""}`);
       tag.position.copy(o.center).add(new THREE.Vector3(0, 0, o.size[2] / 2 + 40));
       this.overGhosts.add(tag);
@@ -793,6 +837,85 @@ export class Workbench3D {
       tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
       this.overGhosts.add(tag);
     }
+  }
+
+  // The focus (maxElementFocus) of a shell contour's largest element, or null.
+  maxFocus(contour) {
+    const at = contour?.mesh?.maxAt?.elem;
+    return at === undefined ? null : maxElementFocus(contour.mesh.rec, at, this.design);
+  }
+
+  // Where the camera stands to see a focus with its neighbourhood (radius, the diameter
+  // across) taking `fill` of the view's smaller side, or of its height with
+  // side "height": { target, position, near, far } in three.js metres.
+  focusView(f, fill = 0.5, side = "smaller") {
+    const target = isoToThree(f.center.toArray());
+    const d = isoToThree(f.dir.toArray()).normalize();
+    const tv = Math.tan((this.camera.fov * Math.PI) / 360);
+    const t = side === "height" ? tv : Math.min(tv, tv * this.camera.aspect);
+    const dist = (f.radius * 0.001) / (fill * t);
+    const span = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() * 0.001 : dist * 20;
+    return { target, position: target.clone().addScaledVector(d, dist), near: dist / 50, far: dist + span * 3 };
+  }
+
+  // The camera at a view ({ target, position, near?, far? } in three.js metres).
+  lookFrom(v) {
+    this.controls.target.copy(v.target);
+    this.camera.position.copy(v.position);
+    if (v.near) this.camera.near = v.near;
+    if (v.far) this.camera.far = v.far;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
+  cameraView() {
+    return { target: this.controls.target.clone(), position: this.camera.position.clone(), near: this.camera.near, far: this.camera.far };
+  }
+
+  // Look at a shell contour's largest element up close (fill as in focusView), or, with
+  // null, go back to the view from before the first focus.
+  setFocus(contour, fill = 0.5) {
+    const f = this.maxFocus(contour);
+    const key = f ? `${contour.key}|${f.elem}` : null;
+    if (key === this.focusKey) return;
+    this.focusKey = key;
+    if (f) {
+      this.focusSaved ??= this.cameraView();
+      this.lookFrom(this.focusView(f, fill));
+      this.focused = f;
+    } else if (this.focusSaved) {
+      this.lookFrom(this.focusSaved);
+      this.focusSaved = null;
+      this.focused = null;
+    }
+    this.setCloseUp(!!this.focused);
+  }
+
+  // Close up (at a focus) the part boxes and the centre-of-gravity mark are left out, the
+  // toggles' state kept: the boxes stand between the camera and the frame's walls and,
+  // see-through, still tint the stress colours behind them, and the mark is a fixed 150 mm
+  // so near it fills the view. They come back as the toggles say when the view leaves.
+  setCloseUp(on) {
+    if (this.closeUp === on) return;
+    this.closeUp = on;
+    this.setToggles(this.toggles);
+  }
+
+  // Keep `right` pixels at the right of the view clear (e.g. under a legend laid over it):
+  // the camera's frustum is the free part's, laid over the whole canvas with a view
+  // offset, so fitting and focusing centre in the free part and nothing is cut at the left.
+  setReserve(right) {
+    this.reserveRight = Math.max(0, right || 0);
+    this.applyAspect();
+  }
+
+  applyAspect() {
+    const { w, h } = this.size;
+    const free = Math.max(1, w - (this.reserveRight ?? 0));
+    this.camera.aspect = free / h;
+    if (free < w) this.camera.setViewOffset(free, h, 0, 0, w, h);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
   }
 
   // A mode shape: each node moves along its recorded vector, scaled so the
@@ -1055,7 +1178,7 @@ export class Workbench3D {
 
   setToggles(t) {
     this.toggles = { ...t };
-    this.parts.visible = !!t.parts;
+    this.parts.visible = !!t.parts && !this.closeUp;
     this.arrows.visible = !!t.arrows && !this.frame;
     this.names.visible = !!t.names;
     this.markers.visible = !!t.names;
@@ -1063,7 +1186,7 @@ export class Workbench3D {
     for (const o of Object.values(this.wheelObjs)) o.tag.visible = !!t.names || o.ring.visible;
     this.overGhosts.visible = !!t.contour;
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
-    this.cg.visible = !!t.cg && !!this.cgPos;
+    this.cg.visible = !!t.cg && !!this.cgPos && !this.closeUp;
     this.placeMotionArrows(this.frame);
   }
 
@@ -1099,13 +1222,18 @@ export class Workbench3D {
     this.camera.fov = other.camera.fov;
     this.camera.near = other.camera.near;
     this.camera.far = other.camera.far;
+    // the other view's frustum, a reserved strip (setReserve) included
+    this.camera.aspect = other.camera.aspect;
+    const ov = other.camera.view;
+    if (ov?.enabled) this.camera.setViewOffset(ov.fullWidth, ov.fullHeight, ov.offsetX, ov.offsetY, ov.width, ov.height);
+    else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
     this.controls.target.copy(other.controls.target);
     this.noFollow = true;
   }
 
   render() {
-    if (!this.noFollow) this.follow();
+    if (!this.noFollow && !this.focused) this.follow();
     if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself

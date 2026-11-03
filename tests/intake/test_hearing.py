@@ -146,6 +146,54 @@ class PrepareTest(unittest.TestCase):
         self.assertIn("答えが無いまま 1 件", hearing_text(p))  # Q03
 
 
+class RequirementsFileStandsTest(unittest.TestCase):
+    """ask_confirm False: the requirements came as a file somebody wrote (a run started from it)."""
+
+    def file(self, drop=()):
+        req = copy.deepcopy(load_product("serving-robot"))
+        req["requirements"] = [r for r in req["requirements"] if r["key"] not in drop]
+        req["requirements"] += [{"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
+                                {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
+        return req
+
+    def test_nothing_is_asked_when_the_file_has_every_required_item(self):
+        p = prepare(self.file(), ask_confirm=False)
+        self.assertEqual(p.asked["questions"], [])
+        self.assertTrue(p.ready)
+        self.assertEqual(p.unresolved, [])
+        self.assertEqual(hearing_text(p), "要件のファイルのまま進みます")
+        self.assertEqual(p.unasked, ["Q20", "Q42", "Q51", "Q74"])  # confirm items with no value anywhere: left out, not made up
+
+    def test_a_default_is_added_with_its_source_and_lands_in_the_file_out(self):
+        req = self.file(drop=("Q63",))
+        p = prepare(req, ask_confirm=False)
+        self.assertEqual(p.asked["questions"], [])
+        (added,) = p.answered["answers"]
+        self.assertEqual((added["key"], added["source"], added["trust"]), ("Q63", "default", 1))
+        self.assertIn("not checked", added["basis"])
+        out = {r["key"]: r for r in p.requirements_file["requirements"]}
+        self.assertEqual(out["Q63"], added)  # the same record in the answered list and in the requirements
+        self.assertEqual(hearing_text(p), "要件のファイルのまま進みます (既定値で足した 1 件: Q63)")
+        self.assertEqual(len(p.requirements_file["requirements"]), len(req["requirements"]) + 1)
+
+    def test_a_confirm_item_with_a_default_takes_it_instead_of_asking(self):
+        p = prepare(self.file(drop=("Q61",)), ask_confirm=False)
+        added = {r["key"]: r for r in p.answered["answers"]}["Q61"]
+        self.assertEqual((added["value"], added["source"], added["trust"]), (1.5, "default", 3))
+        self.assertEqual(p.asked["questions"], [])
+
+    def test_a_required_item_the_file_lacks_is_still_asked(self):
+        req = self.file()
+        req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q50"]
+        p = prepare(req, ask_confirm=False)
+        self.assertEqual([q["req_key"] for q in p.asked["questions"]], ["Q50"])
+        self.assertFalse(p.ready)
+
+    def test_the_default_still_asks_the_way_it_did(self):
+        p = prepare(self.file(), ask_confirm=True)
+        self.assertEqual([q["req_key"] for q in p.asked["questions"]], ["Q20", "Q42", "Q51", "Q74"])
+
+
 class SampleAnswersTest(unittest.TestCase):
     def test_each_product_with_its_sample_answers_is_ready_and_valid(self):
         for slug in product_files():

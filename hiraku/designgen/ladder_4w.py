@@ -351,9 +351,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     cross = frame.section(*rect_tube(v["cross_b"], v["cross_h"], v["cross_t"]))
     frame.ladder(stations, rail_y, rail_z, rail, cross)
 
-    # running gear: front steer, rear drive, coil springs
+    # running gear: front steer, rear drive, double wishbones with coil springs (K2's builtin K&C table;
+    # the spring rate is the wheel rate along the wheel centre's vertical travel)
     def spring(rate: float) -> Suspension:
-        return Suspension("spring", rate, 1.2, v["suspension_travel"])
+        return Suspension("kc_table", rate, 1.2, v["suspension_travel"], "builtin:double_wishbone")
 
     supports = four_wheels(wb, track, r, ww, spring(v["front_spring_rate"]), spring(v["rear_spring_rate"]))
 

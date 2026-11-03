@@ -1,9 +1,11 @@
 import unittest
 from pathlib import Path
 
+from hiraku.catalog import REPO_ROOT, read_data
 from hiraku.intake import IntakeError, expression, facts, knowledge, rulecheck
 from hiraku.intake.knowledge import (CATEGORIES, convert_sentence, doc_id_for, import_text, load_builtin, make_rule,
                                      parse_candidates)
+from hiraku.intake.products import load_product
 from tests.intake.designs import mini_design
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -92,6 +94,12 @@ class KindsTest(unittest.TestCase):
         k = knowledge.kinds_for_sentence
         self.assertEqual(k("サスのストロークは 100 mm 以上", "travel_mm >= 100"), ["support"])
         self.assertEqual(k("肉厚は 1.6 mm 以上", "wall_mm >= 1.6"), ["frame"])
+
+    def test_sheet_metal_talk_is_about_the_plates(self):
+        k = knowledge.kinds_for_sentence
+        self.assertEqual(k("曲げの内側の半径は板厚以上", "bend_radius_mm >= thickness_mm"), ["body"])
+        self.assertEqual(k("穴の中心から板の縁までの距離は板厚の 2 倍以上", "hole_edge_mm >= 2 * thickness_mm"), ["body"])
+        self.assertEqual(k("座面の曲げ半径は 5 mm 以上", "bend_radius_mm >= 5"), ["seat"])  # a named part comes first
 
     def test_import_uses_it(self):
         got = import_text("a.md", "- 電池の質量は 30 kg 以下\n- 質量は 200 kg 以下\n", doc_id="U1")
@@ -190,6 +198,29 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(doc_id_for("a.md", {}), "U1")
         self.assertEqual(doc_id_for("b.md", {"a.md": "U1"}), "U2")
         self.assertEqual(doc_id_for("a.md", {"a.md": "U1", "b.md": "U2"}), "U1")  # the same file again updates its document
+
+
+class SampleNotesTest(unittest.TestCase):
+    """data/knowledge/samples/bending-notes.md is the file the video's script drops on a run; what the script relies on."""
+
+    def test_its_rules_the_skips_and_the_one_hit_on_the_demo_design(self):
+        text = (REPO_ROOT / "data" / "knowledge" / "samples" / "bending-notes.md").read_text(encoding="utf-8")
+        first = import_text("bending-notes.md", text, doc_id="U1")
+        self.assertEqual([n["cand_id"] for n in first.needs_formula], ["c3", "c5"])  # numbers the script's skip uses
+        skip = {"c3": "向きは式にできない", "c5": "部品どうしの距離を測る値が設計に無い"}
+        got = import_text("bending-notes.md", text, doc_id="U1", skip=skip)
+        self.assertEqual(got.needs_formula, [])
+        self.assertEqual([s["reason"] for s in got.record["doc"]["skipped"]], list(skip.values()))
+        by = {r["rule_id"]: r for r in got.record["rules"]}
+        self.assertEqual(sorted(by), ["U1-01", "U1-02", "U1-04", "U1-06", "U1-07"])
+        self.assertEqual(by["U1-01"]["applies_to"], {"kinds": ["body"]})
+        self.assertEqual(by["U1-02"]["applies_to"], {"kinds": ["body"]})
+        design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
+        checks = {c["rule_id"]: c for c in rulecheck.check_all(got.record["rules"], design, load_product("offroad-4w")["requirements"])}
+        self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"]}, {"U1-04": ["battery"]})
+        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same four plates as SM-01 and judge none of them
+            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body"])
+            self.assertEqual([n["part_id"] for n in checks[rid]["not_evaluable"]], checks[rid]["targets"])
 
 
 if __name__ == "__main__":
