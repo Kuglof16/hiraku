@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 from scipy.optimize import brentq
 
 from ..k4_geometry import bodies, disassemble, fit, interferences, steps, sweep
+from ..k4_geometry.assembly import is_attach
+from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
 from ..k4_geometry.obb import from_box, overlap
@@ -56,6 +59,14 @@ class Assembly(BuiltinTool):
         out.append(check_record("1 m cube and the same cube turned 45 deg about z, centres 1.2 m apart", "overlap",
                                 500.0 * math.sqrt(2) + 500.0 - 1200.0, overlap(a, from_box([1200, 0, 0], [1000, 1000, 1000], [0, 0, 45])),
                                 "mm", 1e-6, "the turned cube reaches 500 sqrt(2) mm along x"))
+        rod = from_points([0, 0, 0], [1000, 0, 0], 20.0)
+        out.append(check_record("two 1 m rods 40 mm across, crossed at right angles 100 mm apart", "capsule_overlap", -60.0,
+                                capsule_overlap(rod, from_points([500, -500, 100], [500, 500, 100], 20.0)), "mm", 1e-9,
+                                "capsules: the axes are 100 mm apart, less the two 20 mm radii"))
+        out.append(check_record("rod end 30 mm off a 1 m cube's corner along the diagonal", "capsule_overlap",
+                                20.0 - 30.0, capsule_box_overlap(from_points(np.full(3, 500 + 30 / math.sqrt(3)),
+                                                                             np.full(3, 900.0), 20.0), a), "mm", 1e-9,
+                                "capsule and box: the corner is the nearest point of the cube, 30 mm from the axis end"))
         # a cup (bottom and four walls) with something inside and a lid: the content goes in before the lid
         parts = [_part("bottom", "body", [0, 0, 5], [200, 200, 10]),
                  _part("wall_px", "body", [95, 0, 60], [10, 200, 100]), _part("wall_mx", "body", [-95, 0, 60], [10, 200, 100]),
@@ -110,7 +121,8 @@ class Assembly(BuiltinTool):
         sw = sweep(design, bs)
         seq = steps(design, bs)
         people = fit(design)
-        placed = [s for s in seq if s["no_interference"]]
+        part_steps = [s for s in seq if not is_attach(s)]  # putting a corner group on is not a part of the design
+        placed = [s for s in part_steps if s["no_interference"]]
         results = [
             result("interference_count", float(len(static)), "1"),
             result("worst_interference", static[0][2] if static else 0.0, "mm",
@@ -119,7 +131,7 @@ class Assembly(BuiltinTool):
             result("worst_motion_interference", sw["hits"][0][2] if sw["hits"] else 0.0, "mm",
                    f"{sw['hits'][0][0]} x {sw['hits'][0][1]}" if sw["hits"] else None),
             result("assembly_steps", float(len(placed)), "1"),
-            result("blocked_parts", float(len(seq) - len(placed)), "1"),
+            result("blocked_parts", float(len(part_steps) - len(placed)), "1"),
             result("steps_without_tool_clearance", float(sum(not s["tool_clearance"] for s in seq)), "1"),
             result("steps_out_of_reach", float(sum(not s["hand_reach"] for s in seq)), "1"),
         ]

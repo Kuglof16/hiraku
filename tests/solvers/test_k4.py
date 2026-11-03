@@ -65,6 +65,16 @@ class DemoGeometryTest(unittest.TestCase):
         self.assertNotIn("part:cargo", order)
         self.assertLess(order.index("part:susp_FL"), order.index("part:wheel_FL"))  # arms before the wheel
 
+    def test_hands_in_the_demo(self):
+        from hiraku.solvers.k4_geometry.assembly import steps
+
+        seq = steps(DESIGN)
+        # the hands get to every bolt from some side (a step without room: test_k4_assembly.HandsTest)
+        self.assertEqual([s["part"] for s in seq if not s["tool_clearance"]], [])
+        self.assertTrue(all(s["hand_reach"] for s in seq))
+        # the steering's bolt at RS1 is under the seat bolted there too: 330 mm down from its top (z 710 to 380)
+        self.assertIn("node RS1 from above, 330 mm in", next(s for s in seq if s["part"] == "steering")["note"])
+
     def test_people(self):
         f = fit(DESIGN)
         self.assertAlmostEqual(f["shoulder_room"][0], 1300 - 2 * 495.3, places=6)
@@ -150,6 +160,7 @@ class AssemblyToolTest(unittest.TestCase):
         self.assertGreater(r["motion_interference_count"]["value"], 0.0)
         self.assertLess(r["free_steer_angle"]["value"], r["max_steer_angle"]["value"])
         self.assertEqual(r["blocked_parts"]["value"], 0.0)
+        self.assertEqual(r["assembly_steps"]["value"], 19.0)  # H5: the parts, not the four corners going on
         seq = rec["assembly"]
         self.assertEqual([s["order"] for s in seq], list(range(1, len(seq) + 1)))
         self.assertTrue(all(s["no_interference"] for s in seq))

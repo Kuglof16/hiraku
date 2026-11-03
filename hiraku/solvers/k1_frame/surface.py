@@ -65,13 +65,16 @@ def wall_von_mises(fm: FrameModel, member_id: str, points_mm, n_points: int = N_
     return np.sqrt(sigma**2 + 3.0 * tau**2)
 
 
-def surface_field(fm: FrameModel, mesh: dict, n_points: int = N_POINTS) -> dict:
-    """A stress field with one value per element of the mesh: the beam stress on the outer surface."""
+def surface_field(fm: FrameModel, mesh: dict, n_points: int = N_POINTS, plates: frozenset = frozenset()) -> dict:
+    """A stress field with one value per element of the mesh: the beam stress on the outer surface.
+    Elements of `plates` (gusset parts, which the beam model carries as mass only) get 0."""
     nodes = np.asarray(mesh["nodes_mm"], float)
     members = np.asarray(mesh["element_member"])
     centres = np.array([nodes[e].mean(axis=0) for e in mesh["elements"]])
     values = np.zeros(len(centres))
     for mid in np.unique(members):
+        if mid in plates:
+            continue
         if mid not in fm.props:
             raise DesignError(f"mesh {mesh.get('mesh_id')} has elements of {mid!r}, which is not a member of this design")
         at = members == mid
