@@ -47,6 +47,10 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 合否 (`verdict`) は道具の中でだけ作る: 一致した照合から (`compare`、`basis: "match"`、値は解析) か、説明された安全側の食い違いから (`record_cause`、上の 4)。`basis` が無いものは `match`。
 
+分野が緑 (合格) になる条件 (2026-11-03、実験部の 2 本目の実行で、シェルが 472 MPa を出したのに強度が緑で終わったことから): その版の、その分野の荷重条件のどれについても、(a) 合格の `verdict` がある、(b) 照合の食い違いのうち、原因が解けていない (`resolved` が false) ものが無い、(c) 判定に使う量で基準を超えた解析の結果が無い。どれかが欠ければ、その分野は緑にならない (赤か、まだ判定の無い扱い)。あとの解析が基準を超えたら、前の安全側の `verdict` (`explained_safe_side`) は効かなくなる。HK4 は (b)・(c) の残る分野を「まだ判定の無い分野」と同じに扱う (設計役へ渡すか、原因を書いて解くまで終われない)。
+
+判定に使う量: 荷重条件の基準の量 (`criterion.quantity`) が `max_stress` のとき、板 (シェル) の道具 `frame_shell` で判定に使うのは `max_hot_spot_stress` (溶接の止端の構造応力)。要素の最大 `max_stress` は鋭い角で細かくするほど上がる値なので、記録には出すが判定には使わない。`comparison.quantity` には、実際に比べた結果の量の名前を書く (呼ぶときの `result_quantity` と同じ)。
+
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
 | ID | 中身 |
