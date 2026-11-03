@@ -4,7 +4,10 @@ The one rule every department uses (hand calc, beam model, vehicle physics,
 geometry, catalog): occupants board in the order of design.parts (the first
 one drives); cargo parts ride only with two_cargo. A design with no occupant
 parts at all (a product without seats) carries none; a design with some
-occupant parts but fewer than the loading names does not fit that loading.
+occupants but fewer than the loading names does not fit that loading.
+An occupant may be split into body segments: occupant parts whose ids share
+the text before the first "." (driver.torso, driver.thigh_l) are one person
+(person_of), and board or stay off together.
 """
 
 from __future__ import annotations
@@ -27,6 +30,11 @@ def loading_of(load_case: Record) -> str:
     return (load_case.get("params") or {}).get("loading") or DEFAULT_LOADING
 
 
+def person_of(part: Record) -> str:
+    """The person an occupant part belongs to: its id up to the first "."."""
+    return part["id"].split(".", 1)[0]
+
+
 def parts_on_board(design: Record, loading: str | None = None) -> list[Record]:
     """design.parts without the occupants and cargo this loading leaves off.
 
@@ -37,16 +45,15 @@ def parts_on_board(design: Record, loading: str | None = None) -> list[Record]:
     if loading not in LOADINGS:
         raise ValueError(f"unknown loading {loading!r}; use one of {', '.join(LOADINGS)}")
     parts = design.get("parts", [])
-    occupants = sum(1 for p in parts if p["kind"] == "occupant")
-    if 0 < occupants < OCCUPANTS[loading]:
-        raise ValueError(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {occupants}")
-    out, seated = [], 0
+    people = list(dict.fromkeys(person_of(p) for p in parts if p["kind"] == "occupant"))
+    if 0 < len(people) < OCCUPANTS[loading]:
+        raise ValueError(f"loading {loading} needs {OCCUPANTS[loading]} occupants, the design has {len(people)}")
+    seated = set(people[:OCCUPANTS[loading]])
+    out = []
     for p in parts:
-        if p["kind"] == "occupant":
-            if seated >= OCCUPANTS[loading]:
-                continue
-            seated += 1
-        elif p["kind"] == "cargo" and not CARGO[loading]:
+        if p["kind"] == "occupant" and person_of(p) not in seated:
+            continue
+        if p["kind"] == "cargo" and not CARGO[loading]:
             continue
         out.append(p)
     return out
