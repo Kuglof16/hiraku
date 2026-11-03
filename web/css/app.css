@@ -604,6 +604,13 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .grid-view { gap: 12px; }
 .intake-view { min-height: 0; overflow: auto; display: flex; flex-direction: column; border: 1.5px solid var(--line); border-radius: 12px; }
 .intake-view .intake-host { flex: 1 1 auto; min-height: 0; }
+/* the peek: the design with a rule hit lit, in the intake screen's corner while A2 points at one (app.js drawRulePeek) */
+.rule-peek { position: absolute; width: 440px; height: 300px; z-index: 30; pointer-events: none; display: flex; flex-direction: column;
+  background: var(--panel); border: 2px solid #ff6a00; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); overflow: hidden; }
+.rule-peek[hidden] { display: none; }
+.rule-peek-cap { padding: 5px 12px; font-size: 14px; color: var(--ink); border-bottom: 1.5px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-peek-gl { position: relative; flex: 1 1 auto; min-height: 0; }
+.rule-peek-gl canvas.gl { position: absolute; inset: 0; display: block; }
 .draftbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1.5px solid var(--line); background: var(--panel); font-size: 15px; }
 .draftbar button { font: inherit; font-size: 15px; color: var(--ink); background: var(--panel); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 14px; cursor: pointer; }
 .draftbar button:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
