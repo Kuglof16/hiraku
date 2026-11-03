@@ -293,8 +293,34 @@ def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
 
 def _tool_line(spec: Record) -> Record:
     checks = spec.get("checks") or []
-    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable") if k in spec},
+    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable", "applies_to") if k in spec},
             "checks_passed": f"{sum(1 for c in checks if c.get('pass'))}/{len(checks)}"}
+
+
+def design_kind(ctx: RunContext) -> str | None:
+    """The kind of the version's design: the hiraku.designgen ARCHETYPES key of the generator that made it
+    (designgen.generator_of); None for a design no generator made (one written by hand) or without designgen."""
+    gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
+    if not ctx.version or gen_of is None or not kinds:
+        return None
+    try:
+        gen = gen_of(ctx.store.design())
+    except ValueError:  # DesignGenError: its variables match no generator
+        return None
+    return next((k for k, m in kinds.items() if m is gen), None)
+
+
+def _check_applies_to(ctx: RunContext, name: str) -> None:
+    """Contract tool_spec.applies_to: a tool that names kinds of design is used only on a design of one of them."""
+    kinds = (ctx.specs.get(name) or {}).get("applies_to")
+    if not kinds:
+        return
+    kind = design_kind(ctx)
+    if kind in kinds:
+        return
+    what = f"この版の設計の型は {kind} です" if kind else "この版の設計は、型から作った設計ではありません (型が分からない)"
+    raise ToolError(f"道具 {name} は、設計の型 {', '.join(kinds)} のための道具です。{what}。"
+                    f"list_tools で、applies_to の無い道具か、この型を含む道具を選んでください")
 
 
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
@@ -427,6 +453,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if name not in ctx.tools:
         raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
+    _check_applies_to(ctx, name)
     _gate(ctx, "analyze", args, agent)
 
     upstream = {}

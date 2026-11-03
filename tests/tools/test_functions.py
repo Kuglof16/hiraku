@@ -124,6 +124,45 @@ class PredictionTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.records("prediction"), [])
 
 
+class AppliesToTest(RunCase, unittest.TestCase):
+    """Contract tool_spec.applies_to: a tool for some kinds of design is refused on another kind and on a
+    design of unknown kind; list_tools shows the field."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], applies_to=["space_frame_utv"])
+        load, force = self.predict_p1()
+        self.args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": [force["prediction_id"]]}
+
+    def test_a_design_of_unknown_kind_gets_no_such_tool(self):
+        from hiraku.tools.functions import design_kind
+
+        self.assertIsNone(design_kind(self.ctx))  # the stand-in designgen names no kinds
+        with self.assertRaisesRegex(ToolError, "space_frame_utv.*型が分からない"):
+            analyze(self.ctx, self.args)
+        (line,) = [t for t in list_tools(self.ctx) if t["name"] == "step_climb"]
+        self.assertEqual(line["applies_to"], ["space_frame_utv"])
+
+    def test_the_kind_named_runs_and_another_is_refused(self):
+        from unittest import mock
+
+        from hiraku.tools import functions
+
+        with mock.patch.object(functions, "design_kind", return_value="space_frame_utv"):
+            self.assertEqual(analyze(self.ctx, self.args)["status"], "ok")
+        with mock.patch.object(functions, "design_kind", return_value="ladder_4w"):
+            with self.assertRaisesRegex(ToolError, "この版の設計の型は ladder_4w"):
+                analyze(self.ctx, self.args)
+
+    def test_the_kind_of_a_generated_design(self):
+        import hiraku.designgen as designgen
+        from hiraku.tools.functions import design_kind
+
+        self.ctx.designgen = designgen
+        with mock.patch.object(designgen, "generator_of", return_value=designgen.ARCHETYPES["ladder_4w"]):
+            self.assertEqual(design_kind(self.ctx), "ladder_4w")
+
+
 class LoopTest(RunCase, unittest.TestCase):
     def test_hk1_analyze_needs_a_prediction_of_this_load_case(self):
         with self.assertRaises(ToolError) as cm:
