@@ -87,6 +87,9 @@ export function renderA2(el, m, api, ui) {
               h("button", { class: "in-btn primary", disabled: !canSend,
                 onclick: () => submit(api, ui, { answers: ui.answers, note: ui.note || "", useDefaults: true }) }, ui.sending ? "送っています…" : "答えて進める")))
         : null,
+      !rows.length && m.hearing.answered?.answers?.length
+        ? h("p", { class: "in-foot" }, `既定値で足したもの: ${m.hearing.answered.answers.map((a) => `${a.key} ${a.name}`).join("・")}`)
+        : null,
       m.hearing.answered?.note ? h("p", { class: "in-foot" }, `ほかに伝えたこと: ${m.hearing.answered.note}`) : null,
       must.length ? h("p", { class: "in-warn" }, `必須の ${must.map((q) => q.req_key).join("・")} に答えが無いので、先へ進めません`) : null),
     h("section", { class: "in-right" },
