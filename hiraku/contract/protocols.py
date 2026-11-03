@@ -87,5 +87,5 @@ HOOK_RULES = {
     "HK2_tool_usable": "analyze needs a tool whose spec has usable=true (all known-answer checks pass)",
     "HK3_cause_before_continue": "while a comparison in a domain is a mismatch without a cause, analyze and compare in that domain are denied",
     "HK4_no_stop_before_judged": "the run may not stop while a picked domain is pending, unless the round or cost limit is reached (blocks are counted and capped)",
-    "HK5_layout_first": "when assembly (layout) is a picked domain, analyze for any other domain is denied in a version until every assembly load case of that version has a passing verdict; a red layout goes to revise_design first",
+    "HK5_light_first": "in a version, analyze with a tool of stage n is denied while any load case checked with a tool of a lower stage is red or not yet judged; a red goes to revise_design before heavier checks (tools of the same stage may run in parallel; stage 0 is layout and rules)",
 }
