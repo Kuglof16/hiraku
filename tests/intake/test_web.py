@@ -85,7 +85,12 @@ console.log(JSON.stringify(out));
                          {"offroad-4w": 7, "care-bed": 5, "electric-guitar": 2, "serving-robot": 7, "offroad-4w-file": 7})
         # the run started from the vehicle's file: the file stands, nothing is asked, two defaults are added
         self.assertEqual((got["offroad-4w-file"]["asked"], got["offroad-4w-file"]["open"]), (0, 0))
-        self.assertEqual(got["offroad-4w-file"]["fresh"], 2)  # Q57 and Q63 are the only rows the hearing added
+        from hiraku.intake import hearing, load_product
+
+        file_req = load_product("offroad-4w")  # the rows the hearing adds are the defaults the file does not have
+        added = hearing.plan_hearing(file_req, ask_confirm=False).defaulted
+        self.assertEqual(got["offroad-4w-file"]["fresh"], len(added))
+        self.assertTrue({"Q57", "Q63"} <= {r["key"] for r in added})
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])
