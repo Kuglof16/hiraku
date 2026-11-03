@@ -74,16 +74,34 @@ def _lit_flags(catalog: Catalog, test_ids: list[str], flags: dict[str, bool]) ->
     return seen
 
 
-def buildable(catalog: Catalog, test_ids: list[str]) -> list[str]:
-    """The tests that have a load-case builder: the ones a run can build a case for (the others would stay pending)."""
-    out = []
-    for tid in test_ids:
-        try:
-            if builder_for(catalog, tid) is not None:
-                out.append(tid)
-        except KeyError:  # a `build:` name nobody has
-            pass
-    return out
+def _product_builders() -> dict[str, dict]:
+    """product -> {test id: builder} of hiraku.catalog.builders, where product modules exist (else none)."""
+    try:
+        from hiraku.catalog import builders
+    except ImportError:
+        return {}
+    return getattr(builders, "PRODUCT_BUILDERS", {})
+
+
+def has_builder(catalog: Catalog, test_id: str, product: str | None = None) -> bool:
+    """Can a run of this product build a load case for the test? A builder of the product's own, or a general one.
+
+    builder_for may give a dispatcher that looks at the product (it keeps the general builder in `.general`, None
+    when only some products have one): for another product it would refuse, so it does not count."""
+    try:
+        fn = builder_for(catalog, test_id)
+    except KeyError:  # a `build:` name nobody has
+        return False
+    if fn is None:
+        return False
+    if product and test_id in _product_builders().get(product, {}):
+        return True
+    return getattr(fn, "general", fn) is not None
+
+
+def buildable(catalog: Catalog, test_ids: list[str], product: str | None = None) -> list[str]:
+    """The tests a run of this product can build a case for (the others would stay pending)."""
+    return [tid for tid in test_ids if has_builder(catalog, tid, product)]
 
 
 def unbuilt_note(catalog: Catalog, test_ids: list[str]) -> str:
@@ -131,12 +149,14 @@ def pick_domains(
     shown_names: dict[str, str] | None = None,
     exclude: list[str] | None = None,
     catalog: Catalog | None = None,
+    product: str | None = None,
 ) -> Record:
     """The `domains_picked` record (see intake-contract-request) for a sentence and its flags.
 
     The domains and their tests come from the catalog and the flags only. `reasons` and
     `shown_names` (Claude's words) are used when given; otherwise the code writes both.
-    `exclude`: domains the person took off in A1.
+    `exclude`: domains the person took off in A1. `product`: the requirements file's product (the tests it can
+    build a load case for are the ones picked; a product with builders of its own has more).
     """
     if not want or not want.strip():
         raise IntakeError("want (作りたいものの文) が要ります")
@@ -161,7 +181,7 @@ def pick_domains(
             off.append({"domain": d, "reason": "人が外した"})
         else:
             name = (shown_names.get(d) or "").strip() or default_name(d, flags, speed_class, ids)
-            runnable = buildable(catalog, ids)  # test_ids are the ones a run can build a case for
+            runnable = buildable(catalog, ids, product)  # test_ids are the ones a run can build a case for
             unbuilt = [t for t in ids if t not in runnable]
             given = (reasons.get(d) or "").strip()
             note = unbuilt_note(catalog, unbuilt)
@@ -174,7 +194,7 @@ def pick_domains(
         record["flag_reasons"] = {f: flag_reasons[f] for f in FLAGS if f in flag_reasons}
     record["picks"] = picks
     record["off"] = off
-    record["assembly_test_ids"] = buildable(catalog, by_domain["assembly"])
+    record["assembly_test_ids"] = buildable(catalog, by_domain["assembly"], product)
     return record
 
 

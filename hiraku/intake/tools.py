@@ -81,7 +81,7 @@ def pick_domains_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     record = pick_domains(
         args.get("want", ""), args.get("flags") or {}, args.get("speed_class"),
         flag_reasons=args.get("flag_reasons"), reasons=args.get("reasons"), shown_names=args.get("shown_names"),
-        exclude=args.get("exclude"),
+        exclude=args.get("exclude"), product=(getattr(ctx, "project", None) or {}).get("product"),
     )
     problem, repeated = _emit_changed(ctx, ev.picked_event(record))
     out: Record = {**record, "recorded": problem is None}
