@@ -464,19 +464,21 @@ class Cable(ElementGroup):
         self.name = name
 
     def state(self, nodes: np.ndarray):
+        """(L, e, T, taut): T the force along e; a slack cable (T0 + EA (L - L0) / L0 <= 0) pushes SLACK_FLOOR of
+        that (a millionth: tension-only, kept continuous so that Newton's method settles)."""
         d = nodes[self.conn[:, 1]] + self.disp[:, 1] - nodes[self.conn[:, 0]] - self.disp[:, 0]
         L = np.linalg.norm(d, axis=1)
         e = d / L[:, None]
         T = self.T0 + self.EA * (L - self.L0) / self.L0
-        return L, e, np.maximum(T, 0.0), T > 0.0
+        taut = T > 0.0
+        return L, e, np.where(taut, T, SLACK_FLOOR * T), taut
 
     def stiffness(self, nodes: np.ndarray) -> np.ndarray:
         L, e, T, taut = self.state(nodes)
         ee = e[:, :, None] * e[:, None, :]
-        # a slack cable: zero force, but a little stiffness across (SLACK_FLOOR EA) so that Newton's step stays
-        # defined; the residual takes the true forces, so the solution it settles at does not depend on it
+        # slack: SLACK_FLOOR of the axial stiffness, and SLACK_FLOOR EA across so that the step stays defined
         Tg = np.where(taut, T, SLACK_FLOOR * self.EA)
-        Kb = (np.where(taut, self.EA / self.L0, 0.0)[:, None, None] * ee
+        Kb = (np.where(taut, 1.0, SLACK_FLOOR)[:, None, None] * (self.EA / self.L0)[:, None, None] * ee
               + (Tg / L)[:, None, None] * (np.eye(3)[None] - ee))
         return np.block([[Kb, -Kb], [-Kb, Kb]])
 
@@ -487,7 +489,7 @@ class Cable(ElementGroup):
         return np.hstack([-f, f])
 
     def tensions(self, nodes: np.ndarray) -> np.ndarray:
-        return self.state(nodes)[2]
+        return np.maximum(self.state(nodes)[2], 0.0)
 
 
 def net_effect(lp, prestress: float) -> Record:

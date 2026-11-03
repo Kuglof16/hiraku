@@ -74,10 +74,13 @@ class CableKnownAnswerTest(unittest.TestCase):
         c = LP.Cable([(0, 1)], [1000.0], [10.0], np.array([[0.0, 0, 0], [100.0, 0, 0]]))
         c.disp = np.array([[[0.0, 0, 0], [-2.0, 0, 0]]])  # shortened 2 %: 10 - 20 < 0
         self.assertEqual(float(c.tensions(np.array([[0.0, 0, 0], [100.0, 0, 0]]))[0]), 0.0)
-        K = c.stiffness(np.array([[0.0, 0, 0], [100.0, 0, 0]]))
-        self.assertEqual(K[0, 0, 0], 0.0)  # no axial stiffness
-        self.assertAlmostEqual(K[0, 1, 1], LP.SLACK_FLOOR * 1000.0 / 98.0)  # only the floor across (Newton's step)
-        np.testing.assert_allclose(c.forces(np.array([[0.0, 0, 0], [100.0, 0, 0]])), [[10.0, 0, 0, -10.0, 0, 0]])
+        x = np.array([[0.0, 0, 0], [100.0, 0, 0]])
+        K = c.stiffness(x)
+        # slack: a millionth of the axial stiffness, and the floor across (Newton's step stays defined)
+        self.assertAlmostEqual(K[0, 0, 0], LP.SLACK_FLOOR * 1000.0 / 100.0)
+        self.assertAlmostEqual(K[0, 1, 1], LP.SLACK_FLOOR * 1000.0 / 98.0)
+        # the force: the pretension released, and a millionth of the -10 N push
+        np.testing.assert_allclose(c.forces(x), [[10.0 + 1e-5, 0, 0, -10.0 - 1e-5, 0, 0]], rtol=1e-9)
 
 
 class GeometryTest(unittest.TestCase):
