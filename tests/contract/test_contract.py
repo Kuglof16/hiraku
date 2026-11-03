@@ -258,6 +258,13 @@ class IntakeTest(unittest.TestCase):
         ev = next(e for e in events() if e["kind"] == "run.started")
         self.assertEqual(contract.errors("project", {**ev["data"], "hearing": "claude"}), [])
 
+    def test_rule_questions_in_the_hearing(self):
+        q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
+        self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {}), [])
+        self.assertEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "revise_design"}]}), [])
+        self.assertNotEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "ignore"}]}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
