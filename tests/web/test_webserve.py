@@ -420,6 +420,14 @@ class ShelfTest(unittest.TestCase):
         self.assertEqual(got["formulas"][0]["formula_id"], "frame_static.rail_bending")
         self.assertEqual(self.calls, 1)
 
+    def test_archetype_titles(self):
+        from types import SimpleNamespace
+
+        from hiraku.webserve.shelf import archetype_titles
+
+        kinds = {"a": SimpleNamespace(TITLE="型 A (説明)"), "b": SimpleNamespace(), "c": SimpleNamespace(TITLE=None)}
+        self.assertEqual(archetype_titles(kinds), {"a": "型 A (説明)"})
+
     def test_a_runs_tool_files(self):
         status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.py")
         self.assertEqual((status, ctype.split(";")[0], text), (200, "text/plain", "def run():\n    return 1\n"))
