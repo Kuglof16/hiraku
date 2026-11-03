@@ -53,8 +53,8 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual([a["agent_id"] for a in self.ctx.project["agents"]], ["lead", "designer"])
         self.assertNotIn("design.created", self.kinds())
         self.assertIn("propose_design", rules.stop_reason(self.ctx))  # HK4: nothing to judge yet is no end
-        (kind,) = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
-        self.assertEqual(kind["name"], "ladder_4w")
+        kinds = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
+        self.assertEqual(kinds[0]["name"], "ladder_4w")  # first: the scripted run's default (K2's space frame is another)
 
     def test_roles_are_defined_before_the_load_cases(self):
         att = Attribution()
