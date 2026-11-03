@@ -197,6 +197,28 @@ function label(text, cls) {
   return new CSS2DObject(el);
 }
 
+// A label that says one of the view's main values (the largest value, the picked wheel's
+// force): it is laid out outside the vehicle with a leader line to its point
+// (placeOutLabels), and counted as a label (data-kind) by the present mode.
+function keyLabel(text, cls) {
+  const tag = label(text, `${cls ?? ""} lbl-key lbl-out`);
+  tag.element.dataset.kind = "label";
+  return tag;
+}
+
+const WHEEL_FORCES = new Set(["reaction", "grip"]);
+
+// Distance (px) from a point {x, y} to the segment (ax, ay)-(bx, by).
+function segmentDistance(p, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const L = dx * dx + dy * dy;
+  const u = L > 0 ? Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / L)) : 0;
+  return Math.hypot(p.x - (ax + u * dx), p.y - (ay + u * dy));
+}
+const LEADER_GAP_PX = 18; // between the vehicle's outline on screen and a label laid outside it
+const LABEL_MARGIN = { top: 52, bottom: 124, side: 10 }; // the view's edges kept for its buttons and bars
+
 function disposeTree(obj) {
   obj.traverse((o) => {
     o.geometry?.dispose?.();
@@ -262,6 +284,11 @@ export class Workbench3D {
       this.labelRenderer = new CSS2DRenderer();
       this.labelRenderer.domElement.className = "gl-labels";
       host.appendChild(this.labelRenderer.domElement);
+      // leader lines from the labels laid outside the vehicle to their points
+      const box = document.createElement("div");
+      box.innerHTML = `<svg class="gl-leaders"></svg>`; // parsed as SVG
+      this.leaders = box.firstChild;
+      host.appendChild(this.leaders);
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = false;
       this.controls.screenSpacePanning = true;
@@ -339,6 +366,8 @@ export class Workbench3D {
       this.renderer.setPixelRatio(pixelRatio);
       this.renderer.setSize(w, h, true);
       this.labelRenderer.setSize(w, h);
+      this.leaders.setAttribute("width", String(w));
+      this.leaders.setAttribute("height", String(h));
     }
     this.applyAspect();
     for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.resolution.set(w, h);
@@ -773,8 +802,8 @@ export class Workbench3D {
         const where = new THREE.Vector3();
         for (const n of ids) where.add(v3(P[n]));
         where.multiplyScalar(1 / ids.length);
-        const tag = label(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit)}`), "lbl-max");
-        tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
+        const tag = keyLabel(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit)}`), "lbl-max");
+        tag.position.copy(where);
         this.overGhosts.add(tag);
       }
       if (contour.freeEdges?.length) {
@@ -848,8 +877,8 @@ export class Workbench3D {
       }
     }
     if (contour?.where && this.members[contour.where] && contour.result) {
-      const tag = label(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
-      tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
+      const tag = keyLabel(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
+      tag.position.copy(this.members[contour.where].mid);
       this.overGhosts.add(tag);
     }
   }
@@ -1098,28 +1127,176 @@ export class Workbench3D {
   }
 
   // The analysis' vectors (a still: one moment). Hidden while a motion is shown.
-  setVectors(vectors) {
+  // A wheel's forces (reaction, grip) carry words only at the picked wheel (pickWheel, else
+  // the one with the largest recorded force); the other wheels show their arrows alone.
+  setVectors(vectors, keepPick = false) {
     if (vectors === this.keys.vectors) return;
+    if (!keepPick && vectors) this.pickedWheel = null; // another analysis: its largest force again
     this.keys.vectors = vectors;
     disposeTree(this.arrows);
+    this.vecTips = [];
     const list = (vectors ?? []).filter((v) => Array.isArray(v.vector_N) && Array.isArray(v.origin_mm));
     const mags = list.map((v) => Math.hypot(...v.vector_N));
     const fmax = Math.max(1e-9, ...mags);
+    let auto = null;
+    list.forEach((v, i) => {
+      if (WHEEL_FORCES.has(v.kind) && v.at && (auto === null || mags[i] > auto.mag)) auto = { at: v.at, mag: mags[i] };
+    });
+    this.autoWheel = this.motion ? this.autoWheel : auto?.at ?? null;
+    const picked = this.pickedWheel ?? auto?.at ?? null;
     list.forEach((v, i) => {
       const mag = mags[i];
       if (!(mag > 0)) return;
       const dir = v3(v.vector_N).normalize();
       const len = 160 + 640 * (mag / fmax);
       const origin = v3(v.origin_mm);
-      // Loads push on their point (head at the origin); reactions and grip start there.
-      const start = v.kind === "load" ? origin.clone().addScaledVector(dir, -len) : origin;
+      // Loads and reactions push on their point (head at the origin: a reaction at a tyre's
+      // contact comes from below the road, so it does not lie over the wheel); grip and the
+      // other forces start there.
+      const pushes = v.kind === "load" || v.kind === "reaction";
+      const start = pushes ? origin.clone().addScaledVector(dir, -len) : origin;
       const g = makeArrow(VECTOR_COLORS[v.kind] ?? INK);
       placeArrow(g, start, dir, len);
       this.arrows.add(g);
-      const tag = label(`${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`, `lbl-vec lbl-${v.kind}`);
-      tag.position.copy(start.clone().addScaledVector(dir, len + 40));
+      const wheelForce = WHEEL_FORCES.has(v.kind) && v.at;
+      if (wheelForce) this.vecTips.push({ id: v.at, at: start.clone().addScaledVector(dir, len / 2) });
+      if (wheelForce && v.at !== picked) return; // the arrow alone
+      const text = `${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`;
+      const tag = wheelForce ? keyLabel(text, `lbl-vec lbl-${v.kind}`) : label(text, `lbl-vec lbl-${v.kind}`);
+      // a wheel's force: its label is led from the arrow near the contact, a quarter of the way
+      // from it (the free end below the road can be out of the view); placeOutLabels lays it out
+      tag.position.copy(wheelForce ? origin.clone().addScaledVector(dir, pushes ? -len / 4 : len / 4) : start.clone().addScaledVector(dir, len + 40));
       this.arrows.add(tag);
     });
+  }
+
+  // The wheel whose forces carry words (null: the largest one). Returns true when it changed.
+  pickWheel(id) {
+    if ((id ?? null) === (this.pickedWheel ?? null)) return false;
+    this.pickedWheel = id ?? null;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    this.setToggles(this.toggles);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
+    return true;
+  }
+
+  // The wheel whose forces carry words now.
+  wheelShown() {
+    return this.pickedWheel ?? this.autoWheel ?? null;
+  }
+
+  // The wheel whose arrows are nearest to a point of the view (px from its top left), within
+  // 60 px, picked; returns its id or null.
+  pickAt(x, y) {
+    const cands = this.frame
+      ? this.frame.wheels.filter((w) => w.contact && this.motionArrowObjs?.[w.id]).map((w) => ({ id: w.id, at: v3(w.contact) }))
+      : this.vecTips ?? [];
+    let best = null;
+    for (const c of cands) {
+      const p = this.screenOf(c.at);
+      if (!p) continue;
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= 60 && (!best || d < best.d)) best = { id: c.id, d };
+    }
+    if (best) this.pickWheel(best.id);
+    return best?.id ?? null;
+  }
+
+  // A point in the vehicle's frame of the iso group (ISO mm) on screen (px), or null behind the camera.
+  screenOf(isoPoint, parent = this.iso) {
+    const p = isoPoint.clone().applyMatrix4(parent.matrixWorld).project(this.camera);
+    if (p.z > 1) return null;
+    return { x: (p.x * 0.5 + 0.5) * this.size.w, y: (-p.y * 0.5 + 0.5) * this.size.h };
+  }
+
+  // Labels marked lbl-out go outside the vehicle's outline on screen: above it when their
+  // point is in its upper half, below it otherwise (so a leader line does not cross the
+  // wheels from a point low on the vehicle), at their point's x, kept inside the view and
+  // apart from each other; a leader line joins each label to its point.
+  placeOutLabels() {
+    if (!this.leaders) return;
+    const outs = [];
+    this.scene.traverseVisible((o) => {
+      if (o.isCSS2DObject && o.element.classList.contains("lbl-out") && o.element.style.display !== "none") outs.push(o);
+    });
+    if (!outs.length || !this.design) {
+      if (this.leadersHtml) this.leaders.innerHTML = this.leadersHtml = "";
+      return;
+    }
+    if (this.outline?.design !== this.design) this.outline = { design: this.design, pts: this.contentPoints() };
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const q of this.outline.pts) {
+      const p = this.screenOf(q.clone().applyMatrix4(this.body.matrix));
+      if (!p) continue;
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y);
+      y1 = Math.max(y1, p.y);
+    }
+    const W = this.size.w;
+    const H = this.size.h;
+    // the wheels on screen, as discs: a leader line or a label should not lie over them
+    const discs = [];
+    for (const w of Object.values(this.wheelObjs)) {
+      const c = new THREE.Vector3().setFromMatrixPosition(w.group.matrix);
+      const p = this.screenOf(c);
+      const q = this.screenOf(c.clone().add(new THREE.Vector3(0, 0, w.r)));
+      if (p && q) discs.push({ x: p.x, y: p.y, r: Math.hypot(q.x - p.x, q.y - p.y) });
+    }
+    // the panels over the view (the graph, the legend, the bars, the notes): a label is not put under them
+    const panels = [];
+    for (const el of this.host.children) {
+      if (el === this.renderer.domElement || el === this.labelRenderer.domElement || el === this.leaders || el.classList.contains("cmp-view")) continue;
+      if (!el.offsetParent || el.hidden || Number(getComputedStyle(el).opacity) === 0) continue;
+      panels.push({ x: el.offsetLeft - (this.host.clientWidth - W), y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    }
+    const placed = [];
+    const lines = [];
+    const at = new THREE.Vector3();
+    const gap = LEADER_GAP_PX;
+    for (const o of outs) {
+      at.setFromMatrixPosition(o.matrixWorld).project(this.camera);
+      if (at.z > 1) continue;
+      const ax = (at.x * 0.5 + 0.5) * W;
+      const ay = (-at.y * 0.5 + 0.5) * H;
+      const w = o.element.offsetWidth;
+      const h = o.element.offsetHeight;
+      const cx = (x) => Math.max(w / 2 + LABEL_MARGIN.side, Math.min(W - w / 2 - LABEL_MARGIN.side, x));
+      const cy = (y) => Math.max(LABEL_MARGIN.top + h / 2, Math.min(H - LABEL_MARGIN.bottom - h / 2, y));
+      // places around the vehicle's outline: above and below it (at the point's x and at the
+      // outline's corners), and at its sides (at the point's y and the outline's top and bottom)
+      const cands = [];
+      for (const x of [ax, x0 + w / 2, x1 - w / 2, x0 - gap - w / 2, x1 + gap + w / 2]) {
+        cands.push([x, y0 - gap - h / 2], [x, y1 + gap + h / 2]);
+      }
+      for (const y of [ay, y0 + h / 2, y1 - h / 2]) cands.push([x0 - gap - w / 2, y], [x1 + gap + w / 2, y]);
+      let best = null;
+      for (const [px, py] of cands) {
+        const lx = cx(px);
+        const ly = cy(py);
+        const ex = Math.max(lx - w / 2, Math.min(lx + w / 2, ax)); // the label's edge nearest the point
+        const ey = Math.max(ly - h / 2, Math.min(ly + h / 2, ay));
+        let score = Math.hypot(ex - ax, ey - ay);
+        for (const d of discs) {
+          // the leader line across a wheel (not the wheel the point is on), the label over a wheel
+          if (Math.hypot(ax - d.x, ay - d.y) > d.r && segmentDistance(d, ax, ay, ex, ey) < d.r) score += 1000;
+          if (Math.abs(d.x - lx) < w / 2 + d.r && Math.abs(d.y - ly) < h / 2 + d.r) score += 400;
+        }
+        if (lx + w / 2 > x0 && lx - w / 2 < x1 && ly + h / 2 > y0 && ly - h / 2 < y1) score += 300; // over the vehicle
+        if (placed.some((r) => Math.abs(r.x - lx) < (r.w + w) / 2 + 6 && Math.abs(r.y - ly) < (r.h + h) / 2 + 4)) score += 2000;
+        if (panels.some((r) => lx + w / 2 > r.x && lx - w / 2 < r.x + r.w && ly + h / 2 > r.y && ly - h / 2 < r.y + r.h)) score += 1500;
+        if (!best || score < best.score) best = { score, lx, ly, ex, ey };
+      }
+      const { lx, ly, ex, ey } = best;
+      placed.push({ x: lx, y: ly, w, h });
+      o.element.style.transform = `translate(-50%,-50%) translate(${lx}px,${ly}px)`;
+      if (Math.hypot(ex - ax, ey - ay) > 4) lines.push(`<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="3.5"/>`);
+    }
+    const html = lines.join("");
+    if (html !== this.leadersHtml) this.leaders.innerHTML = this.leadersHtml = html;
   }
 
   // A motion from series.js (or null). Builds the arrow set, the ghost at the
@@ -1128,6 +1305,8 @@ export class Workbench3D {
   setMotion(motion) {
     if (motion === this.motion) return;
     this.motion = motion;
+    this.autoWheel = null;
+    if (motion) this.pickedWheel = null; // another motion: its largest wheel again
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
     this.motionArrowObjs = {};
@@ -1147,10 +1326,20 @@ export class Workbench3D {
     for (const id of motion.wheelIds) {
       const reaction = makeArrow(VECTOR_COLORS.reaction);
       const grip = makeArrow(VECTOR_COLORS.grip);
-      const tag = label("", "lbl-vec lbl-reaction");
+      const tag = keyLabel("", "lbl-vec lbl-reaction");
       this.motionArrows.add(reaction, grip, tag);
       this.motionArrowObjs[id] = { reaction, grip, tag, text: null };
     }
+    // the wheel whose label is shown when none is picked: the largest recorded normal force
+    // over the motion (at the series' samples), so the label does not jump between wheels
+    let best = null;
+    const n = 60;
+    for (let k = 0; k <= n; k += 1) {
+      for (const w of motion.frame(motion.t0 + (motion.duration * k) / n).wheels) {
+        if (w.load !== null && w.load > 0 && motion.wheelIds.includes(w.id) && (!best || w.load > best.load)) best = { id: w.id, load: w.load };
+      }
+    }
+    this.autoWheel = best?.id ?? null;
     if (motion.liftT !== null) this.buildGhost(motion.frame(motion.t1));
   }
 
@@ -1233,16 +1422,23 @@ export class Workbench3D {
         const mag = f ? Math.hypot(...f) : 0;
         const g = o[kind];
         g.visible = !!w.contact && mag > fref * 1e-3;
-        if (g.visible) placeArrow(g, v3(w.contact), v3(f).normalize(), 120 + 680 * Math.min(1, mag / fref));
+        if (!g.visible) continue;
+        const dir = v3(f).normalize();
+        const len = 120 + 680 * Math.min(1, mag / fref);
+        // the road's reaction pushes up into the contact from below (not across the wheel); grip starts there
+        placeArrow(g, kind === "reaction" ? v3(w.contact).addScaledVector(dir, -len) : v3(w.contact), dir, len);
       }
-      // The label shows the recorded normal force (wheel_load) at the nearest sample.
-      o.tag.visible = !!w.contact && w.load !== null && w.load > 0;
-      if (o.tag.visible) {
+      // The picked wheel's label shows the recorded normal force (wheel_load) at the nearest
+      // sample; the other wheels show their arrows without words.
+      o.tag.visible = w.id === this.wheelShown() && !!w.contact && w.load !== null && w.load > 0;
+      if (!o.tag.visible) {
+        if (o.text !== "") o.tag.element.innerHTML = o.text = "";
+      } else {
         const text = `${esc(wheelName(w.id))}<small>${fmt(w.load / 1000, 3)} kN</small>`;
         if (text !== o.text) o.tag.element.innerHTML = o.text = text;
         const f = w.reaction ?? [0, 0, 1];
         const len = 120 + 680 * Math.min(1, Math.hypot(...f) / fref);
-        o.tag.position.copy(v3(w.contact)).addScaledVector(v3(f).normalize(), len + 60);
+        o.tag.position.copy(v3(w.contact)).addScaledVector(v3(f).normalize(), -len / 4); // on the reaction arrow, near the contact
       }
     }
   }
@@ -1342,7 +1538,10 @@ export class Workbench3D {
       this.renderer.shadowMap.enabled = this.look.real;
     }
     this.renderer.render(this.scene, this.camera);
-    this.labelRenderer?.render(this.scene, this.camera);
+    if (this.labelRenderer) {
+      this.labelRenderer.render(this.scene, this.camera);
+      this.placeOutLabels();
+    }
   }
 
   // A view on a shared renderer: draw into the lower left w x h pixels of its canvas
