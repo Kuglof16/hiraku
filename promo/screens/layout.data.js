@@ -265,7 +265,7 @@ window.PROMO_LAYOUT = {
       "crash_s": 0.5,
       "nvh_s": 1.2,
       "assembly_s": 2.0,
-      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). The crash and NVH tiles are red mid iteration; from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
+      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
     },
     "overlay": {
       "color": "#c8402a",
@@ -817,8 +817,9 @@ window.PROMO_LAYOUT = {
       "step_stuck",
       "battery_hot",
       "parts_clash",
-      "rollover"
+      "wind"
     ],
+    "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile",
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -1554,7 +1555,7 @@ window.PROMO_LAYOUT = {
         "message": "長く走っても熱くならず、どこまで速いかが分かる"
       },
       "n04": {
-        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)",
+        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)",
         "limits": {
           "label": 8,
           "moving": 8,
