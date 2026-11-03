@@ -673,7 +673,7 @@
             "properties": {
               "to": {
                 "type": "string",
-                "description": "A part id, member id, support id or '<support>.<hardpoint>'."
+                "description": "A part id, member id, frame node id (an id in nodes, where a part is fixed at a joint of the frame), support id or '<support>.<hardpoint>'."
               },
               "via": {
                 "type": "string",
@@ -1143,6 +1143,11 @@
         "tolerance_rel": {
           "type": "number",
           "minimum": 0
+        },
+        "tolerance_abs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute tolerance, used where the expected value is 0 (or so small that tolerance_rel means nothing): |value - expected| <= tolerance_abs."
         },
         "pass": {
           "type": "boolean"
@@ -1724,7 +1729,7 @@
         },
         "origin_mm": {
           "$ref": "#/$defs/vec3",
-          "description": "Point where the force acts (application point), in design coordinates."
+          "description": "Point where the force acts (application point), in the analysis's scene frame: design coordinates for a static analysis, the run's road frame (world axes, as scene and series) for a driving analysis."
         },
         "vector_N": {
           "$ref": "#/$defs/vec3"
@@ -2965,8 +2970,12 @@
           "minimum": 0
         },
         "cost_usd": {
-          "type": "number",
-          "minimum": 0
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "API cost of the run so far; null where HIRAKU cannot know it (driver claude_code_plugin: the user's own Claude Code pays)."
         },
         "requirements": {
           "type": "array",
@@ -4130,6 +4139,10 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
@@ -4209,6 +4222,10 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
