@@ -16,7 +16,7 @@ load array, except `prescribe`, which sets values on the model.
 - beam_thermal, shell_thermal, solid_thermal: equivalent nodal forces of a free thermal strain
   (Cook, Malkus, Plesha & Witt 2002, the chapter on initial strains: f = integral B^T D eps_0 dV; not
   checked here). The stresses of a solution with a thermal load must take off the thermal strain:
-  MITC4.stresses(..., thermal=(alpha, T_mid, dT)), solid_stresses(sol, g, thermal=(alpha, T)),
+  MITC4.stresses(..., thermal=(alpha, T_mid, dT)), solid_stresses(sol, g, thermal=(alpha, T[, nodal])),
   Beam.axial_force(..., thermal=(alpha, dT)).
 """
 
@@ -73,9 +73,9 @@ def shell_thermal(model: FEModel, group, alpha, T_mid, dT=0.0, nodal: bool = Fal
     return scatter(model, group, group.thermal_forces(model.nodes, alpha, T_mid, dT, nodal))
 
 
-def solid_thermal(model: FEModel, group, alpha, T) -> np.ndarray:
-    """Temperature change T of solids: per node (N,), per element (E,) or one value."""
-    return scatter(model, group, group.thermal_forces(model.nodes, alpha, T))
+def solid_thermal(model: FEModel, group, alpha, T, nodal: bool = False) -> np.ndarray:
+    """Temperature change T of solids: per element (E,) or one value, or per node (N,) with nodal=True."""
+    return scatter(model, group, group.thermal_forces(model.nodes, alpha, T, nodal))
 
 
 __all__ = ["beam_thermal", "prescribe", "scatter", "shell_pressure", "shell_thermal", "solid_pressure",

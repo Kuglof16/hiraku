@@ -11,6 +11,7 @@ from hiraku.solvers.fe import load_checks as lc
 from hiraku.solvers.fe.connect import rigid_link
 from hiraku.solvers.fe.eigen_checks import plate_shell
 from hiraku.solvers.fe.shell import MITC4
+from hiraku.solvers.fe.solid import Hex8
 
 SLOW = unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "a finer mesh: set HIRAKU_SLOW_TESTS=1")
 
@@ -119,6 +120,40 @@ class ThermalTest(unittest.TestCase):
         self.assertLess(np.abs(r["kappa"][:, 2]).max(), 1e-9 * r["expected"])
         self.assertLess(r["stress_max"], 1e-6)
         self.assertLess(r["load_resultant"], 1e-6)
+
+    def test_solid_nodal_temperature_when_nodes_and_elements_are_as_many(self):
+        """A cube split into 8 coincident HEX8 of E/8 each: 8 nodes and 8 elements. A per-node temperature
+        (nodal=True) gives the same loads and stresses as the one full cube; per-element values are uniform in
+        each element; a shape that fits neither is refused."""
+        nodes = np.array([[x, y, z] for z in (0.0, 10.0) for y in (0.0, 10.0) for x in (0.0, 10.0)])
+        cube = [0, 1, 3, 2, 4, 5, 7, 6]
+        E, nu, alpha = 2e5, 0.3, 1.2e-5
+        T = 5.0 + 3.0 * nodes[:, 0] - 2.0 * nodes[:, 1] + nodes[:, 2]  # per node, not uniform
+        one = FEModel(nodes)
+        g1 = one.add(Hex8([cube], E, nu))
+        eight = FEModel(nodes)
+        g8 = eight.add(Hex8([cube] * 8, E / 8, nu))
+        self.assertEqual(len(g8.conn), len(nodes))
+        F1 = loads.solid_thermal(one, g1, alpha, T, nodal=True)
+        F8 = loads.solid_thermal(eight, g8, alpha, T, nodal=True)
+        np.testing.assert_allclose(F8, F1, rtol=1e-12, atol=1e-12 * np.abs(F1).max())
+        # read as per element the same array is a different load (the mistake this guards against)
+        Fe = loads.solid_thermal(eight, g8, alpha, T)
+        self.assertGreater(np.abs(Fe - F1).max(), 1e-3 * np.abs(F1).max())
+        np.testing.assert_allclose(Fe, sum(loads.solid_thermal(one, g1, alpha, t) for t in T) / 8, rtol=1e-12,
+                                   atol=1e-12 * np.abs(Fe).max())
+        # stresses of a given displacement with the nodal temperature taken off: same in both models
+        ue = np.random.default_rng(0).normal(scale=1e-3, size=24)
+        s1 = g1.gauss_stresses(nodes, ue[None, :], thermal=(alpha, T, True))
+        s8 = g8.gauss_stresses(nodes, np.tile(ue, (8, 1)), thermal=(alpha, T, True))
+        for e in range(8):
+            np.testing.assert_allclose(s8[e] * 8, s1[0], rtol=1e-12, atol=1e-9)
+        with self.assertRaises(ValueError):
+            loads.solid_thermal(one, g1, alpha, T)  # 8 values for 1 element without nodal=True
+        with self.assertRaises(ValueError):
+            loads.solid_thermal(one, g1, alpha, T[:4], nodal=True)  # too few nodes
+        with self.assertRaises(ValueError):
+            g1.gauss_stresses(nodes, ue[None, :], thermal=(alpha, np.ones((1, 8))))
 
 
 if __name__ == "__main__":
