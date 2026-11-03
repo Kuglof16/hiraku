@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HIRAKU</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/shelf.css">
 <!-- three.js r170 (0.170.0) from jsDelivr; the version is pinned here and nowhere else. -->
 <script type="importmap">
 {
@@ -32,6 +33,7 @@
       <button class="tab" data-tab="A2">ヒアリング</button>
       <button class="tab" data-tab="bench">作業台</button>
       <button class="tab" data-tab="grid">全分野</button>
+      <button class="tab" data-tab="A4">ツール</button>
       <button class="tab" data-tab="A5">ナレッジ</button>
     </div>
     <div class="chips" id="chips"></div>
@@ -86,6 +88,9 @@
 
     <!-- the intake screens (A1 request, A2 hearing, A5 knowledge): js/intake/, mounted by js/app.js -->
     <section class="col-center intake-view" id="view-intake" hidden></section>
+
+    <!-- A4 the tool shelf: js/shelf.js, mounted by js/app.js -->
+    <section class="col-center shelf-view" id="view-shelf" hidden></section>
 
     <section class="col-center grid-view" id="view-grid" hidden>
       <div class="grid-head" id="grid-head"></div>
