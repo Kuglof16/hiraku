@@ -139,6 +139,8 @@ def k0_mount_loads(design: Record, g: float, step_mm, step_supports) -> tuple[di
 
 class FrameTubes(BuiltinTool):
     name = "frame_tubes"
+    stage = 3  # shell FE
+    applies_to = ("space_frame_utv",)
     title = "フレームの静的 (シェル: 管ごとの板を tie でつなぐ、立体フレーム)"
     domain = "strength"
     base = "K1"

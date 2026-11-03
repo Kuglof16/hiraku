@@ -1,6 +1,7 @@
 """K0 formulas for a care bed (hiraku.designgen.care_bed): the deck frame under a uniform load, tipping under an
-edge load, the side rail pushed outward, the actuators' levers and brackets, the lift, the actuators' duty and
-the fatigue damage over the counts of use.
+edge load and under a push on the side rail, the side rail pushed outward (with the sleeve its post is inserted
+in), the actuators' levers and brackets, the lift, the actuators' duty and the fatigue damage over the counts of
+use.
 
 The inputs are made from the design by functions in hiraku.catalog.builders.care_bed (inputs_from).
 """
@@ -163,6 +164,31 @@ def _lever_formula() -> Formula:
     )
 
 
+# ---------------------------------------------------------------- fatigue over the counts of use
+
+# the welds each use loads: use 1 (getting on and off) and use 4 (the lift) the deck frame, use 2 the back
+# bracket's lug root, use 3 the knee bracket's
+USE_WELDS = {"frame": ("1", "4"), "lug_back": ("2",), "lug_knee": ("3",)}
+
+
+def use_damage(v: dict) -> dict:
+    """bed.use_damage: Miner damage of each use (n_i cycles of the range dS_i) on the S-N curve FAT, m, N_knee with
+    the spectrum's slope 2 m - 1 below the knee; each weld's sum and the worst weld."""
+    from ..k1_frame.fatigue import sn_cycles
+    from .library_fatigue import spectrum_slope
+
+    m2 = spectrum_slope(v["m"])
+    out = {"m2": m2}
+    for i in "1234":
+        ds, cycles = v[f"dS{i}"], v[f"n{i}"]
+        out[f"D{i}"] = 0.0 if ds <= 0 or cycles <= 0 else cycles / sn_cycles(ds, v["FAT"], v["m"], v["N_knee"], m2)
+    out["D"] = sum(out[f"D{i}"] for i in "1234")
+    for weld, uses in USE_WELDS.items():
+        out[f"D_{weld}"] = sum(out[f"D{i}"] for i in uses)
+    out["D_worst"] = max(out[f"D_{w}"] for w in USE_WELDS)
+    return out
+
+
 # ---------------------------------------------------------------- everything else
 
 
@@ -189,26 +215,73 @@ def all_formulas() -> list[Formula]:
         requires=[(ys > 0, "y_s must be positive")],
         symbols=s,
     ))
-    s = {n: sp.Symbol(n, real=True) for n in ("F", "H", "S", "d", "t")}
-    F, H, S, d, t = (s[k] for k in ("F", "H", "S", "d", "t"))
+    s = {n: sp.Symbol(n, real=True) for n in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G")}
+    F, H, S, d, t, sl, ts, E, G = (s[k] for k in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G"))
     I = sp.pi * (d**4 - (d - 2 * t) ** 4) / 64
     Z = 2 * I / d
+    # the sleeve's tube (d .. d + 2 t_s) and the post inside it (d - 2 t .. d) bend together: one tube d - 2 t .. d + 2 t_s
+    d_o = d + 2 * ts
+    I_in = sp.pi * (d_o**4 - (d - 2 * t) ** 4) / 64
+    Z_in = 2 * I_in / d_o
+    s_root = F / 2 * H / Z_in
+    s_top = F / 2 * (H - sl) / Z
+    s_post = sp.Max(s_root, s_top)  # s = 0: s_top = (F / 2) H / Z, larger than s_root (Z_in >= Z)
+    # the top bar bends in the level plane; each end turns about the vertical axis as far as its post twists
+    # (torsion GJ, J = 2 I, over the post above the sleeve and the sleeve's length in series): end moment
+    # M_e = (F S / 8) / (1 + 2 E I / (k S)) (a beam with equal rotational springs k at its ends, central load)
+    k_end = 1 / ((H - sl) / (G * 2 * I) + sl / (G * 2 * I_in))
+    M_end = (F * S / 8) / (1 + 2 * E * I / (k_end * S))
+    s_bar = (F * S / 4 - M_end) / Z
     out.append(Formula(
         formula_id="bed.side_rail_push",
-        title="サイドレールの上の棒の真ん中を外へ押したときの柱の根元と棒の曲げ",
+        title="サイドレールの上の棒の真ん中を外へ押したときの柱の根元 (差し込みの筒の根元と上端) と棒の曲げ",
         domain="strength",
-        expression="Z = pi (d^4 - (d - 2t)^4) / (32 d); sigma_post = (F / 2) H / Z; sigma_bar = F S / 8 / Z",
+        expression=("Z = pi (d^4 - (d - 2t)^4) / (32 d); Z_in = pi ((d + 2 t_s)^4 - (d - 2t)^4) / (32 (d + 2 t_s)) "
+                    "(the post in its sleeve, s long, wall t_s); sigma_post = max((F / 2) H / Z_in, (F / 2)(H - s) / Z) "
+                    "(s = 0, no sleeve: (F / 2) H / Z); the bar's ends held by the posts' torsion: 1 / k = (H - s) / "
+                    "(G 2 I) + s / (G 2 I_in), M_end = (F S / 8) / (1 + 2 E I / (k S)), sigma_bar = (F S / 4 - M_end) / Z"),
         inputs={"F": _in("N", "outward push at the top bar's middle", min=0),
                 "H": _in("mm", "post length, socket to top bar", min=0),
                 "S": _in("mm", "top bar span, post to post", min=0),
-                "d": _in("mm", "round tube outside diameter", min=0), "t": _in("mm", "tube wall", min=0)},
-        outputs={"sigma": ("MPa", "the larger of the two", sp.Max(F / 2 * H / Z, F * S / 8 / Z)),
-                 "sigma_post": ("MPa", "post's bending at its foot", F / 2 * H / Z),
-                 "sigma_bar": ("MPa", "top bar's bending (its ends taken as fixed)", F * S / 8 / Z)},
+                "d": _in("mm", "round tube outside diameter", min=0), "t": _in("mm", "tube wall", min=0),
+                "s": _in("mm", "sleeve the post is inserted in: its length up from the socket (0: none)", min=0),
+                "t_s": _in("mm", "sleeve wall (its inside diameter is d)", min=0),
+                "E": _in("MPa", "Young's modulus of the tubes", min=0),
+                "G": _in("MPa", "shear modulus of the tubes", min=0)},
+        outputs={"sigma": ("MPa", "the larger of the post's and the bar's", sp.Max(s_post, s_bar)),
+                 "sigma_post": ("MPa", "post's bending: at its foot (in the sleeve) or at the sleeve's top", s_post),
+                 "sigma_bar": ("MPa", "top bar's bending at its middle (its ends held by the posts' torsion)", s_bar),
+                 "k_end": ("N*mm", "rotational stiffness of each bar end (the post's torsion), per radian", k_end)},
         assumptions=["the two posts share the push equally and bend as cantilevers from their sockets",
-                     "the sockets and the upper rail do not turn", "the top bar's ends are held by the posts (fixed)"],
-        source="cantilever and fixed-fixed beam bending (textbook)",
-        requires=[(sp.And(2 * t < d, d > 0), "t must be less than half of d")],
+                     "the sockets and the upper rail do not turn",
+                     "the top bar's ends turn as far as the posts twist (the posts' torsion, the sockets rigid)",
+                     "in the sleeve the post and the sleeve bend and twist together as one tube (no gap between them)"],
+        source=("cantilever bending, torsion of a round tube (J = 2 I), a beam with rotational springs at its ends "
+                "(textbook)"),
+        requires=[(sp.And(2 * t < d, d > 0), "t must be less than half of d"),
+                  (sp.And(sl < H, sl >= 0, ts > 0, G > 0, E > 0, S > 0),
+                   "the sleeve must be shorter than the post; t_s, E, G and S positive")],
+        symbols=s,
+    ))
+    s = {n: sp.Symbol(n, real=True) for n in ("W", "y_cg", "F", "h_F", "y_s")}
+    W, ycg, F, hF, ys = (s[k] for k in ("W", "y_cg", "F", "h_F", "y_s"))
+    R_far = (W * (ys - ycg) - F * hF) / (2 * ys)
+    out.append(Formula(
+        formula_id="bed.side_push_tipping",
+        title="サイドレールを外へ押したときの、反対側のキャスターに残る力 (倒れ)",
+        domain="handling",
+        expression="R_far = (W (y_s - y_cg) - F h_F) / (2 y_s); R_near = W - R_far",
+        inputs={"W": _in("N", "weight of the bed and what is on it", min=0),
+                "y_cg": _in("mm", "centre of gravity's offset toward the pushed side"),
+                "F": _in("N", "push, level and outward (away from the bed's centre line)", min=0),
+                "h_F": _in("mm", "push's height above the floor", min=0),
+                "y_s": _in("mm", "caster line's offset from the centre line (half the caster track)", min=0)},
+        outputs={"R_far": ("N", "load left on the casters of the far side (both together); below 0 the bed tips", R_far),
+                 "R_near": ("N", "load on the casters of the pushed side (both together)", W - R_far)},
+        assumptions=["rigid bed on a level floor; the casters' contact points on two lines along the bed",
+                     "the casters do not slide: the floor takes the push at the contact points (floor level)"],
+        source="moment balance about the pushed side's caster line (textbook statics), as bed.edge_load_tipping",
+        requires=[(ys > 0, "y_s must be positive")],
         symbols=s,
     ))
     s = {n: sp.Symbol(n, real=True) for n in ("F", "h_p", "w", "t", "d")}
@@ -263,43 +336,39 @@ def all_formulas() -> list[Formula]:
         requires=[(vel > 0, "v must be positive")],
         symbols=s,
     ))
-    names = ("n1", "dS1", "n2", "dS2", "n3", "dS3", "n4", "dS4", "FAT", "m", "N_knee", "m2")
-
-    def damage(v: dict) -> dict:
-        out_d = {}
-        knee = v["FAT"] * (2e6 / v["N_knee"]) ** (1.0 / v["m"])  # the range at the knee
-        for i in "1234":
-            ds, cycles = v[f"dS{i}"], v[f"n{i}"]
-            if ds <= 0 or cycles <= 0:
-                out_d[f"D{i}"] = 0.0
-                continue
-            N = 2e6 * (v["FAT"] / ds) ** v["m"] if ds >= knee else v["N_knee"] * (knee / ds) ** v["m2"]
-            out_d[f"D{i}"] = cycles / N
-        out_d["D"] = sum(out_d[f"D{i}"] for i in "1234")
-        return out_d
-
     out.append(Formula(
         formula_id="bed.use_damage",
-        title="使う回数ごとの応力の幅から、溶接の疲労の損傷 (マイナー則、4 つの使い方の和)",
+        title="使う回数ごとの応力の幅から、溶接の疲労の損傷 (マイナー則。床の枠と 2 つの金具の耳の根元の悪い方)",
         domain="strength",
-        expression="N_i = 2e6 (FAT / dS_i)^m above the knee, N_knee (dS_knee / dS_i)^m2 below; D = sum n_i / N_i",
+        expression=("N_i = 2e6 (FAT / dS_i)^m above the knee, N_knee (dS_knee / dS_i)^(2m - 1) below; D_i = n_i / N_i; "
+                    "D_frame = D1 + D4, D_lug_back = D2, D_lug_knee = D3, D_worst = the largest; D = sum of the four"),
         inputs={**{f"n{i}": _in("1", f"count of use {i}", min=0) for i in "1234"},
                 **{f"dS{i}": _in("MPa", f"stress range of one use {i}", min=0) for i in "1234"},
                 "FAT": _in("MPa", "fatigue class: range at 2e6 cycles", min=0), "m": _in("1", "slope", min=0),
-                "N_knee": _in("1", "cycles at the knee", min=0), "m2": _in("1", "slope beyond the knee", min=0)},
-        outputs={"D": ("1", "Miner damage of all four uses (failure at 1)", None),
+                "N_knee": _in("1", "cycles at the knee", min=0)},
+        outputs={"D": ("1", "Miner damage of all four uses summed as if at one weld (the safe side)", None),
+                 "D_worst": ("1", "damage at the worst weld: the deck frame (uses 1 and 4), the back bracket's lug root "
+                                  "(use 2) or the knee bracket's (use 3); failure at 1", None),
+                 "D_frame": ("1", "damage at the deck frame (uses 1 and 4)", None),
+                 "D_lug_back": ("1", "damage at the back bracket's lug root (use 2)", None),
+                 "D_lug_knee": ("1", "damage at the knee bracket's lug root (use 3)", None),
+                 "m2": ("1", "slope below the knee used (2 m - 1)", None),
                  **{f"D{i}": ("1", f"damage of use {i}", None) for i in "1234"}},
         assumptions=["each use is one cycle of its stress range (0 to the loaded stress)",
-                     "IIW-type S-N curve (no mean stress correction)", "linear damage accumulation (Miner)"],
+                     "IIW-type S-N curve (no mean stress correction)", "linear damage accumulation (Miner)",
+                     "the uses' ranges differ, so the cycles are a spectrum: below the knee the slope is 2 m - 1 "
+                     "(IIW-1823-07 (2008) sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not the constant-"
+                     "amplitude slope of the design variable fatigue_slope_after_knee"],
         source=("S-N curve N = 2e6 (FAT / range)^m and Miner's rule: A. F. Hobbacher, Recommendations for Fatigue "
-                "Design of Welded Joints and Components, 2nd ed., Springer 2016 (IIW); not checked in this repository"),
-        requires=[(lambda v: v["FAT"] > 0 and v["m"] > 0 and v["N_knee"] > 0 and v["m2"] > 0,
-                   "FAT, m, N_knee and m2 must be positive")],
+                "Design of Welded Joints and Components, 2nd ed., Springer 2016 (IIW), not checked in this repository; "
+                "the slope 2 m - 1 below the knee for a spectrum: IIW-1823-07 (2008) sec. 4.3.1, p.110 (read in that "
+                "document by the quality department)"),
+        requires=[(lambda v: v["FAT"] > 0 and v["m"] > 0 and v["N_knee"] > 0, "FAT, m and N_knee must be positive")],
         primary="D",
         terms={f"D{i}": None for i in "1234"},
-        fn=damage,
+        fn=use_damage,
     ))
     return out
 
 
-__all__ = ["all_formulas", "lever_force"]
+__all__ = ["USE_WELDS", "all_formulas", "lever_force", "use_damage"]

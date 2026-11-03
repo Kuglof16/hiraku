@@ -208,32 +208,93 @@ def _quarter_car(design: Record, summ: Record, loads: Record, sid: str) -> tuple
     return W, m_u, k, c * 1e3 / (2.0 * _m.sqrt(k * 1e3 * m_s))
 
 
-def r3_calc(design: Record, load_case: Record) -> Record:
-    """The rear overhang and its end cross member (frame_inputs.end_cross_member_inputs), the front and
-    rear quarter cars (static load, unsprung mass, spring, damping ratio of the left wheels), the
-    wheelbase and the road class's roughness."""
+_LEG = ("dx", "dy", "dz", "y_p", "b_l", "t_l", "b_x", "t_x", "E", "nu", "k_x", "k_y", "k_z", "theta_front", "theta_rear")
+_QC = ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")
+_DAMAGE_VARS = {"k_t": ("tyre_stiffness", "N/mm"), "FAT": ("fatigue_fat_class", "MPa"), "m": ("fatigue_slope", "1"),
+                "N_knee": ("fatigue_knee_cycles", "1")}
+
+
+def _r3_common(design: Record, load_case: Record) -> Record:
+    """The quarter cars of the left wheels (static load, unsprung mass, spring, damping ratio), the wheelbase and
+    the road class's roughness."""
     from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
-    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, support_loads
+    from hiraku.solvers.k0_handcalc.vehicle import mass_summary, support_loads
     from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
 
-    loading_name = loading_of(load_case)
-    try:
-        ec = end_cross_member_inputs(design, loading=loading_name)
-    except (DesignError, KeyError, ValueError) as e:
-        raise BuildError(f"no rear overhang with an end cross member for the hand calculation: {e}") from None
-    on = on_board(design, loading_name)
+    on = on_board(design, loading_of(load_case))
     summ = mass_summary(on)
     loads = support_loads(on, summary=summ)["supports"]
-    rear_a, _, front_a, _ = ec["supports"]
-    out = dict(ec["inputs"])
+    sup = design["supports"]
+    x_rear = min(s["position_mm"][0] for s in sup)
+    rear_a = max((s for s in sup if abs(s["position_mm"][0] - x_rear) < 1e-6), key=lambda s: s["position_mm"][1])["id"]
+    front_a = max((s for s in sup if abs(s["position_mm"][0] - x_rear) > 1e-6), key=lambda s: s["position_mm"][1])["id"]
+    qc = {}
     for tag, sid in (("f", front_a), ("r", rear_a)):
         W, m_u, k, zeta = _quarter_car(design, summ, loads, sid)
-        out.update({f"W_{tag}": q(W, "N"), f"m_u{tag}": q(m_u, "kg"), f"k_s{tag}": q(k, "N/mm"), f"zeta_{tag}": q(zeta, "1")})
-    x = {s["id"]: float(s["position_mm"][0]) for s in design["supports"]}
-    out["L"] = q(abs(x[front_a] - x[rear_a]), "mm")
-    out["G_d"] = q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")
-    return out
+        qc.update({f"W_{tag}": q(W, "N"), f"m_u{tag}": q(m_u, "kg"), f"k_s{tag}": q(k, "N/mm"), f"zeta_{tag}": q(zeta, "1")})
+    x = {s["id"]: float(s["position_mm"][0]) for s in sup}
+    qc["L"] = q(abs(x[front_a] - x[rear_a]), "mm")
+    qc["G_d"] = q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")
+    return qc
+
+
+def _hand_damage(design: Record, load_case: Record, formula_id: str, inputs: Record, qc: Record) -> float:
+    from hiraku.solvers import formula_registry
+
+    reg = formula_registry()
+    s = reg.evaluate(formula_id, inputs)["outputs"]
+    p = load_case["params"]
+    return reg.evaluate("fatigue.road_damage_four_wheels", {
+        **{k: s[k] for k in ("sigma_ra", "sigma_rb", "sigma_fa", "sigma_fb")}, **qc,
+        **{k: design["variables"][name] for k, (name, _) in _DAMAGE_VARS.items()},
+        "v": p["speed"], "d": p["distance"]})["outputs"]["D"]["value"]
+
+
+def r3_legs(design: Record, load_case: Record) -> list[tuple[float, Record]]:
+    """Each U-frame's leg under the rails (frame_inputs.mount_leg_inputs, its left leg) with its hand damage:
+    [(damage, the leg's record)], the most damaged first."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import mount_leg_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        legs = mount_leg_inputs(design, loading=loading_of(load_case))
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no lower arm legs for the hand calculation: {e}") from None
+    if not legs:
+        raise BuildError("the design has no U-frame of legs and a lower cross member under the rails (lower_cross 0?), "
+                         "so the leg hand calculation has nothing to look at")
+    qc = _r3_common(design, load_case)
+    out = [(_hand_damage(design, load_case, "frame_static.mount_leg_stress", leg["inputs"], qc), leg) for leg in legs]
+    return sorted(out, key=lambda r: -r[0])
+
+
+def r3_places(design: Record, load_case: Record) -> list[tuple[float, str]]:
+    """The welds the plan compares, with their hand damage: the most damaged leg and the end cross member."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+
+    D_leg, leg = r3_legs(design, load_case)[0]
+    ec = end_cross_member_inputs(design, loading=loading_of(load_case))
+    D_end = _hand_damage(design, load_case, "frame_static.end_cross_member_stress", ec["inputs"],
+                         _r3_common(design, load_case))
+    return [(D_leg, leg["leg"]), (D_end, ec["end_cross_member"])]
+
+
+def r3_calc(design: Record, load_case: Record) -> Record:
+    """The plan's from-values: the rear overhang and its end cross member (frame_inputs.end_cross_member_inputs),
+    the leg whose hand damage is the largest (r3_legs; its inputs as leg_<name>), the quarter cars, the wheelbase
+    and the road's roughness."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        ec = end_cross_member_inputs(design, loading=loading_of(load_case))
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no rear overhang with an end cross member for the hand calculation: {e}") from None
+    leg = r3_legs(design, load_case)[0][1]
+    return {**ec["inputs"], **{f"leg_{k}": v for k, v in leg["inputs"].items()}, **_r3_common(design, load_case)}
 
 
 _END = {k: f"from.{k}" for k in ("e", "a", "w", "L1", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c", "b_j", "h_j", "t_j",
@@ -267,25 +328,52 @@ _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右�
 # The values above were summed with slope 22 below the S-N knee. Both sides now use 2 m - 1 = 5 there (IIW-1823-07
 # (2008) sec. 4.3.1, p.110, for a spectrum): hand 0.151 against tool 0.126 (version 1) and 0.215 against 0.193
 # (track 1220 mm, steering_x -200 mm, rail_t 4.5 mm, gusset_leg 40 mm, motor_peak_power 12 kW).
+
+_LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲がり、脚の付く所で左右逆に前後へ傾く (反りのあるねじり、U 字が無いとき)",
+               "脚と下の横の部材の U 字がその傾きを止め、横の部材はねじられ脚は曲げられる。U 字は中で左右逆の形 (半分を解く)",
+               "レールは脚の下で 3 つの回るばね (ねじれ・前後の傾き・横の振れ)。U 字はレールを押し返して傾きを減らす",
+               "左右そろった分 (左右のレールが鏡に回る) は入れない"]
+_DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
+                  "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
+                  "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
+                  "設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので使わない"]
+
+
+def _damage_from(prefix: str, place: str) -> Record:
+    return {"quantity": f"fatigue_damage_{place}", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
+            "assumptions": list(_DAMAGE_ASSUME),
+            "inputs": {**{out: f"pred.{prefix}_per_kN_{tag}" for tag, out, _ in _WHEELS},
+                       **{k: f"from.{k}" for k in _QC},
+                       **{k: f"design.var.{name}" for k, (name, _) in _DAMAGE_VARS.items()},
+                       "v": "lc.speed", "d": "lc.distance"},
+            "inputs_from": r3_calc}
+
+
+# Where the welds are worst (the analysis department's runs of the fatigue tool, 2026-11-03): with the suspension's
+# mounts on the frame, the root of the front lower arm's rear leg (lower_leg_LA2) on v1; with rail_t 4.5 mm the rear
+# overhang's end cross member (cross_E) again. The leg's stress per kN at each wheel (K1 with inertia relief) is mostly
+# the ladder's twist (v1: front -20.7 / +17.0, rear +10.0 / -10.2 MPa for the left / right wheel): the rails pitch
+# opposite ways at the leg's node, the lower cross member is twisted and the legs bend. The hand side here: front
+# +-20.7, rear +-8.1. So the plan works out both welds and takes the larger damage, as the tool takes its worst point.
 R3_PLAN = {
     "tool": "fatigue",
-    "say": ("輪はレールより外にあるので、輪の力はレールをねじり、後ろの張り出しの端の横の部材を曲げます。4 輪それぞれ 1 kN "
-            "あたりのその応力を出し、4 輪の 1/4 車が悪路で受ける力のゆれから、疲労の損傷を先に見積もります"),
+    "say": ("はしごがねじれると、左右のレールが脚の付く所で逆に傾き、脚と下の横の部材の U 字がそれを止めて脚の根元が曲げられます。"
+            "輪はレールより外にあるので、輪の力は後ろの張り出しの端の横の部材も曲げます。4 輪それぞれ 1 kN あたりのその 2 か所の応力を出し、"
+            "4 輪の 1/4 車が悪路で受ける力のゆれから、傷みの大きいほうの疲労の損傷を先に見積もります"),
     "predictions": [
+        *({"quantity": f"mount_leg_stress_per_kN_{tag}", "formula_id": "frame_static.mount_leg_stress",
+           "output": out, "assumptions": [f"{name}に 1 kN", *_LEG_ASSUME],
+           "inputs": {k: f"from.leg_{k}" for k in _LEG}, "inputs_from": r3_calc}
+          for tag, out, name in _WHEELS),
+        _damage_from("mount_leg_stress", "mount_leg"),
         *({"quantity": f"end_cross_member_stress_per_kN_{tag}", "formula_id": "frame_static.end_cross_member_stress",
            "output": out, "assumptions": [f"{name}に 1 kN", *_END_ASSUME], "inputs": _END, "inputs_from": r3_calc}
           for tag, out, name in _WHEELS),
-        {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
-         "assumptions": ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
-                         "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
-                         "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
-                         "設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので使わない"],
-         "inputs": {**{out: f"pred.end_cross_member_stress_per_kN_{tag}" for tag, out, _ in _WHEELS},
-                    **{k: f"from.{k}" for k in ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")},
-                    "k_t": "design.var.tyre_stiffness", "v": "lc.speed", "d": "lc.distance",
-                    "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
-                    "N_knee": "design.var.fatigue_knee_cycles"},
-         "inputs_from": r3_calc},
+        _damage_from("end_cross_member_stress", "end_cross_member"),
+        {"quantity": "fatigue_damage", "formula_id": "fatigue.worst_of_two_welds", "output": "D",
+         "assumptions": ["フレームの寿命はいちばん傷む溶接で決まる (脚の根元か、後ろの張り出しの端の横の部材)",
+                         "脚は、U 字の脚のうち手計算の損傷がいちばん大きいもの"],
+         "inputs": {"D_a": "pred.fatigue_damage_mount_leg", "D_b": "pred.fatigue_damage_end_cross_member"}},
     ],
 }
 
@@ -532,15 +620,15 @@ def h1_interference(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h1_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.library_geometry import _free_steer
-    from hiraku.solvers.k4_geometry import steer_room
+    """geometry.free_steer_angle's inputs: hiraku.solvers.k0_handcalc.scene_inputs.steer_room_inputs."""
+    from hiraku.solvers.k0_handcalc.scene_inputs import steer_room_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    rooms = steer_room(design)
-    if not rooms:
-        raise BuildError("no steered wheel has a frame member beside it")
-    sid = min(rooms, key=lambda k: _free_steer(rooms[k])["theta"])
-    r = rooms[sid]
-    return {"steer_w": q(r["w"], "mm"), "steer_l": q(r["l"], "mm"), "steer_c": q(r["c"], "mm")}
+    try:
+        got = steer_room_inputs(design)["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"steer_w": got["w"], "steer_l": got["l"], "steer_c": got["c"]}
 
 
 H1_PLAN = {
@@ -571,14 +659,16 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k4_geometry import AIST, knee_space
+    """occupant.knee_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_space_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_space_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    space = knee_space(on_board(design, loading_of(load_case)))
-    if not space:
-        raise BuildError("no occupant has a part ahead of the knees")
-    return {"knee_length": q(min(length for length, _ in space.values()), "mm"),
-            "buttock_knee": q(AIST["buttock_knee_m95"], "mm")}
+    try:
+        got = knee_space_inputs(design, loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"knee_length": got["L"], "buttock_knee": got["L_bk"]}
 
 
 H3_PLAN = {
@@ -595,7 +685,7 @@ H3_PLAN = {
 NOT_ASSEMBLED = ("occupant", "cargo")  # people and load ride in, they are not assembled (as in k4_geometry)
 # Parts welded into the frame (gussets, through pieces, the roll bar's part) are in place before
 # assembly, as the frame is (k4_geometry.model.WELDED): not assembly steps either.
-NOT_ASSEMBLED += ("frame", "gusset", "rollbar")
+NOT_ASSEMBLED += ("frame", "gusset", "rollbar", "bracket")
 
 
 def _assembled(design: Record) -> int:

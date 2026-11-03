@@ -35,10 +35,10 @@ def _clear():
 
 
 def _timed(rec: dict) -> dict:
-    """The record without what is a time (effects in s, wall_time_s) or says where the levels were solved."""
+    """The record without its clock times (wall_time_s, timings_s; where the levels ran is named there too)."""
     out = json.loads(json.dumps(rec))
     out.pop("wall_time_s", None)
-    out["effects"] = [e for e in out.get("effects", []) if e.get("unit") != "s"]
+    out.pop("timings_s", None)
     return out
 
 
@@ -81,13 +81,20 @@ class ConvergenceLevels(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertEqual(json.dumps(a.get(key), sort_keys=True), json.dumps(b.get(key), sort_keys=True))
 
-    def test_levels_say_dof_and_where(self):
+    def test_clock_times_only_in_timings(self):
+        for rec in (self.serial, self.parallel):
+            self.assertEqual([e["name"] for e in rec["effects"] if e.get("unit") == "s"], [])
+            self.assertIn("shell_total", rec["timings_s"])
+        for rec, where in ((self.serial, "this_process"), (self.parallel, "other_process")):
+            self.assertEqual(sorted(k for k in rec["timings_s"] if k.startswith("convergence_level_")),
+                             [f"convergence_level_10mm_{where}", f"convergence_level_40mm_{where}"])
+
+    def test_levels_say_dof_not_where(self):
         def solves(rec):
             return next(e["name"] for e in rec["effects"] if e["name"].startswith("mesh convergence solves"))
 
         self.assertIn("free DOF", solves(self.serial))
-        self.assertIn("one after another", solves(self.serial))
-        self.assertIn("other processes", solves(self.parallel))
+        self.assertEqual(solves(self.serial), solves(self.parallel))  # where they ran is in timings_s only
 
 
 class Caches(unittest.TestCase):

@@ -110,8 +110,11 @@ def check(design: Record, loading: str = "two_cargo") -> Record:
     from hiraku.solvers.k4_geometry.assembly import REACH_MM
 
     space = knee_space(on)
-    if space:
-        length, where = max(space.values())
+    from hiraku.solvers.k4_geometry.people import occupants
+
+    driver = next(iter(occupants(on)), None)  # the first occupant drives; the controls are ahead of that seat
+    if driver is not None and driver["id"] in space:
+        length, where = space[driver["id"]]
         q["reach_to_controls"] = _q(REACH_MM - length, "mm", where)
         if length > REACH_MM:
             problems.append(f"the controls ({where}) are {length - REACH_MM:.0f} mm beyond a small person's grip reach")

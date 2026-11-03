@@ -275,10 +275,26 @@ def _link_box(a, b, r):
 
 
 # ---------------------------------------------------------------------------- checks
+def occupants(design: dict) -> list[dict]:
+    """One part per person, in the parts' order: the occupant parts sharing the id before the first "."
+    are one person (hiraku.contract.loading.person_of); the person's part is the one whose id is that
+    (the trunk of a body split into segments), else the person's first part."""
+    from hiraku.contract.loading import person_of
+
+    out: dict[str, dict] = {}
+    for p in design.get("parts", []):
+        if p["kind"] != "occupant":
+            continue
+        who = person_of(p)
+        if who not in out or p["id"] == who:
+            out[who] = p
+    return list(out.values())
+
+
 def fit(design: dict) -> dict:
     """Margins (mm, negative = does not fit) for the occupants and seats in the design."""
     parts = design.get("parts", [])
-    occ = [p for p in parts if p["kind"] == "occupant"]
+    occ = occupants(design)
     seats = [p for p in parts if p["kind"] == "seat"]
     out: dict[str, tuple[float, str]] = {}
     if not occ:
@@ -360,7 +376,7 @@ def poses(design: dict) -> dict[str, dict]:
     under it. The others sit with the knee at KNEE_ANGLE_DEG. Occupants without a floor ahead are left out."""
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
-    occ = [p for p in parts if p["kind"] == "occupant"]
+    occ = occupants(design)
     out = {}
     for i, o in enumerate(occ):
         seat = _seat_of(o, seats)
@@ -490,7 +506,7 @@ def knee_space(design: dict) -> dict[str, tuple[float, str]]:
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
     out = {}
-    for o in (p for p in parts if p["kind"] == "occupant"):
+    for o in occupants(design):
         lo, _ = _box(o)
         seat = _seat_of(o, seats)
         seat_top = _box(seat)[1][2] if seat else lo[2]

@@ -88,9 +88,9 @@ def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
 def steer_room(design: dict, bs: dict[str, Body] | None = None) -> dict[str, dict]:
     """Inputs of the hand calculation geometry.free_steer_angle for each steered support:
     half width w and half length l of its wheel (kind wheel) and the room c between the
-    wheel's inner face and the nearest frame member beside it (within the wheel's length and
-    height), plus TOUCH_MM (touching is not contact). Supports with no member beside them
-    are left out."""
+    wheel's inner face and the nearest frame member beside it running along x (a rail; within
+    the wheel's length and height), plus TOUCH_MM (touching is not contact). Supports with no
+    member beside them are left out."""
     bs = bs or bodies(design)
     out = {}
     for s in design["supports"]:
@@ -111,6 +111,8 @@ def steer_room(design: dict, bs: dict[str, Body] | None = None) -> dict[str, dic
             if b.kind != "member":
                 continue
             m = b.obb.corners()
+            if np.ptp(m[:, 0]) <= max(np.ptp(m[:, 1]), np.ptp(m[:, 2])):
+                continue  # the formula's member runs along the wheel (a rail), not across or up beside it
             if m[:, 0].max() < c[0] - l or m[:, 0].min() > c[0] + l or m[:, 2].max() < c[2] - h or m[:, 2].min() > c[2] + h:
                 continue
             face = float((side * m[:, 1]).max())  # the member's face toward the wheel

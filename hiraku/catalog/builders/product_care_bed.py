@@ -1,14 +1,14 @@
 """Load cases of the care bed (product care-bed, designs of hiraku.designgen.care_bed), built from its
-requirements: S1 tipping under an edge load (Q60), R5 the deck under the safe working load and the side rail
-pushed outward, P5 the back and knee actuators' force (Q56), T3 the actuators' duty (Q03), R3 fatigue over the
-counts of use (Q92).
+requirements: S1 tipping under an edge load (Q60) and under the side rail pushed outward, R5 the deck under the
+safe working load and the side rail pushed outward, P5 the back and knee actuators' force (Q56), T3 the actuators'
+duty (Q03), R3 fatigue over the counts of use (Q92).
 
 PRODUCT names the product these builders are for; hiraku.catalog.builders takes them in place of the general
 builders of the same tests when the requirements' product is this one. PLANS holds the scripted step of the tests
-whose step is the same for every case (P5); STEPS the step of each load case by its id (S1, R5): the general PLANS
-of S1 (K2's tilt table) does not fit a bed, and R5's two cases use different formulas. T3 and R3 have no step: no
-tool on the shelf takes them (the thermal tool drives a forest loop, the fatigue tool a rough road); their K0
-predictions are here (T3_PREDICTIONS, R3_PREDICTIONS) for a tool made in the run.
+whose step is the same for every case (P5); STEPS and STEP_PREFIXES the step of each load case by its id (S1, R5,
+T3, R3): the general PLANS of S1 (K2's tilt table) does not fit a bed, R5's and S1's two cases use different
+formulas, and T3 and R3 take the shelf tools for a product that does not travel (actuator_duty, use_fatigue; the
+vehicle tools thermal and fatigue need a drive loop or a road).
 
 Every number comes from a requirement or the design, or is computed here; the values that are neither are
 constants below, each marked as an assumption.
@@ -103,12 +103,13 @@ def _edge_point(design: Record) -> tuple[str, list[float]]:
     return "LK", [st["K"], y, care_bed.levels(v)["deck_top"]]
 
 
-def s1_tipping(spec: Record, req: Record, design: Record) -> Record:
+def s1_tipping(spec: Record, req: Record, design: Record) -> list[Record]:
+    """Two cases: the edge load straight down (Q60) and the side rail pushed outward (R5's push, half of Q33)."""
     _check_bed(design)
     keys = _check_load(req, design)
     F = number(req, "Q60", "N")
     node, p = _edge_point(design)
-    return {
+    edge = {
         "load_case_id": f"S1-edge{F:g}N",
         "test_id": "S1",
         "domain": spec["domain"],
@@ -123,6 +124,22 @@ def s1_tipping(spec: Record, req: Record, design: Record) -> Record:
                       "requirement_keys": ["Q60"]},
         "tolerance_rel": tolerance(spec, S1_TOL),
     }
+    P = RAIL_PUSH_SHARE * number(req, "Q33", "N")
+    push = {
+        "load_case_id": "S1-side-rail-push",
+        "test_id": "S1",
+        "domain": spec["domain"],
+        "title": (f"サイドレールの上の棒の真ん中を外へ {P:g} N で押して倒れないか (R5-side-rail と同じ力: 利用者の体重 Q33 の "
+                  f"{RAIL_PUSH_SHARE:.0%}、仮定。利用者は降り、マットレスは載せたまま)"),
+        "params": {"loading": LOADING_EMPTY, "load_node": "LSM", "load_y": q(P, "N")},
+        "requirement_keys": ["Q33", *keys],
+        "criterion": {"quantity": "lighter_side_load", "op": ">=", "limit": q(0.0, "N"),
+                      "basis": (f"with the side rail pushed outward by {P:g} N (half of Q33, an assumption) the casters of "
+                                "the far side keep a load (below 0 the bed tips); the casters are taken not to slide"),
+                      "requirement_keys": ["Q33"]},
+        "tolerance_rel": tolerance(spec, S1_TOL),
+    }
+    return [edge, push]
 
 
 def s1_inputs(design: Record, load_case: Record) -> Record:
@@ -147,6 +164,33 @@ S1_STEP = {
     "predictions": [{"quantity": "lighter_side_load", "formula_id": "bed.edge_load_tipping", "output": "R_far",
                      "assumptions": ["ベッドは硬い", "床は水平", "力はまっすぐ下"],
                      "inputs": {k: f"from.{k}" for k in ("W", "y_cg", "F", "y_F", "y_s")}, "inputs_from": s1_inputs}],
+}
+
+
+def s1_push_inputs(design: Record, load_case: Record) -> Record:
+    """W, y_cg (toward the pushed side), F, h_F (above the floor), y_s of bed.side_push_tipping."""
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k0_handcalc import units
+    from hiraku.solvers.k0_handcalc.vehicle import mass_summary
+
+    p = load_case["params"]
+    on = on_board(design, loading_of(load_case))
+    ms = mass_summary(on)
+    Fy = units.to_unit(p["load_y"], "N")
+    side = 1.0 if Fy >= 0 else -1.0
+    node = {n["id"]: n["xyz_mm"] for n in design["nodes"]}[p["load_node"]]
+    y_s = min(abs(s["position_mm"][1]) for s in design["supports"] if s["position_mm"][1] * side > 0)
+    return {"W": q(ms["mass_kg"] * G0, "N"), "y_cg": q(side * float(ms["cg_mm"][1]), "mm"), "F": q(abs(Fy), "N"),
+            "h_F": q(node[2], "mm"), "y_s": q(y_s, "mm")}
+
+
+S1_PUSH_STEP = {
+    "tool": "bed_static",
+    "say": "柵を外へ押す力の床からの高さと、ベッドの重さの、押す側のキャスターの線のまわりのモーメントから、反対側に残る力を先に出します",
+    "predictions": [{"quantity": "lighter_side_load", "formula_id": "bed.side_push_tipping", "output": "R_far",
+                     "assumptions": ["ベッドは硬い", "床は水平", "キャスターは滑らない (床が押す力を接地点で受ける)"],
+                     "inputs": {k: f"from.{k}" for k in ("W", "y_cg", "F", "h_F", "y_s")},
+                     "inputs_from": s1_push_inputs}],
 }
 
 # ---------------------------------------------------------------- R5 the deck and the side rail
@@ -236,12 +280,17 @@ def r5_rail_inputs(design: Record, load_case: Record) -> Record:
     """The inputs of bed.side_rail_push: the push, the posts' length, the top bar's span, the tube."""
     from hiraku.solvers.k0_handcalc import units
 
+    from hiraku.designgen import care_bed
+
     nodes = {n["id"]: n["xyz_mm"] for n in design["nodes"]}
     v = _design_values(design)
     F = units.to_unit(load_case["params"]["load_y"], "N")
+    mat = design["materials"][care_bed.ROUND]
     return {"F": q(abs(F), "N"), "H": q(nodes["LSTP1"][2] - nodes["LSP1"][2], "mm"),
             "S": q(nodes["LSTP1"][0] - nodes["LSTK"][0], "mm"), "d": q(v["side_rail_d"], "mm"),
-            "t": q(v["side_rail_t"], "mm")}
+            "t": q(v["side_rail_t"], "mm"), "s": q(v.get("side_rail_sleeve_height", 0.0), "mm"),
+            "t_s": q(v.get("side_rail_sleeve_t", care_bed.VARIABLES["side_rail_sleeve_t"].default), "mm"),
+            "E": q(mat["E_MPa"], "MPa"), "G": q(mat["E_MPa"] / (2.0 * (1.0 + mat["nu"])), "MPa")}
 
 
 R5_DECK_STEP = {
@@ -257,8 +306,11 @@ R5_RAIL_STEP = {
     "tool": "bed_static",
     "say": "上の棒の真ん中を押す力を 2 本の柱が半分ずつ受け、片持ちの梁として根元で曲がるとみて、応力を先に出します",
     "predictions": [{"quantity": "max_stress", "formula_id": "bed.side_rail_push", "output": "sigma",
-                     "assumptions": ["2 本の柱が半分ずつ受ける", "柱の根元 (差し込み) は回らない"],
-                     "inputs": {k: f"from.{k}" for k in ("F", "H", "S", "d", "t")}, "inputs_from": r5_rail_inputs}],
+                     "assumptions": ["2 本の柱が半分ずつ受ける", "柱の根元 (差し込み) は回らない",
+                                     "差し込みの筒の中では柱と筒が 1 本の管として曲がる",
+                                     "上の棒の両端は、柱がねじれる分だけ回る (柱のねじりのばね)"],
+                     "inputs": {k: f"from.{k}" for k in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G")},
+                     "inputs_from": r5_rail_inputs}],
 }
 
 # ---------------------------------------------------------------- P5 the back and knee actuators
@@ -326,7 +378,7 @@ P5_PLAN = {
     ],
 }
 
-# ---------------------------------------------------------------- T3 the actuators' duty (no tool on the shelf)
+# ---------------------------------------------------------------- T3 the actuators' duty (shelf tool actuator_duty)
 
 
 def _count(text: str, label: str | None = None) -> float:
@@ -383,7 +435,7 @@ T3_PREDICTIONS = [{"quantity": "actuator_duty", "formula_id": "bed.actuator_duty
                    "assumptions": ["1 回の動きは 1 ストローク"],
                    "inputs": {k: f"from.{k}" for k in ("n", "k", "s", "v")}, "inputs_from": t3_inputs}]
 
-# ---------------------------------------------------------------- R3 fatigue over the counts of use (no tool on the shelf)
+# ---------------------------------------------------------------- R3 fatigue over the counts of use (shelf tool use_fatigue)
 
 R3_USES = (("n_seat", "着座"), ("n_lift", "昇降"), ("n_raise", "背上げと膝上げ"), ("n_rail", "柵の上げ下げ"))
 
@@ -441,25 +493,40 @@ def r3_inputs(design: Record, load_case: Record) -> Record:
             "n3": q(n["n_raise"], "1"), "dS3": q(lug["knee"], "MPa"),
             "n4": q(n["n_lift"], "1"), "dS4": q(0.0, "MPa"),
             "FAT": design["variables"]["fatigue_fat_class"], "m": design["variables"]["fatigue_slope"],
-            "N_knee": design["variables"]["fatigue_knee_cycles"], "m2": design["variables"]["fatigue_slope_after_knee"]}
+            "N_knee": design["variables"]["fatigue_knee_cycles"]}
 
 
-R3_PREDICTIONS = [{"quantity": "fatigue_damage", "formula_id": "bed.use_damage", "output": "D",
+R3_PREDICTIONS = [{"quantity": "fatigue_damage", "formula_id": "bed.use_damage", "output": "D_worst",
                    "assumptions": ["着座: 利用者が乗り降りするたびに床の枠の応力が 0 から載せた分まで 1 回振れる",
                                    "背上げ・膝上げ: 金具の耳の根元が最大の力の応力まで 1 回振れる",
-                                   "昇降: 枠の応力は変わらない (リンクは模型に無い)", "柵の上げ下げは入れない"],
+                                   "昇降: 枠の応力は変わらない (リンクは模型に無い)", "柵の上げ下げは入れない",
+                                   "溶接は床の枠・背上げの金具の耳の根元・膝上げの金具の耳の根元の 3 か所、悪い方をとる",
+                                   "S-N の曲がり点より下は傾き 2m − 1 (振幅の変わる繰り返し、IIW-1823-07 (2008) 4.3.1 節 p.110)"],
                    "inputs": {k: f"from.{k}" for k in ("n1", "dS1", "n2", "dS2", "n3", "dS3", "n4", "dS4", "FAT", "m",
-                                                       "N_knee", "m2")},
+                                                       "N_knee")},
                    "inputs_from": r3_inputs}]
+
+T3_STEP = {
+    "tool": "actuator_duty",
+    "say": "背上げのてこのストローク (平らなときと最大に起こしたときのピンの間の長さの差) を定格の速さで割り、1 時間の動く時間と使う割合を先に出します",
+    "predictions": T3_PREDICTIONS,
+}
+R3_STEP = {
+    "tool": "use_fatigue",
+    "say": ("使い方ごとの回数と応力の幅 (着座は床の枠、背上げ・膝上げは金具の耳の根元) から、曲がり点より下を傾き 2m − 1 で延ばした "
+            "S-N とマイナー則で、溶接ごとの損傷を先に出します。悪い方で判定します"),
+    "predictions": R3_PREDICTIONS,
+}
 
 BUILDERS = {"S1": s1_tipping, "R5": r5_static, "P5": p5_actuators, "T3": t3_duty, "R3": r3_uses}
 PLANS = {"P5": P5_PLAN}
-STEPS = {"R5-deck": R5_DECK_STEP, "R5-side-rail": R5_RAIL_STEP}  # by load case id; S1's id carries Q60's force
-STEP_PREFIXES = {"S1-edge": S1_STEP}  # by the start of the load case id
+STEPS = {"R5-deck": R5_DECK_STEP, "R5-side-rail": R5_RAIL_STEP, "S1-side-rail-push": S1_PUSH_STEP,
+         "R3-uses": R3_STEP}  # by load case id
+STEP_PREFIXES = {"S1-edge": S1_STEP, "T3-": T3_STEP}  # by the start of the load case id (S1's and T3's carry numbers)
 
 
 def step_for(load_case: Record) -> Record | None:
-    """The scripted step of one of these load cases (None for T3 and R3: no tool on the shelf)."""
+    """The scripted step of one of these load cases."""
     lc_id = load_case["load_case_id"]
     if lc_id in STEPS:
         return STEPS[lc_id]
@@ -469,4 +536,25 @@ def step_for(load_case: Record) -> Record | None:
     return PLANS.get(load_case["test_id"])
 
 
-__all__ = ["BUILDERS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "STEPS", "T3_PREDICTIONS", "step_for"]
+def predictions_for(load_case: Record) -> list[Record]:
+    """The K0 predictions of one care-bed load case, for the roles' formula_inputs as for the scripted steps:
+    S1's edge load and side rail push, R5's deck (per rail, deck_load_per_rail) and side rail, P5's actuators, T3's
+    duty and R3's damage over the counts of use. Each has its formula, output, inputs (from./lc./pred./design.var.
+    references) and inputs_from(design, load_case), which gives the from.<name> values. [] for other load cases."""
+    step = step_for(load_case)
+    if step is not None:
+        return list(step["predictions"])
+    return []
+
+
+def inputs_for(design: Record, load_case: Record) -> Record:
+    """Every from.<name> value (a quantity) of the load case's predictions (predictions_for), off the design."""
+    out: Record = {}
+    for p in predictions_for(load_case):
+        if p.get("inputs_from") is not None:
+            out.update(p["inputs_from"](design, load_case))
+    return out
+
+
+__all__ = ["BUILDERS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "STEPS", "T3_PREDICTIONS", "inputs_for",
+           "predictions_for", "step_for"]
