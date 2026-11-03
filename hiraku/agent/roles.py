@@ -17,6 +17,7 @@ Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
              "check_tool", "make_tool")
+PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).
@@ -80,7 +81,7 @@ def subagents(ctx: RunContext) -> dict:
             out[sdk_name(a["agent_id"])] = AgentDefinition(
                 description=prompts.cae_description(domain),
                 prompt=prompts.cae_prompt(domain),
-                tools=[contract.mcp_name(t) for t in CAE_TOOLS],
+                tools=[contract.mcp_name(t) for t in (PACKAGER_TOOLS if a["role"] == "packager" else CAE_TOOLS)],
                 skills=plugin_skills(),
                 model="inherit",
                 effort=CAE_EFFORT,

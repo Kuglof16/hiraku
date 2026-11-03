@@ -28,10 +28,22 @@ def resolve_design_path(req: Record, design_path: Path | str | None) -> Path | N
     return REPO_ROOT / req["design_file"]
 
 
+def intake_events_for(req: Record) -> list[Record]:
+    """The intake steps' events for a requirements file (hiraku.intake.pipeline): the domains its
+    flags pick, the hearing on what it already settles (a product HIRAKU has a file for lends its
+    values as the defaults) and the built-in knowledge."""
+    from hiraku.intake.pipeline import intake
+    from hiraku.intake.products import product_files
+
+    product = req["product"] if req["product"] in product_files() else None
+    return intake(req["want"], req["flags"], req.get("speed_class"), product=product,
+                  requirements=req["requirements"]).events
+
+
 def start_run(requirements_path: Path | str, *, design_path: Path | str | None = None,
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
-              designgen: Any = None, **store_kw: Any) -> RunContext:
+              designgen: Any = None, intake_events: list[Record] | None = None, **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
@@ -39,9 +51,10 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     roles lead and designer: the designer makes the first version (propose_design),
     and the load cases, picks and roles follow in project.updated.
 
-    Events: run.started, agent.said (tests left out, if any), design.created,
+    Events: run.started, the intake_events given (intake_events_for: domains.picked,
+    hearing.*, knowledge.imported), agent.said (tests left out, if any), design.created,
     tool.checked (one per tool), judgement.updated (pending tiles); without a
-    design file only run.started and tool.checked.
+    design file no design.created or judgement.updated.
     """
     req = load_requirements(requirements_path)
     catalog = load_catalog()
@@ -71,6 +84,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req)
+    for e in intake_events or ():
+        store.emit(e["kind"], agent=e.get("agent"), text=e.get("text"), data=e["data"])
     if skipped:
         store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
     try:

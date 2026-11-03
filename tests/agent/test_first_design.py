@@ -62,6 +62,8 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertIn("designer", o.agents)
         self.assertIn("packager", o.agents)  # H1 and others apply to the flags
         self.assertIn("cae-strength", o.agents)
+        self.assertIn("mcp__hiraku__rule_check", o.agents["packager"].tools)
+        self.assertIn("mcp__hiraku__analyze", o.agents["packager"].tools)
 
     def test_refusals(self):
         args = {"archetype": "ladder_4w", "reason": "要件から"}
