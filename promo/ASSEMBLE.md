@@ -42,6 +42,30 @@ py promo/assemble.py build promo/assembly.json <出力.mp4> --work <作業フォ
 
 ぼかしの大きさや粒の大きさは 1080p の画素で決め、出力の高さに合わせて拡大する。
 
+## 重ね (`overlay`、映像ごと)
+
+地が透明のコマ (画面を `export.py frames ... --layer fg` で書き出した PNG の連番、または透明度を持つ動画) を、その映像の受け持つカットの頭から重ねる。N01〜N04 の番号つきのラベル (`screens/labels_n01.html` など) に使う。
+
+```json
+{"cuts": ["N01", "N02"], "video": "${WORK}/clips/n01_n02_video_1080p.mp4",
+ "overlay": [{"frames": "${WORK}/frames/labels_n01", "cut": "N01"},
+             {"frames": "${WORK}/frames/labels_n02", "cut": "N02"}]}
+```
+
+| 項目 | 意味 |
+|---|---|
+| `frames` | 拡張子の無いパスはフォルダで、中の `00000.png` から順に読む (`%05d.png`、表の `fps` で)。拡張子があれば動画 |
+| `cut` | どのカットの頭から重ねるか (その映像の受け持つカットのどれか)。無ければ最初のカット |
+| `at` | そのカットの頭からさらに何秒あとか (既定 0) |
+
+- 重ねは映像の上、見た目の層 (粒・にじみ) とつなぎの前に入る。コマは出力の大きさに Lanczos で合わせる
+- 始まりのコマ = 枠の前に足した分 (つなぎの半分) + (そのカットの始まり − 映像の始まり) × fps + `at` × fps。最初のコマより前と最後のコマのあとは、下の映像がそのまま出る (`overlay` の `eof_action=pass`)
+- ffmpeg の入力は、映像 (札のときは無し) のあとに重ねの順で並ぶ
+
+```
+py promo/export.py frames promo/screens/labels_n01.html <作業>/frames/labels_n01 --fps 30 --layer fg --scale 1
+```
+
 ## 字幕と音
 
 `--subs` があれば `promo/subs.py` の `burn_command` で、つないだ映像の上に帯と字幕を焼き、`--audio` の音を入れる (字幕はつなぎの上に乗る)。`--subs` が無ければ映像はそのままで、`--audio` があれば音だけ入れる。
@@ -82,8 +106,9 @@ py promo/assemble.py build promo/assembly.json <出力.mp4> --work <作業フォ
 | `paint_band` | 下の帯を塗る |
 | `look` | `{"grain": true/false, "bloom": 強さ 0〜1}` |
 | `join` | 次のカットへのつなぎ: `{"kind": "cut|dissolve|light|grain", "seconds": 秒}`。最後のカットのものは使わない |
+| `overlay` | 地が透明のコマの重ね: `{"frames": …, "cut": …, "at": 秒}` か、その並び (上の「重ね」) |
 
-表の検査 (作る前に止まる): カットが原稿と同じ順で抜けなく並ぶこと、枠が続いていること、つなぎの半分が前後の枠の半分より短いこと、置き換えの名前に値があること。
+表の検査 (作る前に止まる): カットが原稿と同じ順で抜けなく並ぶこと、枠が続いていること、つなぎの半分が前後の枠の半分より短いこと、置き換えの名前に値があること、重ねに `frames` があり `cut` がその映像のカットであること。
 
 ## 試験
 
@@ -91,4 +116,4 @@ py promo/assemble.py build promo/assembly.json <出力.mp4> --work <作業フォ
 python -m unittest promo.tests.test_assemble
 ```
 
-表の読み込み、時刻 (境目がつなぎの真ん中・全体の長さが変わらない)、フィルタの組み立てを ffmpeg 無しで確かめる。ffmpeg と ffprobe があるときは、小さな入力から 3 秒の動画を 2 回作り、コマ数と、2 回のコマの画素が同じこと (粒の乱数が固定) を確かめる。
+表の読み込み、時刻 (境目がつなぎの真ん中・全体の長さが変わらない)、フィルタの組み立て、重ねの始まりのコマを ffmpeg 無しで確かめる。ffmpeg と ffprobe があるときは、小さな入力から 3 秒の動画を 2 回作り、コマ数と、2 回のコマの画素が同じこと (粒の乱数が固定) を確かめる。重ねは、暗い静止画の 2 つ目のカットの 0.2 秒あとから 12 コマの白い四角を重ね、四角がそのコマ (36〜47) にだけ出ることを確かめる。

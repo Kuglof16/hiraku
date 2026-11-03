@@ -6,10 +6,21 @@
 <link rel="stylesheet" href="common.css">
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n00"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
 <style>
-  /* N00: the name, then the seven CAE agents light up one by one.
-     Placement and times: layout.json n00 (CSS variables from layout.js;
-     --t-name, --t-row, --t-light, --t-step from n00.times). */
+  /* N00: the name, one line that says what HIRAKU is, then the ten 3D pets
+     (promo/pets/pet3d.js) in one row; the seven CAE domain chips light one
+     by one and their pets answer. Placement and times: layout.json n00
+     (CSS variables from layout.js; --t-name, --t-tagline, --t-row,
+     --t-light, --t-step from n00.times). Pets, chips and tags are placed
+     by the script below from n00.pets. */
 
   .name {
     position: absolute;
@@ -49,72 +60,58 @@
     to   { transform: scaleX(1); }
   }
 
-  .row {
+  .tagline {
     position: absolute;
     left: 0;
     right: 0;
-    top: var(--row-y);
-    display: flex;
-    justify-content: center;
-    gap: var(--row-gap-px);
+    top: var(--tagline-y);
+    margin: 0;
+    text-align: center;
+    font: 500 var(--tagline-size-px) / 1.3 var(--font-ja);
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    animation: fade-in 0.6s ease-out both;
+    animation-delay: var(--t-tagline);
   }
-  .agent {
-    width: var(--agent-w);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* pets, chips and tags rise as one row (one thing in motion, not ten) */
+  .row {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
     animation: agent-in 0.5s ease-out both;
-    animation-delay: calc(var(--t-row) + var(--i) * 0.06s);
+    animation-delay: var(--t-row);
   }
   @keyframes agent-in {
     from { opacity: 0; transform: translateY(calc(16 * var(--u))); }
     to   { opacity: 1; transform: none; }
   }
+  .pet { position: absolute; display: block; }
 
-  .pet {
-    width: var(--pet-size-px);
-    height: var(--pet-size-px);
-    margin-left: var(--pet-shift-px); /* body sits left of the box; centre it on the chip */
-    animation:
-      pet-wake 0.5s ease-out both,
-      pet-hop 0.45s cubic-bezier(.3, 0, .3, 1) both;
-    animation-delay:
-      calc(var(--t-light) + var(--i) * var(--t-step)),
-      calc(var(--t-light) + var(--i) * var(--t-step));
-  }
-  .pet-svg { width: 100%; height: 100%; display: block; overflow: visible; }
-  @keyframes pet-wake {
-    from { filter: grayscale(1) opacity(0.55); }
-    to   { filter: grayscale(0) opacity(1); }
-  }
-  @keyframes pet-hop {
-    0%   { transform: translateY(0); }
-    45%  { transform: translateY(calc(-18 * var(--u))); }
-    100% { transform: translateY(0); }
-  }
-  .pet .pr { stroke: var(--ink); stroke-width: 2.2; }
-  .pet .fill-ink { fill: var(--ink); }
-  .pet .fill-paper { fill: var(--paper); }
-
-  .chip {
-    margin-top: var(--chip-gap-above-px);
+  .chip, .tag {
+    position: absolute;
+    transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
-    gap: calc(10 * var(--u));
-    height: var(--chip-h);
-    padding: 0 calc(22 * var(--u)) 0 calc(18 * var(--u));
-    border-radius: calc(26 * var(--u));
-    border: calc(2.5 * var(--u)) solid var(--ink-faint);
+    white-space: nowrap;
     background: var(--paper);
+  }
+  .chip {
+    gap: calc(8 * var(--u));
+    height: var(--chip-h);
+    padding: 0 calc(20 * var(--u)) 0 calc(16 * var(--u));
+    border-radius: calc(23 * var(--u));
+    border: calc(2.5 * var(--u)) solid var(--ink-faint);
     font: 700 var(--chip-size-px) / 1 var(--font-ja);
     color: var(--ink-faint);
-    white-space: nowrap;
     animation: chip-on 0.35s ease-out both;
     animation-delay: calc(var(--t-light) + var(--i) * var(--t-step));
   }
   .chip i {
-    width: calc(16 * var(--u));
-    height: calc(16 * var(--u));
+    width: calc(14 * var(--u));
+    height: calc(14 * var(--u));
     border-radius: 50%;
     background: var(--ink-faint);
     animation: dot-on 0.35s ease-out both;
@@ -129,6 +126,14 @@
     50%  { background: var(--pass); transform: scale(1.5); }
     100% { background: var(--pass); transform: scale(1); }
   }
+  .tag {
+    height: var(--tag-h);
+    padding: 0 calc(14 * var(--u));
+    border-radius: calc(6 * var(--u));
+    border: calc(1.5 * var(--u)) solid var(--ink-faint);
+    font: 500 var(--tag-size-px) / 1 var(--font-ja);
+    color: var(--ink-soft);
+  }
 </style>
 </head>
 <body data-duration="8.6">
@@ -136,31 +141,176 @@
   <div class="safe">
     <h1 class="name" aria-label="HIRAKU" data-box="n00.name"></h1>
     <div class="rule" data-box="n00.rule"></div>
+    <p class="tagline" data-box="n00.tagline"></p>
     <div class="row"></div>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
 </div>
-<script src="pets.js"></script>
 <script>
-  // The seven CAE agents, in the order the chips light.
-  const AGENTS = [
-    ["handling", "操安"],
-    ["powertrain", "動力"],
-    ["aero", "空力"],
-    ["crash", "衝突"],
-    ["strength", "強度信頼性"],
-    ["nvh", "音振"],
-    ["thermal", "熱"],
+  // The ten pets in pet3d.js ROLES order. Lead, designer and packager carry a
+  // name tag; the seven CAE domains carry the chip that lights (in this order).
+  const PETS = [
+    { id: "lead", tag: "まとめ役" },
+    { id: "designer", tag: "設計役" },
+    { id: "packager", tag: "パッケージ役" },
+    { id: "cae.handling", chip: "操安" },
+    { id: "cae.powertrain", chip: "動力" },
+    { id: "cae.aero", chip: "空力" },
+    { id: "cae.crash", chip: "衝突" },
+    { id: "cae.strength", chip: "強度信頼性" },
+    { id: "cae.nvh", chip: "音振" },
+    { id: "cae.thermal", chip: "熱" },
   ];
-  document.querySelector(".name").innerHTML = [..."HIRAKU"]
-    .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
-  document.querySelector(".row").innerHTML = AGENTS
-    .map(([key, label], i) => `<div class="agent" style="--i:${i}" data-box="n00.agent.${key}">
-        <div class="pet" style="--i:${i}">${drawPet(key)}</div>
-        <div class="chip" style="--i:${i}"><i></i>${label}</div>
-      </div>`).join("");
+  (function place() {
+    const { cutRules: R, rules: L, px } = window.promoLayout;
+    const P = R.pets;
+    const span = 9 * P.pitch_px + P.group_gap_px + P.w;
+    const x0 = L.stage.w / 2 - span / 2;
+    let k = 0;
+    PETS.forEach((p, i) => {
+      p.x = x0 + i * P.pitch_px + (i >= 3 ? P.group_gap_px : 0);
+      p.cx = p.x + P.w / 2;
+      p.key = p.id.replace(/^cae\./, "");
+      if (p.chip) p.k = k++;
+    });
+    window.N00_PETS = { list: PETS, x0, span };
+
+    document.querySelector(".name").innerHTML = [..."HIRAKU"]
+      .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
+    document.querySelector(".tagline").textContent = R.tagline.text;
+    const below = P.y + P.h;
+    document.querySelector(".row").insertAdjacentHTML("beforeend", PETS.map((p) => {
+      // one 2D canvas per pet box (the module copies the pet's WebGL frame
+      // into it). data-kind="moving": the layout check cannot see a canvas
+      // moving, and every pet breathes, so each counts
+      const box = `<canvas class="pet" data-box="n00.pet.${p.key}" data-kind="moving"
+          style="left:${px(p.x)};top:${px(P.y)};width:${px(P.w)};height:${px(P.h)}"></canvas>`;
+      const lab = p.chip
+        ? `<div class="chip" style="--i:${p.k};left:${px(p.cx)};top:${px(below + R.chip.gap_above_px)}"
+             data-box="n00.chip.${p.key}" data-kind="label"><i></i>${p.chip}</div>`
+        : `<div class="tag" style="left:${px(p.cx)};top:${px(below + R.tag.gap_above_px)}"
+             data-box="n00.tag.${p.key}" data-kind="label">${p.tag}</div>`;
+      return box + lab;
+    }).join(""));
+  })();
 </script>
 <script src="timeline.js"></script>
+<script>
+  // Frames wait until the 3D pets have been built (the module below loads
+  // three.js); a seek before that would paint an empty row.
+  (function () {
+    let done;
+    const built = new Promise((r) => (done = r));
+    window.__n00Built = done;
+    const base = window.promo.ready.bind(window.promo);
+    window.promo.ready = async () => { await base(); await built; };
+  })();
+</script>
+<script src="../pets/pet3d.js"></script>
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const HP = window.HirakuPets;
+const { cutRules: R } = window.promoLayout;
+const { list: PETS } = window.N00_PETS;
+const P = R.pets, CAM = R.camera, M = R.motion, T = R.times;
+
+// ---- one WebGL renderer off the page, the size of one pet box; each pet is
+// drawn alone into it and copied into that pet's own 2D canvas. Transparent,
+// so the paper grid shows through.
+const boxes = [...document.querySelectorAll("canvas.pet")];
+// layout size in CSS px (clientWidth ignores the row's rise transform)
+const W = boxes[0].clientWidth, H = boxes[0].clientHeight;
+const dpr = window.devicePixelRatio || 1;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(dpr);
+renderer.setSize(W, H, false);
+renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const gl = renderer.domElement;
+
+// ---- scene and light: the paper setting of promo/pets/viewer.html ----------
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.75;
+scene.add(new THREE.HemisphereLight(0xfffaf0, 0xd8d2c4, 0.6));
+const key = new THREE.DirectionalLight(0xfff6e8, 2.1);
+key.position.set(-2.2, 8.0, 3.6);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 3.6, bottom: -1.6, near: 1, far: 16 });
+key.shadow.radius = 8;
+key.shadow.bias = -0.0006;
+key.shadow.normalBias = 0.02;
+key.target.position.set(0.2, 1.0, 0);
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 1.3);
+rim.position.set(3.5, 3.0, -4.5);
+scene.add(rim);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30),
+  new THREE.ShadowMaterial({ color: 0x1b1a17, opacity: 0.13 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---- one camera for every box (all boxes have the same size) ---------------
+const F = HP.FRAME;
+const half = Math.tan((CAM.fov_deg * Math.PI) / 360);
+const aspect = P.w / P.h;
+const dist = Math.max(F.h / 2 / half, F.w / 2 / (half * aspect)) * 1.04 + 0.6;
+const cam = new THREE.PerspectiveCamera(CAM.fov_deg, aspect, 0.1, 80);
+const az = (CAM.azimuth_deg * Math.PI) / 180, el = (CAM.elevation_deg * Math.PI) / 180;
+const home = new THREE.Vector3(F.cx, F.cy, 0);
+cam.position.set(home.x + dist * Math.sin(az) * Math.cos(el), home.y + dist * Math.sin(el),
+                 dist * Math.cos(az) * Math.cos(el));
+cam.lookAt(home);
+cam.updateMatrixWorld();
+
+// ---- pets --------------------------------------------------------------------
+PETS.forEach((p, i) => {
+  p.pet = HP.create(THREE, { role: p.id, theme: "paper" });
+  p.pet.group.visible = false;
+  p.pet.setPixelScale((H * dpr) / (2 * dist * half));
+  scene.add(p.pet.group);
+  boxes[i].width = gl.width;
+  boxes[i].height = gl.height;
+  p.ctx = boxes[i].getContext("2d");
+  if (p.chip) {
+    p.lit = T.light_s + p.k * T.step_s;
+    // shift the pet's clock so its pass hop starts from the ground at p.lit
+    p.shift = Math.ceil(p.lit / M.hop_period_s + 1) * M.hop_period_s - p.lit;
+  } else {
+    p.shift = M.idle_shift_s * i;
+  }
+});
+
+// The pose at t (timeline.js time): idle until the chip lights, one pass hop,
+// then report. Nothing here reads a wall clock or random numbers.
+function stateAt(p, t) {
+  if (!p.chip || t < p.lit) return "idle";
+  return t < p.lit + M.pass_dur_s ? "pass" : "report";
+}
+
+function draw(t) {
+  for (const p of PETS) {
+    p.pet.group.visible = true;
+    p.pet.update(t + p.shift, stateAt(p, t), cam);
+    renderer.render(scene, cam);
+    p.pet.group.visible = false;
+    p.ctx.clearRect(0, 0, gl.width, gl.height);
+    p.ctx.drawImage(gl, 0, 0);
+  }
+}
+
+window.promo.onSeek(draw);
+draw(window.promo.t);
+window.__n00Built();
+</script>
 </body>
 </html>
