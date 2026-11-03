@@ -49,6 +49,55 @@ def load_requirements_want(product):
     return load_product(product)["want"]
 
 
+class N14RealTest(unittest.TestCase):
+    """The materials for a run of the N14 scene by a real Claude: the file, the answers, the dropped notes."""
+
+    def test_the_requirements_file_lacks_what_the_hearing_asks_and_has_no_stop(self):
+        from hiraku.intake import hearing, load_product
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = video_runs.prepare_n14_real(tmp)
+            req = load_requirements(path)
+        self.assertNotIn("stop_after", req)
+        have = {r["key"] for r in req["requirements"]}
+        asked = {q["req_key"] for q in hearing.plan_hearing(req, product_defaults=load_product("offroad-4w")).questions}
+        self.assertTrue({"Q34", "Q64", "Q74", "Q80"} <= asked)
+        self.assertFalse(asked & have)  # what is asked is not in the file
+
+    def test_the_answers_are_written_as_the_screen_writes_them(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = video_runs.answer_hearing(tmp)
+            body = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(path.name, "hearing.answer.json")
+        self.assertTrue({"Q34", "Q64", "Q74", "Q80"} <= set(body["answers"]))
+        self.assertTrue(body["use_defaults"])
+
+    def test_answer_waits_for_the_question(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(TimeoutError):
+                video_runs.answer_hearing(tmp, wait_s=0.6)
+
+    def test_the_notes_are_dropped_as_a_request_in_the_inbox_and_numbered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            first = video_runs.drop_knowledge(run)
+            second = video_runs.drop_knowledge(run)
+            self.assertEqual((first.name, second.name), ("1-knowledge.json", "2-knowledge.json"))
+            body = json.loads(first.read_text(encoding="utf-8"))
+            self.assertEqual((body["kind"], body["file"]), ("knowledge", "bending-notes.md"))
+            self.assertTrue((run / "knowledge" / "bending-notes.md").is_file())
+
+    def test_the_drop_can_wait_for_an_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "events.jsonl").write_text(json.dumps({"kind": "run.started"}) + "\n", encoding="utf-8")
+            with self.assertRaises(TimeoutError):
+                video_runs.drop_knowledge(run, after_kind="comparison.recorded", wait_s=0.6)
+            with (run / "events.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"kind": "comparison.recorded"}) + "\n")
+            self.assertEqual(video_runs.drop_knowledge(run, after_kind="comparison.recorded", wait_s=2).name, "1-knowledge.json")
+
+
 class N14Test(unittest.TestCase):
     def test_the_files_have_the_hearing_and_the_name_the_plan_is_found_by(self):
         with tempfile.TemporaryDirectory() as tmp:
