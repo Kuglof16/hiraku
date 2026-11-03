@@ -151,6 +151,7 @@ OWNERS = {
         "hiraku/catalog/builders/",  # load-case builders per test (k2_*.py by the K2 team)
         "hiraku/designgen/",  # design from its variables (for revise_design)
         "data/designs/",
+        "data/parts/",  # real components with their sources (sizes, masses, ratings)
         "data/materials/",
         "data/tyres/",  # tyre model coefficients (K2 team)
         "tests/solvers/",
