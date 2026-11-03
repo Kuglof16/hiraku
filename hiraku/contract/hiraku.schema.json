@@ -276,6 +276,12 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "stop_after": {
+          "enum": [
+            "picks"
+          ],
+          "description": "A run that ends on purpose after an early step. picks: after domains.picked and the hearing (records for picking domains only; no design is made). The run ends done, with the reason saying so."
         }
       }
     },
