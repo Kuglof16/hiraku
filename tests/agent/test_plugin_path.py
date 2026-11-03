@@ -251,6 +251,37 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("急いで", out["reason"])
 
+    def test_a_message_tells_a_role_at_work_to_return_and_stays_for_the_lead(self):
+        from hiraku.agent.hooks import ROLE_RETURN_FOR_MESSAGE
+
+        self.hook("SubagentStart", {"agent_id": "a1", "agent_type": "hiraku:cae-strength"})
+        folder = self.ctx.store.path / "inbox"
+        folder.mkdir()
+        (folder / "1-message.json").write_text(json.dumps({"kind": "message", "text": "R1 を先に"}), encoding="utf-8")
+        self.server.poll_once()
+        role = {"tool_name": TOOL("get_context"), "tool_input": {}, "agent_type": "hiraku:cae-strength", "agent_id": "a1"}
+        out = self.hook("PostToolUse", role)
+        self.assertEqual(out["hookSpecificOutput"]["additionalContext"], ROLE_RETURN_FOR_MESSAGE)
+        self.assertEqual(self.hook("PostToolUse", role), {})  # told once
+        out = self.hook("SubagentStop", {"agent_id": "a1", "agent_type": "hiraku:cae-strength", "stop_hook_active": False})
+        self.assertEqual(out, {})  # R1 is pending, but the role returns for the message (not held)
+        lead = self.hook("PostToolUse", {"tool_name": "Agent", "tool_input": {}})  # the lead's Agent call has ended
+        self.assertIn("R1 を先に", lead["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(plugin.read_state(self.ctx.store.path)["for_lead"], [])
+        self.server.drain()
+        self.assertEqual(self.events("hook.blocked_stop"), [])
+
+    def test_the_server_leaves_the_unpredictable_cases_for_the_hook_command(self):
+        lc = dict(self.ctx.load_case("R1-step100"), load_case_id="R4-rops", test_id="R4",
+                  criterion=dict(self.ctx.load_case("R1-step100")["criterion"], quantity="rops_occupant_clearance"))
+        self.ctx.load_cases.append(lc)
+        self.call("get_context", {"sections": ["load_cases"]})  # after a tool call the server works it out
+        state = plugin.read_state(self.ctx.store.path)
+        self.assertEqual(state[plugin.UNPREDICTABLE_KEY], {"R4-rops": "rops_occupant_clearance"})
+        self.hook("SubagentStart", {"agent_id": "a1", "agent_type": "hiraku:cae-strength"})
+        self.assertEqual(plugin.read_state(self.ctx.store.path)[plugin.UNPREDICTABLE_KEY],
+                         {"R4-rops": "rops_occupant_clearance"})  # the hook command keeps it
+
 
 class HookCommandTest(PluginRunCase, unittest.TestCase):
     step_factor = 2.0  # the fake step_climb is off by 100 %: compare mismatches
@@ -331,6 +362,15 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("agent.stopped")[-1]["agent"], "lead")
         self.assert_events_fit()
+
+    def test_a_case_the_server_found_unpredictable_does_not_hold_the_stop(self):
+        state = plugin.read_state(self.ctx.store.path)
+        plugin.write_state(self.ctx.store.path, {**state, plugin.UNPREDICTABLE_KEY: {"R1-step100": "max_stress"}})
+        self.assertEqual(self.hook("Stop", {"stop_hook_active": False}), {})  # R1 alone is left, and cannot be judged
+        self.server.drain()
+        self.assertEqual(self.events("hook.blocked_stop"), [])
+        (fin,) = self.events("run.finished")
+        self.assertEqual(fin["data"]["stop_code"], "not_judged")  # the server's own reckoning: R1 is not judged
 
     def test_subagent_start_and_stop(self):
         self.hook("SubagentStart", {"agent_id": "a1", "agent_type": "hiraku:cae-strength"})

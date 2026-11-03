@@ -637,5 +637,90 @@ class RedVerdictTest(RunCase, unittest.TestCase):
         self.assertIn("R1-step250-beyond", rules.stop_reason(self.ctx))
 
 
+class JointWallInputsTest(RunCase, unittest.TestCase):
+    def test_the_section_gives_the_analysis_builders_inputs_for_the_load_case(self):
+        from hiraku.catalog.builders.analysis import joint_wall_calc
+
+        out = get_context(self.ctx, {"sections": ["joint_wall_inputs"], "load_case_id": "R1-step100"})
+        got = out["joint_wall_inputs"]
+        self.assertEqual(got["formula_id"], "frame_static.joint_wall_bending")
+        self.assertEqual(got["inputs"], joint_wall_calc(self.ctx.store.design(), self.ctx.load_case("R1-step100")))
+        units = {k: v["unit"] for k, v in got["inputs"].items()}
+        self.assertEqual(units, {"M": "N*mm", "b": "mm", "h": "mm", "t": "mm", "b_c": "mm", "h_c": "mm", "t_c": "mm",
+                                 "leg": "mm", "E": "MPa", "nu": "1", "through": "1", "open_end": "1"})
+        self.assertNotIn("joint_wall_inputs", get_context(self.ctx))  # only on request
+
+    def test_the_inputs_record_the_hot_spot_prediction_with_the_real_formula(self):
+        from hiraku.solvers import formula_registry
+
+        got = get_context(self.ctx, {"sections": ["joint_wall_inputs"], "load_case_id": "R1-step100"})["joint_wall_inputs"]
+        self.ctx.formulas = formula_registry()
+        pred = record_prediction(self.ctx, {"load_case_id": "R1-step100", "quantity": "max_hot_spot_stress",
+                                            "formula_id": got["formula_id"], "output": "sigma", "inputs": got["inputs"],
+                                            "assumptions": ["test"]}, "cae.strength")
+        self.assertEqual(pred["unit"], "MPa")
+        self.assertGreater(pred["value"], 0.0)
+
+    def test_refusals_say_why(self):
+        from hiraku.catalog.builders.common import BuildError
+
+        with self.assertRaisesRegex(ToolError, "load_case_id"):
+            get_context(self.ctx, {"sections": ["joint_wall_inputs"]})
+        with self.assertRaisesRegex(ToolError, "荷重条件 'R9'"):
+            get_context(self.ctx, {"sections": ["joint_wall_inputs"], "load_case_id": "R9"})
+        why = "no ladder joint for the joint wall hand calculation: fewer than two cross members"
+        with mock.patch("hiraku.catalog.builders.analysis.joint_wall_calc", side_effect=BuildError(why)):
+            with self.assertRaises(ToolError) as cm:
+                get_context(self.ctx, {"sections": ["joint_wall_inputs"], "load_case_id": "R1-step100"})
+        self.assertIn("出せません", str(cm.exception))
+        self.assertIn(why, str(cm.exception))
+
+
+class UnpredictableCaseTest(RunCase, unittest.TestCase):
+    """HK4's stop text for a load case with no usable tool, and one no K0 formula can predict."""
+
+    def add_case(self, lc_id, test_id, quantity):
+        lc = dict(self.ctx.load_case("R1-step100"), load_case_id=lc_id, test_id=test_id,
+                  criterion=dict(self.ctx.load_case("R1-step100")["criterion"], quantity=quantity))
+        self.ctx.load_cases.append(lc)
+
+    def test_no_usable_tool_names_make_tool(self):
+        self.add_case("R4-x", "R4", "max_stress")  # predictable (frame_static pairs it), but no tool for R4
+        self.assertEqual(rules.unpredictable_cases(self.ctx), {})
+        reason = rules.stop_reason(self.ctx)
+        part = reason[reason.index("R4-x"):]
+        self.assertIn("棚に R4 を解析できる使える道具がありません", part)
+        self.assertIn("get_tool_template", part)
+        self.assertIn("make_tool", part)
+        self.assertNotIn("棚に R1", reason)  # frame_static is on the shelf for R1
+
+    def test_a_case_no_formula_predicts_does_not_hold_the_stop(self):
+        from hiraku.agent.runner import end_status
+
+        p1, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": p1["results"][1]["value"], "unit": "N"})  # front_wheel_force
+        ana = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                 "prediction_ids": [r1["prediction_id"]]})
+        compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertIsNone(rules.stop_reason(self.ctx))  # judged
+        self.add_case("R4-rops", "R4", "rops_occupant_clearance")
+        self.assertEqual(rules.unpredictable_cases(self.ctx), {"R4-rops": "rops_occupant_clearance"})
+        self.assertIsNone(rules.stop_reason(self.ctx))  # HK4 does not hold the stop for it
+        self.assertEqual(rules.holding(self.ctx), [])
+        reason = rules.unjudged_reason(self.ctx)
+        self.assertIn("R4-rops (rops_occupant_clearance)", reason)
+        self.assertIn("この実行では判定できません", reason)
+        status, why, code = end_status(self.ctx)
+        self.assertEqual((status, code), ("stopped", "not_judged"))
+        self.assertIn("R4-rops", why)
+        # a prediction of that quantity recorded in the run (a formula did give it): judged as usual again
+        rec =dict(r1, prediction_id=self.ctx.store.next_id("prediction"), load_case_id="R4-rops",
+                   quantity="rops_occupant_clearance", unit="mm")
+        self.ctx.store.add_record("prediction", rec, design_version=self.ctx.version, agent="cae.strength",
+                                  domain="strength")
+        self.assertEqual(rules.unpredictable_cases(self.ctx), {})
+        self.assertIn("R4-rops", rules.stop_reason(self.ctx))
+
+
 if __name__ == "__main__":
     unittest.main()

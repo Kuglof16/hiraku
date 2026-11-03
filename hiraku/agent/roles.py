@@ -17,7 +17,7 @@ from hiraku.tools.context import RunContext
 Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
-             "check_tool", "make_tool")
+             "get_tool_template", "check_tool", "make_tool")
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
