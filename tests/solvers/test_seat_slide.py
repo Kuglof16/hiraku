@@ -151,6 +151,34 @@ class SlideTest(unittest.TestCase):
         self.assertAlmostEqual(mass(self.d), mass(V1), places=9)
         self.assertEqual(interferences(self.d), [])
 
+    def test_leg_clearance_as_measuring_every_body(self):
+        """_leg_checks skips the bodies farther (by their axis-aligned boxes) than the nearest found: the same value
+        and part as measuring them all, the seat anywhere in the travel; the feet do not move with the seat."""
+        from hiraku.solvers.k4_geometry.model import bodies, shape_overlap
+
+        bs = bodies(self.d)
+        seat, (lo, hi) = self.ps["seat"], people._box(self.ps["seat"])
+        face = people.pedal_face(self.ps["pedal"])
+        fz = float(people._extent(self.ps["floor"])[1][2])
+        feet = None
+        for s in np.arange(-SLIDE / 2.0, SLIDE / 2.0 + 1e-9, 20.0):
+            p = people.seated(lo[0] + s, hi[2], float(seat["box"]["center_mm"][1]), fz, BIG, right_ball=(face[0], face[2]))
+            got = people._leg_checks(p, "occupant_R", self.ps, bs)
+            best = (-math.inf, "")
+            for k, lb in people.leg_bodies(p, "occupant_R").items():
+                if ".foot_" in k:
+                    continue
+                for kb, b in bs.items():
+                    if kb == "part:seat_R" or b.kind in people.LEG_SKIP_KINDS:
+                        continue
+                    o = shape_overlap(lb, b)
+                    if o > best[0]:
+                        best = (o, kb.split(":", 1)[1])
+            self.assertEqual(got["leg_clearance"], (-best[0], best[1]), s)
+            now = {k: got[k] for k in ("foot_room", "foot_support")}
+            feet = feet or now
+            self.assertEqual(now, feet, s)
+
     def test_slide_does_not_move_other_parts(self):
         a = {p["id"]: p["box"] for p in V1["parts"]}
         moved = sorted(p["id"] for p in self.d["parts"] if p["box"] != a[p["id"]])

@@ -430,34 +430,63 @@ def best_offset(score, slide: float) -> float:
     return max(seen, key=lambda s: (round(seen[s], 9), -abs(s)))
 
 
-def _leg_checks(pose: Pose, oid: str, ctx: dict, bs: dict) -> dict[str, tuple[float, str]]:
-    """The big person's legs and feet against the vehicle: foot_room, leg_clearance and foot_support (mm)."""
+def _aabb(b) -> tuple[np.ndarray, np.ndarray]:
+    """The axis-aligned box around a K4 body's shape (its capsule when it has one, else its box)."""
+    if b.capsule is not None:
+        c = b.capsule
+        return np.minimum(c.a, c.b) - c.r, np.maximum(c.a, c.b) + c.r
+    pts = b.obb.corners()
+    return pts.min(axis=0), pts.max(axis=0)
+
+
+def _leg_checks(pose: Pose, oid: str, ctx: dict, bs: dict, legs: bool = True,
+                feet: bool = True) -> dict[str, tuple[float, str]]:
+    """The big person's legs and feet against the vehicle: with legs leg_clearance, with feet foot_room and
+    foot_support (mm). The thighs and shanks are capsules, whose overlap with any body is the negative of the exact
+    distance between the two shapes when apart, so a body whose axis-aligned box is farther from the leg's than
+    the nearest body found so far is not measured (it cannot be nearer); equal overlaps keep the body first in
+    `bs`, as measuring them all in that order does."""
     from .model import shape_overlap
 
-    legs = leg_bodies(pose, oid)
     seat_key = f"part:{ctx['seat']['id']}"
     floor_key = f"part:{ctx['floor']['id']}"
-    worst_leg, worst_foot = (-math.inf, ""), (-math.inf, "")
-    for k, lb in legs.items():
+    order = {kb: i for i, kb in enumerate(bs)}
+    worst_leg, worst_foot = (-math.inf, -1, ""), (-math.inf, -1, "")
+    for k, lb in leg_bodies(pose, oid).items():
         foot = ".foot_" in k
-        for kb, b in bs.items():
-            if kb == seat_key or b.kind in (FOOT_SKIP_KINDS if foot else LEG_SKIP_KINDS):
-                continue
-            if foot and kb == floor_key:
-                continue
-            o = shape_overlap(lb, b)
+        if not (feet if foot else legs):
+            continue
+        cands = [(kb, b) for kb, b in bs.items()
+                 if not (kb == seat_key or b.kind in (FOOT_SKIP_KINDS if foot else LEG_SKIP_KINDS)
+                         or (foot and kb == floor_key))]
+        if not foot:
+            lo_a, hi_a = _aabb(lb)
+
+            def gap(b):
+                lo_b, hi_b = _aabb(b)
+                return float(np.linalg.norm(np.maximum(0.0, np.maximum(lo_b - hi_a, lo_a - hi_b))))
+
+            cands = sorted(((gap(b), kb, b) for kb, b in cands), key=lambda t: t[0])
+        else:
+            cands = [(None, kb, b) for kb, b in cands]
+        for g, kb, b in cands:
             cur = worst_foot if foot else worst_leg
-            if o > cur[0]:
-                cur = (o, kb.split(":", 1)[1])
+            if g is not None and g > 0.0 and -g < cur[0]:
+                break  # apart by at least g, sorted by it: no body from here on can be nearer
+            o = shape_overlap(lb, b)
+            if o > cur[0] or (o == cur[0] and order[kb] < cur[1]):
+                cur = (o, order[kb], kb.split(":", 1)[1])
             if foot:
                 worst_foot = cur
             else:
                 worst_leg = cur
     out: dict[str, tuple[float, str]] = {}
-    if worst_foot[1]:
-        out["foot_room"] = (-worst_foot[0], worst_foot[1])
-    if worst_leg[1]:
-        out["leg_clearance"] = (-worst_leg[0], worst_leg[1])
+    if worst_foot[2]:
+        out["foot_room"] = (-worst_foot[0], worst_foot[2])
+    if worst_leg[2]:
+        out["leg_clearance"] = (-worst_leg[0], worst_leg[2])
+    if not feet:
+        return out
     lo, hi = _extent(ctx["floor"])
     s = SIZES[BIG]
     margins = []
@@ -526,9 +555,13 @@ def poses(design: dict) -> dict[str, dict]:
             bs = bs if bs is not None else bodies(design)
             wheel = steering_wheel_of(design, seat)
 
+            # the feet stay on the pedal and the floor wherever the seat is: their margins once
+            fixed = [v for v, _ in _leg_checks(at(BIG, 0.0), o["id"], ctx, bs, legs=False).values()]
+
             def big_score(s: float) -> float:
                 p = at(BIG, s)
-                vals = [v for v, _ in _leg_checks(p, o["id"], ctx, bs).values()] + list(knee_angle_margins(p))
+                vals = fixed + [v for v, _ in _leg_checks(p, o["id"], ctx, bs, feet=False).values()]
+                vals += list(knee_angle_margins(p))
                 knee = _knee_length(design, o, seat, lo[0] + s)
                 if knee is not None:
                     vals.append(knee[0] - AIST["buttock_knee_m95"])
