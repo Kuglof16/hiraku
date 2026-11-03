@@ -53,6 +53,8 @@ export function effectName(name) {
   return null;
 }
 const JAPANESE = /[぀-ヿ一-鿿]/;
+// Not in layout.json: the size of the domains' chips, a multiple of page.title_px.
+const CHIPS_OF_TITLE = 1.4;
 const NOT_OP = { "<=": ">", "<": "≥", ">=": "<", ">": "≤" };
 
 // One verdict in words: "<name> <value> <sign that holds> <limit>" (a yes-or-no quantity:
@@ -158,13 +160,16 @@ export class CutN17 {
       })
       .join("");
     const body = this.story.bodyPx;
+    // the result is the domains' chips, large (the review of the second stills: the page was
+    // full of figure lines nobody reads); the lines with the figures are a pale note under them
+    const chipPx = Math.max(body, Math.round(P.title_px * CHIPS_OF_TITLE));
     el.innerHTML =
       `<div class="n17-head" data-box="n17.result">` +
       `<div class="n17-kicker" style="font-size:${body}px">報告・設計の版 ${esc(String(rep.design_version))}</div>` +
       `<h2>${esc(rep.summary)}</h2>` +
-      (chips ? `<div class="n17-chips" style="font-size:${body}px">${chips}</div>` : "") +
+      (chips ? `<div class="n17-chips" data-box="n17.chips" style="font-size:${chipPx}px">${chips}</div>` : "") +
       `</div>` +
-      `<div class="n17-body" data-box="n17.body">${(rep.domains ?? []).map((d) => this.domainHtml(d)).join("")}${this.uncheckedHtml()}</div>` +
+      `<div class="n17-body n17-pale" data-box="n17.body" data-kind="note">${(rep.domains ?? []).map((d) => this.domainHtml(d)).join("")}${this.uncheckedHtml()}</div>` +
       this.nextHtml();
     this.stage.append(el);
     this.el = el;
@@ -218,7 +223,7 @@ export class CutN17 {
     const assumptions = (d.assumptions ?? []).filter((a) => JAPANESE.test(a));
     return (
       `<section class="n17-domain" data-box="${key}" data-domain="${esc(d.domain)}">` +
-      `<h3 style="font-size:${this.story.bodyPx}px"><span class="${cls}">${mark} ${esc(DOMAIN_JA[d.domain] ?? d.domain)}</span> <span class="n17-line">${esc(this.lineOf(d))}</span></h3>` +
+      `<h3><span class="${cls}">${mark} ${esc(DOMAIN_JA[d.domain] ?? d.domain)}</span> <span class="n17-line">${esc(this.lineOf(d))}</span></h3>` +
       `<div class="n17-detail" data-kind="note">` +
       (effRows ? `<div class="n17-group" data-box="${key}.effects"><h4>効いている項 (全体に占める割合)</h4>${effRows}</div>` : "") +
       (senRows ? `<div class="n17-group" data-box="${key}.sensitivity"><h4>感度 (その数を 1 % 変えると、合否の量が何 % 動くか)</h4>${senRows}</div>` : "") +

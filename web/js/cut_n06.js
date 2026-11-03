@@ -27,11 +27,12 @@
 
 import * as THREE from "three";
 import { clearOfBand, cubicBezier, squeeze } from "./compose.js";
-import { contourOf, fieldsOf, overOf } from "./fields.js";
+import { fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
+import { tileContour } from "./cut_grid.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -344,8 +345,11 @@ export class CutN06 {
     // load case limits held to it
     const field = def.field && c.still ? fieldsOf(c.still, { mesh: false }).find((f) => f.kind === def.field) : null;
     const crit = def.field === "stress" ? this.allowable(field?.unit) ?? c.lc.criterion : c.lc.criterion;
-    const ct = field ? contourOf(c.still, field, crit) : null;
+    // the bands' top is the allowable value (as the N04 tiles, tileContour), so only what is
+    // past it is red, and that is also boxed in translucent red (overMarks) to be seen small
+    const ct = field ? tileContour(c.still, field, crit) : null;
     v.setContour(ct);
+    tile.el.dataset.scale = ct ? (ct.judgedScale ? "allowable" : "shape") : "none";
     v.setVectors(null);
     v.setToggles({ parts: true, contour: true, arrows: false, cg: true, names: false, limit: true });
     v.resize(tile.inner.w, tile.inner.h);
@@ -359,10 +363,42 @@ export class CutN06 {
     const overMember = ct?.limitKnown && Object.values(ct.values ?? {}).some((x) => x > ct.max);
     const overPart = Object.entries(ct?.parts ?? {}).some(([id, x]) => overOf(ct, id, x));
     tile.el.dataset.over = overMember || overPart ? "1" : "0";
+    tile.el.dataset.overMarks = String(this.overMarks(v, ct));
     tile.el.dataset.lift = motion?.liftT !== null && motion?.liftT !== undefined && v.liftIsLimit ? "1" : "0";
     tile.el.dataset.past = this.markPast(v, c, motion) ? "1" : "0";
     tile.el.dataset.case = c.lc.load_case_id;
     tile.el.dataset.version = String(c.version ?? ana.design_version);
+  }
+
+  // A translucent red box (the overlay's colour and opacity) round each member and part
+  // whose recorded value is past the allowable (the contour's top): the place the ✕ is
+  // about, seen even when small in the picture. Returns how many.
+  overMarks(v, ct) {
+    if (!ct?.limitKnown) return 0;
+    const O = this.spec.overlay;
+    const mat = new THREE.MeshBasicMaterial({ color: O.color, transparent: true, opacity: O.opacity * 2, depthWrite: false });
+    const marks = new THREE.Group();
+    for (const [id, x] of Object.entries(ct.values ?? {})) {
+      const m = v.members[id];
+      if (!m || !(x > ct.max)) continue;
+      const k = Math.max(m.width, m.height) * 2.6;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(m.length + k * 0.4, k, k), mat);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(m.mesh.matrix);
+      mesh.renderOrder = 11;
+      marks.add(mesh);
+    }
+    const parts = v.design?.parts ?? [];
+    for (const [id, x] of Object.entries(ct.parts ?? {})) {
+      const p = parts.find((q) => q.id === id);
+      if (!p?.box || !overOf(ct, id, x)) continue;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...p.box.size_mm.map((s) => s * 1.15)), mat);
+      mesh.position.set(...p.box.center_mm);
+      mesh.renderOrder = 11;
+      marks.add(mesh);
+    }
+    v.body.add(marks);
+    return marks.children.length;
   }
 
   // A distance limit (op <= / <, in a length unit) that the record passes: the road from

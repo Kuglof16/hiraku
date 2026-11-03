@@ -258,8 +258,9 @@ class AssemblyBrowserTest(unittest.TestCase):
         return { key: el.dataset.box, box: r(el), parent: up ? up.dataset.box : null, parentBox: up ? r(up) : null };
       });
       const column = [...document.querySelectorAll('[data-box="n16.steps"] *')]
-        .filter((el) => shown(el) && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+        .filter((el) => shown(el) && !el.closest('[data-kind~="note"]') && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
       return {
+        notes: [...document.querySelectorAll('[data-box="n16.steps"] [data-kind~="note"]')].map((el) => [el.innerText.trim(), parseFloat(getComputedStyle(el).fontSize)]),
         err: document.querySelector('.err')?.textContent ?? null,
         duration: window.hiraku.player.duration,
         step: Number(document.documentElement.dataset.n16Step),
@@ -333,7 +334,7 @@ class AssemblyBrowserTest(unittest.TestCase):
         # before steps_from the caption names the first part by its name in the design (no
         # node or member ids, nothing in brackets), and the column says what it found
         self.assertEqual(got["caption"], "手順 1 電池を付ける")
-        self.assertEqual(got["now"], "手順 1 電池 問題なし")
+        self.assertEqual(got["now"], "手順 1 電池 入る")
         # steps_from..steps_to: one step after another, as many as the record has; the
         # caption holds one sentence for the whole order (too fast to read step by step)
         dt = (T["steps_to_s"] - T["steps_from_s"]) / n
@@ -372,8 +373,11 @@ class AssemblyBrowserTest(unittest.TestCase):
         got = at(layout["n16"]["duration_s"])
         self.assertEqual((got["step"], got["u"], got["fill"]), (n, n, 100))
         self.assertEqual(got["caption"], "手順 3 前左の車輪を付ける")
-        self.assertEqual(got["now"], "手順 3 前左の車輪 手が届きにくい")
-        self.assertEqual(got["sums"], ["✓ ぶつからずに入る 全手順", "✕ 工具が入りにくい 1 手順", "✕ 手が届きにくい 1 手順"])
+        self.assertEqual(got["now"], "手順 3 前左の車輪 入る 手が届きにくい")
+        self.assertEqual(got["sums"], ["✓ ぶつからずに入る 全手順", "工具が入りにくい手順 1", "手が届きにくい手順 1"])
+        # the main line is whether the assembly holds; steps hard for a tool or a hand are small
+        # notes (data-kind "note", min_text_px), no cross
+        self.assertEqual(got["notes"], [["工具が入りにくい手順 1", 18.0], ["手が届きにくい手順 1", 18.0], ["手が届きにくい", 18.0]])
         self.assertEqual(got["rows"], [])  # no list of steps (one per frame was not readable)
         self.assertEqual(got["redTicks"], 0)  # every part fits: no red tick on the bar
         self.assertEqual(got["seekKind"], "note")  # the bar's "手順 3 / 3" is the makers' note
@@ -396,7 +400,7 @@ class AssemblyBrowserTest(unittest.TestCase):
             got = at(t)
             self.assertIsNone(got["err"])
             self.assertEqual(len(got["sums"]), 3)
-            self.assertIn("✕ 工具が入りにくい 6 手順", got["sums"])  # steps 2, 5, ... 17 (every third)
+            self.assertIn("工具が入りにくい手順 6", got["sums"])  # steps 2, 5, ... 17 (every third)
             self.assert_boxes_fit(got, layout, t)
         self.assertEqual(errors, [])
         page.close()

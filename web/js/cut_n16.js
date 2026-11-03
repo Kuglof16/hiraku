@@ -36,7 +36,6 @@ const FINDINGS = [
 const STOPS = FINDINGS.filter((f) => f.hard).map((f) => f.key);
 const OK_GREEN = "#2f7d4f";
 const HARD_RED = "#c8402a";
-const SOFT_ORANGE = "#c46a1c";
 
 const $ = (id) => document.getElementById(id);
 
@@ -148,9 +147,16 @@ export class CutN16 {
     const px = Math.max(this.textPx, this.story.bodyPx);
     const n = this.rec.steps.length;
     const count = (key) => this.rec.steps.filter((s) => s[key] === false).length;
+    // the main line: whether the assembly holds (every part goes in without interference);
+    // steps hard for a tool or a hand are small notes under it (they can be done, with care:
+    // the review of the second stills, 37 crosses read as "mostly broken")
     const rows = FINDINGS.map((f) => {
       const k = count(f.key);
-      const [mark, color] = k ? ["✕", f.hard ? HARD_RED : SOFT_ORANGE] : ["✓", OK_GREEN];
+      if (!f.hard) {
+        const words = k ? `${f.ja}手順 ${k}` : `${f.ok} (全手順)`;
+        return `<div class="n16-sum n16-soft" data-box="n16.sum.${f.key}" data-count="${k}" data-kind="note" style="font-size:${this.minPx}px">${esc(words)}</div>`;
+      }
+      const [mark, color] = k ? ["✕", HARD_RED] : ["✓", OK_GREEN];
       return `<div class="n16-sum" data-box="n16.sum.${f.key}" data-count="${k}"><b style="color:${color}">${mark}</b> ${esc(k ? f.ja : f.ok)}<span>${esc(k ? `${k} 手順` : "全手順")}</span></div>`;
     }).join("");
     list.innerHTML =
@@ -195,11 +201,23 @@ export class CutN16 {
     const h = document.createElement("div");
     h.className = "n16-now-name";
     h.textContent = `手順 ${step.order} ${this.partName(step)}`;
+    // what this step's checks found: a part that does not fit in red; otherwise "入る" in
+    // green, with a step hard for a tool or a hand as a small note under it
+    const hard = found.filter((x) => x.hard);
+    const soft = found.filter((x) => !x.hard);
     const f = document.createElement("div");
     f.className = "n16-now-found";
-    f.textContent = found.length ? found.map((x) => x.ja).join("・") : "問題なし";
-    f.style.color = found.some((x) => x.hard) ? HARD_RED : found.length ? SOFT_ORANGE : OK_GREEN;
+    f.textContent = hard.length ? hard.map((x) => x.ja).join("・") : "入る";
+    f.style.color = hard.length ? HARD_RED : OK_GREEN;
     this.now.append(h, f);
+    if (soft.length) {
+      const n = document.createElement("div");
+      n.className = "n16-now-note";
+      n.dataset.kind = "note";
+      Object.assign(n.style, { fontSize: `${this.minPx}px`, color: "#8a857a" });
+      n.textContent = soft.map((x) => x.ja).join("・");
+      this.now.append(n);
+    }
   }
 
   progressAt(t) {

@@ -28,8 +28,8 @@ from tests.web.test_cut_grid_browser import box_of, list_rects
 BAND_Y = 910
 COLORS = {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}
 OVERLAY = {"color": "#c8402a", "opacity": 0.22}
-# around loop_to_s (2.8) and accel_s (2.9), and the end
-N03_TIMES = [0.2, 1.0, 2.0, 2.8, 2.85, 2.9, 3.5, 4.97]
+# around loop_to_s (2.0) and accel_s (2.9), and the end
+N03_TIMES = [0.2, 1.0, 1.9, 2.0, 2.8, 2.85, 2.9, 3.5, 4.97]
 # before the first tile (0.6), each tile's start (0.6 + 0.55 k) and landing, the last landing (3.85), the end
 N06_TIMES = [0.5, 0.7, 1.2, 2.0, 3.3, 3.4, 3.9, 6.0, 11.6]
 
@@ -45,7 +45,7 @@ def n03_n06_layout():
             "duration_s": 5.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
             "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2},
-            "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9},
+            "times": {"lead_s": 0.3, "loop_to_s": 2.0, "accel_s": 2.9},
             "colors": dict(COLORS),
         },
         "n06": {
@@ -108,6 +108,12 @@ def _r(q, v, unit, **kw):
 
 
 ALLOWABLE = 156.7  # MPa (shape example)
+
+
+def design_members():
+    """The member ids of the contract sample's design (the fixture's stress is 60 + 25 k on member k)."""
+    src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+    return [m["id"] for m in next(e for e in src if e["kind"] == "design.created")["data"]["members"]]
 STOP_LIMIT = 14.0  # m (shape example)
 STOP_GOT = 16.0  # m (shape example)
 
@@ -234,10 +240,14 @@ READ = """async (t) => {
     title: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").map((p) => p.querySelector("h3").textContent)[0] ?? null,
     limitText: [...document.querySelectorAll(".n03-page text.limit")].map((e) => e.textContent).join(" "),
     ok: (() => { const e = document.querySelector(".n03-ok"); return e ? getComputedStyle(e).visibility : null; })(),
+    okPx: (() => { const e = document.querySelector(".n03-ok"); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    readingPx: (() => { const e = document.querySelector('[data-page="drive"] .n03-reading'); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    ticks: [...document.querySelectorAll('[data-page="drive"] text.tick')].map((e) => e.textContent.replace(/,/g, "")),
     tiles: [...document.querySelectorAll(".n06-tile")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el), p: Number(el.dataset.p),
       tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), miss: el.dataset.miss, over: el.dataset.over ?? null, lift: el.dataset.lift ?? null,
       past: el.dataset.past ?? null, clash: el.dataset.clash ?? null, marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
       case: el.dataset.case ?? null, version: el.dataset.version ?? null,
+      scale: el.dataset.scale ?? null, overMarks: el.dataset.overMarks === undefined ? null : Number(el.dataset.overMarks),
       outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
       markColor: el.querySelector(".mark") ? getComputedStyle(el.querySelector(".mark")).color : null })),
     bigs: [...document.querySelectorAll(".n06-big")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el),
@@ -368,6 +378,14 @@ class CutN03N06Test(unittest.TestCase):
         # every recorded value keeps to it (48.4 degC), so "✓ 上限より下" shows from loop_to_s
         T = layout["n03"]["times"]
         self.assertIn("上限 55 ℃", shots[1.0]["limitText"])
+        # the axis has round steps from the surroundings (no ambient in this case: 0) up to the
+        # limit, so the room under it reads as numbers
+        ticks = [float(x) for x in shots[1.0]["ticks"]]
+        self.assertEqual(min(ticks), 0.0)
+        self.assertTrue(40.0 <= max(ticks) <= 55.0, ticks)  # up to the limit (0 .. 55: steps of 20)
+        self.assertTrue(all(b > a for a, b in zip(ticks, ticks[1:])))
+        # "✓ 上限より下" on its own line, about half the reading's size (shown under a second)
+        self.assertGreaterEqual(shots[2.0]["okPx"], 0.5 * shots[2.0]["readingPx"])
         self.assertEqual(shots[1.0]["ok"], "hidden")
         self.assertEqual(shots[T["loop_to_s"]]["ok"], "visible")
         self.assertEqual(shots[2.85]["ok"], "visible")
@@ -379,6 +397,23 @@ class CutN03N06Test(unittest.TestCase):
         self.assertGreaterEqual(shots[1.0]["battery"], 40.0)
         self.assertLessEqual(shots[2.8]["battery"], 48.4 + 1e-6)
         self.assertEqual(page.evaluate("window.hiraku.cut.launchView.toggles.arrows && window.hiraku.cut.launchView.toggles.cg"), True)
+        page.close()
+
+    def test_n03_axis_starts_at_the_ambient_temperature(self):
+        """With params.ambient_temperature in the thermal case (40 degC, shape example) the
+        battery chart's axis starts there (at the lowest value if that is lower)."""
+        layout = n03_n06_layout()
+        events = n03_n06_events()
+        for lc in events[0]["data"]["load_cases"]:
+            if lc["load_case_id"] == "T1-v":
+                lc["params"]["ambient_temperature"] = {"value": 40.0, "unit": "degC"}
+        base = self.serve(layout, events={"20261103-120000-n03": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
+        got = page.evaluate(READ, 1.0)
+        self.assertEqual(errors, [])
+        ticks = [float(x) for x in got["ticks"]]
+        self.assertEqual(min(ticks), 40.0)
+        self.assertTrue(max(ticks) <= 55.0, ticks)
         page.close()
 
     def test_n03_takes_p2_without_a_p3_record(self):
@@ -471,6 +506,11 @@ class CutN03N06Test(unittest.TestCase):
         # limit, a lifted wheel, the parts that interfere
         self.assertEqual(last["step_break"]["over"], "1")
         self.assertEqual(last["battery_hot"]["over"], "1")
+        # on the allowable's bands, and what is past it boxed in translucent red (the ✕'s place)
+        self.assertEqual((last["step_break"]["scale"], last["battery_hot"]["scale"]), ("allowable", "allowable"))
+        n_over = sum(1 for k in range(len(design_members())) if 60.0 + 25.0 * k > ALLOWABLE)
+        self.assertEqual(last["step_break"]["overMarks"], n_over)
+        self.assertEqual(last["battery_hot"]["overMarks"], 1)  # the battery (61 > 55 degC); the seat is not judged
         self.assertEqual(last["tilt_over"]["lift"], "1")
         self.assertEqual(last["parts_clash"]["clash"], "1")
         self.assertEqual(last["parts_clash"]["marks"], 2)  # the battery and the cross member, both in place

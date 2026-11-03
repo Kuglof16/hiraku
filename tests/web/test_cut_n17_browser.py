@@ -151,6 +151,9 @@ STATE = """() => {
     effBars: page.querySelectorAll('[data-box$=".effects"] .n17-bar').length,
     lineFont: Math.min(...[...page.querySelectorAll('.n17-domain h3')].map((e) => parseFloat(getComputedStyle(e).fontSize))),
     lines: [...page.querySelectorAll('.n17-line')].map((e) => e.textContent),
+    chipPx: (() => { const e = page.querySelector('.n17-chips'); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    bodyKind: body.dataset.kind ?? null,
+    bodyOpacity: Number(getComputedStyle(body).opacity),
     lit: document.documentElement.dataset.n17Lit,
   };
 }"""
@@ -255,6 +258,11 @@ class CutN17BrowserTest(unittest.TestCase):
         # each domain's line at the story's body text size (this layout has no story: its
         # min_text_px; with the promo department's story, 24 px: test_cut_story_browser)
         self.assertGreaterEqual(got["lineFont"], n17_layout()["min_text_px"])
+        # the result is the domains' chips, large (1.4 x page.title_px); the lines with the
+        # figures are a pale note under them (not counted, may be small)
+        self.assertGreaterEqual(got["chipPx"], round(n17_layout()["n17"]["page"]["title_px"] * 1.4))
+        self.assertEqual(got["bodyKind"], "note")
+        self.assertAlmostEqual(got["bodyOpacity"], 0.5, places=3)
         self.assertEqual(got["effBars"], len(REPORT["domains"][0]["effects"]))
         self.assertEqual(got["sensBars"], len(REPORT["domains"][0]["sensitivity"]))
         strongest = f"n17.domain.strength.sens.{STRONGEST}"

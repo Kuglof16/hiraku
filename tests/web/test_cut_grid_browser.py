@@ -4,7 +4,7 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 The run is the A6 fixture (tests.web.domains_fixture: seven domains and assembly over two
 versions, with judgement.updated), here also with a third version; with HIRAKU_WEB_DEV_RUNS
 the newest run there is opened too. The layout values are the promo department's for
-n04 / n15 / n16 (layout.json), with n01's colours and overlay.
+n04 / n15 / n16 (layout.json 087fb59), with n01's colours and overlay.
 """
 
 import copy
@@ -42,7 +42,8 @@ def grid_layout():
         "min_text_px": 18,
         "n00": {"camera": {"fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12}, "motion": {"pass_dur_s": 0.9, "hop_period_s": 0.9, "idle_shift_s": 1.3}},
         "n01": {"colors": dict(COLORS), "overlay": dict(OVERLAY)},
-        "n04": {"duration_s": 4.0, **copy.deepcopy(common), "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
+        "n04": {"duration_s": 4.0, **copy.deepcopy(common), "assembly": {"x": 96, "y": 160, "w": 1728, "h": 726},
+                "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
                 "colors": dict(COLORS), "overlay": dict(OVERLAY)},
         "n15": {"duration_s": 5.1, **copy.deepcopy(common), "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}},
         "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48},
@@ -193,7 +194,9 @@ READ = """async (t) => {
       const tv = Number(el.dataset.version ?? v);
       const state = cut.s.judgements[`${tv}|${el.dataset.domain}`]?.state ?? null;
       return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", lit: el.dataset.lit ?? "", border: el.style.borderColor, outside: el.dataset.outside ?? null,
-               version: tv, dim: mark ? mark.classList.contains("dim") : null,
+               version: tv, dim: mark ? mark.classList.contains("dim") : null, scale: layer?.dataset.scale ?? null,
+               contour: (() => { const t = cut.tiles.find((x) => x.key === el.dataset.domain); const l = t?.layers.find((x) => x.el === layer);
+                 const ct = l?.view?.keys?.contour; return ct ? { max: ct.max, limitKnown: ct.limitKnown, parts: ct.parts, values: Object.keys(ct.values ?? {}).length } : null; })(),
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
                tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
@@ -301,7 +304,7 @@ class GridCutTest(unittest.TestCase):
     def test_n04_on_a_version_on_the_way(self):
         """?version=1: the grid, the header, marks from version 1's judgements (none on nvh, its
         judgement taken out); crash lit from crash_s while red; from assembly_s the grid gives way
-        to the empty assembly box in n16.view's place."""
+        to the assembly box in n04.assembly (the grid's place)."""
         layout = grid_layout()
         events = without_judgement(crash_drawn(domain_events()), 1, "nvh")
         base = self.serve(layout, events={"20261102-120000-grid-v1": events})
@@ -333,16 +336,23 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(hot(early), {"crash"})  # nvh has no judgement here: not lit
         self.assertEqual(hot(mid), {"crash"})
         tiles = {t["key"].split(".")[-1]: t for t in mid["tiles"]}
+        # the colours say what the mark says: a field in its criterion's unit has the
+        # allowable at the bands' top (thermal: the battery at 60 degC); a field in another
+        # unit (damage against a stress limit, a mode shape without one) is not coloured
+        self.assertEqual({k: tiles[k]["scale"] for k in ("thermal", "strength", "nvh")}, {"thermal": "allowable", "strength": "shape", "nvh": "shape"})
+        self.assertEqual(tiles["thermal"]["contour"]["max"], 60.0)
+        self.assertEqual(set(tiles["thermal"]["contour"]["parts"]), {"battery"})  # only the part its criterion judges
+        self.assertEqual(tiles["strength"]["contour"]["values"], 0)
         # no words or figures on the tiles: the interference, the mode's frequency and the
         # part temperatures are in the pictures only (the story: a picture and a mark)
         self.assertEqual(tiles["assembly"]["hits"], "1")  # the fixture's battery × cross1, boxed in red
         self.assertNotIn("Hz", tiles["nvh"]["text"])
         self.assertEqual(tiles["thermal"]["tags"], 0)
         self.assertEqual(mid["charts"], 0)
-        # from assembly_s: no tile, no header, the assembly box where n16.view is
+        # from assembly_s: no tile, no header, the assembly box in n04.assembly
         self.assertTrue(all(not t["shown"] for t in late["tiles"]))
         self.assertFalse(late["header"]["shown"])
-        V = layout["n16"]["view"]
+        V = layout["n04"]["assembly"]
         self.assertEqual(late["assembly"]["box"], "n04.assembly")
         self.assertTrue(late["assembly"]["shown"])
         self.assertEqual(late["assembly"]["version"], "1")  # the version drawn, not the run's newest
@@ -458,13 +468,12 @@ class GridCutTest(unittest.TestCase):
         del layout["n04"]["tile"]["mark"]["right"]
         del layout["n04"]["tile"]["pet"]
         del layout["n04"]["times"]["crash_s"]
-        del layout["n16"]
+        del layout["n04"]["assembly"]
         del layout["min_text_px"]
         base = self.serve(layout, events={"20261102-120000-grid-v1": domain_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, tile.pet.feature.w, tile.pet.feature.h, times.crash_s", err)
-        self.assertIn("layout.json の n16 に無い: view.x, view.y, view.w, view.h", err)
+        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, tile.pet.feature.w, tile.pet.feature.h, times.crash_s, assembly.x, assembly.y, assembly.w, assembly.h", err)
         self.assertIn("layout.json に無い: min_text_px", err)
         self.assertEqual(page.evaluate("document.querySelectorAll('.grid-tile').length"), 0)
         page.close()

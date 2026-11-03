@@ -12,7 +12,7 @@
 // the colour of their judgement in the record (green or red; not lit without one), and the
 // large tile is the one being named (featuredAt); the ticks and crosses are pale until
 // their tile is lit. From times.assembly_s the grid gives way to the assembly's box
-// (n16.view), where the version's assembly record's steps go in one after another to the
+// (n04.assembly), where the version's assembly record's steps go in one after another to the
 // end of the cut (assembly.js).
 // N15: the run's versions in order (up to ?version=): the rounds share the time from
 // times.rounds_from_s to times.all_green_s, and in a round's slot the tiles take the new
@@ -45,12 +45,12 @@ const COMMON_KEYS = [
   "times.lead_s",
 ];
 const CUT_KEYS = {
-  n04: ["times.crash_s", "times.nvh_s", "times.assembly_s", "colors.bg", "colors.panel", "colors.rule", "overlay.color"],
+  n04: ["times.crash_s", "times.nvh_s", "times.assembly_s", "colors.bg", "colors.panel", "colors.rule", "overlay.color",
+        "assembly.x", "assembly.y", "assembly.w", "assembly.h"],
   n15: ["times.rounds_from_s", "times.all_green_s"],
 };
 const COLOR_KEYS = ["bg", "panel", "rule"];
 const TOP_KEYS = ["min_text_px", "stage.w", "stage.h"];
-const N16_KEYS = ["view.x", "view.y", "view.w", "view.h"];
 
 const at = (obj, path) => path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
@@ -92,6 +92,30 @@ function fieldFor(ana, kind) {
   const fields = fieldsOf(ana, { mesh: false }).filter((f) => f.kind === kind);
   if (kind === "mode_shape") return fields.find((f) => /frame|フレーム/i.test(f.label ?? "")) ?? fields[0] ?? null;
   return fields[0] ?? null;
+}
+
+// The colours of a tile's field, so they say what its tick or cross says (the review of
+// the second stills: a green tile with red members). The bands' top is the tile's load
+// case's allowable value (its criterion's upper limit) when the field is in the limit's
+// unit, even when the criterion's quantity is another (a hot-spot criterion over an
+// element stress): then only what is past the allowable is red. A criterion on one part
+// (T1: temp_battery_max) puts the top at that limit too. When the units differ (a crash
+// judged on a distance, NVH on a frequency, over a stress or a mode shape) the field has
+// no allowable to be read against: its values are not coloured (the drawing keeps its
+// shape and motion, e.g. the mode swinging), so no red comes from a scale of its own.
+export function tileContour(ana, field, criterion) {
+  const ct = contourOf(ana, field, criterion);
+  if (!ct) return null;
+  const lim = criterion?.limit;
+  const upper = lim && lim.unit === field.unit && Number.isFinite(lim.value) && (criterion.op === "<=" || criterion.op === "<");
+  if (upper) {
+    // a criterion on one part judges that part only: the other parts (their own limits are
+    // not this one) are left uncoloured
+    const parts = ct.partLimit ? { [ct.partLimit.part]: ct.parts[ct.partLimit.part] } : ct.parts;
+    const min = field.kind === "temperature" ? ct.min : Math.min(ct.min, 0);
+    return { ...ct, parts, max: lim.value, min, limitKnown: true, crit: criterion, judgedScale: true, key: `${ct.key}|limit ${lim.value}` };
+  }
+  return { ...ct, values: {}, nodes: {}, parts: {}, key: `${ct.key}|shape`, judgedScale: false };
 }
 
 // Does an analysis have anything the tile draws?
@@ -148,10 +172,6 @@ export class CutGrid {
     const missing = [...COMMON_KEYS, ...CUT_KEYS[name]].filter((k) => at(spec, k) === undefined);
     if (name === "n15") missing.push(...COLOR_KEYS.filter((k) => colors?.[k] === undefined).map((k) => `colors.${k}`));
     const why = [missing.length && `layout.json の ${name} に無い: ${missing.join(", ")}`];
-    if (name === "n04") {
-      const n16 = N16_KEYS.filter((k) => at(layout.n16, k) === undefined);
-      why.push(n16.length && `layout.json の n16 に無い: ${n16.join(", ")}`);
-    }
     const top = [...TOP_KEYS.filter((k) => at(layout, k) === undefined), ...missingPetKeys(layout)];
     why.push(top.length && `layout.json に無い: ${top.join(", ")}`);
     if (why.some(Boolean)) throw new Error(why.filter(Boolean).join(" / "));
@@ -368,7 +388,8 @@ export class CutGrid {
     });
 
     if (this.name === "n04") {
-      const V = this.layout.n16.view;
+      // the assembly fast-forward's own box (n04.assembly: the grid's place)
+      const V = sp.assembly;
       this.asmBox = document.createElement("div");
       this.asmBox.className = "n04-assembly";
       this.asmBox.dataset.box = "n04.assembly";
@@ -389,6 +410,7 @@ export class CutGrid {
         this.asmBox.append(canvas);
         const view = new Workbench3D(null, "zu", { renderer: this.renderer });
         const stage = new AssemblyStage(view);
+        stage.ngChecks = ["no_interference"]; // red only for a part that does not fit (as N16)
         stage.setRecord(rec);
         view.resize(V.w, V.h);
         stage.fit(1.04, VIEWS.default);
@@ -498,9 +520,8 @@ export class CutGrid {
     v.setMotion(motion);
     v.setScene(lc, ana);
     const field = def.field ? fieldFor(ana, def.field) : null;
-    // A temperature criterion names one part's quantity (T1: temp_battery_max), so it is
-    // not laid on every part: temperatures are coloured on their own range.
-    const ct = field ? contourOf(ana, field, field.kind === "temperature" ? null : lc.criterion) : null;
+    const ct = field ? tileContour(ana, field, lc.criterion) : null;
+    layer.el.dataset.scale = ct ? (ct.judgedScale ? "allowable" : "shape") : "none";
     v.setContour(ct);
     v.setVectors(null);
     v.setToggles({ parts: true, contour: true, arrows: false, cg: true, names: false, limit: false });
