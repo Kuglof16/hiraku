@@ -318,14 +318,11 @@ function renderDraft() {
   fillPrefill();
 }
 
-// A1 has no way to be given a first text, so the demo's want is typed into its box (the input
-// event keeps it in A1's own state, which it draws the box from). Once, when the box is there.
+// The demo's want goes into A1's box through intake.setWant (not sent: the person presses 送る).
+// Once, when the intake is mounted.
 function fillPrefill() {
-  if (!draft?.prefill) return;
-  const box = $("view-intake")?.querySelector("textarea");
-  if (!box) return;
-  box.value = draft.prefill;
-  box.dispatchEvent(new Event("input", { bubbles: true }));
+  if (!draft?.prefill || !intake) return;
+  intake.setWant(draft.prefill);
   draft.prefill = "";
 }
 
