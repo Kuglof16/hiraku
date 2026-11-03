@@ -255,6 +255,13 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 
     v = ctx.version
     agent = agent or ctx.owner(lc["load_case_id"])
+    # The mesh is an input of the analysis: mesh.created comes before analysis.started (contract).
+    mesh, mesh_error = None, None
+    if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
+        try:
+            mesh = version_mesh(ctx, v, agent)
+        except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
+            mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     analysis_id = ctx.store.next_id("analysis")
     ctx.store.emit("analysis.started", agent=agent, domain=lc["domain"], design_version=v, data={
         "analysis_id": analysis_id,
@@ -267,13 +274,9 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     params = dict(args.get("params") or {})
     if upstream:
         params["upstream_analyses"] = upstream
+    if mesh is not None:
+        params["mesh"] = mesh
     spec = ctx.specs.get(name, {})
-    mesh_error = None
-    if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
-        try:
-            params["mesh"] = version_mesh(ctx, v, agent)
-        except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
-            mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     t0 = time.perf_counter()
     if mesh_error:
         result = {"status": "failed", "error": mesh_error, "results": []}
