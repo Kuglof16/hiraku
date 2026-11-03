@@ -19,14 +19,13 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from hiraku.catalog import REPO_ROOT, load_requirements
+from hiraku.catalog import REPO_ROOT, load_catalog, load_requirements, project_fields
 from hiraku.contract import layout
 from hiraku.intake import events as ev
 from hiraku.intake import hearing, pipeline
 from hiraku.intake.domains import pick_domains
 from hiraku.intake.products import answers_file, load_product
+from hiraku.store import RunStore
 
 Record = dict[str, Any]
 
@@ -36,28 +35,18 @@ N14_NAME = "offroad-4w-n14.yaml"  # the scripted plan is looked up by the file's
 
 
 def make_n09(product: str, runs: Path | str = layout.RUNS_DIR) -> Path:
-    """The run folder of one product: run.started, domains.picked, run.finished."""
-    from hiraku.agent.session import start_run
-
+    """The run folder of one product: run.started, domains.picked, run.finished (made on the run store, below the agent)."""
     req = load_product(product)
-    keep = {k: v for k, v in req.items() if k not in ("design_file", "tests", "beyond")}  # no design: stop at the picks
     picked = pick_domains(req["want"], req["flags"], req.get("speed_class"), product=req.get("product"))
-    tmp = Path(runs) / "_video_files"
-    tmp.mkdir(parents=True, exist_ok=True)
-    path = tmp / f"{product}-n09.yaml"
-    path.write_text(yaml.safe_dump(keep, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
-    ctx = start_run(path, root=Path(runs), slug=f"{product}-n09", formulas=_none(), tools={}, designgen=_none(),
-                    intake_events=[{k: v for k, v in ev.picked_event(picked).items()}])
-    ctx.store.finish("stopped", stop_reason="分野を選ぶところまでの記録です (設計も解析もしていません)",
-                     text="分野を選ぶところまでの記録です", stop_code="not_judged")
-    return ctx.store.path
-
-
-def _none() -> Any:
-    class Nothing:  # a run that never designs or analyses needs neither registry
-        pass
-
-    return Nothing()
+    catalog = load_catalog()
+    keep = {k: v for k, v in req.items() if k not in ("design_file", "tests", "beyond")}  # no design: stop at the picks
+    agents = [{"agent_id": a, "role": a, "prop": catalog.prop(a)} for a in ("lead", "designer")]
+    store = RunStore.create(dict(project_fields(catalog, keep, []), agents=agents), root=Path(runs), slug=f"{product}-n09")
+    event = ev.picked_event(picked)
+    store.emit(event["kind"], agent=event.get("agent"), text=event.get("text"), data=event["data"])
+    store.finish("stopped", stop_reason="分野を選ぶところまでの記録です (設計も解析もしていません)",
+                 text="分野を選ぶところまでの記録です", stop_code="not_judged")
+    return store.path
 
 
 def prepare_n14(folder: Path | str) -> tuple[Path, Path]:

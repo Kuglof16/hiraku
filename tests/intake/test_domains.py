@@ -159,7 +159,13 @@ class PickDomainsTest(unittest.TestCase):
     def test_claudes_words_win_and_the_code_fills_in_the_rest(self):
         rec = pick("electric-guitar", reasons={"strength": "弦の張力でネックが反る"}, shown_names={"nvh": "デッドスポット"})
         by = {p["domain"]: p for p in rec["picks"]}
-        self.assertEqual(by["strength"]["reason"], "弦の張力でネックが反る")
+        # Claude's reason is kept; the code adds one line about the tests that have no load-case builder yet
+        # (R8 today), which goes away when the builder exists
+        self.assertTrue(by["strength"]["reason"].startswith("弦の張力でネックが反る"))
+        unbuilt = [t for t in ("R8", "R7", "R2") if t in by["strength"]["reason"]]
+        self.assertEqual(by["strength"]["reason"] == "弦の張力でネックが反る", not unbuilt)
+        if unbuilt:
+            self.assertIn("荷重条件の作り方がまだ無い", by["strength"]["reason"])
         self.assertEqual(by["nvh"]["shown_name"], "デッドスポット")
         self.assertIn("N1", by["nvh"]["reason"])  # the code's reason names the test
         self.assertEqual(reasons_missing(rec, {"strength": "弦の張力でネックが反る"}), ["nvh"])
