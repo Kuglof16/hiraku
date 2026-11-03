@@ -44,6 +44,7 @@ export const STOP_CODE_JA = {
   turn_limit: "ターン数の上限に達した",
   user_stop: "人が止めた",
   error: "エラーで止まった",
+  red_left: "赤の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
 };
 
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
@@ -173,6 +174,8 @@ const QUANTITY_JA = {
   steps_out_of_reach: "手が届かない手順の数",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
+  // the shell solver (frame_shell): the judged hot-spot stress
+  max_hot_spot_stress: "構造的ホットスポット応力 (溶接線)",
   // the K&C bench (kc_bench): abscissas (series x.quantity) and channels
   travel: "ストローク",
   lateral_force: "横力",

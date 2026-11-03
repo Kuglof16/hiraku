@@ -159,3 +159,42 @@ class Recorder:
             out.append({"kind": "reaction", "at": cid, "origin_mm": origin, "vector_N": [_round(x) for x in nv]})
             out.append({"kind": "grip", "at": cid, "origin_mm": origin, "vector_N": [_round(x) for x in gv]})
         return out + (extra or [])
+
+
+def _body_state(sim: Sim) -> dict:
+    r = sim.rotation()
+    return {"cg_m": [float(x) for x in sim.p], "quat": [float(x) for x in sim.q],
+            "v_m_s": [float(x) for x in sim.v], "omega_rad_s": (r @ np.array(sim.w, dtype=float)).tolist()}
+
+
+class BodyLog:
+    """Every step of a run, for replaying the sprung body in another integrator (qa/rapier).
+
+    start: the body's state before the first step. steps[k]: the loads of step k (Sim.loads,
+    from the state the step started from) and the state after it. Loads: per corner the
+    knuckle's force at the wheel centre ([force N, point m], world) and a free moment (N*m,
+    world: the knuckle's moment and the drive and brake reaction). The body is rigid, mass
+    m_s and inertia I_s about its centre of mass in body axes (rot = R maps body to world);
+    gravity is the run's. External loads given to Sim.step (aerodynamic) are not logged.
+    State: centre of mass (m), quaternion (w, x, y, z), velocity (m/s) and angular velocity
+    (rad/s), world axes. K2 integrates semi-implicit Euler: v and omega (body axes) first,
+    then the position with the new v and the attitude by q <- q (cos(|w| h/2), w/|w| sin(|w| h/2))."""
+
+    def __init__(self, sim: Sim):
+        self.sim = sim
+        self.start = _body_state(sim)
+        self.steps: list[dict] = []
+
+    def tick(self) -> None:
+        """Call after each sim.step()."""
+        ld = self.sim.loads()
+        self.steps.append(dict({"t": float(self.sim.t),
+                                "forces": [[c["force"].tolist(), c["point"].tolist()] for c in ld["corners"]],
+                                "moments": [(c["moment"] + c["body_torque"]).tolist() for c in ld["corners"]]},
+                               **_body_state(self.sim)))
+
+    def record(self) -> dict:
+        sim = self.sim
+        return {"dt": float(sim.dt), "n_steps": len(self.steps), "gravity_m_s2": [float(x) for x in sim.g],
+                "mass_kg": float(sim.veh.m_s), "inertia_kg_m2": [list(map(float, row)) for row in sim.i_s],
+                "corners": [c.id for c in sim.veh.corners], "start": self.start, "steps": self.steps}

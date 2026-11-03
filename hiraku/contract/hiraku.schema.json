@@ -2770,7 +2770,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Ids of the parts the rule applied to."
+          "description": "Ids of the parts the rule applied to. \"design\" stands for the whole design (e.g. a system rule that finds a part missing). Every part_id in hits and not_evaluable is among targets."
         },
         "hits": {
           "type": "array",

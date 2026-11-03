@@ -89,10 +89,15 @@
     <button data-v="grid">並び</button><button data-v="one">1 体</button><button data-v="sizes">大きさ</button>
   </div></div>
   <div class="grp"><div class="lab">役</div><select id="role"></select></div>
+  <div class="grp" id="pkg-grp"><div class="lab">パッケージ役の形</div><div class="seg" data-key="pkg">
+    <button data-v="burr">組木</button><button data-v="rings">輪</button>
+  </div></div>
   <div class="grp"><div class="lab">状態</div><div class="seg" data-key="state">
     <button data-v="idle">待機</button><button data-v="report">報告</button><button data-v="pass">合格</button>
-    <button data-v="mismatch">食い違い</button><button data-v="working">解析中</button>
-  </div></div>
+    <button data-v="mismatch">食い違い</button><button data-v="working">作業中</button><button data-v="run">走る</button>
+  </div>
+    <label class="chk"><input type="checkbox" data-key="across"> 走るとき横に走り抜ける</label>
+  </div>
   <div class="grp"><div class="lab">地</div><div class="seg" data-key="bg">
     <button data-v="paper">生成り</button><button data-v="night">夜</button>
   </div></div>
@@ -123,7 +128,7 @@
   <div id="caption"></div>
   <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
 </div>
-<div id="ver">v5</div>
+<div id="ver">v7</div>
 <div id="err"></div>
 
 <script src="pet3d.js"></script>
@@ -137,13 +142,16 @@ const ROLES = HP.ROLES;
 const STATES = HP.STATES;
 
 // ---- state <-> URL ------------------------------------------------------
-const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false };
-const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"] };
+const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false, across: false, pkg: "burr" };
+// pkg: the packager's body, burr (six-piece burr, default) or rings
+const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"], pkg: ["burr", "rings"] };
 const q = new URLSearchParams(location.search);
 const S = { ...DEFAULTS };
 for (const k of Object.keys(CHOICES)) if (CHOICES[k].includes(q.get(k))) S[k] = q.get(k);
 if (ROLES.some((r) => r.id === q.get("role"))) S.role = q.get("role");
 for (const k of ["edges", "nodes", "spin"]) if (q.has(k)) S[k] = q.get(k) === "1";
+// run=across: the run state crosses the view instead of running in place
+S.across = q.get("run") === "across";
 S.t = q.has("t") && isFinite(parseFloat(q.get("t"))) ? parseFloat(q.get("t")) : null;
 // orbit = camera offset from the target (x,y,z) and the camera up (x,y,z),
 // in pet units; pan = the target point (x,y,z). Any direction is allowed
@@ -172,8 +180,10 @@ function urlNow() {
   if (!S.edges) p.set("edges", "0");
   if (!S.nodes) p.set("nodes", "0");
   if (S.mesh !== "coarse") p.set("mesh", S.mesh);
+  if (S.pkg !== "burr") p.set("pkg", S.pkg);
   p.set("cam", S.cam);
   if (S.spin) p.set("spin", "1");
+  if (S.across) p.set("run", "across");
   if (S.orbit && S.view !== "sizes") p.set("orbit", S.orbit.map((v) => v.toFixed(4)).join(","));
   if (S.pan && S.view !== "sizes") p.set("pan", S.pan.map((v) => v.toFixed(4)).join(","));
   if (frozen !== null) p.set("t", (+frozen.toFixed(3)).toString());
@@ -243,7 +253,7 @@ let pets = [];
 function buildPets() {
   for (const p of pets) { scene.remove(p.group); p.dispose(); }
   pets = ROLES.map((r) => {
-    const p = HP.create(THREE, { role: r.id, mesh: S.mesh, edges: S.edges, nodes: S.nodes, theme: S.bg });
+    const p = HP.create(THREE, { role: r.id, mesh: S.mesh, edges: S.edges, nodes: S.nodes, theme: S.bg, packagerStyle: S.pkg });
     p.group.visible = false;
     scene.add(p.group);
     return p;
@@ -455,7 +465,7 @@ function render() {
     const p = pets[c.i];
     p.group.visible = true;
     p.group.rotation.y = S.spin ? t * 0.6 : 0;
-    p.update(t, S.state, c.cam);
+    p.update(t, S.state, c.cam, { across: S.across });
     const dist = c.cam.position.distanceTo(S.view === "sizes" ? HOME : target());
     p.setPixelScale((c.h * dpr) / (2 * dist * half));
     const gy = H - c.y - c.h;
@@ -485,16 +495,18 @@ function syncPanel() {
   });
   document.querySelectorAll("input[type=checkbox][data-key]").forEach((c) => (c.checked = !!S[c.dataset.key]));
   roleSel.value = S.role;
+  // the burr / rings switch is shown for the packager only
+  document.getElementById("pkg-grp").style.display = S.role === "packager" ? "" : "none";
   freeze.checked = frozen !== null;
   if (frozen !== null) slider.value = String(frozen);
 }
 
 function changed(k) {
-  if (k === "mesh") buildPets();
+  if (k === "mesh" || k === "pkg") buildPets();
   if (k === "bg") applyBg();
   if (k === "edges" || k === "nodes") for (const p of pets) p.setOptions({ [k]: S[k] });
   if (k === "cam") { S.orbit = null; S.pan = null; }
-  if (["view", "role", "cam", "mesh"].includes(k)) layout();
+  if (["view", "role", "cam", "mesh", "pkg"].includes(k)) layout();
   syncPanel();
   writeURL();
 }
