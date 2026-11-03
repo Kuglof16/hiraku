@@ -130,7 +130,7 @@ class BuildersTest(unittest.TestCase):
     def test_known_defects_fail_their_criteria(self):
         r = {x["quantity"]: x["value"] for x in self.runs["H1"]["results"]}
         self.assertLess(r["free_steer_angle"], self.cases["H1"]["criterion"]["limit"]["value"])
-        r = {x["quantity"]: x["value"] for x in self.runs["H3"]["results"]}
+        r = {x["quantity"]: x["value"] for x in self.runs["H3-body-size"]["results"]}
         self.assertLess(r["knee_room"], 0.0)
 
     def test_plans_predict_within_the_tolerance(self):

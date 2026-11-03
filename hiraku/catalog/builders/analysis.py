@@ -652,9 +652,11 @@ H1_PLAN = {
 }
 
 
-def h3_people(spec: Record, req: Record, design: Record) -> Record:
+def h3_people(spec: Record, req: Record, design: Record) -> list[Record]:
+    """Two cases: the large person's knees clear the part ahead (knee_room), and the driver's pedal knee in the
+    comfortable range for both body sizes (knee_angle_room), each seated at their best place in the slide."""
     load, keys = loading(req, design)
-    return {
+    body = {
         "load_case_id": "H3-body-size",
         "test_id": "H3",
         "domain": spec["domain"],
@@ -666,6 +668,13 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
                                "clear the part ahead"},
         "tolerance_rel": tolerance(spec, H_TOL),
     }
+    knee = dict(body, load_case_id="H3-knee-angle",
+                title=f"運転者のペダルを踏む膝の角度が、体格の両端で楽な範囲にあるか ({LOADING_JA[load]})",
+                criterion={"quantity": "knee_angle_room", "op": ">=", "limit": q(0.0, "mm"),
+                           "basis": ("H3: the pedal knee of a female 5th and a male 95th percentile, each at their best "
+                                     "place in the seat's slide, within 99-138 deg (Porter and Gyi 1998, read in "
+                                     "Schmidt et al. 2014; the original not checked)")})
+    return [body, knee]
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
@@ -681,10 +690,27 @@ def h3_calc(design: Record, load_case: Record) -> Record:
     return {"knee_length": got["L"], "buttock_knee": got["L_bk"]}
 
 
+def h3_knee_calc(design: Record, load_case: Record) -> Record:
+    """occupant.knee_angle_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_angle_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_angle_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        return knee_angle_inputs(design, loading=loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+
+
 H3_PLAN = {
     "tool": "assembly",
     "say": "座席の背から前の部品までの長さから、膝の長さを引いて、膝の前の余裕を先に出します",
     "predictions": [
+        {"quantity": "knee_angle_room", "formula_id": "occupant.knee_angle_room", "output": "room",
+         "assumptions": ["脚は膝で曲がる 2 本の棒 (横から見て)", "膝の角度は K4 の座らせ方 (スライドの中のいちばん良い位置) から"],
+         "inputs": {k: f"from.{k}" for k in ("l1_big", "l2_big", "theta_big", "l1_small", "l2_small", "theta_small",
+                                              "theta_lo", "theta_hi")},
+         "inputs_from": h3_knee_calc},
         {"quantity": "knee_room", "formula_id": "occupant.knee_room", "output": "room",
          "assumptions": ["背もたれに付けて座る", "膝の長さは AIST の若年男性 95 パーセンタイル (J5)"],
          "inputs": {"L": "from.knee_length", "L_bk": "from.buttock_knee"}, "inputs_from": h3_calc},
