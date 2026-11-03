@@ -143,7 +143,8 @@ def cmd_prepare(a: argparse.Namespace) -> int:
         flags = {f: True for f in (a.flags or "").split(",") if f}
     path = Path(a.answers) if a.answers else (answers_file(a.product) if a.product and not a.no_answers else None)
     answers, note = hearing.load_answers(path) if path else ({}, None)
-    got = intake(want, flags, speed, product=a.product, answers=answers, note=note, requirements=base_requirements, docs=False)
+    got = intake(want, flags, speed, product=a.product, answers=answers, note=note, requirements=base_requirements,
+                 docs=False, from_file=bool(base_requirements))
     print(summary_line(got.domains))
     print(hearing.hearing_text(got.prepared), "/ 進める" if got.ready else "/ 必須の答えが無いので進めない")
     out = got.requirements_file
