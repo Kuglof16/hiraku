@@ -38,11 +38,14 @@ class Assembly(BuiltinTool):
     domain = "assembly"
     base = "K4"
     tests = ["H1", "H3", "H5"]
-    formulas = ["geometry.free_steer_angle", "occupant.knee_room", "assembly.part_count"]
+    formulas = ["geometry.free_steer_angle", "geometry.free_steer_angle_limited", "occupant.knee_room",
+                "assembly.part_count"]
     load_case_params = (LOADING,)
     predicts = (
-        Predicts("free_steer_angle", "geometry.free_steer_angle", "theta",
-                 "w, l, c of the steered wheel from hiraku.solvers.k4_geometry.steer_room(design)"),
+        Predicts("free_steer_angle", "geometry.free_steer_angle_limited", "theta",
+                 "theta_free = geometry.free_steer_angle (w, l, c of the steered wheel from "
+                 "hiraku.solvers.k4_geometry.steer_room(design)), theta_stop = the design's max_steer_angle: the tool "
+                 "turns the wheel up to that stop only"),
         Predicts("knee_room", "occupant.knee_room", "room",
                  "L from hiraku.solvers.k4_geometry.knee_space(design) (the smallest), "
                  "L_bk = AIST J5 buttock-knee length, male 95th percentile (k4_geometry.AIST)"),

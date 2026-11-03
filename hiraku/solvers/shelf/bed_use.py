@@ -16,7 +16,7 @@ use_fatigue: each use is one cycle of a stress range at one weld.
 The S-N curve is the design's (fatigue_fat_class at 2e6 cycles, fatigue_slope, fatigue_knee_cycles). The uses'
 ranges differ, so the cycles are a spectrum: below the knee the curve goes on with slope 2 m - 1, as IIW-1823-07
 (2008) sec. 4.3.1, p.110 gives for Miner summation of a spectrum (read in that document by the quality department;
-library_fatigue.spectrum_slope). The design variable fatigue_slope_after_knee is the constant-amplitude slope and is
+library_fatigue.spectrum_slope). The design variable fatigue_slope_after_knee_constant_amplitude is the constant-amplitude slope and is
 not used. The damage judged is the worst weld's.
 
 actuator_duty: the stroke one raise takes is the lever's (the pin-to-pin length at the largest raise less that at
@@ -139,6 +139,9 @@ class UseFatigue(BuiltinTool):
                  "dS1 from bed.deck_frame_udl (the user on less the user off), dS2 and dS3 from bed.lug_bending with "
                  "F = bed.lever_actuator_force F_max; the tool takes the frame's range in the 3D frame and the force with "
                  "the loads' heights"),
+        Predicts("stress_range", "bed.use_damage", "dS_worst",
+                 "the range at the worst weld; compared in place of the damage when both damages are next to 0 "
+                 "(hiraku.catalog.builders.product_care_bed.R3_TINY_DAMAGE)"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -178,9 +181,10 @@ class UseFatigue(BuiltinTool):
             ranges[f"lug_{which}"] = lug_root_stress(res["F_max"], h_p, v["bracket_width"], v["bracket_t"])
             where[f"lug_{which}"] = f"bracket_{which}"
         D = weld_damage(ranges, counts, fat, m, n_knee)
-        worst = max(D, key=D.get)
+        worst = max(D, key=lambda w: (D[w], ranges[w]))  # with no damage anywhere: the weld of the largest range
         m2 = spectrum_slope(m)
         results = [result("fatigue_damage", D[worst], "1", where[worst]),
+                   result("stress_range", ranges[worst], "MPa", where[worst]),
                    result("uses_life_factor", 1.0 / D[worst] if D[worst] > 0 else math.inf, "1", where[worst])]
         for w in WELDS:
             results.append(result(f"fatigue_damage_{w}", D[w], "1", where[w]))
@@ -202,7 +206,7 @@ class UseFatigue(BuiltinTool):
             "assumptions": [
                 f"S-N の曲がり点より下は、傾き {m2:g} (= 2 × {m:g} − 1) で延ばした。使い方ごとに応力の幅が違うので振幅の変わる繰り返し "
                 "(スペクトル) で、IIW-1823-07 (2008) 4.3.1 節 (p.110) は、その Miner の和に 2m − 1 を使う (品質保証部がその文書で"
-                "確かめた)。設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので、ここでは使わない",
+                "確かめた)。設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので、ここでは使わない",
                 "使い方 1 回が、その溶接の応力の幅 1 回 (0 から載せた分まで)。平均応力の補正はしない",
                 "着座: 利用者の重さだけを 3D の枠に載せた応力 (枠は線形なので、それが幅)",
                 "背上げ・膝上げ: 1 回の上げで背と膝の金具の耳の根元がそれぞれ 1 回、起こす間の最大の力の応力まで振れる",
@@ -216,6 +220,18 @@ def duty(stroke_mm: float, speed_m_s: float, uses: float, strokes_per_use: float
     run = stroke_mm / 1000.0 / speed_m_s
     on = uses * strokes_per_use * run
     return {"run_time": run, "on_time": on, "duty": 100.0 * on / SECONDS_PER_HOUR}
+
+
+def upstream_stroke(upstream: dict | None, at: str) -> tuple[str, float] | None:
+    """(load case id, mm) of the first ok upstream analysis with a result actuator_stroke where `at`."""
+    for lc_id, ana in (upstream or {}).items():
+        if not isinstance(ana, dict) or ana.get("status") != "ok":
+            continue
+        for r in ana.get("results", []):
+            if r.get("quantity") == "actuator_stroke" and r.get("where") == at and r.get("unit") == "mm" \
+                    and math.isfinite(float(r.get("value", math.nan))):
+                return lc_id, abs(float(r["value"]))
+    return None
 
 
 def actuator_duty_known_answers() -> list[Record]:
@@ -253,6 +269,8 @@ class ActuatorDuty(BuiltinTool):
         Predicts("actuator_duty", "bed.actuator_duty", "duty", "s = bed.lever_actuator_force stroke (the lever's)"),
         Predicts("actuator_run_time", "bed.actuator_duty", "run_time"),
     )
+    upstream = ("an ok analysis with the result actuator_stroke at actuator_<actuator> (actuator_linkage of P5, which "
+                "feeds T3): its stroke replaces the one computed here")
 
     def known_answers(self) -> list[Record]:
         return actuator_duty_known_answers()
@@ -268,12 +286,19 @@ class ActuatorDuty(BuiltinTool):
         k = param_value(load_case, "strokes_per_use", "1")
         if n is None or n < 0 or k is None or k < 0:
             raise LoadCaseError("uses_per_hour and strokes_per_use must be 0 or more")
-        stroke = abs(res["stroke"])
-        got = duty(stroke, speed, n, k)
         at = f"actuator_{which}"
+        own = abs(res["stroke"])
+        up = upstream_stroke(params.get("upstream_analyses"), at)
+        stroke = own if up is None else up[1]
+        got = duty(stroke, speed, n, k)
         results = [result("actuator_duty", got["duty"], "%", at), result("actuator_run_time", got["run_time"], "s", at),
                    result("actuator_on_time", got["on_time"], "s", at), result("actuator_stroke", stroke, "mm", at)]
-        effects = []
+        if up is None:
+            effects = [{"name": "stroke: the lever's, computed here (no upstream actuator_linkage analysis of this "
+                                "actuator)", "value": own, "unit": "mm"}]
+        else:
+            effects = [{"name": f"stroke: from the upstream analysis {up[0]} (actuator_stroke at {at}); computed here "
+                                f"{own:.4g} mm", "value": up[1], "unit": "mm"}]
         whole = _var(design, "actuator_stroke")
         if whole is not None:
             results.append(result("actuator_stroke_left", whole - stroke, "mm", at))

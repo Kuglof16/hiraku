@@ -53,6 +53,7 @@ from typing import Any
 
 from hiraku.designgen.kit.frame import Frame, FrameError
 from hiraku.designgen.kit.sections import rect_tube, round_tube
+from hiraku.solvers.k0_handcalc.library_bed import rail_post_steps  # the post's steps (sleeve, gusset)
 from hiraku.designgen.ladder_4w import DesignGenError  # one error class for every generator (designgen.DesignGenError)
 
 Record = dict[str, Any]
@@ -130,6 +131,15 @@ VARIABLES: dict[str, Var] = {
     "side_rail_sleeve_t": Var("mm", 2.3, 1.6, 4.5, "sleeve wall (its inside diameter is side_rail_d); used when "
                               "side_rail_sleeve_height > 0. The socket stub under it then takes the sleeve's outside "
                               "width and this wall"),
+    "side_rail_posts": Var("1", 2.0, 2.0, 4.0, "posts on each side rail (a whole number): 2 at the stations P1 and K; 3 "
+                           "adds one at the station KA or B nearer the middle; 4 adds both"),
+    "side_rail_gusset_leg": Var("mm", 0.0, 0.0, 150.0, "gusset at each post's foot: two plates flanking the post in the "
+                                "push's plane, this far up the post from the socket's centre line, as deep as the "
+                                "post (or its sleeve) at the root and tapering to nothing; 0: none"),
+    "side_rail_gusset_t": Var("mm", 4.5, 3.2, 9.0, f"gusset plate thickness ({ROUND} is taken for the plates as for the "
+                              "posts); used when side_rail_gusset_leg > 0"),
+    "side_rail_socket_t": Var("mm", 1.6, 1.6, 4.5, "socket stub's wall (the square stub from the upper rail to each "
+                              "post's foot; with a sleeve, the larger of this and side_rail_sleeve_t)"),
     # actuators and their linkage
     "back_lever": Var("mm", 120.0, 60.0, 200.0, "back lever: from the back hinge down to the actuator's pin"),
     "back_actuator_reach": Var("mm", 400.0, 300.0, 600.0, "back actuator's anchor this far from the back hinge B "
@@ -166,11 +176,11 @@ VARIABLES: dict[str, Var] = {
     # A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed.,
     # Springer 2016 (IIW), not checked in this repository; FAT 71 and the slope 22 are assumptions.
     # The counts of use (R3) are a spectrum: the damage takes 2 m - 1 below the knee (IIW-1823-07 (2008)
-    # sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not fatigue_slope_after_knee
+    # sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not fatigue_slope_after_knee_constant_amplitude
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see the module)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
-    "fatigue_slope_after_knee": Var("1", 22.0, meaning="assumption: the constant-amplitude slope beyond the knee; the "
+    "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption: the constant-amplitude slope beyond the knee; the "
                                     "damage over the counts of use (a spectrum) does not use it, it takes 2 m - 1"),
 }
 # requirement key -> (variable, unit): propose() takes these from the requirements, not from the caller
@@ -262,6 +272,31 @@ def requirement_values(requirements: Record) -> dict[str, Record]:
 
 # ---------------------------------------------------------------- geometry from the variables
 
+MIN_PUSH_GAP_MM = 20.0  # a side rail post this close to the top bar's middle (the push node) is refused (assumption)
+
+
+def side_rail_stations(v: dict[str, float], st: dict[str, float]) -> list[str]:
+    """The upper frame stations the side rail posts stand at, head to foot: P1 and K, and for 3 posts the one of KA
+    and B nearer the middle between them, for 4 both."""
+    n = int(round(v["side_rail_posts"]))
+    if n == 2:
+        return ["P1", "K"]
+    if n == 3:
+        x_mid = (st["P1"] + st["K"]) / 2.0
+        return ["P1", min(("KA", "B"), key=lambda k: abs(st[k] - x_mid)), "K"]
+    return ["P1", "KA", "B", "K"]
+
+
+def _step_section(step: dict, t_g: float) -> tuple[str, Record]:
+    """The contract section of one post step (rail_post_steps): a round tube, or with the gusset's plates a custom
+    section (its push-plane I taken about both axes, the safe side for the other plane)."""
+    if step["h"] <= 0.0:
+        return round_tube(step["D"], step["wall"])
+    key = f"cg{step['D']:g}x{step['wall']:g}x{step['h']:.4g}x{t_g:g}"
+    return key, {"shape": "custom", "A_mm2": step["A"], "Iy_mm4": step["I"], "Iz_mm4": step["I"], "J_mm4": step["J"],
+                 "dims_mm": {"cy": step["c"], "cz": step["c"], "tau_per_T": step["tau_per_T"]}}
+
+
 
 def stations(v: dict[str, float]) -> dict[str, float]:
     """x of every upper frame station, head to foot (raises when they do not close)."""
@@ -330,13 +365,16 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     post = f.section(*rect_tube(v["post_b"], v["post_b"], v["post_t"]))
     srail = f.section(*round_tube(v["side_rail_d"], v["side_rail_t"]))
     sleeve = v["side_rail_sleeve_height"] > 0.0
+    n_posts = int(round(v["side_rail_posts"]))
+    if abs(v["side_rail_posts"] - n_posts) > 1e-9:
+        raise DesignGenError(f"side_rail_posts must be a whole number (2, 3 or 4), got {v['side_rail_posts']:g}")
     # the post's foot: in a sleeve, the post and the sleeve bend as one tube from the post's inside to the sleeve's
     # outside (their annuli touch, so the second moments add up to that tube's)
     d_out = v["side_rail_d"] + 2.0 * v["side_rail_sleeve_t"] if sleeve else v["side_rail_d"]
-    sleeved = f.section(*round_tube(d_out, v["side_rail_t"] + v["side_rail_sleeve_t"])) if sleeve else None
     # the sockets: short square stubs as wide as the side rail tube, or its sleeve (a section of their own, so that
     # the shell mesher sees the cross member end at the rail and the socket start there, not one tube through it)
-    sock = f.section(*rect_tube(d_out, d_out, v["side_rail_sleeve_t"] if sleeve else v["cross_t"]))
+    sock_t = max(v["side_rail_socket_t"], v["side_rail_sleeve_t"]) if sleeve else v["side_rail_socket_t"]
+    sock = f.section(*rect_tube(d_out, d_out, sock_t))
     try:
         # upper frame
         f.stations(st, y_r, z["upper"])
@@ -354,24 +392,38 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
             f.member(f"post_{side}F", f"{side}BF", f"{side}P2", post)
         for tag in ("BH", "BM", "BF"):
             f.member(f"base_cross_{tag[1]}", f"L{tag}", f"R{tag}", base)
-        # side rails: sockets outboard of the upper rails at P1 and K, a portal on them
+        # side rails: sockets outboard of the upper rails at the post stations, posts in steps (sleeve, gusset), a top bar
         y_s = y_r + v["rail_b"] / 2.0 + SOCKET_GAP_MM + d_out / 2.0
         z_top = z["deck_top"] + v["side_rail_height"]
+        post_st = side_rail_stations(v, st)
+        x_mid = (st["P1"] + st["K"]) / 2.0
+        if any(abs(st[p] - x_mid) < MIN_PUSH_GAP_MM for p in post_st):
+            raise DesignGenError(f"a side rail post would stand within {MIN_PUSH_GAP_MM:g} mm of the top bar's middle (the "
+                                 "push point); change side_rail_posts or the station it stands at (knee_actuator_reach, "
+                                 "back_length)")
+        steps = rail_post_steps(z_top - z["upper"], v["side_rail_d"], v["side_rail_t"], v["side_rail_sleeve_height"],
+                                v["side_rail_sleeve_t"], v["side_rail_gusset_leg"], v["side_rail_gusset_t"])
+        kinds = ["sleeve" if k["z1"] <= v["side_rail_sleeve_height"] + 1e-9 else "gusset" for k in steps[:-1]]
         for side, sy in (("L", 1.0), ("R", -1.0)):
-            feet = []
-            for s in ("P1", "K"):
+            tops = {}
+            for s in post_st:
                 foot = f.node(f"{side}S{s}", [st[s], sy * y_s, z["upper"]])
                 f.member(f"socket_{side}{s}", f"{side}{s}", foot, sock)
-                top = f.node(f"{side}ST{s}", [st[s], sy * y_s, z_top])
-                if sleeve:
-                    sl = f.node(f"{side}SS{s}", [st[s], sy * y_s, z["upper"] + v["side_rail_sleeve_height"]])
-                    f.member(f"side_rail_{side}_sleeve{s}", foot, sl, sleeved, ROUND)
-                    foot = sl
-                f.member(f"side_rail_{side}_post{s}", foot, top, srail, ROUND)
-                feet.append(top)
-            mid = f.node(f"{side}SM", [(st["P1"] + st["K"]) / 2.0, sy * y_s, z_top])
-            f.member(f"side_rail_{side}_topP1", feet[0], mid, srail, ROUND)
-            f.member(f"side_rail_{side}_topK", mid, feet[1], srail, ROUND)
+                for i, (k, kind) in enumerate(zip(steps[:-1], kinds)):
+                    on_sleeve_top = sleeve and abs(k["z1"] - v["side_rail_sleeve_height"]) < 1e-9
+                    nxt = f.node(f"{side}SS{s}" if on_sleeve_top else f"{side}SG{s}{i}",
+                                 [st[s], sy * y_s, z["upper"] + k["z1"]])
+                    j = kinds[:i + 1].count(kind)
+                    name = f"side_rail_{side}_{kind}{s}" + (f"_{j}" if kinds.count(kind) > 1 else "")
+                    f.member(name, foot, nxt, f.section(*_step_section(k, v["side_rail_gusset_t"])), ROUND)
+                    foot = nxt
+                tops[s] = f.node(f"{side}ST{s}", [st[s], sy * y_s, z_top])
+                f.member(f"side_rail_{side}_post{s}", foot, tops[s], srail, ROUND)
+            mid = f.node(f"{side}SM", [x_mid, sy * y_s, z_top])
+            bar = sorted([(st[p], p, tops[p]) for p in post_st] + [(x_mid, None, mid)], key=lambda e: -e[0])
+            for (_, pa, na), (_, pb, nb) in zip(bar, bar[1:]):
+                tag = pa if pb is None else pb if pa is None else pa + pb
+                f.member(f"side_rail_{side}_top{tag}", na, nb, srail, ROUND)
     except FrameError as e:
         raise DesignGenError(str(e)) from None
     for m in f.members:
@@ -428,7 +480,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         hi = [max(p[i] for p in pts) + d_out / 2.0 for i in range(3)]
         put(f"side_rail_{side}", f"{'左' if side == 'L' else '右'}のサイドレール (柵。管は骨組みの部材)", "side_rail",
             [(a + b) / 2.0 for a, b in zip(lo, hi)], [b - a for a, b in zip(lo, hi)], 0.0,
-            [f"{side}P1", f"{side}K"] + sorted({m[k] for m in mine for k in ("node_a", "node_b")}))
+            [f"{side}{p}" for p in post_st] + sorted({m[k] for m in mine for k in ("node_a", "node_b")}))
     # actuators and their brackets
     w = ACTUATOR_SECTION_MM
     h_lug = {"back": v["back_lever"], "knee": v["knee_lever"]}
@@ -522,7 +574,7 @@ def links(design: Record) -> dict[str, Record]:
         elif pid == "actuator_lift":
             add(pid, *(_c(n, "pin", "load") for n in p["carried_by"]))
         elif kind == "side_rail":  # its posts go into the sockets at the upper rail's nodes P1 and K
-            add(pid, *(_c(n, "insert", "load") for n in p["carried_by"][:2]))
+            add(pid, *(_c(n, "insert", "load") for n in p["carried_by"] if n[1] != "S"))  # the upper rail's nodes
         elif kind in ("bracket",):
             add(pid, *(_c(n, "weld", "load") for n in p["carried_by"]))
         elif kind == "hand_switch":

@@ -269,7 +269,8 @@ def _rail_torques(design: dict, summ: dict, ground: dict, rail_y: float, rail_z:
 
 
 def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float | None = None,
-                      step_supports: list[str] | None = None, g_factor: float = 1.0, mounts: bool = True) -> dict:
+                      step_supports: list[str] | None = None, g_factor: float = 1.0, mounts: bool = True,
+                      wheel_mounts: bool = True) -> dict:
     """Quantities for frame_static.joint_wall_bending at the joint where it is largest, and every joint's numbers.
 
     The ladder's symmetric half: each rail twists in St Venant torsion (G J / length between stations); at
@@ -283,8 +284,10 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
     rails' roll too, as springs among the rail nodes they stand on (mount_roll_stiffness); mount_moments_Nmm is
     what they take. Each cross member's end moment is its spring times the rail's twist there;
     joint_wall_bending then gives each joint's stress.
-    The joints at the supports' frame nodes where the rail runs on (the wheel mounts) are in the chain but not
-    compared: frame_shell leaves the elements inside the mounts out of its peak (the bracket covers the wall).
+    The joints at the supports' frame nodes where the rail runs on (the wheel mounts) are compared too
+    (wheel_mounts, the default): frame_shell reads the hot spots at those joints' cross member welds, so its
+    largest may be there (RB on v1 with rail_t 4.5 mm). wheel_mounts False leaves them out (in the chain, not
+    compared). at_wheel_mount says whether the joint picked is at a wheel mount.
     """
     from .library_joint import joint_wall
     from .vehicle import support_loads
@@ -374,7 +377,10 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
         out = joint_wall(dict(r["values"], M=r["M"]))
         r["sigma"], r["sigma_open_end"] = out["sigma"], out["sigma_open_end"]
     mounts = {s.get("frame_node") for s in design.get("supports", [])} - ends
-    candidates = [r for r in rows if r["node"] not in mounts]
+    # the joints at the wheel mounts are compared too: frame_shell reads the hot spots at a mount's cross member
+    # weld (on v1 with rail_t 4.5 mm its largest is at RB, cross_B), though it leaves the rail's elements inside
+    # the mount out of max_stress
+    candidates = [r for r in rows if wheel_mounts or r["node"] not in mounts]
     if not candidates:
         raise DesignError("every cross member joint is at a wheel mount, where the wall is covered; nothing to compare")
     worst = max(candidates, key=lambda r: r["sigma"])
@@ -387,6 +393,7 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
                    "open_end": q(v["open_end"], "1")},
         "joint": worst["node"],
         "cross_member": worst["cross_member"],
+        "at_wheel_mount": worst["node"] in mounts,
         "joints": [{"node": r["node"], "cross_member": r["cross_member"], "M_Nmm": r["M"], "sigma_MPa": r["sigma"],
                     "sigma_open_end_MPa": r["sigma_open_end"], "theta_per_kNm": r["theta_per_kNm"],
                     "at_wheel_mount": r["node"] in mounts,

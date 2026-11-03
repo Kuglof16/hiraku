@@ -18,13 +18,13 @@ fatigue.constant_amplitude_damage, but the rainflow cycles of the road are a
 stress spectrum: below the knee the curve goes on with slope 2 m - 1, as
 IIW-1823-07 (2008) sec. 4.3.1, PDF p.110 gives for Miner summation of a
 spectrum (read in that document by the quality department; the k0 function
-library_fatigue.spectrum_slope). The design variable fatigue_slope_after_knee
-is the constant-amplitude slope (IIW-1823-07 sec. 3.2, p.44) and is not used
+library_fatigue.spectrum_slope). The design variable
+fatigue_slope_after_knee_constant_amplitude is the constant-amplitude slope (IIW-1823-07 sec. 3.2, p.44) and is not used
 for the damage.
 
 Design variables: fatigue_fat_class (MPa at 2e6 cycles), fatigue_slope,
-fatigue_knee_cycles, tyre_stiffness (N/mm); fatigue_slope_after_knee only for
-the constant-amplitude prediction.
+fatigue_knee_cycles, tyre_stiffness (N/mm); fatigue_slope_after_knee_constant_amplitude
+only for the constant-amplitude prediction.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ WAVINESS = 2.0
 # checked against the bands ISO 8608 reports.
 N_BAND = (0.011, 2.83)  # cycle/m
 SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1"}
-CONSTANT_AMPLITUDE_SLOPE = "fatigue_slope_after_knee"  # not used for the road spectrum (see above)
+CONSTANT_AMPLITUDE_SLOPE = "fatigue_slope_after_knee_constant_amplitude"  # not used for the road spectrum (see above)
 SERIES_POINTS = 600
 
 
@@ -226,7 +226,7 @@ class Fatigue(BuiltinTool):
                  "car on the road class of the load case"),
         Predicts("fatigue_damage", "fatigue.constant_amplitude_damage", "D",
                  "dS = equivalent_stress_range, n = cycles_counted, S-N data from the design variables (m2: the "
-                 "constant-amplitude slope fatigue_slope_after_knee, where the tool sums the spectrum with 2 m - 1)"),
+                 "constant-amplitude slope fatigue_slope_after_knee_constant_amplitude, where the tool sums the spectrum with 2 m - 1)"),
         Predicts("cycles_counted", "fatigue.cycles_over_distance", "n",
                  "rough: f = the body bounce frequency (modal.quarter_car f)"),
     )

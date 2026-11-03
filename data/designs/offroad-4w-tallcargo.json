@@ -192,7 +192,7 @@
       "value": 10000000.0,
       "unit": "1"
     },
-    "fatigue_slope_after_knee": {
+    "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
       "unit": "1"
     },
@@ -258,6 +258,22 @@
     },
     "battery_x": {
       "value": -1045.0,
+      "unit": "mm"
+    },
+    "seat_height": {
+      "value": 260.0,
+      "unit": "mm"
+    },
+    "steering_column_angle": {
+      "value": 35.0,
+      "unit": "deg"
+    },
+    "steering_wheel_height": {
+      "value": 495.411492555231,
+      "unit": "mm"
+    },
+    "pedal_x": {
+      "value": -393.1890219018587,
       "unit": "mm"
     },
     "front_spring_rate": {

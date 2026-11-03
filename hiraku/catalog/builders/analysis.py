@@ -336,12 +336,18 @@ _LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲�
 _DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
                   "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
                   "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
-                  "設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので使わない"]
+                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない"]
 
 
-def _damage_from(prefix: str, place: str) -> Record:
+# A known bias, not worked on (the analysis department's comparisons, 2026-11-03): on the revised version and
+# the version with rail_t 4.5 mm the hand calculation of the end cross member comes out 26-31 % below the tool.
+_END_BIAS = ("偏り (直していない): 直しの版と rail_t 4.5 mm の版では、端の横の部材の手計算が道具より 26〜31 % 小さく出る "
+             "(解析部の照合、2026-11-03)")
+
+
+def _damage_from(prefix: str, place: str, extra: tuple[str, ...] = ()) -> Record:
     return {"quantity": f"fatigue_damage_{place}", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
-            "assumptions": list(_DAMAGE_ASSUME),
+            "assumptions": [*_DAMAGE_ASSUME, *extra],
             "inputs": {**{out: f"pred.{prefix}_per_kN_{tag}" for tag, out, _ in _WHEELS},
                        **{k: f"from.{k}" for k in _QC},
                        **{k: f"design.var.{name}" for k, (name, _) in _DAMAGE_VARS.items()},
@@ -369,7 +375,7 @@ R3_PLAN = {
         *({"quantity": f"end_cross_member_stress_per_kN_{tag}", "formula_id": "frame_static.end_cross_member_stress",
            "output": out, "assumptions": [f"{name}に 1 kN", *_END_ASSUME], "inputs": _END, "inputs_from": r3_calc}
           for tag, out, name in _WHEELS),
-        _damage_from("end_cross_member_stress", "end_cross_member"),
+        _damage_from("end_cross_member_stress", "end_cross_member", (_END_BIAS,)),
         {"quantity": "fatigue_damage", "formula_id": "fatigue.worst_of_two_welds", "output": "D",
          "assumptions": ["フレームの寿命はいちばん傷む溶接で決まる (脚の根元か、後ろの張り出しの端の横の部材)",
                          "脚は、U 字の脚のうち手計算の損傷がいちばん大きいもの"],
@@ -635,9 +641,12 @@ H1_PLAN = {
     "tool": "assembly",
     "say": "前輪を上から見た長方形とみて、内側の角がレールに届くまでのハンドルの角度を先に出します",
     "predictions": [
-        {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle", "output": "theta",
+        {"quantity": "free_steer_angle_geometric", "formula_id": "geometry.free_steer_angle", "output": "theta",
          "assumptions": ["車輪は上から見て直径 x 幅の長方形", "車輪の中心を通る縦の軸で回る", "レールの面は前後に真っすぐ"],
          "inputs": {"w": "from.steer_w", "l": "from.steer_l", "c": "from.steer_c"}, "inputs_from": h1_calc},
+        {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle_limited", "output": "theta",
+         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立ての道具も、そこより先は回さない)"],
+         "inputs": {"theta_free": "pred.free_steer_angle_geometric", "theta_stop": "design.var.max_steer_angle"}},
     ],
 }
 

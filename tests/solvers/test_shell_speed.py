@@ -22,7 +22,7 @@ from hiraku.solvers.shelf import frame_shell
 
 LC = {"load_case_id": "R1-x", "test_id": "R1", "domain": "strength", "title": "R1",
       "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
-PARAMS = {"element_size": {"value": 20.0, "unit": "mm"}}
+PARAMS = {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "3"}
 
 
 def tool(name):

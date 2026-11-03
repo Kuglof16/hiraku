@@ -80,9 +80,9 @@ class ToolSpectrumTest(unittest.TestCase):
 
     def test_design_slope_after_knee_does_not_change_the_damage(self):
         d = copy.deepcopy(DESIGN)
-        d["variables"]["fatigue_slope_after_knee"] = q(9.0, "1")
+        d["variables"]["fatigue_slope_after_knee_constant_amplitude"] = q(9.0, "1")
         self.assertEqual(self.damage(TOOL.run(d, lc(**ROAD), PRED, {})), self.damage(self.base))
-        del d["variables"]["fatigue_slope_after_knee"]
+        del d["variables"]["fatigue_slope_after_knee_constant_amplitude"]
         self.assertEqual(self.damage(TOOL.run(d, lc(**ROAD), PRED, {})), self.damage(self.base))
 
     def test_damage_below_the_knee_on_slope_five(self):
@@ -98,7 +98,7 @@ class ToolSpectrumTest(unittest.TestCase):
         text = " ".join(self.base["assumptions"])
         self.assertIn("5 (= 2 × 3 − 1)", text)
         self.assertIn("IIW-1823-07", text)
-        self.assertIn("fatigue_slope_after_knee = 22", text)
+        self.assertIn("fatigue_slope_after_knee_constant_amplitude = 22", text)
 
     def test_known_answers_pass(self):
         failed = [c for c in TOOL.check() if not c["pass"]]
