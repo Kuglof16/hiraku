@@ -925,9 +925,9 @@ class BrowserReplayTest(unittest.TestCase):
             page.goto(f"{base}/?run={run_id}&tab=A2")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
-            page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /既定値のまま進める/.test(b.textContent) && !b.disabled)")
+            page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /標準の値のまま進める/.test(b.textContent) && !b.disabled)")
             self.assertEqual(page.locator(".stop-btn").count(), 0)  # not started here: no stop
-            page.locator(button, has_text="既定値のまま進める").click()
+            page.locator(button, has_text="標準の値のまま進める").click()
             for _ in range(100):
                 if (run / "hearing.answer.json").exists():
                     break
