@@ -379,7 +379,8 @@ class ServedPageInBrowser(unittest.TestCase):
         cls.s = ServedWork()
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(args=ARGS)
-        cls.page = cls.browser.new_page()
+        cls.context = cls.browser.new_context()
+        cls.page = cls.context.new_page()
         cls.errors = []
         cls.page.on("pageerror", lambda e: cls.errors.append(str(e)))
         cls.page.goto(f"http://127.0.0.1:{cls.s.port}/")
@@ -423,6 +424,17 @@ class ServedPageInBrowser(unittest.TestCase):
         self.assertIn("1/3", self.page.locator("#stOut").inner_text())
         self.assertIn("保存 ✓", self.page.locator("#list .row").first.inner_text())
         self.assertIn("voice/recorded に保存", self.page.locator("#exportInfo").inner_text())
+
+    def test_takes_come_back_after_a_reload(self):
+        # the raw take is kept in IndexedDB, so "save all" works again after the page reopens
+        page = self.context.new_page()  # the same storage as the page that recorded
+        try:
+            page.goto(f"http://127.0.0.1:{self.s.port}/")
+            page.evaluate("async () => { await window.hirakuRec.ready; }")
+            n = page.evaluate("() => (window.hirakuRec.state.takes['N00_1'] || []).length")
+            self.assertEqual(n, 1)
+        finally:
+            page.close()
 
     def test_no_page_errors(self):
         self.assertEqual(self.errors, [])
