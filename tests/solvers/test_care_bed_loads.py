@@ -33,8 +33,8 @@ class BedLoadCasesTest(unittest.TestCase):
                                                                        ["S1", "R5", "P5", "T3", "R3"])}
 
     def test_cases_fit_the_contract(self):
-        self.assertEqual(set(self.cases), {"S1-edge1350N", "R5-deck", "R5-side-rail", "P5-back", "P5-knee", "T3-6uses",
-                                           "R3-uses"})
+        self.assertEqual(set(self.cases), {"S1-edge1350N", "S1-side-rail-push", "R5-deck", "R5-side-rail", "P5-back",
+                                           "P5-knee", "T3-6uses", "R3-uses"})
         for lc in self.cases.values():
             contract.validate("load_case", lc)
             self.assertIn("criterion", lc, lc["load_case_id"])
@@ -59,7 +59,8 @@ class BedLoadCasesTest(unittest.TestCase):
         self.assertIs(PRODUCT_STEPS["care-bed"], bed.step_for)
         for lc_id in ("S1-edge1350N", "R5-deck", "R5-side-rail", "P5-back"):
             self.assertIsNotNone(bed.step_for(self.cases[lc_id]), lc_id)
-        self.assertIsNone(bed.step_for(self.cases["T3-6uses"]))
+        self.assertEqual(bed.step_for(self.cases["T3-6uses"])["tool"], "actuator_duty")
+        self.assertEqual(bed.step_for(self.cases["R3-uses"])["tool"], "use_fatigue")
 
     def test_a_design_off_the_requirements_is_refused(self):
         light = designgen.care_bed.build({"occupant_load": {"value": 1000.0, "unit": "N"}})
@@ -135,7 +136,8 @@ class BedFormulasTest(unittest.TestCase):
     def test_side_rail_push_and_lug(self):
         d, t = 25.4, 1.6
         Z = math.pi * (d**4 - (d - 2 * t) ** 4) / (32 * d)
-        got = k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), d=(d, "mm"), t=(t, "mm"))
+        got = k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), d=(d, "mm"), t=(t, "mm"),
+                 s=(0, "mm"), t_s=(2.3, "mm"), E=(205000, "MPa"), G=(1e15, "MPa"))  # posts rigid in torsion: bar fixed
         self.assertAlmostEqual(got["sigma_post"], 300 * 400 / Z, places=9)
         self.assertAlmostEqual(got["sigma"], max(300 * 400, 600 * 700 / 8) / Z, places=9)
         lug = k0("bed.lug_bending", F=(2000, "N"), h_p=(100, "mm"), w=(40, "mm"), t=(6, "mm"), d=(10, "mm"))
@@ -146,13 +148,15 @@ class BedFormulasTest(unittest.TestCase):
         duty = k0("bed.actuator_duty", n=(6, "1"), k=(2, "1"), s=(120, "mm"), v=(0.006, "m/s"))
         self.assertAlmostEqual(duty["run_time"], 20.0)
         self.assertAlmostEqual(duty["duty"], 100 * 6 * 2 * 20 / 3600)
-        sn = dict(FAT=(71, "MPa"), m=(3, "1"), N_knee=(1e7, "1"), m2=(22, "1"))
-        for dS in (60.0, 20.0):  # above and below the knee (41.5 MPa)
-            one = k0("fatigue.constant_amplitude_damage", dS=(dS, "MPa"), n=(1e5, "1"), **sn)["D"]
+        sn = dict(FAT=(71, "MPa"), m=(3, "1"), N_knee=(1e7, "1"))
+        for dS in (60.0, 20.0):  # above and below the knee (41.5 MPa); below it the spectrum's slope 2 m - 1 = 5
+            one = k0("fatigue.constant_amplitude_damage", dS=(dS, "MPa"), n=(1e5, "1"), m2=(5, "1"), **sn)["D"]
             got = k0("bed.use_damage", n1=(1e5, "1"), dS1=(dS, "MPa"), n2=(0, "1"), dS2=(0, "MPa"), n3=(1e5, "1"),
                      dS3=(dS, "MPa"), n4=(5, "1"), dS4=(0, "MPa"), **sn)
             self.assertAlmostEqual(got["D"] / (2 * one), 1.0, places=9)
+            self.assertAlmostEqual(got["D_worst"] / one, 1.0, places=9)  # frame (use 1) and knee lug (use 3) apart
             self.assertEqual(got["D4"], 0.0)
+            self.assertEqual(got["m2"], 5.0)
 
 
 if __name__ == "__main__":

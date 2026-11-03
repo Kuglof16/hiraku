@@ -51,17 +51,16 @@ class DemoGeometryTest(unittest.TestCase):
         sw = sweep(DESIGN)
         front = [h for h in sw["hits"] if h[0].endswith(("_FL", "_FR"))]  # the steered corners' parts
         self.assertTrue(front)
-        # the rails, and on the driver's side the accelerator pedal at the rail's outer face (kit/body.py)
-        self.assertTrue(all("rail" in h[1] or h[1] == "part:pedal_accel" for h in front))
+        # the rails and the front suspension towers on them (steering past the free angle)
+        self.assertTrue(all("rail" in h[1] or "tower_" in h[1] for h in front))
         self.assertTrue(all(h[3].startswith("steer") for h in front))
         # rails 80 mm inside the 600 x 200 wheel: free until w cos a + l sin a - w = 81 mm
         self.assertAlmostEqual(sw["free_steer"]["FL"], 16.48, delta=0.01)
         self.assertGreaterEqual(sw["free_steer"]["FR"], sw["free_steer"]["FL"] - 0.01)  # the pedal is not nearer
         straight = copy.deepcopy(DESIGN)
         straight["variables"]["max_steer_angle"] = {"value": 10.0, "unit": "deg"}
-        # left: the driveshafts' outer ends rising with the wheels meet the rails above them (no steering)
-        left = sweep(straight)["hits"]
-        self.assertTrue(all(h[0].startswith("part:driveshaft_") and "rail" in h[1] for h in left))
+        # nothing left: the driveshafts pass under the rails at full bump (their inner joints are lowered)
+        self.assertEqual(sweep(straight)["hits"], [])
 
     def test_assembly_order(self):
         asm = disassemble(DESIGN)
@@ -75,16 +74,20 @@ class DemoGeometryTest(unittest.TestCase):
         from hiraku.solvers.k4_geometry.assembly import steps
 
         seq = steps(DESIGN)
-        # the hands get to every bolt on the vehicle from some side (a step without room: test_k4_assembly.HandsTest);
         # on the bench, a corner's boxes overlap one another (rough boxes of parts bolted together)
         no_room = [s for s in seq if not s["tool_clearance"]]
-        self.assertTrue(all("built off the vehicle" in s["note"] for s in no_room))
-        for s in no_room:
+        bench = [s for s in no_room if "built off the vehicle" in s["note"]]
+        for s in bench:
             corner = s["part"].rsplit("_", 1)[1]
             self.assertTrue(all(b.endswith("_" + corner) for b in s["tool_blocked_by"]), s)
+        # on the vehicle the axle stations' rail nodes are under the suspension towers and among the brackets:
+        # what is bolted there (the rear corners, the motor and reducer, the rack, the deck) has no hands' way
+        on_car = {s["part"] for s in no_room if s not in bench}
+        self.assertEqual(on_car, {"corner:FL", "corner:FR", "corner:RL", "corner:RR", "motor", "reducer",
+                                  "steering_rack", "deck"})
         self.assertTrue(all(s["hand_reach"] for s in seq))
-        # the column's bolt at RS1 is under the seat bolted there too: 330 mm down from its top (z 710 to 380)
-        self.assertIn("node RS1 from above, 330 mm in", next(s for s in seq if s["part"] == "steering_column")["note"])
+        # the column is bolted at the dash cross member's ends
+        self.assertIn("node LDT from above", next(s for s in seq if s["part"] == "steering_column")["note"])
 
     def test_people(self):
         f = fit(DESIGN)
@@ -139,7 +142,7 @@ class AssemblyKitTest(unittest.TestCase):
         self.assertEqual(part_fastenings(DESIGN, "cargo", bs), [])
         self.assertEqual(text_of(bat, {}), "LS1・RS1・LS2・RS2 の節点にボルトで留める")
         joints = {w["node"]: w["members"] for w in welds(DESIGN)}
-        self.assertEqual(joints["LA"], ["cross_A", "rail_L_AS1", "rail_L_FA"])
+        self.assertEqual(joints["LA"], ["cross_A", "rail_L_LA_LAu2", "rail_L_LAu1_LA"])  # rail pieces named by their ends
 
     def test_steps_carry_path_fastenings_and_text_when_the_contract_has_them(self):
         from unittest import mock
@@ -150,7 +153,7 @@ class AssemblyKitTest(unittest.TestCase):
         with mock.patch.object(assembly, "_step_fields", return_value=fields):
             seq = assembly.steps(DESIGN)
         bat = next(s for s in seq if s["part"] == "battery")
-        self.assertEqual(bat["path_mm"][-1], [-725.0, 0.0, 330.0])  # ends where it is fitted
+        self.assertEqual(bat["path_mm"][-1], [-1045.0, 0.0, 330.0])  # ends where it is fitted
         self.assertGreater(bat["path_mm"][0][2], 330.0)  # comes down from above
         self.assertTrue(bat["text"].startswith("電池"))
         self.assertIn("ボルトで留める", bat["text"])
@@ -171,13 +174,13 @@ class AssemblyToolTest(unittest.TestCase):
         self.assertGreater(r["motion_interference_count"]["value"], 0.0)
         self.assertLess(r["free_steer_angle"]["value"], r["max_steer_angle"]["value"])
         self.assertEqual(r["blocked_parts"]["value"], 0.0)
-        self.assertEqual(r["assembly_steps"]["value"], 43.0)  # H5: the parts, not the four corners going on
+        self.assertEqual(r["assembly_steps"]["value"], 44.0)  # H5: the parts, not the four corners going on
         seq = rec["assembly"]
         self.assertEqual([s["order"] for s in seq], list(range(1, len(seq) + 1)))
         self.assertTrue(all(s["no_interference"] for s in seq))
         self.assertFalse(any("assembly step" in e["name"] for e in rec.get("effects", [])))
         self.assertEqual({i["state"] for i in rec["interferences"]}, {"motion"})
-        self.assertTrue(all(i["b"].startswith("member rail") or i["b"] == "pedal_accel" for i in rec["interferences"]))
+        self.assertTrue(all(i["b"].startswith(("member rail", "member tower_")) for i in rec["interferences"]))
         wheel = next(s for s in seq if s["part"] == "wheel_FL")
         self.assertIn("susp_FL", wheel["depends_on"])  # the wheel goes on the arms already in place
 

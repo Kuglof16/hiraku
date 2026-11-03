@@ -148,6 +148,18 @@ class Frame:
         return out
 
     # ---------------------------------------------------------------- joint reinforcement
+    def _along_x_at(self, node: str, branch: str) -> list[Record]:
+        """The members other than `branch` that end at `node` and run along x (the tube passing through a T
+        joint; other members there, e.g. a post standing on the rail, are not part of the T)."""
+        out = []
+        for x in self.members:
+            if x["id"] == branch or node not in (x["node_a"], x["node_b"]):
+                continue
+            d = np.asarray(self.nodes[x["node_b"]]) - np.asarray(self.nodes[x["node_a"]])
+            if abs(d[1]) <= 1e-9 and abs(d[2]) <= 1e-9:
+                out.append(x)
+        return out
+
     def gussets(self, node: str, branch: str, leg: float, thickness: float, density_kg_m3: float) -> list[Record]:
         """Four triangular gusset parts at the T joint where member `branch` ends on the side of the
         rect tube that passes through `node` (ahead of and behind the branch, on its upper and lower
@@ -166,7 +178,7 @@ class Frame:
         if abs(u_in[0]) > 1e-9 or abs(u_in[2]) > 1e-9:
             raise FrameError(f"gussets need the branch {branch!r} to run along y from node {node!r}")
         u_in /= np.linalg.norm(u_in)
-        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        hosts = self._along_x_at(node, branch)
         if len(hosts) != 2:
             raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
         host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
@@ -201,7 +213,7 @@ class Frame:
         d = np.asarray(self.nodes[other]) - p
         if abs(d[0]) > 1e-9 or abs(d[2]) > 1e-9:
             raise FrameError(f"a through joint needs the branch {branch!r} to run along y from node {node!r}")
-        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        hosts = self._along_x_at(node, branch)
         if len(hosts) != 2:
             raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
         host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))

@@ -13,10 +13,10 @@ is taken out of the floor they stand on.
 
 The body as parts (occupant_parts): the occupant's mass split by segment (SEGMENT_SHARE) into the
 trunk with the head (the part keeps the occupant's id) and thighs, shanks, feet and arms, each
-"<occupant id>.<segment>_<L or R>". Every part is kind occupant. NOTE: hiraku.contract.loading
-counts each part of kind occupant as one occupant, so a design with these parts boards the wrong
-people until loading groups the parts of a person by the id before the dot (person_of); the
-generator does not write them yet (ladder_4w.BODY_PARTS).
+"<occupant id>.<segment>_<L or R>". Every part is kind occupant; hiraku.contract.loading counts the
+parts sharing the id before the first "." as one person (person_of), and so do K4's checks
+(k4_geometry.people.occupants). The segment shares are D. A. Winter's (below, not checked in this
+repository); the generator writes the bodies (ladder_4w.BODY_PARTS).
 """
 
 from __future__ import annotations

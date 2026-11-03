@@ -86,7 +86,7 @@ class ElementSizeTest(unittest.TestCase):
         return tool("frame_shell").run(fixtures.ladder_design(), self.LC, [{"prediction_id": "pred-0001"}], params)
 
     def test_size_and_mesh_convergence(self):
-        rec = self.run_with({"element_size": {"value": 0.02, "unit": "m"}})  # mesh_convergence "3" by default
+        rec = self.run_with({"element_size": {"value": 0.02, "unit": "m"}, "mesh_convergence": "3"})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
         self.assertTrue(any(e["name"].startswith("shell model") and "(edge 20 mm)" in e["name"] for e in rec["effects"]))
