@@ -448,7 +448,7 @@ class ReferenceLook(unittest.TestCase):
     def test_n18_closing(self):
         r, n = self.rules, self.rules["n18"]
         t = n["times"]
-        order = ["gather_s", "line_s", "open_s", "draw_s", "name_s", "tag_s", "url_s", "credit_s", "out_s"]
+        order = ["gather_s", "line_s", "open_s", "draw_s", "name_s", "tag_s", "url_s", "credit_s"]
         self.assertEqual([k for k in t if not k.startswith("_")], order)
         self.assertEqual([t[k] for k in order], sorted(t[k] for k in order))
         self.assertEqual(n["duration_s"], 9.0)
@@ -458,25 +458,52 @@ class ReferenceLook(unittest.TestCase):
         self.assertLessEqual(t["gather_s"] + g["stagger_s"] + g["gather_dur_s"], t["line_s"] + 1e-9)
         self.assertGreaterEqual(t["line_s"] - t["gather_s"], 0.3)
         self.assertAlmostEqual(t["line_s"] + n["light"]["grow_dur_s"], t["open_s"])
-        # the credit: under the URL, small but not below the minimum, above the band
+        # the dark is only the short wait before the door opens: it is gone by 1.5 s,
+        # and the seam light with it, before the vehicle is drawn on the paper
+        d = n["door"]
+        swing = t["open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertLessEqual(swing + d["open_dur_s"], 1.5 + 1e-9)
+        self.assertLessEqual(swing + n["light"]["out_dur_s"], t["draw_s"])
+        self.assertLessEqual(swing + d["open_dur_s"], t["draw_s"])
+        self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 120)
+        self.assertEqual(len(d["ease"]), 4)
+        self.assertEqual(len(d["crack_ease"]), 4)
+        # the seam runs inside the safe area, so the motes land above the band
+        self.assertGreaterEqual(n["light"]["y"], r["safe"]["y"])
+        self.assertLessEqual(n["light"]["y"] + n["light"]["h"], r["subtitle_band"]["y"])
+        # with the voice (the maker's recording: sentence 2, HIRAKU は、CAE を、…, from 3.61 s):
+        # the name starts just before it, and everything is in before it ends (7.07 s)
+        self.assertTrue(3.0 <= t["name_s"] <= 3.61, t["name_s"])
+        self.assertLess(t["name_s"], t["tag_s"])
         c, u = n["credit"], n["url"]
+        self.assertLessEqual(t["credit_s"] + c["fade_dur_s"], 7.07)
+        # top to bottom: vehicle, name, rule, tag, url, credit
+        v, name, tag = n["vehicle"], n["title"]["name"], n["title"]["tag"]
+        self.assertLessEqual(v["y"] + v["w"] / 2, name["y"])
+        self.assertLessEqual(name["y"] + name["size_px"], n["rule"]["y"])
+        self.assertLessEqual(n["rule"]["y"] + n["rule"]["h"], tag["y"])
+        self.assertLessEqual(tag["y"] + 1.2 * tag["size_px"], u["y"])
+        # the credit: under the URL, small but not below the minimum, above the band
         self.assertGreaterEqual(c["size_px"], r["min_text_px"])
         self.assertLess(c["size_px"], u["size_px"])
         self.assertLessEqual(u["y"] + u["size_px"], c["y"])
         self.assertLess(c["y"] + 1.25 * c["size_px"], r["subtitle_band"]["y"])
         self.assertTrue(0 < c["alpha"] < 1)
-        self.assertLess(t["credit_s"] + c["fade_dur_s"], t["out_s"])
-        b = n["name_bloom"]
-        self.assertGreater(b["peak_blur_px"], b["rest_blur_px"])
-        self.assertGreater(b["halo_peak_alpha"], b["halo_rest_alpha"])
+        self.assertLess(t["credit_s"] + c["fade_dur_s"], n["duration_s"])
 
     def test_n18_page(self):
         html = (lc.SCREENS / "n18.html").read_text(encoding="utf-8")
         self.assertIn('<p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>', html)
         self.assertNotIn("Built with Claude", html)
         self.assertNotIn("powered", html)                  # the ?powered=1 variant is gone
-        for part in ('svg class="gather"', 'class="seed-line"', 'class="name-halo"', "letter-bloom"):
+        for part in ('svg class="gather"', 'class="seed-line"', 'class="leaf leaf-l"', 'class="leaf leaf-r"'):
             self.assertIn(part, html)
+        # ends on paper, the same ground as N00; the night is the door, dropped in ?layer=fg
+        self.assertIn('<div class="stage paper-grid">', html)
+        self.assertIn('<div class="stage paper-grid">', (lc.SCREENS / "n00.html").read_text(encoding="utf-8"))
+        self.assertIn('<div class="door bg-only" data-kind="effect"', html)
+        self.assertNotIn("--page-bg: var(--night)", html)
+        self.assertNotIn("fade-out", html)                 # no fade to black at the end
         self.assertNotIn("<img", html)                     # no logo
         for banned in BANNED:
             self.assertNotIn(banned, html)
@@ -488,21 +515,93 @@ class ReferenceLook(unittest.TestCase):
         self.assertGreater(n["tagline"]["y"], n["rule"]["y"] + n["rule"]["h"])
         self.assertLessEqual(n["tagline"]["y"] + 1.3 * n["tagline"]["size_px"], n["pets"]["y"])
         p = n["pets"]
-        span = 9 * p["pitch_px"] + p["group_gap_px"] + p["w"]
+        span = 6 * p["pitch_px"] + p["w"]                               # the seven domain pets
         x0 = (r["stage"]["w"] - span) / 2
         self.assertGreaterEqual(x0, r["safe"]["x"])                    # the row is inside safe
         self.assertLess(p["w"], p["pitch_px"])                          # boxes do not touch
-        for lab in ("chip", "tag"):
-            self.assertLess(p["y"] + p["h"] + n[lab]["gap_above_px"] + n[lab]["h"], r["subtitle_band"]["y"])
-            self.assertGreaterEqual(n[lab]["size_px"], r["story"]["defaults"]["body_text_px"])
+        self.assertNotIn("tag", n)                                      # no name tags: the roles sit on the name
+        self.assertLess(p["y"] + p["h"] + n["chip"]["gap_above_px"] + n["chip"]["h"], r["subtitle_band"]["y"])
+        self.assertGreaterEqual(n["chip"]["size_px"], r["story"]["defaults"]["body_text_px"])
         t = n["times"]
+        self.assertEqual((t["name_s"], t["tagline_s"], t["row_s"], t["light_s"], t["step_s"]),
+                         (0.25, 1.0, 1.4, 2.0, 0.42))                   # the chips light when they did
         self.assertLess(t["name_s"], t["tagline_s"])
         self.assertLess(t["row_s"] + 0.5, t["light_s"] + 1e-9)          # the row is in before the first chip
         self.assertLess(t["light_s"] + 6 * t["step_s"] + n["motion"]["pass_dur_s"], n["duration_s"])
+        self.assertEqual(n["motion"]["pass_dur_s"], n["motion"]["hop_period_s"])  # one hop per jump
+        self.assertGreater(n["motion"]["jump_over_px"], 0)              # the pet comes down onto its letter
         lim = r["story"]["cuts"]["n00"]["limits"]
-        self.assertGreaterEqual(lim["label"], 10)                       # 7 chips + 3 name tags
+        self.assertGreaterEqual(lim["label"], 7)                        # the 7 chips
         self.assertGreaterEqual(lim["moving"], 10)                      # the ten pets
         self.assertTrue(lim["why"])
+
+    def test_n00_title_pets(self):
+        r, n = self.rules, self.rules["n00"]
+        tp = n["title_pets"]
+        seats = tp["seats"]
+        pet3d = (lc.SCREENS.parent / "pets" / "pet3d.js").read_text(encoding="utf-8")
+        roles = re.findall(r'\{ id: "([a-z.]+)", name:', pet3d)
+        self.assertEqual(sorted(s["role"] for s in seats), sorted(roles))  # each of the ten once
+        per_letter = {}
+        for s in seats:
+            self.assertIn(s["letter"], range(6))                        # H I R A K U
+            self.assertGreaterEqual(s["at"], 0)
+            self.assertLessEqual(s["at"], 1)
+            self.assertLessEqual(abs(s["yaw_deg"]), 45)
+            per_letter.setdefault(s["letter"], []).append(s["at"])
+        self.assertEqual(sorted(per_letter), list(range(6)))            # every letter has a pet
+        self.assertTrue(all(1 <= len(v) <= 2 for v in per_letter.values()))
+        # the domains take their seats from left to right in the order their chips light
+        order = [(s["letter"], s["at"]) for s in seats if s["role"].startswith("cae.")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual([s["role"] for s in seats if s["role"].startswith("cae.")],
+                         [x for x in roles if x.startswith("cae.")])
+        # small next to the letters, and the seat box stays inside safe above the name
+        size = n["name"]["size_px"]
+        self.assertLessEqual(tp["h_em"], 0.7)
+        self.assertGreaterEqual(tp["lift_px"], 0)
+        self.assertGreaterEqual(n["name"]["y"] - tp["h_em"] * size + 0.2 * size, r["safe"]["y"])
+
+    def test_n00_play(self):
+        n = self.rules["n00"]
+        pl, t, m = n["play"], n["times"], n["motion"]
+        size = n["name"]["size_px"]
+        roles = {s["role"]: s for s in n["title_pets"]["seats"]}
+        # all six letters are in while the voice says the name (from 0.3 s)
+        nm = n["name"]
+        self.assertLessEqual(t["name_s"] + 5 * nm["in_step_s"] + nm["in_dur_s"], 1.0 + 1e-9)
+        # the play starts after the name has been said, and is still before 7.5 s
+        self.assertGreaterEqual(pl["from_s"], 1.3)
+        self.assertLessEqual(pl["still_s"], 7.5)
+        first_land = t["light_s"] + m["pass_dur_s"]
+        last_land = t["light_s"] + 6 * t["step_s"] + m["pass_dur_s"]
+        self.assertGreaterEqual(first_land, pl["from_s"])
+        self.assertLessEqual(last_land + max(pl["land"]["dur_s"], pl["crash"]["dur_s"]), pl["still_s"])
+        sh, pu, ch = pl["shake"], pl["push"], pl["cheer"]
+        self.assertLessEqual(sh["start_s"] + sh["dur_s"], pu["start_s"])
+        self.assertLessEqual(pu["start_s"] + pu["dur_s"], pl["still_s"])
+        self.assertLessEqual(ch["start_s"] + ch["dur_s"] + ch["land_dur_s"], pl["still_s"])
+        self.assertEqual(ch["dur_s"], m["hop_period_s"])                 # one pass hop
+        # small moves, so the letters stay readable: under a tenth of the letter size
+        for k in ("sink_px", "dx_px"):
+            for part in (pl["land"], pl["crash"], sh, ch):
+                if k in part:
+                    self.assertLess(part[k], 0.1 * size + 1e-9, (k, part[k]))
+        self.assertLessEqual(max(pu["step_px"]), 0.1 * size)
+        # the pets' own hops are small next to the letters
+        self.assertLessEqual(max(ch["up_px"], pl["crash"]["toss"]["up_px"]), 0.25 * size)
+        self.assertLessEqual(sh["tilt_deg"] + sh["rot_deg"], 8)
+        self.assertLessEqual(pu["lean_deg"], 20)
+        self.assertGreater(pl["crash"]["sink_px"], pl["land"]["sink_px"])    # crash lands harder
+        # the shaken letter is the NVH pet's; the pushers sit on the next letter
+        self.assertEqual(roles["cae.nvh"]["letter"], sh["letter"])
+        self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
+        for role in pu["roles"]:
+            self.assertEqual(roles[role]["letter"], sh["letter"] + 1)
+        nvh_land = t["light_s"] + 5 * t["step_s"] + m["pass_dur_s"]
+        self.assertGreaterEqual(sh["start_s"], nvh_land)
+        self.assertEqual(roles[pl["crash"]["toss"]["role"]]["letter"], roles["cae.crash"]["letter"])
+        self.assertIn(ch["role"], roles)
 
     def test_n00_page(self):
         html = (lc.SCREENS / "n00.html").read_text(encoding="utf-8")
@@ -523,6 +622,13 @@ class ReferenceLook(unittest.TestCase):
         self.assertEqual(ids, re.findall(r'\{ id: "([a-z.]+)", name:', pet3d))
         self.assertEqual(len(ids), 10)
         self.assertIn('data-kind="moving"', html)
+        # the seats come from n00.title_pets, measured on the name's letters
+        for part in ("R.title_pets.seats", "measureText", "actualBoundingBoxAscent", "TP.h_em", "M.jump_over_px"):
+            self.assertIn(part, html)
+        self.assertNotIn('class="tag"', html)                           # no name tags any more
+        # the play: every letter is a <b> moved at each t from n00.play
+        for part in ("R.play", "<b>${c}</b>", "letterMove", "onLetter", "var(--name-in-dur)", "var(--name-in-step)"):
+            self.assertIn(part, html)
         for banned in BANNED:
             self.assertNotIn(banned, html)
 
@@ -1318,11 +1424,14 @@ class InBrowser(unittest.TestCase):
             gx: parseFloat(c.style.getPropertyValue('--gx')), gy: parseFloat(c.style.getPropertyValue('--gy')),
             o: getComputedStyle(c).opacity })),
           credit: [document.querySelector('.credit').textContent, getComputedStyle(document.querySelector('.credit')).opacity],
+          door: getComputedStyle(document.querySelector('.door')).visibility,
+          ground: getComputedStyle(document.querySelector('.stage')).backgroundColor,
+          paper: getComputedStyle(document.documentElement).getPropertyValue('--paper').trim(),
         })"""
         got = {}
         cap = export.Capture(lc.SCREENS / "n18.html", scale=0.25)
         try:
-            for t in (0.0, 0.5, 7.0):
+            for t in (0.0, 0.5, 1.5, 7.0, 8.9):
                 cap.page.evaluate("t => window.__export.seek(t)", t)
                 got[t] = cap.page.evaluate(script)
         finally:
@@ -1341,6 +1450,36 @@ class InBrowser(unittest.TestCase):
         self.assertEqual(got[7.0]["credit"][0], "HIRAKU Powered by Claude")
         self.assertAlmostEqual(float(got[7.0]["credit"][1]), n["credit"]["alpha"], places=3)
         self.assertEqual(float(got[0.5]["credit"][1]), 0.0)
+        # dark (the shut door) at the start, gone by 1.5 s; the ground is N00's paper
+        self.assertEqual(got[0.5]["door"], "visible")
+        self.assertEqual(got[1.5]["door"], "hidden")
+        self.assertEqual(got[8.9]["door"], "hidden")
+        self.assertEqual(got[8.9]["paper"].lower(), "#f4f1ea")
+        self.assertEqual(got[8.9]["ground"], "rgb(244, 241, 234)")
+        self.assertAlmostEqual(float(got[8.9]["credit"][1]), n["credit"]["alpha"], places=3)
+
+    def test_n00_letters_play_then_stand_still(self):
+        from promo import export
+
+        n = lc.load_layout()["n00"]
+        sh = n["play"]["shake"]
+        script = """() => [...document.querySelectorAll('.name b')].map((b) => b.style.transform)"""
+        got = {}
+        cap = export.Capture(lc.SCREENS / "n00.html", scale=0.25)
+        try:
+            for t in (0.3, 0.6, 1.2, 4.3, 5.65, 7.5, 8.5):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                got[t] = cap.page.evaluate(script)
+            cap.page.evaluate("t => window.__export.seek(t)", 5.65)
+            k = cap.page.evaluate(f"() => window.N00_SEATS.letterMove({sh['letter']}, 5.65)")
+        finally:
+            cap.close()
+        for t in (0.3, 0.6, 1.2, 7.5, 8.5):                       # in line while the name is said, and at the end
+            self.assertEqual(got[t], [""] * 6, t)
+        self.assertNotEqual(got[4.3][2], "")                      # crash lands on R
+        self.assertNotEqual(got[5.65][sh["letter"]], "")          # K out of line, before the push
+        self.assertAlmostEqual(k["dx"], sh["dx_px"], places=3)
+        self.assertAlmostEqual(k["rot"], sh["tilt_deg"] * 3.141592653589793 / 180, places=4)
 
     def test_labels_come_and_go(self):
         from promo import export
