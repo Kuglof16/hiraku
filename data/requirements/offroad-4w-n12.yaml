@@ -135,7 +135,7 @@ requirements:
     trust: 1
     basis: request
   - key: Q51
-    name: 0 → 最高速度 (Q50) の時間
+    name: 0 → 最高速度の時間
     value: 6
     unit: s
     source: default
