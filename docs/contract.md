@@ -81,6 +81,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - メッシュの大きさの確かめ (post 処理): 誤差の目安は field の `kind` `error_estimate` (要素ごと `per_element`、単位 `%`。例: Zienkiewicz–Zhu。なめらかに直した応力と要素の応力の差のエネルギーの大きさを、直した応力の大きさで割る)。画面で色に塗り、細かくすべき所を見せる。収束は analysis の任意の欄 `mesh_convergence`: 判定に使う値 (`quantity`・`unit`) を同じ設計の細かいメッシュで解き直した `levels` (粗い順、`element_size_mm`・`value`、任意で `elements`、記録したメッシュなら `mesh_id`。細かい方のメッシュは記録しない)、最も細かい 2 つの変化 `change_pct` と限度 `limit_pct`、3 つあれば Richardson の `observed_order`・`extrapolated`・`error_pct`、`verdict` (`converged`・`not_converged`・`singular`。singular は小さくするほど値が上がり続ける所 (鋭い角・点の荷重) で、そのままでは判定に使えない)
 - 1 つの版に mesh が 2 つ以上あってよい (例: 版の板のメッシュ `frame_mesh` と、管ごとに切って tie で結ぶ `frame_tubes` のメッシュ)。mesh の任意の欄 `mesher` に作ったものの名前を書き、field は自分の載る mesh を `mesh_id` で名指す。道具が自分でメッシュを作るときも、`mesh.created` を `analysis.started` の前に出す
 - メッシュを作るのは解析部の `hiraku.solvers.frame_mesh(design)` (入口は任意の 1 つ、`OPTIONAL_SOLVER_ENTRY_POINTS`。mesh_id の無い mesh を返す)。記録するのは `analyze`: 道具が `needs_mesh` (無ければ False) なら、その版の mesh が無いときだけ 1 回作って `mesh.created` を出し (mesh は解析の入力なので、その解析の `analysis.started` より前に出す)、道具の `run` に `params["mesh"]` で渡す。道具は同じ設計から作った mesh かを確かめ、field の `mesh_id` に書く。渡されないとき (照合・単体の試験) は mesh の field を出さず results だけ返す
+  - 自分のメッシュを作る道具 (例: `frame_tubes`): 道具は `needs_mesh = True` と `make_mesh(design)` (mesh_id の無い mesh を返す。`mesher` はその道具の名前) を持つ。`analyze` は frame_mesh の代わりにそれを呼び、版ごと・mesher ごとに 1 回だけ作って `mesh.created` を `analysis.started` より前に出し、`params["mesh"]` で渡す。同じ版のほかの荷重条件では同じ mesh を使い回す (作り直さない)。`run` の戻りで mesh を返す形 (`out["mesh"]`) は使わない。mesh の field を出さず部材ごとの値だけを返す道具は `make_mesh` を持たなくてよい
 - サスの取付点は、設計の `support.suspension.hardpoints_mm` (取付点の名前 → vec3、mm) に、設計を作るコードが書く。K2 の関数・梁とシェル・画面は、ここから読む (出どころを 1 つにする)。取付点ごとの力は、analysis の `vectors` に `kind: "joint"` (`at` は `<支持の id>.<取付点の名前>`、`origin_mm` は取付点、`vector_N` は車体が受ける力) で出す。サスのタワーはフレームの部材、金具の板は部品 (kind `bracket`) で持つ
 - 接地する所 (`support`) は任意で `tire` (`coefficients`: `data/tyres/` のタイヤの係数のファイル、`relaxation_length_mm`) を持ち、サスペンションは任意で `bushings` (腕の内側のブッシュの半径方向・軸方向とタイロッドの剛性 N/mm、K&C の C) を持つ。無い値は解く側が仮定して analysis の `assumptions` に書く
 - `series` は時間 (`t_s`) か、ほかの量 (`x`: `{quantity, unit, values}`。K&C の台のストロークや横力) のどちらか 1 つを横軸に持つ
@@ -136,6 +137,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `runs/` はコミットしない
 
 - 実行を動かしたもの: project の任意の欄 `driver` (`scripted` 台本・`agent_sdk` HIRAKU のエージェントのループを本人の `ANTHROPIC_API_KEY` で・`claude_code_plugin` 本人の Claude Code のセッションに HIRAKU のプラグインをつないで、本人のサインインで。このとき HIRAKU は Claude を呼ばず、`events.jsonl` を書くのは MCP サーバーのプロセス)
+  - プラグインの実行のフォルダの印: `plugin.lock` (`layout.PLUGIN_LOCK_FILE`) は、状態と outbox を読み書きする間だけ取る短い排他で、セッションが実行を持っている印ではない。持っている印は `plugin.alive` (`layout.PLUGIN_ALIVE_FILE`): MCP サーバーが実行を受け持つ間、見回りのたびに触る。画面は、`plugin.alive` の更新が `layout.PLUGIN_ALIVE_S` 秒より新しければ、その実行に Claude Code のセッションが付いていると見る (ヒアリングの答え・ナレッジ・止めるボタンを受ける)
 
 - 困った所: report の任意の欄 `issues` (`write_report` の入力にも同じ欄)。設計の結果ではなく、HIRAKU そのものが邪魔をした所を書く: `kind` (`missing_tool`・`missing_formula`・`assumed_value`・`unexplained_mismatch`・`tool_error`・`unclear_instruction`・`other`)、`what`、任意で `where`・`record_ids`・`workaround`。実験部が集めて、統括部が部署に振る
 
