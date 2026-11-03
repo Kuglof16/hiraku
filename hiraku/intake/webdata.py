@@ -12,6 +12,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.catalog import REPO_ROOT
 from hiraku.intake import facts
+from hiraku.intake import hearing
 from hiraku.intake.domains import ANALYSIS_DOMAINS
 from hiraku.intake.flags import FLAG_LABELS, FLAGS, SPEED_CLASSES
 from hiraku.intake.knowledge import CATEGORIES
@@ -26,6 +27,7 @@ def tables() -> dict:
         "SPEED_CLASSES": [{"name": n, "symbol": s, "meaning": m} for n, (s, m) in SPEED_CLASSES.items()],
         "DOMAINS": [{"name": d, "ja": contract.DOMAIN_NAMES_JA[d]} for d in ANALYSIS_DOMAINS],
         "CATEGORIES": [{"name": n, "ja": ja} for n, ja in CATEGORIES.items()],
+        "ITEM_HELP": {it["key"]: {"why": it["why"], "example": str(it["example"])} for it in hearing.load_items() if it.get("why")},
         "FACTS": {n: {"label": label, "unit": unit, "inDesigns": scope != "declared"}
                   for n, (label, unit, scope) in facts.FACTS.items()},
     }

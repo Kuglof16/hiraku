@@ -237,8 +237,8 @@ const show = (id) => {{
   return el.text();
 }};
 const sm = show("SM-02"), sy = show("SY-01");
-console.log(JSON.stringify({{ sm: [sm.includes("要る値"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計は持っていない値")],
-                              sy: /要る値(?!が)/.test(sy) }}));
+console.log(JSON.stringify({{ sm: [sm.includes("判定に必要なデータ"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計には無いデータ")],
+                              sy: /判定に必要なデータ(?!が)/.test(sy) }}));
 """)
         self.assertEqual(got, {"sm": [True, True, True], "sy": False})  # a system rule's check is a function, not a list of values
 
@@ -285,14 +285,14 @@ const buttons = (id) => card(id).all('button').map((b) => b.text());
 const shown = { u1: buttons('U1-04'), sm: buttons('SM-01'), parts: card('U1-04').text().includes('battery') };
 card('U1-04').listeners.mouseenter[0]();
 card('U1-04').listeners.mouseleave[0]();
-card('U1-04').all('button').find((b) => b.text() === 'この規則を外す').listeners.click[0]();
+card('U1-04').all('button').find((b) => b.text() === 'このルールを使わない').listeners.click[0]();
 const send = el.all('button').find((b) => b.text() === '答えて進める');
 send.listeners.click[0]();
 await new Promise((r) => setTimeout(r, 20));
 console.log(JSON.stringify({ shown, focused, sent }));
 """)
-        self.assertEqual(got["shown"]["u1"], ["設計を直す", "この規則を外す"])
-        self.assertEqual(got["shown"]["sm"], ["この規則を外す"])  # only the choices that were offered
+        self.assertEqual(got["shown"]["u1"], ["設計を直す", "このルールを使わない"])
+        self.assertEqual(got["shown"]["sm"], ["このルールを使わない"])  # only the choices that were offered
         self.assertTrue(got["shown"]["parts"])
         self.assertEqual(got["focused"], [["battery"], []])  # the host is told which parts to light, then to stop
         self.assertEqual(got["sent"][0]["ruleAnswers"], [{"rule_id": "U1-04", "choice": "drop_rule"}])

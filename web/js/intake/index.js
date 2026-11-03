@@ -28,7 +28,7 @@ import { renderA1 } from "./a1.js";
 import { renderA2 } from "./a2.js";
 import { renderA5 } from "./a5.js";
 
-const SCREENS = [["A1", "依頼", renderA1], ["A2", "ヒアリング", renderA2], ["A5", "ナレッジ", renderA5]];
+const SCREENS = [["A1", "作りたいもの", renderA1], ["A2", "確認したいこと", renderA2], ["A5", "守るルール", renderA5]];
 
 function ensureCss() {
   const href = new URL("./intake.css", import.meta.url).href;
@@ -67,7 +67,7 @@ export function mountIntake(host, api, options = {}) {
         }
       }
     }
-    fill(nav, SCREENS.map(([id, label]) => h("button", { class: id === ui.screen ? "on" : "", onclick: () => show(id) }, `${id} ${label}`)));
+    fill(nav, SCREENS.map(([id, label]) => h("button", { class: id === ui.screen ? "on" : "", onclick: () => show(id), dataset: { screen: id } }, label)));
   }
   ui.rerender = (opts) => draw(opts);
 

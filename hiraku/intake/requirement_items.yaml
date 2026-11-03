@@ -6,6 +6,8 @@
 #               confirm  = asked once with a default, the default is used when there is no answer
 #               default  = not asked; the default is used and shown, the person can change it
 #   question    what the hearing says (must and confirm)
+#   why         one line for a first-time reader: why the question is needed (shown on the screen with the question)
+#   example     an example answer (shown on the screen)
 #   choices     answers offered; the person can always write another (allow_other)
 #   default     {value, unit?, trust, basis}: used when nothing better is known. A product's own
 #               requirements file (data/requirements/products/) wins over it.
@@ -20,12 +22,16 @@ items:
     name: 使う頻度・年数
     applies_if: always
     ask: confirm
+    why: 壊れるまでに何回使われるかで、くり返しの力 (疲れ) の確かめ方を決めるためです。
+    example: 週末ごとに 5 年
     question: どのくらいの頻度で、何年くらい使いますか。
 
   - key: Q11
     name: 路面・床と摩擦係数
     applies_if: self_propelled or standing
     ask: confirm
+    why: 滑りやすさで、止まれるか・転ばないかの確かめ方が変わるためです。
+    example: 砂利 / 舗装路
     question: 走る(置く)面は何ですか。摩擦係数が分かれば添えてください。
     choices: [{label: 砂利, value: 砂利}, {label: 舗装路, value: 舗装路}, {label: 土, value: 土}, {label: 屋内の床, value: 床}]
 
@@ -49,6 +55,8 @@ items:
     name: 走りながらの横の傾き
     applies_if: self_propelled and rough
     ask: confirm
+    why: 横転しやすさの確かめに使います。
+    example: 15 度
     question: 走りながら、どのくらい横に傾いた斜面を通りますか。
     choices: [{label: 10°, value: 10, unit: deg}, {label: 15°, value: 15, unit: deg}, {label: 20°, value: 20, unit: deg}]
 
@@ -56,6 +64,8 @@ items:
     name: 段差
     applies_if: self_propelled
     ask: confirm
+    why: 越える段差の高さで、衝撃の大きさが決まるためです。
+    example: 100 mm
     question: 越える段差の高さは。
 
   - key: Q16
@@ -85,6 +95,8 @@ items:
     name: 気温 (範囲の高い端)
     applies_if: battery or electric or outdoor
     ask: confirm
+    why: 電池や樹脂が熱で弱くならないかを確かめるためです。
+    example: 40 度
     question: 使う場所の気温の高い側は何度ですか。
     default: {value: 40, unit: degC, trust: 3, basis: assumption (the hot end of the range of use)}
 
@@ -92,6 +104,8 @@ items:
     name: 水・ほこり (IP)
     applies_if: battery or electric
     ask: confirm
+    why: 雨や泥で電気の部品が壊れないかの確かめに使います。
+    example: 水の飛まつ
     question: 水やほこりへの強さ (IP) はどのくらい要りますか。
     choices: [{label: 対策なし, value: IPX0}, {label: 水の飛まつ, value: IPX4}, {label: 水・ほこりに強い, value: IP54}, {label: 水に浸かっても, value: IP67}]
 
@@ -99,6 +113,8 @@ items:
     name: 人数と荷重の組み合わせ
     applies_if: ride or lean
     ask: must
+    why: 人数と荷の組み合わせで、重さのかかり方が変わるためです。
+    example: 2 人 + 荷
     question: "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"
     choices: [{label: 空車, value: empty}, {label: 運転者だけ, value: driver}, {label: 2 人, value: two}, {label: 2 人 + 荷, value: two_cargo}]
 
@@ -142,6 +158,8 @@ items:
     name: 弱い人がいるか
     applies_if: always
     ask: confirm
+    why: いる場合は、はさまれや倒れかかりをより厳しく見るためです。
+    example: いない / 子ども
     question: 子どもや高齢者など、力の弱い人が使ったり、そばにいたりしますか。
     choices: [{label: いない, value: いない}, {label: 高齢者, value: 高齢者}, {label: 子ども, value: 子ども}, {label: 高齢者と子ども, value: 高齢者と子ども}]
 
@@ -149,6 +167,8 @@ items:
     name: 積載
     applies_if: cargo
     ask: must
+    why: 荷の重さで、骨組みにかかる力が決まるためです。
+    example: 150 kg
     question: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。
 
   - key: Q41
@@ -160,6 +180,8 @@ items:
     name: 液体のこぼれまでの余裕角
     applies_if: liquid
     ask: confirm
+    why: 傾いたり揺れたりしたとき、中身がこぼれないかを確かめるためです。
+    example: 30 度
     question: 運ぶ液体がこぼれるまでの傾きの余裕は何度ですか。
 
   - key: Q43
@@ -171,12 +193,16 @@ items:
     name: 最高速度
     applies_if: self_propelled
     ask: must
+    why: 止まるまでの距離と、ぶつかったときの強さを計算するためです。
+    example: 40 km/h
     question: 最高速度は。
 
   - key: Q51
     name: 加速
     applies_if: self_propelled
     ask: confirm
+    why: モーターと電池の大きさを決めるためです。
+    example: 0 から 40 km/h まで 6 秒
     question: 目標の加速 (たとえば 0 から最高速度まで何秒) はありますか。
 
   - key: Q52
@@ -193,6 +219,8 @@ items:
     name: 航続・稼働時間
     applies_if: self_propelled and battery
     ask: confirm
+    why: 電池の容量を決めるためです。
+    example: 2 時間
     question: 充電から次の充電まで、どのくらい動かしますか (距離か時間)。
 
   - key: Q55
@@ -204,6 +232,8 @@ items:
     name: アクチュエータの動く範囲
     applies_if: electric and not self_propelled
     ask: confirm
+    why: 動く部分が当たらない広さを確かめるためです。
+    example: 0 度から 60 度まで
     question: 動かす部分の範囲 (角度か長さ) は。
 
   - key: Q57
@@ -227,6 +257,8 @@ items:
     name: 安全率 (降伏に対して)
     applies_if: always
     ask: confirm
+    why: 設計の余裕の大きさです。大きいほど安全で、重くなります。
+    example: 1.5
     question: 部材の安全率 (降伏に対する余裕) はいくつにしますか。
     default: {value: 1.5, unit: "1", trust: 3, basis: assumption}
 
@@ -250,6 +282,8 @@ items:
     name: 横転したときの保護枠 (ROPS)
     applies_if: ride and rough
     ask: confirm
+    why: 横転したとき乗っている人を守る枠があるかで、必要な強さの確かめ方が変わるためです。
+    example: つける
     question: 横転したときの保護枠 (ROPS) をつけますか。
     choices: [{label: つける, value: あり}, {label: つけない, value: なし}]
 
@@ -272,7 +306,7 @@ items:
         design load is the assumption)
 
   - key: Q67
-    name: 手の操作部の握る点の動きの上限 (Q66 の力で)
+    name: 手の操作部の握る点の動きの上限 (上の力をかけたとき)
     applies_if: ride and self_propelled
     ask: default
     default:
@@ -294,7 +328,7 @@ items:
         UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check
 
   - key: Q69
-    name: 足の操作部の踏む面の支えの動きの上限 (Q68 の力で)
+    name: 足の操作部の踏む面の支えの動きの上限 (上の力をかけたとき)
     applies_if: ride and self_propelled
     ask: default
     default:
@@ -308,6 +342,8 @@ items:
     name: 公道を走るか
     applies_if: ride and self_propelled
     ask: must
+    why: 公道なら、道路の決まりの確かめが必要になるためです。
+    example: 私有地だけ
     question: 公道を走りますか (公道なら軽自動車の区分になり、寸法・35°・回転半径が付いてきます)。
     choices: [{label: 公道を走る, value: 公道}, {label: 私有地だけ, value: 私有地だけ}]
 
@@ -330,6 +366,8 @@ items:
     name: 電池の電圧
     applies_if: battery
     ask: confirm
+    why: 60 V を超えると感電の確かめが必要になるためです。
+    example: 51.2 V
     question: 電池の電圧は (60 V を超えると高電圧の扱いが要ります)。
 
   - key: Q75
@@ -368,7 +406,7 @@ items:
         CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03
 
   - key: Q78
-    name: Q77 の力を除いたあとの点 R の永久の横の変形の上限
+    name: 横の力を除いたあとに残る横の変形の上限
     applies_if: ride and rough
     ask: default
     default:
@@ -382,6 +420,8 @@ items:
     name: 材料と接合
     applies_if: always
     ask: confirm
+    why: 溶接や締め付けの決まりのどれを使うかを選ぶためです。
+    example: 鋼の溶接
     question: 主な材料と、つなぎ方は。
     choices: [{label: 鋼を溶接, value: 鋼の溶接}, {label: アルミ, value: アルミ}, {label: 木, value: 木}, {label: 樹脂, value: 樹脂}]
 
@@ -435,6 +475,8 @@ items:
     name: 悪路の走行距離
     applies_if: self_propelled and rough
     ask: confirm
+    why: くり返しの力 (疲れ) の確かめの長さを決めるためです。
+    example: 5000 km
     question: 悪路を合わせて何 km 走る前提で壊れないようにしますか。
     default: {value: 5000, unit: km, trust: 3, basis: assumption (no public basis found)}
 
@@ -442,6 +484,8 @@ items:
     name: 運転時間
     applies_if: continuous
     ask: confirm
+    why: 熱と摩耗の確かめの長さを決めるためです。
+    example: 1 日 2 時間、5 年
     question: 1 日に何時間、何年動かしますか。
 
   - key: Q92

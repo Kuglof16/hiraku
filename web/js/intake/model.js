@@ -142,7 +142,9 @@ export function domainCards(m) {
 
 // ----------------------------------------------------------------------------- A2
 
-export const SOURCE_JA = { user: "ユーザー", hearing: "ヒアリング", default: "既定値" };
+export const SOURCE_JA = { user: "あなたが指定", hearing: "あなたが答えた", default: "標準の値" };
+/** 確かさ: 1 and 2 differ in where the value was seen. */
+export const TRUST_JA = ["", "出典の本文で確かめた", "ほかの資料で確かめた", "仮の値 (確かめていない)"];
 
 /** The hearing as screen rows: each question with its answer once there is one. */
 export function hearingRows(m) {
@@ -164,7 +166,7 @@ export function ruleRows(m) {
   });
 }
 
-export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "この規則を外す" };
+export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "このルールを使わない" };
 
 /** Requirements that rest on an assumption (trust 3): they stay in the report as "not checked". */
 export function assumptions(m) {

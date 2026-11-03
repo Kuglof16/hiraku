@@ -5,11 +5,11 @@ import { fill, h } from "./dom.js";
 import { domainCards } from "./model.js";
 
 const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
-const PLACEHOLDER = "作りたいものを書いてください (例: ギターを作りたい)";
+const PLACEHOLDER = "作りたいものを書いてください。例: 林道を走れる小さな 2 人乗りの電動車";
 
 function bubble(msg) {
   if (msg.who === "note") return h("div", { class: "in-note" }, msg.text);
-  return h("div", { class: `in-msg ${msg.who}` }, h("div", { class: "in-who" }, msg.who === "user" ? "あなた" : "まとめ役"), h("p", {}, msg.text));
+  return h("div", { class: `in-msg ${msg.who}` }, h("div", { class: "in-who" }, msg.who === "user" ? "あなた" : "HIRAKU"), h("p", {}, msg.text));
 }
 
 function composer(api, ui) {
@@ -18,7 +18,7 @@ function composer(api, ui) {
     oninput: (e) => { ui.draft = e.target.value; },
   });
   const send = h("button", {
-    class: "in-btn primary", disabled: !api.send, title: api.send ? "" : "この画面では送れません (記録の再生中)",
+    class: "in-btn primary", disabled: !api.send, title: api.send ? "" : "この画面では送れません (記録の再生中です)",
     onclick: () => {
       const text = (ui.draft || "").trim();
       if (!text) return;
@@ -60,10 +60,10 @@ function card(c, api, ui) {
     h("header", {},
       h("h3", {}, c.shownName),
       c.renamed ? h("small", { class: "in-was" }, `← ${c.ja}`) : null,
-      lit && c.testCount !== null ? h("span", { class: "in-count", title: "当てはまる試験のうち、荷重条件を作れるものの数" }, `試験 ${c.testCount}`) : null),
+      lit && c.testCount !== null ? h("span", { class: "in-count", title: "荷重などの条件を作って確かめられる確認の数" }, `確認 ${c.testCount} 件`) : null),
     c.reason ? h("p", { class: "in-reason", title: c.reason }, c.reason) : null,
-    lit && c.testIds?.length ? h("div", { class: "in-tests" }, c.testIds.map((t) => h("code", {}, t))) : null,
-    lit && api.exclude ? h("button", { class: "in-btn small", onclick: () => api.exclude(c.domain) }, "外す") : null,
+    lit && c.testIds?.length ? h("details", { class: "in-tests" }, h("summary", {}, "くわしく"), c.testIds.map((t) => h("code", {}, t))) : null,
+    lit && api.exclude ? h("button", { class: "in-btn small", onclick: () => api.exclude(c.domain) }, "調べない") : null,
     c.state === "draft" ? h("p", { class: "in-draft" }, "製品の性質から当てた候補 (まだ決めていません)") : null,
     c.state === "wait" ? h("p", { class: "in-reason" }, "まだ決めていません") : null);
 }
@@ -78,23 +78,24 @@ export function renderA1(el, m, api, ui) {
   const reasons = Object.entries(m.domains?.flag_reasons || {});
   fill(el,
     h("section", { class: "in-chat" },
-      h("h2", {}, "依頼と返事"),
+      h("h2", {}, "作りたいものを伝える"),
       h("div", { class: "in-msgs", dataset: { keepScroll: "a1-msgs" } },
-        m.chat.length ? m.chat.map(bubble) : h("p", { class: "in-empty" }, "作りたいものを書くと、まとめ役が返事をしながら、使う分野を選びます")),
+        m.chat.length ? m.chat.map(bubble) : h("p", { class: "in-empty" }, "作りたいものを書くと、HIRAKU が調べる点を選びます")),
       composer(api, ui)),
     h("section", { class: "in-side", dataset: { keepScroll: "a1-side" } },
       h("div", { class: "in-block" },
-        h("h2", {}, "製品の性質", h("small", {}, api.editFlags ? "押すと直せます" : "読み取った性質")),
+        h("h2", {}, "読み取ったこと", h("small", {}, api.editFlags ? "違っていたら押して直せます" : "")),
         h("div", { class: "in-chips" }, chips(m, api), h("span", { class: "in-sep" }), speedChips(m)),
         reasons.length
           ? h("ul", { class: "in-why" }, reasons.map(([f, why]) => h("li", {}, h("b", {}, FLAGS.find((x) => x.name === f)?.symbol || f), why)))
           : null),
       h("div", { class: "in-block" },
-        h("h2", {}, "分野", h("small", {}, draftN ? `候補 ${draftN} / 7 (製品の性質から。選ぶのはこれから)` : m.domains && !m.domainsFromProject ? `${lit} / 7 が灯りました` : m.domains ? `${lit} / 7 (要件のファイルから)` : "")),
+        h("h2", {}, "分野 (どんな点を調べるか)", h("small", {}, draftN ? `候補 ${draftN} / 7 (製品の性質から。選ぶのはこれから)` : m.domains && !m.domainsFromProject ? `7 つのうち ${lit} 個を調べます` : m.domains ? `7 つのうち ${lit} 個 (決まっている内容から)` : "")),
         h("div", { class: "in-cards" }, cards.map((c) => card(c, api, ui))),
-        assembly.length ? h("p", { class: "in-foot" }, "組み立て・人 (分野には数えない): ", assembly.map((t) => h("code", {}, t))) : null),
+        assembly.length ? h("p", { class: "in-foot" }, "組み立てやすさ・人への当たりは、上の 7 つとは別に見ます ",
+          h("details", { class: "in-tests" }, h("summary", {}, "くわしく"), assembly.map((t) => h("code", {}, t)))) : null),
       h("div", { class: "in-block limits" },
-        h("span", { class: "in-pill" }, `繰り返し ${m.limits.round ?? "—"} 回まで`),
-        h("span", { class: "in-pill" }, `費用 ${m.limits.cost ?? "—"} USD まで`),
+        h("span", { class: "in-pill" }, `やり直しは ${m.limits.round ?? "—"} 回まで`),
+        h("span", { class: "in-pill" }, `費用は ${m.limits.cost ?? "—"} USD まで`),
         api.setLimits ? h("button", { class: "in-btn small", onclick: () => api.setLimits(m.limits) }, "上限を変える") : null)));
 }
