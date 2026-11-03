@@ -64,13 +64,14 @@
   },
   "n04": {
     "duration_s": 4.0,
-    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 5 (0:22.5-0:26.5). The same grid of eight tiles as N15",
+    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 6 (0:24.6-0:28.6). The same grid of eight tiles as N15",
     "header": { "x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30, "_note": "one line above the grid: version, rounds" },
     "grid": { "x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24,
               "_note": "seven domains and assembly; bottom 886, above the subtitle band" },
     "feature": { "x": 96, "y": 160, "w": 852, "h": 726, "_note": "the one domain shown large" },
     "list": { "x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24,
               "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)" },
+    "assembly": { "x": 96, "y": 160, "w": 1728, "h": 726, "_note": "the box of the assembly fast-forward from times.assembly_s: the grid's own box, so nothing jumps up or leaves the right side empty (it borrowed n16.view before)" },
     "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"],
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 },
               "mark": { "size_px": 44, "right": 16, "top": 10, "_note": "the tick or cross of the tile" },
@@ -78,7 +79,7 @@
                        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0,
-               "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box" },
+               "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), set from the synthesized voice's pauses; the maker's recording runs 0.41-3.52 s with 組み立て from about 2.08 s, so the times stand. Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -98,7 +99,7 @@
                        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0,
-               "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice runs 0.54-4.32 s" },
+               "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice (the maker's recording) runs 0.42-4.11 s" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n16": {
@@ -108,7 +109,7 @@
     "seek": { "x": 120, "y": 814, "w": 1352, "h": 48, "_note": "the seek bar over the lower edge of the view, 24 px inside its sides and bottom" },
     "steps": { "x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12, "_note": "the list of assembly steps in a narrow column on the right" },
     "times": { "lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8,
-               "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice runs 0.6-5.7 s; 組み立て手順を starts at 2.93 s" },
+               "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice (the maker's recording) runs 0.42-5.53 s; 組み立て手順を starts at about 2.72 s" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n05": {
@@ -228,8 +229,8 @@
     "view": { "x": 96, "y": 96, "w": 1200, "h": 790, "_note": "the 3D drive (loop and straight), the same box as n01.view" },
     "popup": { "x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2,
                "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)" },
-    "times": { "lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9,
-               "_note": "0.3-2.8 s the long loop (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)" },
+    "times": { "lead_s": 0.3, "loop_to_s": 2.0, "accel_s": 2.9,
+               "_note": "0.3-2.0 s the long loop, then the tick (below the limit) holds to 2.9 s while the voice says オーバーヒートしないか (1.44-2.56 s in the maker's recording) (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -244,7 +245,7 @@
     "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 } },
     "times": { "tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55,
-               "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.30-2.79, 3.14-5.93 s)" },
+               "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.41-2.79, 3.35-5.61 s in the maker's recording)" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -384,7 +385,7 @@
               "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)" },
     "dim_opacity": 0.3,
     "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
-    "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 runs 3.83-8.52 s)" },
+    "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 of the maker's recording runs 4.10-8.21 s)" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n17b": {
