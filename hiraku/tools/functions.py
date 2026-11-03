@@ -23,7 +23,8 @@ from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
 from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
-                                prediction_is_unfavourable, unfavourable_side, update_judgement)
+                                prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
+                                update_judgement)
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -663,6 +664,11 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         rec.update(status="failed", results=[], error="the tool returned a record that does not fit the contract: "
                    + "; ".join(errs)[:2000])
     out = ctx.store.add_record("analysis", rec, design_version=v, agent=agent, domain=lc["domain"])
+    # docs/contract.md 荷重の通り道が無いとき: load points with no path give the load case a failing verdict
+    ver = unsupported_load_verdict("", out, lc) if lc.get("criterion") else None
+    if ver is not None:
+        ver["verdict_id"] = ctx.store.next_id("verdict")
+        ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
     if out["status"] == "ok" and lc["domain"] in ctx.picked:  # a result beyond the criterion holds the tile back
         update_judgement(ctx, lc["domain"], v)
     return out
@@ -1199,7 +1205,17 @@ def _check_code_input(name: str, args: dict[str, Any]) -> str:
 
 def _made_answer(made: Any) -> Record:
     return {"name": made.name, "usable": made.usable, "checks": made.checks, "problems": made.problems,
-            "printed": made.printed[-2000:]}
+            "printed": _printed(made.printed)}
+
+
+PRINTED_HEAD, PRINTED_TAIL = 1500, 2500  # chars of a long print kept from its start and its end
+
+
+def _printed(text: str) -> str:
+    if len(text) <= PRINTED_HEAD + PRINTED_TAIL:
+        return text
+    cut = len(text) - PRINTED_HEAD - PRINTED_TAIL
+    return text[:PRINTED_HEAD] + f"\n... ({cut} 文字を省いた) ...\n" + text[-PRINTED_TAIL:]
 
 
 # Words by which a known answer's source names a reference outside the tool (lower case; HIRAKU's choice).
@@ -1258,7 +1274,19 @@ def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent
     """One whole tool in the shape make_tool takes, and what its parts must be (hiraku.tools.tool_template)."""
     from hiraku.tools.tool_template import tool_template
 
-    return tool_template()
+    out = tool_template()
+    if (args or {}).get("api_of") is not None:
+        out["api_of"] = _api_of(args["api_of"])
+    return out
+
+
+def _api_of(names: Any) -> Record:
+    from hiraku.tools.tool_template import api_doc
+
+    try:
+        return api_doc(names)
+    except ValueError as e:
+        raise ToolError(str(e)) from None
 
 
 def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
@@ -1267,9 +1295,14 @@ def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) 
     from hiraku.solvers import toolmaker
     from hiraku.tools.tool_template import RULE, allowed_api
 
+    api_of = args.get("api_of")
+    args = {k: v for k, v in args.items() if k != "api_of"}  # tool_input.check_tool has no api_of; the tool takes it
     code = _check_code_input("check_tool", args)
     out = _made_answer(_apply_refusals(ctx, toolmaker.make_tool(code, taken=tuple(ctx.tools))))
-    return {**out, "rule": RULE, "api": allowed_api()}
+    out = {**out, "rule": RULE, "api": allowed_api()}
+    if api_of is not None:
+        out["api_of"] = _api_of(api_of)
+    return out
 
 
 UNNAMED_TOOL = "unnamed"

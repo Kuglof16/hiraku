@@ -11,10 +11,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# design version -> the domains whose tile is red on it (the last version has none)
+# design version -> the domains whose tile is red on it (the last version has none). HK5, light first:
+# each version stops at its first red stage and the designer revises before the heavier stages.
 EXPECTED_REDS = {
-    1: {"assembly", "powertrain", "strength"},  # H1 and H3, P3, R1s (the joint wall's hot spot)
-    2: set(),
+    1: {"assembly"},    # stage 0: H1 and H3 (the layout)
+    2: {"powertrain"},  # stage 2: P3 (vehicle dynamics), stages 0 and 1 green
+    3: {"strength"},    # stage 3: R1s (the joint wall's hot spot on the shells), stages 0 to 2 green
+    4: set(),
 }
 
 

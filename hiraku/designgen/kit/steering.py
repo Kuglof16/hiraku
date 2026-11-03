@@ -9,9 +9,10 @@ Where the parts go:
   its inner to its outer joint (K2 hard points tie_inner, tie_outer of the support);
 - the pinion is on the rack's line at pinion_y (kept PINION_END_MM in from its ends); the steering
   wheel's centre is at wheel_x, on the driver's middle line; the column runs forward and down
-  from it at COLUMN_ANGLE_DEG, the wheel square to it, high enough that the rim's lowest point is
-  KNEE_GAP_MM above the top of the large driver's knee; the column ends above the pinion (at its
-  x, at least COLUMN_MIN_MM long) and an intermediate shaft runs from there to the pinion; the
+  from it at column_angle (COLUMN_ANGLE_DEG unless given), the wheel square to it, its centre at
+  wheel_z when given, else high enough that the rim's lowest point is KNEE_GAP_MM above the top of
+  the large driver's knee; the column ends above the pinion (at its x, at least COLUMN_MIN_MM long:
+  column_length) and an intermediate shaft runs from there to the pinion; the
   pinion moves inboard along the rack until that shaft is PEDAL_GAP_MM clear of the pedals;
 - a knuckle is the box around the outer joints of the wheel's links (lca_outer, uca_outer,
   tie_outer) and KNUCKLE_PAD_MM beyond them; a wheel that does not steer has a toe link from
@@ -114,18 +115,25 @@ def bar_mass(length_mm: float, radius_mm: float, rho: float) -> float:
     return rho * math.pi * radius_mm ** 2 * length_mm * 1e-9
 
 
-def column_direction() -> np.ndarray:
-    """Unit vector down the column from the wheel: forward and down at COLUMN_ANGLE_DEG."""
-    a = math.radians(COLUMN_ANGLE_DEG)
+def column_direction(angle_deg: float = COLUMN_ANGLE_DEG) -> np.ndarray:
+    """Unit vector down the column from the wheel: forward and down at angle_deg below the horizontal."""
+    a = math.radians(angle_deg)
     return np.array([math.cos(a), 0.0, -math.sin(a)])
 
 
-def wheel_centre(wheel_x: float, driver_y: float, knee_top: float) -> np.ndarray:
+def wheel_centre(wheel_x: float, driver_y: float, knee_top: float, angle_deg: float = COLUMN_ANGLE_DEG) -> np.ndarray:
     """The steering wheel's centre: the wheel square to the column, its rim's lowest point KNEE_GAP_MM
     above knee_top."""
-    u = column_direction()
+    u = column_direction(angle_deg)
     r = STEERING_WHEEL_DIAMETER_MM / 2.0
     return np.array([wheel_x, driver_y, knee_top + KNEE_GAP_MM + r * math.sqrt(1.0 - u[2] ** 2)])
+
+
+def column_length(centre, pinion_x: float, angle_deg: float = COLUMN_ANGLE_DEG) -> float:
+    """The column's length from the wheel's centre down to above the pinion (at the pinion's x), at least
+    COLUMN_MIN_MM."""
+    u = column_direction(angle_deg)
+    return max((pinion_x - float(centre[0])) / u[0], COLUMN_MIN_MM)
 
 
 def _clear_pinion(lay: Layout, low: np.ndarray, pin: np.ndarray, avoid: tuple[str, ...]) -> np.ndarray:
@@ -148,10 +156,17 @@ def _clear_pinion(lay: Layout, low: np.ndarray, pin: np.ndarray, avoid: tuple[st
     return pin
 
 
-def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinion_y: float, knee_top: float,
-          rho: float, avoid: tuple[str, ...] = ()) -> Record:
+def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinion_y: float, knee_top: float | None,
+          rho: float, avoid: tuple[str, ...] = (), column_angle: float = COLUMN_ANGLE_DEG,
+          wheel_z: float | None = None) -> Record:
     """Put the rack, tie rods, column and steering wheel in; returns their masses. avoid: parts (the
-    pedals) the intermediate shaft keeps PEDAL_GAP_MM clear of (the pinion moves inboard for it)."""
+    pedals) the intermediate shaft keeps PEDAL_GAP_MM clear of (the pinion moves inboard for it).
+    column_angle: the column below the horizontal (deg). wheel_z: the wheel centre's height; None puts the
+    rim's lowest point KNEE_GAP_MM above knee_top (wheel_centre)."""
+    if wheel_z is None and knee_top is None:
+        raise ValueError("the steering wheel needs its height (wheel_z) or the knee it clears (knee_top)")
+    if not 0.0 < column_angle < 90.0:
+        raise ValueError(f"the column angle must be between 0 and 90 deg below the horizontal, got {column_angle:g}")
     design = lay.design
     left_right = rack_ends(design)
     rods = {}
@@ -167,9 +182,10 @@ def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinio
     m_rack = rest - m_wheel - m_col - m_shaft
     ys = sorted(p[1] for p in left_right)
     pin = pinion(design, float(np.clip(pinion_y, ys[0] + PINION_END_MM, ys[1] - PINION_END_MM)))
-    centre = wheel_centre(wheel_x, driver_y, knee_top)
-    u = column_direction()
-    length = max((pin[0] - centre[0]) / u[0], COLUMN_MIN_MM)
+    centre = (wheel_centre(wheel_x, driver_y, knee_top, column_angle) if wheel_z is None
+              else np.array([wheel_x, driver_y, float(wheel_z)]))
+    u = column_direction(column_angle)
+    length = column_length(centre, float(pin[0]), column_angle)
     low = centre + u * length
     pin = _clear_pinion(lay, low, pin, avoid)
     put_link(lay, Item("steering_rack", "ステアリングのラック", "steering_rack", (0, 0, 0), m_rack), *left_right,
@@ -194,7 +210,8 @@ def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinio
     if rpy is not None:
         w["box"]["rpy_deg"] = rpy
     return {"rack": m_rack, "column": m_col, "shaft": m_shaft, "wheel": m_wheel, "tie_rods": rod_mass,
-            "wheel_centre": centre.tolist(), "column_end": low.tolist(), "pinion": pin.tolist()}
+            "wheel_centre": centre.tolist(), "column_end": low.tolist(), "pinion": pin.tolist(),
+            "column_length": float(length), "column_angle": float(column_angle)}
 
 
 def place_corners(lay: Layout, rho: float, suspension_prefix: str = "susp_") -> Record:

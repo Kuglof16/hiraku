@@ -4,7 +4,8 @@
     body.occupant_parts(lay, "occupant_R", seat="seat_R", floor="floor_front", grips=feet...)
 
 Pedals: the large driver (AIST young adult male 95th percentile, k4_geometry.people) sits in the
-seat with the heel on the floor and the knee at people.KNEE_ANGLE_DEG; the accelerator's pad is
+seat with the heel on the floor and the knee at people.KNEE_ANGLE_DEG, or with the ball of the right
+foot moved along x to a given ball_x (the knee then bends or opens); the accelerator's pad is
 under the ball of the right foot, square to the sole (people.FOOT_ANGLE_DEG), its upper face at
 the ball, but not further out than outboard_limit (the generator passes the frame rails' outer
 face: the pedals stand in the footwell inside the front wheels' sweep, assumption); the brake's
@@ -60,14 +61,32 @@ def driver_pose(lay: Layout, seat: str, floor: str):
     return people.seated(back, top, y, fz, people.BIG)
 
 
-def place_pedals(lay: Layout, seat: str, floor: str, outboard_limit: float | None = None) -> Record:
-    """Put the accelerator and brake pedals in under the driver's right foot; returns
-    {"ball": the right ball of the foot, "pose": the driver's pose}. outboard_limit: the pads' outer
-    edge stays at most this far from the centre line (the footwell between the frame rails, inside
-    the front wheels' sweep); a foot further out turns in to the pedal (the pad moves in along y only)."""
+def driver_on_pedal(lay: Layout, seat: str, floor: str, ball_x: float | None = None):
+    """The large driver with the heels on the floor: the knee at people.KNEE_ANGLE_DEG (ball_x None, or
+    the ball of the foot of that pose already at ball_x), else the right ball of the foot moved along x to
+    ball_x at the same height (the heel stays on the floor, the knee bends or opens: people.seated with
+    right_ball, as K4's poses() sits the driver on a pedal)."""
     from hiraku.solvers.k4_geometry import people
 
     pose = driver_pose(lay, seat, floor)
+    ball = pose.legs["R"].ball
+    if ball_x is None or float(ball_x) == float(ball[0]):
+        return pose
+    back, top, y, fz = _seat_frame(lay, seat, floor)
+    return people.seated(back, top, y, fz, people.BIG, right_ball=(float(ball_x), float(ball[2])))
+
+
+def place_pedals(lay: Layout, seat: str, floor: str, outboard_limit: float | None = None,
+                 ball_x: float | None = None) -> Record:
+    """Put the accelerator and brake pedals in under the driver's right foot; returns
+    {"ball": the right ball of the foot, "pose": the driver's pose}. outboard_limit: the pads' outer
+    edge stays at most this far from the centre line (the footwell between the frame rails, inside
+    the front wheels' sweep); a foot further out turns in to the pedal (the pad moves in along y only).
+    ball_x: the accelerator pad's upper face middle (where the ball of the foot presses) at this x
+    (driver_on_pedal); None: under the ball of the foot with the knee at people.KNEE_ANGLE_DEG."""
+    from hiraku.solvers.k4_geometry import people
+
+    pose = driver_on_pedal(lay, seat, floor, ball_x)
     ball = pose.legs["R"].ball
     a = np.radians(people.FOOT_ANGLE_DEG)
     along = np.array([np.cos(a), 0.0, np.sin(a)])

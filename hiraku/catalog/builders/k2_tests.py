@@ -447,7 +447,7 @@ _TRACTIVE_FORCE = {
     "assumptions": ["モーターの最大のトルクが減速比と伝達の効率を通って駆動輪に出る",
                     "駆動輪の半径は荷重でたわんだ半径 (K2 の車輪の自由半径 − 止まっているときの輪の荷重 / タイヤの縦のばね "
                     "tyre_stiffness、駆動輪の平均)。設計に tyre_stiffness が無いときは自由半径 (F_max を小さめに出す)"],
-    "inputs": {"T": "from.T", "i": "from.i", "eta": "from.eta", "r": "from.r"}, "inputs_from": launch_inputs}
+    "inputs": {"T": "from.T", "i": "from.i", "eta": "from.eta", "rolling_radius": "from.rolling_radius"}, "inputs_from": launch_inputs}
 
 PLANS: dict[str, Record] = {
     "S1": {"tool": "tilt", "say": "傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります",

@@ -1,4 +1,5 @@
 import copy
+import json
 import unittest
 from unittest import mock
 
@@ -101,6 +102,15 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
+
+    def test_plan_notes_are_said_and_reported(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        plan["notes"] = ["R4 は回していません"]
+        self.assertEqual(run_scripted(self.ctx, plan), "done")
+        said = [json.dumps(e, ensure_ascii=False) for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("R4 は回していません" in t for t in said))
+        report = next(e for e in self.ctx.store.events() if e["kind"] == "report.written")
+        self.assertIn("R4 は回していません", report["data"]["summary"])
 
     def test_rail_joint_inputs_come_from_the_design(self):
         run_scripted(self.ctx)
