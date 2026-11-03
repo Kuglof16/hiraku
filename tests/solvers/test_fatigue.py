@@ -158,7 +158,12 @@ class EndCrossMemberTest(unittest.TestCase):
         from hiraku.solvers.k0_handcalc import sections
         from hiraku.solvers.k0_handcalc.frame_inputs import antisymmetric_twist
 
-        d = on_board(DESIGN, "two_cargo")
+        from hiraku import designgen
+
+        # the strict check is on the ladder alone: the chain carries a roll bar's loads to the rails but not its
+        # stiffness, which the beam model has (the default v1 has a roll bar; checked below within 5 %)
+        bar = on_board(DESIGN, "two_cargo")
+        d = on_board(designgen.regenerate(DESIGN, {"rollbar": {"value": 0, "unit": "1"}}), "two_cargo")
         stiff = copy.deepcopy(d)
         rail_sec = next(m["section"] for m in stiff["members"] if m["id"] == "rail_L_BE")
         p = sections.properties(stiff["sections"][rail_sec])
@@ -174,6 +179,8 @@ class EndCrossMemberTest(unittest.TestCase):
             self.assertAlmostEqual(abs(chain), abs(k1), delta=0.01 * abs(k1))
         base, twice = (abs(antisymmetric_twist(x, "cross_E", pair)["moment"]["rear"]) for x in (d, stiff))
         self.assertAlmostEqual(twice, base, delta=0.03 * base)
+        with_bar = abs(antisymmetric_twist(bar, "cross_E", pair)["moment"]["rear"])
+        self.assertAlmostEqual(with_bar, abs(self._anti_pair_k1(bar)), delta=0.05 * with_bar)
 
     def test_twist_rate_without_warping_is_st_venant(self):
         from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_rate

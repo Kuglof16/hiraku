@@ -414,6 +414,8 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
     the frame nodes as the beam model shares them: parts carried by nodes equally with the moment of
     their offset from the nodes' centroid, members half at each end, unsprung parts at their
     support's frame node. Only what acts on v, theta and phi is kept (the symmetric rest drops out).
+    A load at a frame node off the rails (a roll bar's) is taken rigidly, with the moment of its offset, to
+    the rail node it is joined to through the members (the fewest members away, then the nearest).
 
     Returns misfit {name: rad}: phi - 2 v / w at end_member's station with that member's bending taken
     away (the mismatch it has to close); give (rad per N*mm): how far the rest of the frame lets the
@@ -484,9 +486,34 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
     J_inv = np.linalg.inv(inertia_tensor(items, cg))
     sup = {s["id"]: s for s in design.get("supports", [])}
 
+    links: dict[str, set[str]] = {}
+    for mp in props.values():
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        links.setdefault(a, set()).add(b)
+        links.setdefault(b, set()).add(a)
+    to_rail: dict[str, str] = {}
+
+    def rail_node(node: str) -> str:
+        """The rail node an off-rail node is joined to: the fewest members away, then the nearest."""
+        if node not in to_rail:
+            seen, ring = {node}, {node}
+            while ring:
+                hit = sorted((n for n in ring if n in where), key=lambda n: float(np.linalg.norm(nodes[n] - nodes[node])))
+                if hit:
+                    to_rail[node] = hit[0]
+                    break
+                ring = {m for n in ring for m in links.get(n, ()) if m not in seen}
+                seen |= ring
+            else:
+                raise DesignError(f"node {node} carries a load but is joined to no rail; the twist chain is for a "
+                                  f"ladder frame")
+        return to_rail[node]
+
     def put(Q, node, force, moment):
         if node not in where:
-            raise DesignError(f"node {node} carries a load but is not on the rails; the twist chain is for a ladder frame")
+            r = rail_node(node)
+            moment = np.asarray(moment, float) + np.cross(nodes[node] - nodes[r], force)
+            node = r
         i, s = where[node]
         Q[3 * i] += s * force[2]
         Q[3 * i + 1] -= s * moment[1]  # the left rail's slope is minus its turn about y
