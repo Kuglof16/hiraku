@@ -363,12 +363,13 @@ def record_quality(rec: dict, links=(), loaded_nodes=None, expected_free_loops=N
 
 
 def model_quality(model, loaded_nodes=None, expected_free_loops=None, per_element: bool = False) -> dict:
-    """check_mesh of an FEModel: shells are the 4-node groups with 6 DOFs (MITC4), solids the 8/20-node groups,
-    links every constraint's nodes and every other element group's rows (springs)."""
+    """check_mesh of an FEModel: shells are the 4-node MITC4 groups and the 3-node shell triangles (tri.Tri3),
+    solids the 8/20-node groups, links every constraint's nodes and every other element group's rows
+    (springs). Each group is its own label, so normals are compared within a group only."""
     shells, solids, links, labels = [], [], [], []
     for gi, g in enumerate(model.groups):
         n = g.conn.shape[1]
-        if g.n_comp == 6 and n in (3, 4) and g.kind == "mitc4":
+        if g.n_comp == 6 and n in (3, 4) and (g.kind == "mitc4" or getattr(g, "shell", False)):
             shells += g.conn.tolist()
             labels += [gi] * len(g.conn)
         elif n in (8, 20):

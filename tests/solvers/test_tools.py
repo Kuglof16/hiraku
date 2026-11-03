@@ -94,11 +94,16 @@ def required_case(tool, test_id):
 
 
 def design_for(tool):
-    """The demo vehicle, or a default care bed for the tools that read a care bed's names."""
+    """The demo vehicle, a default care bed for the tools that read a care bed's names, or the default space frame
+    for frame_tubes (it needs the suspension's pickup points on frame nodes)."""
     if tool.name == "actuator_linkage":
         from hiraku.designgen import care_bed
 
         return care_bed.build()
+    if tool.name == "frame_tubes":
+        from hiraku.designgen import space_frame_utv
+
+        return space_frame_utv.build()
     return DESIGN
 
 

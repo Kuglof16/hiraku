@@ -5,11 +5,16 @@
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
   After any tool call of the lead's, it also carries what the person sent through
-  the screen (inbox, hiraku.agent.inbox) and the lead has not been told yet.
+  the screen (inbox, hiraku.agent.inbox) and the lead has not been told yet. While such a
+  message waits, a role's next tool call tells the role (once per message) to finish the load
+  case it is on and return, so the lead's Agent call ends and the lead hears it sooner; the
+  message stays for the lead.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
   (hook.blocked_stop); the lead's stop also while a tile is red and design revisions
   are left (rules.red_left_reason); blocks are counted and capped so a run always
-  ends. A role's stop is blocked only on its own domain's pending cases. The
+  ends. A role's stop is blocked only on its own domain's pending cases, and not while a
+  message for the lead waits (the role returns so the lead hears it). Load cases no K0
+  formula can predict (rules.unpredictable_cases) do not hold a stop. The
   lead's stop while a role is still running is neither blocked nor counted: the
   run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
   with a message from the person not yet told is blocked once with that message
@@ -41,6 +46,10 @@ PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。道具を呼ばずに、ここまでのことを 1 文で言って番を終えてください"
+# what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
+ROLE_RETURN_FOR_MESSAGE = ("まとめ役に、画面の人から伝言が届いています。今の荷重条件を区切りのよい所 (照合まで。食い違ったなら "
+                           "record_cause を書いた所) まで進めたら、新しい荷重条件は始めずに、ここまでの結果をまとめ役に返して"
+                           "番を終えてください。まとめ役が伝言を読んでから、続きを頼みます")
 
 
 class Hooks:
@@ -58,12 +67,13 @@ class Hooks:
         self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
         self.stop_requested = False  # set once stop.request is seen; it stays set
         self.for_lead: list[str] = []  # what the screen sent for the lead (inbox), not told yet
+        self.told_roles: list[str] = []  # roles told to return for the messages in for_lead (SDK agent ids)
         self.models: dict[str, dict[str, Any]] = {}  # contract agent id -> {"model", "effort"} for agent.started
         self.on_end: Callable[[], None] | None = None  # the lead's stop was let through (the plugin ends the run)
 
     # ------------------------------------------------------------------ state kept between calls
 
-    STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead")
+    STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead", "told_roles")
 
     def state(self) -> dict[str, Any]:
         return {k: getattr(self, k) for k in self.STATE_FIELDS}
@@ -169,8 +179,19 @@ class Hooks:
         """What the screen sent for the lead (inbox), as one text, once."""
         if not self.for_lead:
             return None
-        texts, self.for_lead = self.for_lead, []
+        texts, self.for_lead, self.told_roles = self.for_lead, [], []
         return "\n".join(texts)
+
+    def role_return(self, input_data: dict[str, Any]) -> str | None:
+        """ROLE_RETURN_FOR_MESSAGE for a role at work while a message waits for the lead, once per
+        role until the lead takes the messages."""
+        if not self.for_lead:
+            return None
+        key = input_data.get("agent_id") or self.caller(input_data)
+        if key in self.told_roles:
+            return None
+        self.told_roles.append(key)
+        return ROLE_RETURN_FOR_MESSAGE
 
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         return self.decide_post_tool_use(input_data)
@@ -183,7 +204,8 @@ class Hooks:
                 hint = self.next_step(short, input_data.get("tool_input") or {})
             except Exception:
                 hint = None
-        told = self.take_for_lead() if self.caller(input_data) == "lead" else None  # after any tool of the lead's
+        # after any tool of the lead's, what the person sent; after a role's, that the lead has a message
+        told = self.take_for_lead() if self.caller(input_data) == "lead" else self.role_return(input_data)
         text = "\n\n".join(x for x in (hint, told) if x)
         if not text:
             return {}
@@ -239,8 +261,8 @@ class Hooks:
         if agent is None:
             return {}
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        if domain is not None and not self.stopping():
-            left = [lc for d, lcs in rules.pending(self.ctx) if d == domain for lc in lcs]
+        if domain is not None and not self.stopping() and not self.for_lead:  # a waiting message: let it return
+            left = [lc for d, lcs in rules.holding(self.ctx) if d == domain for lc in lcs]
             n = self.subagent_stop_blocks.get(agent, 0)
             if left and n < self.max_subagent_stop_blocks:
                 self.subagent_stop_blocks[agent] = n + 1

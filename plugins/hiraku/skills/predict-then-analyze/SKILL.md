@@ -26,7 +26,18 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 - 梁のモデル (frame_static など) で通っても、同じ試験を解けるシェルの道具 (frame_shell など、管の壁を板で解くもの) が棚にあれば、それも回す
   - 梁は、管と管のつなぎ目の壁の曲げ (応力の集中) を見ない
   - 合否は、荷重条件ごとに新しい方の判定で決まる。シェルは梁のあとに回す
-- `list_formulas(tool=...)`: その道具の量を予測する K0 の式。入力の名前と単位、出力、前提を読む
+- `list_formulas(tool=...)`: その道具の量を予測する K0 の式 (`formulas`) と、道具の対 (`predicts`)。式の入力の名前と単位、出力、前提を読む
+  - `predicts` は、道具のどの結果 (`quantity`) を、どの式 (`formula_id`) のどの出力 (`output`) で予測するかの対。判定の量 (`criterion.quantity`) を予測するときは、その量と対になった式を選ぶ
+  - 対の `note` を読む。ばねのある道具 (傾斜台の tilt など) の横に並ぶ剛体の式 (`tilt.rigid_angle` など) は初めの見積もりで、解析とは食い違う。ばねを入れた式 (`tilt.spring_roll_angle` など) があれば、そちらを判定の量の予測に使う
+- 試験に合う道具が棚に無いときは、道具を書く: `get_tool_template` で見本 (通して動くコードと、クラス・analyse の引数・結果の欄・答えの分かっている例 known_answers と check_record の決まり) を見て、`check_tool(code)` で試し、通ったら `make_tool(code, reason)`
+
+## 2b. シェルのつなぎ目のホットスポット
+
+シェルの道具 (`frame_shell`) の `max_hot_spot_stress` が、梁の式 (`frame_static.rail_joint_stress` など) の予測を大きく超え、結果の `where` がつなぎ目のときは、梁の式では予測できない。横の部材の端がレールの側の壁を板として曲げている。
+
+- `get_context(sections=["joint_wall_inputs"], load_case_id=...)`: 式 `frame_static.joint_wall_bending` の入力 (横の部材の端のモーメント `M`、断面、板の寸法など) を、コードが設計と荷重条件から出して返す
+- `record_prediction(quantity="max_hot_spot_stress", formula_id="frame_static.joint_wall_bending", output="sigma", inputs=返った inputs)` で予測し、その ID でシェルを `analyze` → `compare`
+- はしご形でないフレームでは入力を出せず、理由つきで断られる。そのときは原因にそう書く
 
 ## 3. 予測を記録する
 

@@ -80,14 +80,15 @@ class Spring(ElementGroup):
         self.n_comp = 6 if rotations else 3
         self.name = name
 
-    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+    def relative_motion(self, nodes: np.ndarray) -> np.ndarray:
+        """L = R6 B (E, nc, 2 nc): the relative motion at p in the spring's local axes, L ue."""
         ne = len(self.conn)
         a, b = self.conn[:, 0], self.conn[:, 1]
         xa = nodes[a]
         xb = np.where((b >= 0)[:, None], nodes[np.where(b >= 0, b, 0)], xa)
         p = 0.5 * (xa + xb) if self.points is None else self.points
         nc = self.n_comp
-        K = np.zeros((ne, 2 * nc, 2 * nc))
+        L = np.zeros((ne, nc, 2 * nc))
         for e in range(ne):
             R = self.frames[e]
             if nc == 6:
@@ -101,24 +102,22 @@ class Spring(ElementGroup):
                 R6 = np.zeros((6, 6))
                 R6[:3, :3] = R
                 R6[3:, 3:] = R
-                L = R6 @ Bm
-                K[e] = L.T @ np.diag(self.k[e]) @ L
+                L[e] = R6 @ Bm
             else:
-                Bm = np.hstack([-np.eye(3), np.eye(3)])
-                L = R @ Bm
-                K[e] = L.T @ np.diag(self.k[e, :3]) @ L
-        return K
+                L[e] = R @ np.hstack([-np.eye(3), np.eye(3)])
+        return L
+
+    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+        L = self.relative_motion(nodes)
+        k = self.k[:, : self.n_comp]
+        return np.einsum("eai,ea,eaj->eij", L, k, L)
 
     def forces(self, nodes: np.ndarray, ue: np.ndarray) -> np.ndarray:
-        """Spring forces and moments in local axes (E, 6) (or (E, 3)): k times the local relative motion."""
-        Ke = self.stiffness(nodes)
-        f = np.einsum("eij,ej->ei", Ke, ue)  # nodal forces; node b's part is +k * relative motion in global axes
-        nc = self.n_comp
-        fb = f[:, nc:]
-        if nc == 6:
-            return np.concatenate([np.einsum("eij,ej->ei", self.frames, fb[:, :3]),
-                                   np.einsum("eij,ej->ei", self.frames, fb[:, 3:])], axis=1)
-        return np.einsum("eij,ej->ei", self.frames, fb)
+        """Spring forces and moments in local axes (E, 6) (or (E, 3)): diag(k) R6 B ue, k times the local
+        relative motion at p. (Node b's nodal moment is not used: when the nodes are apart it also holds
+        (p - x_b) x F.)"""
+        L = self.relative_motion(nodes)
+        return self.k[:, : self.n_comp] * np.einsum("eij,ej->ei", L, ue)
 
 
 # ------------------------------------------------------------------ shell to solid
@@ -126,9 +125,9 @@ class Spring(ElementGroup):
 
 def shell_node_normals(conn: np.ndarray, nodes: np.ndarray) -> np.ndarray:
     """Unit normal at every node (N, 3): the mean of the normals of the shell elements around it
-    (zero for nodes without shells)."""
+    (zero for nodes without shells). conn (E, 4) quads or (E, 3) triangles."""
     X = nodes[conn]
-    n = np.cross(X[:, 2] - X[:, 0], X[:, 3] - X[:, 1])
+    n = np.cross(X[:, 2] - X[:, 0], X[:, 3] - X[:, 1]) if conn.shape[1] == 4 else np.cross(X[:, 1] - X[:, 0], X[:, 2] - X[:, 0])
     n /= np.linalg.norm(n, axis=1)[:, None]
     acc = np.zeros((len(nodes), 3))
     for k in range(conn.shape[1]):
@@ -244,18 +243,24 @@ def project_to_faces(points: np.ndarray, faces: np.ndarray, nodes: np.ndarray, n
     return out
 
 
-def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "tie", max_gap: float | None = None,
-        rotations: bool = True) -> Constraint:
-    """Tie slave nodes to a surface of another mesh whose nodes do not match (shell faces (F, 4) or solid faces
-    (F, 8) / (F, 4)).
+def tie_weights(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, max_gap: float | None = None) -> list:
+    """Interpolation weights of a tie: each slave node projected on a surface of another mesh (shell faces
+    (F, 4) or solid faces (F, 8) / (F, 4)) by project_to_faces.
 
-    Each slave node is projected on the surface (project_to_faces): face, (xi, eta), the point x_p. Then
-        u_s = sum_i N_i(xi, eta) u_i  (+ theta_p x (x_s - x_p) when the master nodes have rotations,
-                                          theta_p = sum_i N_i theta_i, which keeps a rigid motion exact
-                                          across a small gap such as a faceted wall),
-        theta_s = sum_i N_i theta_i   (when both sides have rotations and rotations=True).
-    A shell edge tied to solid faces gets no rotation tie (solid nodes have none): use shell_to_solid there.
-    max_gap: refuse slave nodes farther than this from the surface (default: no limit).
+    Returns one dict per slave node, in the order given:
+        slave    the slave node
+        face     index of the face in master_faces
+        masters  the face's nodes (list of int)
+        weights  shape functions N_i(xi, eta) at the projected point, one per master node (they sum to 1)
+        xi, eta  the projected point's coordinates on the face (clamped to [-1, 1])
+        offset   x_s - x_p, the slave's position minus the projected point x_p = sum_i N_i x_i (list of 3)
+        gap      |offset|
+        inside   whether the projection fell inside the face
+    The tie built from them (as tie does) is
+        u_s = sum_i N_i u_i  (+ theta_p x offset when the master nodes have rotations, theta_p = sum_i N_i theta_i,
+                              which keeps a rigid motion exact across a small gap such as a faceted wall),
+        theta_s = sum_i N_i theta_i   (when both sides have rotations).
+    max_gap: refuse slave nodes farther than this from the surface (default: no limit) with ValueError.
     """
     from .solid import shape_quad4, shape_quad8
 
@@ -263,19 +268,41 @@ def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "t
     faces = np.asarray(master_faces, int)
     proj = project_to_faces(nodes[slaves], faces, nodes)
     shp = shape_quad8 if faces.shape[1] == 8 else shape_quad4
-    data = []
+    out = []
     for s, (f, xi, eta, dist, inside) in zip(slaves, proj):
         if max_gap is not None and dist > max_gap:
             raise ValueError(f"tie: slave node {s} is {dist:.3g} from the surface (more than {max_gap:g})")
         N, _ = shp(xi, eta)
         ids = faces[f]
         xp = N @ nodes[ids]
-        data.append((s, ids, N, nodes[s] - xp, dist, inside))
+        out.append({"slave": s, "face": int(f), "masters": [int(i) for i in ids], "weights": [float(n) for n in N],
+                    "xi": xi, "eta": eta, "offset": [float(v) for v in nodes[s] - xp], "gap": dist,
+                    "inside": inside})
+    return out
+
+
+def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "tie", max_gap: float | None = None,
+        rotations: bool = True) -> Constraint:
+    """Tie slave nodes to a surface of another mesh whose nodes do not match (shell faces (F, 4) or solid faces
+    (F, 8) / (F, 4)).
+
+    Each slave node is projected on the surface (tie_weights): face, (xi, eta), the point x_p. Then
+        u_s = sum_i N_i(xi, eta) u_i  (+ theta_p x (x_s - x_p) when the master nodes have rotations,
+                                          theta_p = sum_i N_i theta_i, which keeps a rigid motion exact
+                                          across a small gap such as a faceted wall),
+        theta_s = sum_i N_i theta_i   (when both sides have rotations and rotations=True).
+    A shell edge tied to solid faces gets no rotation tie (solid nodes have none): use shell_to_solid there.
+    max_gap: refuse slave nodes farther than this from the surface (default: no limit).
+    """
+    tw = tie_weights(slave_nodes, master_faces, nodes, max_gap=max_gap)
+    slaves = [w["slave"] for w in tw]
+    data = [(w["slave"], np.asarray(w["masters"], int), np.asarray(w["weights"], float),
+             np.asarray(w["offset"], float)) for w in tw]
     masters = sorted({int(i) for _, ids, *_ in data for i in ids})
 
     def make(counts):
         eqs = []
-        for s, ids, N, d, _, _ in data:
+        for s, ids, N, d in data:
             m_rot = all(counts[i] == 6 for i in ids)
             Sd = skew(d)
             for k in range(3):
@@ -291,12 +318,77 @@ def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "t
         return eqs
 
     c = Constraint(name, nodes=tuple(slaves + masters), maker=make)
-    c.projection = [{"slave": s, "face": int(f), "xi": xi, "eta": eta, "gap": dist, "inside": inside}
-                    for s, (f, xi, eta, dist, inside) in zip(slaves, proj)]
+    c.projection = [{k: w[k] for k in ("slave", "face", "xi", "eta", "gap", "inside")} for w in tw]
     return c
 
 
 # ------------------------------------------------------------------ RBE3
+
+
+def is_collinear(xyz: np.ndarray, weights=None, tol: float = 1e-9) -> bool:
+    """True when the points (with positive weights) lie on one line or coincide, so their translations do not
+    fix a rotation about that line."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    c = (w[:, None] * x).sum(axis=0) / w.sum()
+    rho = x - c
+    A = np.einsum("i,ij,ik->jk", w, rho, rho)
+    A = np.trace(A) * np.eye(3) - A
+    return bool(np.linalg.matrix_rank(A, tol=tol * max(np.trace(A), 1e-300)) < 3)
+
+
+def rbe3_full_matrices(ref_xyz, xyz: np.ndarray, weights=None, rotation_weights=None):
+    """Coefficients of the distributing link with the connected nodes' rotations:
+        u_ref = sum_i (H_i u_i + Hr_i theta_i),  theta_ref = sum_i (G_i u_i + Gr_i theta_i)   (3 x 3 each).
+
+    The reference motion is the weighted least-squares rigid motion (u_c, theta) of the connected nodes,
+    now with their rotations as well:
+        minimise sum_i w_i |u_i - u_c - theta x rho_i|^2 + sum_i v_i |theta_i - theta|^2,
+    rho_i = x_i - c about the weighted centroid c of the translations. Setting the derivatives to zero
+    (derived here): u_c = sum w_i u_i / sum w_i, and
+        A theta = sum_i w_i rho_i x u_i + sum_i v_i theta_i,   A = sum_i w_i (|rho_i|^2 I - rho_i rho_i^T) + (sum v_i) I,
+    then u_ref = u_c + theta x (x_ref - c). The rotation weights v_i (N mm^2 per N, i.e. length^2 times the
+    translation weight's unit) make A invertible when the nodes lie on one line: the twist about the line
+    then comes from the nodes' own rotations. A rigid motion of the connected nodes (u_i = a + omega x x_i,
+    theta_i = omega) is fitted exactly, so the transpose spreads a force and moment at the reference with
+    the same resultant, and the link adds no stiffness (the reference is the dependent node). Nastran's
+    RBE3 also lets the connected nodes' rotational components carry weights (as commonly described; the
+    program's documentation not checked here).
+
+    rotation_weights: per node or one value; None = 0 (translations only, as rbe3_matrices)."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    v = np.zeros(len(x)) if rotation_weights is None else np.broadcast_to(np.asarray(rotation_weights, float),
+                                                                         (len(x),)).copy()
+    W = w.sum()
+    c = (w[:, None] * x).sum(axis=0) / W
+    rho = x - c
+    A = np.einsum("i,ij,ik->jk", w, rho, rho)
+    A = np.trace(A) * np.eye(3) - A + v.sum() * np.eye(3)
+    scale = max(np.trace(A), 1e-300)
+    if np.linalg.matrix_rank(A, tol=1e-9 * scale) < 3:
+        raise ValueError("a distributing link needs at least three connected nodes not on one line, or rotation "
+                         "weights on the connected nodes")
+    Ainv = np.linalg.inv(A)
+    G = np.array([wi * Ainv @ skew(r) for wi, r in zip(w, rho)])  # theta = sum G_i u_i + Gr_i theta_i
+    Gr = np.array([vi * Ainv for vi in v])
+    d = np.asarray(ref_xyz, float) - c
+    Sd = skew(d)
+    H = np.array([(wi / W) * np.eye(3) - Sd @ Gi for wi, Gi in zip(w, G)])  # theta x d = -[d]x theta
+    Hr = np.array([-Sd @ Gi for Gi in Gr])
+    return H, Hr, G, Gr
+
+
+def default_rotation_weights(xyz: np.ndarray, weights=None, factor: float = 1e-3) -> np.ndarray:
+    """Rotation weights for a line of nodes: factor * w_i * l^2, l the RMS distance of the nodes from their
+    centroid (or 1 mm when they coincide). The perpendicular rotations then come almost wholly from the
+    translations (factor small); the twist about the line comes only from the nodes' rotations, shared in
+    proportion to the weights whatever the factor."""
+    x = np.asarray(xyz, float)
+    w = np.ones(len(x)) if weights is None else np.asarray(weights, float)
+    c = (w[:, None] * x).sum(axis=0) / w.sum()
+    l2 = float(np.sum(w * np.sum((x - c) ** 2, axis=1)) / w.sum()) or 1.0
+    return factor * w * l2
 
 
 def rbe3_matrices(ref_xyz, xyz: np.ndarray, weights=None):
@@ -325,23 +417,52 @@ def rbe3_matrices(ref_xyz, xyz: np.ndarray, weights=None):
     return H, G
 
 
-def distributing_link(ref: int, nodes_ids, nodes: np.ndarray, weights=None, name: str = "rbe3") -> Constraint:
+def _rotation_weights(xyz, weights, rotation_weights):
+    """None: zero when the translations fix the rotations, default_rotation_weights when the nodes are on one
+    line; otherwise the values given."""
+    if rotation_weights is None:
+        return default_rotation_weights(xyz, weights) if is_collinear(xyz, weights) else None
+    return rotation_weights
+
+
+def distributing_link(ref: int, nodes_ids, nodes: np.ndarray, weights=None, name: str = "rbe3",
+                      rotation_weights=None) -> Constraint:
     """Distributing link (RBE3 type): the reference node (6 DOFs, dependent) moves with the weighted average
-    rigid motion of the connected nodes' translations (rbe3_matrices). A load on the reference reaches the
-    connected nodes without making them stiffer."""
+    rigid motion of the connected nodes (rbe3_full_matrices). A load on the reference reaches the connected
+    nodes without making them stiffer.
+
+    rotation_weights: None = translations only when the connected nodes span a plane or a volume, and the
+    nodes' rotations with default_rotation_weights when they lie on one line (then they must carry
+    rotations: shell or beam nodes); or values per node / one value (0 = translations only)."""
     ref = int(ref)
     ids = [int(i) for i in np.atleast_1d(nodes_ids)]
-    H, G = rbe3_matrices(nodes[ref], nodes[ids], weights)
-    eqs = []
-    for k in range(3):
-        terms = [(ref, k, 1.0)]
-        terms += [(i, l, -H[n, k, l]) for n, i in enumerate(ids) for l in range(3) if H[n, k, l] != 0.0]
-        eqs.append(Equation(terms, prefer=(ref, k), source=name))
-    for k in range(3):
-        terms = [(ref, 3 + k, 1.0)]
-        terms += [(i, l, -G[n, k, l]) for n, i in enumerate(ids) for l in range(3) if G[n, k, l] != 0.0]
-        eqs.append(Equation(terms, prefer=(ref, 3 + k), source=name))
-    return Constraint(name, eqs, needs_rotation=(ref,), nodes=tuple([ref] + ids))
+    v = _rotation_weights(nodes[ids], weights, rotation_weights)
+    H, Hr, G, Gr = rbe3_full_matrices(nodes[ref], nodes[ids], weights, v)
+    use_rot = [bool(np.any(Hr[n] != 0.0) or np.any(Gr[n] != 0.0)) for n in range(len(ids))]
+
+    def make(counts):
+        bad = [i for i, u in zip(ids, use_rot) if u and counts[i] < 6]
+        if bad:
+            raise ValueError(f"{name}: connected node(s) {bad[:5]} have no rotations, which a link to nodes on one "
+                             f"line needs (connect shell or beam nodes, or give three nodes off one line)")
+        eqs = []
+        for k in range(3):
+            terms = [(ref, k, 1.0)]
+            terms += [(i, l, -H[n, k, l]) for n, i in enumerate(ids) for l in range(3) if H[n, k, l] != 0.0]
+            terms += [(i, 3 + l, -Hr[n, k, l]) for n, i in enumerate(ids) if use_rot[n] for l in range(3)
+                      if Hr[n, k, l] != 0.0]
+            eqs.append(Equation(terms, prefer=(ref, k), source=name))
+        for k in range(3):
+            terms = [(ref, 3 + k, 1.0)]
+            terms += [(i, l, -G[n, k, l]) for n, i in enumerate(ids) for l in range(3) if G[n, k, l] != 0.0]
+            terms += [(i, 3 + l, -Gr[n, k, l]) for n, i in enumerate(ids) if use_rot[n] for l in range(3)
+                      if Gr[n, k, l] != 0.0]
+            eqs.append(Equation(terms, prefer=(ref, 3 + k), source=name))
+        return eqs
+
+    c = Constraint(name, needs_rotation=(ref,), nodes=tuple([ref] + ids), maker=make)
+    c.rotation_weights = None if v is None else np.broadcast_to(np.asarray(v, float), (len(ids),)).copy()
+    return c
 
 
 def rbe3_forces(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights=None) -> np.ndarray:
@@ -349,3 +470,15 @@ def rbe3_forces(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights
     reference: f_i = H_i^T F + G_i^T M."""
     H, G = rbe3_matrices(ref_xyz, xyz, weights)
     return np.einsum("nkl,k->nl", H, np.asarray(force, float)) + np.einsum("nkl,k->nl", G, np.asarray(moment, float))
+
+
+def rbe3_loads(ref_xyz, xyz: np.ndarray, force, moment=(0.0, 0.0, 0.0), weights=None, rotation_weights=None
+               ) -> np.ndarray:
+    """Nodal forces and moments (n, 6) that a distributing link (with the same rotation_weights rule as
+    distributing_link) gives the connected nodes: f_i = H_i^T F + G_i^T M, m_i = Hr_i^T F + Gr_i^T M."""
+    v = _rotation_weights(xyz, weights, rotation_weights)
+    H, Hr, G, Gr = rbe3_full_matrices(ref_xyz, xyz, weights, v)
+    F, M = np.asarray(force, float), np.asarray(moment, float)
+    f = np.einsum("nkl,k->nl", H, F) + np.einsum("nkl,k->nl", G, M)
+    m = np.einsum("nkl,k->nl", Hr, F) + np.einsum("nkl,k->nl", Gr, M)
+    return np.concatenate([f, m], axis=1)

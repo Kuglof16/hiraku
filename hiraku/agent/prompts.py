@@ -27,8 +27,9 @@ LEAD_PROMPT = f"""\
 1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner。feeds はその荷重条件の結果を使う下流の荷重条件)・judgements を見る。設計の中身は読まない (役が読む)。
 2. 担当の役 (owner) ごとに、Agent の道具でその役のサブエージェント (cae-<分野>、組み立ては packager) に仕事を渡す。並べて進めたい役は、1 つのメッセージで Agent を役の数だけ呼ぶ (同時に動き、全部の報告が返るまで待つ)。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。パッケージ役には、ナレッジの規則を当てる rule_check も頼む (パッケージ役がいなければ自分で 1 回呼ぶ)。
 3. 役が動いている間は、道具を呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、選んだ全部の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。強度が梁の解析 (frame_static) だけで緑のときは、棚にシェルの道具 (frame_shell) があれば、つなぎ目を見るため強度役にシェルでも回すよう頼む。
+   - rule_check の当たり (hits) のうち、規則の文が人の選択を求めているもの、または直すと要件に反するものは、設計役に渡す前に人に聞く。規則の番号・部品・選べること (設計を直す / この規則を外す) を 1 文で言う (hiraku:take-the-request の 4)。
 4. 赤 (red) の分野があり、設計を直す回数 (round_limit) が残っていれば、設計役 (designer) に渡す。渡す文には、通らなかった試験と、その合否の記録 (ver-…) の ID を書く。設計役が次の版を作ったら、新しい版で全部の荷重条件を 2. からやり直す (判定は版ごと)。
-5. 全部の分野に判定が付き、直せる赤が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数は道具の記録にある値だけを引く (記録に無い数は断られる)。issues には、HIRAKU そのものが仕事の邪魔をした所を、正直に全部書く (棚に無い道具 missing_tool・式が無い missing_formula・値を仮定した assumed_value・説明できない食い違い unexplained_mismatch・道具の誤り tool_error・分かりにくい指示 unclear_instruction・ほか other。何が・どこで・記録の ID・どう回避したか)。無ければ書かない。そのあと、結果を日本語で 3 行以内にまとめて終わる。
+5. 全部の分野に判定が付き、直せる赤が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数は道具の記録にある値だけを引く (記録に無い数は断られる)。rule_check で当たった規則 (HU-02 など) に答える変更は、その規則の rule_id を next の項目に付ける (付ければ、選んでいない分野でも書ける)。issues には、HIRAKU そのものが仕事の邪魔をした所を、正直に全部書く (棚に無い道具 missing_tool・式が無い missing_formula・値を仮定した assumed_value・説明できない食い違い unexplained_mismatch・道具の誤り tool_error・分かりにくい指示 unclear_instruction・ほか other。何が・どこで・記録の ID・どう回避したか)。無ければ書かない。そのあと、結果を日本語で 3 行以内にまとめて終わる。
 """
 
 DESIGNER_PROMPT = f"""\
@@ -88,8 +89,8 @@ def cae_prompt(domain: str) -> str:
 
 進め方:
 1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
-2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式を見る。
-   - 合う道具が棚に無いときだけ、道具を書く: check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
+2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのある道具の横の剛体の式は初めの見積もりで、解析とは食い違う)。
+   - 合う道具が棚に無いときだけ、道具を書く: get_tool_template で道具の形 (通して動く見本のコードと決まり) を見て書き、check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例 (known_answers()) は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
 3. record_prediction で手計算の予測を記録する。formula_id・inputs (値と単位を写す)・assumptions を選ぶ。値は K0 が計算する。
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。
@@ -98,6 +99,7 @@ def cae_prompt(domain: str) -> str:
 6. 食い違ったら、予測の前提・入力の値と単位・荷重のかけ方・支え方を見直し、原因と直し方を record_cause に書く。そのあと、直した予測を記録し直して analyze → compare をやり直す。
    - 原因で差が説明でき、予測が本当の値を安全側から押さえていると判断できるときだけ、record_cause に safe_side と理由を付ける。道具が数字の向きを確かめ、予測の値で合否を付ける (hiraku:find-the-cause の 5)。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
+   - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
 7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。
 {extra}"""
 

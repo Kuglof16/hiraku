@@ -53,8 +53,8 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual([a["agent_id"] for a in self.ctx.project["agents"]], ["lead", "designer"])
         self.assertNotIn("design.created", self.kinds())
         self.assertIn("propose_design", rules.stop_reason(self.ctx))  # HK4: nothing to judge yet is no end
-        (kind,) = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
-        self.assertEqual(kind["name"], "ladder_4w")
+        kinds = get_context(self.ctx, {"sections": ["archetypes"]})["archetypes"]
+        self.assertEqual(kinds[0]["name"], "ladder_4w")  # first: the scripted run's default (K2's space frame is another)
 
     def test_roles_are_defined_before_the_load_cases(self):
         att = Attribution()
@@ -97,6 +97,15 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
             propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "again"}, "designer")
         for e in events:
             self.assertEqual(contract.errors("event", e), [], e["kind"])
+
+    def test_the_hearings_answers_reach_the_first_version(self):
+        """ask_user writes the answers into project.requirements; the design and its load cases are built
+        from those values, not from the file as it was at the start."""
+        reqs = [dict(r, value=120.0) if r["key"] == "Q15" else r for r in self.ctx.project["requirements"]]
+        self.ctx.store.update_project({"requirements": reqs}, agent="lead", text="ヒアリングの答えを要件に入れました")
+        self.assertEqual(next(r for r in self.ctx.requirements_file["requirements"] if r["key"] == "Q15")["value"], 100)
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "答えの段差で"}, "designer")
+        self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["P1-step120", "R1-step120"])
 
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):

@@ -125,8 +125,14 @@ def beyond_results(ctx: RunContext, load_case: Record, version: int) -> list[tup
 def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
     """(comparison, cause or None) for the version's mismatches of the load case whose cause is not
     written yet or is written but not resolved. A safe-side cause counts as explained: its verdict
-    stands unless a result beyond the criterion voids it (beyond_results)."""
+    stands unless a result beyond the criterion voids it (beyond_results). So does an earlier cause
+    of the quantity that the load case's latest verdict, a safe-side one, was judged on: the chain of
+    re-predictions ended in that verdict (the cause stays unresolved in the record, where resolved_by
+    names only a later match)."""
     causes = ctx.causes_by_comparison()
+    ver = latest_verdicts(ctx, version).get(load_case["load_case_id"])
+    safe_cmp = (ctx.store.get("comparison", ver["comparison_id"])
+                if ver and ver.get("basis") == "explained_safe_side" else None)
     out = []
     for c in ctx.store.records("comparison", version):
         if c["status"] != "mismatch":
@@ -135,6 +141,8 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
         if pred is None or pred["load_case_id"] != load_case["load_case_id"]:
             continue
         cause = causes.get(c["comparison_id"])
+        if cause is not None and safe_cmp is not None and c["quantity"] == safe_cmp["quantity"]:
+            continue  # settled by the later safe-side verdict on the same quantity
         if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
             out.append((c, cause))
     return out

@@ -264,6 +264,9 @@ _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右�
 # symmetric part is within 1 % (10 % low with 4.5 mm rails), the antisymmetric part 5-7 % low at the rear and
 # 16-19 % high at the front: the gap is cross_E's sideways bending from the masses' sideways inertia (0.8-1.0
 # MPa, the same at the rear and the front), which the hand calculation leaves out.
+# The values above were summed with slope 22 below the S-N knee. Both sides now use 2 m - 1 = 5 there (IIW-1823-07
+# (2008) sec. 4.3.1, p.110, for a spectrum): hand 0.151 against tool 0.126 (version 1) and 0.215 against 0.193
+# (track 1220 mm, steering_x -200 mm, rail_t 4.5 mm, gusset_leg 40 mm, motor_peak_power 12 kW).
 R3_PLAN = {
     "tool": "fatigue",
     "say": ("輪はレールより外にあるので、輪の力はレールをねじり、後ろの張り出しの端の横の部材を曲げます。4 輪それぞれ 1 kN "
@@ -274,12 +277,14 @@ R3_PLAN = {
           for tag, out, name in _WHEELS),
         {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
          "assumptions": ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
-                         "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)"],
+                         "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
+                         "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
+                         "設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので使わない"],
          "inputs": {**{out: f"pred.end_cross_member_stress_per_kN_{tag}" for tag, out, _ in _WHEELS},
                     **{k: f"from.{k}" for k in ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")},
                     "k_t": "design.var.tyre_stiffness", "v": "lc.speed", "d": "lc.distance",
                     "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
-                    "N_knee": "design.var.fatigue_knee_cycles", "m2": "design.var.fatigue_slope_after_knee"},
+                    "N_knee": "design.var.fatigue_knee_cycles"},
          "inputs_from": r3_calc},
     ],
 }
@@ -395,7 +400,7 @@ T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculate
 def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
     """thermal.loop_steady_temperature with the plan's inputs (_LOOP_INPUTS) for this load case."""
     from hiraku.solvers import formula_registry
-    from hiraku.tools.summary import design_summary
+    from hiraku.catalog.summary import design_summary
 
     vals = {}
     for name, ref in _LOOP_INPUTS.items():
@@ -451,7 +456,20 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str, ou
 
 
 t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=", "T_battery")
-t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<", "T_controller")
+# T2 is the motor and the controller: one load case per part, each judged on its own limit (a load
+# case has one criterion), ids T2-<ambient>C-motor and T2-<ambient>C-controller.
+T2_PARTS = (("motor", "モーター", "motor_max_temperature", "<", "T_motor"),
+            ("controller", "制御器", "controller_max_temperature", "<", "T_controller"))
+
+
+def t2_thermal(spec: Record, req: Record, design: Record) -> list[Record]:
+    out = []
+    for part, what, limit_var, op, output in T2_PARTS:
+        lc = _thermal("T2", what, f"temp_{part}_max", limit_var, op, output)(spec, req, design)
+        head, beyond, tail = lc["load_case_id"].partition("-beyond")
+        lc["load_case_id"] = f"{head}-{part}{beyond}{tail}"
+        out.append(lc)
+    return out
 
 _LOOP_INPUTS = {
     "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",
@@ -467,21 +485,22 @@ _T_ASSUME = ["周回の区間ごとに目標の速さで一定に走るとみる
              "部品は温度 1 つの熱容量と、空気への熱抵抗"]
 
 
-def _t_plan(what: str, quantity: str, output: str) -> Record:
+def _t_plan(what: str, parts: tuple[tuple[str, str], ...]) -> Record:
+    """parts: (quantity, output) of each part temperature predicted, then drive_time."""
     return {
         "tool": "thermal",
         "say": f"周回を区間ごとの一定の速さで走るとみて損失を出し、{what}の温度の上がり方を先に見積もります",
         "predictions": [
             {"quantity": quantity, "formula_id": "thermal.loop_steady_temperature", "output": output,
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
-            {"quantity": "drive_time", "formula_id": "thermal.loop_steady_temperature", "output": "t",
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
+             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)}
+            for quantity, output in (*parts, ("drive_time", "t"))
         ],
     }
 
 
-T1_PLAN = _t_plan("電池", "temp_battery_max", "T_battery")
-T2_PLAN = _t_plan("制御器", "temp_controller_max", "T_controller")
+T1_PLAN = _t_plan("電池", (("temp_battery_max", "T_battery"),))
+# one plan for both T2 load cases (the plans are per test): it predicts both parts
+T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output) for part, _, _, _, output in T2_PARTS))
 
 # ---------------------------------------------------------------- H1, H3, H5 assembly
 

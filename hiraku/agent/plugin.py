@@ -15,11 +15,11 @@ Claude Code. project.driver is "claude_code_plugin".
   caller's agent for the next tool call (Attribution) and "the lead's stop was let through"
   go as notes into the run folder's OUTBOX_FILE, and the server turns them into events (at
   the start of every tool call, and every POLL_S). What the hooks keep between calls (stop
-  blocks, running roles, what the screen sent for the lead) is in STATE_FILE.
+  blocks, running roles, what the screen sent for the lead) is in STATE_FILE, with the load cases
+  no K0 formula can predict (worked out by the server after each tool call, UNPREDICTABLE_KEY).
 
-These three file names are not in the contract's layout (hiraku/contract/layout.py belongs to
-the lead department); they are kept here. The run folder lock (LOCK_FILE) is taken by the
-hook command and by the server around the state and outbox files.
+The run folder lock (LOCK_FILE) is taken by the hook command and by the server around the
+state and outbox files.
 """
 
 from __future__ import annotations
@@ -46,12 +46,14 @@ Record = dict[str, Any]
 
 DRIVER = "claude_code_plugin"
 CURRENT_FILE = ".plugin_current.json"  # in the runs folder: {"run_dir": ...} of the server's current run
-STATE_FILE = "plugin.hooks.json"  # in the run folder: Hooks.state() between hook calls
-OUTBOX_FILE = "plugin.outbox.jsonl"  # in the run folder: notes from the hook commands for the server
-LOCK_FILE = "plugin.lock"  # in the run folder, while the state or the outbox is read or written
+STATE_FILE = layout.PLUGIN_HOOKS_FILE  # in the run folder: Hooks.state() between hook calls
+OUTBOX_FILE = layout.PLUGIN_OUTBOX_FILE  # in the run folder: notes from the hook commands for the server
+LOCK_FILE = layout.PLUGIN_LOCK_FILE  # in the run folder, while the state or the outbox is read or written
 LOCK_TIMEOUT_S = 10.0
 LOCK_STALE_S = 30.0  # a lock older than this was left by a process that died
 POLL_S = 1.0  # how often the server reads the outbox, the inbox and stop.request
+# in STATE_FILE, written by the server: rules.unpredictable_cases of the run (the hook command has no registry)
+UNPREDICTABLE_KEY = "unpredictable"
 
 STOPPED_SESSION_CLOSED = "Claude Code のセッションが閉じたので、実行を止めました"
 STOPPED_NEW_RUN = "同じセッションで新しい実行を始めたので、この実行は止めました"
@@ -194,17 +196,20 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
         store = open_store(run_dir)
         if store.project["status"] != "running":
             return {}
-        ctx = RunContext(store=store, formulas=None, tools={}, specs=specs_from_events(store.events()))
+        state = read_state(run_dir)
+        # no registry here: the load cases no K0 formula can predict are the server's (UNPREDICTABLE_KEY)
+        ctx = RunContext(store=store, formulas=None, tools={}, specs=specs_from_events(store.events()),
+                         unpredictable=state.get(UNPREDICTABLE_KEY))
         notes: list[Record] = []
 
         def emit(kind: str, **kw: Any) -> None:
             notes.append({"op": "emit", "kind": kind, **kw})
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
-        hooks.load_state(read_state(run_dir))
+        hooks.load_state(state)
         hooks.on_end = lambda: notes.append({"op": "end"})
         out = hooks.decide(event, input_data)
-        write_state(run_dir, hooks.state())
+        write_state(run_dir, {**state, **hooks.state()})
         put_notes(run_dir, notes)
     return out
 
@@ -301,7 +306,9 @@ class PluginServer:
         ctx = self.ctx
         if ctx is None or ctx.project["status"] != "running":
             return {"content": [{"type": "text", "text": NO_RUN}], "is_error": True}
-        return await make_handler(ctx, self.attribution, name, HANDLERS[name])(args)
+        out = await make_handler(ctx, self.attribution, name, HANDLERS[name])(args)
+        await asyncio.to_thread(self.note_unpredictable, ctx)  # a version, a prediction or a verdict changes it
+        return out
 
     # ------------------------------------------------------------------ runs
 
@@ -341,6 +348,7 @@ class PluginServer:
             self.attribution = Attribution()
             ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
             set_current(self.runs, ctx.store.path)
+        self.note_unpredictable(ctx)
         return self._answer(ctx)
 
     def open(self, args: Record) -> Record:
@@ -366,6 +374,7 @@ class PluginServer:
             self.ctx = ctx
             self.attribution = Attribution()
             set_current(self.runs, path)
+        self.note_unpredictable(ctx)
         return self._answer(ctx)
 
     def close(self, status: str, reason: str | None, code: str) -> None:
@@ -398,6 +407,23 @@ class PluginServer:
         with locked(ctx.store.path):
             blocks = int(read_state(ctx.store.path).get("stop_blocks") or 0)
         self.close(*end_status(ctx, blocks))
+
+    def note_unpredictable(self, ctx: RunContext) -> None:
+        """Leave rules.unpredictable_cases in the hooks' state for the hook command (which has no
+        registry), when it changed."""
+        from hiraku.tools import rules
+
+        if ctx.formulas is None or ctx.project["status"] != "running":
+            return
+        try:
+            cases = rules.unpredictable_cases(ctx)
+        except Exception as e:  # the hooks then hold the stop as before (no load case set aside)
+            print(f"hiraku mcp: unpredictable_cases: {type(e).__name__}: {e}", file=sys.stderr)
+            return
+        with locked(ctx.store.path):
+            state = read_state(ctx.store.path)
+            if state.get(UNPREDICTABLE_KEY) != cases:
+                write_state(ctx.store.path, {**state, UNPREDICTABLE_KEY: cases})
 
     # ------------------------------------------------------------------ notes, inbox, stop button
 

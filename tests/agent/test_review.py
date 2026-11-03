@@ -161,6 +161,16 @@ class FailingChecksTest(ReviewCase, unittest.TestCase):
         self.assertTrue(f["cost and turns"].ok and f["model per role"].ok)
 
 
+class PluginCostTest(ReviewCase, unittest.TestCase):
+    def test_a_plugin_runs_null_cost_is_said(self):
+        path = self.ctx.store.path / layout.PROJECT_FILE
+        project = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps(dict(project, cost_usd=None, driver="claude_code_plugin")), encoding="utf-8")
+        f = by_name(review_run(self.ctx.store.path))["cost and turns"]
+        self.assertTrue(f.ok)
+        self.assertIn("cost_usd null", f.detail)
+
+
 def n12_record(root: Path, *, cause: str, second: str = "match", q41=None) -> Path:
     """A minimal record of an N12 run: S1 compared, mismatched, the cause, predicted again and compared."""
     want = next(q for q in read_data(N12_FILE)["requirements"] if q["key"] == N12_KEY)
