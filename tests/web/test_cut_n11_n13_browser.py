@@ -399,10 +399,10 @@ class CutN11N13Test(unittest.TestCase):
         self.assertLessEqual(g["cards"][-1]["right"], shelf[2] - 2, "the new card inside the shelf")
         self.assertEqual(len({round(x["top"]) for x in g["cards"]}), 1)  # one row
         self.assertEqual(g["cards"][-1]["state"], "missing")
-        self.assertEqual(g["gap"], ["点線: 「転倒の守りを確かめる道具」が棚に無い"])
+        self.assertEqual(g["gap"], ["点線: 「転倒の守りを確かめるツール」が棚に無い"])
         # the dotted card's name (a label, red until the checks pass), under it and flush with
         # its right edge; the other cards have no names; "照合 ✓" not yet
-        self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめる道具", "label", RED)])
+        self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめるツール", "label", RED)])
         self.assertAlmostEqual(g["tag"][0]["right"], g["cards"][-1]["right"], delta=0.5)
         self.assertGreaterEqual(g["tag"][0]["top"], g["cards"][-1]["bottom"])
         self.assertEqual([x["text"] for x in g["cards"]], [""] * (len(UNCHECKED) + 1) + ["照合✓"])
@@ -427,14 +427,14 @@ class CutN11N13Test(unittest.TestCase):
         self.assertEqual(c[ticks[0]]["checked"], [])
         self.assertEqual([r["tick"] for r in c[ticks[1]]["rows"]], [True, True])
         rows = [[x for x in r["text"].split("\n") if x.strip()] for r in c[ticks[1]]["rows"]]
-        self.assertEqual(rows[0], ["片持ちの管の先のたわみ", "✓", "答え 79.58 mm ・ 道具 79.58 mm", "出典: 梁の手計算の式"])
-        self.assertEqual(rows[1], ["門形の枠が横に崩れる力", "✓", "答え 2,260 N ・ 道具 2,261 N", "出典: 骨組が崩れる力の教科書 (Neal)"])
+        self.assertEqual(rows[0], ["片持ちの管の先のたわみ", "✓", "答え 79.58 mm ・ ツール 79.58 mm", "出典: 梁の手計算の式"])
+        self.assertEqual(rows[1], ["門形の枠が横に崩れる力", "✓", "答え 2,260 N ・ ツール 2,261 N", "出典: 骨組が崩れる力の教科書 (Neal)"])
         # once both are ticked: the new card is solid in the shelf with "照合 ✓" on it, and its
         # name green as that mark (the tool passed its checks), to the end
         for t in (ticks[1], T["shelf_s"], end):
             self.assertEqual(c[t]["cards"][-1]["state"], "solid", t)
             self.assertEqual([x["isNew"] for x in c[t]["cards"]], [False] * (len(UNCHECKED) + 1) + [True], t)
-            self.assertEqual([(x["text"], x["color"]) for x in c[t]["tag"]], [("転倒の守りを確かめる道具", GREEN)], t)
+            self.assertEqual([(x["text"], x["color"]) for x in c[t]["tag"]], [("転倒の守りを確かめるツール", GREEN)], t)
             self.assertEqual(len(c[t]["checked"]), 1, t)
             ck = c[t]["checked"][0]
             self.assertEqual((ck["text"], ck["kind"], ck["color"]), ("照合 ✓", "label", GREEN), t)
@@ -442,11 +442,11 @@ class CutN11N13Test(unittest.TestCase):
             self.assertTrue(card["left"] <= ck["left"] and ck["right"] <= card["right"] and card["top"] <= ck["top"] and ck["bottom"] <= card["bottom"], (t, ck, card))
             self.assertEqual(c[t]["made"], ["Claude がその場で書き、答えの分かっている例で確かめた"], t)
             self.assertEqual(c[t]["gap"], [], t)
-            self.assertEqual(c[t]["marks"], [["照合✓", GREEN], ["転倒の守りを確かめる道具", GREEN], ["✓", GREEN], ["✓", GREEN]], t)
+            self.assertEqual(c[t]["marks"], [["照合✓", GREEN], ["転倒の守りを確かめるツール", GREEN], ["✓", GREEN], ["✓", GREEN]], t)
             self.assertEqual(seen[t]["counts"].get("label"), 4, t)  # the two ticks, the name and "照合 ✓"
         # the last screen: "転倒の守り" never alone (only in the tool's name), "照合 ✓" shown
-        self.assertEqual(re.findall(r"転倒の守り(?!を確かめる道具)", c[end]["text"]), [])
-        self.assertIn("転倒の守りを確かめる道具", c[end]["text"])
+        self.assertEqual(re.findall(r"転倒の守り(?!を確かめるツール)", c[end]["text"]), [])
+        self.assertIn("転倒の守りを確かめるツール", c[end]["text"])
         self.assertIn("照合 ✓", [x["text"] for x in c[end]["checked"]])
         # the analyses made with it are not shown: no figure, no verdict (they fail on the safe
         # side's prediction), nothing red once the checks have passed
@@ -465,16 +465,16 @@ class CutN11N13Test(unittest.TestCase):
         end = self.layout["n13"]["duration_s"] - 0.1
         seen = self.read("n13", self.three_run, [T["gap_s"], end])
         g, e = seen[T["gap_s"]]["cut"], seen[end]["cut"]
-        self.assertEqual([(x["text"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめる道具", RED)])
-        self.assertEqual([(x["text"], x["color"]) for x in e["tag"]], [("転倒の守りを確かめる道具 ・ 照合 ✓", GREEN)])
+        self.assertEqual([(x["text"], x["color"]) for x in g["tag"]], [("転倒の守りを確かめるツール", RED)])
+        self.assertEqual([(x["text"], x["color"]) for x in e["tag"]], [("転倒の守りを確かめるツール ・ 照合 ✓", GREEN)])
         self.assertEqual(e["checked"], [])
         self.assertEqual(seen[end]["counts"].get("label"), 4)
-        self.assertEqual(re.findall(r"転倒の守り(?!を確かめる道具)", e["text"]), [])
+        self.assertEqual(re.findall(r"転倒の守り(?!を確かめるツール)", e["text"]), [])
 
     def test_n13_without_the_code_file_says_so(self):
         seen = self.read("n13", self.nocode_run, [self.layout["n13"]["times"]["check_s"]])
         got = next(iter(seen.values()))["cut"]
-        self.assertEqual(got["none"], ["道具のコードのファイルが無い"])
+        self.assertEqual(got["none"], ["ツールのコードのファイルが無い"])
         self.assertEqual(got["code"], "")
 
     # ---- the promo department's check times --------------------------------------------

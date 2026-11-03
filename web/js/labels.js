@@ -260,7 +260,7 @@ const PLAIN_JA = {
 const PLAIN_TOOL_JA = {
   // title: "K1 の骨組で、ロールバーに塑性ヒンジを順に入れて押す (…) と、乗員の空間との隙間"
   // (run 20261103-234711-offroad-4w, test R4: the roll-over protective structure)
-  rops_pushover: "転倒の守りを確かめる道具",
+  rops_pushover: "転倒の守りを確かめるツール",
 };
 
 export function plainToolName(name) {

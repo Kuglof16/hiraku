@@ -15,7 +15,7 @@
 // - shelf: from times.gap_s the shelf: a plain card for each tool already on it and a dotted
 //   card for the missing one, with one line naming what is missing. The cards are in as few
 //   rows as keep them readable. The dotted card carries the new tool's name as its tag (a
-//   label, under it and flush with its right edge: cardName, e.g. "転倒の守りを確かめる道具");
+//   label, under it and flush with its right edge: cardName, e.g. "転倒の守りを確かめるツール");
 //   the other cards have no names. From write_s the dotted card fills as the code is written,
 //   and once every check has passed it is solid, shows "照合 ✓" and its tag turns green: the
 //   green says the tool passed its checks, never that the design passed (the run's verdicts
@@ -75,7 +75,7 @@ export function n13Records(s, events) {
   const usedBy = (name) => s.order.analyses.map((id) => s.analyses[id]).filter((a) => a.tool === name && a.status === "ok");
   const made = checked.filter((e) => e.data.origin === "claude" && e.data.usable && usedBy(e.data.name).length);
   const ev = params.get("tool") ? checked.filter((e) => e.data.name === params.get("tool") && e.data.usable).at(-1) : made.at(-1);
-  if (!ev) throw new Error(params.get("tool") ? `使える道具 ${params.get("tool")} の照合の記録が無い` : "Claude が作って解析に使った道具の記録が無い");
+  if (!ev) throw new Error(params.get("tool") ? `使えるツール ${params.get("tool")} の照合の記録が無い` : "Claude が作って解析に使ったツールの記録が無い");
   const tool = ev.data;
   const attempt = checked.filter((e) => e.data.name === tool.name && e.seq <= ev.seq).length;
   const usable = checked.filter((e) => e.seq < ev.seq && e.data.usable).map((e) => e.data.name);
@@ -103,11 +103,11 @@ export function cardName(tool) {
   return parts.length >= 3 ? parts.slice(1).join("の") : t;
 }
 
-// The gap's line: the viewers' name (a name of the tool, "…を確かめる道具") is not on the
+// The gap's line: the viewers' name (a name of the tool, "…を確かめるツール") is not on the
 // shelf, else what the title says has no tool to check it.
 export function missingLine(tool) {
   const plain = plainToolName(tool?.name);
-  return plain ? `点線: 「${plain}」が棚に無い` : `点線: 「${toolTitle(tool) ?? ""}」を確かめる道具が無い`;
+  return plain ? `点線: 「${plain}」が棚に無い` : `点線: 「${toolTitle(tool) ?? ""}」を確かめるツールが無い`;
 }
 
 // The new card's mark once every check has passed (green: the tool passed its checks, not
@@ -161,7 +161,7 @@ export class CutN13 {
     // shelf: the tools on it and the missing one
     const S = sp.shelf;
     const sx = textPx(L, S, st);
-    this.shelf = panel(this.stage, L, "n13", "shelf", "道具の棚", st);
+    this.shelf = panel(this.stage, L, "n13", "shelf", "ツールの棚", st);
     const n = this.before.length + 1;
     // under the title: the cards, the new card's tag (a line and its gap) and one line of text
     const titlePx = Math.max(L.min_text_px, S.title_px, st.bodyPx);
@@ -210,7 +210,7 @@ export class CutN13 {
       return (
         `<div class="n13-row" data-pass="${c.pass ? "1" : "0"}">` +
         `<p class="n13-row-name"><span>${esc(plainName(c.quantity))}</span><span class="mark" data-kind="label" style="color:${c.pass ? GREEN : RED}">${c.pass ? "✓" : "✕"}</span></p>` +
-        `<p class="n13-row-val">答え ${esc(plainValue(c.quantity, c.expected, c.unit, 4))} ・ 道具 ${esc(plainValue(c.quantity, c.got, c.unit, 4))}</p>` +
+        `<p class="n13-row-val">答え ${esc(plainValue(c.quantity, c.expected, c.unit, 4))} ・ ツール ${esc(plainValue(c.quantity, c.got, c.unit, 4))}</p>` +
         (src ? `<p class="n13-src" data-kind="note" style="font-size:${L.min_text_px}px">出典: ${esc(src)}</p>` : "") +
         `</div>`
       );
@@ -235,7 +235,7 @@ export class CutN13 {
     } catch {
       this.codeLines = [];
     }
-    if (!this.codeLines.length) this.code.insertAdjacentHTML("beforeend", `<p class="n13-none" data-kind="note" style="font-size:${this.layout.min_text_px}px">道具のコードのファイルが無い</p>`);
+    if (!this.codeLines.length) this.code.insertAdjacentHTML("beforeend", `<p class="n13-none" data-kind="note" style="font-size:${this.layout.min_text_px}px">ツールのコードのファイルが無い</p>`);
   }
 
   resize() {}
