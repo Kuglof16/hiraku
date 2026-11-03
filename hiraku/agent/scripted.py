@@ -31,7 +31,7 @@ from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, rule_check, write_report)
 from hiraku.tools.judge import latest_verdicts, verdict_line
-from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+from hiraku.tools.plan import (READERS, ReaderError, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
 from hiraku.tools.shelf import STAGE_NAMES_JA, tool_stage
@@ -138,7 +138,15 @@ def _check_stop(ctx: RunContext) -> None:
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
-        given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        try:
+            given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        except ReaderError as e:  # the formula does not apply to this design (e.g. nothing outside point R for R8-push)
+            ctx.store.emit("agent.said", agent="system", domain=lc["domain"],
+                           text=f"{lc['load_case_id']} の {p['quantity']} は、この設計では式 {p['formula_id']} の入力が作れないので"
+                                f"予測しません ({e})",
+                           data={"skipped_prediction": p["formula_id"], "load_case_id": lc["load_case_id"],
+                                 "quantity": p["quantity"], "reason": str(e)})
+            continue
         args = {
             "load_case_id": lc["load_case_id"],
             "quantity": p["quantity"],
@@ -205,7 +213,11 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if step.get("say"):
         _say(ctx, agent, lc, step["say"])
     expected = step.get("expected_mismatch")
-    hit = _analyze_and_compare(ctx, lc, agent, tool, _predict(ctx, lc, agent, step["predictions"]), expected)
+    pred_ids = _predict(ctx, lc, agent, step["predictions"])
+    if not pred_ids:  # every formula of the step was skipped: no prediction, so no analysis (HK1)
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、この設計で使える予測の式が無いので、解析しません")
+        return
+    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
     if hit is None:
         return  # matched; the plan's retry is not needed
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
