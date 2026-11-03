@@ -27,29 +27,32 @@ from tests.web.test_browser import ENABLED, sync_playwright
 BAND_Y = 910
 COLORS = {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}
 OVERLAY = {"color": "#c8402a", "opacity": 0.22}
-N03_TIMES = [0.2, 1.0, 2.0, 2.7, 3.5, 4.8]
-N06_TIMES = [0.1, 0.9, 3.0, 6.0, 10.9]
+# around loop_to_s (2.8) and accel_s (2.9), and the end
+N03_TIMES = [0.2, 1.0, 2.0, 2.8, 2.85, 2.9, 3.5, 4.97]
+# before the first tile (0.6), each tile's start (0.6 + 0.55 k) and landing, the last landing (3.85), the end
+N06_TIMES = [0.5, 0.7, 1.2, 2.0, 3.3, 3.4, 3.9, 6.0, 11.6]
 
 
 def n03_n06_layout():
-    """Provisional layout values in the keys of n03 / n06 (and the top keys the cut pages read)."""
+    """The promo department's proposed values for n03 / n06 (until they are written in
+    layout.json), with the top keys the cut pages read; colours and overlay as n01."""
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
         "min_text_px": 18,
         "n03": {
             "duration_s": 5.0,
-            "view": {"x": 96, "y": 96, "w": 1728, "h": 790},
-            "popup": {"x": 1296, "y": 128, "w": 496, "h": 380, "title_px": 26, "text_px": 20},
-            "times": {"lead_s": 0.3, "loop_to_s": 2.6, "accel_s": 2.8},
+            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
+            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22},
+            "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9},
             "colors": dict(COLORS),
         },
         "n06": {
-            "duration_s": 11.0,
+            "duration_s": 11.7,
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
-            "tests": ["step", "frame", "slope", "wind", "brake", "heat"],
+            "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
             "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}},
-            "times": {"tiles_s": 0.3, "tile_in_s": 0.5, "tile_stagger_s": 0.25},
+            "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55},
             "colors": dict(COLORS),
             "overlay": dict(OVERLAY),
         },
@@ -123,6 +126,10 @@ def n03_n06_events():
             params={"loading": "two_cargo", "side_slope": {"value": 44.0, "unit": "deg"}, "slope_up": "left"}),
         _lc("F1-wind-beyond", "F1", "aero", "限界の外: 強い横風 (形の見本)", criterion=_crit("critical_wind_speed", ">=", 57.0, "m/s")),
         _lc("S4-brake-beyond", "S4", "handling", "限界の外: 滑りやすい路面で急ブレーキ (形の見本)", criterion=_crit("stopping_distance", "<=", STOP_LIMIT, "m")),
+        _lc("P3-v", "P3", "powertrain", "平らな道で 40 km/h まで (形の見本)", params={"loading": "two_cargo", "grade": {"value": 0.0, "unit": "%"}}),
+        _lc("S3-dlc-beyond", "S3", "handling", "限界の外: 速いダブルレーンチェンジ (形の見本)", criterion=_crit("min_side_load", ">", 0.0, "N")),
+        _lc("T1-hot-beyond", "T1", "thermal", "限界の外: 暑い日に長い上り (形の見本)", criterion=_crit("temp_battery_max", "<=", 55.0, "degC")),
+        _lc("H1-v", "H1", "assembly", "組み立ての干渉 (形の見本)"),
     ]
     t_long = [k * 60.0 for k in range(41)]  # 0 .. 2400 s
     t_short = [k * 0.2 for k in range(41)]  # 0 .. 8 s
@@ -162,6 +169,26 @@ def n03_n06_events():
         {"analysis_id": "ana-0010", "tool": "braking", "base": "K2", "load_case_id": "S4-brake-beyond",
          "series": _motion(design, t_short, lambda x: (STOP_GOT * (1 - (1 - min(x, 8.0) / 8.0) ** 2), 0.0, 0.0), fx=lambda x: -2000.0),
          "results": [_r("stopping_distance", STOP_GOT, "m")]},
+        {"analysis_id": "ana-0011", "tool": "launch", "base": "K2", "load_case_id": "P3-v",
+         "series": _motion(design, t_short[:31], lambda x: (0.5 * 1.9 * x * x, 0.0, 0.0), fx=lambda x: 1100.0,
+                           extra=[_s("speed", "km/h", t_short[:31], [1.9 * x * 3.6 for x in t_short[:31]])]),
+         "results": [_r("time_to_speed", 5.85, "s")]},
+        {"analysis_id": "ana-0012", "tool": "lane_change", "base": "K2", "load_case_id": "S3-dlc-beyond",
+         "series": _motion(design, t_short, lambda x: (x * 15.0, 1.75 * (1 - math.cos(math.pi * min(x, 4.0) / 4.0)), 0.0),
+                           roll=lambda x: max(0.0, x - 3.0) * 12.0,
+                           load=lambda wid, x: (0.0 if x >= 3.0 else 1250.0 * (1 - x / 3.0)) if wid in ("FR", "RR") else 1250.0 * (1 + min(x, 3.0) / 3.0)),
+         "results": [_r("min_side_load", 0.0, "N"), _r("wheel_lift", 1.0, "1")]},
+        {"analysis_id": "ana-0013", "tool": "thermal", "base": "K3", "load_case_id": "T1-hot-beyond",
+         "fields": [{"kind": "temperature", "label": "部品の温度", "unit": "degC", "per_part": {"battery": 61.0, "seat": 35.0}}],
+         "results": [_r("temp_battery_max", 61.0, "degC", where="battery")]},
+        {"analysis_id": "ana-0014", "tool": "assembly", "base": "K4", "load_case_id": "H1-v",
+         "assembly": [
+             {"order": 1, "part": "seat", "direction": "-z", "no_interference": True, "tool_clearance": True, "hand_reach": True,
+              "path_mm": [[-600.0, 0.0, 1400.0], [-600.0, 0.0, 600.0]]},
+             {"order": 2, "part": "battery", "direction": "-z", "depends_on": ["seat"], "no_interference": False,
+              "tool_clearance": True, "hand_reach": True, "blocked_by": ["cross1"]},
+         ],
+         "interferences": [{"a": "battery", "b": "member cross1", "depth_mm": 8.0, "state": "rest"}]},
     ]
     events = [run, d_ev]
     for i, a in enumerate(anas):
@@ -201,9 +228,11 @@ READ = """async (t) => {
     battery: cut?.driveView?.keys.contour?.parts ? Object.values(cut.driveView.keys.contour.parts)[0] : null,
     pages: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").map((p) => p.dataset.page),
     now: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").flatMap((p) => [...p.querySelectorAll(".now")].map((n) => n.textContent)),
+    title: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").map((p) => p.querySelector("h3").textContent)[0] ?? null,
     tiles: [...document.querySelectorAll(".n06-tile")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el), p: Number(el.dataset.p),
       tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), miss: el.dataset.miss, over: el.dataset.over ?? null, lift: el.dataset.lift ?? null,
-      past: el.dataset.past ?? null, outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
+      past: el.dataset.past ?? null, clash: el.dataset.clash ?? null, marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
+      outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
       markColor: el.querySelector(".mark") ? getComputedStyle(el.querySelector(".mark")).color : null })),
   };
 }"""
@@ -297,27 +326,49 @@ class CutN03N06Test(unittest.TestCase):
                 self.assertTrue(got["view"]["rate"].startswith("×"), (t, got["view"]["rate"]))
                 self.assertTrue(got["now"] and all(n for n in got["now"]), (t, got["now"]))
 
-    def test_n03_plays_the_long_drive_then_the_launch(self):
+    def check_n03_times(self, shots, layout, launch_end):
+        """The drive plays from lead_s to loop_to_s and holds its end until accel_s; the
+        acceleration plays from accel_s (its first sample) to the end of the cut."""
+        T = layout["n03"]["times"]
+        self.assertLess(shots[1.0]["view"]["tau"], shots[2.0]["view"]["tau"])
+        self.assertAlmostEqual(shots[T["loop_to_s"]]["view"]["tau"], 2400.0, places=6)
+        self.assertEqual(shots[2.85]["phase"], "drive")
+        self.assertAlmostEqual(shots[2.85]["view"]["tau"], 2400.0, places=6)
+        self.assertAlmostEqual(shots[T["accel_s"]]["view"]["tau"], 0.0, places=6)
+        self.assertLess(shots[3.5]["view"]["tau"], shots[4.97]["view"]["tau"])
+        dur = layout["n03"]["duration_s"]
+        self.assertAlmostEqual(shots[4.97]["view"]["tau"], launch_end * (4.97 - T["accel_s"]) / (dur - T["accel_s"]), places=6)
+        # squeezed: 2400 s of record over loop_to_s - lead_s, as rateLabel says it
+        self.assertEqual(shots[1.0]["view"]["rate"], f"×{round(2400.0 / (T['loop_to_s'] - T['lead_s']))}")
+
+    def test_n03_plays_the_long_drive_then_the_straight_acceleration(self):
         layout = n03_n06_layout()
         base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
         shots = {t: page.evaluate(READ, t) for t in N03_TIMES}
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
-        T = layout["n03"]["times"]
-        # the drive: record time moves on with the stage time, then holds at its end until accel_s
-        self.assertLess(shots[1.0]["view"]["tau"], shots[2.0]["view"]["tau"])
-        self.assertAlmostEqual(shots[2.7]["view"]["tau"], 2400.0, places=6)
-        # squeezed: 2400 s of record over loop_to_s - lead_s, as rateLabel says it
-        self.assertEqual(shots[1.0]["view"]["rate"], f"×{round(2400.0 / (T['loop_to_s'] - T['lead_s']))}")
+        self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
+        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2
+        self.assertEqual(shots[1.0]["title"], "電池の残量と温度 (P4・T1)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P3)")
         # the battery warms: its colour's value is the recorded temperature, rising
         self.assertLess(shots[1.0]["battery"], shots[2.0]["battery"])
         self.assertGreaterEqual(shots[1.0]["battery"], 40.0)
-        self.assertLessEqual(shots[2.7]["battery"], 48.4 + 1e-6)
-        # the launch: its record time moves on from the motion's start
-        self.assertLess(shots[3.5]["view"]["tau"], shots[4.8]["view"]["tau"])
-        self.assertLessEqual(shots[4.8]["view"]["tau"], 8.0 + 1e-9)
+        self.assertLessEqual(shots[2.8]["battery"], 48.4 + 1e-6)
         self.assertEqual(page.evaluate("window.hiraku.cut.launchView.toggles.arrows && window.hiraku.cut.launchView.toggles.cg"), True)
+        page.close()
+
+    def test_n03_takes_p2_without_a_p3_record(self):
+        layout = n03_n06_layout()
+        events = [e for e in n03_n06_events() if not (e["kind"] == "analysis.finished" and e["data"]["load_case_id"] == "P3-v")]
+        base = self.serve(layout, events={"20261103-120000-n03": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
+        shots = {t: page.evaluate(READ, t) for t in N03_TIMES}
+        self.assertEqual(errors, [])
+        self.check_n03(shots, layout)
+        self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
+        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P2)")
         page.close()
 
     def check_n06(self, shots, layout, recorded):
@@ -329,13 +380,16 @@ class CutN03N06Test(unittest.TestCase):
             self.assertEqual(got["duration"], sp["duration_s"])
             self.assertEqual([x["box"] for x in got["tiles"]], [f"n06.tile.{k}" for k in sp["tests"]])
             for i, x in enumerate(got["tiles"]):
+                # tile i comes in from tiles_s + i tile_stagger_s over tile_in_s
                 start = T["tiles_s"] + i * T["tile_stagger_s"]
                 self.assertEqual(x["shown"], t > start, (t, x["box"]))
+                self.assertAlmostEqual(x["p"], max(0.0, min(1.0, (t - start) / T["tile_in_s"])), places=6, msg=(t, x["box"]))
                 self.assertIsNone(x["outside"], x["box"])
                 if t >= start + T["tile_in_s"]:
                     col, row = i % g["cols"], i // g["cols"]
                     left, top = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
                     self.assertEqual([round(v) for v in x["rect"]], [left, top, left + g["tile_w"], top + g["tile_h"]], x["box"])
+                    self.assertLessEqual(x["rect"][3], BAND_Y, x["box"])
                     for b in got["boxes"]:
                         if b["box"].startswith(x["box"] + "."):
                             self.inside(b["rect"], x["rect"], b["box"])
@@ -353,36 +407,42 @@ class CutN03N06Test(unittest.TestCase):
         page, errors = self.open(f"{base}/cut.html?cut=n06&run=20261103-120000-n06&t=0")
         shots = {t: page.evaluate(READ, t) for t in N06_TIMES}
         self.assertEqual(errors, [])
-        recorded = {"step", "frame", "slope", "wind", "brake"}
-        self.check_n06(shots, layout, recorded)
-        last = {x["box"].split(".")[-1]: x for x in shots[10.9]["tiles"]}
-        for k in recorded:
+        keys = layout["n06"]["tests"]
+        self.check_n06(shots, layout, set(keys))
+        last = {x["box"].split(".")[-1]: x for x in shots[11.6]["tiles"]}
+        for k in keys:
             self.assertEqual(last[k]["miss"], "1", k)
             self.assertEqual(last[k]["mark"], "✕", k)
         # what happened, read from the records (words only)
-        self.assertIn("越えられない", last["step"]["text"])
-        self.assertIn("フレームが許容を超える", last["step"]["text"])
-        self.assertIn("フレームが許容を超える", last["frame"]["text"])
-        self.assertIn("倒れる", last["slope"]["text"])
-        self.assertIn("輪が浮く", last["slope"]["text"])
-        self.assertIn("横に流される", last["wind"]["text"])
-        self.assertIn("風に耐えられない", last["wind"]["text"])
-        self.assertIn("止まりきれない", last["brake"]["text"])
-        # where the limit is passed, in red: members over the allowable, a lifted wheel, the road past the stop
-        self.assertEqual((last["step"]["over"], last["frame"]["over"]), ("1", "1"))
-        self.assertEqual(last["slope"]["lift"], "1")
-        self.assertEqual(last["brake"]["past"], "1")
-        self.assertEqual(last["wind"]["over"], "0")
-        # no record past the limit for T1 here: said so, no mark
-        self.assertIn("記録がまだ無い", last["heat"]["text"])
-        self.assertEqual(last["heat"]["mark"], None)
+        self.assertIn("フレームが許容を超える", last["step_break"]["text"])
+        self.assertNotIn("越えられない", last["step_break"]["text"])  # its words are the still's
+        self.assertIn("越えられない", last["step_stuck"]["text"])
+        self.assertNotIn("フレーム", last["step_stuck"]["text"])  # its words are the motion's
+        self.assertIn("倒れる", last["tilt_over"]["text"])
+        self.assertIn("輪が浮く", last["tilt_over"]["text"])
+        self.assertIn("電池が熱くなりすぎる", last["battery_hot"]["text"])
+        self.assertIn("部品がぶつかる", last["parts_clash"]["text"])
+        self.assertIn("片側の輪が浮く", last["rollover"]["text"])
+        # where the limit is passed, in red: members over the allowable, a part over its
+        # limit, a lifted wheel, the parts that interfere
+        self.assertEqual(last["step_break"]["over"], "1")
+        self.assertEqual(last["battery_hot"]["over"], "1")
+        self.assertEqual((last["tilt_over"]["lift"], last["rollover"]["lift"]), ("1", "1"))
+        self.assertEqual(last["parts_clash"]["clash"], "1")
+        self.assertEqual(last["parts_clash"]["marks"], 2)  # the battery and the cross member, both in place
         # the records play from each tile's landing to the end
-        mid = {x["box"].split(".")[-1]: x for x in shots[3.0]["tiles"]}
-        for k in ("step", "slope", "wind", "brake"):
-            self.assertLess(mid[k]["tau"], last[k]["tau"], k)
         T = layout["n06"]["times"]
-        land = T["tiles_s"] + layout["n06"]["tests"].index("slope") * T["tile_stagger_s"] + T["tile_in_s"]
-        self.assertAlmostEqual(last["slope"]["tau"], 8.0 * (10.9 - land) / (layout["n06"]["duration_s"] - land), places=6)
+        dur = layout["n06"]["duration_s"]
+        mid = {x["box"].split(".")[-1]: x for x in shots[6.0]["tiles"]}
+        for k in ("step_break", "tilt_over", "step_stuck", "parts_clash", "rollover"):
+            self.assertLess(mid[k]["tau"], last[k]["tau"], k)
+        land = lambda k: T["tiles_s"] + keys.index(k) * T["tile_stagger_s"] + T["tile_in_s"]  # noqa: E731
+        self.assertAlmostEqual(last["tilt_over"]["tau"], 8.0 * (11.6 - land("tilt_over")) / (dur - land("tilt_over")), places=6)
+        # the assembly: its two steps over the same span; the battery's box once it is in
+        self.assertAlmostEqual(last["parts_clash"]["tau"], 2.0 * (11.6 - land("parts_clash")) / (dur - land("parts_clash")), places=6)
+        early = {x["box"].split(".")[-1]: x for x in shots[3.9]["tiles"]}
+        self.assertLess(early["parts_clash"]["tau"], 2.0)
+        self.assertEqual(early["parts_clash"]["marks"], 1)  # the cross member only: the battery is not in yet
         page.close()
 
     def test_missing_layout_keys_are_named(self):
@@ -430,7 +490,7 @@ class CutN03N06Test(unittest.TestCase):
         page, errors = self.open(f"{base}/cut.html?cut=n06&run={run}&t=0")
         shots = {t: page.evaluate(READ, t) for t in N06_TIMES}
         self.assertEqual(errors, [])
-        recorded = {x["box"].split(".")[-1] for x in shots[10.9]["tiles"] if "記録がまだ無い" not in x["text"]}
+        recorded = {x["box"].split(".")[-1] for x in shots[11.6]["tiles"] if "記録がまだ無い" not in x["text"]}
         self.check_n06(shots, layout, recorded)
         page.close()
 

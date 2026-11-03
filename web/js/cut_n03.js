@@ -6,10 +6,11 @@
 // upper limit (else the highest recorded one). The vehicle stands on the plain ground:
 // the drive_energy (P4) and thermal (T1) records hold no positions, so no course is drawn
 // and the vehicle does not move; its centre of gravity is marked. From times.accel_s to
-// the end the launch record (P2, else ?accel=<load case id>) plays: its motion with each
-// wheel's road reaction and grip arrows and the centre of gravity. A small popup over the
-// view charts the battery's charge and temperature (drive), then the speed against time
-// (launch), with a cursor at the record time and the recorded sample nearest to it.
+// the end the acceleration record plays (?accel=<load case id>, else the straight run on the
+// flat, P3, else the launch on the slope, P2): its motion with each wheel's road reaction
+// and grip arrows and the centre of gravity. The popup charts the battery's charge and
+// temperature (drive), then the speed against time (acceleration), with a cursor at the
+// record time and the recorded sample nearest to it; its title names the tests charted.
 // The squeeze is in the view's corner (rateLabel, as the N05 tiles).
 //
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
@@ -48,6 +49,11 @@ export const N03_KEYS = [
   "times.lead_s", "times.loop_to_s", "times.accel_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
+
+// Not in layout.json (written here until the promo department gives keys for them): the
+// view's and the popup's border and the popup's corner, the padding inside the popup and
+// around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
+export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
 
@@ -110,8 +116,10 @@ export class CutN03 {
     const has = (...names) => (a) => names.every((n) => channelsOf(a).has(n));
     this.drive = newestOf(s, { test: "P4" }, has("soc"));
     this.heat = newestOf(s, { test: "T1" }, (a) => [...channelsOf(a).keys()].some((n) => n.startsWith("temp.")));
+    // the straight run on the flat (P3) when it was recorded, else the launch on the slope (P2)
     const accel = params.get("accel");
-    this.launch = newestOf(s, accel ? { lcId: accel } : { test: "P2" }, (a) => !!motionOf(a));
+    const moving = (a) => !!motionOf(a);
+    this.launch = accel ? newestOf(s, { lcId: accel }, moving) : newestOf(s, { test: "P3" }, moving) ?? newestOf(s, { test: "P2" }, moving);
     this.build();
   }
 
@@ -119,16 +127,18 @@ export class CutN03 {
     const sp = this.spec;
     const V = sp.view;
     const P = sp.popup;
-    const pad = Math.round(P.text_px / 2);
-    this.inner = { w: V.w, h: V.h };
+    const S = N03_STYLE;
+    const pad = Math.round(P.text_px * S.pad_of_text);
+    const border = `${S.border_px}px solid ${sp.colors.rule}`;
+    this.inner = { w: V.w - 2 * S.border_px, h: V.h - 2 * S.border_px };
 
     const box = document.createElement("div");
     box.className = "n03-view";
     box.dataset.box = "n03.view";
-    Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, borderColor: sp.colors.rule });
+    Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border });
     box.innerHTML =
       `<canvas></canvas>` +
-      `<span class="rate" data-box="n03.view.rate" style="right:${pad}px;bottom:${pad}px;font-size:${P.text_px}px"></span>`;
+      `<span class="rate" data-box="n03.view.rate" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
     if (!clearOfBand({ x: V.x, y: V.y, w: V.w, h: V.h }, this.layout)) box.dataset.outside = "1";
     this.stage.append(box);
     this.box = box;
@@ -145,33 +155,36 @@ export class CutN03 {
     const pop = document.createElement("div");
     pop.className = "n03-popup";
     pop.dataset.box = "n03.popup";
-    Object.assign(pop.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px`, background: sp.colors.panel, borderColor: sp.colors.rule, padding: `${pad}px` });
+    Object.assign(pop.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px`, background: sp.colors.panel, border, borderRadius: `${S.popup_radius_px}px`, padding: `${pad}px` });
     if (!clearOfBand({ x: P.x, y: P.y, w: P.w, h: P.h }, this.layout)) pop.dataset.outside = "1";
     this.stage.append(pop);
     this.popup = pop;
-    const chartW = P.w - 2 * pad;
-    const room = P.h - 2 * pad - P.title_px - pad;
+    const chartW = P.w - 2 * pad - 2 * S.border_px;
+    // a page of the popup: its title with the tests whose records it charts, then the charts
     const page = (key, title, charts) => {
       const el = document.createElement("div");
       el.className = "n03-page";
       el.dataset.page = key;
+      const list = charts.filter((c) => c.s);
+      const tests = [...new Set(list.map((c) => c.test))];
       const h3 = document.createElement("h3");
       h3.dataset.box = "n03.popup.title";
+      h3.dataset.tests = tests.join(" ");
       Object.assign(h3.style, { fontSize: `${P.title_px}px`, marginBottom: `${pad}px` });
-      h3.textContent = title;
+      h3.textContent = tests.length ? `${title} (${tests.join("・")})` : title;
       el.append(h3);
       pop.append(el);
-      const list = charts.filter((c) => c.s);
       if (!list.length) {
         el.insertAdjacentHTML("beforeend", `<p class="none" style="font-size:${P.text_px}px">記録がまだ無い (${esc(charts.map((c) => c.test).join("・"))})</p>`);
         return { el, charts: [] };
       }
+      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad;
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
         el,
-        charts: list.map((c) => {
+        charts: list.map((c, i) => {
           const { svg, X } = chartSvg(c.s, chartW, h, P.text_px, c.name, c.limit ?? null);
-          el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-bottom:${pad}px">${svg}</svg>`);
+          el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-top:${i ? pad : 0}px">${svg}</svg>`);
           const node = el.lastElementChild;
           return { ...c, X, cur: node.querySelector(".cur"), now: node.querySelector(".now") };
         }),
@@ -186,7 +199,7 @@ export class CutN03 {
         { key: "soc", name: "電池の残量", s: driveCh.get("soc"), test: "P4" },
         { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null },
       ]),
-      launch: page("launch", "発進の速さと時間", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P2" }]),
+      launch: page("launch", "加速の速さと時間", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
     };
 
     // the record time spans the two phases play
