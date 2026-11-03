@@ -127,7 +127,14 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(got["predicts"], pairs)
         self.assertIn("note", got["how"])
         self.assertEqual(list_formulas(self.ctx, {"tool": "step_climb"})["predicts"], [])  # no describe()
-        self.assertIsInstance(list_formulas(self.ctx), list)  # without tool: the formulas as before
+        short = list_formulas(self.ctx)
+        self.assertIsInstance(short, list)  # without tool: the short list (run N13: the whole one was too large)
+        self.assertEqual(set(short[0]), {"formula_id", "title", "domain", "inputs", "outputs"})
+        fid = short[0]["formula_id"]
+        (whole,) = list_formulas(self.ctx, {"formula_ids": [fid]})
+        self.assertEqual(whole, next(f for f in self.ctx.formulas.list_formulas() if f["formula_id"] == fid))
+        with self.assertRaises(ToolError):
+            list_formulas(self.ctx, {"formula_ids": ["no.such"]})
         from hiraku import contract
 
         for f in got["formulas"]:
