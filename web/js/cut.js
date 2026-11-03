@@ -670,7 +670,8 @@ const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16
 // ---- story check ---------------------------------------------------------------
 // After each frame: the elements with a data-kind shown now, counted by kind against the
 // cut's limits (layout.json story), and every text shown against its smallest size (the
-// story's body text inside an element with a kind, min_text_px elsewhere). What is over is
+// story's body text inside an element with a kind, min_text_px elsewhere and inside a
+// note: data-kind "note" marks notes and sources, not counted). What is over is
 // said in small text in the stage's top left corner, above layout.safe.
 
 let story = null; // { limits, bodyPx, minPx, note, last }
@@ -703,7 +704,8 @@ function checkStory() {
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
     if (!shownNow(el)) continue;
     const px = parseFloat(getComputedStyle(el).fontSize);
-    const min = el.closest("[data-kind]") ? story.bodyPx : story.minPx;
+    // notes and sources (data-kind "note", as promo/layout_check.py) are not body text
+    const min = el.closest("[data-kind]") && !el.closest('[data-kind~="note"]') ? story.bodyPx : story.minPx;
     if (px < min - 0.01) small.push(`${el.textContent.trim().slice(0, 12)} ${px} px < ${min}`);
   }
   if (small.length) over.push(`字 ${small.join("、")}`);
@@ -763,6 +765,7 @@ async function main() {
     if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
     cut = new CUTS[name](layout, stateOf(events));
+    if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
     window.hiraku.cut = cut;
     if (!ONLY_HERO) initStory(layout, name);
     player.duration = layout[name].duration_s;

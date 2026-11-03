@@ -308,6 +308,38 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class PetsTest(unittest.TestCase):
+    def test_pets_script_is_served_as_it_is_or_404(self):
+        """GET /pets/pet3d.js passes the given pets file through as JavaScript; without it, 404."""
+        tmp = Path(tempfile.mkdtemp())
+        servers = []
+        try:
+            src = b"(function () { window.HirakuPets = { shape: 'example' }; })();\n"
+            (tmp / "pet3d.js").write_bytes(src)
+            for name in ("pet3d.js", "absent.js"):
+                s = make_server("127.0.0.1", 0, tmp, tmp, quiet=True, saved_dir=None, launcher=False, pets_file=tmp / name)
+                threading.Thread(target=s.serve_forever, daemon=True).start()
+                servers.append(s)
+                url = f"http://127.0.0.1:{s.server_address[1]}/pets/pet3d.js"
+                if name == "pet3d.js":
+                    with urllib.request.urlopen(url, timeout=5) as r:
+                        self.assertEqual(r.read(), src)
+                        self.assertTrue(r.headers["Content-Type"].startswith("text/javascript"))
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(url, timeout=5)
+                    self.assertEqual(cm.exception.code, 404)
+            # only that one file: other paths under /pets/ are not served from its folder
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(f"http://127.0.0.1:{servers[0].server_address[1]}/pets/absent.js", timeout=5)
+            self.assertEqual(cm.exception.code, 404)
+        finally:
+            for s in servers:
+                s.shutdown()
+                s.server_close()
+            shutil.rmtree(tmp)
+
+
 class OpenTest(unittest.TestCase):
     """python -m hiraku.webserve --open (what HIRAKU.cmd runs): the browser opens on the server's page."""
 
