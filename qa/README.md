@@ -39,7 +39,13 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - 動画用の要件の台本の運転は、2 回回すとバイトまで同じ (`--twice` で確かめた)。前は modal の道具の固有値計算 (scipy の `eigsh`) が乱数の始めのベクトルから解き、振動数が 1e-10 ほど違い、モードの形の向きが変わっていた。いまは始めのベクトルを固定し、モードの形の向きをそろえている。`--rel` は、乱数を使う道具がまた入ったときのためのもの
 - 基準の運転は `runs/baseline/<要件の名前>/`、`--check` と `--twice` の運転は `runs/compare/` に残る (`--baseline`・`--out` で変えられる)
 
-重い比べ (台本の運転をもう 1 回まるごと回す) は、main に入れる前に毎回回す `python -m unittest` には入れない。`HIRAKU_SLOW_TESTS=1` のときだけ `test_real_runs` が動画用の要件をもう 1 回回して比べる (全部の試験が 1 分半ほど延びる)。回すのは次のとき:
+重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
+
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転
+- 動画用の要件をもう 1 回回して、バイトで比べる
+- `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く (`MeshFieldRecord`)
+
+`HIRAKU_SLOW_TESTS=1` で回すのは次のとき:
 
 - 台本の運転の通り道 (`hiraku/solvers/`・`hiraku/agent/`・`hiraku/store/`・`hiraku/tools/`・`hiraku/catalog/`・`data/catalog/`・`data/requirements/`) を変える取り込みのあと、取り込んだ main で 1 回。同じ回にいくつかの部署を取り込むなら、最後の 1 回だけでよい
 - 動画や `showcase/` に使う運転を記録する前に 1 回

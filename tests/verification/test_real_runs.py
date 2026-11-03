@@ -30,8 +30,10 @@ from qa import compare_runs
 from ._solvers import tool_or_skip
 
 ROOT = Path(__file__).resolve().parents[2]
-REQUIREMENTS = sorted((ROOT / "data" / "requirements").glob("*.yaml"))
-SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # tests that add whole scripted runs
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # tests that add whole scripted runs or whole-frame solves
+# every requirements file with HIRAKU_SLOW_TESTS=1; otherwise the video requirements only (one run)
+REQUIREMENTS = [r for r in sorted((ROOT / "data" / "requirements").glob("*.yaml"))
+                if SLOW or r.name == "offroad-4w-video.yaml"]
 
 
 def _errors(run: Path, recompute: bool = True) -> list[str]:
@@ -178,6 +180,8 @@ class MeshFieldRecord(unittest.TestCase):
     them (one value per element or node of a mesh created before, of the same version)."""
 
     def test_each_mesh_tool_on_the_demo_mesh(self):
+        if not SLOW:
+            self.skipTest("whole-frame shell solves: set HIRAKU_SLOW_TESTS=1")
         import hiraku.solvers as solvers
         if not callable(getattr(solvers, "frame_mesh", None)):
             self.skipTest("hiraku.solvers.frame_mesh() is not there yet (analysis dept)")
