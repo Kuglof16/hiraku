@@ -711,10 +711,31 @@ class CheckRun(unittest.TestCase):
         # frame_shell (stage 3) after frame_static's R1 (stage 1) passed: allowed
         ev = self._stages(self._shell_after_green(sample_events(), 100.0), frame_static=1, frame_shell=3)
         self.assertNotIn("HK5_light_first", self.rules(ev))
-        # started before R1 had its verdict: HK5 denies it
+        # on R1 itself before R1 had its verdict: allowed (the heavier tool may be what settles it)
         early = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
                              frame_static=1, frame_shell=3)
-        self.assertFlags(early, "HK5_light_first")
+        self.assertNotIn("HK5_light_first", self.rules(early))
+        # on R1 after frame_static's verdict on R1 was red: HK5 denies it (revise first)
+        red = sample_events()
+        by_kind(red, "verdict.recorded")["data"]["pass"] = False
+        red = self._stages(self._shell_after_green(red, 100.0, after="verdict.recorded"), frame_static=1, frame_shell=3)
+        self.assertIn("HK5_light_first", self.rules(red))
+        # on another load case while R1 has no verdict yet: HK5 denies it
+        other = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
+                             frame_static=1, frame_shell=3)
+        for e in other:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertFlags(other, "HK5_light_first")
+        # a case past the limit (-beyond) is meant to fail: its red does not hold back the heavier tools
+        beyond = json.loads(json.dumps(sample_events()).replace("R1-step100", "R1-step100-beyond"))
+        by_kind(beyond, "verdict.recorded")["data"]["pass"] = False
+        beyond = self._stages(self._shell_after_green(beyond, 100.0, after="verdict.recorded"),
+                              frame_static=1, frame_shell=3)
+        for e in beyond:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertNotIn("HK5_light_first", self.rules(beyond))
         # tools of one stage may run side by side, and without stages every tool is stage 1
         self.assertNotIn("HK5_light_first", self.rules(self._stages(
             self._shell_after_green(sample_events(), 100.0, after="analysis.finished"), frame_static=1, frame_shell=1)))
