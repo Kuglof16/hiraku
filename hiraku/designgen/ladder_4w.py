@@ -152,7 +152,21 @@ VARIABLES: dict[str, Var] = {
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
                                      "as a multiple of the wheel's static load"),
     "bump_stop_factor": Var("1", 10.0, meaning="assumption: bump and rebound stop stiffness, as a multiple of the spring"),
+    # joint reinforcement at the T joints (where a cross member ends on the side of a rail); see
+    # CHOICES["joints"]. Written into design.variables only when switched on or changed, so a design
+    # without reinforcement is the same as before these variables existed.
+    "gussets": Var("1", 0.0, 0.0, 1.0, "1: four triangular gusset plates at every T joint, ahead of and behind the "
+                   "cross member on its upper and lower wall (0: none)"),
+    "gusset_leg": Var("mm", 60.0, 30.0, 150.0, "gusset leg along the rail and along the cross member; the default "
+                      "1.5 x the cross member width is an assumption"),
+    "gusset_thickness": Var("mm", 2.3, 1.6, 4.5, "gusset plate thickness; the default (the tube wall) is an assumption"),
+    "cross_members_through": Var("1", 0.0, 0.0, 1.0, "1: the cross members pass through a hole in the rail's inner "
+                                 "wall and are welded to both rail walls (the shell mesh; the beam model is the same); "
+                                 "0: they end on the rail's side"),
 }
+SWITCHES = ("gussets", "cross_members_through")  # 0 or 1
+# Reinforcement variables, written into design.variables only when their group is switched on or changed.
+OPTIONAL = {"gussets": ("gussets", "gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
     "tyre_relaxation_length": ("mm", "assumption: the tyre's relaxation length, taken as the wheel radius"),
@@ -208,8 +222,32 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(str(e)) from None
         if var.revisable and not var.lo <= val <= var.hi:
             raise DesignGenError(f"{name} = {val:g} {var.unit} is outside {var.lo:g} to {var.hi:g} {var.unit}")
+        if name in SWITCHES and val not in (0.0, 1.0):
+            raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
         vals[name] = val
     return vals
+
+
+def choice_values(choices: dict | None) -> dict[str, Record]:
+    """The variables a set of CHOICES stands for ({"joints": "gusset"} -> gussets 1, cross_members_through 0)."""
+    out: dict[str, Record] = {}
+    for k, opt in (choices or {}).items():
+        if k not in CHOICES:
+            raise DesignGenError(f"no choice {k!r}; the choices: {', '.join(CHOICES)}")
+        if opt not in CHOICES[k]:
+            raise DesignGenError(f"{k} must be one of {', '.join(CHOICES[k])}, got {opt!r}")
+        out.update({name: _q(v, "1") for name, v in JOINT_SWITCHES[opt].items()})
+    return out
+
+
+def choices_of(design: Record) -> dict[str, str]:
+    """The CHOICES a design was built with (from its variables)."""
+    now = {k: v["value"] for k, v in design.get("variables", {}).items() if k in SWITCHES}
+    on = {k for k, v in now.items() if v == 1}
+    for opt, sw in JOINT_SWITCHES.items():
+        if on == {k for k, v in sw.items() if v == 1}:
+            return {"joints": opt}
+    return {"joints": "+".join(sorted(on))}
 
 
 def values_of(design: Record) -> dict[str, Record]:
@@ -233,7 +271,12 @@ OCCUPANT_BACK_MM = 55.0  # the occupant's mass box centre this far behind the se
 CARGO_SHORT_MM = 50.0  # the cargo box is this much shorter than the deck
 TITLE = "2 人乗り 4 輪のはしご形フレームの電動車 (前輪で操舵、後輪で駆動、右ハンドル)"
 DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive"
-CHOICES: dict[str, list[str]] = {}  # nothing to choose yet beyond the variables
+# How the T joints (a cross member ending on the side of a rail) are made: butt (the cross member
+# welded on the rail's side, the first version), gusset (plus triangular plates, gusset_leg and
+# gusset_thickness) or through (the cross member through the rail's inner wall to its outer wall).
+CHOICES: dict[str, tuple[str, ...]] = {"joints": ("butt", "gusset", "through")}
+JOINT_SWITCHES = {"butt": {"gussets": 0, "cross_members_through": 0}, "gusset": {"gussets": 1, "cross_members_through": 0},
+                  "through": {"gussets": 0, "cross_members_through": 1}}
 
 
 def applies(flags: dict) -> bool:
@@ -324,9 +367,18 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                      (250.0, 120.0, 200.0), 8.0),
                 x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
     lay.reorder(PART_ORDER)
+    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
+    if v["gussets"] == 1:  # at the T joints: every station but the frame's two ends
+        for st in list(stations)[1:-1]:
+            for side in "LR":
+                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"],
+                                               float(material["density_kg_m3"])))
 
+    written = {k for group, names in OPTIONAL.items()
+               if v[group] == 1 or any(v[n] != VARIABLES[n].default for n in names) for k in names}
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
-    variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items() if k not in variables})
+    variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items()
+                      if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
     variables["tyre_relaxation_length"] = _q(r, "mm")
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
     return {
@@ -338,5 +390,5 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "supports": supports,
         "parts": lay.parts,
         **frame.part(),
-        "materials": {"stkr400": json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]},
+        "materials": {"stkr400": material},
     }

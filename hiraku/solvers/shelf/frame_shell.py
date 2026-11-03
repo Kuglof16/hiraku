@@ -49,11 +49,25 @@ def _vec(v, nd: int = 1) -> list[float]:
     return [round(float(x), nd) for x in v]
 
 
+MOUNT_ASSUMPTION = ("輪の力 (とばね下の重さ) は、support の frame_node を通る管の 4 面の壁の、節から管の高さ h の範囲 "
+                    "(前後 ± h) の節に RBE3 で分けて入れる。取付金具の大きさとして仮定した (確かめていない)")
+EXCLUDE_ASSUMPTION = ("取付の区画 (節がすべて上の範囲にある要素) は、最大の応力・安全率・応力集中の倍率・膜と曲げの内訳を"
+                      "比べる場所から外した。実物では金具が溶接で重なって壁を補う所で、力を入れる所の局所の値はつなぎ目の"
+                      "評価に使えないため。値は field に残す")
+GUSSET_ASSUMPTION = ("ガセット (kind gusset の部品) はシェルでは板の要素 (材料は横の部材と同じ、脚の 2 辺は溶接で全長が"
+                     "つながる) として入り、梁 (K1) では質量だけとして入る")
+THROUGH_ASSUMPTION = ("横の部材を通す形 (cross_members_through = 1): シェルでは横の部材の 4 面の壁が手前の壁の穴を通って"
+                      "向こうの壁の中面まで伸び、両方の壁と節を共有する。梁 (K1) の形は変わらない")
+
+
 def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step, sup) -> Record:
     """results / fields / vectors / effects of one frame_shell analysis."""
     worst, e = res["worst_member"], res["worst_element"]
     peak = res["member_max"][worst][0]
     bworst = beam["worst_member"]
+    ms = res["mesh"]
+    members = {m["id"] for m in design["members"]}
+    beam_member = ms.part_material.get(worst, worst)  # a gusset is compared with the branch it is welded to
     safe = min(res["safety"], key=res["safety"].get)
     m_tot = res["total_mass_kg"]
     results = [
@@ -80,7 +94,7 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
 
     fields = [
         {"kind": "stress", "label": LABEL_MEMBER, "unit": "MPa",
-         "per_member": {m: round(v, 2) for m, (v, _) in res["member_max"].items()}},
+         "per_member": {m: round(v, 2) for m, (v, _) in res["member_max"].items() if m in members}},
         {"kind": "stress", "label": LABEL_BEAM, "unit": "MPa",
          "per_member": {m: round(s["max"], 2) for m, s in beam["stresses"].items()}},
     ]
@@ -88,20 +102,25 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     # ---- effects: the material for explaining the shell peak
     place = element_place(res, e)
     mb = membrane_bending(res, e)
-    beam_same = beam["stresses"][worst]["max"]
-    beam_here = float(wall_von_mises(beam["model"], worst, [place["centre_mm"]])[0])
+    beam_same = beam["stresses"][beam_member]["max"]
     fx = res["ground_source"]
+    where = (f"{place['s_mm']:.0f} mm from its node_a" if worst in members else
+             f"gusset plate welded to {beam_member}, {place['s_mm']:.0f} mm from its corner along the through tube")
     effects = [
-        {"name": (f"shell max {peak:.1f} MPa: element {e} of {worst}, {place['s_mm']:.0f} mm from its node_a, "
+        {"name": (f"shell max {peak:.1f} MPa: element {e} of {worst}, {where}, "
                   f"{place['wall']} wall, {place['node_distance_mm']:.0f} mm from node {place['node']} "
-                  f"({res['mesh'].joint_kinds.get(place['node'], '?')} joint); "
+                  f"({ms.joint_kinds.get(place['node'], '?')} joint); "
                   f"{'inner' if mb['inner_vm'] > mb['outer_vm'] else 'outer'} surface"),
          "value": peak, "unit": "MPa"},
-        {"name": f"shell max / beam max in {worst} (stress concentration at the joint)",
+        {"name": f"shell max / beam max in {beam_member} (stress concentration at the joint)",
          "value": peak / beam_same if beam_same > 0 else 0.0, "unit": "1"},
-        {"name": f"beam max in {worst} (same ground forces)", "value": beam_same, "unit": "MPa"},
-        {"name": f"beam stress at the same point of {worst} (outer surface, beam theory)", "value": beam_here,
-         "unit": "MPa"},
+        {"name": f"beam max in {beam_member} (same ground forces)", "value": beam_same, "unit": "MPa"},
+    ]
+    if worst in members:
+        beam_here = float(wall_von_mises(beam["model"], worst, [place["centre_mm"]])[0])
+        effects.append({"name": f"beam stress at the same point of {worst} (outer surface, beam theory)",
+                        "value": beam_here, "unit": "MPa"})
+    effects += [
         {"name": "outer surface von Mises at the shell max", "value": mb["outer_vm"], "unit": "MPa"},
         {"name": "inner surface von Mises at the shell max", "value": mb["inner_vm"], "unit": "MPa"},
     ]
@@ -123,8 +142,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     st = res["stress"]
     nodes = np.array(list(res["frame"].node_xyz.values()))
     dist = np.min(np.linalg.norm(st.centres[:, None, :] - nodes[None, :, :], axis=2), axis=1)
-    size = {m: _tube_size(design, m) for m in res["member_max"]}
-    far = np.array([dist[i] >= AWAY_FACTOR * size[m] for i, m in enumerate(res["mesh"].element_member)])
+    size = {m: _tube_size(design, m) for m in res["member_max"] if m in members}
+    far = np.array([m in size and dist[i] >= AWAY_FACTOR * size[m] and not res["excluded"][i]
+                    for i, m in enumerate(ms.element_member)])
     if far.any():
         idx = np.nonzero(far)[0]
         f_e = int(idx[np.argmax(res["von_mises"]["max"][idx])])
@@ -135,6 +155,17 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
                                 f"{f_m}, element {f_e}", "value": f_val, "unit": "MPa"})
         effects.append({"name": f"beam stress at that point of {f_m} (outer surface)", "value": f_beam, "unit": "MPa"})
     src = SOURCES[fx].format(lc=up_lc, step=step if step is not None else 0.0, sup=",".join(sup or []))
+    n_ex = int(np.sum(res["excluded"]))
+    if ms.mounts:
+        mounts = ", ".join(f"{fn} +- {ms.mount_half_mm[fn]:g} mm" for fn in ms.mounts if fn in res["frame"].support_node.values())
+        effects.append({"name": (f"wheel loads put in over the walls of the tube through each support's frame node ({mounts}); "
+                                 f"{n_ex} elements inside those mounts left out of the peak, the safety factors, the "
+                                 f"stress concentration and the membrane / bending split (their stresses stay in the "
+                                 f"fields)"), "value": n_ex, "unit": "1"})
+        if res["excluded_max"] is not None:
+            v, ee = res["excluded_max"]
+            effects.append({"name": f"largest stress inside the mounts (left out): element {ee} of {ms.element_member[ee]}",
+                            "value": v, "unit": "MPa"})
     effects += [
         {"name": src},
         {"name": "hold reaction / weight (six restraints that only stop rigid-body motion)",
@@ -144,17 +175,34 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
         {"name": (f"tube mass from the shell elements (rho t area) {res['shell_mass_kg']:.2f} kg vs "
                   f"{res['mass']['frame_mass_kg']:.2f} kg from density A L (beam); the difference is left to inertia relief"),
          "value": res["shell_mass_kg"] - res["mass"]["frame_mass_kg"], "unit": "kg"},
-        {"name": (f"shell model: {res['mesh'].n_nodes} nodes, {res['mesh'].n_elements} elements "
-                  f"(edge {res['mesh'].element_size_mm:g} mm); suspension and part loads enter as RBE3 forces on "
-                  f"the joint nodes (ring and wall patch); sharp corners, no welds"),
+        {"name": (f"shell model: {ms.n_nodes} nodes, {ms.n_elements} elements "
+                  f"(edge {ms.element_size_mm:g} mm); wheel loads enter as RBE3 forces on the mount nodes, part loads "
+                  f"on the joint nodes (ring and wall patch); sharp corners, no welds"),
          "value": res["timings"].get("total_s", 0.0), "unit": "s"},
     ]
+    if ms.part_material:
+        effects.append({"name": (f"{len(ms.part_material)} gussets meshed as plates (in the shell's mass, so not added "
+                                 f"again as parts); the beam model carries them as mass only"),
+                        "value": len(ms.part_material), "unit": "1"})
+    if ms.through_joints:
+        effects.append({"name": (f"cross members through the rails at {', '.join(ms.through_joints)} (shell only; the "
+                                 f"beam model is unchanged)"), "value": len(ms.through_joints), "unit": "1"})
     if float(np.linalg.norm(res["inertia_alpha"])) > 0:
         effects.append({"name": f"angular acceleration from inertia relief {_vec(res['inertia_alpha'], 3)} rad/s^2 "
                                 f"(value: its size in rad/s^2)",
                         "value": float(np.linalg.norm(res["inertia_alpha"]))})
     effects += [dict(t, name="beam: " + t["name"]) for t in stress_terms(beam)]
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": effects}
+    assumptions = []
+    if ms.mounts:
+        assumptions += [MOUNT_ASSUMPTION, EXCLUDE_ASSUMPTION]
+    if ms.part_material:
+        assumptions.append(GUSSET_ASSUMPTION)
+    if ms.through_joints:
+        assumptions.append(THROUGH_ASSUMPTION)
+    out = {"results": results, "fields": fields, "vectors": vectors, "effects": effects}
+    if assumptions:
+        out["assumptions"] = assumptions
+    return out
 
 
 def mesh_fields(res: dict, mesh: Record) -> list[Record]:
