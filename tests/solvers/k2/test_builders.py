@@ -59,8 +59,9 @@ class Builders(unittest.TestCase):
     def test_the_nine_tests(self):
         self.assertEqual(sorted(BUILDERS), sorted(TOOL_OF))
         self.assertEqual(set(PLANS), set(BUILDERS))
-        for tid, fn in BUILDERS.items():  # the package collects this module
-            self.assertIs(ALL_BUILDERS[tid], fn)
+        for tid, fn in BUILDERS.items():  # the package collects this module (a product's builder may wrap it)
+            got = ALL_BUILDERS[tid]
+            self.assertIs(getattr(got, "general", got), fn)
         from hiraku.catalog.builders import PLANS_BEYOND as ALL_PLANS_BEYOND
         for tid, step in PLANS_BEYOND.items():
             self.assertIs(ALL_PLANS_BEYOND[tid], step)

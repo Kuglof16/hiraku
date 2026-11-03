@@ -493,7 +493,7 @@ class CutN01 {
 // its first pose before and its last after; so no more than m move at one time. Without a
 // story they all play from lead_s to the end.
 
-const N02_KEYS = ["duration_s", "grid", "panes", "pane", "times", "overlay", "colors"];
+const N02_KEYS = ["duration_s", "grid", "panes", "pane", "pane.verdict.of_label", "times", "overlay", "colors"];
 const N02_TESTS = {
   tilt: { test: "S1", name: "傾斜台" },
   wind: { test: "F1", name: "横風" },
@@ -505,7 +505,7 @@ const BEYOND = /-beyond$/;
 
 class CutN02 {
   constructor(layout, s) {
-    const missing = N02_KEYS.filter((k) => layout.n02?.[k] === undefined);
+    const missing = N02_KEYS.filter((k) => k.split(".").reduce((o, x) => (o == null ? undefined : o[x]), layout.n02) === undefined);
     if (missing.length) throw new Error(`layout.json の n02 に無い: ${missing.join(", ")}`);
     this.layout = layout;
     this.story = storyOf(layout, "n02");
@@ -570,8 +570,8 @@ class CutN02 {
       const { ok, over } = def.test ? this.casesOf(def.test) : {};
       const px = Math.max(st.label.size_px, this.story.bodyPx);
       const verdict = ok ? this.verdictOf(ok) : null;
-      // the verdict fills the pane's width up to twice the pane's name, so it stays above the vehicle
-      const big = Math.max(this.story.bodyPx, Math.min(2 * px, Math.floor((r.w - 2 * st.border_px - 2 * st.label.x) / VERDICT_CHARS)));
+      // the verdict fills the pane's width up to pane.verdict.of_label x the pane's name, so it stays above the vehicle
+      const big = Math.max(this.story.bodyPx, Math.min(Math.round(st.verdict.of_label * px), Math.floor((r.w - 2 * st.border_px - 2 * st.label.x) / VERDICT_CHARS)));
       el.dataset.ok = verdict === null ? "" : verdict ? "1" : "0";
       el.innerHTML =
         `<canvas class="main"></canvas><canvas class="over"></canvas>` +

@@ -1,5 +1,5 @@
 """MITC4 shells on the fe core: the same answers as k1_shell's own solver, and k1_shell's known answers
-(shell_known_answers, 22 checks) run with the core in place of k1_shell's StaticSolver."""
+(shell_known_answers, every record it has) run with the core in place of k1_shell's StaticSolver."""
 
 import unittest
 from unittest import mock
@@ -40,12 +40,30 @@ class SameAnswerTest(unittest.TestCase):
         self.assertLess(precheck.rigid_body_energy(fe_model)["energy_ratio"], 1e-10)
 
 
+def _counting(cls):
+    """A subclass of a solver class that counts its constructions (so the test sees every solve go through it)."""
+    class Counted(cls):
+        made = 0
+
+        def __init__(self, *a, **k):
+            type(self).made += 1
+            super().__init__(*a, **k)
+    return Counted
+
+
 class K1KnownAnswersOnCoreTest(unittest.TestCase):
     def test_shell_known_answers_on_the_core(self):
-        with mock.patch.object(k1checks, "StaticSolver", K1CompatSolver), \
-                mock.patch.object(k1frame, "StaticSolver", K1CompatSolver):
+        """Every record of shell_known_answers (however many k1_shell has) passes with the core as the solver,
+        the same records as with k1_shell's own solver, and every solver k1_shell builds is the core's."""
+        own_cls, core_cls = _counting(K1StaticSolver), _counting(K1CompatSolver)
+        with mock.patch.object(k1checks, "StaticSolver", own_cls), mock.patch.object(k1frame, "StaticSolver", own_cls):
+            own = k1checks.shell_known_answers()
+        with mock.patch.object(k1checks, "StaticSolver", core_cls), mock.patch.object(k1frame, "StaticSolver", core_cls):
             recs = k1checks.shell_known_answers()
-        self.assertEqual(len(recs), 22)
+        self.assertGreater(len(recs), 0)
+        self.assertEqual([(r["case"], r["quantity"]) for r in recs], [(r["case"], r["quantity"]) for r in own])
+        self.assertGreater(core_cls.made, 0)
+        self.assertEqual(core_cls.made, own_cls.made)
         bad = [(r["case"], r["quantity"], r["expected"], r["got"]) for r in recs if not r["pass"]]
         self.assertEqual(bad, [])
         self.assertIsNot(k1checks.StaticSolver, K1CompatSolver)  # patched only inside the block

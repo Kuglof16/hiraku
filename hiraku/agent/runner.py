@@ -10,6 +10,7 @@ from hiraku import contract
 from hiraku.agent import inbox, prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
+from hiraku.catalog.mixes import Mix, get_mix
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
 from hiraku.tools.functions import RUN_TOOLS
@@ -47,12 +48,34 @@ def require_api_key() -> None:
         )
 
 
-def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DEFAULT_MODEL,
-                  effort: str = DEFAULT_EFFORT, max_budget_usd: float | None = None,
+def lead_model(mix: Mix | None, model: str | None = None, effort: str | None = None) -> tuple[str, str]:
+    """(model, effort) of the lead: model and effort when given, else the mix's lead, else
+    DEFAULT_MODEL / DEFAULT_EFFORT."""
+    spec = mix["lead"] if mix is not None else {"model": DEFAULT_MODEL, "effort": DEFAULT_EFFORT}
+    return model or spec["model"], effort or spec["effort"]
+
+
+def role_models(options: Any) -> dict[str, dict[str, Any]]:
+    """{contract agent id: {"model", "effort"}} of the lead and each role in the options, for the
+    agent.started events. A role whose model is "inherit" runs on the lead's model."""
+    out = {"lead": {"model": options.model, "effort": options.effort}}
+    for name, d in (options.agents or {}).items():
+        agent = agent_id_from_sdk(name)
+        if agent:
+            out[agent] = {"model": options.model if d.model in (None, "inherit") else d.model, "effort": d.effort}
+    return out
+
+
+def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str | None = None,
+                  effort: str | None = None, mix: Mix | None = None, max_budget_usd: float | None = None,
                   max_turns: int = DEFAULT_MAX_TURNS):
+    """The SDK options of a run. With a mix (hiraku.catalog.mixes), the lead's model and effort and
+    each role's come from it (model and effort, when given, still set the lead's); without one, the
+    lead runs on model / effort (default DEFAULT_MODEL, DEFAULT_EFFORT) and the roles inherit its model."""
     from claude_agent_sdk import ClaudeAgentOptions
 
     budget = ctx.project["cost_limit_usd"] if max_budget_usd is None else max_budget_usd
+    model, effort = lead_model(mix, model, effort)
     return ClaudeAgentOptions(
         # Only Agent (to start the role subagents) and Skill (the procedures in
         # plugins/hiraku) of the built-in set; Bash, Read, Write and the rest
@@ -67,7 +90,7 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
         allowed_tools=[contract.mcp_name(t) for t in RUN_TOOLS] + [AGENT_TOOL, SKILL_TOOL],
         permission_mode="dontAsk",
         hooks=hooks.matchers(),
-        agents=subagents(ctx),
+        agents=subagents(ctx, mix),
         system_prompt=prompts.LEAD_PROMPT,
         model=model,
         effort=effort,
@@ -82,7 +105,8 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str = DE
 
 
 class MessageLog:
-    """Turns the SDK message stream into agent.said / cost.updated events."""
+    """Turns the SDK message stream into agent.said / cost.updated events. cost.updated carries, next
+    to cost_usd, what the ResultMessage reports for measuring later runs (usage_data)."""
 
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
@@ -110,7 +134,15 @@ class MessageLog:
         elif isinstance(msg, ResultMessage):
             self.result = msg
             if msg.total_cost_usd is not None:
-                self.ctx.store.set_cost(msg.total_cost_usd)
+                self.ctx.store.set_cost(msg.total_cost_usd, extra=usage_data(msg))
+
+
+def usage_data(result: Any) -> dict[str, Any]:
+    """The token counts and turns of a ResultMessage as it reports them (claude_agent_sdk 0.2.173):
+    usage (the CLI's usage dict), model_usage (per model id: inputTokens, outputTokens,
+    cacheReadInputTokens, cacheCreationInputTokens, costUSD, ...) and num_turns; None where absent."""
+    return {"usage": getattr(result, "usage", None), "model_usage": getattr(result, "model_usage", None),
+            "num_turns": getattr(result, "num_turns", None)}
 
 
 def error_text(ctx: RunContext, result: Any) -> str:
@@ -132,21 +164,34 @@ def error_text(ctx: RunContext, result: Any) -> str:
     return (getattr(result, "subtype", None) or "error") + tail
 
 
-def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tuple[str, str | None, str]:
-    """(status, stop_reason, stop_code) of a Claude run from its last result message."""
+def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None,
+                 budget_usd: float | None = None) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a Claude run from its last result message. budget_usd:
+    the max_budget_usd the run was given (build_options; None: the project's cost_limit_usd)."""
     subtype = getattr(result, "subtype", None)
     if subtype == "error_max_budget_usd":
-        return "stopped", f"cost limit {ctx.project['cost_limit_usd']} USD reached", "cost_limit"
+        budget = ctx.project["cost_limit_usd"] if budget_usd is None else budget_usd
+        return "stopped", f"cost limit {budget} USD reached", "cost_limit"
     if subtype == "error_max_turns":
         return "stopped", "turn limit reached", "turn_limit"
     if result is None or getattr(result, "is_error", False):
         return "failed", error_text(ctx, result), "error"
+    return end_status(ctx, hooks.stop_blocks if hooks is not None else 0)
+
+
+def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a run whose lead has stopped, Claude having reported
+    no error or limit: not_judged while a picked domain is pending (blocks: how many stops HK4
+    turned down first); red_left when a tile is red and design revisions are left (the Stop hook
+    let the stop through at its cap); else rules.judged_end. Shared with the plugin
+    (hiraku.agent.plugin); the scripted driver keeps rules.judged_end."""
+    after = f" (止めるのを {blocks} 回断ったあと、上限で終了)" if blocks else ""
     left = rules.stop_reason(ctx)
     if left:
-        blocks = hooks.stop_blocks if hooks is not None else 0
-        why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
-               if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
-        return "stopped", why + left, "not_judged"
+        return "stopped", f"まとめ役が、判定の付いていない分野を残して止まりました{after}。" + left, "not_judged"
+    red = rules.red_left_reason(ctx)
+    if red:
+        return "stopped", f"まとめ役が、設計の直しの回数を残したまま、赤の分野を残して止まりました{after}。" + red, "red_left"
     return rules.judged_end(ctx)
 
 
@@ -156,7 +201,8 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     Roles run in the foreground (FOREGROUND_ROLES_ENV), so the lead's turn normally outlasts
     them. Should a role still be at work when the lead's turn ends, the reading goes on (the
     roles are not cut off), and when the last role stops while the lead is idle, the lead is
-    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
+    woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S; after MAX_WAKES
+    wake-ups the reading ends there instead (no turn would come).
     The stop button (stop.request, checked every STOP_POLL_S) interrupts the CLI; the
     hooks deny every tool from then on, and the reading ends within STOP_GRACE_S.
     The inbox (hiraku.agent.inbox) is read at the same times: its events are emitted
@@ -167,20 +213,27 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
 
     state = {"idle": False, "wakes": 0}
     loop = asyncio.get_running_loop()
+    main = asyncio.current_task()
+    cut = {"done": False}  # the reading was cut on purpose (stop button, no wake-up left): an ordinary end
 
     async def wake() -> None:
         await asyncio.sleep(WAKE_GRACE_S)
-        if state["idle"] and not hooks.running and state["wakes"] < MAX_WAKES:
+        if not state["idle"] or hooks.running:
+            return
+        if state["wakes"] < MAX_WAKES:
             state["wakes"] += 1
             state["idle"] = False
             await client.query(WAKE_TEXT)
+            return
+        # MAX_WAKES used up: nothing will start another turn of the lead's, so the reading ends here
+        ctx.store.emit("agent.said", agent="system",
+                       text=f"まとめ役を起こす回数の上限 ({MAX_WAKES} 回) に達したので、実行を終えます")
+        cut["done"] = True
+        main.cancel()
 
     def roles_done() -> None:
         if state["idle"]:
             loop.create_task(wake())
-
-    main = asyncio.current_task()
-    cut = {"done": False}
 
     async def watch_stop() -> None:
         while not hooks.stopping():
@@ -217,25 +270,30 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     except asyncio.CancelledError:
         if not cut["done"]:
             raise  # Ctrl+C
-        main.uncancel()  # the stop button cut the reading: an ordinary end
+        main.uncancel()  # the stop button or the wake limit cut the reading: an ordinary end
     finally:
         watcher.cancel()
 
 
-async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT,
-                          max_budget_usd: float | None = None, max_turns: int = DEFAULT_MAX_TURNS) -> str:
-    """Run the lead agent (and its role subagents) until the run is judged or a limit stops it."""
+async def run_with_claude(ctx: RunContext, *, model: str | None = None, effort: str | None = None,
+                          mix: str | None = None, max_budget_usd: float | None = None,
+                          max_turns: int = DEFAULT_MAX_TURNS) -> str:
+    """Run the lead agent (and its role subagents) until the run is judged or a limit stops it.
+    mix: a name in data/catalog/model_mixes.yaml (None: every role on the lead's model, as before)."""
     require_api_key()
+    chosen = get_mix(mix) if mix is not None else None
     from claude_agent_sdk import ClaudeSDKClient
 
     from hiraku.tools.mcp import build_server
 
     attribution = Attribution()
     hooks = Hooks(ctx, attribution)
-    options = build_options(ctx, build_server(ctx, attribution), hooks, model=model, effort=effort,
+    options = build_options(ctx, build_server(ctx, attribution), hooks, model=model, effort=effort, mix=chosen,
                             max_budget_usd=max_budget_usd, max_turns=max_turns)
+    hooks.models = role_models(options)
     log = MessageLog(ctx)
-    ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
+    ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead", **hooks.models["lead"],
+                                                        **({"mix": mix} if mix is not None else {})})
 
     def close(status: str, reason: str | None, code: str) -> None:
         # roles the CLI never reported stopped (cut off with the run) stop with it, then the lead
@@ -263,6 +321,6 @@ async def run_with_claude(ctx: RunContext, *, model: str = DEFAULT_MODEL, effort
         close("stopped", STOPPED_BY_BUTTON, "user_stop")
         ctx.store.clear_stop_request()
         return "stopped"
-    status, reason, code = final_status(ctx, log.result, hooks)
+    status, reason, code = final_status(ctx, log.result, hooks, options.max_budget_usd)
     close(status, reason, code)
     return status

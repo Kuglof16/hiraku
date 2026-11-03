@@ -1,7 +1,6 @@
 # Built-in rules: people (人). See sheet-metal.yaml for the shape.
-# The body sizes are AIST 1991-92 values from the catalog research (sitting hip breadth, 95th percentile
-# female 391 mm; buttock-popliteal length, 5th percentile female 406 mm); the page has not been read
-# again for this repository.
+# The body sizes are AIST 1991-92 values (J2 sitting hip breadth, 95th percentile young female 391 mm;
+# J6 buttock-popliteal length, 5th percentile young female 406 mm), read from the AIST tables 2026-11-03.
 doc_id: KN-HU
 title: 人の決まり
 category: human
@@ -12,22 +11,37 @@ rules:
     check: size_y_mm >= 391
     trust: 1
     basis: >-
-      AIST 人体寸法データベース 1991-92, 座位殿幅, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
-      (not checked in this repository)
+      AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported),
+      statistics table https://www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from
+      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm
+      (N 202). Young adults = 18-29 years, women measured July-August 1992
+      (https://www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th
+      percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03
   - id: HU-02
     text: 座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下
     kinds: [seat]
     check: size_x_mm <= 406
     trust: 1
     basis: >-
-      AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
-      (not checked in this repository). The seat box may include the back, so a hit is a question to the
-      designer, not a verdict
+      AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting),
+      statistics table https://www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from
+      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm
+      (N 202). Young adults = 18-29 years, women measured July-August 1992
+      (https://www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group
+      only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat
+      box may include the back, so a hit is a question to the designer, not a verdict
   - id: HU-03
     text: 動いて閉じる隙間は、指が入る 25 mm より小さくしない
     kinds: [suspension, frame]
     check: closing_gap_mm >= 25
     trust: 1
     basis: >-
-      ISO 13854:1996 (finger 25 mm), https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
-      (not checked in this repository)
+      ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50,
+      foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7),
+      https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf ,
+      read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone,
+      the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger
+      than a finger; children and bulky clothing must also be considered. The current edition is
+      ISO 13854:2017 (2nd ed., a "minor revision" per its foreword, ANSI preview read 2026-11-03); its
+      Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not
+      checked

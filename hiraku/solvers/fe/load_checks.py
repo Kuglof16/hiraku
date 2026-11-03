@@ -209,8 +209,8 @@ def restrained_bar(dT: float = 50.0, alpha: float = ALPHA_ST, L: float = 200.0, 
     gs = sm.add(Hex20(m.conn, E_ST, NU_ST))
     _hold_bar_ends(sm, m, L, b)
     T = np.full(len(m.nodes), dT)
-    sol = StaticSolver(sm).solve(loads.solid_thermal(sm, gs, alpha, T))
-    s = solid_stresses(sol, gs, thermal=(alpha, T))["stress"][np.unique(m.conn)]
+    sol = StaticSolver(sm).solve(loads.solid_thermal(sm, gs, alpha, T, nodal=True))
+    s = solid_stresses(sol, gs, thermal=(alpha, T, True))["stress"][np.unique(m.conn)]
     out["solid_sxx"] = (float(s[:, 0].min()), float(s[:, 0].max()))
     out["solid_others"] = float(np.abs(s[:, 1:]).max())
     lat = sol.displacements[m.nodes_where(lambda x, y, z: np.abs(y - b / 2) < 1e-9), 1]

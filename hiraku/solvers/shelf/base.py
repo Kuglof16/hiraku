@@ -243,6 +243,7 @@ class BuiltinTool(ABC):
     run_params: tuple[Param, ...] = ()
     predicts: tuple[Predicts, ...] = ()
     upstream = ""
+    judged_as: dict[str, str] = {}  # criterion quantity -> the result this tool judges it on (contract)
 
     def __init__(self) -> None:
         self._checks: list[Record] | None = None
@@ -273,6 +274,8 @@ class BuiltinTool(ABC):
                        "params": [p.describe() for p in self.load_case_params],
                        "predicts": [p.describe() for p in self.predicts],
                        "formulas": list(self.formulas)}
+        if self.judged_as:
+            out["judged_as"] = dict(self.judged_as)
         if self.run_params:
             out["run_params"] = [p.describe() for p in self.run_params]
         if self.upstream:

@@ -339,8 +339,9 @@ def _min_load(series_min: dict) -> tuple[str, float]:
 
 
 def _ssf(veh) -> float:
-    """T / 2h of the vehicle as designed (track between the outermost supports, total CG height
-    above the ground under the wheels)."""
+    """T / 2h of the vehicle as designed: the supports' design positions (c.pos) and the design CG
+    (veh.cg_total), not the vehicle settled on its springs and tyres (track between the outermost
+    supports, total CG height above the ground under the wheels)."""
     ys = [float(c.pos[1]) for c in veh.corners]
     t = max(ys) - min(ys)
     ground = min(float(c.pos[2]) - c.radius for c in veh.corners)

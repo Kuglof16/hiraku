@@ -231,6 +231,15 @@
         "flags": {
           "$ref": "#/$defs/flags"
         },
+        "default_loading": {
+          "enum": [
+            "empty",
+            "driver",
+            "two",
+            "two_cargo"
+          ],
+          "description": "Who and what is on board when a load case does not say (params.loading). Omitted: two_cargo, the vehicle default. A one-person product (a care bed) says driver: one occupant, no cargo."
+        },
         "speed_class": {
           "$ref": "#/$defs/speed_class"
         },
@@ -673,7 +682,7 @@
             "properties": {
               "to": {
                 "type": "string",
-                "description": "A part id, member id, support id or '<support>.<hardpoint>'."
+                "description": "A part id, member id, frame node id (an id in nodes, where a part is fixed at a joint of the frame), support id or '<support>.<hardpoint>'."
               },
               "via": {
                 "type": "string",
@@ -1143,6 +1152,11 @@
         "tolerance_rel": {
           "type": "number",
           "minimum": 0
+        },
+        "tolerance_abs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute tolerance, used where the expected value is 0 (or so small that tolerance_rel means nothing): |value - expected| <= tolerance_abs."
         },
         "pass": {
           "type": "boolean"
@@ -1724,7 +1738,7 @@
         },
         "origin_mm": {
           "$ref": "#/$defs/vec3",
-          "description": "Point where the force acts (application point), in design coordinates."
+          "description": "Point where the force acts (application point), in the analysis's scene frame: design coordinates for a static analysis, the run's road frame (world axes, as scene and series) for a driving analysis."
         },
         "vector_N": {
           "$ref": "#/$defs/vec3"
@@ -2945,6 +2959,14 @@
             "failed"
           ]
         },
+        "driver": {
+          "enum": [
+            "scripted",
+            "agent_sdk",
+            "claude_code_plugin"
+          ],
+          "description": "What drove the run: scripted (no Claude), agent_sdk (HIRAKU's own agent loop with the user's ANTHROPIC_API_KEY), claude_code_plugin (the user's own Claude Code session with the HIRAKU plugin, under the user's own sign-in; HIRAKU does not call Claude)."
+        },
         "stop_reason": {
           "type": "string"
         },
@@ -2957,8 +2979,12 @@
           "minimum": 0
         },
         "cost_usd": {
-          "type": "number",
-          "minimum": 0
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "API cost of the run so far; null where HIRAKU cannot know it (driver claude_code_plugin: the user's own Claude Code pays)."
         },
         "requirements": {
           "type": "array",
@@ -4122,12 +4148,22 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
         },
         "summary": {
           "type": "string"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
         }
       }
     },
@@ -4195,9 +4231,20 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          },
+          "description": "Optional: where HIRAKU itself was in the way during this run."
         }
       }
     },
@@ -4513,6 +4560,47 @@
           },
           "uniqueItems": true,
           "description": "使わない規則の番号"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "what"
+      ],
+      "description": "Where the run got stuck or had to work around HIRAKU itself (not a design result): input for improving HIRAKU.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "missing_tool",
+            "missing_formula",
+            "assumed_value",
+            "unexplained_mismatch",
+            "tool_error",
+            "unclear_instruction",
+            "other"
+          ]
+        },
+        "what": {
+          "type": "string",
+          "description": "What was missing or went wrong, in one or two sentences."
+        },
+        "where": {
+          "type": "string",
+          "description": "Load case, tool or step."
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Records that show it (ana-, pred-, cmp-, cause-, tool ids)."
+        },
+        "workaround": {
+          "type": "string",
+          "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
         }
       }
     }

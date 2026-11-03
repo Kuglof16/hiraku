@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -22,8 +23,8 @@ class BuiltinTest(unittest.TestCase):
 
     def test_ten_categories_one_document_each(self):
         self.assertEqual([r["rules"][0]["category"] for r in self.docs], list(CATEGORIES))
-        self.assertEqual(len(self.rules), 27)  # 18 formulas and 9 system checks
-        self.assertEqual(len({r["rule_id"] for r in self.rules}), 27)
+        self.assertEqual(len(self.rules), 28)  # 19 formulas and 9 system checks
+        self.assertEqual(len({r["rule_id"] for r in self.rules}), 28)
         for rec in self.docs:
             self.assertEqual(rec["doc"]["origin"], "builtin")
 
@@ -42,8 +43,9 @@ class BuiltinTest(unittest.TestCase):
             with self.subTest(rule=r["rule_id"]):
                 self.assertIn(r["trust"], (1, 2, 3))
                 self.assertTrue(r["basis"])
-                if r["trust"] in (1, 2):
-                    self.assertIn("not checked", r["basis"])
+                if r["trust"] in (1, 2):  # a source: either it says when it was read, or it says it was not checked
+                    self.assertTrue("not checked" in r["basis"] or re.search(r"(?i)read 20\d\d-\d\d-\d\d", r["basis"]), r["basis"])
+                    self.assertNotIn("recalled", r["basis"])
                 else:
                     self.assertIn("assumption", r["basis"])
 
@@ -221,8 +223,10 @@ class SampleNotesTest(unittest.TestCase):
         design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
         checks = {c["rule_id"]: c for c in rulecheck.check_all(got.record["rules"], design, load_product("offroad-4w")["requirements"])}
         self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"]}, {"U1-04": ["battery"]})
-        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same four plates as SM-01 and judge none of them
-            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body"])
+        plates = [p["id"] for p in design["parts"] if p["kind"] == "body"]  # whatever plates the demo design has
+        self.assertGreaterEqual(len(plates), 4)
+        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same plates as SM-01 and judge none of them
+            self.assertEqual(checks[rid]["targets"], plates)
             self.assertEqual([n["part_id"] for n in checks[rid]["not_evaluable"]], checks[rid]["targets"])
 
 

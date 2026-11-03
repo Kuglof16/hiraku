@@ -1,0 +1,31 @@
+# Model mixes for a real Claude run: the model and effort of each role.
+# roles: lead (the run's main agent), designer, packager (the CAE steps on the assembly load cases) and
+#   cae (every CAE role, cae.<domain>).
+# model: a Claude model id (the SDK's AgentDefinition.model and ClaudeAgentOptions.model take full ids).
+# effort: low / medium / high / xhigh / max.
+# Chosen with `python -m hiraku run ... --mix NAME` (default: default) or a demo run's `mix` in
+# data/catalog/demo_runs.yaml. `default` is the model and effort every role had before mixes existed
+# (hiraku.agent.runner DEFAULT_MODEL / DEFAULT_EFFORT, hiraku.agent.roles DESIGNER_EFFORT / CAE_EFFORT;
+# tests/agent/test_mixes.py checks they agree). The others keep the efforts and change only models.
+# What a smaller model could get wrong, and how it shows in a run's record: hiraku.agent.review.
+mixes:
+  default:
+    lead: {model: claude-opus-5-5, effort: high}
+    designer: {model: claude-opus-5-5, effort: high}
+    packager: {model: claude-opus-5-5, effort: medium}
+    cae: {model: claude-opus-5-5, effort: medium}
+  cae-sonnet:
+    lead: {model: claude-opus-5-5, effort: high}
+    designer: {model: claude-opus-5-5, effort: high}
+    packager: {model: claude-sonnet-5-5, effort: medium}
+    cae: {model: claude-sonnet-5-5, effort: medium}
+  cae-haiku:
+    lead: {model: claude-opus-5-5, effort: high}
+    designer: {model: claude-opus-5-5, effort: high}
+    packager: {model: claude-haiku-5-5, effort: medium}
+    cae: {model: claude-haiku-5-5, effort: medium}
+  lead-sonnet:
+    lead: {model: claude-sonnet-5-5, effort: high}
+    designer: {model: claude-sonnet-5-5, effort: high}
+    packager: {model: claude-sonnet-5-5, effort: medium}
+    cae: {model: claude-sonnet-5-5, effort: medium}

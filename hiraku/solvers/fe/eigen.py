@@ -133,6 +133,9 @@ def buckling(model: FEModel, F, n_modes: int = 3, sigma: float | None = None, th
     n = Kr.shape[0]
     k = max(1, min(n_modes, n - 2))
     v0 = np.random.default_rng(V0_SEED).random(n)
+    if KGr.nnz == 0 or not np.any(KGr.data):  # no initial stress that does work on the free DOFs: no buckling
+        return Buckling(np.zeros(0), np.zeros((st.layout.n_dof, 0)), sol, st.layout,
+                        {"method": "K_G is zero", "n_reduced": int(n)})
     if sigma is None:
         Kinv = spla.LinearOperator((n, n), matvec=st.lu.solve, dtype=float)
         # extra pairs: negative mu (tension-type factors) may come out among the largest magnitudes

@@ -27,6 +27,8 @@ Record = dict[str, Any]
 
 # Event kind emitted when a record of this kind is written (the contract's one map).
 RECORD_EVENT = layout.RECORD_EVENT
+# project.driver whose cost HIRAKU cannot know (the person's own Claude Code pays): cost_usd null
+UNPRICED_DRIVER = "claude_code_plugin"
 
 
 class StoreError(RuntimeError):
@@ -78,7 +80,8 @@ class RunStore:
                wall: Callable[[], datetime] = _now, mono: Callable[[], float] = time.monotonic) -> "RunStore":
         """Make runs/<run_id>/, write project.json and emit run.started.
 
-        project_fields: every project field except run_id, created_at, status and cost_usd.
+        project_fields: every project field except run_id, created_at, status and cost_usd (0.0, or
+        null for driver claude_code_plugin).
         """
         now = wall()
         run_id = layout.new_run_id(now, slug or project_fields["product"])
@@ -90,7 +93,8 @@ class RunStore:
             "created_at": _iso(now),
             **project_fields,
             "status": "running",
-            "cost_usd": 0.0,
+            # null where HIRAKU cannot know the cost: the person's own Claude Code pays (plugin path)
+            "cost_usd": None if project_fields.get("driver") == UNPRICED_DRIVER else 0.0,
             "design_versions": list(project_fields.get("design_versions", [])),
         }
         contract.validate("project", project)
@@ -180,11 +184,13 @@ class RunStore:
         """The newest design version (0 before the first design)."""
         return max(self._project.get("design_versions") or [0])
 
-    def set_cost(self, cost_usd: float) -> Record:
+    def set_cost(self, cost_usd: float, extra: Record | None = None) -> Record:
+        """project.json cost_usd and a cost.updated event; extra (token counts, turns) goes into the
+        event's data next to cost_usd (the contract requires only cost_usd there)."""
         with self._lock:
             self._project["cost_usd"] = float(cost_usd)
             self._save_project()
-            return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
+            return self.emit("cost.updated", agent="system", data={**(extra or {}), "cost_usd": float(cost_usd)})
 
     def update_project(self, fields: Record, *, agent: str = "system", text: str | None = None) -> Record:
         """Change project fields after the start (the load cases, picks and roles of a run whose
