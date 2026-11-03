@@ -25,6 +25,12 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
+板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
+
+```
+.venv\Scripts\python -m pip install -r requirements-fast.txt
+```
+
 試験:
 
 ```

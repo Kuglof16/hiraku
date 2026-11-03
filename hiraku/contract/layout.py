@@ -129,6 +129,7 @@ OWNERS = {
         "HIRAKU.cmd",  # double-click launcher of the screen
         "CLAUDE.md",
         "requirements.txt",
+        "requirements-fast.txt",
         ".gitignore",
     ],
     "design": [  # 設計部: agent loop, hooks, MCP tools, run store, catalog
