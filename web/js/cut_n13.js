@@ -15,17 +15,20 @@
 // - shelf: from times.gap_s the shelf: a plain card for each tool already on it and a dotted
 //   card for the missing one, with one line naming what is missing. The cards are in as few
 //   rows as keep them readable. The dotted card carries the new tool's name as its tag (a
-//   label, under it and flush with its right edge: toolPlainName); the other cards have no
-//   names (the story's label limit 4: the ticks and this name). From write_s the dotted card
-//   fills as the code is written, and it is solid (its tag green) once every check has
-//   passed; the shelf stays so to the end (times.shelf_s is the end of the ticks).
+//   label, under it and flush with its right edge: cardName, e.g. "転倒の守りを確かめる道具");
+//   the other cards have no names. From write_s the dotted card fills as the code is written,
+//   and once every check has passed it is solid, shows "照合 ✓" and its tag turns green: the
+//   green says the tool passed its checks, never that the design passed (the run's verdicts
+//   are not shown). The story's label limit (4) counts the ticks, the tag and "照合 ✓"; when
+//   they would be more, "照合 ✓" joins the tag as one label. The shelf stays so to the end
+//   (times.shelf_s is the end of the ticks).
 // - code: from times.write_s a few lines of the tool's code (from its analyse / run
 //   method), typed in up to times.check_s; small, a glimpse (data-kind "note"); the caret
 //   is what moves.
 // - check: from times.check_s the known-answer checks (tool.checked checks): the check's
 //   quantity in words, the known answer and the tool's, and a short source; each is ticked
 //   (✓, or ✕ when it failed) one after another up to times.shelf_s.
-// The ticks and the new card's name are labels (data-kind); no number is emphasised. No
+// The ticks, the new card's name and its "照合 ✓" are labels (data-kind); no number is emphasised. No
 // record id, test id or tool name is shown (the code is the tool's own text).
 // Positions, sizes, colours, the length and the times come from layout.json n13; a missing
 // key is named on the page.
@@ -100,10 +103,16 @@ export function cardName(tool) {
   return parts.length >= 3 ? parts.slice(1).join("の") : t;
 }
 
-// What is missing, in the gap's line: the viewers' name, else the title before any bracket.
-export function missingName(tool) {
-  return plainToolName(tool?.name) ?? toolTitle(tool) ?? "";
+// The gap's line: the viewers' name (a name of the tool, "…を確かめる道具") is not on the
+// shelf, else what the title says has no tool to check it.
+export function missingLine(tool) {
+  const plain = plainToolName(tool?.name);
+  return plain ? `点線: 「${plain}」が棚に無い` : `点線: 「${toolTitle(tool) ?? ""}」を確かめる道具が無い`;
 }
+
+// The new card's mark once every check has passed (green: the tool passed its checks, not
+// the design).
+export const CHECKED_MARK = "照合 ✓";
 
 // The cards in rows: { rows, perRow, w, h }, the fewest rows whose cards are at least
 // CARD_MIN_W wide and fit the height given, else the rows with the widest cards that fit.
@@ -158,21 +167,28 @@ export class CutN13 {
     const titlePx = Math.max(L.min_text_px, S.title_px, st.bodyPx);
     const room = S.h - 2 * BORDER_PX - 2 * PAD_Y_PX - titlePx * 1.6 - sx * 1.2 * 2 - 10 - 4 - sx * 1.6 - sx * 1.2;
     const fit = cardRows(n, S.w - 2 * BORDER_PX - 2 * PAD_X_PX, room);
-    const card = (cls) => `<i class="n13-card${cls}" style="width:${fit.w}px;height:${fit.h}px"><b></b></i>`;
-    const tag = `<span class="n13-tag" data-kind="label" style="font-size:${sx}px">${esc(cardName(this.tool))}</span>`;
+    // the mark "照合 ✓" is a label of its own on the new card while the ticks, the name and it
+    // keep within the story's label limit; else it joins the name (one label)
+    const nChecks = (this.tool.checks ?? []).length;
+    this.markJoined = nChecks + 2 > (st.limits?.label ?? Infinity);
+    const card = (cls, inner = "") => `<i class="n13-card${cls}" style="width:${fit.w}px;height:${fit.h}px"><b></b>${inner}</i>`;
+    const mark = this.markJoined ? "" : `<span class="n13-checked" data-kind="label" style="font-size:${sx}px">${CHECKED_MARK.replace(" ", "<br>")}</span>`;
+    const joined = this.markJoined ? `<span class="n13-tag-mark"> ・ ${esc(CHECKED_MARK)}</span>` : "";
+    const tag = `<span class="n13-tag" data-kind="label" style="font-size:${sx}px">${esc(cardName(this.tool))}${joined}</span>`;
     // the name may be wider than the card: its column keeps the card's width, the name reaches left
-    const cards = this.before.map(() => card("")).join("") + `<span class="n13-newwrap" style="width:${fit.w}px">${card(" new")}${tag}</span>`;
+    const cards = this.before.map(() => card("")).join("") + `<span class="n13-newwrap" style="width:${fit.w}px">${card(" new", mark)}${tag}</span>`;
     const rowW = fit.perRow * fit.w + (fit.perRow - 1) * CARD_GAP_PX;
     this.shelf.insertAdjacentHTML(
       "beforeend",
       `<div class="n13-shelf"><div class="n13-cards" style="width:${rowW}px">${cards}</div>` +
-        `<p class="n13-gap" style="font-size:${sx}px">点線: 「${esc(missingName(this.tool))}」を確かめる道具が無い</p>` +
+        `<p class="n13-gap" style="font-size:${sx}px">${esc(missingLine(this.tool))}</p>` +
         `<p class="n13-made" style="font-size:${sx}px">Claude がその場で書き、答えの分かっている例で確かめた</p></div>`,
     );
     this.cardFit = fit;
     this.newCard = this.shelf.querySelector(".n13-card.new");
     this.fill = this.newCard.querySelector("b");
     this.tag = this.shelf.querySelector(".n13-tag");
+    this.markEl = this.shelf.querySelector(".n13-checked") ?? this.shelf.querySelector(".n13-tag-mark");
     this.gapEl = this.shelf.querySelector(".n13-gap");
     this.madeEl = this.shelf.querySelector(".n13-made");
 
@@ -237,6 +253,7 @@ export class CutN13 {
     this.newCard.style.borderStyle = solid ? "solid" : "dashed";
     this.tag.style.color = solid ? GREEN : RED;
     this.tag.style.borderColor = solid ? GREEN : RED;
+    this.markEl.style.display = solid ? "" : "none";
     this.gapEl.style.display = solid ? "none" : "";
     this.madeEl.style.display = solid ? "" : "none";
     // code: typed line by line from write_s to check_s; the caret moves while it types
