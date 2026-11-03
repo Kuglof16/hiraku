@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from hiraku.catalog import owner_agent
@@ -26,6 +27,7 @@ class RunContext:
     designgen: Any = None  # hiraku.designgen (regenerate), for revise_design; None while absent
     made_tools: Any = None  # hiraku.solvers.toolmaker.RunShelf of this run, made on the first make_tool
     requirements_file: Record | None = None  # the whole requirements file (propose_design builds from it)
+    requirements_path: Path | None = None  # where it was read from (the scripted run's plan of that file)
 
     # ---------------------------------------------------------------- project views
 
