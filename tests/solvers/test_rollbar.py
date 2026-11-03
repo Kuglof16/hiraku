@@ -177,71 +177,9 @@ class OccupantSpaceTest(unittest.TestCase):
             occupant_clearance(d)
 
 
-E = 205000.0
-I = 6.0e4
-H, W = 1400.0, 1200.0
-MP = 8.0e5
-
-
-def side(**kw):
-    v = dict(E=q(E, "MPa"), h=q(H, "mm"), w=q(W, "mm"), I_c=q(I, "mm^4"), I_b=q(I, "mm^4"), theta_f=q(0, "rad"),
-             M_pf=q(MP, "N*mm"), M_pt=q(MP, "N*mm"), E_in=q(875, "J"))
-    v.update(kw)
-    return out("frame_static.portal_frame_side", **v)
-
-
-class PortalFormulaTest(unittest.TestCase):
-    """Known answers of portal frames (textbook limits) and the plastic collapse loads."""
-
-    def test_side_stiffness_limits(self):
-        a = E * I / H**3
-        self.assertAlmostEqual(side(I_b=q(I * 1e9, "mm^4"))["k"] / (24 * a), 1.0, places=6)  # two fixed-guided posts
-        self.assertAlmostEqual(side(I_b=q(I * 1e-9, "mm^4"))["k"] / (6 * a), 1.0, places=6)  # two cantilevers
-        # equal posts and beam, h = w: (12 a / h^2)(a + 6b)/(2a + 3b) with a = b -> 16.8 E I / h^3
-        self.assertAlmostEqual(side(w=q(H, "mm"))["k"] / (16.8 * a), 1.0, places=9)
-        # pinned feet (a very soft foot spring), rigid beam: two cantilevers, 6 E I / h^3
-        self.assertAlmostEqual(side(theta_f=q(1e9, "rad"), I_b=q(I * 1e9, "mm^4"))["k"] / (6 * a), 1.0, places=5)
-        # a foot spring in series with a cantilever (beam with no stiffness): 2 / (h^3/(3EI) + h^2 c_f)
-        c = 2e-7
-        k = side(theta_f=q(c * 1e6, "rad"), I_b=q(I * 1e-9, "mm^4"))["k"]
-        self.assertAlmostEqual(k / (2 / (H**3 / (3 * E * I) + H**2 * c)), 1.0, places=6)
-
-    def test_side_collapse_and_energy(self):
-        r = side()
-        self.assertAlmostEqual(r["H_c"], 4 * MP / H)  # sway mechanism, four hinges
-        self.assertEqual(r["n_hinges"], 4.0)
-        self.assertEqual(side(M_pf=q(0, "N*mm"))["n_hinges"], 2.0)
-        self.assertLess(r["H_first"], r["H_c"])
-        dy = r["H_c"] / r["k"]
-        self.assertAlmostEqual(r["delta_E"], dy + (875e3 - r["H_c"] * dy / 2) / r["H_c"])
-        small = side(E_in=q(1, "J"))  # within the elastic part: E = k d^2 / 2
-        self.assertAlmostEqual(small["delta_E"], math.sqrt(2 * 1e3 / small["k"]))
-        self.assertEqual(small["plastic"], 0.0)
-
-    def test_rear_lever_and_cantilevers(self):
-        base = dict(E=q(E, "MPa"), h=q(H, "mm"), I_c=q(I, "mm^4"), theta_f=q(0, "rad"), M_pf=q(MP, "N*mm"),
-                    E_in=q(700, "J"))
-        mid = out("frame_static.portal_frame_rear", f=q(0.5, "1"), **base)
-        self.assertAlmostEqual(mid["k"], 2 * 3 * E * I / H**3)  # at mid-span: two cantilevers side by side
-        self.assertAlmostEqual(mid["P_c"], 2 * MP / H)
-        r = out("frame_static.portal_frame_rear", f=q(1 / 6, "1"), **base)
-        self.assertAlmostEqual(r["k"], 3 * E * I / H**3 / ((5 / 6) ** 2 + (1 / 6) ** 2))
-        self.assertAlmostEqual(r["P_c"], MP / (5 / 6 * H))
-        self.assertEqual(r["n_hinges"], 1.0)
-
-    def test_top_beam_limits(self):
-        base = dict(E=q(E, "MPa"), h=q(H, "mm"), w=q(W, "mm"), I_b=q(I, "mm^4"), I_min=q(I, "mm^4"), theta_f=q(0, "rad"),
-                    M_pb=q(MP, "N*mm"), M_pt=q(MP, "N*mm"), f_y=q(215, "MPa"), F=q(1000, "N"))
-        stiff = out("frame_static.portal_frame_top", I_c=q(I * 1e9, "mm^4"), A_c=q(1e12, "mm^2"), **base)
-        self.assertAlmostEqual(stiff["delta"] / (1000 * W**3 / (192 * E * I)), 1.0, places=6)  # fixed-fixed beam
-        self.assertAlmostEqual(stiff["M_end"] / (1000 * W / 8), 1.0, places=6)
-        soft = out("frame_static.portal_frame_top", I_c=q(I * 1e-9, "mm^4"), A_c=q(1e12, "mm^2"), **base)
-        self.assertAlmostEqual(soft["delta"] / (1000 * W**3 / (48 * E * I)), 1.0, places=6)  # simply supported
-        self.assertAlmostEqual(stiff["F_c"], 8 * MP / W)  # three hinges
-        self.assertEqual(stiff["n_hinges"], 3.0)
-        posts = out("frame_static.portal_frame_top", I_c=q(I * 1e9, "mm^4"), A_c=q(300, "mm^2"), **base)
-        self.assertAlmostEqual(posts["delta_posts"], 500 * H / (E * 300))
-        self.assertAlmostEqual(posts["F_squash"], 2 * 300 * 215)
+class PortalInputsTest(unittest.TestCase):
+    """frame_inputs.portal_frame_inputs off the demo roll bar (the portal formulas' closed forms are in
+    test_k0_portal_pushover)."""
 
     def test_plastic_modulus(self):
         self.assertAlmostEqual(plastic_modulus({"shape": "round_tube", "dims_mm": {"d": 40, "t": 2}})[0],
@@ -250,19 +188,27 @@ class PortalFormulaTest(unittest.TestCase):
         self.assertAlmostEqual(zz, (40 * 80**2 - 36 * 76**2) / 4)
         self.assertAlmostEqual(zy, (80 * 40**2 - 76 * 36**2) / 4)
 
-
-class PortalInputsTest(unittest.TestCase):
     def test_from_the_demo_roll_bar(self):
         pi = portal_frame_inputs(RB)
         n = xyz(RB)
-        self.assertAlmostEqual(pi["side"]["h"]["value"], n["LHT"][2] - n["LHO"][2])
-        self.assertAlmostEqual(pi["side"]["w"]["value"], 2 * n["LHT"][1])
+        v = {k: x["value"] for k, x in pi["side"].items()}
+        self.assertAlmostEqual(v["h"], n["LHT"][2] - n["LHO"][2])
+        self.assertAlmostEqual(v["w"], 2 * n["LHT"][1])
+        self.assertAlmostEqual(v["e"], n["LHO"][1] - n["LH"][1])  # the outrigger out from the rail
         d, t = 42.7, 2.3
-        self.assertAlmostEqual(pi["side"]["M_pf"]["value"], (d**3 - (d - 2 * t) ** 3) / 6 * 215.0)
+        self.assertAlmostEqual(v["Mpy_c"], (d**3 - (d - 2 * t) ** 3) / 6 * 215.0)
+        self.assertAlmostEqual(v["Mpz_b"], v["Mpy_c"])  # the same tube
         foot = pi["foot"]
         self.assertEqual(foot["rail_members"], ["rail_L_S2H", "rail_L_HB"])
-        self.assertAlmostEqual(pi["side"]["theta_f"]["value"],
-                               foot["theta_outrigger_side_per_kNm"] + foot["theta_rail_side_per_kNm"])
+        self.assertEqual(foot["rail_hold"], "wheels")
+        wheels = {s["frame_node"] for s in RB["supports"] if s.get("frame_node")}
+        self.assertIn(foot["held_ahead"], wheels)
+        self.assertIn(foot["held_behind"], wheels)
+        self.assertAlmostEqual(v["L_a"], abs(n[foot["held_ahead"]][0] - n["LH"][0]))
+        self.assertAlmostEqual(v["L_b"], abs(n[foot["held_behind"]][0] - n["LH"][0]))
+        nxt = portal_frame_inputs(RB, rail_hold="next")["side"]
+        self.assertLessEqual(nxt["L_a"]["value"], v["L_a"])
+        self.assertEqual(pi["top"]["f_y"]["value"], 215.0)
         for name, extra in (("side", {"E_in": q(875, "J")}), ("rear", {"E_in": q(700, "J"), "f": q(1 / 6, "1")}),
                             ("top", {"F": q(10000, "N")})):
             FORMULAS.evaluate(f"frame_static.portal_frame_{name}", {**pi[name], **extra})
@@ -271,7 +217,8 @@ class PortalInputsTest(unittest.TestCase):
         narrow = designgen.regenerate(RB, {"rollbar_width": q(700, "mm")})
         pi = portal_frame_inputs(narrow)
         self.assertNotIn("outrigger", pi["foot"])
-        self.assertAlmostEqual(pi["side"]["theta_f"]["value"], pi["foot"]["theta_rail_side_per_kNm"])
+        self.assertEqual(pi["side"]["e"]["value"], 0.0)
+        self.assertEqual(pi["side"]["A_o"]["value"], 0.0)
 
     def test_no_roll_bar(self):
         with self.assertRaisesRegex(ValueError, "no roll bar"):
