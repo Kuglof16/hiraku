@@ -10,7 +10,8 @@ from hiraku.solvers.k2_vehicle.drive import on_board
 from hiraku.solvers.k2_vehicle.model import box_design, build_vehicle
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.shelf.base import K2Tool, P
-from hiraku.solvers.k2_vehicle.shelf.launch import STEADY_GAIN, _loaded_radius
+from hiraku.solvers.k2_vehicle.drive import Motor
+from hiraku.solvers.k2_vehicle.shelf.launch import STEADY_GAIN, LaunchTool, driven_rolling_radius
 from tests.solvers.k2.slow import SLOW
 
 G = 9.80665
@@ -58,7 +59,7 @@ def stop_rule_floor(power_kw: float, slip: float) -> float:
     of STEADY_GAIN m/s in 1 s on the mass with the wheels' spin inertia."""
     veh = build_vehicle(on_board(design(), None))
     m = veh.m_total
-    m_eff = m + sum(c.j_w / _loaded_radius(c) ** 2 for c in veh.corners if c.kind == "wheel")
+    m_eff = m + sum(c.j_w / c.rolling_radius ** 2 for c in veh.corners if c.kind == "wheel")
     pw = ETA * power_kw * 1000.0 / (1.0 + slip)
 
     def net(v):
@@ -88,6 +89,46 @@ class Declarations(unittest.TestCase):
         self.assertIn("until = top_speed", pairs["top_speed_power"]["note"])
         self.assertIn("motor_max_speed", pairs["top_speed"]["note"])
         self.assertIn("compare top_speed_power", pairs["top_speed"]["note"])
+
+
+class RollingRadius(unittest.TestCase):
+    """K2's effective rolling radius and the F_max of launch.peak_tractive_force on it (no simulation)."""
+
+    def setUp(self):
+        self.veh = build_vehicle(on_board(design(), None))
+        self.motor = Motor(torque=20.0, power=2000.0, gear=8.0, efficiency=ETA)
+
+    def test_the_loaded_radius_at_the_static_load(self):
+        for c in self.veh.corners:
+            self.assertAlmostEqual(c.rolling_radius, c.radius - c.static_load / c.k_z, places=12)
+            self.assertLess(c.rolling_radius, c.radius)
+
+    def test_peak_tractive_force_on_k2s_radius_and_the_gap_to_the_free_radius(self):
+        tool, notes = LaunchTool(), []
+        tool._vars, tool._assumed = {}, []
+        res = {r["quantity"]: r for r in tool._tractive(self.veh, self.motor, {}, notes)}
+        r = driven_rolling_radius(self.veh)
+        self.assertAlmostEqual(res["rolling_radius"]["value"], r * 1000.0, places=9)
+        self.assertEqual(res["rolling_radius"]["unit"], "mm")
+        self.assertAlmostEqual(res["peak_tractive_force"]["value"], 20.0 * 8.0 * ETA / r, places=9)
+        free = next(c.radius for c in self.veh.corners if c.drive)
+        self.assertIn(f"the free radius (no effective rolling radius given, as K0 takes it then) {free * 1000.0:.1f} mm "
+                      f"gives {20.0 * 8.0 * ETA / free:.1f} N", notes[0])
+        # the K0 formula on the same r gives the same F_max (where the registry has it)
+        if "launch.peak_tractive_force" not in {f["formula_id"] for f in formula_registry().list_formulas()}:
+            self.skipTest("launch.peak_tractive_force is not in this K0 registry yet")
+        out = formula_registry().evaluate("launch.peak_tractive_force", {
+            "T": q(20.0, "N*m"), "i": q(8.0, "1"), "eta": q(ETA, "1"), "r": res["rolling_radius"]})
+        self.assertAlmostEqual(out["outputs"]["F_max"]["value"], res["peak_tractive_force"]["value"], places=6)
+
+    def test_a_given_effective_rolling_radius_is_set_beside_k2s(self):
+        tool, notes = LaunchTool(), []
+        tool._vars, tool._assumed = {"effective_rolling_radius": q(290.0, "mm")}, []
+        res = {r["quantity"]: r for r in tool._tractive(self.veh, self.motor, {}, notes)}
+        f = res["peak_tractive_force"]["value"]
+        self.assertAlmostEqual(f, 20.0 * 8.0 * ETA / driven_rolling_radius(self.veh), places=9)  # K2 keeps its own
+        self.assertIn(f"the given effective rolling radius (rolling_radius / effective_rolling_radius) 290.0 mm gives "
+                      f"{20.0 * 8.0 * ETA / 0.290:.1f} N", notes[0])
 
 
 class AnalyzeParams(unittest.TestCase):
@@ -153,8 +194,7 @@ class TopSpeed(unittest.TestCase):
         rpm = 1800.0
         lim = q(rpm, "rpm")
         veh = build_vehicle(on_board(design(), None))
-        r = [_loaded_radius(c) for c in veh.corners if c.drive]
-        v_rim = rpm / 60.0 * 2.0 * math.pi / 8.0 * sum(r) / len(r) * 3.6
+        v_rim = rpm / 60.0 * 2.0 * math.pi / 8.0 * driven_rolling_radius(veh) * 3.6
         self.assertLess(v_rim, 0.9 * k0_top(2.0))
         tops = {}
         for kw in (2.0, 3.0):
