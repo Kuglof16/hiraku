@@ -6,9 +6,10 @@
 - an A6 tile of a field with frames: the moment with the largest value, named
 - a solid (hex8 / hex20) mesh: its outer faces, its edges, no shell free edges, counts by kind
 - the event feed: a read that does not move on does not ask again at once
+- an unknown cost (project.cost_usd null) said as unknown, and the run list's driver tag
 
 The values put in the records are shape examples (not results); the counts checked are
-computed here from the shapes. Browser tests need HIRAKU_WEB_BROWSER=1 and Playwright.
+computed here from the shapes. Browser tests: python -m tests.web.browser (needs Playwright).
 """
 
 import copy
@@ -105,7 +106,7 @@ class FixturesFitTheContract(unittest.TestCase):
         self.assertTrue(all(o["size_mm"][0] == 0 and o["size_mm"][2] == 0 and o["size_mm"][1] > 0 for o in gates))
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class ReviewFixesBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -262,6 +263,61 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         self.assertEqual(got["text"], "四角 1・三角 1・六面体 8 節点 2")
         # the quad and the triangle share the side 0-1: 3 + 2 free sides
         self.assertEqual(got["mixedFree"], 5)
+        page.close()
+
+    def test_an_unknown_cost_is_said_so_not_zero(self):
+        # project.cost_usd null (claude/lead-refactor ea80fa4: driver claude_code_plugin, HIRAKU cannot
+        # know the cost). This branch's schema does not take null yet, so these events are not checked here.
+        events = sample_events()
+        _of(events, "run.started")["data"].update(cost_usd=None, driver="claude_code_plugin")
+        for e in events:
+            if e["kind"] == "cost.updated":
+                e["data"]["cost_usd"] = None
+        page, errors = self.open(events)
+        pill = page.evaluate("() => document.getElementById('pill-cost').textContent")
+        self.assertEqual(errors, [])
+        self.assertIn("費用 不明", pill)
+        self.assertNotIn("$0.00", pill)
+        page.close()
+        # a known cost is still shown as before
+        page, errors = self.open(sample_events())
+        cost = next(e["data"]["cost_usd"] for e in reversed(sample_events()) if e["kind"] == "cost.updated")
+        pill = page.evaluate("() => document.getElementById('pill-cost').textContent")
+        self.assertEqual(errors, [])
+        self.assertIn(f"費用 ${cost:.2f}", pill)
+        page.close()
+
+    def test_the_run_list_says_what_drove_each_run(self):
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        runs = tmp / "runs"
+        drivers = {"20261103-100000-plugin": "claude_code_plugin", "20261103-100001-sdk": "agent_sdk",
+                   "20261103-100002-script": "scripted", "20261103-100003-old": None}
+        for rid, drv in drivers.items():
+            (runs / rid).mkdir(parents=True)
+            data = {"want": rid, **({"driver": drv} if drv else {})}
+            (runs / rid / "events.jsonl").write_text(json.dumps({"seq": 0, "t": 0, "kind": "run.started", "data": data}) + "\n", encoding="utf-8")
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1")
+        page.wait_for_selector("#runlist table")
+        got = page.evaluate(
+            """() => Object.fromEntries([...document.querySelectorAll("#runlist tr")].filter((tr) => tr.querySelector(".rid"))
+                 .map((tr) => { const d = tr.querySelector(".drv"); return [tr.querySelector(".rid").firstChild.textContent.trim(), d ? [d.dataset.driver, d.textContent] : null]; }))"""
+        )
+        self.assertEqual(errors, [])
+        words = {"claude_code_plugin": "Claude Code", "agent_sdk": "API キー", "scripted": "台本"}
+        for rid, drv in drivers.items():
+            self.assertEqual(got[rid], [drv, words[drv]] if drv else None, rid)
         page.close()
 
     def test_the_feed_does_not_ask_again_at_once_when_a_read_does_not_move_on(self):

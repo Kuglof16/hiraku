@@ -1,7 +1,7 @@
 """The A4 tool shelf in a headless browser: the shelf from /api/shelf (a small stand-in
 load, not the solvers) with a run's tool.checked records laid over it.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (see test_browser.py).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (see test_browser.py).
 The tools, checks and formulas below are shape examples: their numbers are made up.
 """
 
@@ -65,7 +65,7 @@ def shelf_events(focus=False):
     return events
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class ShelfBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

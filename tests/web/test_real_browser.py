@@ -3,7 +3,7 @@ web/assets/polyhaven/ (they are added by hand, not committed), its fall-back lig
 textures when they are not (a server that lists none), and the contour keeping the
 legend's colours (unlit, outside the tone mapping and the post-processing) in both looks.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (see test_browser.py).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (see test_browser.py).
 """
 
 import json
@@ -109,7 +109,7 @@ PIXELS = """async (shell) => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class RealLookBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

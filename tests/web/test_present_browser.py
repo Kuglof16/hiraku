@@ -1,6 +1,6 @@
 """The present mode (?present=1, the 見せる / 作業台 switch) and the workbench's lighter labels.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed, as test_browser.
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
 
 import copy
@@ -53,7 +53,7 @@ def overlaps(a, b):
     return a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"] and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class PresentBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

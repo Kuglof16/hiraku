@@ -13,7 +13,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DOMAINS, DOMAIN_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, DRIVER_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -176,15 +176,15 @@ const intakeApi = {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
   },
-  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // Only while the watched run is going (runGoing; a replay stays read-only). The
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
     if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
-    return ownRunGoing() ? answerHearing : undefined;
+    return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
-    return ownRunGoing() ? dropFile : undefined;
+    return runGoing() ? dropFile : undefined;
   },
   // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
   get send() {
@@ -334,6 +334,13 @@ function ownRunGoing() {
   return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
 }
 
+// The run being watched is going: started here (launch), or followed live while its record says
+// running (a run started elsewhere, e.g. from a Claude Code session with the plugin). A replay
+// (?live=0, a dropped file, a finished run) is not. The server checks again (Launcher.going_dir).
+function runGoing() {
+  return ownRunGoing() || (player.live && player.state.status === "running");
+}
+
 async function postLaunch(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, ...body }) });
   const got = await res.json().catch(() => ({}));
@@ -361,8 +368,8 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
-  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
-  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  // (and when the run turns out to be going, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
     intakeApplied = now;
     const last = player.events[player.applied - 1] ?? null;
@@ -382,7 +389,8 @@ function renderTop(s) {
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
-  $("pill-cost").textContent = `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0
+  $("pill-cost").textContent = `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
@@ -1399,7 +1407,9 @@ async function showRunList(message = "", runs = null) {
     const href = `?run=${encodeURIComponent(r.run_id)}`;
     const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
     const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
-    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+    // what drove the run (project.driver); nothing for older records without it
+    const drv = DRIVER_JA[r.driver] ? ` <span class="drv" data-driver="${esc(r.driver)}">${DRIVER_JA[r.driver]}</span>` : "";
+    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drv}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
   };
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =

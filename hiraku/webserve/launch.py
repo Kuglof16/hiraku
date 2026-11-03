@@ -35,7 +35,13 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
-from hiraku.contract.layout import EVENTS_FILE, INBOX_DIR, KNOWLEDGE_DIR, RUN_ID_RE, STOP_REQUEST_FILE
+from hiraku.contract import layout
+from hiraku.contract.layout import EVENTS_FILE, INBOX_DIR, KNOWLEDGE_DIR, PROJECT_FILE, RUN_ID_RE, STOP_REQUEST_FILE
+
+# Present while a claude_code_plugin run's MCP server owns the run. The contract names it
+# layout.PLUGIN_LOCK_FILE (lead's change); until that reaches this branch the same name is used here.
+PLUGIN_LOCK_FILE = getattr(layout, "PLUGIN_LOCK_FILE", "plugin.lock")
+PLUGIN_DRIVER = "claude_code_plugin"
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_DIR / "data" / "requirements"
@@ -351,31 +357,52 @@ class Launcher:
         self.current["stop_requested"] = True
         return {"run_id": run_id, "stop_requested": True}
 
+    def going_dir(self, run_id: Any) -> Path:
+        """The folder of a run that is going, for the screen to put things in (the hearing's
+        answer, a dropped file): the run started here while it runs, or any run in the runs
+        folder whose project.json says running (a run started elsewhere, such as from a
+        Claude Code session with the plugin). A claude_code_plugin run also needs its
+        plugin.lock: without it no session holds the run, so nothing would read the inbox."""
+        if not isinstance(run_id, str) or not RUN_ID_RE.match(run_id):
+            raise LaunchError(400, "run_id must be the id of a run in the runs folder")
+        run_dir = self.runs_dir / run_id
+        if self.running() and self.current and self.current.get("run_id") == run_id:
+            return run_dir
+        if not run_dir.resolve().is_relative_to(self.runs_dir.resolve()) or not run_dir.is_dir():
+            raise LaunchError(409, f"no run {run_id} in the runs folder")
+        try:
+            project = json.loads((run_dir / PROJECT_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise LaunchError(409, f"run {run_id} has no readable {PROJECT_FILE}: {type(e).__name__}") from e
+        status = project.get("status") if isinstance(project, dict) else None
+        if status != "running":
+            raise LaunchError(409, f"run {run_id} is not running (status {status}); it no longer reads what is put in its folder")
+        if project.get("driver") == PLUGIN_DRIVER and not (run_dir / PLUGIN_LOCK_FILE).is_file():
+            raise LaunchError(409, f"run {run_id} is a {PLUGIN_DRIVER} run without {PLUGIN_LOCK_FILE}: no Claude Code session holds it now")
+        return run_dir
+
     def answer(self, run_id: Any, body: Any) -> dict[str, Any]:
-        """The hearing's answer (A2) for the run started here, while it runs: checked and
+        """The hearing's answer (A2) for a run that is going (going_dir): checked and
         written as hearing.answer.json in its folder by hiraku.intake.hearing.save_answer."""
-        if not self.running() or not self.current or self.current.get("run_id") != run_id:
-            raise LaunchError(409, "no run started from this screen is going under that id")
+        run_dir = self.going_dir(run_id)
         if not isinstance(body, dict):
             raise LaunchError(400, "answer must be an object (answers, note, useDefaults)")
         from hiraku.intake.hearing import save_answer
 
         try:
-            save_answer(self.runs_dir / run_id, body)
+            save_answer(run_dir, body)
         except ValueError as e:  # IntakeError: an answer the hearing does not take
             raise LaunchError(400, str(e)) from e
         return {"run_id": run_id, "answered": True}
 
     def knowledge(self, run_id: Any, name: Any, text: Any) -> dict[str, Any]:
-        """A knowledge file dropped on A5, for the run started here while it runs: kept as
+        """A knowledge file dropped on A5, for a run that is going (going_dir): kept as
         knowledge/<name> in its folder, and asked for through inbox/<n>-knowledge.json (the run
         reads it, imports the file and emits the events itself)."""
-        if not self.running() or not self.current or self.current.get("run_id") != run_id:
-            raise LaunchError(409, "no run started from this screen is going under that id")
+        run_dir = self.going_dir(run_id)
         if not isinstance(text, str):
             raise LaunchError(400, "text must be the file's text")
         safe = knowledge_name(name)
-        run_dir = self.runs_dir / run_id
         folder = run_dir / KNOWLEDGE_DIR
         folder.mkdir(exist_ok=True)
         (folder / safe).write_bytes(text.encode("utf-8"))  # as given (no newline translation)
