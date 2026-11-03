@@ -1454,18 +1454,36 @@ async function renderLaunch(message = "") {
 // 台本で / Claude で走らせる for one requirements file r ({file, cost_limit_usd, round_limit}).
 // ask: what launchConfirm holds while this row's Claude confirmation is open. A Claude run
 // needs the key in the server's window, and the cost limit is shown and confirmed first.
+// r.modes (when the demo runs list the file): only those buttons. r.estimate_usd (a demo row):
+// the estimate of a real Claude run, shown with the limit; when it is over the limit, the button
+// and the confirmation say the run stops at the limit (it can still be started).
 function runButtons(info, r, ask, busy) {
   const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
   const file = esc(r.file);
-  let claude;
-  if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>`;
+  const modes = r.modes ?? ["scripted", "claude"];
+  const demo = "estimate_usd" in r;
+  const over = demo && overLimit(r);
+  const overNote = over ? `<span class="over">見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まる</span>` : "";
+  let claude = ""; // (none when the demo runs list the file without claude)
+  if (!modes.includes("claude")) claude = "";
+  else if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>${overNote}`;
   else if (launchConfirm === ask)
     claude =
-      `<span class="confirm">Claude を呼びます。費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。走らせますか?</span>` +
+      `<span class="confirm">Claude を呼びます。${demo ? `見込みは ${usd(r.estimate_usd)}、` : ""}費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。` +
+      `${over ? `見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まります。` : ""}走らせますか?</span>` +
       `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
-  else claude = `<button data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>Claude で走らせる (費用の上限 ${usd(r.cost_limit_usd)})</button>`;
-  return `<div class="lbtns"><button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>${claude}</div>`;
+  else {
+    const label = demo ? `見込み ${usd(r.estimate_usd)}・上限 ${usd(r.cost_limit_usd)}` : `費用の上限 ${usd(r.cost_limit_usd)}`;
+    claude = `<button data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>Claude で走らせる (${label})</button>${overNote}`;
+  }
+  const scripted = modes.includes("scripted")
+    ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>`
+    : "";
+  return `<div class="lbtns">${scripted}${claude}</div>`;
 }
+
+// The two values as written (no estimate or no limit: not over).
+const overLimit = (r) => typeof r.estimate_usd === "number" && typeof r.cost_limit_usd === "number" && r.estimate_usd > r.cost_limit_usd;
 
 // デモの実行: the rows of data/requirements/demo_runs.yaml (the design department's), in its order.
 // A file row runs like the files below; a request row opens A1 (?new=1&demo=<id>) with the
@@ -1483,7 +1501,10 @@ function demoSection(info, busy) {
     if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
     else if (d.file) {
       // (a file row carries its requirements' product too; file is what tells the two apart)
-      left = `<div class="rid">${esc(d.file)}</div>`;
+      const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+      left =
+        `<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}</div>` +
+        `<div class="rid">${esc(d.file)}</div>`;
       right = runButtons(info, d, `demo:${d.id}`, busy);
     } else {
       left = `<div class="rid">${esc(d.want)} (products/${esc(d.product)}.yaml)</div>`;

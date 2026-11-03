@@ -472,7 +472,8 @@ class BrowserReplayTest(unittest.TestCase):
         (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
         run_id = "20261103-120000-offroad-4w-fake"
         lau = Launcher(tmp / "runs", tmp / "requirements", env={"ANTHROPIC_API_KEY": "test-value-not-a-real-key"},
-                       command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20)
+                       command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -507,23 +508,32 @@ class BrowserReplayTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
     def _demo_server(self, env):
-        """A launcher on a requirements folder with a demo_runs.yaml: a file row (N12), a request row (N09)."""
+        """A launcher on a requirements folder and a demo runs list: file rows under the limit (N12),
+        without an estimate and Claude only (N13), over the limit (demo); a request row (N09).
+        (fake_reader gives every file a limit of $2.)"""
         from hiraku.webserve.launch import Launcher
         from tests.web.fake_launch import fake_command, fake_reader
 
         tmp = Path(tempfile.mkdtemp())
         req = tmp / "requirements"
         (req / "products").mkdir(parents=True)
-        (req / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
-        (req / "offroad-4w-n12.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        for name in ("offroad-4w.yaml", "offroad-4w-n12.yaml", "offroad-4w-n13.claude.yaml"):
+            (req / name).write_text("product: offroad-4w\n", encoding="utf-8")
         (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 在宅で使う電動の介護ベッドを作りたい\n", encoding="utf-8")
-        (req / "demo_runs.yaml").write_text(
+        demo = tmp / "catalog" / "demo_runs.yaml"
+        demo.parent.mkdir()
+        demo.write_text(
             "runs:\n"
-            "  - id: n12\n    title: 要件の間違い\n    shows: 要件の誤りを見つけて直す\n    file: offroad-4w-n12.yaml\n    cuts: [N12]\n"
-            "  - id: n09\n    title: 依頼から始める\n    shows: 依頼の文から分野を選ぶ\n    request: {product: care-bed}\n    cuts: [N09]\n",
+            "  - id: n12\n    title: 要件の間違い\n    shows: 要件の誤りを見つけて直す\n    file: offroad-4w-n12.yaml\n"
+            "    modes: [claude, scripted]\n    estimate_usd: 1.1\n    cuts: [N11, N12]\n"
+            "  - id: n13\n    title: ツールを作る\n    shows: 棚に無いツールを書く\n    file: offroad-4w-n13.claude.yaml\n"
+            "    modes: [claude]\n    estimate_usd: null\n    cuts: [N13]\n"
+            "  - id: demo\n    title: デモの車\n    shows: 6 つの試験\n    file: offroad-4w.yaml\n    modes: [scripted, claude]\n    estimate_usd: 12.5\n"
+            "  - id: n09\n    title: 依頼から始める\n    shows: 依頼の文から分野を選ぶ\n    request: {product: care-bed}\n    modes: [claude]\n    cuts: [N09]\n",
             encoding="utf-8")
         run_id = "20261103-120000-offroad-4w-fake"
-        lau = Launcher(tmp / "runs", req, env=env, command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20)
+        lau = Launcher(tmp / "runs", req, env=env, command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=demo)
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -554,16 +564,37 @@ class BrowserReplayTest(unittest.TestCase):
                 files: [...document.querySelectorAll('#launch .lreq:not(.demo) .rid')].map((e) => e.textContent),
             })""")
             self.assertEqual(got["first"], "デモの実行")
-            self.assertEqual(got["ids"], ["n12", "n09"])
-            for words in ("要件の間違い", "要件の誤りを見つけて直す", "N12", "依頼から始める", "N09", "在宅で使う電動の介護ベッドを作りたい"):
+            self.assertEqual(got["ids"], ["n12", "n13", "demo", "n09"])
+            for words in ("要件の間違い", "要件の誤りを見つけて直す", "N11", "N12", "依頼から始める", "N09", "在宅で使う電動の介護ベッドを作りたい"):
                 self.assertIn(words, got["text"])
-            self.assertEqual(got["files"], ["offroad-4w-n12.yaml", "offroad-4w.yaml"])  # the files below stay as they were
+            # the files below stay as they were
+            self.assertEqual(got["files"], ["offroad-4w-n12.yaml", "offroad-4w-n13.claude.yaml", "offroad-4w.yaml"])
             self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n12'] a.demo-a1").count(), 0)  # a file row runs, not A1
-            ask = page.locator("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
-            self.assertIn("$2", ask.text_content())
+            # the estimate next to the limit, as written; over the limit only on the demo row
+            row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
+            self.assertIn("見込み $1.10・上限 $2.00", page.text_content(f"{row('n12')} .cost"))
+            self.assertIn("見込み —・上限 $2.00", page.text_content(f"{row('n13')} .cost"))
+            self.assertIn("見込み $12.50・上限 $2.00", page.text_content(f"{row('demo')} .cost"))
+            self.assertEqual([page.locator(f"{row(i)} .lbtns .over").count() for i in ("n12", "n13", "demo")], [0, 0, 1])
+            self.assertIn("見込みが上限を超えるので、上限 $2.00 で止まる", page.text_content(f"{row('demo')} .lbtns .over"))
+            # modes: N13 is Claude only, here and in the files below
+            self.assertEqual(page.locator(f"{row('n13')} button[data-launch='scripted']").count(), 0)
+            self.assertEqual(page.locator(f"{row('n13')} button[data-launch-ask]").count(), 1)
+            n13_file = page.locator("#launch .lreq:not(.demo)", has_text="offroad-4w-n13.claude.yaml")
+            self.assertEqual(n13_file.locator("button[data-launch='scripted']").count(), 0)
+            ask = page.locator(f"{row('n12')} button[data-launch-ask]")
+            self.assertIn("見込み $1.10・上限 $2.00", ask.text_content())
+            # over the limit: it can be started, and the confirmation says where it stops
+            page.click(f"{row('demo')} button[data-launch-ask]")
+            page.wait_for_selector(f"{row('demo')} .confirm")
+            confirm = page.text_content(f"{row('demo')} .confirm")
+            self.assertIn("見込みは $12.50", confirm)
+            self.assertIn("見込みが上限を超えるので、上限 $2.00 で止まります", confirm)
+            page.click("#launch button[data-launch-cancel]")
             ask.click()
-            page.wait_for_selector("#launch .lreq.demo[data-demo='n12'] .confirm")
+            page.wait_for_selector(f"{row('n12')} .confirm")
             self.assertIn("費用の上限は $2", page.text_content("#launch .confirm"))
+            self.assertNotIn("超える", page.text_content("#launch .confirm"))
             self.assertEqual(page.locator("#launch .confirm").count(), 1)  # only the demo row asks
             page.click("#launch button[data-launch-cancel]")
             page.wait_for_selector("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
@@ -604,6 +635,7 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(page.locator(f"{row} button[data-launch-ask]").count(), 0)
             self.assertFalse(page.is_disabled(f"{row} button[data-launch='scripted']"))
             self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n09'] a.demo-a1").count(), 1)
+            self.assertIn("上限 $2.00 で止まる", page.text_content("#launch .lreq.demo[data-demo='demo'] .lbtns .over"))
             self.assertEqual(errors, [])
             page.close()
         finally:
@@ -778,7 +810,8 @@ class BrowserReplayTest(unittest.TestCase):
             seen.append((Path(req).name, intake_events and Path(intake_events).name, mode))
             return fake(req, mode, runs)
 
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
@@ -828,7 +861,8 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         going = tmp / "going.jsonl"
         going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20)
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20,
+                       demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"

@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from hiraku.webserve.launch import Launcher, LaunchError
+from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
@@ -333,6 +333,7 @@ class LaunchTest(unittest.TestCase):
         req = self.tmp / "requirements"
         req.mkdir()
         (req / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        self.demo_file = self.tmp / "catalog" / "demo_runs.yaml"  # (not there unless a test writes it)
         self.servers = []
 
     def tearDown(self):
@@ -347,7 +348,7 @@ class LaunchTest(unittest.TestCase):
 
     def serve(self, env, hold_s=3.0, command=None, reader=fake_reader):
         lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=command or fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
-                       reader=reader, wait_s=20)
+                       reader=reader, wait_s=20, demo_runs_file=self.demo_file)
         self.launchers = [*getattr(self, "launchers", []), lau]
         server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -461,7 +462,8 @@ class LaunchTest(unittest.TestCase):
             seen.append((Path(req), intake_events and Path(intake_events)))
             return fake(req, mode, runs)
 
-        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20,
+                       demo_runs_file=self.demo_file)
         self.launchers = [*getattr(self, "launchers", []), lau]
         server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -497,7 +499,8 @@ class LaunchTest(unittest.TestCase):
         self.assertTrue(bad["error"])
 
     def test_a_request_with_no_kind_of_design_is_refused(self):
-        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, self.RUN, 1.0), reader=fake_reader)
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, self.RUN, 1.0), reader=fake_reader,
+                       demo_runs_file=self.demo_file)
         folder = lau.requests_dir / "20261103-120000-guitar"
         folder.mkdir(parents=True)
         (folder / "requirements.yaml").write_text("product: guitar\nflags: {}\n", encoding="utf-8")
@@ -518,22 +521,27 @@ class LaunchTest(unittest.TestCase):
 
     DEMO = (
         "runs:\n"
-        "  - id: n12\n    title: 間違いを見つける\n    shows: 要件の誤りを Claude が見つける\n    file: offroad-4w-n12.yaml\n    cuts: [N12]\n"
-        "  - id: bed\n    title: 介護ベッド\n    shows: 製品の要件から走る\n    file: products/care-bed.yaml\n"
-        "  - id: broken\n    title: 読めない\n    shows: x\n    file: products/broken.yaml\n"
-        "  - id: n09\n    title: 依頼から\n    shows: A1 で分野を選ぶ\n    request: {product: care-bed}\n    cuts: [N09]\n"
-        "  - id: up\n    title: 外\n    shows: x\n    file: ../secret.yaml\n"
+        "  - id: n12\n    title: 間違いを見つける\n    shows: 要件の誤りを Claude が見つける\n    file: offroad-4w-n12.yaml\n"
+        "    modes: [claude, scripted]\n    estimate_usd: 1.1\n    cuts: [N11, N12]\n"
+        "  - id: n13\n    title: ツールを作る\n    shows: x\n    file: offroad-4w-n13.claude.yaml\n    modes: [claude]\n    estimate_usd: null\n"
+        "  - id: bed\n    title: 介護ベッド\n    shows: 製品の要件から走る\n    file: products/care-bed.yaml\n    modes: [scripted]\n    estimate_usd: 3.5\n"
+        "  - id: broken\n    title: 読めない\n    shows: x\n    file: products/broken.yaml\n    modes: [scripted]\n"
+        "  - id: n09\n    title: 依頼から\n    shows: A1 で分野を選ぶ\n    request: {product: care-bed}\n    modes: [claude]\n    cuts: [N09]\n"
+        "  - id: up\n    title: 外\n    shows: x\n    file: ../secret.yaml\n    modes: [scripted]\n"
+        "  - id: odd\n    title: 変な modes\n    shows: x\n    file: offroad-4w.yaml\n    modes: [fast]\n"
     )
 
     def demo_setup(self):
         req = self.tmp / "requirements"
         (req / "offroad-4w-n12.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "offroad-4w-n13.claude.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
         (req / "products").mkdir()
         (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 介護ベッドを作りたい\n", encoding="utf-8")
         (req / "products" / "broken.yaml").write_text("product: [\n", encoding="utf-8")
         (req / "products" / "serving-robot.yaml").write_text("product: serving-robot\n", encoding="utf-8")
         (self.tmp / "secret.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
-        (req / "demo_runs.yaml").write_text(self.DEMO, encoding="utf-8")
+        self.demo_file.parent.mkdir()
+        self.demo_file.write_text(self.DEMO, encoding="utf-8")
 
         def reader(path):
             if path.name == "broken.yaml":
@@ -558,30 +566,36 @@ class LaunchTest(unittest.TestCase):
         info = self.launch_info(base)
         self.assertIsNone(info["demo_runs_error"])
         rows = {r["id"]: r for r in info["demo_runs"]}
-        self.assertEqual([r["id"] for r in info["demo_runs"]], ["n12", "bed", "broken", "n09", "up"])
+        self.assertEqual([r["id"] for r in info["demo_runs"]], ["n12", "n13", "bed", "broken", "n09", "up", "odd"])
         n12 = rows["n12"]
-        self.assertEqual((n12["title"], n12["shows"], n12["cuts"], n12["file"]), ("間違いを見つける", "要件の誤りを Claude が見つける", ["N12"], "offroad-4w-n12.yaml"))
+        self.assertEqual((n12["title"], n12["shows"], n12["cuts"], n12["file"]), ("間違いを見つける", "要件の誤りを Claude が見つける", ["N11", "N12"], "offroad-4w-n12.yaml"))
         self.assertEqual((n12["want"], n12["cost_limit_usd"], n12["round_limit"]), ("見本の要件", 2.0, 1))  # read by the launcher's reader
+        self.assertEqual((n12["modes"], n12["estimate_usd"]), (["scripted", "claude"], 1.1))
         self.assertNotIn("error", n12)
-        self.assertEqual((rows["bed"]["file"], rows["bed"]["cost_limit_usd"]), ("products/care-bed.yaml", 2.0))
+        self.assertEqual((rows["n13"]["modes"], rows["n13"]["estimate_usd"]), (["claude"], None))
+        self.assertEqual((rows["bed"]["file"], rows["bed"]["cost_limit_usd"], rows["bed"]["estimate_usd"]), ("products/care-bed.yaml", 2.0, 3.5))
         self.assertIn("does not load", rows["broken"]["error"])  # shown, not hidden
         self.assertEqual(rows["broken"]["title"], "読めない")
         n09 = rows["n09"]
-        self.assertEqual((n09["product"], n09["want"], n09["cuts"]), ("care-bed", "介護ベッドを作りたい", ["N09"]))
+        self.assertEqual((n09["product"], n09["want"], n09["cuts"], n09["modes"]), ("care-bed", "介護ベッドを作りたい", ["N09"], ["claude"]))
         self.assertNotIn("file", n09)
         self.assertIn("error", rows["up"])
-        # demo_runs.yaml itself is not a requirements file to run
-        self.assertNotIn("demo_runs.yaml", [r["file"] for r in info["requirements"]])
+        self.assertIn("modes", rows["odd"]["error"])
+        # the files below carry the modes of the demo runs that list them
+        files = {r["file"]: r for r in info["requirements"]}
+        self.assertEqual(files["offroad-4w-n13.claude.yaml"]["modes"], ["claude"])
+        self.assertNotIn("modes", files["offroad-4w.yaml"])  # listed only by a row whose modes are unusable
 
     def test_demo_runs_missing_or_not_loading(self):
         base = self.serve({})
         info = self.launch_info(base)
         self.assertEqual((info["demo_runs"], info["demo_runs_error"]), ([], None))
-        (self.tmp / "requirements" / "demo_runs.yaml").write_text("runs: [\n", encoding="utf-8")
+        self.demo_file.parent.mkdir()
+        self.demo_file.write_text("runs: [\n", encoding="utf-8")
         info = self.launch_info(base)
         self.assertEqual(info["demo_runs"], [])
         self.assertIn("demo_runs.yaml", info["demo_runs_error"])
-        (self.tmp / "requirements" / "demo_runs.yaml").write_text("other: 1\n", encoding="utf-8")
+        self.demo_file.write_text("other: 1\n", encoding="utf-8")
         self.assertIn("runs", self.launch_info(base)["demo_runs_error"])
 
     def test_a_listed_demo_file_runs_and_unlisted_paths_do_not(self):
@@ -590,11 +604,37 @@ class LaunchTest(unittest.TestCase):
         for bad in ("products/serving-robot.yaml", "../secret.yaml", str(self.tmp / "secret.yaml"),
                     (self.tmp / "secret.yaml").as_posix(), "products/../offroad-4w.yaml", "products\\care-bed.yaml"):
             self.assertEqual(self.post(base, {"requirements": bad, "mode": "scripted"})[0], 400, bad)
-        self.assertEqual(self.post(base, {"requirements": "demo_runs.yaml", "mode": "scripted"})[0], 404)
         self.assertEqual(seen, [])  # nothing was started
-        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "claude"})
-        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN + "-claude", "products/care-bed.yaml"))
+        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "scripted"})
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, "products/care-bed.yaml"))
         self.assertEqual([p.resolve() for p in seen], [(req / "products" / "care-bed.yaml").resolve()])
+
+    def test_a_demo_file_runs_only_in_its_modes(self):
+        base, seen = self.demo_setup()
+        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "claude"})
+        self.assertEqual(status, 400)  # listed as scripted only
+        self.assertIn("scripted", out["error"])
+        status, out = self.post(base, {"requirements": "offroad-4w-n13.claude.yaml", "mode": "scripted"})
+        self.assertEqual(status, 400)  # claude only, also when named as a file of the folder
+        self.assertEqual(seen, [])
+        status, out = self.post(base, {"requirements": "offroad-4w-n13.claude.yaml", "mode": "claude"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN + "-claude"))
+
+    @unittest.skipUnless(DEMO_RUNS_FILE.is_file(), "no data/catalog/demo_runs.yaml in this checkout")
+    def test_the_real_demo_runs_all_show(self):
+        """The design department's list with the real requirements files: every row shows, without an error."""
+        lau = Launcher(self.runs, env={}, demo_runs_file=DEMO_RUNS_FILE)
+        rows, error = lau.demo_runs()
+        self.assertIsNone(error)
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertNotIn("error", r, r["id"])
+            self.assertTrue(r["title"] and r["shows"] and r["modes"], r["id"])
+            if "file" in r:
+                self.assertIsInstance(r["cost_limit_usd"], (int, float), r["id"])
+                self.assertIn("estimate_usd", r)
+            else:
+                self.assertTrue(r["product"] and r["want"], r["id"])
 
     def test_refuses_other_files_and_other_pages(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})

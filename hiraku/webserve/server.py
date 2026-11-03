@@ -10,7 +10,7 @@ Standard library only. Routes:
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
     GET /api/launch, POST /api/launch   start a run from the screen (launch.py); GET also lists
-                                        the demo runs of data/requirements/demo_runs.yaml
+                                        the demo runs of data/catalog/demo_runs.yaml
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
     POST /api/launch {request, mode}    start a run from a request settled in A1/A2 (--intake-events)
     POST /api/request, /api/request/answer
@@ -47,7 +47,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
 from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
-from hiraku.webserve.launch import Launcher, LaunchError
+from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.shelf import Shelf
 
 DEFAULT_HOST = "127.0.0.1"
@@ -457,15 +457,17 @@ def make_server(
     launcher: Launcher | bool | None = None,
     layout_file: Path | str = LAYOUT_FILE,
     shelf: Shelf | None = None,
+    demo_runs_file: Path | str = DEMO_RUNS_FILE,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
-    launcher: None starts runs into runs_dir with this process' environment;
-    False turns starting runs off; or a Launcher to use. shelf: what /api/shelf
-    answers (by default the solvers' shelf, computed on the first request).
+    launcher: None starts runs into runs_dir with this process' environment
+    (with the demo runs of demo_runs_file); False turns starting runs off; or a
+    Launcher to use. shelf: what /api/shelf answers (by default the solvers'
+    shelf, computed on the first request).
     """
     if launcher is None:
-        launcher = Launcher(Path(runs_dir))
+        launcher = Launcher(Path(runs_dir), demo_runs_file=Path(demo_runs_file))
     handler = type(
         "BoundHandler",
         (Handler,),
