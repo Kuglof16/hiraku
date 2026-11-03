@@ -98,6 +98,37 @@ class LinkTest(unittest.TestCase):
         self.stats = out
 
 
+class ConstraintMethodOnLinksTest(unittest.TestCase):
+    """Elimination, Lagrange multipliers and penalty on a shell plate with a rigid link over 22 nodes:
+    accuracy, constraint violation and the condition number of the matrix that is factorised."""
+
+    @staticmethod
+    def cond(A):
+        sv = np.linalg.svd(A.toarray(), compute_uv=False)
+        return sv[0] / sv[-1]
+
+    def test_elimination_keeps_the_condition(self):
+        from hiraku.solvers.fe import ModelError
+        m, idx, ref, F = loaded("rbe2")
+        out = {}
+        for meth, kw in (("eliminate", {}), ("lagrange", {}), ("penalty", {"penalty_scale": 1e2})):
+            s = StaticSolver(m, method=meth, **kw)
+            sol = s.solve(F)
+            C, g = m.constraint_matrix(sol.layout)
+            out[meth] = (sol.displacements[ref, 2], float(np.abs(C @ sol.U - g).max()), self.cond(s.A))
+        m0, _ = plate()
+        c0 = self.cond(StaticSolver(m0).A)
+        u = out["eliminate"][0]
+        self.assertLess(out["eliminate"][1], 1e-12)
+        self.assertLess(out["eliminate"][2], 1.1 * c0)  # no worse than the plate without the link
+        self.assertLess(abs(out["lagrange"][0] / u - 1), 1e-8)
+        self.assertGreater(out["lagrange"][2], 1e3 * out["eliminate"][2])
+        self.assertGreater(abs(out["penalty"][0] / u - 1), 1e-8)  # penalty leaves an error ...
+        self.assertGreater(out["penalty"][2], 1e3 * out["eliminate"][2])  # ... and a worse matrix
+        with self.assertRaises(ModelError):  # a larger penalty loses the solution; the residual check says so
+            StaticSolver(m, method="penalty", penalty_scale=1e6).solve(F)
+
+
 class ShellSolidTest(unittest.TestCase):
     def test_cantilever_half_solid_half_shell(self):
         r = checks.shell_solid_cantilever()

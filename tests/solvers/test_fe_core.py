@@ -165,7 +165,12 @@ class ConstraintMethodTest(unittest.TestCase):
         self.assertLess(out["eliminate"][1], 1e-14)
         self.assertLess(out["lagrange"][1], 1e-12)
         self.assertLess(np.abs(out["lagrange"][0] - ref).max(), 1e-10 * np.abs(ref).max())
-        self.assertLess(np.abs(out["penalty"][0] - ref).max(), 1e-5 * np.abs(ref).max())
+        # penalty: the error falls as 1 / alpha (a well-conditioned truss allows a large alpha)
+        err2 = np.abs(out["penalty"][0] - ref).max() / np.abs(ref).max()
+        sol6 = StaticSolver(m, method="penalty", penalty_scale=1e6).solve(F)
+        err6 = np.abs(sol6.U - ref).max() / np.abs(ref).max()
+        self.assertLess(err2, 1e-2)
+        self.assertLess(err6, 1e-3 * err2)
         self.assertGreater(out["penalty"][1], out["eliminate"][1])
 
 
