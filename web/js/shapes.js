@@ -108,9 +108,39 @@ function nose([sx, sy, sz]) {
   ];
 }
 
-// Floor and deck plates.
-function plate([sx, sy, sz]) {
-  return [piece(new THREE.BoxGeometry(sx, sy, sz), 0, 0, 0, "floor")];
+// The corner radius of a box drawn with rounded edges (the real look), from its
+// thinnest side: 0.35 of it, at most 40 mm. A 1.2 mm panel gets 0.42 mm, a 100 mm
+// cushion 35 mm. These are values for the picture (how the edges catch the light), not
+// the parts' radii; the design gives none.
+export const ROUND = { share: 0.35, max_mm: 40 };
+export function roundRadius(size) {
+  return Math.min(ROUND.max_mm, ROUND.share * Math.min(...size));
+}
+
+// A plain box of the part's size: in the real look (round) with rounded edges. The
+// radius is kept in geometry.userData.round_mm (0 for a sharp box).
+export function boxGeometry([sx, sy, sz], round = false) {
+  if (!round) {
+    const g = new THREE.BoxGeometry(sx, sy, sz);
+    g.userData.round_mm = 0;
+    return g;
+  }
+  const r = roundRadius([sx, sy, sz]);
+  // RoundedBoxGeometry needs the radius under half of every side
+  const g = new RoundedBoxGeometry(sx, sy, sz, r < 2 ? 1 : 3, Math.min(r, Math.min(sx, sy, sz) / 2 - 1e-3));
+  g.userData.round_mm = r;
+  return g;
+}
+
+// A plate (floor, deck, a body panel): a box whose thinnest side is its thickness.
+function plate(size, round) {
+  return [{ geo: boxGeometry(size, round), sub: null }];
+}
+
+// A box is a plate when its thinnest side is a tenth of the middle one or less.
+function isPlate(size) {
+  const s = [...size].sort((a, b) => a - b);
+  return s[0] <= s[1] * 0.1;
 }
 
 // Cargo: crates in a grid that fills the box, with a gap between them.
@@ -169,14 +199,18 @@ const SHAPES = {
   suspension,
 };
 
+// A seat given as its pieces (seat_R_back, seat_R_cushion, ...): each is drawn as its box,
+// so the seat shape (a cushion and a backrest in one box) is not drawn twice.
+const SEAT_PIECE = /_(back|backrest|cushion|base|bottom|headrest)$/i;
+
 // Pieces of a part in its local frame (box centre at the origin, box rotation not applied).
-// Returns null for a kind drawn as its plain box.
-export function partPieces(part) {
+// Every kind without a shape is its plain box (rounded when `round`, the real look).
+export function partPieces(part, { round = false } = {}) {
   const size = part.box.size_mm;
   const kind = part.kind;
-  if (kind === "body") return size[2] <= Math.min(size[0], size[1]) * 0.1 ? plate(size) : nose(size);
-  const make = SHAPES[kind];
-  return make ? make(size, part.box.center_mm) : null;
+  if (kind === "body") return isPlate(size) ? plate(size, round) : nose(size);
+  const make = kind === "seat" && SEAT_PIECE.test(part.id ?? "") ? null : SHAPES[kind];
+  return make ? make(size, part.box.center_mm) : [{ geo: boxGeometry(size, round), sub: null }];
 }
 
 // A wheel (tyre with a rounded tread, rim, hub and spokes) around ISO y, centre at 0.

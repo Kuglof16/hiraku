@@ -2,8 +2,9 @@
 //   zu    the diagram: unbleached paper and black ink, grey members, pale parts,
 //         a ruled ground
 //   real  a photograph-like view: outdoor sky light (image-based), sun shadows,
-//         physically based materials (painted steel, aluminium, galvanised steel,
-//         rubber, fabric, resin, wood, earth, concrete)
+//         physically based materials (painted steel, body paint, black-coated steel,
+//         aluminium, diamond plate, galvanised steel, rubber, fabric, vinyl, resin,
+//         wood, earth, concrete), and part boxes with rounded edges (shapes.js)
 //
 // The real look's textures are drawn in code on a canvas. Poly Haven files (CC0)
 // listed in ASSETS are used in their place when they are in web/assets/polyhaven/
@@ -310,6 +311,14 @@ const TEXTURES = {
 //   surface: a ground-like texture that a Poly Haven asset can replace (ASSETS)
 const FINISH = {
   painted_steel: { type: "physical", color: "#3d4840", roughness: 0.5, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 },
+  // a body panel's paint (painted sheet steel or moulded plastic): one calm colour, a thin clearcoat
+  body_paint: { type: "physical", color: "#40535f", roughness: 0.42, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.2 },
+  // brackets: steel in a black satin coat
+  black_steel: { type: "physical", color: "#1b1c1e", roughness: 0.55, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.4 },
+  // a seat's cover: vinyl (the fabric finish is the woven one)
+  vinyl: { type: "physical", color: "#242528", roughness: 0.6, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.5, sheen: 0.3, sheenRoughness: 0.5, sheenColor: "#4a4c52", normal: "fabric", normalScale: 0.15 },
+  // a floor: anti-slip diamond plate (aluminium)
+  tread_plate: { type: "standard", color: "#a9aeb3", roughness: 0.4, metalness: 1, normal: "plate", normalScale: 1 },
   aluminium: { type: "standard", color: "#b9bec4", roughness: 0.32, metalness: 1 },
   galvanized: { type: "standard", color: "#a3a9ad", roughness: 0.48, metalness: 1 },
   rubber: { type: "standard", color: "#1d1e20", roughness: 0.88, metalness: 0, normal: "tread", normalScale: 1 },
@@ -320,16 +329,43 @@ const FINISH = {
   concrete: { type: "standard", color: "#ffffff", roughness: 0.95, metalness: 0, surface: "concrete" },
 };
 
-// What each part (by kind, or by the piece's sub: tyre, rim, hub, spring, floor)
-// and each frame member (by its material's name) is made of: one table. A colour
-// here overrides the finish's own.
+// What each part and each frame member is made of in the real look: one table. An
+// entry is { finish (a FINISH key), color? }; a colour here overrides the finish's own.
+//
+// A part's entry is decided in this order (partEntry):
+//   1. part.material (a material's name, e.g. "SPCC", "A5052", "PP"): the rows of
+//      `material` (first match) give the finish. A steel row (painted steel) keeps the
+//      entry of step 3 when that is a paint too (a steel hood stays the body colour).
+//   2. part.finish (a FINISH key), when given, replaces the finish of step 1 or 3.
+//   3. kind and id: the first row of `id[kind]` whose pattern matches the id, else
+//      `kind[kind]`, else `kind.default`.
+// part.material and part.finish are not in the contract yet (2026-11-03); without them
+// kind and id decide. A piece of a part's shape (shapes.js: tyre, rim, hub, spring)
+// takes `sub[piece]`, whatever the part.
+// A frame member's entry (memberEntry): `kind[member.part]` (e.g. "rollbar"), else
+// `kind.frame`, then its material's name (design.materials[m.material].name) through the
+// same `material` rows, by the same rule as step 1.
 export const MATERIAL_OF = {
+  sub: {
+    tyre: { finish: "rubber" },
+    rim: { finish: "aluminium" },
+    hub: { finish: "galvanized", color: "#7e8489" },
+    spring: { finish: "painted_steel", color: "#8e2f22" },
+  },
+  id: {
+    body: [
+      { match: /floor|deck|step/i, finish: "tread_plate" },
+      { match: /mat\b|_mat/i, finish: "rubber", color: "#232426" },
+      // hood, fender_FL / FR, side_panel_L / R, bulkhead, door, cowl and the rest: the paint
+      { match: /./, finish: "body_paint" },
+    ],
+  },
   kind: {
     frame: { finish: "painted_steel" },
-    rollbar: { finish: "painted_steel" },
+    // the roll cage (members of part "rollbar" and the rollbar part): painted tube, a colour apart from the frame
+    rollbar: { finish: "painted_steel", color: "#c4c1b8" },
+    bracket: { finish: "black_steel" },
     suspension: { finish: "painted_steel", color: "#2f3438" },
-    spring: { finish: "painted_steel", color: "#8e2f22" },
-    hub: { finish: "galvanized", color: "#7e8489" },
     tie_rod: { finish: "galvanized" },
     knuckle: { finish: "galvanized", color: "#8a9094" },
     driveshaft: { finish: "galvanized" },
@@ -343,13 +379,11 @@ export const MATERIAL_OF = {
     brake_master_cylinder: { finish: "aluminium" },
     accelerator_pedal: { finish: "aluminium" },
     brake_pedal: { finish: "aluminium" },
-    rim: { finish: "aluminium" },
-    floor: { finish: "galvanized", color: "#9aa0a6", normal: "plate" },
-    tyre: { finish: "rubber" },
     wheel: { finish: "rubber" },
-    seat: { finish: "fabric" },
+    // the backrest and the cushion are separate parts of kind seat: the same cover
+    seat: { finish: "vinyl" },
     seat_belt: { finish: "fabric", color: "#1e1f22" },
-    body: { finish: "resin", color: "#59664a" },
+    body: { finish: "body_paint" },
     battery: { finish: "resin", color: "#2e3a48" },
     electrical: { finish: "resin", color: "#3a3e44" },
     switch: { finish: "resin", color: "#b33a2a" },
@@ -358,19 +392,42 @@ export const MATERIAL_OF = {
     cargo: { finish: "wood" },
     default: { finish: "painted_steel", color: "#7d828a" },
   },
-  // a frame member's material, by words in its name in design.materials (first match)
-  member: [
+  // a material's name (part.material, or a member's design.materials name): words in it (first match)
+  material: [
     { match: /alumin|A\d{4}\b/i, finish: "aluminium" },
     { match: /galvani|亜鉛|SGCC|ZAM/i, finish: "galvanized" },
-    { match: /steel|STK|SS\d{3}|STKR|STKM|鋼/i, finish: "painted_steel" },
+    { match: /steel|STK|SS\d{3}|STKR|STKM|SPCC|SPHC|SAPH|鋼/i, finish: "painted_steel" },
+    { match: /plastic|resin|樹脂|\bPP\b|\bABS\b|\bPE\b|\bPC\b|FRP|GFRP|CFRP|nylon|\bPA\d*\b/i, finish: "resin" },
+    { match: /rubber|ゴム|EPDM/i, finish: "rubber" },
+    { match: /vinyl|PVC|ビニル|leather|革/i, finish: "vinyl" },
+    { match: /fabric|cloth|布|polyester/i, finish: "fabric" },
+    { match: /wood|木|plywood|合板/i, finish: "wood" },
   ],
-  memberDefault: { finish: "painted_steel" },
 };
 
-// The table's entry for a member (design.materials[m.material].name).
-export function memberEntry(materialName) {
-  const hit = MATERIAL_OF.member.find((e) => e.match.test(materialName ?? ""));
-  return hit ? { finish: hit.finish } : MATERIAL_OF.memberDefault;
+// The finishes that are a coat of paint on steel.
+const PAINTS = new Set(["painted_steel", "body_paint", "black_steel"]);
+
+// Step 1 and 2 of the order above, over the entry of kind and id (or of a member's part).
+function refine(base, materialName, finish) {
+  let entry = base;
+  const row = materialName ? MATERIAL_OF.material.find((e) => e.match.test(materialName)) : null;
+  if (row && !(row.finish === "painted_steel" && PAINTS.has(base.finish))) entry = { finish: row.finish, color: row.color };
+  if (finish && FINISH[finish] && finish !== entry.finish) entry = { finish };
+  return entry;
+}
+
+// The table's entry for a part ({ id, kind, material?, finish? }).
+export function partEntry(part) {
+  const rows = MATERIAL_OF.id[part.kind] ?? [];
+  const byId = rows.find((r) => r.match.test(part.id ?? ""));
+  const base = byId ? { finish: byId.finish, color: byId.color } : (MATERIAL_OF.kind[part.kind] ?? MATERIAL_OF.kind.default);
+  return refine(base, part.material ?? null, part.finish ?? null);
+}
+
+// The table's entry for a frame member: its part ("frame", "rollbar") and its material's name.
+export function memberEntry(materialName, part = null) {
+  return refine(MATERIAL_OF.kind[part] ?? MATERIAL_OF.kind.frame, materialName ?? null, null);
 }
 
 // Colours of the parts in the diagram look (pale, see-through).
@@ -604,15 +661,18 @@ export class Look {
   }
 
   // Frame members (the contour colours them; in the real look the paint is the colour).
-  memberMaterial(materialName = null) {
+  memberMaterial(materialName = null, part = null) {
     if (!this.real) return new THREE.MeshLambertMaterial({ color: GRAY });
-    return this.fromEntry(memberEntry(materialName));
+    return this.fromEntry(memberEntry(materialName, part));
   }
 
-  // A part's material by kind (sub picks a piece: "spring", "tyre", "rim", "hub", "floor").
-  partMaterial(kind, sub = null) {
+  // A part's material: `part` is the design's part (or just a kind); sub picks a piece
+  // of its shape ("spring", "tyre", "rim", "hub").
+  partMaterial(part, sub = null) {
+    const p = typeof part === "string" ? { kind: part } : part;
+    const kind = p.kind;
     if (this.real) {
-      const entry = MATERIAL_OF.kind[sub ?? kind] ?? MATERIAL_OF.kind.default;
+      const entry = (sub && MATERIAL_OF.sub[sub]) || partEntry(p);
       const m = this.fromEntry(entry);
       m.userData.baseColor = "#" + m.color.getHexString();
       return m;
