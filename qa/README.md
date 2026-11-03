@@ -39,8 +39,8 @@ python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml       
 python -m qa.compare_runs runs/<run_a> runs/<run_b>                                  # 2 つのフォルダを比べる
 ```
 
-- 比べないもの: 時刻 (event の `ts`・`t`、`created_at`・`wall_time_s`)、`run_id` (文の中の run id と実行のフォルダも)、費用 `cost_usd`
-- 比べるための台本の運転は、どれも `HIRAKU_TOOL_CHECK_REUSE=0` で回す (道具の照合を前の実行から使い回さない。使い回すと `tool.checked` に `cached_from` が入って違いになる)
+- 比べないもの: 時刻 (event の `ts`・`t`、`created_at`・`wall_time_s`・解析の `timings_s`。契約で、時計の時間はこの 2 つの欄にだけ書く)、`run_id` (文の中の run id と実行のフォルダも)、費用 `cost_usd`
+- 比べるための台本の運転は、どれも道具の照合をその場で全部回す: `HIRAKU_TOOL_CHECK_REUSE=0` (前の実行から使い回すと `tool.checked` に `cached_from` が入る) で、試験のための覚え (`HIRAKU_CHECK_CACHE`。使うと `agent.said` が 1 行増える) も外す
 - 違えば、ファイル (記録は ID の名前)・`events.jsonl` の行・欄の道を出して終了コード 1。比べられないとき (基準の運転が無い、など) は 2
 - `--rel` が無ければ 1 バイトでも違えば違い (キーの順・空白・数の書き方も)。`--rel 1e-6` は数 (文の中の数も) の相対差 1e-6 までと、向きが逆なだけのモードの形 (`mode_shape`) を同じとみて、その数を最後の行に出す
 - 動画用の要件の台本の運転は、2 回回すとバイトまで同じ (`--twice` で確かめた)。前は modal の道具の固有値計算 (scipy の `eigsh`) が乱数の始めのベクトルから解き、振動数が 1e-10 ほど違い、モードの形の向きが変わっていた。いまは始めのベクトルを固定し、モードの形の向きをそろえている。`--rel` は、乱数を使う道具がまた入ったときのためのもの

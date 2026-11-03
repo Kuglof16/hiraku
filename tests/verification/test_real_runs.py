@@ -58,14 +58,17 @@ def _class_name(prefix: str, name: str) -> str:
     return prefix + re.sub(r"\W", "_", name)
 
 
-def _scripted_run(req: Path, out: Path):
+def _scripted_run(req: Path, out: Path, compared: bool = False):
     """One `python -m hiraku run REQ --scripted --runs OUT`; (run folder or None, process, seconds).
     A run still going after RUN_TIMEOUT_S is stopped with everything it started (qa.procs) and
-    gives no run folder, so its tests fail with the seconds instead of the class erring."""
-    # Japanese status lines; one BLAS thread (several runs go at once: qa.procs.one_blas_thread); every tool
-    # check runs (the video run is compared with a second one: qa.compare_runs.scripted_run)
+    gives no run folder, so its tests fail with the seconds instead of the class erring. A run
+    compared with another (compared) computes every check, as qa.compare_runs.scripted_run does."""
+    # Japanese status lines; one BLAS thread (several runs go at once: qa.procs.one_blas_thread); no tool
+    # check taken from an earlier run (HIRAKU_TOOL_CHECK_REUSE=0)
     env = procs.one_blas_thread(dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUTF8="1", HIRAKU_TOOL_CHECK_REUSE="0"))
     env.pop("ANTHROPIC_API_KEY", None)  # the scripted run must not need it
+    if compared:  # nor from the tests' disk cache (HIRAKU_CHECK_CACHE=1 adds an agent.said when used)
+        env.pop("HIRAKU_CHECK_CACHE", None)
     cmd = [sys.executable, "-m", "hiraku", "run", str(req), "--scripted", "--runs", str(out)]
     t0 = time.perf_counter()
     try:
@@ -180,7 +183,7 @@ class _ScriptedRunTwice(_ScriptedRunTests):
             return
         tmp = Path(cls._tmp.name)
         with ThreadPoolExecutor(max_workers=2) as pool:  # leaving the block waits for both runs
-            first = pool.submit(_scripted_run, cls.REQ, tmp / cls.REQ.stem)
+            first = pool.submit(_scripted_run, cls.REQ, tmp / cls.REQ.stem, compared=True)
             second = pool.submit(_scripted_run_again, cls.REQ, tmp / "again")
         cls.run_dir, cls.proc, cls.seconds = first.result()
         cls.again, cls.again_seconds = second.result()
@@ -280,22 +283,27 @@ if SLOW:
 
 
 def _design_for(tool):
-    """The design a needs_mesh tool runs on: a tool that says which design type it applies to
-    (describe()["applies_to"], a module of hiraku.designgen) gets that type's design as built with its
-    defaults; any other tool the ladder demo (data/designs/offroad-4w-v1.json)."""
+    """The design a needs_mesh tool runs on: a tool whose spec says which design types it applies to
+    (tool_spec.applies_to, a list of hiraku.designgen.ARCHETYPES keys; a single name is taken too) gets
+    the first type's design as built with its defaults; any other tool the ladder demo
+    (data/designs/offroad-4w-v1.json)."""
     import importlib
-    kind = (tool.describe() or {}).get("applies_to") if callable(getattr(tool, "describe", None)) else None
-    if kind:
-        return importlib.import_module(f"hiraku.designgen.{kind}").build(), kind
+    kinds = (tool.describe() or {}).get("applies_to") if callable(getattr(tool, "describe", None)) else None
+    if isinstance(kinds, str):
+        kinds = [kinds]
+    if kinds:
+        from hiraku import designgen
+        gen = getattr(designgen, "ARCHETYPES", {}).get(kinds[0]) or importlib.import_module(f"hiraku.designgen.{kinds[0]}")
+        return gen.build(), kinds[0]
     return json.loads(DEMO_DESIGN.read_text(encoding="utf-8")), None
 
 
 class _MeshFieldTests:
-    """A tool that needs_mesh (TOOL), given its design's frame_mesh as params["mesh"]: the mesh and
-    the tool's analysis pass check_run's rules for meshes and the fields on them (one value per
-    element or node of a mesh created before, of the same version). The design is the one the tool
-    applies to (_design_for); a tool that meshes its own design type is not held to fields on the
-    given mesh. Mixed into a TestCase per tool."""
+    """A tool that needs_mesh (TOOL) on the ladder demo, given its frame_mesh as params["mesh"]: the
+    mesh and the tool's analysis pass check_run's rules for meshes and the fields on them (one value
+    per element or node of a mesh created before, of the same version). A tool that applies to its
+    own design types (_design_for) runs on that design with no mesh given (it meshes the design
+    itself) and is held to its status and the analysis schema. Mixed into a TestCase per tool."""
 
     TOOL = None
 
@@ -306,17 +314,20 @@ class _MeshFieldTests:
         why = cls.TOOL.applies(cls.design) if callable(getattr(cls.TOOL, "applies", None)) else None
         if why:
             raise unittest.SkipTest(f"{cls.TOOL.name} does not apply to the {cls.kind or 'ladder demo'} design: {why}")
-        cls.mesh = dict(solvers.frame_mesh(cls.design), mesh_id="mesh-0001")
+        cls.mesh = None if cls.kind else dict(solvers.frame_mesh(cls.design), mesh_id="mesh-0001")
 
     def test_each_mesh_tool_on_the_demo_mesh(self):
         design, mesh, tool = self.design, self.mesh, self.TOOL
         lc = {"load_case_id": "R1-step100", "test_id": "R1", "domain": "strength", "title": "R1",
               "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
         with self.subTest(tool=tool.name, design=self.kind or "ladder demo"):
-            out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh})
+            out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh} if mesh else {})
             self.assertEqual(out.get("status"), "ok", out.get("error"))
-            if self.kind is None:
-                self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
+            if mesh is None:  # its own mesh: which mesh record its fields name waits for the contract
+                self.assertEqual(contract.errors("analysis", dict(out, analysis_id="ana-0001",
+                                                                  prediction_ids=["pred-0001"])), [])
+                return
+            self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
             rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
             checker = cr.RunChecker(ROOT)
             checker.where_of = ["mesh.created", "analysis.finished"]
