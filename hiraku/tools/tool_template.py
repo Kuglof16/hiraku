@@ -25,7 +25,8 @@ Record = dict[str, Any]
 TEMPLATE_CODE = '''\
 import math
 
-from hiraku.solvers.shelf.base import BuiltinTool, LoadCaseError, Param, check_record, param_text, param_value, result
+from hiraku.solvers.shelf.base import (BuiltinTool, LoadCaseError, Param, Predicts, check_record, param_text, param_value,
+                                       result)
 
 
 def midspan_stress(F, L, b, h, t):
@@ -45,6 +46,8 @@ class MidspanBending(BuiltinTool):
     base = "K0"
     tests = ["R1"]
     formulas = ["frame_static.rail_bending"]
+    # which result each formula output predicts (list_formulas(tool=...) shows these pairs to the roles)
+    predicts = (Predicts("max_stress", "frame_static.rail_bending", "sigma"),)
     # every load case parameter analyse() reads (others cannot be read); unit None is a string
     load_case_params = (
         Param("force", "N", "load at mid-span", default=1000.0),
