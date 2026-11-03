@@ -11,6 +11,7 @@ n17b.html loads with <script src> (the screen is opened from file://).
 
     py promo/n17b_data.py --run <runs/<run_id> folder>
     py promo/n17b_data.py --run <folder> --ref main --out promo/screens/n17b.data.js
+    py promo/n17b_data.py --keep-depth    # count git again, keep the depth of the data file
 
 The amount, from git (``amount``):
 
@@ -23,6 +24,22 @@ The amount, from git (``amount``):
 - days: calendar days (JST) from the first commit to the ref's newest commit,
   both counted (2026-11-02 to 2026-11-03 is day 2).
 - tests: lines that define a test (``def test_``) in the tracked Python files.
+
+The lanes, from git (``graph``, drawn faint behind the figures):
+
+- one lane per Claude Code session that built HIRAKU (the lead and the
+  departments, LANES below). Each commit is put in the lane of the branch it
+  was written on, read from the merge records: a merge "Merge claude/dept-qa-...",
+  "Merge branch 'claude/dept-qa-...' into ..." or "Merge the QA department"
+  brings in the commits of that branch (those reachable from its second parent
+  and not from its first). Merges are taken oldest first, and a commit stays in
+  the lane of the first merge that brought it in. Merges of main into a branch
+  bring in nothing. Commits on main itself, and anything no merge names, are
+  the lead's. A merge commit is in the lane of the branch it was made on (the
+  one after "into"; main, and so the lead, when there is no "into").
+- per lane: the author times of its commits that are not merges, and the
+  commit times of the merges on the ref's first-parent line that bring in its
+  branch (into_main). t0 / t1: the first and the last time of all commits.
 
 The depth, from the run's events.jsonl (``depth``). A record that is put out
 again with the same ID (docs/contract.md: the last event of an ID is the
@@ -55,6 +72,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -75,6 +93,20 @@ GENERATED = re.compile(r"^\s*(?://|#|/\*|<!--|\*)?\s*generated\b", re.I)
 TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test_", re.M)
 ASSEMBLY = "assembly"
 
+# Lanes, top to bottom: key, name, branch name prefixes (after "claude/"), and
+# the words merges use for the branch.
+LANES = [
+    ("lead", "統括部", ("lead-",), ()),
+    ("design", "設計部", ("dept-design",), ("the design department",)),
+    ("analysis", "解析部", ("dept-analysis",), ("the analysis department",)),
+    ("k2", "解析部 K2 班", ("dept-k2", "k2-"), ("the k2 team",)),
+    ("screen", "画面部", ("dept-screen", "screen-"), ("the screen department",)),
+    ("qa", "品質保証部", ("dept-qa",), ("the qa department",)),
+    ("intake", "受付部", ("dept-intake",), ("the intake department", "the intake branch")),
+    ("promo", "広報部", ("dept-promo",), ("the promo department",)),
+]
+MAIN_LANE = "lead"  # commits made on main directly
+
 
 def git(repo: Path, *args: str, data: bytes | None = None) -> bytes:
     return subprocess.run(["git", "-C", str(repo), *args], input=data, capture_output=True, check=True).stdout
@@ -83,12 +115,13 @@ def git(repo: Path, *args: str, data: bytes | None = None) -> bytes:
 # --- the amount, from git ---------------------------------------------------------
 
 def read_log(repo: Path, ref: str) -> list[dict]:
-    """Commits reachable from ref: [{sha, parents, at (author time), ct (commit time)}]."""
-    out = git(repo, "log", ref, "--format=%H%x1f%P%x1f%at%x1f%ct")
+    """Commits reachable from ref, parents before children:
+    [{sha, parents, at (author time), ct (commit time), subject}]."""
+    out = git(repo, "log", ref, "--topo-order", "--reverse", "--format=%H%x1f%P%x1f%at%x1f%ct%x1f%s")
     commits = []
     for line in out.decode("utf-8").splitlines():
-        sha, parents, at, ct = line.split("\x1f", 3)
-        commits.append({"sha": sha, "parents": parents.split(), "at": int(at), "ct": int(ct)})
+        sha, parents, at, ct, subject = line.split("\x1f", 4)
+        commits.append({"sha": sha, "parents": parents.split(), "at": int(at), "ct": int(ct), "subject": subject})
     return commits
 
 
@@ -182,6 +215,138 @@ def amount(repo: Path, ref: str) -> dict:
     }
 
 
+# --- the lanes, from git ------------------------------------------------------------
+
+def lane_of(ref: str | None) -> str | None:
+    """The lane of a branch named in a merge ("main" for main, None when unknown)."""
+    if not ref:
+        return None
+    r = ref.strip().strip("'\"").lower()
+    for pre in ("remotes/", "origin/"):
+        if r.startswith(pre):
+            r = r[len(pre):]
+    if r in ("main", "master"):
+        return "main"
+    if r.startswith("claude/"):
+        r = r[len("claude/"):]
+        for key, _name, prefixes, _words in LANES:
+            if any(r.startswith(p) for p in prefixes):
+                return key
+        return None
+    # words ("the analysis department and K2 team" -> the first one named)
+    hits = []
+    for key, _name, _prefixes, words in LANES:
+        for w in words:
+            i = r.find(w)
+            if i >= 0:
+                hits.append((i, key))
+    return min(hits)[1] if hits else None
+
+
+_BRANCH = re.compile(r"^Merge (?:remote-tracking )?branch '([^']+)'(?: into (\S+))?")
+_PLAIN = re.compile(r"^Merge (.+?)(?: into (.+?))?(?::|$)")
+
+
+def parse_merge(subject: str) -> tuple[str | None, str | None]:
+    """(lane brought in, lane merged into) of a merge's subject.
+
+    "main" stands for main; the lane merged into is "main" when the subject
+    names no branch after "into". Either is None when the words are not known.
+    """
+    m = _BRANCH.match(subject)
+    if m:
+        src, dst = m.group(1), m.group(2)
+    else:
+        m = _PLAIN.match(subject)
+        if not m:
+            return None, None
+        src, dst = m.group(1), m.group(2)
+        src = re.sub(r"\s+up to \w+$", "", src)
+    return lane_of(src), (lane_of(dst) if dst else "main")
+
+
+def first_parent_line(commits: list[dict], head: str) -> list[str]:
+    """The first-parent line from head, newest first."""
+    by = {c["sha"]: c for c in commits}
+    line, sha = [], head
+    while sha in by:
+        line.append(sha)
+        ps = by[sha]["parents"]
+        sha = ps[0] if ps else None
+    return line
+
+
+def ancestors(by: dict, start: str, stop: set[str]) -> list[str]:
+    """Commits reachable from start that are not in stop (start included)."""
+    seen, todo = set(), deque([start])
+    while todo:
+        s = todo.popleft()
+        if s in seen or s in stop or s not in by:
+            continue
+        seen.add(s)
+        todo.extend(by[s]["parents"])
+    return list(seen)
+
+
+def assign_lanes(commits: list[dict], head: str) -> tuple[dict[str, str], list[dict]]:
+    """The lane of every commit, and the merges into the ref that bring in a branch.
+
+    commits must be parents before children (read_log). Returns ({sha: lane},
+    [{lane, t, sha}] oldest first).
+    """
+    by = {c["sha"]: c for c in commits}
+    on_main = set(first_parent_line(commits, head))
+    lane: dict[str, str] = {}
+    into_main = []
+    for c in commits:  # parents before children: older merges first
+        if len(c["parents"]) < 2:
+            continue
+        src, dst = parse_merge(c["subject"])
+        if src and src != "main":
+            stop = set(ancestors(by, c["parents"][0], set()))
+            for s in ancestors(by, c["parents"][1], stop):
+                if s not in lane and len(by[s]["parents"]) < 2:
+                    lane[s] = src
+            if c["sha"] in on_main:
+                into_main.append({"lane": src, "t": c["ct"], "sha": c["sha"]})
+        if dst == "main" or c["sha"] in on_main:
+            lane[c["sha"]] = MAIN_LANE
+        elif dst:
+            lane[c["sha"]] = dst
+    for c in commits:  # what no merge names
+        if c["sha"] in lane:
+            continue
+        if c["sha"] in on_main:
+            lane[c["sha"]] = MAIN_LANE
+        else:
+            p = c["parents"][0] if c["parents"] else None
+            lane[c["sha"]] = lane.get(p, MAIN_LANE)
+    return lane, into_main
+
+
+def graph(repo: Path, ref: str) -> dict:
+    commits = read_log(repo, ref)
+    if not commits:
+        raise SystemExit(f"no commits in {ref}")
+    head = git(repo, "rev-parse", ref).decode().strip()
+    lane, into_main = assign_lanes(commits, head)
+    lanes = []
+    for key, name, _p, _w in LANES:
+        mine = [c for c in commits if lane[c["sha"]] == key]
+        lanes.append({
+            "key": key,
+            "name": name,
+            "commits": sorted(c["at"] for c in mine if len(c["parents"]) < 2),
+            "into_main": sorted(m["t"] for m in into_main if m["lane"] == key),
+        })
+    return {
+        "t0": min(c["at"] for c in commits),
+        "t1": max(max(c["at"], c["ct"]) for c in commits),
+        "merges_into_main": len(into_main),
+        "lanes": lanes,
+    }
+
+
 # --- the depth, from one run's record -----------------------------------------------
 
 def read_events(run: Path) -> list[dict]:
@@ -244,14 +409,26 @@ def depth(events: list[dict]) -> dict:
 
 # --- all of it ---------------------------------------------------------------------
 
-def collect(run: Path, repo: Path = ROOT, ref: str = "main", now: datetime | None = None) -> dict:
+def collect(run: Path | None, repo: Path = ROOT, ref: str = "main", now: datetime | None = None,
+            kept_depth: dict | None = None) -> dict:
+    """All of N17b's data. The depth is counted from the run's folder, or, with
+    run None, kept_depth (the depth of an earlier data file) is used as it is."""
+    if run is None and kept_depth is None:
+        raise SystemExit("give the run's folder, or keep the depth of the data file")
     now = now or datetime.now(JST)
     return {
         "ref": ref,
         "counted_at": now.astimezone(JST).isoformat(timespec="minutes"),
         "amount": amount(repo, ref),
-        "depth": depth(read_events(run)),
+        "graph": graph(repo, ref),
+        "depth": depth(read_events(run)) if run is not None else kept_depth,
     }
+
+
+def read_data(path: Path) -> dict:
+    """The data of a data file written by render_js."""
+    text = path.read_text(encoding="utf-8")
+    return json.loads(text[text.index("{"):text.rindex("}") + 1])
 
 
 def render_js(data: dict) -> str:
@@ -262,12 +439,16 @@ def render_js(data: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--run", type=Path, required=True, help="the run's folder (holds events.jsonl)")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--run", type=Path, help="the run's folder (holds events.jsonl)")
+    src.add_argument("--keep-depth", action="store_true",
+                     help="keep the depth of the data file at --out (counted from its run before)")
     ap.add_argument("--repo", type=Path, default=ROOT)
     ap.add_argument("--ref", default="main")
     ap.add_argument("--out", type=Path, default=OUT)
     a = ap.parse_args(argv)
-    data = collect(a.run, a.repo, a.ref)
+    kept = read_data(a.out)["depth"] if a.keep_depth else None
+    data = collect(a.run, a.repo, a.ref, kept_depth=kept)
     a.out.write_text(render_js(data), encoding="utf-8", newline="\n")
     am, dp = data["amount"], data["depth"]
     print(f"{data['ref']} {am['head']} counted at {data['counted_at']}")
@@ -275,6 +456,11 @@ def main(argv: list[str] | None = None) -> int:
           + ", ".join(f"{k} {v:,}" for k, v in am["lines"].items())
           + f"), {am['commits']} commits ({am['merges']} merges), day {am['days']}, {am['tests']:,} tests")
     print(f"  generated files left out: {', '.join(am['generated_skipped']) or 'none'}")
+    gr = data["graph"]
+    print(f"  lanes: {gr['merges_into_main']} merges into {data['ref']}; "
+          + ", ".join(f"{ln['key']} {len(ln['commits'])}+{len(ln['into_main'])}" for ln in gr["lanes"]))
+    if a.keep_depth:
+        print("  depth kept from the data file")
     print(f"  depth ({dp['run_id']}): {dp['domains']} domains"
           + (" + assembly" if dp["assembly"] else "")
           + f", {dp['passed']}/{dp['areas']} green in version {dp['versions']}, "

@@ -54,6 +54,9 @@ class FakeRepo:
         self.git("add", name)
         self.git("commit", "-q", "-m", msg, when=when)
 
+    def merge(self, branch, msg, when):
+        self.git("merge", "-q", "--no-ff", "-m", msg, branch, when=when)
+
 
 def make_history(root: Path) -> FakeRepo:
     r = FakeRepo(root)
@@ -71,6 +74,48 @@ def make_history(root: Path) -> FakeRepo:
     r.git("merge", "-q", "--no-ff", "-m", "Merge claude/dept-qa-ab12: checks", "claude/dept-qa-ab12",
           when="2026-11-03T10:00:00+09:00")
     return r
+
+
+def make_lane_history(root: Path) -> FakeRepo:
+    """Department branches, a branch of a branch, main merged into a branch, and
+    the three ways merges into main are written."""
+    r = FakeRepo(root)
+    r.commit("hiraku/a.py", "x = 0\n", "Start the repository", "2026-11-02T18:00:00+09:00")
+
+    r.git("checkout", "-q", "-b", "claude/dept-qa-ab12")
+    r.commit("qa/test_q.py", "def test_q():\n    pass\n", "QA: first check", "2026-11-02T19:00:00+09:00")
+    r.commit("qa/run.py", "x = 1\n", "QA: runner", "2026-11-02T19:30:00+09:00")
+
+    r.git("checkout", "-q", "main")
+    r.git("checkout", "-q", "-b", "claude/dept-design-cd34")
+    r.commit("design/d.py", "y = 2\n", "Design: kit", "2026-11-02T19:10:00+09:00")
+
+    r.git("checkout", "-q", "main")
+    r.commit("hiraku/contract.py", "Z = 3\n", "Contract: units", "2026-11-02T19:20:00+09:00")
+
+    r.git("checkout", "-q", "claude/dept-design-cd34")
+    r.merge("main", "Merge branch 'main' into claude/dept-design-cd34", "2026-11-02T19:25:00+09:00")
+
+    r.git("checkout", "-q", "main")
+    r.merge("claude/dept-qa-ab12", "Merge claude/dept-qa-ab12: first checks", "2026-11-02T20:00:00+09:00")
+
+    # the screen department works on a side branch of its own and merges it in
+    r.git("checkout", "-q", "-b", "claude/dept-screen-ef56")
+    r.commit("web/screen.js", "const s = 1;\n", "Screen: view", "2026-11-02T21:00:00+09:00")
+    r.git("checkout", "-q", "-b", "claude/screen-grid")
+    r.commit("web/grid.css", "a { b: c; }\n", "Screen: grid", "2026-11-02T21:30:00+09:00")
+    r.git("checkout", "-q", "claude/dept-screen-ef56")
+    r.merge("claude/screen-grid", "Merge branch 'claude/screen-grid' into claude/dept-screen-ef56",
+            "2026-11-02T21:40:00+09:00")
+
+    r.git("checkout", "-q", "main")
+    r.merge("claude/dept-screen-ef56", "Merge the screen department: view and grid", "2026-11-03T09:00:00+09:00")
+    r.merge("claude/dept-design-cd34", "Merge branch 'claude/dept-design-cd34'", "2026-11-03T10:00:00+09:00")
+    return r
+
+
+def ts(s: str) -> int:
+    return int(datetime.fromisoformat(s).timestamp())
 
 
 def ev(kind, data, run="20261103-000000-test"):
@@ -142,6 +187,86 @@ class Amount(unittest.TestCase):
         self.assertEqual(nd.amount(self.repo.path, "main~1")["days"], 1)  # up to 23:50 on 11/2
 
 
+class ParseMerge(unittest.TestCase):
+    def test_forms(self):
+        cases = {
+            "Merge claude/dept-qa-ba0596: margin checks": ("qa", "main"),
+            "Merge claude/dept-qa-ba0596 up to 28aaaa2": ("qa", "main"),
+            "Merge claude/lead-refactor: field.frames": ("lead", "main"),
+            "Merge branch 'main' into claude/dept-k2-0c4e6b": ("main", "k2"),
+            "Merge remote-tracking branch 'origin/main' into claude/dept-screen-812e37": ("main", "screen"),
+            "Merge branch 'claude/dept-analysis-mesh' into claude/dept-analysis-cf6cf8": ("analysis", "analysis"),
+            "Merge branch 'claude/screen-n17' into claude/dept-screen-812e37": ("screen", "screen"),
+            "Merge branch 'claude/dept-analysis-cf6cf8' into claude/dept-design-90c266": ("analysis", "design"),
+            "Merge the design department: run store": ("design", "main"),
+            "Merge the K2 team: assumptions field": ("k2", "main"),
+            "Merge the QA department: margin checks": ("qa", "main"),
+            "Merge the analysis department and K2 team: builders": ("analysis", "main"),
+            "Merge main into claude/dept-design-90c266": ("main", "design"),
+            "Merge main into the intake branch": ("main", "intake"),
+            "Merge main: intake events in the scripted run": ("main", "main"),
+            "Merge claude/dept-promo-f2ae3c: narration": ("promo", "main"),
+            "Merge claude/dept-intake-932455: A1 request": ("intake", "main"),
+        }
+        for subject, want in cases.items():
+            self.assertEqual(nd.parse_merge(subject), want, subject)
+
+    def test_unknown_branch(self):
+        self.assertEqual(nd.parse_merge("Merge claude/someone-else: x"), (None, "main"))
+        self.assertEqual(nd.parse_merge("Add a file"), (None, None))
+
+    def test_lane_table(self):
+        names = [name for _k, name, _p, _w in nd.LANES]
+        self.assertEqual(names, ["統括部", "設計部", "解析部", "解析部 K2 班", "画面部", "品質保証部", "受付部", "広報部"])
+        self.assertEqual(nd.MAIN_LANE, "lead")
+
+
+class Lanes(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.repo = make_lane_history(Path(cls.tmp.name))
+        cls.g = nd.graph(cls.repo.path, "main")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def lane(self, key):
+        return next(ln for ln in self.g["lanes"] if ln["key"] == key)
+
+    def test_lanes_in_order(self):
+        self.assertEqual([ln["key"] for ln in self.g["lanes"]], [k for k, _n, _p, _w in nd.LANES])
+
+    def test_commits_by_lane(self):
+        self.assertEqual(self.lane("lead")["commits"], [ts("2026-11-02T18:00:00+09:00"), ts("2026-11-02T19:20:00+09:00")])
+        self.assertEqual(self.lane("qa")["commits"], [ts("2026-11-02T19:00:00+09:00"), ts("2026-11-02T19:30:00+09:00")])
+        self.assertEqual(self.lane("design")["commits"], [ts("2026-11-02T19:10:00+09:00")])
+        # the side branch claude/screen-grid belongs to the screen department
+        self.assertEqual(self.lane("screen")["commits"], [ts("2026-11-02T21:00:00+09:00"), ts("2026-11-02T21:30:00+09:00")])
+        for key in ("analysis", "k2", "intake", "promo"):
+            self.assertEqual(self.lane(key)["commits"], [], key)
+        # merges are not dots: 7 commits that are not merges
+        self.assertEqual(sum(len(ln["commits"]) for ln in self.g["lanes"]), 7)
+
+    def test_merges_into_main(self):
+        self.assertEqual(self.lane("qa")["into_main"], [ts("2026-11-02T20:00:00+09:00")])
+        self.assertEqual(self.lane("screen")["into_main"], [ts("2026-11-03T09:00:00+09:00")])
+        self.assertEqual(self.lane("design")["into_main"], [ts("2026-11-03T10:00:00+09:00")])
+        self.assertEqual(self.lane("lead")["into_main"], [])   # main into a branch brings in nothing
+        self.assertEqual(self.g["merges_into_main"], 3)
+
+    def test_time_axis(self):
+        self.assertEqual(self.g["t0"], ts("2026-11-02T18:00:00+09:00"))
+        self.assertEqual(self.g["t1"], ts("2026-11-03T10:00:00+09:00"))
+
+    def test_a_ref_before_the_merges(self):
+        g = nd.graph(self.repo.path, "main~3")   # up to "Contract: units"
+        self.assertEqual(g["merges_into_main"], 0)
+        self.assertEqual(sum(len(ln["commits"]) for ln in g["lanes"]), 2)
+        self.assertEqual(len(next(ln for ln in g["lanes"] if ln["key"] == "lead")["commits"]), 2)
+
+
 class Depth(unittest.TestCase):
     def setUp(self):
         self.d = nd.depth(make_events())
@@ -189,12 +314,28 @@ class Depth(unittest.TestCase):
             repo = make_history(run / "repo")
             data = nd.collect(run, repo.path, "main", now=datetime.fromisoformat("2026-11-04T08:15:00+09:00"))
         self.assertEqual(data["depth"], self.d)
+        self.assertEqual(data["graph"]["merges_into_main"], 1)    # the QA branch
         self.assertEqual(data["counted_at"], "2026-11-04T08:15+09:00")
         text = nd.render_js(data)
         self.assertTrue(text.startswith("// Generated file: do not edit."))
         self.assertNotIn("test@example.invalid", text)
         self.assertNotIn(str(run), text)                  # no paths in the data
         self.assertEqual(json.loads(text[text.index("{"):text.rindex("}") + 1]), data)
+
+    def test_keep_depth(self):
+        # git counted again, the depth taken as it is from an earlier data file
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "repo").mkdir()
+            repo = make_history(Path(t) / "repo")
+            out = Path(t) / "n17b.data.js"
+            out.write_text(nd.render_js({"ref": "main", "amount": {"head": "abc1234"}, "depth": self.d}),
+                           encoding="utf-8")
+            kept = nd.read_data(out)["depth"]
+            data = nd.collect(None, repo.path, "main", kept_depth=kept)
+            self.assertEqual(data["depth"], self.d)
+            self.assertEqual(data["amount"]["commits"], 5)
+            with self.assertRaises(SystemExit):
+                nd.collect(None, repo.path, "main")
 
 
 class DataFileInTheRepo(unittest.TestCase):
@@ -227,6 +368,18 @@ class DataFileInTheRepo(unittest.TestCase):
         except subprocess.CalledProcessError:
             self.skipTest(f"{head} is not in this clone")
         self.assertEqual(nd.amount(nd.ROOT, head), self.d["amount"])
+        self.assertEqual(nd.graph(nd.ROOT, head), self.d["graph"])
+
+    def test_graph_shape(self):
+        g, a = self.d["graph"], self.d["amount"]
+        self.assertEqual([(ln["key"], ln["name"]) for ln in g["lanes"]], [(k, n) for k, n, _p, _w in nd.LANES])
+        # every commit that is not a merge is a dot in one lane
+        self.assertEqual(sum(len(ln["commits"]) for ln in g["lanes"]), a["commits"] - a["merges"])
+        self.assertEqual(sum(len(ln["into_main"]) for ln in g["lanes"]), g["merges_into_main"])
+        self.assertLessEqual(g["merges_into_main"], a["merges"])
+        for ln in g["lanes"]:
+            for t in ln["commits"] + ln["into_main"]:
+                self.assertTrue(g["t0"] <= t <= g["t1"], ln["key"])
 
     @unittest.skipUnless(os.environ.get("N17B_RUN"), "set N17B_RUN to the run's folder to count the depth again")
     def test_depth_is_the_count_of_the_run(self):
@@ -288,6 +441,35 @@ class Rules(unittest.TestCase):
         # still from 5.0 s to the end
         self.assertLessEqual(max(last, t["stamp_s"] + c["in_dur_s"]), 5.0)
 
+    def test_the_graph_behind(self):
+        ln, t, f = self.n["lanes"], self.n["times"], self.n["flow"]
+        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
+        self.assertLessEqual(ln["y"] + ln["h"], band)
+        self.assertGreaterEqual(ln["y"], safe["y"])
+        self.assertGreaterEqual(ln["x"], safe["x"])
+        self.assertLessEqual(ln["x"] + ln["w"], stage["w"] - safe["x"])
+        self.assertLessEqual(ln["top"] + len(nd.LANES) * ln["pitch_px"], ln["h"])   # eight lanes in the box
+        # faint, and fainter while the cards are read
+        self.assertLessEqual(ln["alpha"], 0.35)
+        self.assertLess(ln["dim_alpha"], ln["alpha"])
+        self.assertGreater(ln["dim_alpha"], 0)
+        self.assertGreater(ln["halo_px"], 0)
+        # grows with sentence 1 and is still before the first card
+        self.assertGreaterEqual(t["lanes_s"], SENTENCE_1[0])
+        self.assertLess(t["lanes_s"], t["lanes_to_s"])
+        self.assertLessEqual(t["lanes_to_s"], SENTENCE_1[1])
+        self.assertLessEqual(t["lanes_to_s"] + f["merge_dur_s"], t["cards_s"])
+        self.assertLessEqual(t["lanes_to_s"] + f["dot_dur_s"], t["cards_s"])
+
+    def test_the_graph_is_a_backdrop(self):
+        m = re.search(r'<div class="lanes"([^>]*)>', self.html)
+        self.assertIsNotNone(m)
+        self.assertIn('data-kind="note"', m.group(1))   # not a counted label, graph or number
+        self.assertNotIn("data-box", m.group(1))         # may lie under the boxes
+        self.assertNotIn('data-kind="graph"', self.html)
+        for _k, name, _p, _w in nd.LANES:                # no lane names on the screen
+            self.assertNotIn(name, self.html)
+
     def test_page_names_and_words(self):
         self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
         for name in re.findall(r'data-box="([^"$]+)"', self.html):
@@ -338,7 +520,10 @@ class OnScreen(unittest.TestCase):
       out.text = document.querySelector('.depth').textContent;
       out.stamp = document.querySelector('.stamp').textContent;
       out.op = { amount: op('.amount .num'), card0: op('.card'), card3: op('.card:last-child'),
-                 head: op('.head'), stamp: op('.stamp') };
+                 head: op('.head'), stamp: op('.stamp'), lanes: op('.lanes') };
+      out.lanes = { dots: document.querySelectorAll('.lanes .dot').length,
+                    merges: document.querySelectorAll('.lanes .merge').length,
+                    open: window.n17b.lanes.open(window.promo.t) };
       return out;
     }"""
 
@@ -347,10 +532,11 @@ class OnScreen(unittest.TestCase):
         from promo import export
 
         cls.d = read_data_file()
+        cls.n = layout_build.load()["n17b"]
         cap = export.Capture(lc.SCREENS / "n17b.html", scale=0.5)
         try:
             cls.at = {}
-            for t in (0.1, 2.0, 3.0, 5.8):
+            for t in (0.1, 1.0, 2.0, 3.0, 5.8):
                 cap.page.evaluate("t => window.__export.seek(t)", t)
                 cls.at[t] = cap.page.evaluate(cls.SCRIPT)
         finally:
@@ -382,6 +568,18 @@ class OnScreen(unittest.TestCase):
         self.assertEqual(float(three["op"]["card3"]), 0)                   # the cards come one after another
         self.assertEqual(float(three["op"]["stamp"]), 0)
         self.assertEqual(float(self.at[5.8]["op"]["stamp"]), 1)
+
+    def test_the_graph_behind(self):
+        g, ln = self.d["graph"], self.n["lanes"]
+        end = self.at[5.8]["lanes"]
+        self.assertEqual(end["dots"], sum(len(x["commits"]) for x in g["lanes"]))
+        self.assertEqual(end["merges"], sum(len(x["into_main"]) for x in g["lanes"][1:]))   # the lead's own are on its lane
+        self.assertEqual(float(self.at[0.1]["op"]["lanes"]), 0)                    # nothing before the voice
+        self.assertGreater(self.at[1.0]["lanes"]["open"], 0)                        # growing with the count
+        self.assertLess(self.at[1.0]["lanes"]["open"], 1)
+        self.assertEqual(self.at[2.0]["lanes"]["open"], 1)                          # open by the end of sentence 1
+        self.assertAlmostEqual(float(self.at[2.0]["op"]["lanes"]), ln["alpha"], places=3)
+        self.assertAlmostEqual(float(self.at[5.8]["op"]["lanes"]), ln["dim_alpha"], places=3)
 
 
 if __name__ == "__main__":

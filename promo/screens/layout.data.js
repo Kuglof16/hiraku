@@ -1349,7 +1349,7 @@ window.PROMO_LAYOUT = {
       "h": 406,
       "title_px": 30,
       "text_px": 24,
-      "_note": "the analysis result in 3D or a value; the settings carry the unit mistake (62 mm for 62 cm), so the value looks plausible"
+      "_note": "the analysis result in 3D or a value. In the record (scripted run 20261103-223035) the unit mistake (62 mm meant as 62 cm) went into the hand calculation (the prediction, 40.6 deg); the analysis used the design's load height (31.7 deg) and is right. The screen shows the 62 mm in the settings and never calls the analysis wrong"
     },
     "times": {
       "lead_s": 0.3,
@@ -1357,7 +1357,7 @@ window.PROMO_LAYOUT = {
       "memo_s": 4.9,
       "stop_s": 9.6,
       "run_s": 11.6,
-      "_note": "the maker's recording: sentence 1 0.30-4.56 s (a plausible wrong result shows from plausible_s), sentence 2 4.91-9.20 s (the memo is written from memo_s), sentence 3 9.55-12.81 s (the call without a prediction is stopped at stop_s; after the prediction it runs from run_s)"
+      "_note": "the maker's recording: sentence 1 0.30-4.56 s (the settings card with the mistaken 62 mm shows from plausible_s), sentence 2 4.91-9.20 s (the memo is written from memo_s), sentence 3 9.55-12.81 s (the call without a prediction is stopped at stop_s; after the prediction it runs from run_s)"
     },
     "overlay": {
       "color": "#c8402a",
@@ -1381,7 +1381,7 @@ window.PROMO_LAYOUT = {
       "title_px": 30,
       "text_px": 28,
       "value_px": 56,
-      "_note": "the comparison: the prediction and the analysis side by side, their difference; red while they disagree, green once fixed"
+      "_note": "the comparison: the prediction (hand calculation) and the analysis side by side, their difference; red while they disagree (40.6 / 31.7 deg, -22.0 %), green once fixed (33.6 / 31.7 deg, -5.6 %). Numbers from the record"
     },
     "cause": {
       "x": 96,
@@ -1390,7 +1390,7 @@ window.PROMO_LAYOUT = {
       "h": 206,
       "title_px": 30,
       "text_px": 28,
-      "_note": "the recorded cause in one line (the centre of mass height, cm and mm), then the comparison again"
+      "_note": "the recorded cause in one line: the prediction took the load height 62 mm where 62 cm was meant; fixed, the comparison again"
     },
     "times": {
       "lead_s": 0.3,
@@ -1478,7 +1478,8 @@ window.PROMO_LAYOUT = {
       "y": 96,
       "w": 1004,
       "h": 560,
-      "_note": "the part the new rule catches, in 3D"
+      "fill": 0.8,
+      "_note": "the part the new rule catches, in 3D; fill: the vehicle fills this share of the view (the larger of width and height), centred"
     },
     "ask": {
       "x": 820,
@@ -1581,6 +1582,36 @@ window.PROMO_LAYOUT = {
       "size_px": 19,
       "_note": "when the figures were counted, the git ref and the run, right-aligned, small; bottom 890, above the subtitle band"
     },
+    "lanes": {
+      "x": 96,
+      "y": 118,
+      "w": 1728,
+      "h": 690,
+      "top": 1,
+      "pitch_px": 86,
+      "dot_r_px": 4.5,
+      "line_px": 2,
+      "main_line_px": 3,
+      "curve_dx_px": 48,
+      "halo_px": 14,
+      "alpha": 0.3,
+      "dim_alpha": 0.2,
+      "dim_dur_s": 0.45,
+      "_note": "the commit graph from git, faint behind the figures: one lane per Claude Code session (the lead on top, then the departments; graph.lanes of n17b.data.js), lane i's centre at top + (i + 0.5) x pitch_px inside this box (8 lanes, 1-689). A commit is a dot at its author time on a linear axis from the first commit (x 0) to the last (x w); a merge into main is a curve from department lane i, curve_dx_px x sqrt(i) before the merge, up to the lead's lane. No lane names or dates. The text in front has a halo of the night colour (halo_px) so no line runs through a letter. The whole graph is drawn at alpha and dims to dim_alpha over dim_dur_s from times.dim_s, with the amount, so the cards stay the place to read"
+    },
+    "flow": {
+      "ease": [
+        0.3,
+        0,
+        0.35,
+        1
+      ],
+      "step_s": 0.05,
+      "dot_dur_s": 0.3,
+      "merge_dur_s": 0.35,
+      "in_dur_s": 0.4,
+      "_note": "the graph grows from the left with the amount's count: a clip over the graph opens from x 0 at times.lanes_s to x w at times.lanes_to_s (ease), sampled every step_s into keyframes; the graph comes in over in_dur_s from times.lanes_s; a dot fades in over dot_dur_s and a merge curve draws over merge_dur_s when the clip reaches them. The page holds no lane motion after times.lanes_to_s + merge_dur_s"
+    },
     "count": {
       "amount_dur_s": 1.3,
       "card_dur_s": 0.9,
@@ -1596,13 +1627,15 @@ window.PROMO_LAYOUT = {
     },
     "times": {
       "amount_s": 0.3,
+      "lanes_s": 0.3,
+      "lanes_to_s": 1.9,
       "amount_count_s": 0.35,
       "amount_sub_s": 1.0,
       "dim_s": 2.2,
       "cards_s": 2.35,
       "card_step_s": 0.4,
       "stamp_s": 4.5,
-      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
+      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. lanes: the faint commit graph behind comes in at lanes_s and grows from the left to lanes_to_s, about as the lines count up, and is still by lanes_to_s + flow.merge_dur_s = 2.25 s; from dim_s it dims with the amount. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
     }
   },
   "n18": {
@@ -1814,8 +1847,8 @@ window.PROMO_LAYOUT = {
       "n09": {
         "message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)",
         "limits": {
-          "label": 7,
-          "why": "the seven domains light up"
+          "label": 8,
+          "why": "the seven domains and assembly light up (the same eight as the N04 / N15 grid)"
         }
       },
       "n10": {
@@ -1837,7 +1870,11 @@ window.PROMO_LAYOUT = {
         }
       },
       "n13": {
-        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う"
+        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う",
+        "limits": {
+          "label": 4,
+          "why": "the three known-answer checks and the new tool's name; the shelf's other cards go without names"
+        }
       },
       "n14": {
         "message": "渡したノウハウが、設計のチェックの規則になる"
@@ -1862,7 +1899,7 @@ window.PROMO_LAYOUT = {
           "label": 7,
           "number": 5,
           "moving": 4,
-          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once"
+          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once. The commit graph behind (data-kind note: not a counted label, graph or number; its dots and curves are parts of it) is one moving thing; it grows during sentence 1, when only the amount moves, and its dim overlaps only the heading and the first card, so at most four move at once (2.4 s: the amount and the graph dimming, the heading, the first card)"
         }
       },
       "n18": {
@@ -1891,6 +1928,44 @@ window.PROMO_LAYOUT = {
         0.5,
         1.5,
         3.5
+      ],
+      "n09": [
+        0.3,
+        2.2,
+        3.6,
+        4.65,
+        5.5
+      ],
+      "n11": [
+        0.3,
+        1.5,
+        4.9,
+        9.6,
+        11.6,
+        14.4
+      ],
+      "n12": [
+        0.3,
+        1.0,
+        5.2,
+        7.6,
+        9.0
+      ],
+      "n13": [
+        0.3,
+        4.0,
+        4.6,
+        7.6,
+        10.4,
+        11.8
+      ],
+      "n14": [
+        0.3,
+        2.2,
+        3.6,
+        5.0,
+        6.8,
+        9.6
       ],
       "n06": [
         1.0,
