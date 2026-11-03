@@ -37,7 +37,7 @@ from typing import Any, Callable
 
 from hiraku.catalog.build import CatalogError, check_design_loading
 from hiraku.catalog.builders.common import BuildError, entry, loading, number, q, text, tolerance
-from hiraku.catalog.loading import CARGO, LOADING_JA
+from hiraku.contract.loading import CARGO, LOADING_JA
 
 Record = dict[str, Any]
 

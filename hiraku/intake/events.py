@@ -30,15 +30,18 @@ def known(kind: str) -> bool:
     return kind != RULE_CHECK_RECORDED or "rule_check" in contract.kinds()
 
 
+def picked_event(record: Record) -> Record:
+    return {"kind": DOMAINS_PICKED, "agent": "lead", "text": domains_line(record), "data": record}
+
+
 def store_records(store: Any, kind: str) -> bool:
-    """Does this RunStore write records of this kind (a file and its event) through add_record?"""
+    """Does the run store write records of this kind (a file and its event) through add_record?
+
+    False for a store whose RECORD_EVENT table does not list the kind yet; the caller emits the event alone.
+    """
     from hiraku.store import run_store
 
     return kind in getattr(run_store, "RECORD_EVENT", {})
-
-
-def picked_event(record: Record) -> Record:
-    return {"kind": DOMAINS_PICKED, "agent": "lead", "text": domains_line(record), "data": record}
 
 
 def asked_event(asked: Record) -> Record:
@@ -63,14 +66,15 @@ def knowledge_event(record: Record) -> Record:
 
 
 def intake_events(domains: Record | None, prepared: Prepared | None, docs: list[Record] | None = None) -> list[Record]:
-    """Everything the intake steps say before the analysis starts, in the order they happen."""
+    """Everything the intake steps say before the analysis starts, in the contract's order:
+    domains.picked, knowledge.imported (one per document), hearing.asked, hearing.answered."""
     out: list[Record] = []
     if domains is not None:
         out.append(picked_event(domains))
-    if prepared is not None:
-        out.extend(hearing_events(prepared))
     for rec in docs or []:
         out.append(knowledge_event(rec))
+    if prepared is not None:
+        out.extend(hearing_events(prepared))
     return out
 
 

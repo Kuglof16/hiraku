@@ -6,13 +6,10 @@ import copy
 import math
 from dataclasses import dataclass
 
-from hiraku.contract.protocols import DEFAULT_LOADING, LOADINGS
+from hiraku.contract import loading as contract_loading
 
 from .model import DesignError, Vehicle
 from .sim import Controls, Sim, quat_to_r
-
-OCCUPANTS = {"empty": 0, "driver": 1, "two": 2, "two_cargo": 2}
-CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
 
 # Air density at sea level, 15 degC, in the ICAO / ISO 2533 standard atmosphere
 # (1.225 kg/m^3; not checked against the ISO 2533 text).
@@ -20,30 +17,13 @@ RHO_AIR = 1.225
 
 
 def on_board(design: dict, loading: str | None) -> dict:
-    """A copy of the design with the occupants and cargo of `loading` (contract LOADINGS).
-
-    Occupants take their seats in the order of design.parts (the first one drives);
-    cargo parts ride only with two_cargo.
-    """
-    loading = loading or DEFAULT_LOADING
-    if loading not in LOADINGS:
-        raise DesignError(f"unknown loading {loading!r}; use one of {', '.join(LOADINGS)}")
-    out = copy.deepcopy(design)
-    seated = 0
-    parts = []
-    for p in out.get("parts", []):
-        kind = str(p.get("kind", "")).lower()
-        if kind == "occupant":
-            if seated >= OCCUPANTS[loading]:
-                continue
-            seated += 1
-        elif kind == "cargo" and not CARGO[loading]:
-            continue
-        parts.append(p)
-    if seated < OCCUPANTS[loading] and any(str(p.get("kind", "")).lower() == "occupant" for p in design.get("parts", [])):
-        raise DesignError(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {seated}")
-    out["parts"] = parts
-    return out
+    """A deep copy of the design with the occupants and cargo of `loading`, by the one rule of
+    hiraku.contract.loading (K2 may change the copy). A loading the design does not fit is a
+    DesignError."""
+    try:
+        return copy.deepcopy(contract_loading.on_board(design, loading))
+    except ValueError as e:
+        raise DesignError(str(e)) from None
 
 
 @dataclass

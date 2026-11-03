@@ -11,6 +11,16 @@ Sources used below:
            symbolically from E I w'''' = q in tests/verification/test_known_answers.py
 - [SI]     unit definitions as given by scipy.constants (CODATA / SI)
 - [vib]    single-degree-of-freedom vibration, f = sqrt(k/m) / (2 pi)
+- [Kirsch] the plane-stress field around a circular hole in an infinite plate under
+           uniaxial tension (Kirsch, 1898); re-derived symbolically from its Airy
+           stress function in tests/verification/test_known_answers.py
+- [Pilkey] the net-section Kt of a central hole in a finite-width plate, the fit
+           Kt_n = 3.000 - 3.140 x + 3.667 x^2 - 1.527 x^3 (x = d/W, 0 <= x <= 1), as
+           amesweb.info gives it from W. D. Pilkey, Formulas for Stress, Strain, and
+           Structural Matrices, 2nd ed., Wiley, 2005 (the book itself: 確かめていない)
+- [thin]   thin-walled sections on their mid-line (what a shell model of the walls
+           represents): Bredt's shear flow for a closed cell, derived in the
+           docstring, and the webs carrying the shear force
 """
 
 from __future__ import annotations
@@ -198,6 +208,105 @@ def free_fall_semi_implicit_euler(y0: float, g: float, dt: float, steps: int) ->
     return y0 - g * dt * dt * steps * (steps + 1) / 2
 
 
+# --- plates and shells ---------------------------------------------------------------------
+
+def kirsch_stresses(sigma: float, a: float, r: float, theta: float) -> dict[str, float]:
+    """Plane stresses (rr, tt, rt) at (r, theta) around a hole of radius a in an
+    infinite plate under uniaxial tension sigma along theta = 0 [Kirsch].
+
+    From the Airy stress function
+    phi = sigma / 4 (r^2 - 2 a^2 ln r - (r^2 - 2 a^2 + a^4 / r^2) cos 2 theta):
+    rr = phi_r / r + phi_tt / r^2, tt = phi_rr, rt = -(phi_t / r)_r.
+    """
+    q2, q4, c, s = (a / r) ** 2, (a / r) ** 4, math.cos(2 * theta), math.sin(2 * theta)
+    return {"rr": sigma / 2 * (1 - q2) + sigma / 2 * (1 - 4 * q2 + 3 * q4) * c,
+            "tt": sigma / 2 * (1 + q2) - sigma / 2 * (1 + 3 * q4) * c,
+            "rt": -sigma / 2 * (1 + 2 * q2 - 3 * q4) * s}
+
+
+def kirsch_kt() -> float:
+    """Kt of a circular hole in an infinite plate: the hoop stress at the side of the hole."""
+    return kirsch_stresses(1.0, 1.0, 1.0, math.pi / 2)["tt"]
+
+
+def kirsch_across(sigma: float, a: float, y: float) -> float:
+    """Stress along the load, sigma_x, at a distance y >= a from the hole centre on the
+    line through the hole across the load (theta = 90 deg) [Kirsch]: how fast the peak
+    dies away, for checking a mesh away from the edge of the hole."""
+    return kirsch_stresses(sigma, a, y, math.pi / 2)["tt"]
+
+
+def hole_kt_net(d_over_w: float) -> float:
+    """Kt of a central circular hole in a plate of finite width W under tension,
+    on the net-section stress P / ((W - d) t) [Pilkey]. 3 at d/W = 0 (Kirsch), 2 at d/W = 1."""
+    x = d_over_w
+    if not 0 <= x <= 1:
+        raise ValueError(f"need 0 <= d/W <= 1, got {x}")
+    return 3.000 - 3.140 * x + 3.667 * x**2 - 1.527 * x**3
+
+
+def hole_kt_gross(d_over_w: float) -> float:
+    """The same peak on the gross stress P / (W t): Kt_n / (1 - d/W)."""
+    return hole_kt_net(d_over_w) / (1 - d_over_w)
+
+
+def box_midline(b: float, h: float, t: float) -> dict[str, float]:
+    """A rectangular tube as walls of thickness t on its mid-line (a shell model) [thin].
+
+    b = outer width (along y), h = outer height (along z). The walls are b_m = b - t
+    and h_m = h - t long between the corner lines. Iy (vertical load) adds the two
+    webs (t h_m^3 / 12 each) and the two flanges (b_m t^3 / 12 + b_m t (h_m / 2)^2
+    each). A_m is the area the mid-line encloses (for Bredt), A_web the webs that
+    carry a vertical shear force.
+    """
+    bm, hm = b - t, h - t
+    return {
+        "b_m": bm, "h_m": hm, "A": 2 * t * (bm + hm),
+        "Iy": 2 * t * hm**3 / 12 + 2 * (bm * t**3 / 12 + bm * t * (hm / 2) ** 2),
+        "Iz": 2 * t * bm**3 / 12 + 2 * (hm * t**3 / 12 + hm * t * (bm / 2) ** 2),
+        "A_m": bm * hm, "A_web": 2 * hm * t, "c_z": hm / 2,
+    }
+
+
+def shear_modulus(E: float, nu: float) -> float:
+    """G = E / (2 (1 + nu)) of an isotropic material."""
+    return E / (2 * (1 + nu))
+
+
+def cantilever_box_tip_load(P: float, L: float, E: float, nu: float, b: float, h: float, t: float,
+                            x: float = 0.0) -> dict[str, float]:
+    """A rectangular tube cantilevered at x = 0, a vertical load P at the free end x = L.
+
+    Tip deflection: bending P L^3 / (3 E I) [EB] plus shear P L / (G A_web) [thin] (the
+    webs take the shear; an approximation, a few per cent of the shear part). Flange
+    stress at the mid-surface at x: M c / I with M = P (L - x) and c = h_m / 2; read it
+    at least one tube height from the clamped end, where the clamp's local effect has
+    died away.
+    """
+    s = box_midline(b, h, t)
+    bend = P * L**3 / (3 * E * s["Iy"])
+    shear = P * L / (shear_modulus(E, nu) * s["A_web"])
+    return {"deflection": bend + shear, "deflection_bending": bend, "deflection_shear": shear,
+            "moment": P * (L - x), "flange_stress": P * (L - x) * s["c_z"] / s["Iy"]}
+
+
+def bredt_torsion(T: float, L: float, G: float, b: float, h: float, t: float) -> dict[str, float]:
+    """A closed thin-walled rectangular tube of one cell under a torque T [thin] (Bredt).
+
+    The shear flow q = tau t is the same all round the cell (equilibrium of a wall
+    element along the tube). Its moment about any point is q times twice the area the
+    mid-line encloses: T = 2 A_m q, so tau = T / (2 A_m t). Work: T theta' / 2 equals the
+    shear strain energy per length, the sum over the wall of q^2 / (2 G t) ds, so
+    theta' = T (sum ds / t) / (4 A_m^2 G) and J = 4 A_m^2 / (sum ds / t), with
+    sum ds / t = 2 (b_m + h_m) / t for one wall thickness. A square tube does not warp,
+    so a clamped end does not change its twist.
+    """
+    s = box_midline(b, h, t)
+    J = 4 * s["A_m"] ** 2 * t / (2 * (s["b_m"] + s["h_m"]))
+    q = T / (2 * s["A_m"])
+    return {"shear_flow": q, "shear_stress": q / t, "J": J, "twist_rate": T / (G * J), "twist": T * L / (G * J)}
+
+
 # --- units [SI] --------------------------------------------------------------------------
 
 # Factor to the SI base of each unit in the contract's unit list, plus offset for
@@ -277,3 +386,14 @@ STEP_CASES = [
 # Beam cases share one aluminium-like section so every value is easy to recompute.
 # E and the section are inputs of the check, not material data claimed for a product.
 BEAM = {"E": 69000.0, "I": 1.0e5, "L": 1000.0, "A": 400.0, "rho_t_mm3": 2.7e-9}
+
+# Shell cases (inputs of the checks, like BEAM). Plates with a central hole under a
+# tension sigma at both ends, long enough (4 W) for the ends not to reach the hole.
+# A small hole for Kirsch, a wide one for the finite-width fit.
+SHELL = {"E": 205000.0, "nu": 0.3}
+HOLE_CASES = [
+    {"case": "small_hole", "W": 400.0, "d": 20.0, "length": 1600.0, "t": 2.0, "sigma": 100.0},
+    {"case": "wide_hole", "W": 100.0, "d": 50.0, "length": 400.0, "t": 2.0, "sigma": 100.0},
+]
+# Square tube 40 x 40 x 2 mm, 800 mm long, clamped at one end: a tip load and a tip torque.
+BOX = {"b": 40.0, "h": 40.0, "t": 2.0, "L": 800.0, "P": 500.0, "T": 200000.0}

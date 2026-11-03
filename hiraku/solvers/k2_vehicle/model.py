@@ -211,6 +211,24 @@ def _var(design: dict, name: str, want: str, notes: list[str], default_key: str 
     return value
 
 
+def _note(notes: list[str], text: str):
+    if text not in notes:
+        notes.append(text)
+
+
+@dataclass
+class _Settings:
+    """The design-wide tyre, suspension and steering numbers (design variables or DEFAULTS)."""
+
+    k_z: float
+    zeta_z: float
+    c_kappa: float
+    mu: float
+    c_rr: float
+    zeta_s: float
+    max_steer: float
+
+
 def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     """Build the simulation model. Raises DesignError with what to change."""
     overrides = overrides or {}
@@ -218,8 +236,30 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     sups = design.get("supports") or []
     if not sups:
         raise DesignError("the design has no supports (wheels, casters or legs); add design.supports")
-    parts = design.get("parts") or []
-    items = part_items(parts)
+    items = _weighed_items(design, notes)
+    m_all = sum(it[0] for it in items)
+    mirror = _mirror_pairs(sups)
+    symmetric = all(j >= 0 for j in mirror) and items_symmetric(items)
+    sups, mirror_new = _in_mirror_pairs(sups, mirror)
+    st = _settings(design, overrides, notes)
+    corners = [_corner(s, mirror_new[k], st, design, notes) for k, s in enumerate(sups)]
+    sprung_items = _unsprung(items, corners, m_all, design, notes)
+    m_total, cg_total, m_s, cg_s, i_s = _body(items, sprung_items, symmetric)
+    loads = _static_loads(corners, m_total, cg_total, symmetric)
+    _settle(corners, loads, sups, design, st, notes)
+    side_area, side_cp, front_area, front_cp = _aero(items, corners, symmetric, notes)
+    x_ref, l_steer = _steering(corners, cg_total)
+    return Vehicle(
+        name=design.get("name", "design"), corners=corners, m_total=m_total, cg_total=cg_total,
+        m_s=m_s, cg_s=cg_s, i_s=i_s, symmetric=symmetric, side_area=side_area, side_cp=side_cp,
+        front_area=front_area, front_cp=front_cp, x_ref=x_ref, l_steer=l_steer, max_steer=st.max_steer,
+        assumptions=notes,
+    )
+
+
+def _weighed_items(design: dict, notes: list[str]) -> list:
+    """(mass, centre, inertia, part) of every part box and frame member."""
+    items = part_items(design.get("parts") or [])
     try:
         members = member_items(design)
     except ValueError as e:
@@ -229,12 +269,12 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         notes.append("frame members weighed as thin rods: density x area x length at the member centre")
     if not items:
         raise DesignError("the design has no parts with mass; add design.parts with mass_kg")
+    return items
 
-    m_all = sum(it[0] for it in items)
-    mirror = _mirror_pairs(sups)
-    symmetric = all(j >= 0 for j in mirror) and items_symmetric(items)
 
-    # Order corners in mirror pairs (left, right), then centreline and unpaired ones.
+def _in_mirror_pairs(sups: list[dict], mirror: list[int]) -> tuple[list[dict], list[int]]:
+    """The supports ordered in mirror pairs (left, right), then centreline and unpaired ones,
+    and the mirror partner of each in that order."""
     order: list[int] = []
     for i, s in enumerate(sups):
         if i in order:
@@ -253,7 +293,10 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         if (k % 2 == 0 and float(a["position_mm"][1]) > 0 and abs(float(a["position_mm"][1]) + float(b["position_mm"][1])) < 1e-9
                 and abs(float(a["position_mm"][0]) - float(b["position_mm"][0])) < 1e-9):
             mirror_new[k], mirror_new[k + 1] = k + 1, k
+    return sups, mirror_new
 
+
+def _settings(design: dict, overrides: dict, notes: list[str]) -> _Settings:
     k_z = overrides.get("tire_vertical_stiffness")
     if k_z is None:
         k_z = _var(design, "tyre_stiffness", "N/m", notes)
@@ -267,58 +310,63 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         c_rr = _var(design, "rolling_resistance", "1", notes)
     zeta_s = _var(design, "damping_ratio", "1", [])
     max_steer = _var(design, "max_steer_angle", "rad", notes)
+    return _Settings(k_z, zeta_z, c_kappa, mu, c_rr, zeta_s, max_steer)
 
-    corners: list[Corner] = []
-    for k, s in enumerate(sups):
-        pos = np.asarray(s["position_mm"], dtype=float) / 1000.0
-        kind = s["kind"]
-        radius = float(s["radius_mm"]) / 1000.0
-        if kind == "leg" and radius <= 0.0:
-            radius = 0.01
-        if radius <= 0.0:
-            raise DesignError(f"support {s['id']}: radius_mm must be > 0 for a {kind}")
-        width = float(s.get("width_mm", 0.0)) / 1000.0
-        sus = s["suspension"]
-        typ = sus["type"]
-        if typ == "kc_table" and not sus.get("kc_table"):
-            raise DesignError(f"support {s['id']}: suspension type kc_table needs suspension.kc_table (a table path or 'builtin:double_wishbone')")
-        if typ in ("spring", "kc_table") and not sus.get("stiffness_N_per_mm"):
-            raise DesignError(f"support {s['id']}: suspension.stiffness_N_per_mm (wheel rate) is missing or zero; give the wheel rate or use type 'rigid'")
-        side = 1.0 if pos[1] > 1e-12 else (-1.0 if pos[1] < -1e-12 else 0.0)
-        act = s["actuation"]
-        c = Corner(id=s["id"], kind=kind, side=side, pos=pos, radius=radius, width=width, susp=typ,
-                   drive=bool(act["drive"]) and kind == "wheel", brake=bool(act["brake"]) and kind == "wheel",
-                   steer=bool(act["steer"]) and kind == "wheel", mirror=mirror_new[k])
-        c.k_z = k_z
-        c.mu = mu
-        c.c_rr = c_rr
-        if typ != "rigid":
-            c.k_w = float(sus["stiffness_N_per_mm"]) * 1000.0
-            if "travel_mm" in sus:
-                travel = float(sus["travel_mm"]) / 1000.0
-            else:
-                travel = DEFAULTS["travel"][0]
-                if DEFAULTS["travel"][2] not in notes:
-                    notes.append(DEFAULTS["travel"][2])
-            c.s_min, c.s_max = -travel / 2.0, travel / 2.0
-            c.k_stop = _var(design, "bump_stop_factor", "1", notes) * c.k_w
-            if typ == "kc_table":
-                ref = sus["kc_table"]
-                if ref.startswith("builtin:"):
-                    hp_pos = pos.copy()
-                    hp_pos[1] = abs(hp_pos[1])
-                    table = kinematics.build_table(kinematics.generic_sla(hp_pos, radius), max(travel, 0.02) * 0.6)
-                    note = "K&C table from the generic short-long-arm layout (builtin, not a real vehicle)"
-                    if note not in notes:
-                        notes.append(note)
-                else:
-                    table = kinematics.load_table(ref)
-                c.path = kinematics.PathPoly.from_table(table)
-            else:
-                c.path = kinematics.PathPoly.vertical()
-        corners.append(c)
 
-    # Unsprung masses from wheel parts, assigned to the nearest corner.
+def _corner(s: dict, mirror: int, st: _Settings, design: dict, notes: list[str]) -> Corner:
+    """One support as a corner: geometry, actuation, suspension rate, travel and wheel path."""
+    pos = np.asarray(s["position_mm"], dtype=float) / 1000.0
+    kind = s["kind"]
+    radius = float(s["radius_mm"]) / 1000.0
+    if kind == "leg" and radius <= 0.0:
+        radius = 0.01
+    if radius <= 0.0:
+        raise DesignError(f"support {s['id']}: radius_mm must be > 0 for a {kind}")
+    width = float(s.get("width_mm", 0.0)) / 1000.0
+    sus = s["suspension"]
+    typ = sus["type"]
+    if typ == "kc_table" and not sus.get("kc_table"):
+        raise DesignError(f"support {s['id']}: suspension type kc_table needs suspension.kc_table (a table path or 'builtin:double_wishbone')")
+    if typ in ("spring", "kc_table") and not sus.get("stiffness_N_per_mm"):
+        raise DesignError(f"support {s['id']}: suspension.stiffness_N_per_mm (wheel rate) is missing or zero; give the wheel rate or use type 'rigid'")
+    side = 1.0 if pos[1] > 1e-12 else (-1.0 if pos[1] < -1e-12 else 0.0)
+    act = s["actuation"]
+    c = Corner(id=s["id"], kind=kind, side=side, pos=pos, radius=radius, width=width, susp=typ,
+               drive=bool(act["drive"]) and kind == "wheel", brake=bool(act["brake"]) and kind == "wheel",
+               steer=bool(act["steer"]) and kind == "wheel", mirror=mirror)
+    c.k_z = st.k_z
+    c.mu = st.mu
+    c.c_rr = st.c_rr
+    if typ == "rigid":
+        return c
+    c.k_w = float(sus["stiffness_N_per_mm"]) * 1000.0
+    if "travel_mm" in sus:
+        travel = float(sus["travel_mm"]) / 1000.0
+    else:
+        travel = DEFAULTS["travel"][0]
+        _note(notes, DEFAULTS["travel"][2])
+    c.s_min, c.s_max = -travel / 2.0, travel / 2.0
+    c.k_stop = _var(design, "bump_stop_factor", "1", notes) * c.k_w
+    if typ == "kc_table":
+        ref = sus["kc_table"]
+        if ref.startswith("builtin:"):
+            hp_pos = pos.copy()
+            hp_pos[1] = abs(hp_pos[1])
+            table = kinematics.build_table(kinematics.generic_sla(hp_pos, radius), max(travel, 0.02) * 0.6)
+            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle)")
+        else:
+            table = kinematics.load_table(ref)
+        c.path = kinematics.PathPoly.from_table(table)
+    else:
+        c.path = kinematics.PathPoly.vertical()
+    return c
+
+
+def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
+    """Give each corner its unsprung mass and spin inertia; return the sprung items.
+
+    Wheel parts go to the nearest corner (suspension parts half); a sprung corner without
+    wheel parts gets a default share, taken out of the body."""
     sprung_items = []
     wheel_mass = np.zeros(len(corners))
     for m, centre, inertia, p in items:
@@ -339,8 +387,7 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         if mw <= 0.0:
             mw = max(1.0, frac * m_all / len(corners))
             if c.dof or c.kind == "wheel":
-                if DEFAULTS["unsprung_fraction"][2] not in notes:
-                    notes.append(DEFAULTS["unsprung_fraction"][2])
+                _note(notes, DEFAULTS["unsprung_fraction"][2])
             if c.dof:
                 sprung_items.append((-mw, c.pos, np.zeros((3, 3))))
         if c.dof:
@@ -355,7 +402,11 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         notes.append(DEFAULTS["wheel_inertia"][2])
     if any(c.kind == "caster" for c in corners):
         notes.append("casters swivel freely: no side force, rolling resistance only")
+    return sprung_items
 
+
+def _body(items: list, sprung_items: list, symmetric: bool):
+    """Whole-vehicle mass and CG; sprung mass, CG and inertia about it."""
     m_total, cg_total, _ = combine([(m, c, i) for m, c, i, _ in items])
     try:
         m_s, cg_s, i_s = combine(sprung_items)
@@ -369,9 +420,12 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
         i_s[0, 1] = i_s[1, 0] = i_s[1, 2] = i_s[2, 1] = 0.0
     if np.any(np.linalg.eigvalsh(i_s) <= 0.0):
         raise DesignError("the body inertia is not positive; check the part boxes and masses")
+    return m_total, cg_total, m_s, cg_s, i_s
 
-    # Cornering stiffness per axle (both tyres) from the design, shared by the wheels of
-    # the front-most and the rear-most axle; other wheels fall back on the coefficient.
+
+def _axle_cornering(design: dict, corners: list[Corner]) -> dict[int, float]:
+    """Cornering stiffness per wheel from the design's per-axle values (both tyres), for the wheels
+    of the front-most and the rear-most axle; other wheels are not in the result."""
     axle_cornering: dict[int, float] = {}
     var = design.get("variables") or {}
     wheels = [i for i, c in enumerate(corners) if c.kind == "wheel"]
@@ -382,8 +436,11 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
                 on = [i for i in wheels if abs(float(corners[i].pos[0]) - x) < 1e-9]
                 for i in on:
                     axle_cornering[i] = si(var[name], "N/rad") / len(on)
+    return axle_cornering
 
-    # Static loads: rigid body on elastic supports (series spring + tyre).
+
+def _static_loads(corners: list[Corner], m_total: float, cg_total: np.ndarray, symmetric: bool) -> np.ndarray:
+    """Static wheel loads: rigid body on elastic supports (series spring + tyre)."""
     xs = np.array([c.pos[0] for c in corners])
     ys = np.array([c.pos[1] for c in corners])
     keff = np.array([(c.k_w * c.k_z / (c.k_w + c.k_z)) if c.dof else c.k_z for c in corners])
@@ -403,6 +460,14 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     if np.any(loads <= 0.0):
         bad = [c.id for c, f in zip(corners, loads) if f <= 0]
         raise DesignError(f"the centre of gravity is outside the support area (support {', '.join(bad)} would lift at rest); move the mass or the supports")
+    return loads
+
+
+def _settle(corners: list[Corner], loads: np.ndarray, sups: list[dict], design: dict, st: _Settings,
+            notes: list[str]):
+    """Per corner from its static load: spring preload and damper, tyre damping, relaxation
+    length and the tyre's slip and cornering stiffness."""
+    axle_cornering = _axle_cornering(design, corners)
     for i, (c, f) in enumerate(zip(corners, loads)):
         c.static_load = float(f)
         if c.dof:
@@ -414,24 +479,26 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
             if "damping_Ns_per_mm" in sus_i:
                 c.c_w = float(sus_i["damping_Ns_per_mm"]) * 1000.0
             else:
-                c.c_w = 2.0 * zeta_s * math.sqrt(c.k_w * m_corner)
-                if "damping_ratio" not in (design.get("variables") or {}) and DEFAULTS["damping_ratio"][2] not in notes:
-                    notes.append(DEFAULTS["damping_ratio"][2])
+                c.c_w = 2.0 * st.zeta_s * math.sqrt(c.k_w * m_corner)
+                if "damping_ratio" not in (design.get("variables") or {}):
+                    _note(notes, DEFAULTS["damping_ratio"][2])
         m_vert = c.m_u if c.dof else f / G0
-        c.c_z = 2.0 * zeta_z * math.sqrt(c.k_z * m_vert)
+        c.c_z = 2.0 * st.zeta_z * math.sqrt(c.k_z * m_vert)
         relax = _given(design, "tyre_relaxation_length")
         c.sigma = si(relax, "m") if relax is not None else c.radius
         if c.kind == "caster":
             c.c_long = c.c_lat = 0.0
         else:
-            c.c_long = c_kappa * f
+            c.c_long = st.c_kappa * f
             c.c_lat = axle_cornering.get(i)
             if c.c_lat is None:
                 c.c_lat = _var(design, "tire_cornering_coeff", "1", notes) * f
     if _given(design, "tyre_relaxation_length") is None:
         notes.append(DEFAULTS["tyre_relaxation_length"][2])
 
-    # Aerodynamic projections: part boxes and wheels.
+
+def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):
+    """Side and frontal areas and their centres of pressure from the part boxes and wheels."""
     boxes = []
     for m, centre, inertia, p in items:
         if "box" not in p:
@@ -449,20 +516,18 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     front_cp = np.array([0.0, front_c[0], front_c[1]])
     if symmetric:
         front_cp[1] = 0.0
+    return side_area, side_cp, front_area, front_cp
 
+
+def _steering(corners: list[Corner], cg_total: np.ndarray) -> tuple[float, float]:
+    """x of the non-steered axle (Ackermann reference) and the steered axle's distance from it."""
     steered = [c for c in corners if c.steer]
     fixed = [c for c in corners if c.kind == "wheel" and not c.steer]
     x_ref = float(np.mean([c.pos[0] for c in fixed])) if fixed else float(cg_total[0])
     l_steer = float(np.mean([c.pos[0] for c in steered])) - x_ref if steered else 1.0
     if steered and abs(l_steer) < 1e-6:
         l_steer = 1.0
-
-    return Vehicle(
-        name=design.get("name", "design"), corners=corners, m_total=m_total, cg_total=cg_total,
-        m_s=m_s, cg_s=cg_s, i_s=i_s, symmetric=symmetric, side_area=side_area, side_cp=side_cp,
-        front_area=front_area, front_cp=front_cp, x_ref=x_ref, l_steer=l_steer, max_steer=max_steer,
-        assumptions=notes,
-    )
+    return x_ref, l_steer
 
 
 def box_design(*, mass: float = 500.0, cg_x: float = -0.9, cg_z: float = 0.5, track: float = 1.2,

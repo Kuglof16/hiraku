@@ -277,6 +277,18 @@ class Runs(unittest.TestCase):
         self.assertGreater(wx["values"][up] * 1000.0, edge - r)
         self.assertLess(wx["values"][up] * 1000.0, edge)
 
+    def test_a_push_short_of_grip_says_it_did_not_lift(self):
+        # 250 mm on 300 mm wheels needs a push of about 6 x the front wheel load; at friction
+        # 0.5 the rear wheels spin before the front ones lift
+        params = {"loading": "two_cargo", "step_height": q(250.0, "mm"), "speed": q(10.0, "km/h"), "mu": q(0.5, "1")}
+        rec = TOOLS["step_climb_dynamic"].run(self.d, {"load_case_id": "x", "params": params},
+                                              [{"prediction_id": "pred-0001"}], {})
+        res = {r["quantity"]: r for r in rec["results"]}
+        self.assertEqual(res["lifted_by_push"]["value"], 0.0)
+        self.assertEqual(res["lifted_by_push"]["where"], "grip")
+        self.assertAlmostEqual(res["required_mu_push"]["value"], 0.5, delta=0.01)
+        self.assertEqual(self.res("step_climb_dynamic")["lifted_by_push"], 1.0)  # 100 mm lifts
+
     def test_a_vehicle_that_tips_stops_the_run(self):
         params = {"loading": "two_cargo", "side_slope": q(55.0, "deg"), "length": q(20.0, "m"),
                   "slope_ramp_time": q(8.0, "s"), "mu": q(2.0, "1")}  # held tyres: it tips, not slides

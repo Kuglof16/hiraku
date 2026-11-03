@@ -9,6 +9,7 @@ Mass bookkeeping (shared with K1 so both see the same vehicle):
 - a part with `carried_by` frame nodes loads those nodes
 - a part without `carried_by` is unsprung: it rests on the nearest support
   and does not load the frame (wheels, hubs, brakes)
+Who is on board for a load case is hiraku.contract.loading's rule.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import sections
+from .rigid import box_inertia
 from .units import STANDARD_GRAVITY
 
 
@@ -34,20 +36,6 @@ class MassItem:
     carrier: str  # "member", "nodes" or "support"
     carried_by: list[str]  # member id, frame node ids, or [support id]
     inertia_kg_mm2: np.ndarray | None = None  # own inertia about its centre of gravity (3 x 3)
-
-
-def box_inertia(mass: float, size_mm, rpy_deg=None) -> np.ndarray:
-    """Inertia (kg*mm^2) of a solid box about its centre, rotated by roll-pitch-yaw (fixed axes x, y, z)."""
-    a, b, c = (float(s) for s in size_mm)
-    local = mass / 12.0 * np.diag([b * b + c * c, a * a + c * c, a * a + b * b])
-    if not rpy_deg or not any(rpy_deg):
-        return local
-    r, p, y = np.radians(rpy_deg)
-    Rx = np.array([[1, 0, 0], [0, np.cos(r), -np.sin(r)], [0, np.sin(r), np.cos(r)]])
-    Ry = np.array([[np.cos(p), 0, np.sin(p)], [0, 1, 0], [-np.sin(p), 0, np.cos(p)]])
-    Rz = np.array([[np.cos(y), -np.sin(y), 0], [np.sin(y), np.cos(y), 0], [0, 0, 1]])
-    R = Rz @ Ry @ Rx
-    return R @ local @ R.T
 
 
 def rod_inertia(mass: float, a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -67,33 +55,6 @@ def inertia_tensor(items: list[MassItem], about: np.ndarray) -> np.ndarray:
         if it.inertia_kg_mm2 is not None:
             J += it.inertia_kg_mm2
     return J
-
-
-OCCUPANTS = {"empty": 0, "driver": 1, "two": 2, "two_cargo": 2}
-CARGO = {"empty": False, "driver": False, "two": False, "two_cargo": True}
-
-
-def parts_on_board(design: dict, loading: str) -> dict:
-    """A copy of the design with only the occupants and cargo of a loading (requirement key Q30).
-
-    Occupants board in the order they are listed (the first is the driver);
-    cargo parts ride only with two_cargo. A design with fewer occupant parts
-    than the loading names carries the ones it has (products without seats).
-    """
-    if loading not in OCCUPANTS:
-        raise ValueError(f"unknown loading {loading!r}; use one of {', '.join(OCCUPANTS)}")
-    parts, seated = [], 0
-    for p in design.get("parts", []):
-        if p["kind"] == "occupant":
-            if seated >= OCCUPANTS[loading]:
-                continue
-            seated += 1
-        elif p["kind"] == "cargo" and not CARGO[loading]:
-            continue
-        parts.append(p)
-    out = dict(design)
-    out["parts"] = parts
-    return out
 
 
 def node_table(design: dict) -> dict[str, np.ndarray]:

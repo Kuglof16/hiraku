@@ -19,8 +19,12 @@ runs/<run_id>/
     knowledge/<filename>              a knowledge file the person dropped (its rules live in events only)
     hearing.request.json              (later) questions waiting for an answer during the run
     hearing.answer.json               (later) the answer put by the screen; the run reads and removes both
+    inbox/<n>-<kind>.json             a request from the screen (a message for Claude, a dropped file); the run
+                                      reads it, emits the event itself and removes the file
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
+Only the run process appends to events.jsonl (seq has no gaps and one writer);
+anything else asks through stop.request, hearing.answer.json or inbox/.
 Every record written to a file is also the `data` of one event, byte-for-byte
 the same object, so replaying events.jsonl alone rebuilds the screen.
 
@@ -49,6 +53,7 @@ STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to 
 KNOWLEDGE_DIR = "knowledge"  # knowledge files the person dropped, kept as given
 HEARING_REQUEST_FILE = "hearing.request.json"  # later: hearing during the run
 HEARING_ANSWER_FILE = "hearing.answer.json"
+INBOX_DIR = "inbox"  # requests the screen puts for a running run (the run turns them into events)
 
 RECORD_DIRS = {
     "prediction": "predictions",

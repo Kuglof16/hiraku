@@ -275,11 +275,16 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     ids = (lambda: store.next_id("rule_check")) if persist else None
     checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
     if persist:
+        through_store = ev.store_records(store, "rule_check")  # the store writes rchk-NNNN.json and emits the event
         for c in checks:
-            if ev.store_records(store, "rule_check"):  # the store writes the file and emits the event
-                store.add_record("rule_check", c, design_version=version, agent="packager")
-            elif (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
-                problems.append(p)  # the store does not know the kind yet: the event alone (no file)
+            if through_store:
+                try:
+                    store.add_record("rule_check", c, design_version=version, agent="packager")
+                    continue
+                except KeyError:  # the store's table changed shape: the event alone from here on
+                    through_store = False
+            if (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
+                problems.append(p)
                 break
     else:
         problems.append(f"event kind {ev.RULE_CHECK_RECORDED} is not in the contract yet")

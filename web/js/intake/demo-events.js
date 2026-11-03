@@ -365,8 +365,448 @@ export const DEMOS = {
   },
   {
    "seq": 2,
+   "ts": "2026-11-03T10:00:03.000+09:00",
+   "t": 3.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SM",
+     "filename": "板金の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SM-01",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "SM-02",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
+      "check": "hole_edge_mm >= 2 * thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-11-03T10:00:03.200+09:00",
+   "t": 3.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-FS",
+     "filename": "締結の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "FS-01",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
+      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "FS-02",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
+      "check": "thread_engagement_mm >= bolt_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-11-03T10:00:03.400+09:00",
+   "t": 3.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-WD",
+     "filename": "溶接の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "WD-01",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
+      "check": "section_ratio_max <= 35",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-02",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
+      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-11-03T10:00:03.600+09:00",
+   "t": 3.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-TL",
+     "filename": "公差の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "TL-01",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
+      "check": "clearance_mm > tolerance_stack_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "TL-02",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
+      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 6,
+   "ts": "2026-11-03T10:00:03.800+09:00",
+   "t": 3.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-HU",
+     "filename": "人の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "HU-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
+      "check": "size_y_mm >= 391",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
+      "check": "size_x_mm <= 406",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
+      "check": "closing_gap_mm >= 25",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "suspension",
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 7,
    "ts": "2026-11-03T10:00:04.000+09:00",
    "t": 4.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-BT",
+     "filename": "電池の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "BT-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
+      "check": "req_Q19 <= 55",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "BT-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
+      "check": "var_battery_voltage <= 60",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 8,
+   "ts": "2026-11-03T10:00:04.200+09:00",
+   "t": 4.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-AS",
+     "filename": "組み立ての決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "AS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "1 人で持ち上げる部品は 23 kg 以下",
+      "check": "mass_kg <= 23",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "applies_to": {
+       "kinds": [
+        "battery",
+        "motor",
+        "controller",
+        "electrical",
+        "body",
+        "steering",
+        "seat",
+        "suspension",
+        "wheel"
+       ]
+      }
+     },
+     {
+      "rule_id": "AS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "部品の箱は地面より下に出ない",
+      "check": "bottom_z_mm >= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 9,
+   "ts": "2026-11-03T10:00:04.400+09:00",
+   "t": 4.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SU",
+     "filename": "サスの決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SU-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
+      "check": "travel_mm >= req_Q15",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "SU-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "荷を載せた静的なたわみは、サスのストローク以内",
+      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 10,
+   "ts": "2026-11-03T10:00:04.600+09:00",
+   "t": 4.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-MF",
+     "filename": "製造の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "MF-01",
+      "doc_id": "KN-MF",
+      "category": "manufacturing",
+      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
+      "check": "wall_mm >= 1.6",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 11,
+   "ts": "2026-11-03T10:00:06.000+09:00",
+   "t": 6.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.asked",
    "agent": "lead",
@@ -490,9 +930,9 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 3,
-   "ts": "2026-11-03T10:00:06.000+09:00",
-   "t": 6.0,
+   "seq": 12,
+   "ts": "2026-11-03T10:00:08.000+09:00",
+   "t": 8.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
@@ -551,446 +991,6 @@ export const DEMOS = {
      }
     ],
     "note": "林道だけで使い、公道は走らない"
-   }
-  },
-  {
-   "seq": 4,
-   "ts": "2026-11-03T10:00:08.000+09:00",
-   "t": 8.0,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SM",
-     "filename": "板金の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SM-01",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "曲げの内側の半径は板厚以上",
-      "check": "bend_radius_mm >= thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "SM-02",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
-      "check": "hole_edge_mm >= 2 * thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 5,
-   "ts": "2026-11-03T10:00:08.200+09:00",
-   "t": 8.2,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-FS",
-     "filename": "締結の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "FS-01",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
-      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "FS-02",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
-      "check": "thread_engagement_mm >= bolt_diameter_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 6,
-   "ts": "2026-11-03T10:00:08.400+09:00",
-   "t": 8.4,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-WD",
-     "filename": "溶接の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "WD-01",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     },
-     {
-      "rule_id": "WD-02",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
-      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 7,
-   "ts": "2026-11-03T10:00:08.600+09:00",
-   "t": 8.6,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-TL",
-     "filename": "公差の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "TL-01",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
-      "check": "clearance_mm > tolerance_stack_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "TL-02",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
-      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 8,
-   "ts": "2026-11-03T10:00:08.800+09:00",
-   "t": 8.8,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-HU",
-     "filename": "人の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "HU-01",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
-      "check": "size_y_mm >= 391",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-02",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
-      "check": "size_x_mm <= 406",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-03",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
-      "check": "closing_gap_mm >= 25",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "suspension",
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 9,
-   "ts": "2026-11-03T10:00:09.000+09:00",
-   "t": 9.0,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-BT",
-     "filename": "電池の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "BT-01",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
-      "check": "req_Q19 <= 55",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     },
-     {
-      "rule_id": "BT-02",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
-      "check": "var_battery_voltage <= 60",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 10,
-   "ts": "2026-11-03T10:00:09.200+09:00",
-   "t": 9.2,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-AS",
-     "filename": "組み立ての決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "AS-01",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "1 人で持ち上げる部品は 23 kg 以下",
-      "check": "mass_kg <= 23",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
-      "applies_to": {
-       "kinds": [
-        "battery",
-        "motor",
-        "controller",
-        "electrical",
-        "body",
-        "steering",
-        "seat",
-        "suspension",
-        "wheel"
-       ]
-      }
-     },
-     {
-      "rule_id": "AS-02",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "部品の箱は地面より下に出ない",
-      "check": "bottom_z_mm >= 0",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 11,
-   "ts": "2026-11-03T10:00:09.400+09:00",
-   "t": 9.4,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SU",
-     "filename": "サスの決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SU-01",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
-      "check": "travel_mm >= req_Q15",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     },
-     {
-      "rule_id": "SU-02",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "荷を載せた静的なたわみは、サスのストローク以内",
-      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 12,
-   "ts": "2026-11-03T10:00:09.600+09:00",
-   "t": 9.6,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-MF",
-     "filename": "製造の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "MF-01",
-      "doc_id": "KN-MF",
-      "category": "manufacturing",
-      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
-      "check": "wall_mm >= 1.6",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
    }
   },
   {
@@ -3198,8 +3198,448 @@ export const DEMOS = {
   },
   {
    "seq": 2,
+   "ts": "2026-11-03T10:00:03.000+09:00",
+   "t": 3.0,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SM",
+     "filename": "板金の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SM-01",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "SM-02",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
+      "check": "hole_edge_mm >= 2 * thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-11-03T10:00:03.200+09:00",
+   "t": 3.2,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-FS",
+     "filename": "締結の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "FS-01",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
+      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "FS-02",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
+      "check": "thread_engagement_mm >= bolt_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-11-03T10:00:03.400+09:00",
+   "t": 3.4,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-WD",
+     "filename": "溶接の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "WD-01",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
+      "check": "section_ratio_max <= 35",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-02",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
+      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-11-03T10:00:03.600+09:00",
+   "t": 3.6,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-TL",
+     "filename": "公差の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "TL-01",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
+      "check": "clearance_mm > tolerance_stack_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "TL-02",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
+      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 6,
+   "ts": "2026-11-03T10:00:03.800+09:00",
+   "t": 3.8,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-HU",
+     "filename": "人の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "HU-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
+      "check": "size_y_mm >= 391",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
+      "check": "size_x_mm <= 406",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
+      "check": "closing_gap_mm >= 25",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "suspension",
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 7,
    "ts": "2026-11-03T10:00:04.000+09:00",
    "t": 4.0,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-BT",
+     "filename": "電池の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "BT-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
+      "check": "req_Q19 <= 55",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "BT-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
+      "check": "var_battery_voltage <= 60",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 8,
+   "ts": "2026-11-03T10:00:04.200+09:00",
+   "t": 4.2,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-AS",
+     "filename": "組み立ての決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "AS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "1 人で持ち上げる部品は 23 kg 以下",
+      "check": "mass_kg <= 23",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "applies_to": {
+       "kinds": [
+        "battery",
+        "motor",
+        "controller",
+        "electrical",
+        "body",
+        "steering",
+        "seat",
+        "suspension",
+        "wheel"
+       ]
+      }
+     },
+     {
+      "rule_id": "AS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "部品の箱は地面より下に出ない",
+      "check": "bottom_z_mm >= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 9,
+   "ts": "2026-11-03T10:00:04.400+09:00",
+   "t": 4.4,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SU",
+     "filename": "サスの決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SU-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
+      "check": "travel_mm >= req_Q15",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "SU-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "荷を載せた静的なたわみは、サスのストローク以内",
+      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 10,
+   "ts": "2026-11-03T10:00:04.600+09:00",
+   "t": 4.6,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-MF",
+     "filename": "製造の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "MF-01",
+      "doc_id": "KN-MF",
+      "category": "manufacturing",
+      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
+      "check": "wall_mm >= 1.6",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 11,
+   "ts": "2026-11-03T10:00:06.000+09:00",
+   "t": 6.0,
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.asked",
    "agent": "lead",
@@ -3390,9 +3830,9 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 3,
-   "ts": "2026-11-03T10:00:06.000+09:00",
-   "t": 6.0,
+   "seq": 12,
+   "ts": "2026-11-03T10:00:08.000+09:00",
+   "t": 8.0,
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
@@ -3552,446 +3992,6 @@ export const DEMOS = {
     ],
     "note": "マットレスは厚さ 150 mm 以下を使う予定"
    }
-  },
-  {
-   "seq": 4,
-   "ts": "2026-11-03T10:00:08.000+09:00",
-   "t": 8.0,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SM",
-     "filename": "板金の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SM-01",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "曲げの内側の半径は板厚以上",
-      "check": "bend_radius_mm >= thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "SM-02",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
-      "check": "hole_edge_mm >= 2 * thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 5,
-   "ts": "2026-11-03T10:00:08.200+09:00",
-   "t": 8.2,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-FS",
-     "filename": "締結の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "FS-01",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
-      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "FS-02",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
-      "check": "thread_engagement_mm >= bolt_diameter_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 6,
-   "ts": "2026-11-03T10:00:08.400+09:00",
-   "t": 8.4,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-WD",
-     "filename": "溶接の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "WD-01",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     },
-     {
-      "rule_id": "WD-02",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
-      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 7,
-   "ts": "2026-11-03T10:00:08.600+09:00",
-   "t": 8.6,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-TL",
-     "filename": "公差の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "TL-01",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
-      "check": "clearance_mm > tolerance_stack_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "TL-02",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
-      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 8,
-   "ts": "2026-11-03T10:00:08.800+09:00",
-   "t": 8.8,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-HU",
-     "filename": "人の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "HU-01",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
-      "check": "size_y_mm >= 391",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-02",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
-      "check": "size_x_mm <= 406",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-03",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
-      "check": "closing_gap_mm >= 25",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "suspension",
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 9,
-   "ts": "2026-11-03T10:00:09.000+09:00",
-   "t": 9.0,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-BT",
-     "filename": "電池の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "BT-01",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
-      "check": "req_Q19 <= 55",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     },
-     {
-      "rule_id": "BT-02",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
-      "check": "var_battery_voltage <= 60",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 10,
-   "ts": "2026-11-03T10:00:09.200+09:00",
-   "t": 9.2,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-AS",
-     "filename": "組み立ての決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "AS-01",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "1 人で持ち上げる部品は 23 kg 以下",
-      "check": "mass_kg <= 23",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
-      "applies_to": {
-       "kinds": [
-        "battery",
-        "motor",
-        "controller",
-        "electrical",
-        "body",
-        "steering",
-        "seat",
-        "suspension",
-        "wheel"
-       ]
-      }
-     },
-     {
-      "rule_id": "AS-02",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "部品の箱は地面より下に出ない",
-      "check": "bottom_z_mm >= 0",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 11,
-   "ts": "2026-11-03T10:00:09.400+09:00",
-   "t": 9.4,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SU",
-     "filename": "サスの決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SU-01",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
-      "check": "travel_mm >= req_Q15",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     },
-     {
-      "rule_id": "SU-02",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "荷を載せた静的なたわみは、サスのストローク以内",
-      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 12,
-   "ts": "2026-11-03T10:00:09.600+09:00",
-   "t": 9.6,
-   "run_id": "20261103-100000-care-bed",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-MF",
-     "filename": "製造の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "MF-01",
-      "doc_id": "KN-MF",
-      "category": "manufacturing",
-      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
-      "check": "wall_mm >= 1.6",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
   }
  ],
  "electric-guitar": [
@@ -4110,8 +4110,448 @@ export const DEMOS = {
   },
   {
    "seq": 2,
+   "ts": "2026-11-03T10:00:03.000+09:00",
+   "t": 3.0,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SM",
+     "filename": "板金の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SM-01",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "SM-02",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
+      "check": "hole_edge_mm >= 2 * thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-11-03T10:00:03.200+09:00",
+   "t": 3.2,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-FS",
+     "filename": "締結の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "FS-01",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
+      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "FS-02",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
+      "check": "thread_engagement_mm >= bolt_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-11-03T10:00:03.400+09:00",
+   "t": 3.4,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-WD",
+     "filename": "溶接の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "WD-01",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
+      "check": "section_ratio_max <= 35",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-02",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
+      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-11-03T10:00:03.600+09:00",
+   "t": 3.6,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-TL",
+     "filename": "公差の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "TL-01",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
+      "check": "clearance_mm > tolerance_stack_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "TL-02",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
+      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 6,
+   "ts": "2026-11-03T10:00:03.800+09:00",
+   "t": 3.8,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-HU",
+     "filename": "人の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "HU-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
+      "check": "size_y_mm >= 391",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
+      "check": "size_x_mm <= 406",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
+      "check": "closing_gap_mm >= 25",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "suspension",
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 7,
    "ts": "2026-11-03T10:00:04.000+09:00",
    "t": 4.0,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-BT",
+     "filename": "電池の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "BT-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
+      "check": "req_Q19 <= 55",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "BT-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
+      "check": "var_battery_voltage <= 60",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 8,
+   "ts": "2026-11-03T10:00:04.200+09:00",
+   "t": 4.2,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-AS",
+     "filename": "組み立ての決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "AS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "1 人で持ち上げる部品は 23 kg 以下",
+      "check": "mass_kg <= 23",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "applies_to": {
+       "kinds": [
+        "battery",
+        "motor",
+        "controller",
+        "electrical",
+        "body",
+        "steering",
+        "seat",
+        "suspension",
+        "wheel"
+       ]
+      }
+     },
+     {
+      "rule_id": "AS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "部品の箱は地面より下に出ない",
+      "check": "bottom_z_mm >= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 9,
+   "ts": "2026-11-03T10:00:04.400+09:00",
+   "t": 4.4,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SU",
+     "filename": "サスの決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SU-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
+      "check": "travel_mm >= req_Q15",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "SU-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "荷を載せた静的なたわみは、サスのストローク以内",
+      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 10,
+   "ts": "2026-11-03T10:00:04.600+09:00",
+   "t": 4.6,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-MF",
+     "filename": "製造の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "MF-01",
+      "doc_id": "KN-MF",
+      "category": "manufacturing",
+      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
+      "check": "wall_mm >= 1.6",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 11,
+   "ts": "2026-11-03T10:00:06.000+09:00",
+   "t": 6.0,
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.asked",
    "agent": "lead",
@@ -4192,9 +4632,9 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 3,
-   "ts": "2026-11-03T10:00:06.000+09:00",
-   "t": 6.0,
+   "seq": 12,
+   "ts": "2026-11-03T10:00:08.000+09:00",
+   "t": 8.0,
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.answered",
    "agent": "lead",
@@ -4227,446 +4667,6 @@ export const DEMOS = {
       "basis": "assumption",
       "value": 1.5,
       "unit": "1"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 4,
-   "ts": "2026-11-03T10:00:08.000+09:00",
-   "t": 8.0,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SM",
-     "filename": "板金の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SM-01",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "曲げの内側の半径は板厚以上",
-      "check": "bend_radius_mm >= thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "SM-02",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
-      "check": "hole_edge_mm >= 2 * thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 5,
-   "ts": "2026-11-03T10:00:08.200+09:00",
-   "t": 8.2,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-FS",
-     "filename": "締結の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "FS-01",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
-      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "FS-02",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
-      "check": "thread_engagement_mm >= bolt_diameter_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 6,
-   "ts": "2026-11-03T10:00:08.400+09:00",
-   "t": 8.4,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-WD",
-     "filename": "溶接の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "WD-01",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     },
-     {
-      "rule_id": "WD-02",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
-      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 7,
-   "ts": "2026-11-03T10:00:08.600+09:00",
-   "t": 8.6,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-TL",
-     "filename": "公差の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "TL-01",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
-      "check": "clearance_mm > tolerance_stack_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "TL-02",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
-      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 8,
-   "ts": "2026-11-03T10:00:08.800+09:00",
-   "t": 8.8,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-HU",
-     "filename": "人の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "HU-01",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
-      "check": "size_y_mm >= 391",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-02",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
-      "check": "size_x_mm <= 406",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-03",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
-      "check": "closing_gap_mm >= 25",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "suspension",
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 9,
-   "ts": "2026-11-03T10:00:09.000+09:00",
-   "t": 9.0,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-BT",
-     "filename": "電池の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "BT-01",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
-      "check": "req_Q19 <= 55",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     },
-     {
-      "rule_id": "BT-02",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
-      "check": "var_battery_voltage <= 60",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 10,
-   "ts": "2026-11-03T10:00:09.200+09:00",
-   "t": 9.2,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-AS",
-     "filename": "組み立ての決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "AS-01",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "1 人で持ち上げる部品は 23 kg 以下",
-      "check": "mass_kg <= 23",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
-      "applies_to": {
-       "kinds": [
-        "battery",
-        "motor",
-        "controller",
-        "electrical",
-        "body",
-        "steering",
-        "seat",
-        "suspension",
-        "wheel"
-       ]
-      }
-     },
-     {
-      "rule_id": "AS-02",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "部品の箱は地面より下に出ない",
-      "check": "bottom_z_mm >= 0",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 11,
-   "ts": "2026-11-03T10:00:09.400+09:00",
-   "t": 9.4,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SU",
-     "filename": "サスの決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SU-01",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
-      "check": "travel_mm >= req_Q15",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     },
-     {
-      "rule_id": "SU-02",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "荷を載せた静的なたわみは、サスのストローク以内",
-      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 12,
-   "ts": "2026-11-03T10:00:09.600+09:00",
-   "t": 9.6,
-   "run_id": "20261103-100000-electric-guitar",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-MF",
-     "filename": "製造の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "MF-01",
-      "doc_id": "KN-MF",
-      "category": "manufacturing",
-      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
-      "check": "wall_mm >= 1.6",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
      }
     ]
    }
@@ -4821,8 +4821,448 @@ export const DEMOS = {
   },
   {
    "seq": 2,
+   "ts": "2026-11-03T10:00:03.000+09:00",
+   "t": 3.0,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SM",
+     "filename": "板金の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SM-01",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "SM-02",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
+      "check": "hole_edge_mm >= 2 * thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-11-03T10:00:03.200+09:00",
+   "t": 3.2,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-FS",
+     "filename": "締結の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "FS-01",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
+      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "FS-02",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
+      "check": "thread_engagement_mm >= bolt_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-11-03T10:00:03.400+09:00",
+   "t": 3.4,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-WD",
+     "filename": "溶接の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "WD-01",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
+      "check": "section_ratio_max <= 35",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-02",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
+      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-11-03T10:00:03.600+09:00",
+   "t": 3.6,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-TL",
+     "filename": "公差の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "TL-01",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
+      "check": "clearance_mm > tolerance_stack_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "TL-02",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
+      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 6,
+   "ts": "2026-11-03T10:00:03.800+09:00",
+   "t": 3.8,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-HU",
+     "filename": "人の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "HU-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
+      "check": "size_y_mm >= 391",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
+      "check": "size_x_mm <= 406",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
+      "check": "closing_gap_mm >= 25",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "suspension",
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 7,
    "ts": "2026-11-03T10:00:04.000+09:00",
    "t": 4.0,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-BT",
+     "filename": "電池の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "BT-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
+      "check": "req_Q19 <= 55",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "BT-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
+      "check": "var_battery_voltage <= 60",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 8,
+   "ts": "2026-11-03T10:00:04.200+09:00",
+   "t": 4.2,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-AS",
+     "filename": "組み立ての決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "AS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "1 人で持ち上げる部品は 23 kg 以下",
+      "check": "mass_kg <= 23",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "applies_to": {
+       "kinds": [
+        "battery",
+        "motor",
+        "controller",
+        "electrical",
+        "body",
+        "steering",
+        "seat",
+        "suspension",
+        "wheel"
+       ]
+      }
+     },
+     {
+      "rule_id": "AS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "部品の箱は地面より下に出ない",
+      "check": "bottom_z_mm >= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 9,
+   "ts": "2026-11-03T10:00:04.400+09:00",
+   "t": 4.4,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SU",
+     "filename": "サスの決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SU-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
+      "check": "travel_mm >= req_Q15",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "SU-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "荷を載せた静的なたわみは、サスのストローク以内",
+      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 10,
+   "ts": "2026-11-03T10:00:04.600+09:00",
+   "t": 4.6,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-MF",
+     "filename": "製造の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "MF-01",
+      "doc_id": "KN-MF",
+      "category": "manufacturing",
+      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
+      "check": "wall_mm >= 1.6",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 11,
+   "ts": "2026-11-03T10:00:06.000+09:00",
+   "t": 6.0,
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.asked",
    "agent": "lead",
@@ -5059,9 +5499,9 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 3,
-   "ts": "2026-11-03T10:00:06.000+09:00",
-   "t": 6.0,
+   "seq": 12,
+   "ts": "2026-11-03T10:00:08.000+09:00",
+   "t": 8.0,
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
@@ -5270,446 +5710,6 @@ export const DEMOS = {
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (a sample answer)"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 4,
-   "ts": "2026-11-03T10:00:08.000+09:00",
-   "t": 8.0,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SM",
-     "filename": "板金の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SM-01",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "曲げの内側の半径は板厚以上",
-      "check": "bend_radius_mm >= thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "SM-02",
-      "doc_id": "KN-SM",
-      "category": "sheet_metal",
-      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
-      "check": "hole_edge_mm >= 2 * thickness_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 5,
-   "ts": "2026-11-03T10:00:08.200+09:00",
-   "t": 8.2,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-FS",
-     "filename": "締結の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "FS-01",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
-      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "FS-02",
-      "doc_id": "KN-FS",
-      "category": "fastener",
-      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
-      "check": "thread_engagement_mm >= bolt_diameter_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 6,
-   "ts": "2026-11-03T10:00:08.400+09:00",
-   "t": 8.4,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-WD",
-     "filename": "溶接の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "WD-01",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     },
-     {
-      "rule_id": "WD-02",
-      "doc_id": "KN-WD",
-      "category": "weld",
-      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
-      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 7,
-   "ts": "2026-11-03T10:00:08.600+09:00",
-   "t": 8.6,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-TL",
-     "filename": "公差の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "TL-01",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
-      "check": "clearance_mm > tolerance_stack_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     },
-     {
-      "rule_id": "TL-02",
-      "doc_id": "KN-TL",
-      "category": "tolerance",
-      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
-      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame",
-        "body"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 8,
-   "ts": "2026-11-03T10:00:08.800+09:00",
-   "t": 8.8,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-HU",
-     "filename": "人の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "HU-01",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
-      "check": "size_y_mm >= 391",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-02",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
-      "check": "size_x_mm <= 406",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
-      "applies_to": {
-       "kinds": [
-        "seat"
-       ]
-      }
-     },
-     {
-      "rule_id": "HU-03",
-      "doc_id": "KN-HU",
-      "category": "human",
-      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
-      "check": "closing_gap_mm >= 25",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "suspension",
-        "frame"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 9,
-   "ts": "2026-11-03T10:00:09.000+09:00",
-   "t": 9.0,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-BT",
-     "filename": "電池の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "BT-01",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
-      "check": "req_Q19 <= 55",
-      "origin": "builtin",
-      "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     },
-     {
-      "rule_id": "BT-02",
-      "doc_id": "KN-BT",
-      "category": "battery",
-      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
-      "check": "var_battery_voltage <= 60",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
-      "applies_to": {
-       "kinds": [
-        "battery"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 10,
-   "ts": "2026-11-03T10:00:09.200+09:00",
-   "t": 9.2,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-AS",
-     "filename": "組み立ての決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "AS-01",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "1 人で持ち上げる部品は 23 kg 以下",
-      "check": "mass_kg <= 23",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
-      "applies_to": {
-       "kinds": [
-        "battery",
-        "motor",
-        "controller",
-        "electrical",
-        "body",
-        "steering",
-        "seat",
-        "suspension",
-        "wheel"
-       ]
-      }
-     },
-     {
-      "rule_id": "AS-02",
-      "doc_id": "KN-AS",
-      "category": "assembly",
-      "text": "部品の箱は地面より下に出ない",
-      "check": "bottom_z_mm >= 0",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
-     }
-    ]
-   }
-  },
-  {
-   "seq": 11,
-   "ts": "2026-11-03T10:00:09.400+09:00",
-   "t": 9.4,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-SU",
-     "filename": "サスの決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "SU-01",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
-      "check": "travel_mm >= req_Q15",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     },
-     {
-      "rule_id": "SU-02",
-      "doc_id": "KN-SU",
-      "category": "suspension",
-      "text": "荷を載せた静的なたわみは、サスのストローク以内",
-      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
-      "origin": "builtin",
-      "trust": 3,
-      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
-      "applies_to": {
-       "kinds": [
-        "support"
-       ]
-      }
-     }
-    ]
-   }
-  },
-  {
-   "seq": 12,
-   "ts": "2026-11-03T10:00:09.600+09:00",
-   "t": 9.6,
-   "run_id": "20261103-100000-serving-robot",
-   "kind": "knowledge.imported",
-   "agent": "lead",
-   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
-   "data": {
-    "doc": {
-     "doc_id": "KN-MF",
-     "filename": "製造の決まり",
-     "origin": "builtin"
-    },
-    "rules": [
-     {
-      "rule_id": "MF-01",
-      "doc_id": "KN-MF",
-      "category": "manufacturing",
-      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
-      "check": "wall_mm >= 1.6",
-      "origin": "builtin",
-      "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
-      "applies_to": {
-       "kinds": [
-        "frame"
-       ]
-      }
      }
     ]
    }

@@ -210,6 +210,108 @@ class Frequencies(unittest.TestCase):
         self.assertAlmostEqual(body / f, 1.0, places=6)
 
 
+class PlatesAndShells(unittest.TestCase):
+    def test_kirsch_from_the_airy_function(self):
+        r, th, a, s = sp.symbols("r theta a sigma", positive=True)
+        phi = s / 4 * (r**2 - 2 * a**2 * sp.log(r) - (r**2 - 2 * a**2 + a**4 / r**2) * sp.cos(2 * th))
+        rr = sp.diff(phi, r) / r + sp.diff(phi, th, 2) / r**2
+        tt = sp.diff(phi, r, 2)
+        rt = -sp.diff(sp.diff(phi, th) / r, r)
+        lap = lambda f: sp.diff(f, r, 2) + sp.diff(f, r) / r + sp.diff(f, th, 2) / r**2
+        self.assertEqual(sp.simplify(lap(lap(phi))), 0)  # compatible: biharmonic
+        for f in (rr, rt):  # the hole is free of traction
+            self.assertEqual(sp.simplify(f.subs(r, a)), 0)
+        far = {"rr": s * sp.cos(th) ** 2, "tt": s * sp.sin(th) ** 2, "rt": -s * sp.sin(th) * sp.cos(th)}
+        for name, f in (("rr", rr), ("tt", tt), ("rt", rt)):
+            self.assertEqual(sp.simplify(sp.limit(f, r, sp.oo) - far[name]), 0, name)  # uniaxial far away
+            fn = sp.lambdify((s, a, r, th), f)
+            for args in ((100.0, 10.0, 10.0, 0.3), (100.0, 10.0, 25.0, 1.2), (-50.0, 4.0, 9.0, 2.0)):
+                self.assertAlmostEqual(ka.kirsch_stresses(*args)[name], fn(*args), places=9)
+        self.assertAlmostEqual(ka.kirsch_kt(), 3.0, places=12)
+        self.assertAlmostEqual(ka.kirsch_stresses(1.0, 1.0, 1.0, 0.0)["tt"], -1.0, places=12)
+
+    def test_kirsch_across_carries_the_load_cut_by_the_hole(self):
+        # Along the line across the hole, the stress above sigma carries the sigma a
+        # that the hole takes out of each side: the integral of (sigma_x - sigma) from a to infinity.
+        y, a, s = sp.symbols("y a sigma", positive=True)
+        sx = s * (1 + a**2 / (2 * y**2) + 3 * a**4 / (2 * y**4))
+        self.assertEqual(sp.simplify(sp.integrate(sx - s, (y, a, sp.oo)) - s * a), 0)
+        for yv in (10.0, 13.0, 50.0):
+            self.assertAlmostEqual(ka.kirsch_across(100.0, 10.0, yv), float(sx.subs({s: 100.0, a: 10.0, y: yv})), places=9)
+        self.assertEqual(round(ka.kirsch_across(1.0, 1.0, 5.0), 4), 1.0224)  # 2 % above sigma at 5 radii
+
+    def test_finite_width_fit(self):
+        self.assertAlmostEqual(ka.hole_kt_net(0.0), ka.kirsch_kt(), places=12)
+        self.assertAlmostEqual(ka.hole_kt_net(1.0), 2.0, places=12)
+        xs = np.linspace(0, 1, 101)
+        net = [ka.hole_kt_net(x) for x in xs]
+        self.assertTrue(all(b < a for a, b in zip(net, net[1:])))  # falls from 3 to 2
+        # a small hole sees the Kirsch peak on the gross stress
+        self.assertAlmostEqual(ka.hole_kt_gross(0.01), ka.kirsch_kt(), delta=0.002)
+        got = [(round(ka.hole_kt_net(c["d"] / c["W"]), 3), round(ka.hole_kt_gross(c["d"] / c["W"]), 3))
+               for c in ka.HOLE_CASES]
+        self.assertEqual(got, [(2.852, 3.002), (2.156, 4.312)])
+        with self.assertRaises(ValueError):
+            ka.hole_kt_net(1.2)
+
+    def test_box_section_on_the_mid_line(self):
+        b, h, t = ka.BOX["b"], ka.BOX["h"], ka.BOX["t"]
+        s = ka.box_midline(b, h, t)
+        bm, hm = s["b_m"], s["h_m"]
+        y, z = sp.symbols("y z")
+        web = sp.integrate(z**2, (y, -t / 2, t / 2), (z, -hm / 2, hm / 2))  # each wall a strip of thickness t
+        flange = sp.integrate(z**2, (y, -bm / 2, bm / 2), (z, hm / 2 - t / 2, hm / 2 + t / 2))
+        self.assertAlmostEqual(float(2 * web + 2 * flange) / s["Iy"], 1.0, places=12)
+        self.assertAlmostEqual(s["Iy"], s["Iz"], places=9)  # square
+        solid = ka.rect_tube(b, h, t)
+        self.assertAlmostEqual(s["A"], solid["A"], places=9)  # the corners: overlap = missing
+        self.assertLess(abs(s["Iy"] / solid["Iy"] - 1), 0.003)
+        thin = ka.box_midline(40.0, 60.0, 0.01)
+        self.assertAlmostEqual(thin["Iy"] / ka.rect_tube(40.0, 60.0, 0.01)["Iy"], 1.0, places=5)
+
+    def test_cantilever_box(self):
+        E, nu = ka.SHELL["E"], ka.SHELL["nu"]
+        c = ka.BOX
+        out = ka.cantilever_box_tip_load(c["P"], c["L"], E, nu, c["b"], c["h"], c["t"])
+        s = ka.box_midline(c["b"], c["h"], c["t"])
+        self.assertAlmostEqual(out["deflection_bending"], ka.cantilever_tip_load(c["P"], c["L"], E, s["Iy"])["deflection"], places=12)
+        self.assertAlmostEqual(out["deflection"], out["deflection_bending"] + out["deflection_shear"], places=12)
+        self.assertLess(out["deflection_shear"] / out["deflection"], 0.01)  # slender: shear under 1 %
+        at_h = ka.cantilever_box_tip_load(c["P"], c["L"], E, nu, c["b"], c["h"], c["t"], x=c["h"])
+        self.assertAlmostEqual(at_h["flange_stress"], ka.bending_stress(c["P"] * (c["L"] - c["h"]), s["Iy"], s["c_z"]), places=9)
+        self.assertEqual((round(out["deflection"], 3), round(out["flange_stress"], 2), round(at_h["flange_stress"], 2)),
+                         (5.719, 103.81, 98.62))
+
+    def test_bredt_by_the_moment_and_the_work_of_the_shear_flow(self):
+        E, nu = ka.SHELL["E"], ka.SHELL["nu"]
+        G = ka.shear_modulus(E, nu)
+        for b, h, t in ((ka.BOX["b"], ka.BOX["h"], ka.BOX["t"]), (40.0, 80.0, 3.0)):
+            with self.subTest(b=b, h=h, t=t):
+                T = ka.BOX["T"]
+                out = ka.bredt_torsion(T, ka.BOX["L"], G, b, h, t)
+                bm, hm, q = b - t, h - t, out["shear_flow"]
+                # walk the mid-line once (counter-clockwise) and add the moment of q ds about a point off the centre
+                corners = [(-bm / 2, -hm / 2), (bm / 2, -hm / 2), (bm / 2, hm / 2), (-bm / 2, hm / 2)]
+                px, pz, moment, n = 7.0, -3.0, 0.0, 1000
+                for (x0, z0), (x1, z1) in zip(corners, corners[1:] + corners[:1]):
+                    for k in range(n):
+                        f = (k + 0.5) / n
+                        x, z = x0 + f * (x1 - x0) - px, z0 + f * (z1 - z0) - pz
+                        dx, dz = (x1 - x0) / n, (z1 - z0) / n
+                        moment += q * (x * dz - z * dx)
+                self.assertAlmostEqual(moment / T, 1.0, places=9)
+                # T theta' / 2 = sum of q^2 / (2 G t) ds round the cell
+                energy = q**2 / (2 * G * t) * 2 * (bm + hm)
+                self.assertAlmostEqual(T * out["twist_rate"] / 2 / energy, 1.0, places=12)
+                self.assertAlmostEqual(out["shear_stress"] * t, q, places=9)
+        # a thin round cell by the same steps tends to the round tube's polar J
+        R, t = 20.0, 0.02
+        j_bredt = 4 * (math.pi * R**2) ** 2 * t / (2 * math.pi * R)
+        self.assertAlmostEqual(j_bredt / ka.round_tube(2 * R + t, t)["J"], 1.0, places=6)
+        sq = ka.bredt_torsion(ka.BOX["T"], ka.BOX["L"], G, ka.BOX["b"], ka.BOX["h"], ka.BOX["t"])
+        self.assertEqual((round(sq["shear_stress"], 2), round(math.degrees(sq["twist"]), 4)), (34.63, 1.0595))
+
+
 class VehicleStatics(unittest.TestCase):
     def test_tilt_by_moments(self):
         t, hcg = 1200.0, 500.0
