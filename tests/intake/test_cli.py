@@ -51,6 +51,33 @@ class HearingCliTest(unittest.TestCase):
         self.assertIn("必須の答えが無いので進めない", out)
 
 
+class PrepareCliTest(unittest.TestCase):
+    def test_a_requirements_file_a_run_can_start_from(self):
+        import tempfile
+        from pathlib import Path
+
+        from hiraku.catalog import load_requirements
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "care-bed.yaml"
+            code, text, _ = run("prepare", "--product", "care-bed", "--bare", "--out", str(out))
+            self.assertEqual(code, 0)
+            self.assertIn("5 分野", text)
+            req = load_requirements(out)  # validated against the contract
+            self.assertEqual(req["product"], "care-bed")
+            sources = {r["key"]: r["source"] for r in req["requirements"]}
+            self.assertEqual((sources["Q40"], sources["Q60"]), ("hearing", "default"))
+
+    def test_a_required_answer_missing_is_exit_1_and_nothing_pretends(self):
+        code, text, _ = run("prepare", "--product", "care-bed", "--bare", "--no-answers")
+        self.assertEqual(code, 1)
+        self.assertIn("必須の答えが無い", text)
+
+    def test_from_a_sentence_and_flag_names(self):
+        code, text, _ = run("prepare", "--want", "Standing desk", "--flags", "standing,cargo", "--speed", "static", "--no-answers")
+        self.assertEqual(code, 1)  # Q40 is required and nobody answered
+
+
 class RulesCliTest(unittest.TestCase):
     def test_the_demo_design(self):
         code, out, _ = run("rules", "--design", "data/designs/offroad-4w-v1.json", "--product", "offroad-4w")

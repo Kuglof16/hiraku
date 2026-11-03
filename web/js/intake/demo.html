@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIRAKU 受付の画面 (見本)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e6e0d3; color: #1d1d1f; font-family: "BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic", Meiryo, sans-serif; }
+  body { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .bar { display: flex; gap: 14px; align-items: center; padding: 8px 24px; background: #fbf9f4; border-bottom: 1px solid #e2dccf; font-size: 14px; flex-wrap: wrap; }
+  .bar b { letter-spacing: 0.3em; font-size: 20px; margin-right: 10px; }
+  .bar select, .bar input[type=range] { font: inherit; }
+  .bar input[type=range] { width: 260px; }
+  .bar .note { color: #6b665c; }
+  #host { min-height: 0; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>HIRAKU</b>
+  <label>製品 <select id="product"></select></label>
+  <label>記録の位置 <input id="step" type="range" min="0" max="0" value="0"></label>
+  <span id="pos"></span>
+  <span class="note">見本: コードだけで作った記録の再生です (Claude の返事・解析は入っていません)</span>
+</div>
+<div id="host"></div>
+<script type="module">
+import { DEMOS } from "./demo-events.js";
+import { mountIntake } from "./index.js";
+
+const params = new URLSearchParams(location.search);
+const sel = document.getElementById("product");
+const step = document.getElementById("step");
+const pos = document.getElementById("pos");
+for (const slug of Object.keys(DEMOS)) sel.append(Object.assign(document.createElement("option"), { value: slug, textContent: slug }));
+sel.value = params.get("product") && DEMOS[params.get("product")] ? params.get("product") : Object.keys(DEMOS)[0];
+
+let all = DEMOS[sel.value];
+let shown = all.length;
+// This page is a replay of a sample. The controls that would act on a run do the nearest thing the
+// sample can do: answering the hearing shows the answers that are in the sample, a dropped file is read
+// and reported but not turned into rules (that is Claude's and the code's work in a run).
+const api = {
+  events: () => all.slice(0, shown),
+  onEvent: () => () => {},
+  answerHearing: () => {
+    const i = all.findIndex((e) => e.kind === "hearing.answered");
+    if (i >= 0) { shown = Math.max(shown, i + 1); sync(); }
+  },
+  dropFile: async (name, text) => `${text.split(/\r?\n/).filter(Boolean).length} 行を読みました (見本のページでは規則にしません)`,
+};
+const intake = mountIntake(document.getElementById("host"), api, { screen: params.get("screen") || "A1" });
+
+function sync() {
+  step.max = all.length;
+  step.value = shown;
+  pos.textContent = `${shown} / ${all.length} 件`;
+  intake.update();
+}
+sel.onchange = () => { all = DEMOS[sel.value]; shown = all.length; sync(); };
+step.oninput = () => { shown = +step.value; sync(); };
+sync();
+window.intake = intake; // for the console
+</script>
+</body>
+</html>

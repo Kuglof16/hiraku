@@ -30,7 +30,7 @@ class BuiltinTest(unittest.TestCase):
             with self.subTest(rule=r["rule_id"]):
                 self.assertEqual(facts.unknown_names(expression.names(r["check"])), [])
                 self.assertEqual(r["origin"], "builtin")
-                self.assertEqual(r["check_by"], "file")
+                self.assertNotIn("check_by", r)  # the formula came with the data: nobody turned a sentence into it
 
     def test_a_source_is_written_and_unchecked_ones_say_so(self):
         for r in self.rules:
@@ -142,7 +142,7 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(sorted(by), ["U1-01", "U1-02", "U1-04", "U1-06", "U1-07"])
         self.assertEqual(by["U1-01"]["check"], "bend_radius_mm >= thickness_mm")
         self.assertEqual((by["U1-01"]["check_by"], by["U1-01"]["category"], by["U1-01"]["origin"]), ("code", "sheet_metal", "dropped"))
-        self.assertEqual(by["U1-06"]["check_by"], "file")  # the table brought its formula
+        self.assertNotIn("check_by", by["U1-06"])  # the table brought its formula
         self.assertEqual(by["U1-06"]["applies_to"], {"kinds": ["seat"]})
         self.assertEqual([n["cand_id"] for n in got.needs_formula], ["c3", "c5"])
         self.assertEqual(got.needs_formula[0]["category"], "sheet_metal")

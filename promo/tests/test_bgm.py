@@ -56,7 +56,7 @@ class Story(unittest.TestCase):
             self.assertTrue({2, 9} <= {m % 12 for m in pitches})  # the drone's D and A
 
     def test_screen_times(self):
-        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), 0.95)
+        self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), 1.25)
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n00", "step"), 0.42)
         with self.assertRaises(ValueError):
             bgm.screen_time(bgm.SCREENS, "n05", "nothing")

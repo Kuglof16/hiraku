@@ -4,6 +4,7 @@
     python -m hiraku.intake pick --product serving-robot --claude   Claude reads the sentence and picks (needs ANTHROPIC_API_KEY)
     python -m hiraku.intake pick --want "..." --claude              any sentence
     python -m hiraku.intake hearing --product care-bed [--bare]     the questions, settled with the sample answers
+    python -m hiraku.intake prepare --product care-bed --bare --out <file>   request -> requirements file (pick + hearing)
     python -m hiraku.intake rules --design data/designs/offroad-4w-v1.json --product offroad-4w [--drop notes.md]
     python -m hiraku.intake gen-js                                  rewrite web/js/intake/data.js
 """
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from hiraku.catalog import REPO_ROOT, load_requirements, read_data
 from hiraku.intake import (IntakeError, flags_text, load_product, pick_domains, product_files, rulecheck, summary_line)
-from hiraku.intake import hearing, knowledge, webdata
+from hiraku.intake import demo, hearing, knowledge, webdata
 from hiraku.intake.products import answers_file
 
 
@@ -125,8 +126,36 @@ def cmd_rules(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prepare(a: argparse.Namespace) -> int:
+    """Request -> requirements file: the pick, the hearing with an answers file, and the file a run can start from."""
+    import yaml
+
+    from hiraku.intake.pipeline import intake
+
+    if a.product:
+        req = _product(a.product)
+        want, flags, speed = req["want"], req["flags"], req.get("speed_class")
+        base_requirements = [] if a.bare else req["requirements"]
+    else:
+        if not a.want:
+            raise SystemExit("--product か --want のどちらかが要ります")
+        want, speed, base_requirements = a.want, a.speed, []
+        flags = {f: True for f in (a.flags or "").split(",") if f}
+    path = Path(a.answers) if a.answers else (answers_file(a.product) if a.product and not a.no_answers else None)
+    answers, note = hearing.load_answers(path) if path else ({}, None)
+    got = intake(want, flags, speed, product=a.product, answers=answers, note=note, requirements=base_requirements, docs=False)
+    print(summary_line(got.domains))
+    print(hearing.hearing_text(got.prepared), "/ 進める" if got.ready else "/ 必須の答えが無いので進めない")
+    out = got.requirements_file
+    if a.out:
+        Path(a.out).write_text(yaml.safe_dump(out, allow_unicode=True, sort_keys=False, width=100), encoding="utf-8")
+        print("書きました:", a.out)
+    return 0 if got.ready else 1
+
+
 def cmd_gen_js(a: argparse.Namespace) -> int:
     print(webdata.write())
+    print(demo.write())
     return 0
 
 
@@ -160,6 +189,17 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--requirements", help="a requirements file")
     r.add_argument("--drop", action="append", help="a file of rules, as if dragged in (repeatable)")
     r.set_defaults(fn=cmd_rules)
+
+    pr = sub.add_parser("prepare", help="a request -> a requirements file a run can start from (pick + hearing)")
+    pr.add_argument("--product", choices=slugs)
+    pr.add_argument("--bare", action="store_true", help="with --product: start from its sentence and flags only")
+    pr.add_argument("--want", help="a request in a sentence (without --product)")
+    pr.add_argument("--flags", help="comma separated flag names, e.g. standing,cargo (without --product)")
+    pr.add_argument("--speed", choices=["static", "walk", "vehicle"])
+    pr.add_argument("--answers", help="an answers file (default: the product's sample answers)")
+    pr.add_argument("--no-answers", action="store_true")
+    pr.add_argument("--out", help="write the requirements file here (YAML)")
+    pr.set_defaults(fn=cmd_prepare)
 
     g = sub.add_parser("gen-js", help="rewrite web/js/intake/data.js from the Python tables")
     g.set_defaults(fn=cmd_gen_js)

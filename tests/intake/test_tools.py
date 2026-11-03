@@ -114,7 +114,13 @@ class AskUserToolTest(ToolsTestCase):
         q19 = next(q for q in got["questions"] if q["req_key"] == "Q19")
         self.assertEqual(q19["default"]["value"], 40)
         self.assertTrue(any(r["key"] == "Q60" and r["source"] == "default" for r in got["answers"]))
-        self.assertIn("requirements_to_add", got)  # the run store cannot take them yet
+        self.assertTrue(got["requirements_recorded"])  # joined project.requirements through the store's update_project
+        in_project = {r["key"]: r for r in ctx.project["requirements"]}
+        self.assertEqual(in_project["Q60"]["source"], "default")
+        self.assertIn("project.updated", self.kinds(ctx))
+        self.assertEqual(contract.errors("project", ctx.project), [])
+        again = call("ask_user", ctx)  # what is in the project is not asked again; what has no value still is
+        self.assertEqual([q["req_key"] for q in again["questions"]], ["Q03", "Q30", "Q40"])
 
     def test_answers_make_it_ready(self):
         ctx = make_ctx(self.root, product="care-bed")
@@ -210,7 +216,10 @@ class RuleCheckToolTest(ToolsTestCase):
         self.assertIn("SM-01", [n["rule_id"] for n in got["not_evaluable"]])
         if ev.known(ev.RULE_CHECK_RECORDED):
             self.assertTrue(got["recorded"], got.get("not_recorded"))
-            self.assertEqual(len(ctx.store.records("rule_check")), got["summary"]["rules"])
+            events = [e for e in ctx.store.events() if e["kind"] == ev.RULE_CHECK_RECORDED]
+            self.assertEqual(len(events), got["summary"]["rules"])  # always as events, the screen draws from them
+            if ev.store_records(ctx.store, "rule_check"):  # and as files, once the run store writes this kind
+                self.assertEqual(len(ctx.store.records("rule_check")), got["summary"]["rules"])
         else:
             self.assertFalse(got["recorded"])
 

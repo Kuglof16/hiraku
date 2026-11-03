@@ -10,14 +10,17 @@ written in a sentence). tools.py holds the definitions of the MCP tools for hira
 
 from hiraku.intake.domains import IntakeError, pick_domains, project_picks, reasons_missing, summary_line
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES, describe_condition, flags_text
+from hiraku.intake.pipeline import IntakeResult, intake
 from hiraku.intake.products import load_product, product_files
 
 __all__ = [
     "FLAGS",
     "IntakeError",
+    "IntakeResult",
     "SPEED_CLASSES",
     "describe_condition",
     "flags_text",
+    "intake",
     "load_product",
     "pick_domains",
     "product_files",
