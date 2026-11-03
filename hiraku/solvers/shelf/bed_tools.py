@@ -117,6 +117,7 @@ def bed_static_known_answers() -> list[Record]:
 
 class BedStatic(BuiltinTool):
     name = "bed_static"
+    applies_to = ("care_bed",)
     title = "ベッドの枠の静的 (3D の梁、キャスターの上で 1 点の荷重)"
     domain = "strength"
     base = "K1"
@@ -251,6 +252,7 @@ ACTUATORS = {"back": ("B", "back_lever", "back_angle_max", 1.0), "knee": ("K", "
 
 class ActuatorLinkage(BuiltinTool):
     name = "actuator_linkage"
+    applies_to = ("care_bed",)
     title = "背上げ・膝上げのアクチュエーターの力 (仮想仕事、板を起こす)"
     domain = "powertrain"
     base = "K0"

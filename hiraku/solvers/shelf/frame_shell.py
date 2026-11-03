@@ -793,6 +793,7 @@ def shell_timings(res: dict, converged: bool) -> dict[str, float]:
 class FrameShell(BuiltinTool):
     name = "frame_shell"
     stage = 3  # shell FE, mesh convergence
+    applies_to = ("ladder_4w",)  # the mesh is built on a ladder's rails and cross members (frame_tubes: space frames)
     title = "フレームの静的 (シェル: 管の壁の板)"
     domain = "strength"
     base = "K1"
