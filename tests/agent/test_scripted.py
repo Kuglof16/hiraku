@@ -224,6 +224,7 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         plan = load_plan("offroad-4w")
         self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],
                          [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
+                          ("R1s-step100", "frame_shell"),  # only where R1s is built
                           ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
                           ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
                           ("P1-step250-beyond", "step_climb_dynamic"),

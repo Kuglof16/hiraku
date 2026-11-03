@@ -136,8 +136,13 @@ class CornersTest(unittest.TestCase):
 
     def test_groups_from_the_supports(self):
         g = corners(bodies(DESIGN))
-        self.assertEqual(g, {s: [f"part:susp_{s}", f"part:wheel_{s}"] for s in ("FL", "FR", "RL", "RR")})
-        lone = corners(bodies(dict(DESIGN, parts=[p for p in DESIGN["parts"] if p["id"] != "susp_FL"])))
+        # the parts riding with each wheel: arms, knuckle, caliper, and the tie rod (front) or the toe link and
+        # the driveshaft (rear, driven)
+        own = {"FL": ("tie_rod",), "FR": ("tie_rod",), "RL": ("toe_link", "driveshaft"), "RR": ("toe_link", "driveshaft")}
+        self.assertEqual(g, {s: sorted(f"part:{k}_{s}" for k in ("caliper", "knuckle", "susp", "wheel", *extra))
+                             for s, extra in own.items()})
+        lone = corners(bodies(dict(DESIGN, parts=[p for p in DESIGN["parts"]
+                                                  if not p["id"].endswith("_FL") or p["id"] == "wheel_FL"])))
         self.assertNotIn("FL", lone)  # one part is not a group
 
     def test_corners_first_then_drive_battery_electrics_body(self):
@@ -146,16 +151,20 @@ class CornersTest(unittest.TestCase):
         kinds = {p["id"]: p["kind"] for p in DESIGN["parts"]}
         stages = [stage(kinds[k.split(":", 1)[1]]) for k in units[4:]]
         self.assertEqual(stages, sorted(stages))
-        self.assertEqual(units[4:6], ["part:motor", "part:battery"])
+        self.assertEqual(units[4:7], ["part:motor", "part:reducer", "part:battery"])
         self.assertLess(units.index("part:floor"), units.index("part:seat_L"))  # bottom up within a stage
         self.assertEqual(len(STAGES) + 1, stage("seat"))
 
     def test_inside_a_corner_and_onto_the_frame(self):
         for s, side in (("FL", 1), ("FR", -1), ("RL", 1), ("RR", -1)):
             g = self.asm["groups"][f"corner:{s}"]
-            self.assertEqual([k for k, _ in g["order"]], [f"part:susp_{s}", f"part:wheel_{s}"])  # arm, then the wheel on it
-            self.assertEqual(g["order"][1][1], "-y" if side > 0 else "+y")  # the wheel goes inward onto the hub
-            self.assertEqual(dict(self.asm["units"])[f"corner:{s}"], "-y" if side > 0 else "+y")  # the corner inward
+            ks = [k for k, _ in g["order"]]
+            self.assertEqual(ks[-1], f"part:wheel_{s}")  # the wheel last, onto the hub
+            self.assertLess(ks.index(f"part:susp_{s}"), ks.index(f"part:wheel_{s}"))
+            self.assertEqual(g["order"][-1][1], "-y" if side > 0 else "+y")  # the wheel goes inward onto the hub
+            # the corner inward; a rear corner's driveshaft runs in under the rail, so it may go in from below
+            ways = {"-y" if side > 0 else "+y"} | ({"+z"} if s.startswith("R") else set())
+            self.assertIn(dict(self.asm["units"])[f"corner:{s}"], ways)
         order = [k for k, _ in self.asm["order"]]
         self.assertLess(order.index("part:susp_FL"), order.index("part:wheel_FL"))
         self.assertEqual(self.asm["blocked"], {})
@@ -167,11 +176,16 @@ class CornersTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         attach = [s for s in seq if is_attach(s)]
         self.assertEqual(len(attach), 4)
-        self.assertEqual(len(seq) - len(attach), 19)  # the H5 count: 23 parts less 2 occupants, 2 others not assembled
+        # the H5 count: 47 parts less 2 occupants, the cargo and the roll bar's part (welded, in place with the frame)
+        self.assertEqual(len(seq) - len(attach), 43)
         fl = ids.index("corner:FL")
-        self.assertEqual(ids[fl - 2:fl], ["susp_FL", "wheel_FL"])
+        group = ["caliper_FL", "knuckle_FL", "susp_FL", "tie_rod_FL", "wheel_FL"]
+        self.assertEqual(sorted(ids[fl - 5:fl]), group)
+        self.assertEqual(ids[fl - 1], "wheel_FL")
         self.assertIn("built off the vehicle", seq[fl - 1]["note"])
-        self.assertEqual(seq[fl]["depends_on"], ["susp_FL", "wheel_FL"])
+        self.assertEqual(seq[fl]["depends_on"], group)
+        self.assertEqual(seq[fl]["group_parts"], group)
+        self.assertNotIn("group_parts", seq[fl - 1])  # a step of the group's own build
         self.assertIn("node LA", seq[fl]["note"])
         self.assertTrue(all(s["no_interference"] for s in seq))
 
@@ -205,6 +219,7 @@ class HandsTest(unittest.TestCase):
         # what is in the way from above, the side it came in from: the 200 x 125 mm sweep meets all six
         self.assertNotIn("blocked_by", unit)  # that field is for a part that cannot go in (check_run holds to it)
         self.assertIn("the hands' way is taken by top_my, top_py, wall_mx, wall_my, wall_px, wall_py", unit["note"])
+        self.assertEqual(unit["tool_blocked_by"], ["top_my", "top_py", "wall_mx", "wall_my", "wall_px", "wall_py"])
         self.assertIn("node N is taken from every side", unit["note"])
         self.assertTrue(unit["hand_reach"])  # 80 mm down from the top of the plates
         bare = next(s for s in steps(boxed_in(walls=False)) if s["part"] == "unit")

@@ -8,9 +8,12 @@
 // and the vehicle does not move; its centre of gravity is marked. From times.accel_s to
 // the end the acceleration record plays (?accel=<load case id>, else the straight run on the
 // flat, P3, else the launch on the slope, P2): its motion with each wheel's road reaction
-// and grip arrows and the centre of gravity. The popup charts the battery's charge and
-// temperature (drive), then the speed against time (acceleration), with a cursor at the
-// record time and the recorded sample nearest to it; its title names the tests charted.
+// and grip arrows and the centre of gravity. The popup charts one graph at a time (the
+// story's limit): the battery's temperature (drive), then the speed against time
+// (acceleration), with a cursor at the record time; its title names the tests charted.
+// The representative shown large is the recorded sample nearest to the cursor, under the
+// title (the one emphasised number): the message is "長く走っても熱くならず、どこまで
+// 速いか", so the value itself is what is read; the graph under it is the small context.
 // The squeeze is in the view's corner (rateLabel, as the N05 tiles).
 //
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
@@ -42,6 +45,51 @@ export function requireKeys(layout, name, keys) {
   return layout[name];
 }
 
+// ---- story (layout.json story: what a cut may show at one time) ---------------------
+//
+// Elements say what they are with data-kind: label (name tags, ✓ / ✕), graph (plots),
+// legend (colour bars), number (emphasised figures), moving (things in motion). The page
+// (cut.js) counts those shown at each time against the cut's limits, and text inside an
+// element with a kind is at least limits.body_text_px; other text at least min_text_px.
+
+export const KINDS = ["label", "graph", "legend", "number", "moving"];
+
+// The cut's message and limits (story.defaults, overridden by story.cuts.<name>.limits).
+// Without a story section there are no limits, and text to be read keeps min_text_px.
+export function storyOf(layout, name) {
+  const st = layout.story;
+  if (st === undefined) return { message: null, limits: null, bodyPx: layout.min_text_px };
+  const missing = [...KINDS, "body_text_px"].filter((k) => typeof st?.defaults?.[k] !== "number");
+  if (missing.length) throw new Error(`layout.json の story.defaults に無い: ${missing.join(", ")}`);
+  const own = st.cuts?.[name] ?? {};
+  const limits = {};
+  for (const k of [...KINDS, "body_text_px"]) limits[k] = typeof own.limits?.[k] === "number" ? own.limits[k] : st.defaults[k];
+  return { message: own.message ?? null, limits, bodyPx: limits.body_text_px };
+}
+
+// One tile large and the rest as a small list, inside the box of a grid {x, y, cols, rows,
+// tile_w, tile_h, gap_x, gap_y} (the story: show one representative large). The large one
+// takes the first ceil(cols / 2) columns over all rows; the n - 1 others fill the columns
+// left, row by row, as many rows as they need. Returns { big, small: [rect, ...] }.
+export function featureRects(g, n) {
+  const W = g.cols * g.tile_w + (g.cols - 1) * g.gap_x;
+  const H = g.rows * g.tile_h + (g.rows - 1) * g.gap_y;
+  const bc = Math.min(g.cols - 1, Math.ceil(g.cols / 2));
+  const big = { x: g.x, y: g.y, w: bc * g.tile_w + (bc - 1) * g.gap_x, h: H };
+  const cols = Math.max(1, g.cols - bc);
+  const rows = Math.max(1, Math.ceil((n - 1) / cols));
+  const left = g.x + big.w + g.gap_x;
+  const w = (W - big.w - g.gap_x - (cols - 1) * g.gap_x) / cols;
+  const h = (H - (rows - 1) * g.gap_y) / rows;
+  const small = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    small.push({ x: Math.round(left + c * (w + g.gap_x)), y: Math.round(g.y + r * (h + g.gap_y)), w: Math.floor(w), h: Math.floor(h) });
+  }
+  return { big, small };
+}
+
 export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
@@ -52,8 +100,10 @@ export const N03_KEYS = [
 
 // Not in layout.json (written here until the promo department gives keys for them): the
 // view's and the popup's border and the popup's corner, the padding inside the popup and
-// around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
-export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
+// around the rate (a fraction of popup.text_px), the rate's text size (popup.text_px), and
+// the largest size of the reading (a multiple of popup.title_px; it is also held to the
+// popup's width).
+export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1, reading_of_title: 2 };
 
 // ---- records ----------------------------------------------------------------------
 
@@ -90,7 +140,6 @@ function chartSvg(s, w, h, textPx, name, limit) {
   const unit = unitLabel(s.unit) || "1";
   const svg =
     `<text x="0" y="${textPx}" font-size="${textPx}" fill="#5c5a54">${esc(name)} [${esc(unit)}]</text>` +
-    `<text class="now" x="${w}" y="${textPx}" font-size="${textPx}" fill="#1b1a17" text-anchor="end"></text>` +
     (limit !== null ? `<line x1="0" x2="${w}" y1="${Y(limit).toFixed(1)}" y2="${Y(limit).toFixed(1)}" stroke="${RED}" stroke-width="1.5" stroke-dasharray="6 4"/>` : "") +
     `<polyline points="${pts.join(" ")}" fill="none" stroke="${LINE}" stroke-width="2.2"/>` +
     `<line class="cur" x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="${RED}" stroke-width="1.5"/>`;
@@ -107,6 +156,7 @@ export class CutN03 {
   constructor(layout, s) {
     this.spec = requireKeys(layout, "n03", N03_KEYS);
     this.layout = layout;
+    this.story = storyOf(layout, "n03");
     this.s = s;
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -128,6 +178,9 @@ export class CutN03 {
     const V = sp.view;
     const P = sp.popup;
     const S = N03_STYLE;
+    // the popup's title and the graph's words are read: at least the story's body text size
+    const titlePx = Math.max(P.title_px, this.story.bodyPx);
+    const textPx = Math.max(P.text_px, this.story.bodyPx);
     const pad = Math.round(P.text_px * S.pad_of_text);
     const border = `${S.border_px}px solid ${sp.colors.rule}`;
     this.inner = { w: V.w - 2 * S.border_px, h: V.h - 2 * S.border_px };
@@ -137,7 +190,7 @@ export class CutN03 {
     box.dataset.box = "n03.view";
     Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border });
     box.innerHTML =
-      `<canvas></canvas>` +
+      `<canvas data-kind="moving"></canvas>` +
       `<span class="rate" data-box="n03.view.rate" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
     if (!clearOfBand({ x: V.x, y: V.y, w: V.w, h: V.h }, this.layout)) box.dataset.outside = "1";
     this.stage.append(box);
@@ -169,8 +222,9 @@ export class CutN03 {
       const tests = [...new Set(list.map((c) => c.test))];
       const h3 = document.createElement("h3");
       h3.dataset.box = "n03.popup.title";
+      h3.dataset.kind = "label";
       h3.dataset.tests = tests.join(" ");
-      Object.assign(h3.style, { fontSize: `${P.title_px}px`, marginBottom: `${pad}px` });
+      Object.assign(h3.style, { fontSize: `${titlePx}px`, marginBottom: `${pad}px` });
       h3.textContent = tests.length ? `${title} (${tests.join("・")})` : title;
       el.append(h3);
       pop.append(el);
@@ -178,28 +232,46 @@ export class CutN03 {
         el.insertAdjacentHTML("beforeend", `<p class="none" style="font-size:${P.text_px}px">記録がまだ無い (${esc(charts.map((c) => c.test).join("・"))})</p>`);
         return { el, charts: [] };
       }
-      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad;
+      // the reading, large: as large as the widest value the record holds fits the popup's width
+      const unitOf = (c) => unitLabel(c.s.unit) || "";
+      const readings = list.map((c) => {
+        const r = document.createElement("div");
+        r.className = "now n03-reading";
+        r.dataset.kind = "number";
+        r.dataset.box = `n03.popup.${c.key}.reading`;
+        const [lo, hi] = extent(c.s.values);
+        r.textContent = [lo, hi].map((v) => `${fmt(v, 3)} ${unitOf(c)}`).sort((a, b) => b.length - a.length)[0];
+        el.append(r);
+        let px = Math.round(P.title_px * S.reading_of_title);
+        r.style.fontSize = `${px}px`;
+        while (r.scrollWidth > chartW && px > this.story.bodyPx) {
+          px -= 1;
+          r.style.fontSize = `${px}px`;
+        }
+        r.style.marginBottom = `${pad}px`;
+        return r;
+      });
+      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0);
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
         el,
         charts: list.map((c, i) => {
-          const { svg, X } = chartSvg(c.s, chartW, h, P.text_px, c.name, c.limit ?? null);
-          el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-top:${i ? pad : 0}px">${svg}</svg>`);
+          const { svg, X } = chartSvg(c.s, chartW, h, textPx, c.name, c.limit ?? null);
+          el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" data-kind="graph" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-top:${i ? pad : 0}px">${svg}</svg>`);
           const node = el.lastElementChild;
-          return { ...c, X, cur: node.querySelector(".cur"), now: node.querySelector(".now") };
+          return { ...c, X, cur: node.querySelector(".cur"), now: readings[i], unit: unitOf(c) };
         }),
       };
     };
-    const driveCh = this.drive ? channelsOf(this.drive.ana) : new Map();
     const heatCh = this.heat ? channelsOf(this.heat.ana) : new Map();
     const launchCh = this.launch ? channelsOf(this.launch.ana) : new Map();
     this.battery = this.batteryChannel(heatCh, design);
+    // one graph at a time (story): the battery's temperature on the long drive, then the speed
     this.pages = {
-      drive: page("drive", "電池の残量と温度", [
-        { key: "soc", name: "電池の残量", s: driveCh.get("soc"), test: "P4" },
+      drive: page("drive", "長く走ったときの電池の温度", [
         { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null },
       ]),
-      launch: page("launch", "加速の速さと時間", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
+      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
     };
 
     // the record time spans the two phases play
@@ -289,7 +361,7 @@ export class CutN03 {
     for (const c of this.pages[phase].charts) {
       if (tau === null) continue;
       c.cur.setAttribute("transform", `translate(${c.X(tau).toFixed(1)} 0)`);
-      c.now.textContent = fmt(nearestAt(c.s, tau), 3);
+      c.now.textContent = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
     }
     let view;
     if (launch) {

@@ -182,8 +182,10 @@ class Sim:
         self.dy = [0.0] * n
         self.ct = [0.0] * n  # toe and camber from the compliance (rad), from the forces of the step before
         self.cc = [0.0] * n
+        self.tb = [(0.0, 0.0, 0.0)] * n  # drive and brake reaction straight on the body (world), last step
+        self.last = None  # the state and solution of the last step, for loads()
         self.out = {}
-        defl = [c.static_load / c.k_z for c in veh.corners]
+        defl =[c.static_load / c.k_z for c in veh.corners]
         self.p[2] -= sum(defl) / n
 
     _STATE = ("t", "p", "q", "v", "w", "s", "sd", "om", "dx", "dy", "ct", "cc")
@@ -298,6 +300,7 @@ class Sim:
         rhs6, sm, jj = self._body_forces(rows, rot, ext)
         mm, rhs = self._mass_matrix(geo, rot, sm, jj, rhs6, qs)
         sol, (gx, gy, gz) = self._solve(mm, rhs)
+        self.last = (rot, list(self.p), list(self.s), list(self.w), sol, (gx, gy, gz), rows, geo, list(self.tb))
         self._integrate(sol, gx, gy, gz, h)
         self.om = om_new
         self._relax_tyres(geo, keep, o_ntot, rot, h)
@@ -454,6 +457,7 @@ class Sim:
         t_res = (on - om_free) * jw / h
         t_brake = t_res * (brake / cap) if cap > 0.0 else 0.0
         react = drive + t_brake
+        self.tb[i] = (-react * ax, -react * ay, -react * az)
         mbx = mtx - tau * ax - react * ax
         mby = mty - tau * ay - react * ay
         mbz = mtz - tau * az - react * az
@@ -735,6 +739,42 @@ class Sim:
             g = self._path(i, self.s[i])
             out.append(np.array(self.p) + r @ np.array(g[:3]))
         return np.array(out)
+
+    def loads(self) -> dict:
+        """What the sprung body received in the last step (world axes, N, N*m, m, m/s^2, rad/s),
+        from the state that step started from.
+
+        Per corner: the force and moment its suspension passes to the body, as a load on the
+        knuckle at the wheel centre (the road force, the unsprung mass's weight and inertia
+        m_u (g - a_u), and the moment of the road forces about the wheel centre without its part
+        about the spin axis), and the drive and brake reaction the body takes straight (the
+        motor and the brakes sit on the body in K2). The body's own d'Alembert force
+        -m_s a and moment -(I alpha + omega x I omega) about its centre of mass balance them
+        with its weight (and the external loads of the step, e.g. aerodynamic, not listed)."""
+        rot, p, s, w, sol, grav, rows, geo, tb = self.last
+        r = np.array(rot, dtype=float).reshape(3, 3)
+        g = np.array(grav, dtype=float)
+        acc = np.array(sol[0:3], dtype=float) + g
+        alpha, om = np.array(sol[3:6], dtype=float), np.array(w, dtype=float)
+        i_s = np.array(self.i_s, dtype=float)
+        pos = {i: k for k, i in enumerate(self.dofidx)}
+        corners = []
+        for i in range(self.n):
+            row = rows[i]
+            c = np.array(geo[i][0][0:3], dtype=float)
+            force = np.array(row[0:3], dtype=float)
+            mu_ = self.mu_[i]
+            if self.dof[i] and mu_ > 0.0:
+                dc = np.array(geo[i][0][3:6], dtype=float)
+                a_u = acc + r @ (np.cross(alpha, c) + dc * sol[6 + pos[i]] + np.array(row[9:12], dtype=float) / mu_)
+                force = force + mu_ * (g - a_u)
+            body = np.array(tb[i], dtype=float)
+            corners.append({"force": force, "point": np.array(p) + r @ c, "moment": np.array(row[6:9]) - body,
+                            "body_torque": body, "travel": float(s[i])})
+        m_s = float(self.veh.m_s)
+        return {"rot": r, "cg": np.array(p, dtype=float), "acc": acc, "alpha": r @ alpha, "omega": r @ om,
+                "inertia_force": -m_s * acc, "inertia_moment": -(r @ (i_s @ alpha + np.cross(om, i_s @ om))),
+                "weight": m_s * g, "corners": corners}
 
     def cg_world(self) -> np.ndarray:
         """Whole-vehicle centre of mass (sprung + unsprung)."""

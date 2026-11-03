@@ -7,7 +7,8 @@ as "not evaluable" with the name, so a rule is never answered by a guess.
 
 What a rule can hit (a "target"):
   part     each design.parts entry: its box, mass, and the facts of the members that belong to it
-  frame    members whose `part` names no entry of design.parts (the demo's "frame"): wall, outer size ...
+  frame    each member whose `part` names no entry of design.parts (the demo's "frame"), under the member's own
+           id: wall, outer size, section ratio ... of that member, so a hit names the tube
   support  each design.supports entry (wheel, caster, leg): suspension travel and stiffness, load
 Boxes are read as they are given: size_x is the length along x (front-back), size_y across, size_z up;
 the box rotation (rpy_deg) is not applied.
@@ -43,6 +44,8 @@ FACTS: dict[str, tuple[str, str, str]] = {
     "wall_mm": ("鋼管などの肉厚 (部材のうち最小)", "mm", "member"),
     "outer_mm": ("部材の断面の外形 (大きい方)", "mm", "member"),
     "section_ratio_max": ("断面の外形 / 肉厚 (部材ごとに出して最大)", "1", "member"),
+    "section_ratio_rect_max": ("角形鋼管の外形 / 肉厚 (部材ごとに出して最大。角形鋼管でなければ 0)", "1", "member"),
+    "section_ratio_round_max": ("円形鋼管の外径 / 肉厚 (部材ごとに出して最大。円形鋼管でなければ 0)", "1", "member"),
     "member_count": ("部材の数", "1", "member"),
     "member_length_max_mm": ("部材のうち最長の長さ", "mm", "member"),
     "yield_MPa": ("部材の材料の降伏点 (最小)", "MPa", "member"),
@@ -130,6 +133,8 @@ def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
     walls: list[float] = []
     outers: list[float] = []
     ratios: list[float] = []
+    rect_ratios: list[float] = []  # 0 for a member of another shape: a rule about square tubes passes on it
+    round_ratios: list[float] = []
     lengths: list[float] = []
     yields: list[float] = []
     for m in members:
@@ -141,6 +146,9 @@ def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
             outers.append(max(sizes))
         if sizes and _num(dims.get("t")) and dims["t"] > 0:
             ratios.append(max(sizes) / dims["t"])  # per member: a thin wall on a small tube is not a thin wall on a big one
+            shape = sections.get(m["section"], {}).get("shape")
+            rect_ratios.append(ratios[-1] if shape == "rect_tube" else 0.0)
+            round_ratios.append(ratios[-1] if shape == "round_tube" else 0.0)
         if m["node_a"] in nodes and m["node_b"] in nodes:
             lengths.append(math.dist(nodes[m["node_a"]], nodes[m["node_b"]]))
         y = materials.get(m["material"], {}).get("yield_MPa")
@@ -153,6 +161,8 @@ def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
         out["outer_mm"] = max(outers)
     if ratios:
         out["section_ratio_max"] = max(ratios)
+        out["section_ratio_rect_max"] = max(rect_ratios)
+        out["section_ratio_round_max"] = max(round_ratios)
     if lengths:
         out["member_length_max_mm"] = max(lengths)
     if yields:
@@ -176,8 +186,9 @@ def targets(design: Record, requirements: list[Record] | None = None) -> list[Re
         out.append({"id": p["id"], "type": "part", "kind": p["kind"], "name": p["name"], "facts": facts})
     for pid, members in members_by_part.items():
         if pid not in part_ids:
-            out.append({"id": pid, "type": "frame", "kind": "frame", "name": f"骨組み ({pid})",
-                        "facts": {**shared, **_member_facts(design, members)}})
+            for m in members:  # one target per member, under its id (the contract's rule_check names ids of the design)
+                out.append({"id": m["id"], "type": "frame", "kind": "frame", "name": f"骨組みの部材 {m['id']}",
+                            "facts": {**shared, **_member_facts(design, [m]), "member_count": len(members)}})
     n_support = len(design.get("supports", []))
     for s in design.get("supports", []):
         facts = {**shared, "radius_mm": s["radius_mm"]}

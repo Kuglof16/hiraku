@@ -24,7 +24,7 @@ from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
 from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
-from hiraku.intake.products import PRODUCTS_DIR, load_product, product_files
+from hiraku.intake.products import ANSWERS_SUFFIX, PRODUCTS_DIR, load_product, product_files
 
 Record = dict[str, Any]
 
@@ -92,13 +92,21 @@ def _product_defaults(slug: str, current: Record) -> dict[str, Record]:
 
 
 def _answers_from_file(path: str) -> tuple[dict[str, Any], str | None]:
-    p = (REPO_ROOT / path).resolve()
+    """The answers file named by `path`: relative to the repository (data/requirements/products/<name>), or just
+    <name> (looked up in the products folder), with or without the .answers.yaml ending."""
     allowed = PRODUCTS_DIR.resolve()
-    if not p.is_relative_to(allowed):
-        raise IntakeError(f"答えのファイルは data/requirements/products/ の中のものだけ読めます ({path!r})")
-    if not p.is_file():
-        raise IntakeError(f"答えのファイル {path!r} がありません")
-    return hearing.load_answers(p)
+    names = [path, f"{path}{ANSWERS_SUFFIX}"]
+    tries = [(root / n).resolve() for n in names for root in (REPO_ROOT, PRODUCTS_DIR)]
+    inside = [p for p in tries if p.is_relative_to(allowed)]
+    if not inside:
+        raise IntakeError(f"答えのファイルは data/requirements/products/ の中のものだけ読めます ({path!r})。"
+                          "data/requirements/products/<名前>.answers.yaml のパスで渡してください")
+    for p in inside:
+        if p.is_file():
+            return hearing.load_answers(p)
+    have = ", ".join(sorted(f.name for f in allowed.glob(f"*{ANSWERS_SUFFIX}")))
+    raise IntakeError(f"答えのファイル {path!r} がありません。data/requirements/products/ にあるのは: {have}。"
+                      "data/requirements/products/<名前>.answers.yaml のパスで渡してください")
 
 
 @_guard
@@ -280,7 +288,8 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     problems = _ensure_builtin(ctx)
     persist = ev.known(ev.RULE_CHECK_RECORDED)
     ids = (lambda: store.next_id("rule_check")) if persist else None
-    checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
+    checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids,
+                                  flags=ctx.project.get("flags"))
     if persist:
         through_store = ev.store_records(store, "rule_check")  # the store writes rchk-NNNN.json and emits the event
         for c in checks:
@@ -355,7 +364,8 @@ TOOLS: dict[str, Record] = {
             "要件のうち、この製品に要るのに実行の要件に無いもの (必須・確認) を、まとめて 1 回聞く。質問と選択肢はコードが "
             "項目の表から作る。答えが無い確認の質問は、出どころつきの既定値を使う。必須の質問は答えが無いと進めない。"
             "answers には、人が実際に言ったことだけを {要件の番号: 値 か {value, unit, basis}} で入れる (推測で埋めない)。"
-            "answers_file は data/requirements/products/ の答えのファイル。質問を製品に合わせて言い換えたいときは wording "
+            "answers_file は data/requirements/products/ の答えのファイル (パス data/requirements/products/<名前>.answers.yaml か、名前だけ)。"
+            "Q30 の答えは見る組み合わせ (empty・driver・two・two_cargo か、空車・運転者だけ・2 人・2 人 + 荷)。質問を製品に合わせて言い換えたいときは wording "
             "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
             "答えが来るか時間が切れるまで待つ)。"
         ),

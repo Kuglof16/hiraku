@@ -24,6 +24,8 @@ import yaml
 from hiraku import contract
 from hiraku.catalog import applies, read_data
 from hiraku.contract import layout
+from hiraku.contract.loading import LOADING_JA
+from hiraku.contract.protocols import LOADINGS
 from hiraku.intake.domains import IntakeError, normalize_flags
 
 Record = dict[str, Any]
@@ -155,10 +157,30 @@ def load_answers(path: Path) -> tuple[dict[str, Any], str | None]:
     return dict(data.get("answers") or {}), data.get("note")
 
 
+LOADING_KEY = "Q30"  # the combination of people and load to check: one of hiraku.contract.protocols.LOADINGS
+_LOADING_WORDS = {**{n: n for n in LOADINGS}, **{ja: n for n, ja in LOADING_JA.items()}, "1 人": "driver"}
+
+
+def loading_answer(value: Any) -> str | None:
+    """A loading name (empty, driver, two, two_cargo) for what was answered to Q30: the name itself, its Japanese
+    words (空車・運転者だけ・2 人・2 人 + 荷) or "1 人", spaces ignored. None for anything else."""
+    squeeze = lambda t: "".join(str(t).split()).lower()  # noqa: E731
+    words = {squeeze(w): n for w, n in _LOADING_WORDS.items()}
+    return words.get(squeeze(value))
+
+
 def _answer_requirement(it: Record, answer: Any) -> Record:
     spec = answer if isinstance(answer, dict) else {"value": answer}
     if "value" not in spec:
         raise IntakeError(f"{it['key']} の答えに value がありません")
+    if it["key"] == LOADING_KEY:  # the catalog and the analyses take only these four (hiraku.contract.loading)
+        loading = loading_answer(spec["value"])
+        if loading is None:
+            raise IntakeError(
+                f"{LOADING_KEY} は、見る組み合わせを {', '.join(LOADINGS)} のどれか "
+                f"({'・'.join(LOADING_JA[n] for n in LOADINGS)}) で答えてください ({spec['value']!r} は組み合わせの名前ではありません)。"
+                "介助者のように乗らない人は数えません (乗る人だけを数えます)")
+        spec = {**spec, "value": loading}
     out: Record = {"key": it["key"], "name": it["name"], "value": spec["value"], "source": "hearing",
                    "trust": spec.get("trust", DEFAULT_ANSWER_TRUST), "basis": spec.get("basis", DEFAULT_ANSWER_BASIS)}
     if "unit" in spec:

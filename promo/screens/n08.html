@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N08 An ordinary CAE tool</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n08"></script>
+<style>
+  /* N08: not HIRAKU but an ordinary, made-up CAE application (no product
+     name, logo or layout of a real one). Licence windows pile up, then
+     settings windows, then warnings and a stack of manuals; at the end the
+     picture darkens to hand over to N08b. Placement and times: layout.json
+     n08 (CSS variables from layout.js; --t-* from n08.times). Windows are
+     placed by script from n08.win (boxStyle). */
+  :root {
+    --page-bg: #161a1f;
+    --ui-face: #e9ebee;
+    --ui-face-2: #f4f5f7;
+    --ui-line: #8d949d;
+    --ui-line-soft: #b9bec5;
+    --ui-text: #1f242a;
+    --ui-text-soft: #59616b;
+    --ui-sel: #2f6fd0;
+    --ui-bar: #3b6aa8;
+    --ui-bar-off: #c6ccd3;
+    --ui-warn: #e0a722;
+    --ui-err: #cf3b2e;
+    --ui-ok: #3b8a52;
+    --font-ui: "Meiryo UI", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  }
+  .stage {
+    background: radial-gradient(ellipse at 50% 42%, #2c333b 0%, #1d2228 60%, #14171b 100%);
+    font-family: var(--font-ui);
+    color: var(--ui-text);
+  }
+
+  /* the application: turns and grows slowly about (960, 455) */
+  .desk {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--stage-w);
+    height: var(--stage-h);
+    transform-origin: calc(960 * var(--u)) calc(455 * var(--u));
+    animation: camera var(--camera-move-dur) var(--camera-ease) both;
+  }
+  @keyframes camera {
+    from { transform: rotate(var(--camera-rotate-from)) scale(var(--camera-from-scale)); }
+    to   { transform: rotate(var(--camera-rotate-to)) scale(var(--camera-to-scale)); }
+  }
+
+  /* ---- main window ---- */
+  .main {
+    position: absolute;
+    left: var(--main-x);
+    top: var(--main-y);
+    width: var(--main-w);
+    height: var(--main-h);
+    background: var(--ui-face);
+    border: calc(1 * var(--u)) solid #6f7680;
+    box-shadow: 0 calc(18 * var(--u)) calc(60 * var(--u)) rgba(0, 0, 0, 0.55);
+    display: grid;
+    grid-template-rows: var(--main-bar-h) var(--main-menu-h) var(--main-tool-h) 1fr var(--main-status-h);
+    grid-template-columns: var(--main-tree-w) 1fr var(--main-props-w);
+  }
+  .main > .bar, .main > .menu, .main > .tools, .main > .status { grid-column: 1 / -1; }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: calc(10 * var(--u));
+    padding: 0 calc(12 * var(--u));
+    background: var(--ui-bar);
+    color: #fff;
+    font: 600 var(--text-title-px) / 1.3 var(--font-ui);
+    white-space: nowrap;
+  }
+  .bar .ttl { flex: 1; overflow: hidden; }
+  .bar svg { width: calc(16 * var(--u)); height: calc(16 * var(--u)); flex: none; }
+  .main > .bar { animation: bar-off 0.01s linear both; animation-delay: var(--t-license); }
+  @keyframes bar-off { to { background: var(--ui-bar-off); color: #4d5560; } }
+
+  .menu {
+    display: flex;
+    align-items: center;
+    padding: 0 calc(8 * var(--u));
+    background: var(--ui-face-2);
+    border-bottom: calc(1 * var(--u)) solid var(--ui-line-soft);
+    font: 400 var(--text-menu-px) / 1.3 var(--font-ui);
+    white-space: nowrap;
+  }
+  .menu span { padding: 0 calc(13 * var(--u)); }
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: calc(4 * var(--u));
+    padding: 0 calc(10 * var(--u));
+    border-bottom: calc(1 * var(--u)) solid var(--ui-line-soft);
+  }
+  .tools i {
+    display: block;
+    width: calc(36 * var(--u));
+    height: calc(36 * var(--u));
+    border: calc(1 * var(--u)) solid var(--ui-line-soft);
+    border-radius: calc(3 * var(--u));
+    background: linear-gradient(#fbfbfc, #e1e4e8);
+  }
+  .tools i svg { width: 100%; height: 100%; }
+  .tools .sep { width: calc(1 * var(--u)); height: calc(30 * var(--u)); background: var(--ui-line-soft); border: 0; margin: 0 calc(6 * var(--u)); }
+
+  .tree, .props {
+    background: #fff;
+    border-right: calc(1 * var(--u)) solid var(--ui-line-soft);
+    font: 400 var(--text-tree-px) / 1.3 var(--font-ui);
+    overflow: hidden;
+  }
+  .props { border-right: 0; border-left: calc(1 * var(--u)) solid var(--ui-line-soft); }
+  .pane-h {
+    height: calc(36 * var(--u));
+    display: flex;
+    align-items: center;
+    padding: 0 calc(12 * var(--u));
+    background: var(--ui-face);
+    border-bottom: calc(1 * var(--u)) solid var(--ui-line-soft);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .tree p {
+    margin: 0;
+    height: calc(34 * var(--u));
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    padding-left: calc(12 * var(--u) + var(--lv) * 22 * var(--u));
+  }
+  .tree p b { width: calc(18 * var(--u)); color: var(--ui-text-soft); font-weight: 400; }
+  .tree p.sel { background: var(--ui-sel); color: #fff; }
+  .tree p.sel b { color: #fff; }
+  .props dl { margin: 0; display: grid; grid-template-columns: 44% 56%; }
+  .props dt, .props dd {
+    margin: 0;
+    height: calc(34 * var(--u));
+    display: flex;
+    align-items: center;
+    padding: 0 calc(10 * var(--u));
+    border-bottom: calc(1 * var(--u)) solid #e3e6ea;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .props dt { color: var(--ui-text-soft); border-right: calc(1 * var(--u)) solid #e3e6ea; }
+  .props dd.bad { color: var(--ui-err); }
+
+  .view {
+    position: relative;
+    background: linear-gradient(#3a434d, #20262d);
+    overflow: hidden;
+  }
+  .view svg.mesh { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .view .cap {
+    position: absolute;
+    left: calc(14 * var(--u));
+    top: calc(12 * var(--u));
+    font: 400 var(--text-view-px) / 1.3 var(--font-ui);
+    color: #c9d1da;
+    white-space: nowrap;
+  }
+  .mesh polygon { stroke: #2b333c; stroke-width: 1.1; stroke-linejoin: round; }
+  .mesh .front { fill: #b8c2cc; }
+  .mesh .top { fill: #d6dce2; }
+  .mesh .side { fill: #8c97a3; }
+  .mesh .front.bad { animation: bad 0.01s linear both; animation-delay: var(--t-warn-shape); }
+  .mesh .front.bad.worse { animation-name: worse; }
+  @keyframes bad { to { fill: #e6bf45; } }
+  @keyframes worse { to { fill: #d8573d; } }
+  .mesh .axis { stroke: #c9d1da; stroke-width: 2; fill: none; }
+  .mesh text { font: 400 var(--text-view-px) var(--font-ui); fill: #c9d1da; }
+
+  .status {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: calc(30 * var(--u));
+    padding: 0 calc(12 * var(--u));
+    background: var(--ui-face);
+    border-top: calc(1 * var(--u)) solid var(--ui-line-soft);
+    font: 400 var(--text-status-px) / 1.3 var(--font-ui);
+    color: var(--ui-text-soft);
+    white-space: nowrap;
+  }
+  .status .now { width: calc(360 * var(--u)); position: relative; height: 100%; }
+  .status .now span { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
+  .status .ready { animation: gone 0.01s linear both; animation-delay: var(--t-warn-shape); }
+  .status .alert { color: var(--ui-err); animation: shown 0.01s linear both; animation-delay: var(--t-warn-shape); }
+  @keyframes gone { to { opacity: 0; } }
+  @keyframes shown { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---- dialogs ---- */
+  .win {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    background: var(--ui-face);
+    border: calc(1 * var(--u)) solid #5f6670;
+    border-radius: calc(var(--chrome-radius-px)) calc(var(--chrome-radius-px)) 0 0;
+    box-shadow: 0 calc(10 * var(--u)) calc(34 * var(--u)) rgba(0, 0, 0, 0.45);
+    animation: pop var(--anim-pop-dur) var(--anim-pop-ease) both;
+    animation-delay: var(--at);
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(var(--anim-pop-from-scale)); }
+    to   { opacity: 1; transform: none; }
+  }
+  .win > .bar { height: var(--chrome-bar-h); flex: none; animation: bar-off 0.01s linear both; animation-delay: var(--next); }
+  .win.last > .bar { animation: none; }
+  .win.warn > .bar, .win.err > .bar { --ui-bar: #4a5260; }
+  .tabs {
+    display: flex;
+    gap: calc(2 * var(--u));
+    padding: calc(8 * var(--u)) var(--chrome-pad-px) 0;
+    border-bottom: calc(1 * var(--u)) solid var(--ui-line);
+    font: 400 var(--text-tab-px) / 1.3 var(--font-ui);
+  }
+  .tabs b {
+    font-weight: 400;
+    padding: 0 calc(16 * var(--u));
+    height: calc(var(--chrome-tab-h) - 8 * var(--u));
+    display: flex;
+    align-items: center;
+    background: #dde1e6;
+    border: calc(1 * var(--u)) solid var(--ui-line-soft);
+    border-bottom: 0;
+    white-space: nowrap;
+  }
+  .tabs b.on { background: var(--ui-face); border-color: var(--ui-line); margin-bottom: calc(-1 * var(--u)); }
+  .body { flex: 1; padding: calc(10 * var(--u)) var(--chrome-pad-px); min-height: 0; overflow: hidden; }
+  .row {
+    display: grid;
+    grid-template-columns: var(--chrome-label-w) 1fr;
+    align-items: center;
+    height: var(--chrome-row-h);
+  }
+  .row > span { font: 400 var(--text-label-px) / 1.3 var(--font-ui); white-space: nowrap; overflow: hidden; }
+  .fld {
+    position: relative;
+    height: var(--chrome-field-h);
+    display: flex;
+    align-items: center;
+    padding: 0 calc(8 * var(--u));
+    background: #fff;
+    border: calc(1 * var(--u)) solid #a3aab3;
+    box-shadow: inset 0 calc(1 * var(--u)) calc(2 * var(--u)) rgba(0, 0, 0, 0.12);
+    font: 400 var(--text-field-px) / 1.3 var(--font-ui);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .fld.dd { padding-right: calc(34 * var(--u)); }
+  .fld.dd::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(26 * var(--u));
+    border-left: calc(1 * var(--u)) solid #c3c8ce;
+    background: linear-gradient(#f7f8f9, #e2e5e9);
+    clip-path: none;
+  }
+  .fld.dd::before {
+    content: "";
+    position: absolute;
+    right: calc(8 * var(--u));
+    top: 50%;
+    width: calc(9 * var(--u));
+    height: calc(9 * var(--u));
+    border-right: calc(2 * var(--u)) solid #49515b;
+    border-bottom: calc(2 * var(--u)) solid #49515b;
+    transform: translateY(-70%) rotate(45deg);
+    z-index: 1;
+  }
+  .fld.empty { background: #fff; }
+  .fld.unset { color: #9aa1aa; }
+  .checks { display: flex; gap: calc(12 * var(--u)); font: 400 var(--text-field-px) / 1.3 var(--font-ui); white-space: nowrap; }
+  .checks label { display: flex; align-items: center; gap: calc(5 * var(--u)); }
+  .checks i {
+    width: calc(18 * var(--u));
+    height: calc(18 * var(--u));
+    background: #fff;
+    border: calc(1 * var(--u)) solid #7d858f;
+  }
+  .grid-t {
+    margin-top: calc(6 * var(--u));
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: calc(1 * var(--u)) solid #a3aab3;
+    border-left: calc(1 * var(--u)) solid #a3aab3;
+    font: 400 var(--text-field-px) / 1.3 var(--font-ui);
+  }
+  .grid-t div {
+    height: calc(30 * var(--u));
+    border-right: calc(1 * var(--u)) solid #a3aab3;
+    border-bottom: calc(1 * var(--u)) solid #a3aab3;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 calc(8 * var(--u));
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .grid-t div.h { background: #e3e6ea; color: var(--ui-text-soft); }
+  .btns {
+    flex: none;
+    display: flex;
+    justify-content: flex-end;
+    gap: calc(10 * var(--u));
+    padding: calc(10 * var(--u)) var(--chrome-pad-px) calc(12 * var(--u));
+  }
+  .btns b {
+    font: 400 var(--text-btn-px) / 1.3 var(--font-ui);
+    height: var(--chrome-btn-h);
+    min-width: calc(96 * var(--u));
+    padding: 0 calc(16 * var(--u));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(#fdfdfd, #e4e7ea);
+    border: calc(1 * var(--u)) solid #9aa1aa;
+    border-radius: calc(3 * var(--u));
+    white-space: nowrap;
+  }
+  .btns b.def { border: calc(2 * var(--u)) solid var(--ui-sel); }
+
+  /* licence and modules */
+  .info .row > span:first-child { color: var(--ui-text-soft); }
+  .info .val { font: 400 var(--text-label-px) / 1.3 var(--font-ui); white-space: nowrap; overflow: hidden; }
+  .info .val.red { color: var(--ui-err); font-weight: 600; }
+  .quote {
+    margin-top: calc(12 * var(--u));
+    padding: calc(14 * var(--u)) calc(16 * var(--u));
+    background: #fff8e1;
+    border: calc(1 * var(--u)) solid #d9b75a;
+    display: flex;
+    gap: calc(16 * var(--u));
+    align-items: center;
+    font: 400 var(--text-label-px) / 1.2 var(--font-ui);
+    white-space: nowrap;
+  }
+  .quote span:first-child { color: var(--ui-text-soft); }
+  .quote b { font-weight: 600; }
+  .list { border: calc(1 * var(--u)) solid var(--ui-line); background: #fff; }
+  .list .lh, .list .li {
+    display: grid;
+    grid-template-columns: calc(34 * var(--u)) 1fr calc(220 * var(--u));
+    align-items: center;
+    height: calc(42 * var(--u));
+    padding: 0 calc(10 * var(--u));
+    font: 400 var(--text-label-px) / 1.3 var(--font-ui);
+    white-space: nowrap;
+  }
+  .list .lh { background: #e3e6ea; color: var(--ui-text-soft); border-bottom: calc(1 * var(--u)) solid var(--ui-line-soft); height: calc(36 * var(--u)); }
+  .list .li { position: relative; border-bottom: calc(1 * var(--u)) solid #edf0f2; }
+  .list .li > * { position: relative; }
+  .list .li .in { display: contents; }
+  .list .li {
+    animation: row-in var(--anim-row-dur) ease-out both;
+    animation-delay: calc(var(--t-module-rows) + var(--i) * var(--t-module-step));
+  }
+  @keyframes row-in { from { opacity: 0; transform: translateX(calc(-14 * var(--u))); } to { opacity: 1; transform: none; } }
+  .list .li i {
+    width: calc(18 * var(--u));
+    height: calc(18 * var(--u));
+    border: calc(1 * var(--u)) solid #9aa1aa;
+    background: #f0f1f3;
+  }
+  .list .li.own i { background: var(--ui-ok); border-color: var(--ui-ok); }
+  .list .st { display: flex; align-items: center; gap: calc(8 * var(--u)); color: var(--ui-text-soft); }
+  .list .own .st { color: var(--ui-ok); }
+  .list .st svg { width: calc(16 * var(--u)); height: calc(18 * var(--u)); flex: none; }
+  .list .li .selbg { position: absolute; inset: 0; background: var(--ui-sel); opacity: 0;
+                     animation: shown 0.01s linear both; animation-delay: var(--t-select); }
+  .list .li.pick span, .list .li.pick .st { animation: on-sel 0.01s linear both; animation-delay: var(--t-select); }
+  @keyframes on-sel { to { color: #fff; } }
+
+  /* message boxes */
+  .msg { flex: 1; display: flex; gap: calc(20 * var(--u)); align-items: flex-start; padding: calc(22 * var(--u)) calc(24 * var(--u)) 0; }
+  .msg svg { width: calc(54 * var(--u)); height: calc(54 * var(--u)); flex: none; }
+  .msg p { margin: 0; white-space: nowrap; }
+  .msg .m1 { font: 600 var(--text-warn-px) / 1.35 var(--font-ui); }
+  .msg .m2 { margin-top: calc(8 * var(--u)); font: 400 var(--text-warn-sub-px) / 1.35 var(--font-ui); color: var(--ui-text-soft); }
+  .win.err { animation: pop var(--anim-pop-dur) var(--anim-pop-ease) both, shake var(--anim-shake-dur) linear both; animation-delay: var(--at), calc(var(--at) + var(--anim-pop-dur)); }
+  @keyframes shake {
+    0%, 100% { translate: 0 0; }
+    20% { translate: calc(-10 * var(--u)) 0; }
+    40% { translate: calc(9 * var(--u)) 0; }
+    60% { translate: calc(-6 * var(--u)) 0; }
+    80% { translate: calc(3 * var(--u)) 0; }
+  }
+
+  /* ---- manuals (in front, not turned with the application) ---- */
+  .books {
+    position: absolute;
+    left: var(--books-x);
+    top: var(--books-y);
+    width: var(--books-w);
+    height: var(--books-h);
+  }
+  .book {
+    position: absolute;
+    left: 0;
+    display: flex;
+    align-items: center;
+    border-radius: calc(3 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u)) calc(3 * var(--u));
+    box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(0, 0, 0, 0.5), inset 0 calc(2 * var(--u)) 0 rgba(255, 255, 255, 0.12);
+    color: #ebe7dc;
+    font: 600 var(--text-book-px) / 1.3 var(--font-ui);
+    white-space: nowrap;
+    animation: drop var(--anim-book-dur) var(--anim-book-ease) both;
+    animation-delay: calc(var(--t-books) + var(--i) * var(--t-book-step));
+  }
+  .book::before {   /* bands across the spine */
+    content: "";
+    position: absolute;
+    left: calc(26 * var(--u));
+    top: 0;
+    bottom: 0;
+    width: calc(10 * var(--u));
+    border-left: calc(3 * var(--u)) solid rgba(255, 255, 255, 0.25);
+    border-right: calc(3 * var(--u)) solid rgba(255, 255, 255, 0.25);
+  }
+  .book::after {    /* page edges at the right end */
+    content: "";
+    position: absolute;
+    right: calc(-14 * var(--u));
+    top: calc(4 * var(--u));
+    bottom: calc(4 * var(--u));
+    width: calc(14 * var(--u));
+    background: repeating-linear-gradient(#f3efe4 0 calc(2 * var(--u)), #cfc9ba calc(2 * var(--u)) calc(3 * var(--u)));
+    border-radius: 0 calc(3 * var(--u)) calc(3 * var(--u)) 0;
+  }
+  .book span { margin-left: calc(56 * var(--u)); }
+  @keyframes drop {
+    from { opacity: 0; translate: 0 calc(-1 * var(--books-drop-px)); }
+    30%  { opacity: 1; }
+    to   { opacity: 1; translate: 0 0; }
+  }
+
+  /* mouse pointer: path keyframes are written by script from n08.pointer.path */
+  .pointer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    width: 0;
+    height: 0;
+    animation: pointer-path var(--pointer-duration) linear both;
+  }
+  .pointer svg {
+    position: absolute;
+    left: calc(-2 * var(--u));
+    top: calc(-1 * var(--u));
+    width: var(--pointer-size-px);
+    height: calc(var(--pointer-size-px) * 1.5);
+    filter: drop-shadow(0 calc(2 * var(--u)) calc(3 * var(--u)) rgba(0, 0, 0, 0.5));
+  }
+  .pointer i {
+    position: absolute;
+    left: calc(var(--pointer-ring-px) / -2);
+    top: calc(var(--pointer-ring-px) / -2);
+    width: var(--pointer-ring-px);
+    height: var(--pointer-ring-px);
+    border-radius: 50%;
+    border: calc(3 * var(--u)) solid var(--ui-sel);
+    opacity: 0;
+    animation: click var(--pointer-click-dur) ease-out both;
+  }
+  .pointer i.c1 { animation-delay: var(--t-select); }
+  .pointer i.c2 { animation-delay: var(--t-run); }
+  @keyframes click {
+    from { opacity: 0.9; transform: scale(0.3); }
+    to   { opacity: 0; transform: scale(1.2); }
+  }
+
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: var(--night);
+    opacity: 0;
+    animation: dim var(--dim-fade-dur) ease-in both;
+    animation-delay: var(--t-dim);
+    pointer-events: none;
+  }
+  @keyframes dim { from { opacity: 0; } to { opacity: var(--dim-peak); } }
+</style>
+</head>
+<body data-duration="6.4">
+<div class="stage">
+  <div class="desk">
+    <div class="main" data-box="n08.main">
+      <div class="bar"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 11 L8 4 L12 11 Z" fill="#fff"/></svg><span class="ttl" data-kind="label">無題 — 構造解析</span></div>
+      <div class="menu"></div>
+      <div class="tools"></div>
+      <div class="tree"><div class="pane-h">モデルの構成</div></div>
+      <div class="view"><svg class="mesh"></svg><div class="cap">表示: メッシュ ・ 面と線</div></div>
+      <div class="props"><div class="pane-h">プロパティ</div><dl></dl></div>
+      <div class="status">
+        <div class="now"><span class="ready">準備完了</span><span class="alert">警告があります。メッセージを確認してください</span></div>
+        <span>単位系: 未設定</span><span>選択: なし</span>
+      </div>
+    </div>
+  </div>
+  <div class="books" data-box="n08.books"></div>
+  <div class="dim"></div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Everything below is made up for this screen: an ordinary CAE application
+  // with no product name. No prices and no counts are shown.
+  const L = window.promoLayout;
+  const R = L.cutRules;
+  const px = L.px;
+  const css = (k) => k.replace(/_/g, "-");
+  document.documentElement.style.setProperty("--dim-peak", String(R.dim.peak_alpha));
+
+  // Seeded generator (mulberry32): the same seed gives the same picture.
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---- main window ----
+  document.querySelector(".menu").innerHTML =
+    ["ファイル", "編集", "表示", "形状", "メッシュ", "材料", "条件", "解析", "結果", "ツール", "ウィンドウ", "ヘルプ"]
+      .map((m) => `<span>${m}</span>`).join("");
+
+  const GLYPHS = [
+    '<path d="M8 12 L18 7 L28 12 L28 24 L18 29 L8 24 Z M8 12 L18 17 L28 12 M18 17 L18 29" fill="none" stroke="#4b5560" stroke-width="1.6"/>',
+    '<path d="M8 28 L18 8 L28 28 Z M13 18 L23 18 M18 8 L13 28 M18 8 L23 28" fill="none" stroke="#4b5560" stroke-width="1.6"/>',
+    '<circle cx="16" cy="16" r="7" fill="none" stroke="#4b5560" stroke-width="2"/><path d="M21 21 L28 28" stroke="#4b5560" stroke-width="2.4"/>',
+    '<path d="M18 7 L18 29 M7 18 L29 18" stroke="#4b5560" stroke-width="2"/><path d="M18 7 L15 11 M18 7 L21 11" stroke="#4b5560" stroke-width="2" fill="none"/>',
+    '<path d="M8 8 H28 V28 H8 Z M8 15 H28 M8 22 H28 M15 8 V28 M22 8 V28" fill="none" stroke="#4b5560" stroke-width="1.4"/>',
+    '<path d="M9 27 L27 9" stroke="#4b5560" stroke-width="2"/><path d="M20 9 H27 V16" fill="none" stroke="#4b5560" stroke-width="2"/>',
+    '<rect x="9" y="9" width="18" height="18" fill="#9fb3c8" stroke="#4b5560" stroke-width="1.4"/>',
+    '<path d="M10 26 Q18 4 26 26" fill="none" stroke="#4b5560" stroke-width="2"/>',
+    '<path d="M8 14 H28 M8 22 H28" stroke="#4b5560" stroke-width="2"/><circle cx="14" cy="14" r="3" fill="#4b5560"/><circle cx="23" cy="22" r="3" fill="#4b5560"/>',
+    '<path d="M9 18 A9 9 0 1 1 18 27" fill="none" stroke="#4b5560" stroke-width="2"/><path d="M9 18 L6 14 M9 18 L13 15" stroke="#4b5560" stroke-width="2"/>',
+  ];
+  const toolPick = rng(R.view.seed + 101);
+  let tools = "";
+  for (let i = 0; i < 30; i++) {
+    if (i % 6 === 5) { tools += '<i class="sep"></i>'; continue; }
+    const g = GLYPHS[Math.floor(toolPick() * GLYPHS.length)];
+    tools += `<i><svg viewBox="0 0 36 36">${g}</svg></i>`;
+  }
+  document.querySelector(".tools").innerHTML = tools;
+
+  const TREE = [
+    [0, "▾", "解析 1"], [1, "▾", "形状"], [2, "", "ブラケット"], [1, "▾", "メッシュ", "sel"], [2, "", "四面体・二次"],
+    [1, "▸", "材料"], [1, "▸", "断面の性質"], [1, "▸", "拘束"], [1, "▸", "荷重"], [1, "▸", "接触の組"],
+    [1, "▸", "解析のステップ"], [1, "▸", "出力の要求"], [1, "▸", "結果"], [0, "▸", "解析 2 (下書き)"],
+  ];
+  document.querySelector(".tree").insertAdjacentHTML("beforeend", TREE.map(([lv, ar, name, cls]) =>
+    `<p class="${cls || ""}" style="--lv:${lv}"><b>${ar}</b>${name}</p>`).join(""));
+
+  const PROPS = [["名前", "ブラケット"], ["材料", "未割り当て", "bad"], ["断面", "未設定", "bad"], ["要素の種類", "四面体・二次"],
+    ["要素の大きさ", "自動"], ["座標系", "全体"], ["形の判定", "標準"], ["接触", "なし"], ["状態", "要確認", "bad"]];
+  document.querySelector(".props dl").innerHTML = PROPS.map(([k, v, c]) =>
+    `<dt>${k}</dt><dd class="${c || ""}">${v}</dd>`).join("");
+
+  // ---- the bracket's mesh in the 3D view ----
+  (function drawMesh() {
+    const V = R.view, M = R.main;
+    const w = M.w - M.tree_w - M.props_w, h = M.h - M.bar_h - M.menu_h - M.tool_h - M.status_h;
+    const svg = document.querySelector("svg.mesh");
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    const rand = rng(V.seed);
+    const s = V.unit_px, ox = V.origin_x, oy = V.origin_y, dx = V.depth_x_px, dy = V.depth_y_px;
+    const step = 0.5;
+    // L-shaped section: base 14 x 2.5 units, web 2.5 x 10 units
+    const inside = (u, v) => (u >= 0 && u <= 14 && v >= 0 && v <= 2.5) || (u >= 0 && u <= 2.5 && v >= 0 && v <= 10);
+    const cellIn = (u, v) => inside(u + step / 2, v + step / 2);
+    const P = (u, v, z) => [ox + s * u + dx * z, oy - s * v - dy * z];
+    const nodes = new Map();
+    const node = (i, j) => {
+      const k = i + "," + j;
+      if (!nodes.has(k)) {
+        let u = i * step, v = j * step;
+        // move interior nodes only (all four surrounding cells are in the section)
+        const interior = cellIn(u - step, v - step) && cellIn(u, v - step) && cellIn(u - step, v) && cellIn(u, v);
+        if (interior) { u += (rand() - 0.5) * 2 * V.jitter * step; v += (rand() - 0.5) * 2 * V.jitter * step; }
+        nodes.set(k, [u, v]);
+      }
+      return nodes.get(k);
+    };
+    const poly = (pts, cls, extra = "") =>
+      `<polygon class="${cls}" ${extra} points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(",")).join(" ")}"/>`;
+    let out = "";
+    // faces seen from the upper right: tops (v = 2.5 for the base beyond the web, v = 10 for the web) and right sides
+    const strip = (a, b, n, cls) => {   // a, b: [u, v] ends of an edge; n cells along it, 3 across the depth
+      for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) {
+        const t0 = i / n, t1 = (i + 1) / n, z0 = k / 3, z1 = (k + 1) / 3;
+        const at = (t, z) => P(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z);
+        out += poly([at(t0, z0), at(t1, z0), at(t1, z1), at(t0, z1)], cls);
+      }
+    };
+    strip([2.5, 2.5], [14, 2.5], 23, "top");
+    strip([0, 10], [2.5, 10], 5, "top");
+    strip([14, 0], [14, 2.5], 5, "side");
+    strip([2.5, 2.5], [2.5, 10], 15, "side");
+    // the front face, in triangles
+    const corner = [2.5, 2.5];
+    for (let i = 0; i < 28; i++) for (let j = 0; j < 20; j++) {
+      const u = i * step, v = j * step;
+      if (!cellIn(u, v)) continue;
+      const a = node(i, j), b = node(i + 1, j), c = node(i + 1, j + 1), d = node(i, j + 1);
+      const tris = (i + j) % 2 ? [[a, b, c], [a, c, d]] : [[a, b, d], [b, c, d]];
+      for (const t of tris) {
+        const cu = (t[0][0] + t[1][0] + t[2][0]) / 3, cv = (t[0][1] + t[1][1] + t[2][1]) / 3;
+        const near = Math.hypot(cu - corner[0], cv - corner[1]);
+        const r = rand();
+        let cls = "front";
+        if (near < 1.6 && r < 0.55) cls += r < 0.2 ? " bad worse" : " bad";
+        else if (near >= 1.6 && r < 0.025) cls += " bad";
+        out += poly(t.map((q) => P(q[0], q[1], 0)), cls);
+      }
+    }
+    // axis triad, bottom left
+    const tx = 60, ty = h - 50;
+    out += `<path class="axis" d="M${tx} ${ty} h44 M${tx} ${ty} v-44 M${tx} ${ty} l22 -16"/>` +
+      `<text x="${tx + 50}" y="${ty + 6}">X</text><text x="${tx - 6}" y="${ty - 52}">Y</text><text x="${tx + 26}" y="${ty - 22}">Z</text>`;
+    svg.innerHTML = out;
+  })();
+
+  // ---- dialogs ----
+  const X = '<svg viewBox="0 0 16 16"><path d="M3 3 L13 13 M13 3 L3 13" stroke="currentColor" stroke-width="2"/></svg>';
+  const Q = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 6.2 Q6 4 8 4 Q10 4 10 6 Q10 7.4 8 8.2 V9.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="12" r="1" fill="currentColor"/></svg>';
+  const LOCK = '<svg viewBox="0 0 16 18"><path d="M4 8 V5.5 A4 4 0 0 1 12 5.5 V8" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="2" y="8" width="12" height="9" rx="1.5" fill="currentColor"/></svg>';
+  const WARN = '<svg viewBox="0 0 54 54"><path d="M27 4 L51 48 H3 Z" fill="#e0a722" stroke="#9a6f0c" stroke-width="2" stroke-linejoin="round"/><path d="M27 18 V34" stroke="#2a2105" stroke-width="5" stroke-linecap="round"/><circle cx="27" cy="41" r="3" fill="#2a2105"/></svg>';
+  const ERR = '<svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="24" fill="#cf3b2e" stroke="#8c2118" stroke-width="2"/><path d="M18 18 L36 36 M36 18 L18 36" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>';
+
+  const f = (label, value, kind = "dd") => `<div class="row"><span>${label}</span><div class="fld ${kind}">${value}</div></div>`;
+  const blank = (label) => `<div class="row"><span>${label}</span><div class="fld empty"></div></div>`;
+  const unset = (label) => `<div class="row"><span>${label}</span><div class="fld unset">未設定</div></div>`;
+  const checks = (label, items) => `<div class="row"><span>${label}</span><div class="checks">${items.map((x) => `<label><i></i>${x}</label>`).join("")}</div></div>`;
+  const tabs = (names) => `<div class="tabs">${names.map((n, i) => `<b class="${i ? "" : "on"}">${n}</b>`).join("")}</div>`;
+  const btns = (names) => `<div class="btns">${names.map((n, i) => `<b class="${i === names.length - 1 ? "def" : ""}">${n}</b>`).join("")}</div>`;
+  const info = (label, value, red) => `<div class="row"><span>${label}</span><span class="val${red ? " red" : ""}">${value}</span></div>`;
+  const msg = (icon, m1, m2) => `<div class="msg">${icon}<div><p class="m1">${m1}</p><p class="m2">${m2}</p></div></div>`;
+
+  const MODULES = [
+    ["構造 (線形)", true], ["構造 (非線形)"], ["流体"], ["熱"], ["疲労"], ["衝突"], ["振動・騒音"], ["最適化"], ["電磁場"], ["樹脂の流れ"],
+  ];
+  const PICK = "疲労";
+
+  const WINDOWS = [
+    { key: "license", title: "ライセンスの管理", html:
+      `<div class="body info">` +
+      info("製品の構成", "基本パッケージ") +
+      info("ライセンスの種類", "年間契約・フローティング") +
+      info("ライセンスの有効期限", "まもなく切れます", true) +
+      info("同時に使える人数", "上限に達しています", true) +
+      info("ノード数の上限", "基本パッケージの範囲まで") +
+      info("保守とサポート", "別の契約が必要です") +
+      `<div class="quote"><span>価格</span><b>お見積もりはお問い合わせください</b></div></div>` +
+      btns(["閉じる", "更新の手続き", "営業担当に問い合わせる"]) },
+    { key: "modules", title: "追加モジュール", html:
+      `<div class="body"><div class="list"><div class="lh"><span></span><span>モジュール</span><span>状態</span></div>` +
+      MODULES.map(([name, own], i) =>
+        `<div class="li${own ? " own" : ""}${name === PICK ? " pick" : ""}" style="--i:${i}">` +
+        (name === PICK ? `<div class="selbg"></div>` : "") +
+        `<i></i><span>${name}</span><div class="st">${own ? "契約中" : LOCK + "<span>別のライセンス</span>"}</div></div>`).join("") +
+      `</div></div>` + btns(["閉じる", "見積もりを依頼"]) },
+    { key: "nolicense", title: "ライセンス", cls: "warn", html:
+      msg(WARN, "このモジュールのライセンスが見つかりません。", "追加のライセンスを購入するか、管理者に問い合わせてください。") +
+      btns(["キャンセル", "購入について問い合わせる"]) },
+    { key: "mesh", title: "メッシュの設定", html: tabs(["基本", "詳細", "上級者向け"]) +
+      `<div class="body">` + f("要素の大きさ", "自動") + f("要素の種類", "四面体・二次") + f("曲率で細かくする", "有効") +
+      f("細かさの変化", "なだらか") + f("薄い所の扱い", "細かくする") + f("形の判定", "厳しい") + unset("局所的な細分化") + unset("境界層") +
+      `</div>` + btns(["プレビュー", "適用", "OK"]) },
+    { key: "material", title: "材料の定義", html: tabs(["弾性", "塑性", "温度", "疲労", "減衰"]) +
+      `<div class="body">` + f("弾性の種類", "等方性") + blank("ヤング率") + blank("ポアソン比") + blank("密度") +
+      f("降伏の判定", "ミーゼス") + f("硬化の規則", "多直線") + `<div class="row"><span>応力とひずみの表</span><span></span></div>` +
+      `<div class="grid-t"><div class="h">ひずみ</div><div class="h">応力</div><div class="h">温度</div><div class="h">ひずみ速度</div>` +
+      "<div></div>".repeat(8) + `</div></div>` + btns(["読み込む", "適用", "OK"]) },
+    { key: "bc", title: "拘束と荷重", html: tabs(["拘束", "荷重", "初期条件"]) +
+      `<div class="body">` + f("拘束する面", "選ばれていません", "unset") + checks("止める向き", ["X", "Y", "Z", "回転X", "回転Y"]) +
+      f("荷重の種類", "力") + f("荷重の向き", "成分で入力") + f("分布のさせ方", "一様") + f("時間による変化", "表で入力") + f("座標系", "全体") +
+      `</div>` + btns(["適用", "OK"]) },
+    { key: "contact", title: "接触の設定", html: tabs(["接触の組", "判定", "安定化"]) +
+      `<div class="body">` + f("接触の組", "自動で探す") + f("判定の方法", "面と面") + f("摩擦", "あり") + blank("摩擦係数") +
+      blank("貫通の許容") + f("初めの隙間", "調整する") + f("剛性の倍率", "自動") + f("安定化", "なし") +
+      `</div>` + btns(["適用", "OK"]) },
+    { key: "solver", title: "解く設定", html: tabs(["解析", "増分", "収束", "出力", "並列"]) +
+      `<div class="body">` + f("解析の種類", "非線形・静的") + f("大きな変形", "考慮する") + f("増分の制御", "自動") + blank("最大の反復回数") +
+      f("収束の判定", "力と変位") + blank("許容の幅") + f("連立方程式の解き方", "直接法") + blank("並列の数") + f("出力の頻度", "毎増分") +
+      `</div>` + btns(["保存", "計算を始める"]) },
+    { key: "warn_shape", title: "警告", cls: "warn", html:
+      msg(WARN, "要素の形が悪い箇所があります。", "メッシュを見直してから、もう一度実行してください。") + btns(["無視して続ける", "場所を表示"]) },
+    { key: "warn_conv", title: "エラー", cls: "err", html:
+      msg(ERR, "解が収束しませんでした。", "荷重の増分を小さくするか、接触の設定を見直してください。") + btns(["ログを見る", "OK"]) },
+    { key: "warn_rigid", title: "警告", cls: "warn", html:
+      msg(WARN, "拘束が足りません。", "モデルが剛体のまま動いてしまいます。") + btns(["OK"]) },
+  ];
+
+  const desk = document.querySelector(".desk");
+  desk.insertAdjacentHTML("beforeend", WINDOWS.map((w, i) => {
+    const b = R.win[w.key], next = WINDOWS[i + 1];
+    const style = `${L.boxStyle(b)};z-index:${b.z};--at:var(--t-${css(w.key)});` +
+      (next ? `--next:var(--t-${css(next.key)})` : "");
+    return `<div class="win ${w.cls || ""}${next ? "" : " last"}" style="${style}" data-box="n08.win.${css(w.key)}">` +
+      `<div class="bar"><span class="ttl" data-kind="label">${w.title}</span>${Q}${X}</div>${w.html}</div>`;
+  }).join(""));
+
+  // ---- mouse pointer: eased moves between the points of n08.pointer.path ----
+  (function pointer() {
+    const P = R.pointer.path, D = R.duration_s;
+    const frames = P.map((p) => `${(100 * p.t_s / D).toFixed(4)}% { translate: ${px(p.x)} ${px(p.y)}; ` +
+      `animation-timing-function: cubic-bezier(0.45, 0, 0.25, 1); }`).join("\n");
+    const style = document.createElement("style");
+    style.textContent = `@keyframes pointer-path {\n${frames}\n}`;
+    document.head.appendChild(style);
+    document.documentElement.style.setProperty("--pointer-duration", `${D}s`);
+    desk.insertAdjacentHTML("beforeend", `<div class="pointer"><i class="c1"></i><i class="c2"></i>` +
+      `<svg viewBox="0 0 20 30"><path d="M1 1 V24 L7 18.5 L11 28 L15 26.3 L11 17 H19 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`);
+  })();
+
+  // ---- manuals: bottom book first, seeded shifts and turns ----
+  (function stackBooks() {
+    const B = R.books, rand = rng(B.seed);
+    const TITLES = ["操作の手引き 上", "操作の手引き 下", "理論の手引き", "要素の手引き", "材料モデルの手引き", "例題集"];
+    const COLORS = ["#2f3e55", "#4a4f57", "#5b3e3c", "#2f4a45", "#3d3f66", "#5a564d"];
+    let y = B.h;
+    document.querySelector(".books").innerHTML = TITLES.map((t, i) => {
+      const hgt = B.heights_px[i];
+      y -= hgt;
+      const shift = (rand() - 0.5) * 2 * B.shift_px, tilt = (rand() - 0.5) * 2 * B.tilt_deg;
+      const left = (B.w - B.book_w - 14) / 2 + shift;
+      return `<div class="book" style="--i:${i};left:${px(left)};top:${px(y)};width:${px(B.book_w)};height:${px(hgt)};` +
+        `background:linear-gradient(${COLORS[i]}, ${COLORS[i]}e0);transform:rotate(${tilt.toFixed(2)}deg)"><span data-kind="label">${t}</span></div>`;
+    }).join("");
+  })();
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>

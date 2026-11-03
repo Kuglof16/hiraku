@@ -51,8 +51,9 @@ class PromptTest(unittest.TestCase):
         self.assertNotIn("rule_check", prompts.cae_prompt("strength"))
 
     def test_the_designer_looks_at_whether_the_design_stands_as_a_structure(self):
-        for point in ("取付点", "つなぎ目", "ロールバー"):
+        for point in ("取付点", "つなぎ目", "ロールバー", "系の欠け"):
             self.assertIn(point, prompts.DESIGNER_PROMPT)
+        self.assertIn("系の点検", prompts.cae_prompt("assembly"))
 
 
 if __name__ == "__main__":

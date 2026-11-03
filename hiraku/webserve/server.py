@@ -11,6 +11,10 @@ Standard library only. Routes:
                                         parsed; next_offset tells where to read next
     GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
+    POST /api/launch {request, mode}    start a run from a request settled in A1/A2 (--intake-events)
+    POST /api/request, /api/request/answer
+                                        A1/A2 before a run (hiraku.intake.request): the domains, the
+                                        hearing, then the request's files under runs/_requests/<id>/
     GET /layout.json                    the video's layout rules (promo/screens/layout.json,
                                         the promo department's), read by the cut pages
     GET /api/shelf                      the tool shelf for A4: every builtin tool's spec and
@@ -72,6 +76,7 @@ _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 _TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
 KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
+REQUEST_MAX_BYTES = 1_000_000  # an A1/A2 request carries its draft back
 
 
 def events_path(runs_dir: Path, run_id: str, saved_dir: Path | None = None) -> Path | None:
@@ -290,14 +295,16 @@ class Handler(BaseHTTPRequestHandler):
             length = 0
         route = urlsplit(self.path).path
         # a dropped knowledge file carries its text; the other bodies are small
-        raw = self.rfile.read(min(max(length, 0), KNOWLEDGE_MAX_BYTES if route == "/api/launch/knowledge" else 10000))
+        # a dropped knowledge file carries its text and a request its draft; the other bodies are small
+        cap = KNOWLEDGE_MAX_BYTES if route == "/api/launch/knowledge" else REQUEST_MAX_BYTES if route.startswith("/api/request") else 10000
+        raw = self.rfile.read(min(max(length, 0), cap))
         left = min(max(length, 0), 64 * 1024 * 1024) - len(raw)
         while left > 0:  # the rest of a body too big to take is read and dropped
             chunk = self.rfile.read(min(left, 65536))
             if not chunk:
                 break
             left -= len(chunk)
-        if route not in ("/api/launch", "/api/launch/stop", "/api/launch/hearing", "/api/launch/knowledge") or not self.launcher:
+        if route not in ("/api/launch", "/api/launch/stop", "/api/launch/hearing", "/api/launch/knowledge", "/api/request", "/api/request/answer") or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         # Only this server's own page may start a run: another web page could
@@ -334,10 +341,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(self.launcher.stop(body.get("run_id")))
             elif route == "/api/launch/hearing":
                 self._send_json(self.launcher.answer(body.get("run_id"), body.get("answer")))
+            elif route in ("/api/request", "/api/request/answer"):
+                self._send_json(self._request(route, body))
             elif route == "/api/launch/knowledge":
                 self._send_json(self.launcher.knowledge(body.get("run_id"), body.get("name"), body.get("text")))
             else:
-                self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
+                self._send_json(self.launcher.start(body.get("requirements"), body.get("mode"), body.get("request")))
         except LaunchError as e:
             self._send_json({"error": str(e)}, HTTPStatus(e.status))
 
@@ -380,6 +389,29 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
+
+    def _request(self, route: str, body: dict[str, Any]) -> dict[str, Any]:
+        """A1/A2 before a run: hiraku.intake.request over the body. Claude picks the flags only when the
+        body asks (claude: true) and the key is where this server runs; the key is never read here.
+        A settled request also says whether its product has a scripted plan and a kind of design."""
+        from hiraku.intake.domains import IntakeError
+        from hiraku.intake.request import claude_picker, handle_answer, handle_request
+
+        try:
+            if route == "/api/request":
+                ask = bool(body.pop("claude", False))
+                return handle_request(body, picker=claude_picker if ask and self.launcher.claude_ready() else None)
+            out = handle_answer(body, self.launcher.requests_dir)
+        except IntakeError as e:
+            raise LaunchError(400, str(e)) from e
+        rf = out.get("requirements_file") or {}
+        if out.get("ready") and rf:
+            from hiraku.agent.scripted import has_plan
+            from hiraku.designgen import archetypes
+
+            out["scripted_plan"] = has_plan(rf.get("product", ""))
+            out["designable"] = bool(archetypes(rf.get("flags") or {}))
+        return out
 
     def _send_tool_file(self, run_id: str, name: str) -> None:
         path = events_path(self.runs_dir, run_id, self.saved_dir)

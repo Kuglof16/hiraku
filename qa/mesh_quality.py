@@ -15,9 +15,10 @@ Topology of the mesh:
 - free_edges: edges of exactly one element (a tube's open ends have them)
 - coincident_nodes: nodes with another node within tol_mm (not merged: a crack)
 - unconnected_groups: groups of elements joined through shared nodes
-- orientation_conflicts: edges of exactly two elements that both run the same way (one of them faces
-  the other side); joint_edges: edges of three or more elements (walls meeting at a joint), where
-  facing has no one meaning
+- orientation_conflicts: edges of exactly two elements of the same member that both run the same way
+  (one of them faces the other side); seam_conflicts: the same between two members, where it is
+  expected (each tube's elements face out of their own tube); joint_edges: edges of three or more
+  elements (walls meeting at a joint), where facing has no one meaning
 
 Solid hexahedra (8 nodes: 0-3 the bottom face, counter-clockwise seen from above; node i + 4 above
 node i): hex_corner_jacobians and hex_volume.
@@ -69,8 +70,12 @@ def _elements(P: np.ndarray, conn: np.ndarray) -> dict[str, np.ndarray]:
             "jacobian_ratio": np.where(degenerate, -np.inf, ratio), "warp_deg": warp, "degenerate": degenerate}
 
 
-def measure(nodes_mm, elements) -> dict:
-    """Per-element measures (arrays in element order) and the topology of a shell mesh."""
+def measure(nodes_mm, elements, element_member=None) -> dict:
+    """Per-element measures (arrays in element order) and the topology of a shell mesh.
+
+    With element_member, facing is compared only between elements of the same member: each tube's
+    elements face out of that tube, so where two tubes meet there is no one side to face (those
+    edges are counted as seam_conflicts)."""
     P = np.asarray(nodes_mm, float).reshape(-1, 3)
     n_el = len(elements)
     out = {k: np.zeros(n_el) for k in ("aspect_ratio", "min_angle_deg", "max_angle_deg", "area",
@@ -95,7 +100,15 @@ def measure(nodes_mm, elements) -> dict:
     pair = counts[inverse] == 2
     order = np.argsort(inverse[pair], kind="stable")
     t2 = tails[pair][order].reshape(-1, 2)
-    conflicts = int(np.sum(t2[:, 0] == t2[:, 1]))
+    same_way = t2[:, 0] == t2[:, 1]
+    if element_member is not None and len(element_member) == n_el:
+        members = np.asarray(element_member, dtype=object)
+        o2 = owner[pair][order].reshape(-1, 2)
+        one_member = members[o2[:, 0]] == members[o2[:, 1]]
+    else:
+        one_member = np.ones(len(t2), bool)
+    conflicts = int(np.sum(same_way & one_member))
+    seam_conflicts = int(np.sum(same_way & ~one_member))
     non_manifold = int(np.sum(counts > 2))
     pairs = cKDTree(P).query_pairs(TOL_MM) if len(P) else set()
     coincident = len({i for pair in pairs for i in pair})
@@ -106,7 +119,8 @@ def measure(nodes_mm, elements) -> dict:
     else:
         groups = 0
     out["topology"] = {"free_edges": free_edges, "coincident_nodes": coincident, "unconnected_groups": int(groups),
-                       "orientation_conflicts": conflicts, "joint_edges": non_manifold,
+                       "orientation_conflicts": conflicts, "seam_conflicts": seam_conflicts,
+                       "joint_edges": non_manifold,
                        "degenerate": int(out["degenerate"].sum()),
                        "inverted": int(np.sum(~out["degenerate"] & (out["jacobian_ratio"] <= 0)))}
     return out

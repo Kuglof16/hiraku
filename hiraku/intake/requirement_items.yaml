@@ -11,6 +11,8 @@
 #               requirements file (data/requirements/products/) wins over it.
 # trust: 1 primary source, 2 secondary source, 3 assumption. "not checked in this repository" = the
 # value is taken from the cited page and that page has not been read again for this repository.
+# "read 2026-11-03 in a source check" = the value was seen in the cited source at the place named, in a
+# source check on that date. "tried 2026-11-03 ... not reachable" = the check could not reach the value.
 # Q01 (what to make) and Q02 (the flags) are not here: they are the sentence and A1's chips.
 
 items:
@@ -75,8 +77,9 @@ items:
       unit: m/s
       trust: 1
       basis: >-
-        気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https://www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf
-        (not checked in this repository)
+        気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https://www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf,
+        and the JMA glossary 非常に強い風 "20m/s以上30m/s未満", https://www.jma.go.jp/jma/kishou/know/yougo_hp/kaze.html;
+        read 2026-11-03 in a source check
 
   - key: Q19
     name: 気温 (範囲の高い端)
@@ -96,7 +99,8 @@ items:
     name: 人数と荷重の組み合わせ
     applies_if: ride or lean
     ask: must
-    question: "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。"
+    question: "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"
+    choices: [{label: 空車, value: empty}, {label: 運転者だけ, value: driver}, {label: 2 人, value: two}, {label: 2 人 + 荷, value: two_cargo}]
 
   - key: Q31
     name: 体格の範囲
@@ -105,7 +109,9 @@ items:
     default:
       value: 若年女性 5 % 〜 若年男性 95 %
       trust: 1
-      basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+      basis: >-
+        AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
+        (not checked in this repository; tried 2026-11-03: AIST; not reachable)
 
   - key: Q32
     name: 体重 (法令の計算用)
@@ -115,7 +121,9 @@ items:
       value: 55
       unit: kg
       trust: 1
-      basis: 細目告示 第2条 (1 人 55 kg), https://www.mlit.go.jp/jidosha/content/S002.pdf (not checked in this repository)
+      basis: >-
+        細目告示 第2条 第九号 "乗車定員1人の重量は55kg", PDF p.2 (the 2026.1.9 version),
+        https://www.mlit.go.jp/jidosha/content/S002.pdf; read 2026-11-03 in a source check
 
   - key: Q33
     name: 体重 (強さの不利側)
@@ -127,7 +135,8 @@ items:
       trust: 1
       basis: >-
         AIST 人体寸法データベース 1991-92, 体重, 若年男性 95 パーセンタイル,
-        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository;
+        tried 2026-11-03: AIST; not reachable)
 
   - key: Q34
     name: 弱い人がいるか
@@ -206,8 +215,8 @@ items:
       unit: mm
       trust: 1
       basis: >-
-        EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https://www.legislation.gov.uk/eur/2013/168/annex/I
-        (not checked in this repository)
+        EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) "ground clearance ≥180 mm",
+        https://www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check
 
   - key: Q60
     name: 静的に倒れない限界
@@ -234,8 +243,8 @@ items:
       value: ISO 13854 (指 25 mm)
       trust: 1
       basis: >-
-        ISO 13854:1996 の試し読み, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
-        (not checked in this repository)
+        ISO 13854:1996 の試し読み, Table 1, PDF p.7, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf;
+        read 2026-11-03 in a source check
 
   - key: Q64
     name: 横転したときの保護枠 (ROPS)

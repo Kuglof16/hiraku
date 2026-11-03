@@ -9,6 +9,7 @@ n04 / n15 / n16 (layout.json), with n01's colours and overlay.
 
 import copy
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -45,6 +46,22 @@ def grid_layout():
                 "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
                 "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": dict(COLORS)},
     }
+
+
+def feature_rects(g, n):
+    """As cut_n03.js featureRects: the large box [x, y, w, h] over the first ceil(cols / 2)
+    columns and all rows, and n - 1 small ones filling the columns left, row by row."""
+    W = g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+    H = g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+    bc = min(g["cols"] - 1, -(-g["cols"] // 2))
+    big = [g["x"], g["y"], bc * g["tile_w"] + (bc - 1) * g["gap_x"], H]
+    cols = max(1, g["cols"] - bc)
+    rows = max(1, -(-(n - 1) // cols))
+    left = g["x"] + big[2] + g["gap_x"]
+    w = (W - big[2] - g["gap_x"] - (cols - 1) * g["gap_x"]) / cols
+    h = (H - (rows - 1) * g["gap_y"]) / rows
+    small = [[math.floor(left + (i % cols) * (w + g["gap_x"]) + 0.5), math.floor(g["y"] + (i // cols) * (h + g["gap_y"]) + 0.5), int(w), int(h)] for i in range(n - 1)]
+    return big, small
 
 
 def renumber(events):
@@ -117,8 +134,10 @@ READ = """async (t) => {
       return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", outside: el.dataset.outside ?? null,
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
-               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]') };
+               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
+               hits: layer?.dataset.hits ?? null, featured: el.dataset.featured === "1" };
     }),
+    charts: document.querySelectorAll(".grid-tile svg.chart").length,
   };
 }"""
 
@@ -191,18 +210,32 @@ class GridCutTest(unittest.TestCase):
         g = spec["grid"]
         self.assertIsNone(got["err"])
         self.assertEqual([t["key"] for t in got["tiles"]], [f"{name}.tile.{k}" for k in spec["tests"]])
-        for i, t in enumerate(got["tiles"]):
-            col, row = i % g["cols"], i // g["cols"]
-            x, y = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
-            self.assertEqual([round(v) for v in t["rect"]], [x, y, x + g["tile_w"], y + g["tile_h"]], t["key"])
+        # one tile large, the others as a small list in the grid's box (featureRects)
+        featured = [t for t in got["tiles"] if t["featured"]]
+        self.assertEqual(len(featured), 1)
+        big, small = feature_rects(g, len(spec["tests"]))
+        rest = iter(small)
+        for t in got["tiles"]:
+            r = big if t["featured"] else next(rest)
+            self.assertEqual([round(v) for v in t["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], t["key"])
             self.assertLessEqual(t["rect"][3], BAND_Y, t["key"])
             self.assertIsNone(t["outside"], t["key"])
             self.assertTrue(t["shown"], t["key"])
             self.assertTrue(t["pet"], t["key"])
             self.assertEqual(t["mark"], t["want"], t["key"])  # the mark is the run's judgement, and none without one
-            self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            if t["minText"] is not None:  # a tile with a record and no judgement holds no text
+                self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            # a picture and its mark only: no name, no figure (a tile without its record says so)
+            if "記録が無い" not in t["text"]:
+                self.assertIn(t["text"], ("", "✓", "✕"), t["key"])
+            self.assertIsNone(t["label"], t["key"])
         self.assertTrue(got["header"]["shown"])
-        self.assertEqual(got["header"]["text"], f"版 {got['version']}・繰り返し {got['version'] - 1} 回")
+        # one line with one number: N04 the tiles still red, N15 the rounds
+        if name == "n15":
+            self.assertEqual(got["header"]["text"], f"繰り返し {got['version'] - 1} 回")
+        else:
+            reds = sum(1 for t in got["tiles"] if t["want"] == "✕")
+            self.assertEqual(got["header"]["text"], f"まだ赤が {reds} 枚" if reds else "全部が緑")
 
     def test_n04_on_a_version_on_the_way(self):
         """?version=1: the grid, the header, marks from version 1's judgements (none on nvh, its
@@ -226,13 +259,21 @@ class GridCutTest(unittest.TestCase):
         marks = {t["key"].split(".")[-1]: t["mark"] for t in mid["tiles"]}
         for key in TESTS:
             self.assertEqual(marks[key], None if key == "nvh" else "✕" if key in V1_RED else "✓", key)
+        # the large tile is a red one (the message: still red), with its record drawn
+        big = next(t for t in mid["tiles"] if t["featured"])
+        self.assertIn(big["key"].split(".")[-1], V1_RED)
+        self.assertEqual(big["mark"], "✕")
+        self.assertNotIn("記録が無い", big["text"])
         hot = lambda got: {t["key"].split(".")[-1] for t in got["tiles"] if t["hot"]}  # noqa: E731
         self.assertEqual(hot(before), set())
         self.assertEqual(hot(early), {"crash"})  # nvh is red in V1_RED but has no judgement here
         tiles = {t["key"].split(".")[-1]: t for t in mid["tiles"]}
-        self.assertIn("干渉 1 件", tiles["assembly"]["text"])  # the fixture's battery × cross1
-        self.assertIn("23.4 Hz", tiles["nvh"]["text"])  # the mode's recorded frequency
-        self.assertGreater(tiles["thermal"]["tags"], 0)  # part temperatures as text
+        # no words or figures on the tiles: the interference, the mode's frequency and the
+        # part temperatures are in the pictures only (the story: a picture and a mark)
+        self.assertEqual(tiles["assembly"]["hits"], "1")  # the fixture's battery × cross1, boxed in red
+        self.assertNotIn("Hz", tiles["nvh"]["text"])
+        self.assertEqual(tiles["thermal"]["tags"], 0)
+        self.assertEqual(mid["charts"], 0)
         # from assembly_s: no tile, no header, the assembly box where n16.view is
         self.assertTrue(all(not t["shown"] for t in late["tiles"]))
         self.assertFalse(late["header"]["shown"])
@@ -270,8 +311,11 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(marks(shots[0.5]), {k: "✕" if k in V1_RED else "✓" for k in TESTS})
         self.assertEqual(marks(shots[2.5]), {k: "✕" if k in V2_RED else "✓" for k in TESTS})
         self.assertEqual(marks(shots[4.8]), {k: "✓" for k in TESTS})
-        self.assertIn("✓ 干渉なし", shots[4.8]["tiles"][TESTS.index("assembly")]["text"])
-        self.assertEqual(shots[4.8]["header"]["text"], "版 3・繰り返し 2 回")
+        self.assertEqual(shots[4.8]["tiles"][TESTS.index("assembly")]["hits"], "0")
+        self.assertEqual(shots[4.8]["header"]["text"], "繰り返し 2 回")
+        # the large tile is one that turned green last (red in version 2, green in 3)
+        big = next(t for t in shots[4.8]["tiles"] if t["featured"])
+        self.assertIn(big["key"].split(".")[-1], V2_RED)
         page.close()
 
     def test_n15_last_version_not_green_stays_as_recorded(self):
