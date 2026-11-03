@@ -10,7 +10,7 @@ from .. import kinematics
 from ..checks import _check
 from ..drive import SpeedController, controls, start_rolling
 from ..model import DesignError, box_design, build_vehicle
-from ..record import Recorder
+from ..record import BodyLog, Recorder
 from ..road import step as step_road
 from ..scenario import new_sim
 from ..units import G0
@@ -18,7 +18,7 @@ from .base import MOTOR, MU, K2Tool, P, Pair, _box, _half_width, _length, _res
 
 
 def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=None, ramp_s: float = 4.0,
-              run_up: float = 2.0, rec_hz: float = 0.0, after_s: float = 0.0) -> dict:
+              run_up: float = 2.0, rec_hz: float = 0.0, after_s: float = 0.0, log: bool = False) -> dict:
     """Quasi-static push: the stepping wheels stand 0.5 mm before the step corner and the
     drive torque grows slowly from zero until they leave the low ground.
 
@@ -27,7 +27,8 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
     run_up: the step for the dynamic run is placed this far further (m).
     rec_hz > 0 records the push, and the body's loads (Sim.loads) every 10 ms in "states";
     after_s goes on that long after the lift-off with the torque of the lift-off held, so the
-    record shows the wheels rolling onto the step.
+    record shows the wheels rolling onto the step. log: every step in a record.BodyLog
+    ("body_log", for replaying the sprung body elsewhere).
     """
     xs = max(float(veh.corners[i].pos[0]) for i in stepping)
     r = max(veh.corners[i].radius for i in stepping)
@@ -47,6 +48,7 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
     # alone rises a few mm as its ground contact unloads, before the real lift-off)
     z_free = [veh.corners[i].radius + 0.01 for i in stepping]
     rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
+    body = BodyLog(sim) if log else None
     states: list[dict] = []
     every = max(1, int(round(LOAD_EVERY_S / dt)))
     best, snap, lifted, slip = -1.0, None, False, False
@@ -56,6 +58,8 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
         for i in driven:
             drive[i] = total / len(driven)
         sim.step(controls(sim, 0.0, drive, [0.0] * sim.n))
+        if body is not None:
+            body.tick()
         if rec is not None:
             rec.tick({"wheel_torque": ("N*m", total)})
             if rec.k % every == 1 or every == 1:
@@ -90,7 +94,22 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
         while sim.t < t_end:
             push(held)
     return {"ratio": best, "snap": snap, "static": static, "lifted": lifted, "slip": slip, "x_corner": x_step,
-            "x_step": x_step + run_up, "road": road, "recorder": rec, "states": states}
+            "x_step": x_step + run_up, "road": road, "recorder": rec, "states": states,
+            "body_log": None if body is None else body.record()}
+
+
+def step_body_log(design: dict, step_height_mm: float, step_supports: list[str] | None = None, *,
+                  dt: float = 1e-3, after_s: float = 1.5) -> dict:
+    """The quasi-static push of step_climb_dynamic (run 1, the design's defaults; the stepping
+    supports are the front-most unless given) with every step logged: record.BodyLog.record()."""
+    veh = build_vehicle(design)
+    ids = veh.ids()
+    if step_supports:
+        stepping = [ids.index(x) for x in step_supports]
+    else:
+        xmax = max(float(c.pos[0]) for c in veh.corners)
+        stepping = [i for i, c in enumerate(veh.corners) if abs(float(c.pos[0]) - xmax) < 1e-9]
+    return step_push(veh, step_height_mm / 1000.0, stepping, dt=dt, after_s=after_s, log=True)["body_log"]
 
 
 LOAD_EVERY_S = 0.01  # s between the body's loads kept during the push
