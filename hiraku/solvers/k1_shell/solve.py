@@ -10,19 +10,27 @@ Constraints:
   Chains of links are resolved to the last master.
 
 Both are eliminated with a reduction matrix T (u = T u_r), the reduced
-matrix T^T K T is factorised once (SuperLU) and every load case reuses the
-factors.
+matrix T^T K T is factorised once and every load case reuses the factors.
+
+The factorisation is SuperLU (scipy) or, when the package pypardiso (Intel MKL PARDISO) can be
+imported, PARDISO: HIRAKU_SOLVER=superlu|pardiso chooses, the default is pardiso when it is
+installed (solver_choice). The known answers and the byte-for-byte record comparisons are made
+with superlu. PARDISO_REL_TOL is how far the two may differ.
 """
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import importlib
+import os
 import time
 from dataclasses import dataclass, field
 
 import numpy as np
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 
+from ..sparse_lu import superlu
 from . import element
 
 DOF_NAMES = ("ux", "uy", "uz", "rx", "ry", "rz")
@@ -186,27 +194,129 @@ def reduction_matrix(nodes: np.ndarray, links, fixed: np.ndarray) -> tuple[sp.cs
     return T, free
 
 
+SOLVERS = ("superlu", "pardiso")
+# How far a PARDISO solve may differ from the SuperLU one, relative to the largest absolute value of
+# the same quantity in the model (displacements, stresses): both are direct factorisations in double
+# precision of the same matrix, and their round-off on the demo frame's matrices (free DOF to 3e5) is
+# well below this. An assumption, checked on small models in tests/solvers/test_shell_pardiso.py.
+PARDISO_REL_TOL = 1e-6
+# Largest relative residual |Kr ur - r| / |r| of a solve accepted: a direct solve of a well-held model
+# leaves round-off (about 1e-12 on the demo frame); a model that is barely held (a near mechanism)
+# can give large finite displacements that do not satisfy the equations. The same bound as the
+# solid FE core's (an assumption).
+RESIDUAL_TOL = 1e-6
+
+
+def pardiso_module():
+    """The pypardiso module, or None when it cannot be imported."""
+    try:
+        return importlib.import_module("pypardiso")
+    except Exception:  # not installed, or MKL cannot be loaded on this machine
+        return None
+
+
+_FORCED: contextvars.ContextVar[str | None] = contextvars.ContextVar("hiraku_shell_solver", default=None)
+
+
+@contextlib.contextmanager
+def using(name: str):
+    """Solve with `name` ('superlu' or 'pardiso') inside the with block, whatever HIRAKU_SOLVER says
+    (the known answers use superlu)."""
+    if name not in SOLVERS:
+        raise ValueError(f"solver must be one of {SOLVERS}, got {name!r}")
+    token = _FORCED.set(name)
+    try:
+        yield
+    finally:
+        _FORCED.reset(token)
+
+
+def solver_choice() -> str:
+    """'superlu' or 'pardiso': the one of an enclosing using(), else HIRAKU_SOLVER when it names one
+    (pardiso only when it can be imported), else pardiso when it can be imported, else superlu."""
+    if _FORCED.get() is not None:
+        return _FORCED.get()
+    asked = os.environ.get("HIRAKU_SOLVER", "").strip().lower()
+    if asked == "superlu":
+        return "superlu"
+    return "pardiso" if pardiso_module() is not None else "superlu"
+
+
+def solver_assumption(name: str) -> str:
+    """The analysis assumption that says which factorisation solved the shell."""
+    if name == "pardiso":
+        return ("linear solver: Intel MKL PARDISO through pypardiso (real nonsymmetric storage of the "
+                "symmetric reduced stiffness); the results may differ from the SuperLU solve by up to "
+                f"{PARDISO_REL_TOL:g} of each quantity's largest absolute value in the model (round-off of "
+                "two direct solvers; an assumption)")
+    if name == "superlu":
+        return ("linear solver: SuperLU (scipy.sparse.linalg.spilu with no dropping, the complete LU; "
+                "MMD_AT_PLUS_A ordering, symmetric mode, no pivoting threshold)")
+    return f"linear solver: {name}"
+
+
+class _Pardiso:
+    """The factors of PARDISO for one matrix, with the solve() of a SuperLU object."""
+
+    def __init__(self, A: sp.csc_matrix, module) -> None:
+        self.A = sp.csr_matrix(A)
+        self.ps = module.PyPardisoSolver()  # mtype 11, real nonsymmetric: the full matrix, no triangle to pass
+        self.ps.factorize(self.A)
+
+    def solve(self, b: np.ndarray) -> np.ndarray:
+        b = np.asarray(b, float)
+        if b.ndim == 1:
+            return np.asarray(self.ps.solve(self.A, b), float)
+        return np.column_stack([np.asarray(self.ps.solve(self.A, np.ascontiguousarray(b[:, j])), float)
+                                for j in range(b.shape[1])])
+
+
+def relative_residual(A, x: np.ndarray, b: np.ndarray) -> float:
+    """Largest |A x - b| / |b| over the columns of b (columns with b = 0: |A x|, which must be 0 too)."""
+    r = A @ x - b
+    if b.ndim == 1:
+        r, b = r[:, None], b[:, None]
+    nb = np.linalg.norm(b, axis=0)
+    nr = np.linalg.norm(r, axis=0)
+    return float(np.max(np.where(nb > 0, nr / np.where(nb > 0, nb, 1.0), nr))) if nr.size else 0.0
+
+
 class StaticSolver:
     """Factorise the constrained stiffness once; solve any number of load cases.
 
     fixed: global DOF indices held at zero. Rigid links are taken from
     model.links. Raises ValueError when the constrained model is singular
-    (a mechanism: missing supports or disconnected parts).
+    (a mechanism: missing supports or disconnected parts). solver: 'superlu'
+    or 'pardiso' (None: solver_choice()); the one used is self.solver_name.
     """
 
-    def __init__(self, model: ShellModel, fixed) -> None:
+    def __init__(self, model: ShellModel, fixed, solver: str | None = None) -> None:
         self.model = model
+        name = solver or solver_choice()
+        if name not in SOLVERS:
+            raise ValueError(f"solver must be one of {SOLVERS}, got {name!r}")
+        mod = pardiso_module() if name == "pardiso" else None
+        if name == "pardiso" and mod is None:
+            raise ValueError("solver 'pardiso' needs the package pypardiso, which cannot be imported")
         K = model.stiffness()
         t0 = time.perf_counter()
         self.T, self.free = reduction_matrix(model.nodes, model.links, np.asarray(fixed, int))
         Kr = (self.T.T @ K @ self.T).tocsc()
         t1 = time.perf_counter()
         try:
-            self.lu = spla.splu(Kr, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0,
-                                options={"SymmetricMode": True})
-        except RuntimeError as e:
+            if mod is not None:
+                self.lu = _Pardiso(Kr, mod)
+            else:
+                self.lu = superlu(Kr)
+        except (RuntimeError, ValueError, ArithmeticError) as e:
             raise ValueError(f"the shell model cannot be solved ({e}): it is not held against all rigid-body "
                              f"motions or a part is not connected") from None
+        except Exception as e:  # pypardiso's own error class
+            if mod is None:
+                raise
+            raise ValueError(f"the shell model cannot be solved ({e}): it is not held against all rigid-body "
+                             f"motions or a part is not connected") from None
+        self.solver_name = name
         self.Kr = Kr
         model.timings["reduce_s"] = t1 - t0
         model.timings["factor_s"] = time.perf_counter() - t1
@@ -216,9 +326,16 @@ class StaticSolver:
         """Displacements (n_dof,) or (n_dof, n_cases) for loads of the same shape."""
         t0 = time.perf_counter()
         F = np.asarray(F, float)
-        ur = self.lu.solve(np.asarray(self.T.T @ F))
+        rhs = np.asarray(self.T.T @ F)
+        ur = self.lu.solve(rhs)
         if not np.all(np.isfinite(ur)):
             raise ValueError("the shell solution is not finite; the model is singular or ill-conditioned")
+        worst = relative_residual(self.Kr, ur, rhs)
+        if worst > RESIDUAL_TOL:
+            raise ValueError(f"the shell solution does not satisfy the equations (relative residual {worst:.1e}, "
+                             f"more than {RESIDUAL_TOL:g}): the model is nearly singular, held by too little "
+                             f"or a part is barely connected")
+        self.model.timings["residual"] = worst
         U = self.T @ ur
         self.model.timings["solve_s"] = time.perf_counter() - t0
         return U

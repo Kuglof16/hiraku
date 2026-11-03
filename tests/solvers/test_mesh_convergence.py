@@ -194,14 +194,14 @@ class FrameShellConvergenceTest(unittest.TestCase):
         self.assertIsNone(hot_spot_on({"hot_spots": hs}, ("C",) + key[1:]))
 
     def test_ladder_record(self):
-        """The ladder at 20 mm with the default convergence (40 / 20 / 10 mm) and its mesh record."""
+        """The ladder at 20 mm with the convergence asked for (40 / 20 / 10 mm) and its mesh record."""
         lad = fixtures.ladder_design()
         mesh = build_mesh(lad, 20.0).record("mesh-0003", int(lad.get("design_version", 1)))
         lc = {"load_case_id": "R1-x", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
               "tolerance_rel": 0.15}
         t0 = time.perf_counter()
         rec = tool("frame_shell").run(lad, lc, [{"prediction_id": "pred-0001"}],
-                                      {"element_size": {"value": 20.0, "unit": "mm"}, "mesh": mesh})
+                                      {"element_size": {"value": 20.0, "unit": "mm"}, "mesh": mesh, "mesh_convergence": "3"})
         print(f"  frame_shell ladder with mesh convergence: {time.perf_counter() - t0:.1f} s")
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))

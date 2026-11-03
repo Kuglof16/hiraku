@@ -1,5 +1,6 @@
 """Pre-processing checks: mesh quality (11) and the checks around the solve (12)."""
 
+import contextlib
 import json
 import unittest
 from pathlib import Path
@@ -35,6 +36,14 @@ def tube(n_around=8, n_len=6, r=20.0, L=120.0):
             a, b = i * n_around + j, i * n_around + (j + 1) % n_around
             q.append([a, a + n_around, b + n_around, b])
     return nodes, np.array(q)
+
+
+@contextlib.contextmanager
+def not_factorised():
+    """Fail the test if the model is factorised (by the eliminate path's superlu or the others' splu)."""
+    no = AssertionError("factorised")
+    with mock.patch.object(fe_model, "superlu", side_effect=no), mock.patch.object(fe_model.spla, "splu", side_effect=no):
+        yield
 
 
 class GoodMeshTest(unittest.TestCase):
@@ -200,7 +209,7 @@ class PrecheckTest(unittest.TestCase):
         m, model, root, F = bar_model()
         model.fix(root, "z")  # only uz held on the face x = 0: free to slide in x and y, turn about z, and
         # turn about the y axis through that face (uz = -theta_y x is 0 there)
-        with mock.patch.object(fe_model.spla, "splu", side_effect=AssertionError("factorised")):
+        with not_factorised():
             out = analysis.run_static(model, F)
             with self.assertRaisesRegex(ModelError, "rigid body"):
                 StaticSolver(model)
@@ -215,7 +224,7 @@ class PrecheckTest(unittest.TestCase):
         model.fix(root, "xyz")
         g = model.groups[0]
         g.conn[3] = g.conn[3][[4, 5, 6, 7, 0, 1, 2, 3]]  # an inverted brick
-        with mock.patch.object(fe_model.spla, "splu", side_effect=AssertionError("factorised")):
+        with not_factorised():
             out = analysis.run_static(model, F)
         self.assertEqual(out["status"], "failed")
         self.assertIn("negative volume", out["reasons"][0])

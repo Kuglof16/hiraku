@@ -26,6 +26,11 @@ cargo are not assembled and are left out.
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
+from collections import OrderedDict
+
 import numpy as np
 
 from .capsule import swept_overlap
@@ -78,10 +83,47 @@ def swept(obb: OBB, direction, travel: float) -> OBB:
     return OBB((lo + hi) / 2.0, np.eye(3), (hi - lo) / 2.0, obb.name)
 
 
+_CORNER_SIGNS = np.array([[i, j, k] for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)], float)
+
+
+def _shape_bounds(b: Body | OBB) -> tuple[np.ndarray, np.ndarray]:
+    """World-aligned box (lo, hi) around what shape_overlap reads of b: its capsule and its box."""
+    obb = b.obb if isinstance(b, Body) else b
+    pts = obb.center + (_CORNER_SIGNS * obb.half) @ obb.axes
+    lo, hi = pts.min(axis=0), pts.max(axis=0)
+    cap = b.capsule if isinstance(b, Body) else None
+    if cap is not None:
+        lo = np.minimum(lo, np.minimum(cap.a, cap.b) - cap.r)
+        hi = np.maximum(hi, np.maximum(cap.a, cap.b) + cap.r)
+    return lo, hi
+
+
+def _near(part: Body, nudged: Body, box: OBB | None, others: list[Body], d: np.ndarray, travel: float) -> np.ndarray:
+    """Which of `others` may touch the part where it is, nudged or along its sweep: those whose world box
+    comes within SWEEP_SKIP_MM of the world box around all three. The others are apart by more than that
+    on a world axis, so every overlap test below gives less than zero for them (a separating axis
+    exists, or the capsule's distance is more than its radius) and they can be passed over."""
+    los, his = zip(*(_shape_bounds(x) for x in (part, nudged, box) if x is not None))
+    lo, hi = np.min(los, axis=0), np.max(his, axis=0)
+    if box is None:  # the capsule's sweep: its axis's ends slid by travel, and its radius
+        c = nudged.capsule
+        ends = np.vstack([c.a, c.b, c.a + d * travel, c.b + d * travel])
+        lo, hi = np.minimum(lo, ends.min(axis=0) - c.r), np.maximum(hi, ends.max(axis=0) + c.r)
+    olo, ohi = (np.array(x) for x in zip(*(_shape_bounds(o) for o in others))) if others else (np.zeros((0, 3)),) * 2
+    gap = np.maximum(olo - hi, lo - ohi).max(axis=1) if len(others) else np.zeros(0)
+    return gap <= SWEEP_SKIP_MM
+
+
+SWEEP_SKIP_MM = 1.0  # world-box gap past which a body cannot be hit (round-off room; any overlap test is < 0 there)
+
+
 def _blocker1(part: Body, others: list[Body], d: np.ndarray, travel: float) -> str | None:
     nudged = part.moved(d * NUDGE_MM)
     box = swept(nudged.obb, d, travel) if part.capsule is None else None
-    for o in others:
+    near = _near(part, nudged, box, others, d, travel)
+    for o, close in zip(others, near):
+        if not close:
+            continue
         start = shape_overlap(part, o)
         if start > TOUCH_MM:  # already overlapping (bolted): moving away must not make it worse
             if shape_overlap(nudged, o) > start + TOUCH_MM:
@@ -111,17 +153,32 @@ def _take_apart(units: dict[str, list[Body]], fixed: list[Body], travel: float, 
                 prefer: dict[str, tuple[str, ...]]) -> tuple[list, dict]:
     """Units out one at a time ((unit, moves) in the order they come out) and what is left
     blocked ({unit: [blocker ids]})."""
-    from .route import straight, two_moves
+    from .route import two_moves
 
     remaining = dict(units)
     removed: list[tuple[str, list[tuple[str, float]]]] = []
+    # blocker(unit k, others_of(k), direction) is the first body in others_of(k) that stops it. Taking a unit
+    # out only removes bodies from that list (the order of the rest stays), so the answer stays the same
+    # unless the body it named was taken out: kept here and asked again only then.
+    first_hit: dict[tuple[str, str], str | None] = {}
+    gone: set[str] = set()
 
     def others_of(k):
         return fixed + [b for kk, u in remaining.items() if kk != k for b in u]
+
+    def hit(k: str, d: str) -> str | None:
+        key = (k, d)
+        if key not in first_hit or (first_hit[key] is not None and first_hit[key] in gone):
+            first_hit[key] = blocker(remaining[k], others_of(k), DIRECTIONS[d], travel)
+        return first_hit[key]
+
+    def straight(unit_key, prefer_k):  # route.straight on the kept answers
+        return [d for d in prefer_k if hit(unit_key, d) is None]
+
     while remaining:
         best = None
         for k in sorted(remaining):
-            free = straight(remaining[k], others_of(k), travel, prefer[k])
+            free = straight(k, prefer[k])
             if free and (best is None or (rank[k], len(free)) > (rank[best[0]], len(best[1]))):
                 best = (k, free)
         if best is None:  # nothing comes out straight: the shortest two-move route
@@ -135,10 +192,11 @@ def _take_apart(units: dict[str, list[Body]], fixed: list[Body], travel: float, 
         else:
             k, moves = best[0], [(best[1][0], travel)]
         removed.append((k, moves))
+        gone.update(b.id for b in remaining[k])
         del remaining[k]
     blocked = {}
     for k, u in remaining.items():
-        blocked[k] = sorted({blocker(u, others_of(k), dv, travel) for dv in DIRECTIONS.values()} - {None})
+        blocked[k] = sorted({hit(k, d) for d in DIRECTIONS} - {None})
     return removed, blocked
 
 
@@ -197,6 +255,10 @@ def disassemble(design: dict, bs: dict[str, Body] | None = None, groups: bool = 
     from .route import PREFERRED, away_from
 
     bs = bs or bodies(design)
+    key = _disassembly_key(design, bs, groups)
+    if key in _DISASSEMBLED:  # the same design and bodies taken apart before in this process (H1, H3, H5)
+        _DISASSEMBLED.move_to_end(key)
+        return copy.deepcopy(_DISASSEMBLED[key])
     members = [b for b in bs.values() if _frame(b)]
     parts = {k: b for k, b in bs.items() if b.kind not in NOT_ASSEMBLED and not _frame(b)}
     pts = np.vstack([b.obb.corners() for b in bs.values()])
@@ -224,7 +286,27 @@ def disassemble(design: dict, bs: dict[str, Body] | None = None, groups: bool = 
     order = []
     for k, d in unit_order:
         order += sub[k]["order"] if k in sub else [(k, d)]
-    return {"order": order, "units": unit_order, "groups": sub, "routes": routes, "blocked": blocked}
+    out = {"order": order, "units": unit_order, "groups": sub, "routes": routes, "blocked": blocked}
+    _DISASSEMBLED[key] = copy.deepcopy(out)
+    while len(_DISASSEMBLED) > DISASSEMBLED_KEPT:
+        _DISASSEMBLED.popitem(last=False)
+    return out
+
+
+DISASSEMBLED_KEPT = 4
+_DISASSEMBLED: OrderedDict = OrderedDict()  # disassemble()'s results by _disassembly_key
+
+
+def _disassembly_key(design: dict, bs: dict[str, Body], groups: bool) -> str:
+    """Hash of everything disassemble() reads: the design, the bodies (boxes, capsules, kinds, supports,
+    nodes) and groups."""
+    def body(b: Body) -> list:
+        cap = None if b.capsule is None else [b.capsule.a.tolist(), b.capsule.b.tolist(), float(b.capsule.r)]
+        return [b.id, b.kind, b.support, sorted(b.nodes), b.obb.center.tolist(), b.obb.axes.tolist(),
+                b.obb.half.tolist(), cap]
+
+    text = json.dumps([design, [body(bs[k]) for k in bs], bool(groups)], sort_keys=True, default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def is_attach(step: dict) -> bool:

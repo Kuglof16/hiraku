@@ -6,6 +6,10 @@ at each instant with those forces at the design's hard points (in the body's
 axes, gravity tilted with it) and the stresses go into field.frames, with the
 largest at each instant as a series. The judged results stay those of the
 upstream's vectors (the instant it picked).
+
+Beside the overall max_stress (where = its member), each member's largest
+von Mises is a result max_stress.<member id> (the stress field's per_member
+values). Those are reported, not judged: the criterion names max_stress.
 """
 
 from __future__ import annotations
@@ -74,6 +78,19 @@ def frame_outputs(res: dict) -> Record:
         part = t["name"].split(" (", 1)[0]
         results.append(result(f"max_stress_{part}", t["value"], "MPa", worst))
     return {"results": results, "fields": fields, "vectors": vectors, "effects": terms}
+
+
+def member_results(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> list[Record]:
+    """One result per member, `<quantity>.<member id>` with where = the member, in the dict's order.
+    Reported only: the criterion is judged on the overall `quantity` (exact name match)."""
+    return [result(f"{quantity}.{m}", float(v), unit, m) for m, v in per_member.items()]
+
+
+def member_effect(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> Record:
+    """An effect naming where the overall largest of a per-member quantity is."""
+    top = max(per_member, key=per_member.get)
+    return {"name": (f"{quantity} per member: {len(per_member)} results {quantity}.<member id>; the largest "
+                     f"({quantity}) is in {top}"), "value": float(per_member[top]), "unit": unit}
 
 
 def _beam(length, section, material=fixtures.STEEL):
@@ -214,6 +231,9 @@ class FrameStatic(BuiltinTool):
         res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
                       ground_forces=up[1] if up else None, inertia_N=up[2] if up else None)
         out = frame_outputs(res)
+        per_member = {m: s["max"] for m, s in res["stresses"].items()}  # the same values as the stress field
+        out["results"] += member_results("max_stress", per_member)
+        out["effects"].append(member_effect("max_stress", per_member))
         series = upstream_mount_series(params.get("upstream_analyses"), design)
         if series:
             add_frames(out, beam_frames(design, series))

@@ -34,23 +34,45 @@ LOAD_PARAMS = (
 )
 
 
-def solve_at_rest(design: Record, node: str | None = None, force=(0.0, 0.0, 0.0), point=None) -> dict:
-    """The frame standing on its supports under its weights and one extra force at `point` (default: the node),
-    carried into `node` with the moment of the offset. Returns the model, stresses, worst member, ground forces,
-    displacements (support motion removed) and the masses."""
-    summ = mass_summary(design)
+def _solve_once(design: Record, summ: dict, node: str | None, f: np.ndarray, point, shift: dict | None):
     fm = build(design)
     fm.add_gravity(summ["items"])
-    f = np.asarray(force, float)
+    p = None
     if node is not None:
         if node not in fm.model.nodes or node not in fm.frame_nodes:
             raise LoadCaseError(f"load_node {node!r} is not a node of the frame's members")
         p = fm.node_xyz(node) if point is None else np.asarray(point, float)
         fm.add_force_at(node, p, f)
-    else:
-        p = None
+    for sid, m in (shift or {}).items():
+        fm.add_force(fm.wheel_nodes[sid], (0.0, 0.0, 0.0), m)
     fm.restrain_on_wheels()
     fm.solve()
+    return fm, p
+
+
+def solve_at_rest(design: Record, node: str | None = None, force=(0.0, 0.0, 0.0), point=None) -> dict:
+    """The frame standing on its supports under its weights and one extra force at `point` (default: the node),
+    carried into `node` with the moment of the offset. Returns the model, stresses, worst member, ground forces,
+    displacements (support motion removed) and the masses.
+
+    The frame model holds the supports sideways and fore-and-aft at the wheel centres; the floor holds them at the
+    contact points. When the loads have a level part (a push on the side rail), the holds' level reactions are
+    moved down to the contact points: their moment (contact - wheel centre) x reaction is added at the wheel nodes
+    and the frame solved again. The level reactions are statically determinate (three holds), so the second solve
+    leaves them as they are; the vertical ones then balance the push's moment about the floor, not about the
+    wheel centres' height. floor_shift_N_mm gives the moments added (empty when there is no level load)."""
+    summ = mass_summary(design)
+    f = np.asarray(force, float)
+    fm, p = _solve_once(design, summ, node, f, point, None)
+    weight = summ["mass_kg"] * STANDARD_GRAVITY
+    shift = {}
+    for s in design["supports"]:
+        r, _ = fm.reaction(fm.wheel_nodes[s["id"]])
+        level = np.array([r[0], r[1], 0.0])
+        if float(np.linalg.norm(level)) > 1e-9 * max(weight, 1.0):
+            shift[s["id"]] = np.cross(np.asarray(support_contact(s), float) - fm.node_xyz(fm.wheel_nodes[s["id"]]), level)
+    if shift:
+        fm, p = _solve_once(design, summ, node, f, point, shift)
     ground = {}
     for s in design["supports"]:
         r, _ = fm.reaction(fm.wheel_nodes[s["id"]])
@@ -61,7 +83,7 @@ def solve_at_rest(design: Record, node: str | None = None, force=(0.0, 0.0, 0.0)
     t, th = rigid_fit(pts, [fm.displacement(n) for n in fm.wheel_nodes.values()])
     disp = {n: fm.displacement(n) - (t + np.cross(th, fm.node_xyz(n))) for n in fm.frame_nodes}
     return {"model": fm, "mass": summ, "stresses": stresses, "worst": worst, "ground": ground, "displacements": disp,
-            "load_point": p, "load": f}
+            "load_point": p, "load": f, "floor_shift_N_mm": {k: [float(x) for x in v] for k, v in shift.items()}}
 
 
 def side_loads(design: Record, ground: dict) -> dict[str, float]:
@@ -112,21 +134,32 @@ def bed_static_known_answers() -> list[Record]:
     out.append(check_record("the load 200 mm off the line AB toward C, carried into Q with its moment",
                             "support_load_C", P * 200.0 / 800.0, g["SC"], "N", 1e-6,
                             "moment balance about the line AB: R_C 800 = P 200"))
+    # a level push toward C at Q, 300 mm above the floor (the wheel centres are 50 mm up): the floor takes it at the
+    # contact points, so the lever about the line AB on the floor is 300 mm, not 250 mm
+    res = solve_at_rest(_table_design(), "Q", (0.0, P, 0.0))
+    g = {k: float(v["force_N"][2]) for k, v in res["ground"].items()}
+    out.append(check_record("1 kN level at Q toward C, 300 mm above the floor", "support_load_C", P * 300.0 / 800.0,
+                            g["SC"], "N", 1e-6, "moment balance about the line AB on the floor: R_C 800 = P 300"))
+    out.append(check_record("the same push", "support_load_A_plus_B", -P * 300.0 / 800.0, g["SA"] + g["SB"], "N", 1e-6,
+                            "vertical balance: R_A + R_B = -R_C (weightless members)"))
     return out
 
 
 class BedStatic(BuiltinTool):
     name = "bed_static"
+    applies_to = ("care_bed",)
     title = "ベッドの枠の静的 (3D の梁、キャスターの上で 1 点の荷重)"
     domain = "strength"
     base = "K1"
     tests = ["R5", "S1"]
-    formulas = ["bed.deck_frame_udl", "bed.side_rail_push", "bed.edge_load_tipping"]
+    formulas = ["bed.deck_frame_udl", "bed.side_rail_push", "bed.edge_load_tipping", "bed.side_push_tipping"]
     load_case_params = (LOADING,) + LOAD_PARAMS
     predicts = (
         Predicts("max_stress", "bed.deck_frame_udl", "sigma", "the deck's weights only (no load_node)"),
         Predicts("max_stress", "bed.side_rail_push", "sigma", "a push outward at a side rail's top bar"),
         Predicts("lighter_side_load", "bed.edge_load_tipping", "R_far", "an edge load straight down"),
+        Predicts("lighter_side_load", "bed.side_push_tipping", "R_far",
+                 "a level push outward (the side rail's top bar); the floor takes it at the contact points"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -172,8 +205,14 @@ class BedStatic(BuiltinTool):
         if node is not None and float(np.linalg.norm(res["load"])) > 0:
             vectors.append({"kind": "load", "at": node, "origin_mm": [float(x) for x in res["load_point"]],
                             "vector_N": [float(x) for x in res["load"]]})
-        return {"results": results, "fields": fields, "vectors": vectors,
-                "effects": [{"name": f"{side} casters' load", "value": v, "unit": "N"} for side, v in sides.items()]}
+        out = {"results": results, "fields": fields, "vectors": vectors,
+               "effects": [{"name": f"{side} casters' load", "value": v, "unit": "N"} for side, v in sides.items()]}
+        if res["floor_shift_N_mm"]:
+            out["assumptions"] = ["the casters do not slide: the floor takes the level load at the contact points (the "
+                                  "model's level holds at the wheel centres are moved down by their moments, "
+                                  + ", ".join(f"{k} {np.linalg.norm(v):.0f} N*mm" for k, v in res["floor_shift_N_mm"].items())
+                                  + ")"]
+        return out
 
 
 # ---------------------------------------------------------------- actuators
@@ -249,8 +288,35 @@ def actuator_known_answers() -> list[Record]:
 ACTUATORS = {"back": ("B", "back_lever", "back_angle_max", 1.0), "knee": ("K", "knee_lever", "knee_angle_max", -1.0)}
 
 
+def actuator_over_raise(design: Record, which: str, tool: str = "actuator_linkage") -> dict:
+    """linkage_force of the back or knee actuator of a care bed (the design as on board): the board's loads, for
+    the knee half the leg board's at the thigh board's far end. Raises DesignError naming what a design lacks."""
+    station, lever, angle, sense = ACTUATORS[which]
+    v = {k: q["value"] for k, q in design.get("variables", {}).items()}
+    nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
+    parts = {p["id"]: p for p in design.get("parts", [])}
+    need = [f"L{station}", f"bracket_{which}", f"actuator_{which}", lever, angle]
+    missing = [k for k in need if k not in nodes and k not in parts and k not in v]
+    if missing:
+        raise DesignError(f"{tool} reads a care bed (hiraku.designgen.care_bed); this design lacks {', '.join(missing)}")
+    hinge = (nodes[f"L{station}"][0], nodes[f"L{station}"][2])
+    anchor = (parts[f"bracket_{which}"]["box"]["center_mm"][0], parts[f"actuator_{which}"]["box"]["center_mm"][2])
+    board = {"back": "back", "knee": "thigh"}[which]
+    loads = board_loads(design, board)
+    extra = None
+    if which == "knee":  # the leg board rests on the thigh board's far end (half its weight) and on the frame
+        leg = sum(m for m, _, _ in board_loads(design, "leg")) * STANDARD_GRAVITY / 2.0
+        far = nodes["LT"][0] if "LT" in nodes else None
+        if far is None:
+            raise DesignError(f"{tool}: no thigh-leg hinge node LT")
+        arm = abs(far - hinge[0])
+        extra = lambda t: leg * arm * math.cos(t)  # noqa: E731
+    return linkage_force(hinge, anchor, v[lever], loads, v[angle], sense, extra=extra)
+
+
 class ActuatorLinkage(BuiltinTool):
     name = "actuator_linkage"
+    applies_to = ("care_bed",)
     title = "背上げ・膝上げのアクチュエーターの力 (仮想仕事、板を起こす)"
     domain = "powertrain"
     base = "K0"
@@ -268,28 +334,7 @@ class ActuatorLinkage(BuiltinTool):
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
         design = on_board(design, load_case)
         which = param_text(load_case, "actuator")
-        station, lever, angle, sense = ACTUATORS[which]
-        v = {k: q["value"] for k, q in design.get("variables", {}).items()}
-        nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
-        parts = {p["id"]: p for p in design.get("parts", [])}
-        need = [f"L{station}", f"bracket_{which}", f"actuator_{which}", lever, angle]
-        missing = [k for k in need if k not in nodes and k not in parts and k not in v]
-        if missing:
-            raise DesignError(f"actuator_linkage reads a care bed (hiraku.designgen.care_bed); this design lacks "
-                              f"{', '.join(missing)}")
-        hinge = (nodes[f"L{station}"][0], nodes[f"L{station}"][2])
-        anchor = (parts[f"bracket_{which}"]["box"]["center_mm"][0], parts[f"actuator_{which}"]["box"]["center_mm"][2])
-        board = {"back": "back", "knee": "thigh"}[which]
-        loads = board_loads(design, board)
-        extra = None
-        if which == "knee":  # the leg board rests on the thigh board's far end (half its weight) and on the frame
-            leg = sum(m for m, _, _ in board_loads(design, "leg")) * STANDARD_GRAVITY / 2.0
-            far = nodes["LT"][0] if "LT" in nodes else None
-            if far is None:
-                raise DesignError("actuator_linkage: no thigh-leg hinge node LT")
-            arm = abs(far - hinge[0])
-            extra = lambda t: leg * arm * math.cos(t)  # noqa: E731
-        res = linkage_force(hinge, anchor, v[lever], loads, v[angle], sense, extra=extra)
+        res = actuator_over_raise(design, which, self.name)
         k = int(np.argmax(res["F"]))
         return {
             "results": [result("actuator_force", res["F_max"], "N", f"actuator_{which}"),
@@ -308,4 +353,5 @@ class ActuatorLinkage(BuiltinTool):
         }
 
 
-__all__ = ["ActuatorLinkage", "BedStatic", "board_loads", "linkage_force", "side_loads", "solve_at_rest"]
+__all__ = ["ACTUATORS", "ActuatorLinkage", "BedStatic", "actuator_over_raise", "board_loads", "linkage_force",
+           "side_loads", "solve_at_rest"]

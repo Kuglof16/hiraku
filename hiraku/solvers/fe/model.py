@@ -61,6 +61,8 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from ..sparse_lu import superlu
+
 DOF_NAMES = ("ux", "uy", "uz", "rx", "ry", "rz")
 
 
@@ -602,8 +604,7 @@ class StaticSolver:
             if method in ("lagrange", "penalty"):  # indefinite, or badly scaled by alpha: let SuperLU pivot
                 self.lu = spla.splu(A)
             else:
-                self.lu = spla.splu(A, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0,
-                                    options={"SymmetricMode": True})
+                self.lu = superlu(A)  # splu's reservation, not its factors, is most of its memory
         except RuntimeError as e:
             raise ModelError(f"the model cannot be solved ({e}): a mechanism or a part that is not held") from None
         self.info = {**info, "n_dof": lay.n_dof, "n_reduced": int(A.shape[0])}

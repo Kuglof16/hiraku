@@ -143,12 +143,13 @@ class FormulaLedgerTest(unittest.TestCase):
         self.assertEqual((ji["rail_member"][-3:], ji["cross_member"]), ("S2B", "cross_B"))
         ins = {k: v["value"] for k, v in ji["inputs"].items()}
         self.assertEqual((ins["z"], ins["e"], ins["L1"], ins["L_c"]), (380.0, 200.0, 700.0, 700.0))
-        # overhang by hand: deck 18 kg and cargo 150 kg over 6 bed nodes (one at the rear end, 400 mm behind),
+        # overhang by hand: the deck and cargo 150 kg over 6 bed nodes (one at the rear end, 400 mm behind),
         # half of cross_E at that end, and the 400 mm rail piece behind the axle at 200 mm
         g = 9.80665
         rail_w = 7850e-9 * (40 * 80 - 35.4 * 75.4) * g
         cross_m = 7850e-9 * (40 * 40 - 35.4 * 35.4) * 700
-        by_hand = (18 / 6 + 150 / 6) * g * 400 + cross_m / 2 * g * 400 + rail_w * 400 * 200
+        deck = next(p["mass_kg"] for p in design["parts"] if p["id"] == "deck")  # between the rear towers: narrower
+        by_hand = (deck / 6 + 150 / 6) * g * 400 + cross_m / 2 * g * 400 + rail_w * 400 * 200
         self.assertAlmostEqual(ins["M_oh"], by_hand, places=6)
         self.assertEqual(overhang_moment(design, "LA") > ins["M_oh"], True)  # more lies behind the front axle
         # with no offset and no overhang the formula is the traction bending plus the push

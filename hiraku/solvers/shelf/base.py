@@ -244,6 +244,8 @@ class BuiltinTool(ABC):
     predicts: tuple[Predicts, ...] = ()
     upstream = ""
     judged_as: dict[str, str] = {}  # criterion quantity -> the result this tool judges it on (contract)
+    stage = 1  # the contract's tool_spec.stage: 0 layout and rules, 1 light, 2 vehicle dynamics, 3 heavy (HK5)
+    applies_to: tuple[str, ...] = ()  # tool_spec.applies_to: the kinds of design (designgen.ARCHETYPES); () any
 
     def __init__(self) -> None:
         self._checks: list[Record] | None = None
@@ -262,6 +264,8 @@ class BuiltinTool(ABC):
             "usable": bool(checks) and all(c["pass"] for c in checks),
             "checks": checks,
             "formulas": list(self.formulas),
+            "stage": self.stage,
+            **({"applies_to": list(self.applies_to)} if self.applies_to else {}),
         }
 
     def check(self) -> list[Record]:
@@ -273,9 +277,11 @@ class BuiltinTool(ABC):
         out: Record = {"name": self.name, "title": self.title, "domain": self.domain, "tests": list(self.tests),
                        "params": [p.describe() for p in self.load_case_params],
                        "predicts": [p.describe() for p in self.predicts],
-                       "formulas": list(self.formulas)}
+                       "formulas": list(self.formulas), "stage": self.stage}
         if self.judged_as:
             out["judged_as"] = dict(self.judged_as)
+        if self.applies_to:
+            out["applies_to"] = list(self.applies_to)
         if self.run_params:
             out["run_params"] = [p.describe() for p in self.run_params]
         if self.upstream:

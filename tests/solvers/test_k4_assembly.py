@@ -147,7 +147,10 @@ class CornersTest(unittest.TestCase):
 
     def test_corners_first_then_drive_battery_electrics_body(self):
         units = [k for k, _ in self.asm["units"]]
-        self.assertEqual(sorted(units[:4]), ["corner:FL", "corner:FR", "corner:RL", "corner:RR"])
+        # the front bulkhead goes in among the corners: it spans the rails' outer faces, so it has to be in
+        # before the front corner on that side closes its way
+        self.assertEqual(sorted(units[:5]), ["corner:FL", "corner:FR", "corner:RL", "corner:RR", "part:bulkhead"])
+        units = [u for u in units if u != "part:bulkhead"]
         kinds = {p["id"]: p["kind"] for p in DESIGN["parts"]}
         stages = [stage(kinds[k.split(":", 1)[1]]) for k in units[4:]]
         self.assertEqual(stages, sorted(stages))
@@ -176,8 +179,9 @@ class CornersTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         attach = [s for s in seq if is_attach(s)]
         self.assertEqual(len(attach), 4)
-        # the H5 count: 47 parts less 2 occupants, the cargo and the roll bar's part (welded, in place with the frame)
-        self.assertEqual(len(seq) - len(attach), 43)
+        # the H5 count: the parts less the occupants' bodies, the cargo, the roll bar's part and the brackets
+        # (welded, in place with the frame): 43 of the first v1 and the bulkhead
+        self.assertEqual(len(seq) - len(attach), 44)
         fl = ids.index("corner:FL")
         group = ["caliper_FL", "knuckle_FL", "susp_FL", "tie_rod_FL", "wheel_FL"]
         self.assertEqual(sorted(ids[fl - 5:fl]), group)

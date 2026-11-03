@@ -91,7 +91,8 @@ tests:
   - {id: T3, domain: thermal, title: 使い方とデューティ, applies_if: electric and not continuous, requirement_keys: [Q03]}
   - {id: H1, domain: assembly, title: 干渉, applies_if: always, requirement_keys: []}
   - {id: H2, domain: assembly, title: 手と工具が入るか, applies_if: assembly, requirement_keys: [Q81]}
-  - {id: H3, domain: assembly, title: 体格・手が届くか, applies_if: ride or lean or handheld, requirement_keys: [Q31]}
+  # H3 reads a seated person's knee room and reach (K4): not for a product a person only lies or leans on (a bed)
+  - {id: H3, domain: assembly, title: 体格・手が届くか, applies_if: ride or handheld, requirement_keys: [Q31]}
   - {id: H4, domain: assembly, title: 挟み込み, applies_if: pinch, requirement_keys: [Q63]}
   - {id: H5, domain: assembly, title: 組み立ての順番, applies_if: assembly, requirement_keys: [Q82]}
   - {id: G1, domain: assembly, title: 区分・寸法 (法令), applies_if: public_road, requirement_keys: [Q70, Q71]}

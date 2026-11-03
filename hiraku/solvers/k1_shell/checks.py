@@ -18,7 +18,7 @@ from ..shelf import fixtures
 from ..shelf.base import Record, check_record
 from . import element
 from .mesh import build_mesh
-from .solve import ShellModel, StaticSolver, dofs_of
+from .solve import ShellModel, StaticSolver, dofs_of, using
 from .stress import element_stresses
 
 STEEL = fixtures.STEEL
@@ -41,6 +41,17 @@ SRC_HEYWOOD = ("finite-width plate with a central hole in tension: Kt_net = 2 + 
 
 
 # ------------------------------------------------------------------ flat helpers
+
+
+def drilling_held(xy: np.ndarray) -> np.ndarray:
+    """rz of the node nearest the origin and of the node nearest to it. A flat quad grid loaded in its own plane
+    has two zero-energy patterns of the drilling rotation alone: opposite corners of every element turning equal
+    and opposite, rz(i, j) = (-1)^j g(i - j) with g of period 2, gives each element's centre and hourglass terms
+    nothing. Holding rz at two neighbouring nodes removes both; u, v and the stresses do not change."""
+    a = int(np.argmin(np.hypot(xy[:, 0], xy[:, 1])))
+    d = np.hypot(*(xy - xy[a]).T)
+    d[a] = np.inf
+    return 6 * np.array([a, int(np.argmin(d))]) + 5
 
 
 def flat_model(xy: np.ndarray, quads: np.ndarray, t: float, E: float = E_ST, nu: float = NU_ST,
@@ -125,7 +136,8 @@ def inplane_cantilever(nx: int = 8, ny: int = 2, incompatible: bool = True, L: f
     mid = root[np.argmin(np.abs(xy[root, 1]))]
     alln = np.arange(len(xy))
     # in-plane problem: hold w, rx, ry everywhere; root free to contract (only ux, and uy at the middle)
-    fixed = np.concatenate([dofs_of(root, "x"), dofs_of(mid, "y"), dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4])
+    fixed = np.concatenate([dofs_of(root, "x"), dofs_of(mid, "y"), dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4,
+                            drilling_held(xy)])
     I = t * h**3 / 12.0
     M = 1.0e5
     F = np.zeros(model.n_dof)
@@ -356,7 +368,7 @@ def holed_plate_kt(W: float = 100.0, d: float = 25.0, length: float = 300.0, n_q
     xy, quads, col = holed_plate_mesh(W, d, length, n_quarter, n_radial, grading)
     model = flat_model(xy, quads, t)
     alln = np.arange(len(xy))
-    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4,
+    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, drilling_held(xy),
              dofs_of(np.nonzero(np.abs(xy[:, 0]) < 1e-9)[0], "x"), dofs_of(np.nonzero(np.abs(xy[:, 1]) < 1e-9)[0], "y")]
     F = np.zeros(model.n_dof)
     edge = np.nonzero(np.abs(xy[:, 1] - length / 2.0) < 1e-9)[0]
@@ -398,10 +410,14 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
     res = analyze_shell(lad, frame=fr)
     case = f"symmetric ladder at rest on four rigid wheels, shell mesh {element_size_mm:g} mm"
     out = []
-    W = res["mass"]["mass_kg"] * STANDARD_GRAVITY
     total = float(sum(g["force_N"][2] for g in res["ground"].values()))
-    out.append(check_record(case, "total_wheel_load", W, total, "N", 1e-9,
-                            "sum of the ground forces (K0 rigid-body statics) equals the weight"))
+    # the shell's own weight (lumped element masses and the parts it carries as point loads) against the
+    # K0 ground forces it is loaded with: a wrong shell mass shows here, where inertia relief would hide it
+    # from the hold reactions. 1 %: mid-surface tubes overlap at the joints (0.06 % on the ladder; an assumption)
+    out.append(check_record(case, "shell_weight", total, float(res["weight_N"]), "N", 0.01,
+                            "the shell's weight (element masses lumped to the nodes, parts) equals the sum of the "
+                            "ground forces it is loaded with (K0 rigid-body statics of the design's masses); the "
+                            "difference is the mid-surface tubes overlapping at the joints"))
     out.append(check_record(case, "hold_reaction", 0.0, res["residual_ratio"], "1", 1e-6,
                             "loads balanced by inertia relief: the six holding restraints carry nothing "
                             "(reaction / weight)"))
@@ -516,7 +532,8 @@ def l_plate_corner(n: int, a: float = 100.0, t: float = 1.0, sigma: float = 10.0
     model = flat_model(xy, quads, t)
     alln = np.arange(len(xy))
     on = lambda k, v: np.nonzero(np.abs(xy[:, k] - v) < 1e-9)[0]  # noqa: E731
-    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, dofs_of(on(1, 0.0), "y"), dofs_of(on(0, 0.0), "x")]
+    fixed = [dofs_of(alln, "z"), 6 * alln + 3, 6 * alln + 4, drilling_held(xy), dofs_of(on(1, 0.0), "y"),
+             dofs_of(on(0, 0.0), "x")]
     F = np.zeros(model.n_dof)
     for k, comp in ((1, 1), (0, 0)):  # edge y = 2a pulled along y, edge x = 2a along x
         edge = on(k, 2 * a)
@@ -586,7 +603,12 @@ def convergence_checks(plate_n=(4, 8, 16), l_n=(8, 16, 32)) -> list[Record]:
 
 
 def shell_known_answers() -> list[Record]:
-    """Checks a shell tool runs every time (about 4 s)."""
+    """Checks a shell tool runs every time (about 4 s), with SuperLU whatever HIRAKU_SOLVER says."""
+    with using("superlu"):
+        return _known_answers()
+
+
+def _known_answers() -> list[Record]:
     out, _ = patch_tests()
     got, exp = inplane_cantilever(8, 2)
     out.append(check_record("in-plane cantilever strip 100 x 10 x 1, 8 x 2 elements, end moment", "tip_deflection",

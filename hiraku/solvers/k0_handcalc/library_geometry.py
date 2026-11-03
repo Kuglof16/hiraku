@@ -58,6 +58,20 @@ def all_formulas() -> list[Formula]:
             fn=_free_steer,
         ),
         Formula(
+            formula_id="geometry.free_steer_angle_limited",
+            title="ハンドルの止め (max_steer_angle) までで、車輪がフレームに当たらずに切れる角度",
+            domain="assembly",
+            expression="theta = min(theta_free, theta_stop)",
+            inputs={"theta_free": _in("deg", "steer angle at which the wheel reaches the frame (geometry.free_steer_angle)",
+                                      min=0),
+                    "theta_stop": _in("deg", "the steering's stop (the design's max_steer_angle)", min=0)},
+            outputs={"theta": ("deg", "steer angle reached without touching the frame", None)},
+            assumptions=["the steering stops at theta_stop: the wheel is not turned further, so the angle checked "
+                         "is not larger than it"],
+            source="definition (the smaller of two angles)",
+            fn=lambda v: {"theta": min(v["theta_free"], v["theta_stop"])},
+        ),
+        Formula(
             formula_id="occupant.knee_room",
             title="座った人の膝の前の余裕",
             domain="assembly",

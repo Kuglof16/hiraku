@@ -14,9 +14,18 @@ the mesh's weld strips). max_stress, the largest element stress, sits at a
 sharp re-entrant corner of a joint where the shell's stress is singular, so
 it grows as the elements shrink; it is kept as a reference.
 
+Per member, max_stress.<member id> (the largest element stress of the member
+or gusset plate outside the wheel mounts, as max_stress and the per-member
+stress field) and max_hot_spot_stress.<member id> (as the per-member hot-spot
+field) are reported beside the overall values; they are not judged. The
+element stress fields on the mesh include the mount elements, so their largest
+can be above max_stress; the effects give the largest outside and inside the
+mounts.
+
 Run parameters (analyze's params): element_size, the shell elements' target
 edge (the version's mesh record is made at the default, so another size is
-solved but not drawn on it); mesh_convergence "3" (default) solves the same
+solved but not drawn on it); mesh_convergence "3" (asked for once, on the
+version that looks final; the default is "off") solves the same
 design on three meshes, coarse to fine by a ratio of 2 (2s, s, s/2; 4s, 2s, s
 when s/2 would be under 5 mm), and writes analysis.mesh_convergence for the
 judged hot spot read at the same weld line on every level (change, Richardson
@@ -37,6 +46,12 @@ upstream's vectors.
 
 from __future__ import annotations
 
+import multiprocessing
+import os
+import sys
+import time
+from dataclasses import dataclass
+
 import numpy as np
 
 from ..k1_frame import analyze as beam_analyze
@@ -44,14 +59,16 @@ from ..k1_frame import stress_terms
 from ..k1_frame.surface import wall_von_mises
 from ..k1_shell.convergence import (LIMIT_PCT, REFINE_RATIO, convergence_assumption, convergence_record, verdict_of,
                                     zz_assumption, zz_error)
-from ..k1_shell.frame import analyze_shell, element_place, membrane_bending
+from ..k1_shell.frame import ShellFrame, analyze_shell, element_place, membrane_bending
 from ..k1_shell.mesh import ELEMENT_SIZE_MM, build_mesh
+from ..k1_shell.solve import solver_assumption
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from . import scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
 from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
-                           front_supports, g_factor, upstream_ground_forces, upstream_mount_series)
+                           front_supports, g_factor, member_effect, member_results, upstream_ground_forces,
+                           upstream_mount_series)
 
 WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
                "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
@@ -66,20 +83,22 @@ ELEMENT_SIZE = Param("element_size", "mm", "target edge of the shell elements (t
 MESH_CONVERGENCE = Param("mesh_convergence", None, "'3': also solve on two more meshes (three levels coarse to fine by "
                          f"a ratio of {REFINE_RATIO:g}: 2s, s, s/2, or 4s, 2s, s when s/2 is under "
                          f"{ELEMENT_SIZE_RANGE_MM[0]:g} mm) and write mesh_convergence for max_hot_spot_stress at the "
-                         "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off': not",
-                         default="3", choices=("off", "3"))
+                         "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off' (default): one mesh. "
+                         "Ask for '3' once, on the judged load cases of the version that looks final (HK5)",
+                         default="off", choices=("off", "3"))
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
+MOUNT_NOTE = "車輪の取付の当て板の要素も含む (max_stress はそれを外した最大)"
 LABELS = {
-    "max": "シェルの von Mises (外と内の面の大きい方)",
-    "top": "シェルの von Mises (外の面)",
-    "bottom": "シェルの von Mises (内の面)",
+    "max": f"シェルの von Mises (外と内の面の大きい方、{MOUNT_NOTE})",
+    "top": f"シェルの von Mises (外の面、{MOUNT_NOTE})",
+    "bottom": f"シェルの von Mises (内の面、{MOUNT_NOTE})",
 }
 LABEL_MEMBER = "シェルの von Mises (部材ごとの最大)"
 LABEL_HOT_SPOT = "構造的ホットスポット応力 (溶接線に直角、部材ごとの絶対値の最大)"
 LABEL_BEAM = "梁の von Mises (部材ごとの最大、シェルと同じ地面の力)"
 LABEL_DISP = "シェルの変位 (輪のつなぎ目の剛体の動きを除く)"
 LABEL_ZZ = "誤差の目安 (Zienkiewicz-Zhu: なめらかに直した応力と要素の応力の差、外と内の面)"
-LABEL_FRAMES = "シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと)"
+LABEL_FRAMES = f"シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと、{MOUNT_NOTE})"
 LABEL_FRAMES_MEMBER = "シェルの von Mises (部材ごとの最大、上流の取付点の力の時刻ごと)"
 SOURCES = {
     "given": "ground forces from the upstream analysis {lc}",
@@ -144,13 +163,15 @@ def hot_spot_outputs(res: dict) -> tuple[list[Record], list[Record], list[Record
     if top is None:
         return [], [], [{"name": "no structural hot spot read (no shared joint with weld strips outside the wheel mounts)"}]
     v = top["value"]
-    results = [result("max_hot_spot_stress", abs(v), "MPa", top["member"])]
     per_member: dict[str, float] = {}
     per_joint: dict[str, dict] = {}
     for h in hs:
         per_member[h["member"]] = max(per_member.get(h["member"], 0.0), abs(h["value"]))
         if h["joint"] not in per_joint or abs(h["value"]) > abs(per_joint[h["joint"]]["value"]):
             per_joint[h["joint"]] = h
+    # per member: reported, not judged (the criterion is judged on max_hot_spot_stress)
+    results = ([result("max_hot_spot_stress", abs(v), "MPa", top["member"])]
+               + member_results("max_hot_spot_stress", per_member))
     fields = [{"kind": "stress", "label": LABEL_HOT_SPOT, "unit": "MPa",
                "per_member": {m: round(x, 2) for m, x in per_member.items()}}]
     a, b = HOT_SPOT_READ_T
@@ -167,6 +188,7 @@ def hot_spot_outputs(res: dict) -> tuple[list[Record], list[Record], list[Record
                   f"{len(res['mesh'].weld_lines)} weld line segments at {len(per_joint)} joints; the {CORNER_SKIP_T:g} t "
                   f"corner squares and the wheel mounts not read"), "value": len(hs), "unit": "1"},
     ]
+    effects.append(member_effect("max_hot_spot_stress", per_member))
     for node in sorted(per_joint):
         h = per_joint[node]
         effects.append({"name": (f"largest hot spot at joint {node} ({h['kind']}): {SIDE[h['side']]} ({h['member']}, "
@@ -198,6 +220,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     ]
     for sid, g in res["ground"].items():
         results.append(result(f"wheel_load_{sid}", g["force_N"][2], "N", sid))
+    # per member (and gusset plate): the largest element stress outside the wheel mounts, as max_stress
+    member_peak = {m: v for m, (v, _) in res["member_max"].items()}
+    results += member_results("max_stress", member_peak)
     hs_results, hs_fields, hs_effects = hot_spot_outputs(res)
     results = hs_results + results
 
@@ -281,10 +306,15 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
                                  f"{n_ex} elements inside those mounts left out of the peak, the safety factors, the "
                                  f"stress concentration and the membrane / bending split (their stresses stay in the "
                                  f"fields)"), "value": n_ex, "unit": "1"})
+        # the stress fields (surface max / top / bottom) include the mount elements; max_stress does not
+        effects.append({"name": (f"largest element stress outside the wheel mounts (max_stress): element {e} of "
+                                 f"{worst}"), "value": peak, "unit": "MPa"})
         if res["excluded_max"] is not None:
             v, ee = res["excluded_max"]
-            effects.append({"name": f"largest stress inside the mounts (left out): element {ee} of {ms.element_member[ee]}",
-                            "value": v, "unit": "MPa"})
+            effects.append({"name": (f"largest element stress inside the wheel mounts (left out of max_stress; in the "
+                                     f"stress fields, whose largest it is when above max_stress): element {ee} of "
+                                     f"{ms.element_member[ee]}"), "value": v, "unit": "MPa"})
+    effects.append(member_effect("max_stress", member_peak))
     effects += [
         {"name": src},
         {"name": "hold reaction / weight (six restraints that only stop rigid-body motion)",
@@ -299,7 +329,7 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
                   f"on the joint nodes (ring and wall patch); sharp corners, no welds"
                   + ("; strips of t x t elements beside the joints' weld lines (grid lines at t and 2t from them, and "
                      "at t, 2t and 3t from the footprints' corners along them)" if ms.weld_strips else "")),
-         "value": res["timings"].get("total_s", 0.0), "unit": "s"},
+         "value": float(ms.n_elements), "unit": "1"},  # its clock times go to timings_s (shell_timings)
         {"name": "largest element aspect ratio (longest / shortest edge)",
          "value": float(ms.aspect_ratios().max()), "unit": "1"},
     ]
@@ -331,6 +361,7 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
         assumptions.append(THROUGH_ASSUMPTION)
     if res.get("shell_parts"):
         assumptions.append(MASS_ASSUMPTION)
+    assumptions.append(solver_assumption(res.get("linear_solver", "superlu")))
     out = {"results": results, "fields": fields, "vectors": vectors, "effects": effects}
     if assumptions:
         out["assumptions"] = assumptions
@@ -367,7 +398,7 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
     largest hot spot and element stress, their largest instants as results, and an effect."""
     lc_id, ana_id, instants = series
     members = {m["id"] for m in design["members"]}
-    per_element, per_member, peak, hot, hot_at = [], [], [], [], []
+    per_element, per_member, peak, hot, hot_at, hot_t = [], [], [], [], [], []
     for inst in instants:
         r = analyze_shell(design, frame=res["frame"], mount_loads=inst["mount_loads"],
                           gravity_mps2=inst["gravity_mps2"], inertia_N=inst["inertia_N"])
@@ -376,8 +407,10 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
         per_member.append({m: round(v, 2) for m, (v, _) in r["member_max"].items() if m in members})
         peak.append(r["member_max"][r["worst_member"]][0])
         top = r.get("hot_spot_max")
-        hot.append(abs(top["value"]) if top else 0.0)
-        hot_at.append(f"joint {top['joint']} ({top['member']})" if top else "")
+        if top:  # an instant with no hot spot read is left out of the hot-spot series (not 0 MPa)
+            hot.append(abs(top["value"]))
+            hot_at.append(f"joint {top['joint']} ({top['member']})")
+            hot_t.append(inst["t_s"])
     t = [inst["t_s"] for inst in instants]
     src = {"source_analysis_id": ana_id} if ana_id else {}
     fields = [{"kind": "stress", "label": LABEL_FRAMES_MEMBER, "unit": "MPa",
@@ -386,17 +419,27 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
         fields.insert(0, {"kind": "stress", "label": LABEL_FRAMES, "unit": "MPa", "mesh_id": mesh["mesh_id"],
                           "surface": "max", "frames": {"t_s": t, "per_element": per_element,
                                                        "max": [round(max(v), 2) for v in per_element], **src}})
-    k, j = int(np.argmax(hot)), int(np.argmax(peak))
+    j = int(np.argmax(peak))
+    series_out, results = [], []
+    if hot:
+        k = int(np.argmax(hot))
+        series_out.append({"channel": "max_hot_spot_stress", "unit": "MPa", "t_s": hot_t,
+                           "values": [round(v, 3) for v in hot]})
+        results.append(result("max_hot_spot_stress_over_time", hot[k], "MPa", f"{hot_at[k]} at t {hot_t[k]:.3f} s"))
+        said = f"largest hot spot {hot[k]:.1f} MPa at {hot_at[k]}, t {hot_t[k]:.3f} s"
+        if len(hot) < len(t):
+            said += f" (hot spots read at {len(hot)} of the {len(t)} instants)"
+    else:
+        said = "no hot spot read at any instant"
+    series_out.append({"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]})
+    results.append(result("max_stress_over_time", peak[j], "MPa", f"t {t[j]:.3f} s"))
     return {
         "fields": fields,
-        "series": [{"channel": "max_hot_spot_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in hot]},
-                   {"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]}],
-        "results": [result("max_hot_spot_stress_over_time", hot[k], "MPa", f"{hot_at[k]} at t {t[k]:.3f} s"),
-                    result("max_stress_over_time", peak[j], "MPa", f"t {t[j]:.3f} s")],
+        "series": series_out,
+        "results": results,
         "effects": [{"name": (f"shell solved at {len(t)} instants of {lc_id}'s mount forces (t {t[0]:.3f} to "
-                              f"{t[-1]:.3f} s, one factorisation): largest hot spot {hot[k]:.1f} MPa at "
-                              f"{hot_at[k]}, t {t[k]:.3f} s; largest element stress {peak[j]:.1f} MPa at t "
-                              f"{t[j]:.3f} s"), "value": hot[k], "unit": "MPa"}],
+                              f"{t[-1]:.3f} s, one factorisation): {said}; largest element stress {peak[j]:.1f} MPa "
+                              f"at t {t[j]:.3f} s"), "value": hot[k] if hot else peak[j], "unit": "MPa"}],
         "assumptions": [FRAMES_ASSUMPTION.format(lc=lc_id)],
     }
 
@@ -459,28 +502,209 @@ def zz_effects(res: dict, zz: dict) -> list[Record]:
     return out
 
 
+# Levels of the convergence study solved in other processes while this one solves the base level
+# (HIRAKU_SHELL_WORKERS, default 2; 0 or 1: one after another in this process). Processes add up their
+# memory, so the levels go to other processes only when this process's memory now plus the estimated
+# peak of every level solved at once stays within MEMORY_BUDGET (and within MEMORY_SHARE of the free
+# memory). The estimate of one level's peak is BYTES_PER_ELEMENT x its elements, measured on the demo
+# frame (10 mm, 49,612 elements: 2.3 GB of committed memory at the peak of one shell solve in one process
+# with one BLAS thread, factorised by hiraku.solvers.sparse_lu); an estimate for other frames. With it the
+# demo frame's 20 mm level goes to another process beside its 10 mm base (its 5 mm level is over
+# MAX_LEVEL_ELEMENTS).
+WORKERS = 2
+PARALLEL_MIN_ELEMENTS = 10_000  # a smaller base level is solved in a few seconds: no processes for it
+BYTES_PER_ELEMENT = 48_000
+MEMORY_BUDGET = 5_000_000_000
+MEMORY_SHARE = 0.6
+THREAD_ENV = {"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"}  # the levels' processes: one BLAS thread
+
+
+def level_workers() -> int:
+    try:
+        return max(int(os.environ.get("HIRAKU_SHELL_WORKERS", WORKERS)), 0)
+    except ValueError:
+        return WORKERS
+
+
+def _memory() -> tuple[int | None, int | None]:
+    """(free physical memory, this process's committed memory) in bytes; None where it cannot be read."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            from ctypes import wintypes
+
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            class Counters(ctypes.Structure):
+                _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                            ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                            ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+
+            st = MemoryStatus()
+            st.dwLength = ctypes.sizeof(MemoryStatus)
+            free = int(st.ullAvailPhys) if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)) else None
+            c = Counters()
+            c.cb = ctypes.sizeof(Counters)
+            k32 = ctypes.WinDLL("kernel32")
+            k32.GetCurrentProcess.restype = wintypes.HANDLE
+            info = k32.K32GetProcessMemoryInfo
+            info.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+            info.restype = wintypes.BOOL
+            ok = info(k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
+            return free, (int(c.PagefileUsage) if ok else None)
+        page = int(os.sysconf("SC_PAGE_SIZE"))
+        free = int(os.sysconf("SC_AVPHYS_PAGES")) * page
+        with open("/proc/self/statm") as f:
+            used = int(f.read().split()[1]) * page
+        return free, used
+    except (AttributeError, OSError, ValueError, IndexError):
+        return None, None
+
+
+def parallel_memory(base_elements: int, sizes: list[float], base_size: float) -> tuple[bool, str]:
+    """Whether the levels `sizes` may be solved in other processes beside the base level (base_elements at
+    base_size), and why or why not."""
+    est = [base_elements * (base_size / s) ** 2 for s in sizes]  # elements go as 1 / size^2
+    solved = [e for e in est if e <= MAX_LEVEL_ELEMENTS]
+    free, used = _memory()
+    need = (used or 0) + (base_elements + sum(solved)) * BYTES_PER_ELEMENT
+    cap = MEMORY_BUDGET if free is None else min(MEMORY_BUDGET, MEMORY_SHARE * free)
+    if need > cap:
+        return False, f"about {need / 1e9:.1f} GB with all levels at once, over the {cap / 1e9:.1f} GB allowed"
+    return True, f"about {need / 1e9:.1f} GB with all levels at once"
+
+
+@dataclass
+class _LevelFrame:
+    """What the convergence study reads of a level's ShellFrame (the factorised model stays in its process)."""
+    node_xyz: dict
+    model: object = None
+
+
+def solve_level(design: Record, s: float, solve: dict, base_size: float) -> dict:
+    """One level of the convergence study (in this process or another): {"size", "left_out": elements} for a
+    finer level above MAX_LEVEL_ELEMENTS, else {"size", "res" (analyze_shell's result without the
+    factorised frame and U), "zz" (zz_error), "seconds" (analyze_shell), "n_dof_free", "elements",
+    "factor_s"}."""
+    if s < base_size:
+        n = build_mesh(design, s).n_elements
+        if n > MAX_LEVEL_ELEMENTS:
+            return {"size": s, "left_out": n}
+    # a frame of its own, not the process's cache (that keeps the base level's frame for the next load case)
+    fr = ShellFrame.build(design, s)
+    r = analyze_shell(design, element_size_mm=s, frame=fr, **solve)
+    zz = zz_error(fr.model, r["stress"])
+    out = {k: v for k, v in r.items() if k not in ("frame", "U")}
+    out["frame"] = _LevelFrame(fr.node_xyz)
+    return {"size": s, "res": out, "zz": zz, "seconds": r["timings"].get("total_s", 0.0),
+            "n_dof_free": int(fr.model.timings.get("n_dof_free", 0)), "elements": int(fr.mesh.n_elements),
+            "factor_s": float(fr.model.timings.get("factor_s", 0.0))}
+
+
+class Levels:
+    """The other levels of the convergence study, started before the base level is solved: in other
+    processes when level_workers() > 1 and the memory estimate fits, else solved here and now, one
+    after another (each level's factors are freed before the base level is factorised, so this
+    process holds one factorisation at a time)."""
+
+    def __init__(self, design: Record, size: float, solve: dict, base_elements: int | None = None):
+        self.design, self.size, self.solve = design, size, solve
+        self.sizes = [s for s in convergence_sizes(size) if abs(s - size) >= 1e-9]
+        self.pool = None
+        self.futures = {}
+        self.where = "this process, one after another"
+        self._done = None
+        self._start(base_elements)
+        if self.pool is None:
+            self._done = [solve_level(self.design, s, self.solve, self.size) for s in self.sizes]
+
+    def _start(self, base_elements: int | None) -> None:
+        size, design, solve = self.size, self.design, self.solve
+        n = min(level_workers(), len(self.sizes))
+        if n <= 1 or base_elements is None or base_elements < PARALLEL_MIN_ELEMENTS:
+            return
+        ok, why = parallel_memory(base_elements, self.sizes, size)
+        if not ok:
+            self.where = f"this process, one after another ({why})"
+            return
+        saved = {k: os.environ.get(k) for k in THREAD_ENV}
+        os.environ.update(THREAD_ENV)  # the spawned processes read it when they start (here, in Pool())
+        try:
+            self.pool = multiprocessing.get_context("spawn").Pool(n)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        self.futures = {s: self.pool.apply_async(solve_level, (design, s, solve, size)) for s in self.sizes}
+        self.where = f"{n} other processes, beside the base level"
+
+    def results(self) -> list[dict]:
+        try:
+            if self.pool is None:
+                return self._done
+            return [self.futures[s].get() for s in self.sizes]
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        """Stop the processes (a level still being solved is dropped)."""
+        if self.pool is not None:
+            self.pool.terminate()
+            self.pool.join()
+            self.pool = None
+
+
 def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None,
-                     zz_res: dict) -> tuple[Record, list[Record]]:
+                     zz_res: dict, levels: Levels | None = None) -> tuple[Record, list[Record]]:
     """analysis.mesh_convergence and the effects, from res (solved at its element size) and the two other levels
-    of convergence_sizes solved here. The judged hot spot is read on the same weld line and surface on every
-    level: the one of largest size on the level that is the version's mesh (else res's level)."""
+    of convergence_sizes (`levels`, started before res was solved; None: solved here). The judged hot spot is
+    read on the same weld line and surface on every level: the one of largest size on the level that is the
+    version's mesh (else res's level). The free DOF of every level go into the effects, its clock time
+    into res's model.timings["convergence_levels"] (shell_timings reads it for timings_s)."""
     size = res["mesh"].element_size_mm
+    levels = levels or Levels(design, size, solve)
+    t0 = time.perf_counter()
+    done = {lv["size"]: lv for lv in levels.results()}
+    waited = time.perf_counter() - t0
+    solved_in = levels.where
     levels_res = {}
     times = {}
     left_out = []
+    level_zz = {}
+    timing_rows = []
     for s in convergence_sizes(size):
         if abs(s - size) < 1e-9:
             levels_res[s] = res
+            m = res["frame"].model
+            timing_rows.append({"element_size_mm": float(s), "elements": int(res["mesh"].n_elements),
+                                "n_dof_free": int(m.timings.get("n_dof_free", 0)),
+                                "total_s": float(res["timings"].get("total_s", 0.0)),
+                                "factor_s": float(m.timings.get("factor_s", 0.0)), "where": "base"})
             continue
-        if s < size:
-            n = build_mesh(design, s).n_elements
-            if n > MAX_LEVEL_ELEMENTS:
-                left_out.append(f"the {s:g} mm level ({n} elements) is left out: more than {MAX_LEVEL_ELEMENTS} "
-                                f"elements (its factorisation takes minutes; an assumption)")
-                continue
-        r = analyze_shell(design, element_size_mm=s, **solve)
-        times[s] = r["timings"].get("total_s", 0.0)
-        levels_res[s] = r
+        lv = done[s]
+        if "left_out" in lv:
+            n = lv["left_out"]
+            left_out.append(f"the {s:g} mm level ({n} elements) is left out: more than {MAX_LEVEL_ELEMENTS} "
+                            f"elements (its factorisation takes minutes; an assumption)")
+            continue
+        times[s] = lv["seconds"]
+        levels_res[s] = lv["res"]
+        level_zz[s] = lv["zz"]
+        timing_rows.append({"element_size_mm": float(s), "elements": lv["elements"], "n_dof_free": lv["n_dof_free"],
+                            "total_s": float(lv["seconds"]), "factor_s": lv["factor_s"], "where": solved_in})
+    res["frame"].model.timings["convergence_levels"] = timing_rows
+    # not ending in _s: analyze_shell copies the model's *_s timings, and the model may be reused (cache.py)
+    res["frame"].model.timings["convergence_wait"] = waited
     sizes = list(levels_res)
     recorded = {s: mesh is not None and same_mesh(r, mesh) is None for s, r in levels_res.items()}
     base = next((r for s, r in levels_res.items() if recorded[s]), res)
@@ -488,7 +712,7 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     rows = []
     for s in sizes:
         r = levels_res[s]
-        zz = zz_error(r["frame"].model, r["stress"]) if r is not res else None
+        zz = level_zz.get(s) if r is not res else None
         rows.append({"size": s, "res": r, "zz": zz})
     top = base.get("hot_spot_max")
     notes = []
@@ -510,6 +734,9 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     if top is None:
         quantity, unit = "max_stress", "MPa"
         values = [r["res"]["member_max"][r["res"]["worst_member"]][0] for r in rows]
+    # edge of the element at the peak on each level: the same on every level when the weld strips' grid sizes it
+    edges = [float(r["res"]["mesh"].edge_lengths()[r["res"]["worst_element"]].max()) for r in rows]
+    peak_fixed = max(edges) <= 1.01 * min(edges)
     levels = []
     for row, v in zip(rows, values):
         lv = {"element_size_mm": float(row["size"]), "elements": int(row["res"]["mesh"].n_elements), "value": float(v)}
@@ -521,8 +748,16 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     notes += left_out
     if quantity == "max_hot_spot_stress":
         notes.append("the strip elements it is read on are t x t on every level (IIW); the levels refine the mesh "
-                     "around them")
+                     "around them, not the read elements, so the verdict says how the value settles as the mesh "
+                     "around the read points is refined")
     rec = convergence_record(quantity, unit, levels, LIMIT_PCT, REFINE_RATIO, "; ".join(notes))
+    if quantity == "max_stress" and peak_fixed and rec["verdict"] == "converged":
+        # the element peak sits in a strip element that does not shrink with element_size (PEAK_ASSUMPTION):
+        # a small change says nothing of convergence there
+        rec["verdict"] = "not_converged"
+        rec["notes"] = "; ".join(x for x in (rec.get("notes"), (
+            f"the element at the peak is {edges[-1]:.2g} mm on every level (sized by the weld strips' grid, not by "
+            f"element_size), so its small change is not convergence; not judged converged")) if x)
 
     # effects: the judged value, the element peak, the error estimate and the time
     sz = " / ".join(f"{s:g}" for s in sizes)
@@ -546,8 +781,7 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     p_rich = f", observed order {prich['observed_order']:.2f}" if prich and prich["observed_order"] is not None else ""
     if prich and prich["extrapolated"] is not None and pv != "singular":
         p_rich += f", extrapolated {prich['extrapolated']:.1f} MPa"
-    edges = [float(r["res"]["mesh"].edge_lengths()[r["res"]["worst_element"]].max()) for r in rows]
-    if max(edges) <= 1.01 * min(edges):
+    if peak_fixed:
         p_rich += (f"; the peak element is {edges[-1]:.2g} mm on every level (sized by the weld strips' grid, not by "
                    f"element_size), so the element at the peak itself is not refined")
     effects.append({"name": (f"mesh convergence of max_stress (the element peak, a reference): {sz} mm -> "
@@ -558,15 +792,33 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     globs = [(row["zz"] or zz_res)["global_pct"] for row in rows]
     effects.append({"name": (f"error estimate (Zienkiewicz-Zhu) of the whole model per level: {sz} mm -> "
                              f"{' / '.join(f'{g:.1f}' for g in globs)} %"), "value": float(globs[-1]), "unit": "%"})
-    extra = sum(times.values())
+    dof = {round(r["element_size_mm"], 9): r["n_dof_free"] for r in timing_rows}
     effects.append({"name": ("mesh convergence solves: " + ", ".join(
-        f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements) {t:.1f} s" for s, t in times.items())),
-        "value": extra, "unit": "s"})
+        f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements, {dof.get(round(float(s), 9), 0)} free DOF)"
+        for s in times) + " (where and how long each took: timings_s)"),
+        "value": float(len(times)), "unit": "1"})
     return rec, effects
+
+
+def shell_timings(res: dict, converged: bool) -> dict[str, float]:
+    """analysis.timings_s (clock times, never in results, effects or text): the shell solve's parts
+    (analyze_shell's *_s timings) and, after mesh_convergence, each other level's solve (named with where it ran:
+    this process or another, which hangs on the free memory) and the wait for them."""
+    out = {f"shell_{k[:-2]}": float(v) for k, v in res["timings"].items() if k.endswith("_s")}
+    if converged:
+        t = res["frame"].model.timings
+        for row in t.get("convergence_levels", []):
+            if row["where"] != "base":
+                where = "other_process" if "other process" in row["where"] else "this_process"
+                out[f"convergence_level_{row['element_size_mm']:g}mm_{where}"] = float(row["total_s"])
+        out["convergence_wait"] = float(t.get("convergence_wait", 0.0))
+    return out
 
 
 class FrameShell(BuiltinTool):
     name = "frame_shell"
+    stage = 3  # shell FE, mesh convergence
+    applies_to = ("ladder_4w",)  # the mesh is built on a ladder's rails and cross members (frame_tubes: space frames)
     title = "フレームの静的 (シェル: 管の壁の板)"
     domain = "strength"
     base = "K1"
@@ -601,6 +853,14 @@ class FrameShell(BuiltinTool):
 
         return shell_known_answers()
 
+    @staticmethod
+    def _elements(design: Record, size: float) -> int | None:
+        """Elements of the base level's mesh (for the memory estimate of the levels), None if it cannot be made."""
+        try:
+            return build_mesh(design, size).n_elements
+        except Exception:  # analyze_shell says what is wrong with the design
+            return None
+
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
         """Load case params: load_case_params. Run params: upstream_analyses (as
         frame_static: ground forces and the inertia force from an upstream
@@ -621,7 +881,16 @@ class FrameShell(BuiltinTool):
             raise LoadCaseError(f"run parameter element_size must be {lo:g} to {hi:g} mm, got {size:g} mm")
         solve = dict(g_factor=g, step_mm=None if up else step, step_supports=sup, ground_forces=up[1] if up else None,
                      inertia_N=inertia)
-        res = analyze_shell(design, element_size_mm=size, **solve)
+        series = upstream_mount_series(params.get("upstream_analyses"), design)
+        levels = None
+        if not series and conv == "3":  # the other levels start now, beside the base level
+            levels = Levels(design, size, solve, self._elements(design, size))
+        try:
+            res = analyze_shell(design, element_size_mm=size, **solve)
+        except BaseException:
+            if levels is not None:
+                levels.close()
+            raise
         ground = {sid: [(k, p, f) for k, p, f in gr["vectors"]] for sid, gr in res["ground"].items()}
         beam = beam_analyze(design, g_factor=g, ground_forces=ground, inertia_N=inertia)
         out = shell_outputs(design, res, beam, up[0] if up else None, None if up else step, sup)
@@ -635,13 +904,13 @@ class FrameShell(BuiltinTool):
                 out["fields"] += mesh_fields(res, mesh, zz)
         if why:
             out["effects"].append({"name": why})
-        series = upstream_mount_series(params.get("upstream_analyses"), design)
         if series:
             add_frames(out, shell_frames(design, res, series, mesh if mesh is not None and why is None else None))
         elif conv == "3":
-            out["mesh_convergence"], eff = mesh_convergence(design, res, solve, mesh, zz)
+            out["mesh_convergence"], eff = mesh_convergence(design, res, solve, mesh, zz, levels)
             out["effects"] += eff
             out["assumptions"].append(convergence_assumption())
+        out["timings_s"] = shell_timings(res, not series and conv == "3")
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
