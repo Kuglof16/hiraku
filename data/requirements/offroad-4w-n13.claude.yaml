@@ -1,6 +1,6 @@
 # Requirements for the video scene N13 (a tool made in the run): the video run's flags and
 # requirement values with one more wish, to protect the people in a roll-over, and the demo
-# design with a roll bar (data/designs/offroad-4w-rollbar.json). R4 has no tool on the shelf
+# design with a roll bar (data/designs/offroad-4w-v1.json, roll bar on by default). R4 has no tool on the shelf
 # and no scripted step on purpose: Claude writes the tool during the run (make_tool). So this
 # file is for a run with Claude only (*.claude.yaml); its scripted run stops not judged.
 # Shape: hiraku.contract "requirements_file". Sources are written in `basis`.
@@ -308,6 +308,6 @@ requirements:
       the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this
       arc counts too (assumption)
 tests: [R4]
-design_file: data/designs/offroad-4w-rollbar.json
+design_file: data/designs/offroad-4w-v1.json
 round_limit: 1
 cost_limit_usd: 5.0
