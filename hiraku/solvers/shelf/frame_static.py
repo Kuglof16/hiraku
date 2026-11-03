@@ -231,8 +231,8 @@ def upstream_mount_series(upstream: dict | None, design: Record):
     """(load case id, analysis id, instants) from the first upstream analysis whose series carry K2's mount
     forces (mount_x/y/z.<support>.<mount>, N, world axes) for every support and the sprung body's attitude
     (sprung_roll/pitch/yaw, deg); None when none does. Each instant: {"t_s", "mount_loads" (k1_frame.analyze's,
-    the forces at the design's suspension hardpoints_mm and each support's body_torque_x/y/z, in the body's
-    axes), "gravity_mps2" (body axes), "inertia_N" (inertia_force_x/y/z in the body's axes, or None)}."""
+    (mount, point, force) at the design's suspension hardpoints_mm and each support's body_torque_x/y/z, in
+    the body's axes), "gravity_mps2" (body axes), "inertia_N" (inertia_force_x/y/z in the body's axes, or None)}."""
     ids = [s["id"] for s in design.get("supports", [])]
     hp = {s["id"]: (s.get("suspension") or {}).get("hardpoints_mm") or {} for s in design.get("supports", [])}
     for lc_id, ana in (upstream or {}).items():
@@ -270,7 +270,7 @@ def upstream_mount_series(upstream: dict | None, design: Record):
             Rt = rpy_matrix([att[0][k], att[1][k], att[2][k]]).T  # world -> body
             loads = {}
             for sid in ids:
-                vs = [("joint", np.asarray(hp[sid][m], float), Rt @ np.array([f[k] for f in force[(sid, m)]]))
+                vs = [(m, np.asarray(hp[sid][m], float), Rt @ np.array([f[k] for f in force[(sid, m)]]))
                       for m in mounts[sid]]
                 tq = np.array([c[k] if c else 0.0 for c in torque[sid]])
                 loads[sid] = {"vectors": vs, "moment_Nmm": Rt @ tq}

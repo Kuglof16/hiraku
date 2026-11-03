@@ -11,7 +11,7 @@ from hiraku.solvers.k0_handcalc.rigid import rpy_matrix
 from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
 from hiraku.solvers.k0_handcalc.vehicle import DesignError, support_loads
 from hiraku.solvers.k1_frame import analyze
-from hiraku.solvers.k1_frame.analyze import _split, sprung_items
+from hiraku.solvers.k1_frame.analyze import _split, mount_carriers, sprung_items
 from hiraku.solvers.k1_shell import build_mesh
 from hiraku.solvers.k1_shell.frame import ShellFrame, analyze_shell
 from hiraku.solvers.k0_handcalc.vehicle import mass_summary
@@ -68,7 +68,7 @@ class SeriesTest(unittest.TestCase):
             np.testing.assert_allclose(i["gravity_mps2"], Rt @ [0.0, 0.0, -STANDARD_GRAVITY], atol=1e-12)
             f = np.asarray(st["supports"]["FL"]["force_N"], float)
             (kind, p, fb), = i["mount_loads"]["FL"]["vectors"]
-            self.assertEqual(kind, "joint")
+            self.assertEqual(kind, "contact")
             np.testing.assert_allclose(p, d["supports"][0]["suspension"]["hardpoints_mm"]["contact"])
             np.testing.assert_allclose(fb, Rt @ f, atol=1e-9)
             np.testing.assert_allclose(i["mount_loads"]["FL"]["moment_Nmm"], Rt @ [0.0, 40e3, 0.0], atol=1e-9)
@@ -198,6 +198,82 @@ class ToolFramesTest(unittest.TestCase):
                                       dict(SIZE, upstream_analyses=self.up))
         frames = self.check_common(rec, ["max_hot_spot_stress", "max_stress"])
         self.assertEqual([("mesh_id" in f, "per_member" in f["frames"]) for f in frames], [(False, True)])
+
+
+
+def towered():
+    """The fixture ladder with a 200 mm post (30 x 30 x 2) standing on the left rail at x -500: FL's
+    damper_upper at its top (node LT), a bracket on the right rail holding FR's uca_front, the other
+    hard points nowhere on the frame."""
+    d, st = ladder()
+    d["nodes"] += [{"id": "LM", "xyz_mm": [-500.0, 400.0, 400.0]}, {"id": "LT", "xyz_mm": [-500.0, 400.0, 600.0]},
+                   {"id": "RM", "xyz_mm": [-500.0, -400.0, 400.0]}]
+    d["sections"]["post"] = {"shape": "rect_tube", "dims_mm": {"b": 30.0, "h": 30.0, "t": 2.0}}
+    ms = [m for m in d["members"] if m["id"] not in ("railLa", "railRa")]
+    base = next(m for m in d["members"] if m["id"] == "railLa")
+    ms += [dict(base, id="railLa1", node_a="L0", node_b="LM"), dict(base, id="railLa2", node_a="LM", node_b="L1"),
+           dict(base, id="railRa1", node_a="R0", node_b="RM"), dict(base, id="railRa2", node_a="RM", node_b="R1"),
+           dict(base, id="post", node_a="LM", node_b="LT", section="post")]
+    d["members"] = ms
+    d["supports"][0]["suspension"]["hardpoints_mm"]["damper_upper"] = [-500.0, 400.0, 600.0]
+    d["supports"][1]["suspension"]["hardpoints_mm"]["uca_front"] = [-480.0, -360.0, 450.0]
+    d["parts"].append({"id": "bracket_FR", "name": "金具", "kind": "bracket", "mass_kg": 0.5, "carried_by": ["RM", "R1"],
+                       "box": {"center_mm": [-500.0, -370.0, 450.0], "size_mm": [60.0, 30.0, 40.0]}})
+    return d, st
+
+
+class MountCarriersTest(unittest.TestCase):
+    """Mount forces go into the frame where the design takes them (案 A: towers and brackets)."""
+
+    def setUp(self):
+        self.d, st = towered()
+        self.loads = {sid: {"vectors": [("contact", s.get("contact_point", s["point_mm"]), s["force_N"])]}
+                      for sid, s in st["supports"].items()}
+
+    def test_carriers(self):
+        c = mount_carriers(self.d)
+        self.assertEqual(c["FL"], {"contact": [], "damper_upper": ["LT"]})
+        self.assertEqual(c["FR"], {"contact": [], "uca_front": ["RM", "R1"]})
+        self.assertEqual(c["RL"], {"contact": []})
+
+    def with_side_force(self, mount, point, force=(0.0, 2000.0, 0.0)):
+        """FL's ground force, and a side force at `mount` taken back out at the contact (a couple)."""
+        out = copy.deepcopy(self.loads)
+        f = np.asarray(force, float)
+        (k, p, g), = out["FL"]["vectors"]
+        out["FL"]["vectors"] = [(k, p, np.asarray(g, float) - f), (mount, np.asarray(point, float), f)]
+        return out
+
+    def test_beam_post_takes_the_force_at_its_top(self):
+        top = [-500.0, 400.0, 600.0]
+        on = analyze(self.d, mount_loads=self.with_side_force("damper_upper", top), inertia_N=np.zeros(3))
+        off = analyze(self.d, mount_loads=self.with_side_force("elsewhere", top), inertia_N=np.zeros(3))
+        I = (30.0**4 - 26.0**4) / 12.0
+        want = 2000.0 * 200.0 * 15.0 / I  # the post as a cantilever, the side force at its top
+        self.assertAlmostEqual(on["stresses"]["post"]["max"], want, delta=0.05 * want)
+        self.assertLess(off["stresses"]["post"]["max"], 0.05 * want)
+
+    def test_shell_post_and_bracket(self):
+        fr = ShellFrame.build(self.d, 20.0)
+        kw = dict(frame=fr, inertia_N=np.zeros(3))
+        on = analyze_shell(self.d, mount_loads=self.with_side_force("damper_upper", [-500.0, 400.0, 600.0]), **kw)
+        off = analyze_shell(self.d, mount_loads=self.with_side_force("elsewhere", [-500.0, 400.0, 600.0]), **kw)
+        self.assertGreater(on["member_max"]["post"][0], 10.0 * off["member_max"]["post"][0])
+        self.assertIn("LT", on["joint_loads"])
+        br = self.with_side_force("elsewhere", [-500.0, 400.0, 600.0])
+        br["FR"]["vectors"].append(("uca_front", np.array([-480.0, -360.0, 450.0]), np.array([0.0, 0.0, 300.0])))
+        br["FR"]["vectors"][0] = ("contact", br["FR"]["vectors"][0][1], np.asarray(br["FR"]["vectors"][0][2]) -
+                                  np.array([0.0, 0.0, 300.0]))
+        r = analyze_shell(self.d, mount_loads=br, **kw)
+        # half of the bracket's 300 N goes into RM, which carries nothing else but half the 0.5 kg bracket,
+        # whose d'Alembert force changes with the couple the extra force makes
+        c = np.array([-500.0, -370.0, 450.0])
+
+        def body(res):  # analyze_shell's body force per kg at the bracket's centre
+            return -res["inertia_accel"] - np.cross(res["inertia_alpha"], c - res["cg_mm"]) * 1e-3
+
+        want = np.array([0.0, 0.0, 150.0]) + 0.25 * (body(r) - body(off))
+        np.testing.assert_allclose(r["joint_loads"]["RM"][0] - off["joint_loads"]["RM"][0], want, atol=1e-6)
 
 
 if __name__ == "__main__":

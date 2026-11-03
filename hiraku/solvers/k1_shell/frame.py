@@ -16,10 +16,12 @@ mesh of the tube walls:
   corner or an open end) uses its joint nodes (mesh.joints[frame_node]).
   Unsprung parts (carrier "support") load the same nodes.
 - or mount loads: the forces the body receives at the suspension mounts
-  (K2's mount series, in the body's axes), each at its hard point and
-  spread over the support's wheel mount as the ground forces are, with a
-  moment per support (a drive or brake reacting on the body) on the same
-  nodes. The unsprung parts are inside those forces, so they are left out
+  (K2's mount series, in the body's axes), each at its hard point, carried
+  in where the design takes it (k1_frame.analyze.mount_carriers): on the
+  joint nodes of the frame node at the point (a tower's top), shared over
+  the joints of a bracket's carried_by nodes, else spread over the
+  support's wheel mount as the ground forces are; a moment per support (a
+  drive or brake reacting on the body) on the wheel mount. The unsprung parts are inside those forces, so they are left out
   as K2 splits them (k1_frame.analyze.sprung_items: wheel kinds out,
   suspension kinds half), and gravity may come tilted (the body's attitude).
 - the elements inside a wheel mount (mesh.mount_elements: all their nodes
@@ -58,7 +60,7 @@ import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, node_table, resultant, support_loads
-from ..k1_frame.analyze import BALANCE_TOL, _split, rigid_fit, sprung_items
+from ..k1_frame.analyze import BALANCE_TOL, _split, mount_carriers, mount_share, rigid_fit, sprung_items
 from .mesh import ELEMENT_SIZE_MM, ShellMesh, build_mesh
 from .solve import ShellModel, StaticSolver, dofs_of, spread_load
 from .stress import ShellStress, element_stresses, hot_spots
@@ -247,9 +249,9 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     """Solve the shell frame (see the module notes). Arguments as k1_frame.analyze; `frame`
     reuses a built and factorised ShellFrame of the same design; weld_strips as mesh.build_mesh.
 
-    mount_loads {support: {"vectors": [(kind, point mm, force N)], "moment_Nmm": (3,)}}: the forces
-    the body receives at its suspension mounts, in place of the ground forces (the unsprung parts are
-    then left out, sprung_items); inertia_N, if given, is the d'Alembert force they come with. gravity_mps2: gravity
+    mount_loads {support: {"vectors": [(mount, point mm, force N)], "moment_Nmm": (3,)}}: the forces
+    the body receives at its suspension mounts (named as in hardpoints_mm, carried in by mount_carriers),
+    in place of the ground forces (the unsprung parts are then left out, sprung_items); inertia_N, if given, is the d'Alembert force they come with. gravity_mps2: gravity
     in the body's axes (default straight down, times g_factor). Both in the design's axes."""
     t0 = time.perf_counter()
     summ = mass_summary(design)
@@ -313,10 +315,21 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         acc[0] += force
         acc[1] += np.asarray(moment, float) + np.cross(np.asarray(about, float) - fr.node_xyz[node], force)
 
+    carriers = mount_carriers(design) if mount_loads is not None else {}
     for sid, g in ground.items():
         fn = fr.support_node[sid]
-        for _, p, f in g["vectors"]:
-            put(fn, f, np.zeros(3), p, fr.mount_nodes(fn))
+        for kind, p, f in g["vectors"]:
+            at = carriers.get(sid, {}).get(kind) or []
+            for n in at:
+                if n not in ms.joints:
+                    raise DesignError(f"the {kind} mount of {sid} is carried by node {n!r}, which no member uses")
+            if len(at) == 1:
+                put(at[0], f, np.zeros(3), p)
+            elif at:
+                for n, (fn_, mn) in zip(at, mount_share(f, p, [fr.node_xyz[n] for n in at])):
+                    put(n, fn_, mn, fr.node_xyz[n])
+            else:
+                put(fn, f, np.zeros(3), p, fr.mount_nodes(fn))
         if np.any(g.get("moment_Nmm", 0.0)):
             put(fn, np.zeros(3), g["moment_Nmm"], fr.node_xyz[fn], fr.mount_nodes(fn))
     for it in parts:
