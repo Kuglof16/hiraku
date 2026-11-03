@@ -107,12 +107,33 @@ def rigid_body_check(model: FEModel, lay: Layout | None = None, fixed: dict | No
     free = np.nonzero(w < tol)[0]
     motions = []
     col_names = np.array(col_names)
+    by_group: dict[int, list] = {}
     for i in free:
         v = V[:, i]
         gi = int(col_names[np.argmax(np.abs(v))])  # the group the free motion lives in
-        coef = sum(v[c] * col_coef[c] for c in np.nonzero(col_names == gi)[0])
-        nm = RIGID_NAMES[int(np.argmax(np.abs(coef)))]
-        motions.append(f"group {gi} {nm}" if n_groups > 1 else nm)
+        by_group.setdefault(gi, []).append(sum(v[c] * col_coef[c] for c in np.nonzero(col_names == gi)[0]))
+    for gi, rows in sorted(by_group.items()):
+        # name a basis of the free motions by row reduction with rotations tried first as pivots: a rotation
+        # about an axis away from the centroid (a rotation plus a translation) is then named as the rotation
+        order = [3, 4, 5, 0, 1, 2]
+        A = np.array(rows)[:, order]
+        piv = []
+        r = 0
+        for c in range(6):
+            if r == len(A):
+                break
+            p = r + int(np.argmax(np.abs(A[r:, c])))
+            if abs(A[p, c]) < 1e-6 * np.abs(A).max():
+                continue
+            A[[r, p]] = A[[p, r]]
+            A[r] /= A[r, c]
+            for k in range(len(A)):
+                if k != r:
+                    A[k] -= A[k, c] * A[r]
+            piv.append(order[c])
+            r += 1
+        for j in sorted(piv):
+            motions.append(f"group {gi} {RIGID_NAMES[j]}" if n_groups > 1 else RIGID_NAMES[j])
     return {"free_rigid_modes": int(len(free)), "free_motions": motions, "groups": n_groups,
             "smallest_eigenvalue": float(w.min())}
 
