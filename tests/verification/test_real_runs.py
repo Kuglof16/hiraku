@@ -172,6 +172,37 @@ class AssemblyToolRecord(unittest.TestCase):
         self.assertEqual([str(f) for f in checker.findings], [])
 
 
+class MeshFieldRecord(unittest.TestCase):
+    """A tool that needs_mesh, given the demo design's frame_mesh as params["mesh"]: the
+    mesh and the tool's analysis pass check_run's rules for meshes and the fields on
+    them (one value per element or node of a mesh created before, of the same version)."""
+
+    def test_frame_static_on_the_demo_mesh(self):
+        import hiraku.solvers as solvers
+        if not callable(getattr(solvers, "frame_mesh", None)):
+            self.skipTest("hiraku.solvers.frame_mesh() is not there yet (analysis dept)")
+        tools = [t for t in solvers.builtin_tools() if getattr(t, "needs_mesh", False)]
+        if not tools:
+            self.skipTest("no tool with needs_mesh yet (analysis dept)")
+        path = ROOT / "data" / "designs" / "offroad-4w-v1.json"
+        design = json.loads(path.read_text(encoding="utf-8"))
+        mesh = dict(solvers.frame_mesh(design), mesh_id="mesh-0001")
+        lc = {"load_case_id": "R1-step100", "test_id": "R1", "domain": "strength", "title": "R1",
+              "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
+        tool = {t.name: t for t in tools}.get("frame_static") or tools[0]
+        out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh})
+        self.assertEqual(out.get("status"), "ok", out.get("error"))
+        self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
+        checker = cr.RunChecker(ROOT)
+        checker.where_of = ["mesh.created", "analysis.finished"]
+        checker.designs[design["design_version"]] = (-1, design)
+        checker.recs["mesh"]["mesh-0001"] = (0, mesh)
+        checker.recs["analysis"]["ana-0001"] = (1, dict(out, analysis_id="ana-0001"))
+        checker.check_meshes()
+        self.assertEqual([str(f) for f in checker.findings], [])
+        self.assertEqual(contract.errors("analysis", dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])), [])
+
+
 class SavedRuns(unittest.TestCase):
     """The example runs committed under showcase/<run_id>/. runs/ is local and not
     committed, so it is not checked here (python -m qa.check_run --all does that by hand)."""
