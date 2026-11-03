@@ -367,7 +367,10 @@ def _frame(v: dict[str, float], hp: dict[str, dict], secs: dict[str, tuple[str, 
     for k, p in left.items():
         frame.node(f"L{k}", p)
         frame.node(f"R{k}", [p[0], -p[1], p[2]])
-    centre = {"C1": [(x_f + x_hoop) / 2, 0.0, fz], "C2": [x_hoop, 0.0, (hm[2] + roof_z) / 2],
+    # the crossing points of the X braces (each diagonal straight through it); the hoop is narrower at Hm
+    # than at the roof, so its X crosses below the middle
+    z_c2 = hm[2] + hm[1] / (hm[1] + cage_y) * (roof_z - hm[2])
+    centre = {"C1": [(x_f + x_hoop) / 2, 0.0, fz], "C2": [x_hoop, 0.0, float(z_c2)],
               "C3": [(x_roof + x_hoop) / 2, 0.0, roof_z], "D0": [float(ad[0]), 0.0, float(ad[2])]}
     for k, p in centre.items():
         frame.node(k, p)
