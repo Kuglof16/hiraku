@@ -9,7 +9,7 @@ frame_inputs.ladder_twist_inputs), with what it picked beside the inputs:
   part ahead at knee height, the shortest over the occupants on board) and L_bk (AIST J5,
   k4_geometry.AIST).
 - launch_inputs(design, loading, params): launch.peak_tractive_force (P3) T, i, eta and r
-  of the driven wheels, and of launch.time_to_speed / launch.top_speed (P2, P3) the motor
+  of the driven wheels (r the loaded radius, loaded_radius), and of launch.time_to_speed / launch.top_speed (P2, P3) the motor
   power P, eta, C_rr, C_d, A and rho, as the K2 launch tool takes them (load case params,
   else design variables, else its declared defaults). m, grade, lambda and v are not read
   here: other_inputs names where they come from.
@@ -71,11 +71,40 @@ LAUNCH_OTHER_INPUTS = {
 }
 
 
+LOADED_RADIUS_ASSUMPTION = ("駆動輪の半径は荷重でたわんだ半径 (自由半径 − 止まっているときの輪の荷重 / タイヤの縦のばね "
+                            "tyre_stiffness、駆動輪の平均)")
+FREE_RADIUS_ASSUMPTION = ("駆動輪の半径は自由半径 (設計にタイヤの縦のばね tyre_stiffness が無いので、荷重でたわんだ半径を"
+                          "出せない。たわみの分だけ F_max を小さめに出す)")
+
+
+def loaded_radius(design: dict, loading: str | None, free_mm: dict[str, float]) -> dict:
+    """The driven wheels' radius for launch.peak_tractive_force: each wheel's free radius (free_mm, by support
+    id) less its tyre's deflection at rest, W / k_t (W the ground force at the support from K0 statics,
+    support_loads, at the loading; k_t the design variable tyre_stiffness, N/mm), averaged. Without
+    tyre_stiffness the free radius. Returns {"r_mm", "free_r_mm", "kind" ("loaded" or "free"),
+    "deflection_mm" by support, "assumption"}."""
+    from .vehicle import support_loads
+
+    free = sum(free_mm.values()) / len(free_mm)
+    kt = (design.get("variables") or {}).get("tyre_stiffness")
+    if not kt or kt.get("unit") != "N/mm" or float(kt["value"]) <= 0:
+        return {"r_mm": free, "free_r_mm": free, "kind": "free", "deflection_mm": {},
+                "assumption": FREE_RADIUS_ASSUMPTION}
+    on = on_board(design, loading) if loading is not None else design
+    ground = support_loads(on)["supports"]
+    defl = {sid: float(ground[sid]["force_N"][2]) / float(kt["value"]) for sid in free_mm}
+    r = sum(free_mm[sid] - defl[sid] for sid in free_mm) / len(free_mm)
+    return {"r_mm": r, "free_r_mm": free, "kind": "loaded", "deflection_mm": defl,
+            "assumption": LOADED_RADIUS_ASSUMPTION}
+
+
 def launch_inputs(design: dict, loading: str | None = None, params: dict | None = None) -> dict:
     """The K2 launch tool's motor and road load for launch.peak_tractive_force and launch.time_to_speed /
-    top_speed: T (motor_torque), i (gear_ratio), eta (efficiency), r (mean radius of the driven wheels,
-    K2's corner radius), P (motor_power), C_rr (the first wheel's rolling resistance), C_d, A (front),
-    rho. `params`: the load case params (they come first, as in the launch tool)."""
+    top_speed: T (motor_torque), i (gear_ratio), eta (efficiency), r (the driven wheels' radius under load,
+    loaded_radius: K2's corner radius less the tyre's deflection at rest; the free radius when the design
+    has no tyre_stiffness, as radius["assumption"] says), P (motor_power), C_rr (the first wheel's rolling
+    resistance), C_d, A (front), rho. `params`: the load case params (they come first, as in the launch
+    tool)."""
     from ..k2_vehicle.drive import on_board as k2_on_board
     from ..k2_vehicle.model import build_vehicle
     from ..k2_vehicle.shelf import LaunchTool
@@ -91,7 +120,8 @@ def launch_inputs(design: dict, loading: str | None = None, params: dict | None 
     driven = [c for c in veh.corners if c.drive]
     if not driven:
         raise DesignError("no driven wheel: launch needs supports with actuation.drive")
-    r = sum(c.radius for c in driven) / len(driven)  # m
+    radius = loaded_radius(design, loading, {c.id: float(c.radius) * 1000.0 for c in driven})
+    r = radius["r_mm"] / 1000.0  # m
     return {
         "inputs": {
             "T": quantity(float(motor.torque), "N*m"), "i": quantity(float(motor.gear), "1"),
@@ -101,6 +131,7 @@ def launch_inputs(design: dict, loading: str | None = None, params: dict | None 
             "rho": quantity(float(aero.rho), "kg/m^3"),
         },
         "driven_wheels": [c.id for c in driven],
+        "radius": radius,
         "other_inputs": dict(LAUNCH_OTHER_INPUTS),
         "assumed": list(tool.__dict__.get("_assumed", [])),
     }
