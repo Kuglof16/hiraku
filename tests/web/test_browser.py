@@ -596,6 +596,24 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"t = ", got["t"])
         page.close()
 
+    def test_mesh_convergence_line(self):
+        """analysis.mesh_convergence is one line under the analysis' results: the change between the
+        two finest meshes against its limit, or, when singular, that the value is not judged."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        # shape example: three mesh sizes, not a result
+        ana["mesh_convergence"] = {"quantity": "max_stress", "unit": "MPa", "verdict": "converged", "change_pct": 2.0, "limit_pct": 5.0,
+                                   "levels": [{"element_size_mm": 20, "value": 118.0}, {"element_size_mm": 10, "value": 121.0}, {"element_size_mm": 5, "value": 123.5}]}
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        line = page.text_content("#card-ana .conv")
+        self.assertEqual(line, "メッシュ 10 → 5 mm で 2 % (限度 5 %): 収まった")
+        ana["mesh_convergence"]["verdict"] = "singular"
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        self.assertIn("細かくするほど上がる (特異点): この値では判定しない", page.text_content("#card-ana .conv"))
+        self.assertEqual(errors, [])
+        page.close()
+
     def test_joint_vectors_are_drawn(self):
         """A force at a suspension mounting point (vector kind joint, at "<support>.<point>")
         is drawn with its own colour and name, beside the reactions."""

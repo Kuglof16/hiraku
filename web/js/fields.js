@@ -4,8 +4,10 @@
 // case's criterion limit when it has the field's unit, else the field's own
 // range); nothing here makes a new value to show.
 
-export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement"];
-export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位" };
+// error_estimate: the estimated discretisation error of the stress per element (%), coloured from 0
+// like a stress, showing where the mesh should be finer.
+export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement", "error_estimate"];
+export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位", error_estimate: "誤差の目安" };
 // A shell's surfaces. The contract lists mesh elements counter-clockwise seen from the
 // outer side, so the element normal points out and "top" is the outer face.
 export const SURFACE_JA = { top: "外面", mid: "中面", bottom: "内面", max: "外面と内面の大きい方" };
@@ -254,4 +256,15 @@ export function atFrame(ct, k) {
   }
   ct.atFrames.set(k, out);
   return out;
+}
+
+// analysis.mesh_convergence in one line: the judged value solved again on finer meshes. Singular
+// (it keeps rising as the mesh gets finer) is said so, and that value is not judged.
+export function convergenceLine(mc) {
+  if (!mc?.levels?.length) return "";
+  const sizes = mc.levels.map((l) => `${+l.element_size_mm.toPrecision(3)}`);
+  if (mc.verdict === "singular") return `メッシュ ${sizes.join(" → ")} mm: 細かくするほど上がる (特異点): この値では判定しない`;
+  const change = typeof mc.change_pct === "number" ? `${+mc.change_pct.toPrecision(2)} %` : "—";
+  const limit = typeof mc.limit_pct === "number" ? ` (限度 ${+mc.limit_pct.toPrecision(2)} %)` : "";
+  return `メッシュ ${sizes.slice(-2).join(" → ")} mm で ${change}${limit}: ${mc.verdict === "converged" ? "収まった" : "まだ動く"}`;
 }

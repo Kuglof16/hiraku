@@ -297,6 +297,7 @@ body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #ecee
 body.video .legend .sw { height: 13px; }
 body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .legend .when { font-size: 12px; color: var(--muted); max-width: 220px; margin: -2px 0 6px; }
+.legend .conv, .card .conv { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
 .legend .lim { color: var(--red); font-weight: 600; margin-top: 6px; }
 .legend .src { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .legend .ttl small { font-weight: 400; color: var(--muted); font-size: 11px; }

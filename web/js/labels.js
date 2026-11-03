@@ -44,6 +44,7 @@ export const STOP_CODE_JA = {
   turn_limit: "ターン数の上限に達した",
   user_stop: "人が止めた",
   error: "エラーで止まった",
+  red_left: "赤の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
 };
 
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
