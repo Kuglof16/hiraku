@@ -154,6 +154,116 @@ class TieTest(unittest.TestCase):
         self.assertAlmostEqual(eta, -0.6, places=9)
         self.assertLess(dist, 1e-9)
 
+    QUAD8 = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 1], [0, 10, 0], [5, 0, 0.2], [10, 5, 0.4], [5, 10, 0.3],
+                      [0, 5, -0.2]], float)
+
+    def _check_weights(self, w, nodes):
+        x_s = nodes[w["slave"]]
+        N = np.asarray(w["weights"])
+        self.assertEqual(len(N), len(w["masters"]))
+        self.assertAlmostEqual(N.sum(), 1.0, places=12)
+        back = N @ nodes[w["masters"]] + np.asarray(w["offset"])
+        np.testing.assert_allclose(back, x_s, rtol=0, atol=1e-12)
+        self.assertAlmostEqual(w["gap"], np.linalg.norm(w["offset"]), places=12)
+
+    def test_tie_weights_flat_quad4(self):
+        from hiraku.solvers.fe.connect import tie_weights
+        face = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]], float)
+        pts = np.array([[3.0, 4.0, 0.0], [3.0, 4.0, 0.5], [7.5, 2.0, -0.25], [10.4, 4.0, 0.3], [-0.2, -0.3, 0.0]])
+        # distance to the square [0, 10]^2 in z = 0
+        dist = [0.0, 0.5, 0.25, np.hypot(0.4, 0.3), np.hypot(0.2, 0.3)]
+        nodes = np.vstack([face, pts])
+        tw = tie_weights(np.arange(4, 9), np.arange(4)[None, :], nodes)
+        self.assertEqual([w["slave"] for w in tw], [4, 5, 6, 7, 8])
+        for w, d, inside in zip(tw, dist, (True, True, True, False, False)):
+            self.assertEqual(w["face"], 0)
+            self.assertEqual(w["masters"], [0, 1, 2, 3])
+            self.assertEqual(w["inside"], inside)
+            self._check_weights(w, nodes)
+            self.assertAlmostEqual(w["gap"], d, places=9)
+        # on the face at (3, 4): bilinear weights of (xi, eta) = (-0.4, -0.2)
+        xi, eta = -0.4, -0.2
+        expect = [(1 - xi) * (1 - eta) / 4, (1 + xi) * (1 - eta) / 4, (1 + xi) * (1 + eta) / 4,
+                  (1 - xi) * (1 + eta) / 4]
+        np.testing.assert_allclose(tw[0]["weights"], expect, rtol=0, atol=1e-12)
+        self.assertAlmostEqual(tw[0]["xi"], xi, places=12)
+        self.assertAlmostEqual(tw[0]["eta"], eta, places=12)
+
+    def test_tie_weights_quad8(self):
+        from hiraku.solvers.fe.connect import tie_weights
+        from hiraku.solvers.fe.solid import shape_quad8
+        X = self.QUAD8
+        pts, gaps = [], []
+        for xi, eta, h in ((0.3, -0.6, 0.0), (0.3, -0.6, 0.05), (-0.7, 0.4, -0.03), (0.9, 0.9, 0.02)):
+            N, dN = shape_quad8(xi, eta)
+            J = dN @ X
+            n = np.cross(J[0], J[1])
+            pts.append(N @ X + h * n / np.linalg.norm(n))  # along the normal: the face point is the closest
+            gaps.append(abs(h))
+        # slightly outside the edge xi = 1: closest point on that edge, found by sampling it finely
+        N, _ = shape_quad8(1.0, 0.0)
+        p_out = N @ X + np.array([0.3, 0.0, 0.0])
+        edge = np.array([shape_quad8(1.0, e)[0] @ X for e in np.linspace(-1, 1, 200001)])
+        pts.append(p_out)
+        gaps.append(np.linalg.norm(edge - p_out, axis=1).min())
+        nodes = np.vstack([X, pts])
+        tw = tie_weights(np.arange(8, 8 + len(pts)), np.arange(8)[None, :], nodes)
+        for w, g in zip(tw[:4], gaps[:4]):
+            self.assertAlmostEqual(w["gap"], g, places=9)
+        # outside a curved face the projection is the unconstrained solution clamped to the edge, not the exact
+        # closest point on it: close to the distance, not equal (on a flat face it is exact, see the quad4 test)
+        self.assertLessEqual(gaps[4], tw[4]["gap"])
+        self.assertLess(tw[4]["gap"] - gaps[4], 1e-4 * gaps[4])
+        for w in tw:
+            self.assertEqual(w["masters"], list(range(8)))
+            self._check_weights(w, nodes)
+        self.assertTrue(all(w["inside"] for w in tw[:4]))
+        self.assertFalse(tw[4]["inside"])
+        self.assertAlmostEqual(tw[1]["xi"], 0.3, places=6)
+        self.assertAlmostEqual(tw[1]["eta"], -0.6, places=6)
+
+    def test_tie_coefficients_are_the_weights(self):
+        from hiraku.solvers.fe.connect import skew, tie, tie_weights
+        X = self.QUAD8
+        pts = np.array([[4.0, 3.0, 0.6], [8.0, 7.0, 0.1], [10.3, 5.0, 0.5]])
+        nodes = np.vstack([X, pts])
+        slaves = [8, 9, 10]
+        faces = np.arange(8)[None, :]
+        tw = tie_weights(slaves, faces, nodes)
+        c = tie(slaves, faces, nodes)
+        self.assertEqual(c.projection, [{k: w[k] for k in ("slave", "face", "xi", "eta", "gap", "inside")}
+                                        for w in tw])
+        for cnt in (6, 3):
+            eqs = c.make(np.full(len(nodes), cnt))
+            self.assertEqual(len(eqs), len(slaves) * (6 if cnt == 6 else 3))
+            for w in tw:
+                s = w["slave"]
+                Sd = skew(np.asarray(w["offset"]))
+                for comp in range(6 if cnt == 6 else 3):
+                    (eq,) = [e for e in eqs if e.prefer == (s, comp)]
+                    coef = {}
+                    for node, k, a in eq.terms:
+                        coef[(node, k)] = coef.get((node, k), 0.0) + a
+                    expect = {(s, comp): 1.0}
+                    for i, n in zip(w["masters"], w["weights"]):
+                        expect[(i, comp)] = expect.get((i, comp), 0.0) - n
+                        if comp < 3 and cnt == 6:  # + theta_p x offset = -[offset]x theta_p
+                            for l in range(3):
+                                expect[(i, 3 + l)] = expect.get((i, 3 + l), 0.0) + n * Sd[comp, l]
+                    keys = set(coef) | set(expect)
+                    for key in keys:
+                        self.assertAlmostEqual(coef.get(key, 0.0), expect.get(key, 0.0), places=14, msg=str(key))
+
+    def test_tie_weights_max_gap(self):
+        from hiraku.solvers.fe.connect import tie, tie_weights
+        face = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]], float)
+        nodes = np.vstack([face, [[5.0, 5.0, 0.1], [5.0, 5.0, 2.0]]])
+        self.assertEqual(len(tie_weights([4], np.arange(4)[None, :], nodes, max_gap=0.5)), 1)
+        for fn in (tie_weights, tie):
+            with self.assertRaises(ValueError) as cm:
+                fn([4, 5], np.arange(4)[None, :], nodes, max_gap=0.5)
+            self.assertEqual(str(cm.exception), "tie: slave node 5 is 2 from the surface (more than 0.5)")
+
     def test_rect_t_tied_vs_shared_nodes(self):
         a = checks.rect_t_joint(5.0, tied=False)
         b = checks.rect_t_joint(5.0, tied=True)

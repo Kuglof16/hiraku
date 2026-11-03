@@ -244,18 +244,24 @@ def project_to_faces(points: np.ndarray, faces: np.ndarray, nodes: np.ndarray, n
     return out
 
 
-def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "tie", max_gap: float | None = None,
-        rotations: bool = True) -> Constraint:
-    """Tie slave nodes to a surface of another mesh whose nodes do not match (shell faces (F, 4) or solid faces
-    (F, 8) / (F, 4)).
+def tie_weights(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, max_gap: float | None = None) -> list:
+    """Interpolation weights of a tie: each slave node projected on a surface of another mesh (shell faces
+    (F, 4) or solid faces (F, 8) / (F, 4)) by project_to_faces.
 
-    Each slave node is projected on the surface (project_to_faces): face, (xi, eta), the point x_p. Then
-        u_s = sum_i N_i(xi, eta) u_i  (+ theta_p x (x_s - x_p) when the master nodes have rotations,
-                                          theta_p = sum_i N_i theta_i, which keeps a rigid motion exact
-                                          across a small gap such as a faceted wall),
-        theta_s = sum_i N_i theta_i   (when both sides have rotations and rotations=True).
-    A shell edge tied to solid faces gets no rotation tie (solid nodes have none): use shell_to_solid there.
-    max_gap: refuse slave nodes farther than this from the surface (default: no limit).
+    Returns one dict per slave node, in the order given:
+        slave    the slave node
+        face     index of the face in master_faces
+        masters  the face's nodes (list of int)
+        weights  shape functions N_i(xi, eta) at the projected point, one per master node (they sum to 1)
+        xi, eta  the projected point's coordinates on the face (clamped to [-1, 1])
+        offset   x_s - x_p, the slave's position minus the projected point x_p = sum_i N_i x_i (list of 3)
+        gap      |offset|
+        inside   whether the projection fell inside the face
+    The tie built from them (as tie does) is
+        u_s = sum_i N_i u_i  (+ theta_p x offset when the master nodes have rotations, theta_p = sum_i N_i theta_i,
+                              which keeps a rigid motion exact across a small gap such as a faceted wall),
+        theta_s = sum_i N_i theta_i   (when both sides have rotations).
+    max_gap: refuse slave nodes farther than this from the surface (default: no limit) with ValueError.
     """
     from .solid import shape_quad4, shape_quad8
 
@@ -263,19 +269,41 @@ def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "t
     faces = np.asarray(master_faces, int)
     proj = project_to_faces(nodes[slaves], faces, nodes)
     shp = shape_quad8 if faces.shape[1] == 8 else shape_quad4
-    data = []
+    out = []
     for s, (f, xi, eta, dist, inside) in zip(slaves, proj):
         if max_gap is not None and dist > max_gap:
             raise ValueError(f"tie: slave node {s} is {dist:.3g} from the surface (more than {max_gap:g})")
         N, _ = shp(xi, eta)
         ids = faces[f]
         xp = N @ nodes[ids]
-        data.append((s, ids, N, nodes[s] - xp, dist, inside))
+        out.append({"slave": s, "face": int(f), "masters": [int(i) for i in ids], "weights": [float(n) for n in N],
+                    "xi": xi, "eta": eta, "offset": [float(v) for v in nodes[s] - xp], "gap": dist,
+                    "inside": inside})
+    return out
+
+
+def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "tie", max_gap: float | None = None,
+        rotations: bool = True) -> Constraint:
+    """Tie slave nodes to a surface of another mesh whose nodes do not match (shell faces (F, 4) or solid faces
+    (F, 8) / (F, 4)).
+
+    Each slave node is projected on the surface (tie_weights): face, (xi, eta), the point x_p. Then
+        u_s = sum_i N_i(xi, eta) u_i  (+ theta_p x (x_s - x_p) when the master nodes have rotations,
+                                          theta_p = sum_i N_i theta_i, which keeps a rigid motion exact
+                                          across a small gap such as a faceted wall),
+        theta_s = sum_i N_i theta_i   (when both sides have rotations and rotations=True).
+    A shell edge tied to solid faces gets no rotation tie (solid nodes have none): use shell_to_solid there.
+    max_gap: refuse slave nodes farther than this from the surface (default: no limit).
+    """
+    tw = tie_weights(slave_nodes, master_faces, nodes, max_gap=max_gap)
+    slaves = [w["slave"] for w in tw]
+    data = [(w["slave"], np.asarray(w["masters"], int), np.asarray(w["weights"], float),
+             np.asarray(w["offset"], float)) for w in tw]
     masters = sorted({int(i) for _, ids, *_ in data for i in ids})
 
     def make(counts):
         eqs = []
-        for s, ids, N, d, _, _ in data:
+        for s, ids, N, d in data:
             m_rot = all(counts[i] == 6 for i in ids)
             Sd = skew(d)
             for k in range(3):
@@ -291,8 +319,7 @@ def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "t
         return eqs
 
     c = Constraint(name, nodes=tuple(slaves + masters), maker=make)
-    c.projection = [{"slave": s, "face": int(f), "xi": xi, "eta": eta, "gap": dist, "inside": inside}
-                    for s, (f, xi, eta, dist, inside) in zip(slaves, proj)]
+    c.projection = [{k: w[k] for k in ("slave", "face", "xi", "eta", "gap", "inside")} for w in tw]
     return c
 
 
