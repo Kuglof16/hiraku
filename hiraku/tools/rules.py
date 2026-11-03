@@ -14,7 +14,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
-from hiraku.tools.judge import latest_verdicts
+from hiraku.tools.judge import held_cases, latest_verdicts
 
 HK1 = "HK1_prediction_first"
 HK2 = "HK2_tool_usable"
@@ -103,15 +103,19 @@ def check_call(ctx: RunContext, tool: str, args: dict[str, Any]) -> Denial | Non
 
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
-    """Picked domains whose judgement is still pending: [(domain, load case ids without a verdict)]."""
+    """Picked domains whose judgement is still pending: [(domain, load case ids)], the load cases
+    without a verdict and (HK4, docs/contract.md 分野が緑になる条件) those held back from passing by an
+    unresolved mismatch or a result beyond the criterion (judge.held_cases)."""
     v = version or ctx.version
     verdicts = latest_verdicts(ctx, v)
     out = []
     for d in ctx.picked:
-        missing = [lc["load_case_id"] for lc in ctx.load_cases
-                   if lc["domain"] == d and "criterion" in lc and lc["load_case_id"] not in verdicts]
-        if missing:
-            out.append((d, missing))
+        held = held_cases(ctx, d, v) if v else {}
+        left = [lc["load_case_id"] for lc in ctx.load_cases
+                if lc["domain"] == d and "criterion" in lc
+                and (lc["load_case_id"] not in verdicts or lc["load_case_id"] in held)]
+        if left:
+            out.append((d, left))
     return out
 
 
@@ -162,10 +166,15 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
         return None
     parts = []
     for d, lcs in left:
+        held = held_cases(ctx, d, ctx.version)
         steps = []
         for lc_id in lcs:
             lc = ctx.load_case(lc_id)
             q = lc["criterion"]["quantity"]
+            if lc_id in held:
+                steps.append(f"{lc_id} ({'、'.join(held[lc_id])}。原因を書き、その結果と一致する予測を記録し直して "
+                             f"compare で一致させると判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
+                continue
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
             steps.append(f"{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
@@ -174,4 +183,4 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
     tail = ""
     if open_:
         tail = f" 原因の書かれていない食い違い {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"
-    return f"まだ判定の無い分野があるので終われません。{' / '.join(parts)}。{tail}".strip()
+    return f"まだ判定の無い (合格にできない試験の残る) 分野があるので終われません。{' / '.join(parts)}。{tail}".strip()

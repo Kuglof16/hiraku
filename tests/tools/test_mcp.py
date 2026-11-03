@@ -95,7 +95,8 @@ class HandlerTest(RunCase, unittest.TestCase):
             with self.subTest(name=name):
                 out = self.call(name, args)  # nothing pushed: the PreToolUse hook did not see the call
                 self.assertTrue(out["is_error"])
-                self.assertIn("呼んだ役が分からない", out["content"][0]["text"])
+                self.assertIn("どの役が呼んだのかを確かめられなかった", out["content"][0]["text"])
+                self.assertNotIn("hooks", out["content"][0]["text"])  # it is not the person's hooks setup
         self.assertEqual(self.ctx.version, 1)
         self.assertNotIn("report.written", self.kinds())
 

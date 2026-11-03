@@ -140,6 +140,34 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(rules.judged_end(self.ctx)[2], "done")  # the scripted driver's end is unchanged
         self.assert_events_fit()
 
+    def test_a_result_beyond_the_limit_after_a_pass_blocks_the_stop(self):
+        """docs/contract.md 分野が緑になる条件: a later analysis beyond the criterion holds the passed
+        load case back; HK4 treats it as pending, and a run stopped at the cap is not_judged."""
+        from hiraku.agent.runner import end_status
+
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        self.assertTrue(compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})["verdict"]["pass"])
+        orig = self.tools["frame_static"].run
+
+        def scaled(design, lc, preds, params):
+            out = orig(design, lc, preds, params)
+            out["results"][0]["value"] *= 100
+            return out
+
+        self.tools["frame_static"].run = scaled
+        a3 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
+        out = run(self.hooks.stop({"stop_hook_active": False}, None, None))
+        self.assertEqual(out["decision"], "block")
+        for needle in ("R1-step100", a3["analysis_id"], "を超えている", "設計役に渡す"):
+            self.assertIn(needle, out["reason"])
+        run(self.hooks.stop({"stop_hook_active": True}, None, None))
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})  # cap reached
+        self.assertEqual(end_status(self.ctx, self.hooks.stop_blocks)[::2], ("stopped", "not_judged"))
+        self.assert_events_fit()
+
     def test_red_with_no_revision_left_may_stop(self):
         from hiraku.agent.runner import end_status
 

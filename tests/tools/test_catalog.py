@@ -122,6 +122,30 @@ class CatalogTest(unittest.TestCase):
         p1 = build_load_cases(self.catalog, req, loaded_design(cargo_kg=1.0), ["P1"])[0]  # cargo stays off
         self.assertEqual((p1["params"]["loading"], p1["requirement_keys"]), ("two", ["Q15", "Q30", "Q33"]))
 
+    def test_default_loading_of_the_requirements_file(self):
+        """docs/contract.md: without Q30 the requirements file's default_loading is the loading to check,
+        and a case a builder makes without params.loading gets it."""
+        from unittest import mock
+
+        from hiraku.catalog import build
+
+        req = copy.deepcopy(self.req)
+        req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q30"]
+        req["default_loading"] = "driver"
+        p1 = build_load_cases(self.catalog, req, loaded_design(), ["P1"])[0]
+        self.assertEqual(p1["params"]["loading"], "driver")
+        bare = {"load_case_id": "P1-x", "test_id": "P1", "domain": "powertrain", "title": "x", "params": {},
+                "requirement_keys": []}
+        with mock.patch.object(build, "builder_for", return_value=lambda spec, r, d: dict(bare, params={})):
+            self.assertEqual(build._build_one(self.catalog, req, loaded_design(), "P1", False)[0]["params"],
+                             {"loading": "driver"})
+            given = lambda spec, r, d: dict(bare, params={"loading": "empty"})  # noqa: E731
+            with mock.patch.object(build, "builder_for", return_value=given):
+                self.assertEqual(build._build_one(self.catalog, req, loaded_design(), "P1", False)[0]["params"],
+                                 {"loading": "empty"})
+            del req["default_loading"]
+            self.assertEqual(build._build_one(self.catalog, req, loaded_design(), "P1", False)[0]["params"], {})
+
     def test_parts_on_board(self):
         d = design()
         ids = {name: [p["id"] for p in parts_on_board(d, name)] for name in ("empty", "driver", "two", "two_cargo")}
