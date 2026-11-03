@@ -44,7 +44,7 @@ def n03_n06_layout():
         "n03": {
             "duration_s": 5.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
-            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2},
+            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2, "ok_of_reading": 0.55},
             "times": {"lead_s": 0.3, "loop_to_s": 2.0, "accel_s": 2.9},
             "colors": dict(COLORS),
         },
@@ -241,6 +241,7 @@ READ = """async (t) => {
     limitText: [...document.querySelectorAll(".n03-page text.limit")].map((e) => e.textContent).join(" "),
     ok: (() => { const e = document.querySelector(".n03-ok"); return e ? getComputedStyle(e).visibility : null; })(),
     okPx: (() => { const e = document.querySelector(".n03-ok"); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    okReadingPx: (() => { const e = document.querySelector(".n03-ok"); const r = e && document.querySelector(`[data-box="${e.dataset.box.replace(/\\.ok$/, ".reading")}"]`); return r ? parseFloat(getComputedStyle(r).fontSize) : null; })(),
     readingPx: (() => { const e = document.querySelector('[data-page="drive"] .n03-reading'); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
     ticks: [...document.querySelectorAll('[data-page="drive"] text.tick')].map((e) => e.textContent.replace(/,/g, "")),
     tiles: [...document.querySelectorAll(".n06-tile")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el), p: Number(el.dataset.p),
@@ -384,8 +385,10 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(min(ticks), 0.0)
         self.assertTrue(40.0 <= max(ticks) <= 55.0, ticks)  # up to the limit (0 .. 55: steps of 20)
         self.assertTrue(all(b > a for a, b in zip(ticks, ticks[1:])))
-        # "✓ 上限より下" on its own line, about half the reading's size (shown under a second)
-        self.assertGreaterEqual(shots[2.0]["okPx"], 0.5 * shots[2.0]["readingPx"])
+        # "✓ 上限より下" on its own line, layout.json n03.popup.ok_of_reading x its reading's size
+        # (not below text_px; shown under a second)
+        P = layout["n03"]["popup"]
+        self.assertEqual(shots[2.0]["okPx"], max(P["text_px"], round(shots[2.0]["okReadingPx"] * P["ok_of_reading"])))
         self.assertEqual(shots[1.0]["ok"], "hidden")
         self.assertEqual(shots[T["loop_to_s"]]["ok"], "visible")
         self.assertEqual(shots[2.85]["ok"], "visible")
@@ -571,6 +574,7 @@ class CutN03N06Test(unittest.TestCase):
     def test_missing_layout_keys_are_named(self):
         layout = n03_n06_layout()
         del layout["n03"]["popup"]["title_px"]
+        del layout["n03"]["popup"]["ok_of_reading"]
         del layout["n03"]["times"]["accel_s"]
         del layout["n06"]["tile"]["label"]
         del layout["n06"]["overlay"]["opacity"]
@@ -578,7 +582,7 @@ class CutN03N06Test(unittest.TestCase):
         base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n03 に無い: popup.title_px, times.accel_s", err)
+        self.assertIn("layout.json の n03 に無い: popup.title_px, popup.ok_of_reading, times.accel_s", err)
         self.assertIn("layout.json に無い: min_text_px", err)
         self.assertEqual(page.evaluate("document.querySelectorAll('.n03-view').length"), 0)
         page.close()

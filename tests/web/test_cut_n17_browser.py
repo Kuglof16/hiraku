@@ -123,7 +123,7 @@ def n17_layout():
         "n17": {
             "duration_s": 8.7,
             "dim_opacity": 0.3,
-            "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5},
+            "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5, "domain_of_title": 1.4},
             "times": {"lead_s": 0.3, "light_s": 5.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
         },
@@ -273,9 +273,11 @@ class CutN17BrowserTest(unittest.TestCase):
         # each domain's line at the story's body text size (this layout has no story: its
         # min_text_px; with the promo department's story, 24 px: test_cut_story_browser)
         self.assertGreaterEqual(got["lineFont"], n17_layout()["min_text_px"])
-        # the result is the domains' chips, large (1.4 x page.title_px); the lines with the
+        # the result is the domains' chips, large (layout.json n17.page.domain_of_title x
+        # page.title_px); the lines with the
         # figures are a pale note under them (not counted, may be small)
-        self.assertGreaterEqual(got["chipPx"], round(n17_layout()["n17"]["page"]["title_px"] * 1.4))
+        P = n17_layout()["n17"]["page"]
+        self.assertEqual(got["chipPx"], max(got["textPx"], round(P["title_px"] * P["domain_of_title"])))
         self.assertEqual(got["bodyKind"], "note")
         self.assertAlmostEqual(got["bodyOpacity"], 0.5, places=3)
         self.assertEqual(got["effBars"], len(REPORT["domains"][0]["effects"]))
@@ -355,11 +357,12 @@ class CutN17BrowserTest(unittest.TestCase):
         layout = n17_layout()
         del layout["n17"]["times"]["light_s"]
         del layout["n17"]["page"]["title_px"]
+        del layout["n17"]["page"]["domain_of_title"]
         del layout["n17"]["colors"]
         self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
         page, errors = self.open(self.run_id, 1)
         got = page.evaluate(STATE)
-        self.assertIn("layout.json の n17 に無い: page.title_px, times.light_s, colors.bg, colors.panel, colors.rule", got["err"])
+        self.assertIn("layout.json の n17 に無い: page.title_px, page.domain_of_title, times.light_s, colors.bg, colors.panel, colors.rule", got["err"])
         page.close()
         # the amount the rest is made pale is the layout's too
         layout = n17_layout()

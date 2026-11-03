@@ -53,8 +53,6 @@ export function effectName(name) {
   return null;
 }
 const JAPANESE = /[぀-ヿ一-鿿]/;
-// Not in layout.json: the size of the domains' chips, a multiple of page.title_px.
-const CHIPS_OF_TITLE = 1.4;
 const NOT_OP = { "<=": ">", "<": "≥", ">=": "<", ">": "≤" };
 
 // One verdict in words: "<name> <value> <sign that holds> <limit>" (a yes-or-no quantity:
@@ -77,7 +75,7 @@ const $ = (id) => document.getElementById(id);
 const N17_KEYS = [
   "duration_s",
   "dim_opacity",
-  "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px", "page.change_of_title",
+  "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px", "page.change_of_title", "page.domain_of_title",
   "times.lead_s", "times.light_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
@@ -200,7 +198,7 @@ export class CutN17 {
     const body = this.story.bodyPx;
     // the result is the domains' chips, large (the review of the second stills: the page was
     // full of figure lines nobody reads); the lines with the figures are a pale note under them
-    const chipPx = Math.max(body, Math.round(P.title_px * CHIPS_OF_TITLE));
+    const chipPx = Math.max(body, Math.round(P.title_px * P.domain_of_title)); // layout.json n17.page.domain_of_title
     el.innerHTML =
       `<div class="n17-head" data-box="n17.result">` +
       `<div class="n17-kicker" style="font-size:${body}px">報告・設計の版 ${esc(String(rep.design_version))}</div>` +

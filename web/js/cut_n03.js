@@ -93,7 +93,7 @@ export function listRects(L) {
 export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
-  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title",
+  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title", "popup.ok_of_reading",
   "times.lead_s", "times.loop_to_s", "times.accel_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
@@ -102,7 +102,7 @@ export const N03_KEYS = [
 // view's and the popup's border and the popup's corner, the padding inside the popup and
 // around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
 // The reading's largest size is layout.json n03.popup.reading_of_title x title_px (it is
-// also held to the popup's width).
+// also held to the popup's width); "✓ 上限より下" is popup.ok_of_reading x the reading's size.
 export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
@@ -123,8 +123,6 @@ export function newestOf(s, { test, lcId }, pick) {
 const LINE = "#2b59c3";
 const RED = "#c8402a";
 const OK_GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
-// Not in layout.json: the size of "✓ 上限より下", a share of the reading's size.
-const OK_OF_READING = 0.55;
 
 // Round steps for an axis from lo to hi: about four, of 1, 2 or 5 times a power of ten.
 function niceTicks(lo, hi) {
@@ -302,7 +300,7 @@ export class CutN03 {
         ok.className = "n03-ok";
         ok.dataset.box = `n03.popup.${c.key}.ok`;
         ok.dataset.kind = "label";
-        const px = Math.max(textPx, Math.round(Number(readings[i].dataset.px) * OK_OF_READING));
+        const px = Math.max(textPx, Math.round(Number(readings[i].dataset.px) * P.ok_of_reading));
         Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px` });
         ok.textContent = "✓ 上限より下";
         readings[i].after(ok);

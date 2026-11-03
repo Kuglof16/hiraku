@@ -4,7 +4,7 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 The run is the A6 fixture (tests.web.domains_fixture: seven domains and assembly over two
 versions, with judgement.updated), here also with a third version; with HIRAKU_WEB_DEV_RUNS
 the newest run there is opened too. The layout values are the promo department's for
-n04 / n15 / n16 (layout.json 087fb59), with n01's colours and overlay.
+n04 / n15 / n16 (layout.json 52d12e9), with n01's colours and overlay.
 """
 
 import copy
