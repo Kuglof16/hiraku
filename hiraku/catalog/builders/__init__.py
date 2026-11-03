@@ -24,7 +24,8 @@ A module product_<name>.py holds the builders of one product (its PRODUCT, a
 requirements file's `product`): for that product they take the place of the
 general builders of the same tests (BUILDERS[test_id] looks at req["product"]);
 for other products those tests keep their general builder, or have none. Its
-PLANS go into PLANS only for tests that have no general plan; PRODUCT_STEPS
+PLANS go into PLANS only for tests that have no general plan; its FEEDS join
+FEEDS (meant for tests only that product builds); PRODUCT_STEPS
 [product](load_case) gives the scripted step of each of its load cases.
 """
 
@@ -85,6 +86,8 @@ def _collect() -> None:
             PRODUCT_STEPS[product] = mod.step_for
         for test_id, plan in getattr(mod, "PLANS", {}).items():
             PLANS.setdefault(test_id, plan)
+        for test_id, down in getattr(mod, "FEEDS", {}).items():  # tests only this product builds (care-bed: P5 -> T3)
+            FEEDS.setdefault(test_id, []).extend(t for t in down if t not in FEEDS.get(test_id, []))
         for test_id in mod.BUILDERS:
             general = BUILDERS.get(test_id)
             BUILDERS[test_id] = _by_product(test_id, getattr(general, "general", general))

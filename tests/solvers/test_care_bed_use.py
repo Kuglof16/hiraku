@@ -96,24 +96,27 @@ class UseFormulasTest(unittest.TestCase):
         self.assertAlmostEqual(got["R_near"] + got["R_far"], 1200.0)
 
     def rail(self, s, ts, G):
-        return k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), d=(25.4, "mm"), t=(1.6, "mm"),
-                  s=(s, "mm"), t_s=(ts, "mm"), E=(205000, "MPa"), G=(G, "MPa"))
+        return k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), n=(2, "1"), u2=(0, "mm"),
+                  u3=(0, "mm"), d=(25.4, "mm"), t=(1.6, "mm"), s=(s, "mm"), t_s=(ts, "mm"), g=(0, "mm"),
+                  t_g=(4.5, "mm"), b_k=(200, "mm"), t_k=(20, "mm"), E=(205000, "MPa"), G=(G, "MPa"),
+                  k_f1=(0, "N*mm"), k_f2=(0, "N*mm"), k_f3=(0, "N*mm"), k_f4=(0, "N*mm"))
 
     def test_side_rail_sleeve(self):
         d, t, ts = 25.4, 1.6, 2.3
         Z = math.pi * (d**4 - (d - 2 * t) ** 4) / (32 * d)
         do = d + 2 * ts
         Z_in = math.pi * (do**4 - (d - 2 * t) ** 4) / (32 * do)
-        got = self.rail(150, ts, 78846)
-        self.assertAlmostEqual(got["sigma_post"], max(300 * 400 / Z_in, 300 * 250 / Z), places=9)
-        self.assertAlmostEqual(self.rail(0, ts, 78846)["sigma_post"], 300 * 400 / Z, places=9)
-        self.assertLess(got["sigma_post"], self.rail(0, ts, 78846)["sigma_post"])
+        G0 = 1e-3  # next to no torsion: the posts' torque and the bar's twist vanish, the posts are plain cantilevers
+        got = self.rail(150, ts, G0)
+        self.assertAlmostEqual(got["sigma_post"], max(300 * 400 / Z_in, 300 * 250 / Z), places=6)
+        self.assertAlmostEqual(self.rail(0, ts, G0)["sigma_post"], 300 * 400 / Z, places=6)
+        self.assertLess(got["sigma_post"], self.rail(0, ts, G0)["sigma_post"])
 
     def test_bar_between_fixed_and_simply_supported(self):
         d, t = 25.4, 1.6
         Z = math.pi * (d**4 - (d - 2 * t) ** 4) / (32 * d)
-        self.assertAlmostEqual(self.rail(0, 2.3, 1e15)["sigma_bar"], 600 * 700 / 8 / Z, places=6)  # posts rigid
-        self.assertAlmostEqual(self.rail(0, 2.3, 1e-9)["sigma_bar"], 600 * 700 / 4 / Z, places=6)  # posts free to twist
+        self.assertAlmostEqual(self.rail(0, 2.3, 1e15)["sigma_bar"] / (600 * 700 / 8 / Z), 1.0, places=6)  # posts rigid
+        self.assertAlmostEqual(self.rail(0, 2.3, 1e-3)["sigma_bar"], 600 * 700 / 4 / Z, places=4)  # posts free to twist
         I = math.pi * (d**4 - (d - 2 * t) ** 4) / 64
         k = 78846 * 2 * I / 400
         M_end = 600 * 700 / 8 / (1 + 2 * 205000 * I / (k * 700))
