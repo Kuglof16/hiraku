@@ -14,7 +14,7 @@ from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_poi
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
 from ..k4_geometry.obb import from_box, overlap
-from ..k4_geometry.people import PEDAL_KINDS
+from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
 from .base import LOADING, BuiltinTool, Predicts, Record, check_record, on_board, result
 
@@ -160,6 +160,8 @@ class Assembly(BuiltinTool):
             out["assumptions"].insert(0, PEDAL_RULE)
         if people:
             out["effects"] = [{"name": f"body sizes: {AIST_SOURCE}"}]
+            if "knee_angle_room" in groups:
+                out["effects"].append({"name": f"knee_angle_room (mm of the hip-ankle distance): {KNEE_COMFORT_SOURCE}"})
         return out
 
 
