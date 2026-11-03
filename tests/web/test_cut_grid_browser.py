@@ -104,6 +104,28 @@ def without_judgement(events, version, domain):
     return renumber(out)
 
 
+def with_state(events, version, domain, state):
+    """The fixture with the domain's judgements of the version set to state (shape example)."""
+    out = copy.deepcopy(events)
+    for e in out:
+        d = e.get("data") or {}
+        if e["kind"] == "judgement.updated" and d.get("design_version") == version and d.get("domain") == domain:
+            d["state"] = state
+            if "red_count" in d:
+                d["red_count"] = 0 if state == "green" else max(1, d["red_count"])
+    return out
+
+
+def without_assembly(events):
+    """The fixture without the analyses that carry assembly steps or interferences."""
+    out = [e for e in events if not (e["kind"] == "analysis.finished" and ("assembly" in e["data"] or "interferences" in e["data"]))]
+    return renumber(out)
+
+
+GREEN_RGB = "rgb(47, 125, 79)"  # the pages' colour of a pass
+RED_RGB = "rgb(200, 64, 42)"  # n04.overlay.color
+
+
 # What the page shows at stage time t, read in the page.
 READ = """async (t) => {
   await window.hiraku.seek(t);
@@ -124,14 +146,14 @@ READ = """async (t) => {
   return {
     duration: window.hiraku.player.duration, version: v, err: document.querySelector(".err")?.textContent ?? null,
     header: { shown: shown(header), text: header.textContent, rect: rect(header) },
-    assembly: asm ? { shown: shown(asm), rect: rect(asm), box: asm.dataset.box } : null,
+    assembly: asm ? { shown: shown(asm), rect: rect(asm), box: asm.dataset.box, lit: asm.dataset.lit ?? "", border: asm.style.borderColor, version: asm.dataset.version ?? null } : null,
     boxes: [...document.querySelectorAll("[data-box]")].filter(shown).map((el) => ({ box: el.dataset.box, rect: rect(el) })),
     tiles: [...document.querySelectorAll(".grid-tile")].map((el) => {
       const layer = [...el.querySelectorAll(".layer")].find((l) => l.style.display !== "none");
       const mark = layer?.querySelector(".mark");
       const label = layer?.querySelector("b");
       const state = cut.s.judgements[`${v}|${el.dataset.domain}`]?.state ?? null;
-      return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", outside: el.dataset.outside ?? null,
+      return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", lit: el.dataset.lit ?? "", border: el.style.borderColor, outside: el.dataset.outside ?? null,
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
                tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
@@ -258,14 +280,16 @@ class GridCutTest(unittest.TestCase):
         marks = {t["key"].split(".")[-1]: t["mark"] for t in mid["tiles"]}
         for key in TESTS:
             self.assertEqual(marks[key], None if key == "nvh" else "✕" if key in V1_RED else "✓", key)
-        # the large tile is a red one (the message: still red), with its record drawn
+        # the large tile is the last one the voice names (crash, nvh, assembly) with a record
+        # to draw: assembly (the message: everything at once, the named tiles in their colours)
         big = next(t for t in mid["tiles"] if t["featured"])
-        self.assertIn(big["key"].split(".")[-1], V1_RED)
+        self.assertEqual(big["key"], "n04.tile.assembly")
         self.assertEqual(big["mark"], "✕")
         self.assertNotIn("記録が無い", big["text"])
         hot = lambda got: {t["key"].split(".")[-1] for t in got["tiles"] if t["hot"]}  # noqa: E731
         self.assertEqual(hot(before), set())
-        self.assertEqual(hot(early), {"crash"})  # nvh is red in V1_RED but has no judgement here
+        self.assertEqual(hot(early), {"crash"})  # nvh has no judgement here: not lit
+        self.assertEqual(hot(mid), {"crash"})
         tiles = {t["key"].split(".")[-1]: t for t in mid["tiles"]}
         # no words or figures on the tiles: the interference, the mode's frequency and the
         # part temperatures are in the pictures only (the story: a picture and a mark)
@@ -279,16 +303,44 @@ class GridCutTest(unittest.TestCase):
         V = layout["n16"]["view"]
         self.assertEqual(late["assembly"]["box"], "n04.assembly")
         self.assertTrue(late["assembly"]["shown"])
+        self.assertEqual(late["assembly"]["version"], "1")  # the version drawn, not the run's newest
+        self.assertEqual((late["assembly"]["lit"], late["assembly"]["border"]), ("red", RED_RGB))  # assembly red in version 1
         self.assertEqual([round(v) for v in late["assembly"]["rect"]], [V["x"], V["y"], V["x"] + V["w"], V["y"] + V["h"]])
         page.close()
 
-    def test_n04_lights_nvh_when_red(self):
+    def test_n04_lights_the_named_tiles_in_their_recorded_colours(self):
+        """Crash judged green and NVH red in version 1: each lights from its time in its own
+        colour (nothing turned red); from assembly_s the assembly's box is lit in the
+        assembly's colour (red in version 1)."""
         layout = grid_layout()
-        base = self.serve(layout, events={"20261102-120000-grid-v1": domain_events()})
+        events = with_state(domain_events(), 1, "crash", "green")
+        base = self.serve(layout, events={"20261102-120000-grid-v1": events})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&version=1&t=0")
-        lit = {t: {x["key"].split(".")[-1] for x in page.evaluate(READ, t)["tiles"] if x["hot"]} for t in (1.1, 1.3)}
+        shots = {t: page.evaluate(READ, t) for t in (0.4, 1.1, 1.3, 3.5)}
         self.assertEqual(errors, [])
-        self.assertEqual(lit, {1.1: {"crash"}, 1.3: {"crash", "nvh"}})
+        lit = {t: {x["key"].split(".")[-1]: (x["lit"], x["border"]) for x in g["tiles"] if x["hot"]} for t, g in shots.items()}
+        self.assertEqual(lit[0.4], {})
+        self.assertEqual(lit[1.1], {"crash": ("green", GREEN_RGB)})
+        self.assertEqual(lit[1.3], {"crash": ("green", GREEN_RGB), "nvh": ("red", RED_RGB)})
+        marks = {x["key"].split(".")[-1]: x["mark"] for x in shots[1.3]["tiles"]}
+        self.assertEqual((marks["crash"], marks["nvh"]), ("✓", "✕"))  # the colour is the record's judgement
+        self.assertEqual(shots[1.3]["header"]["text"], f"まだ赤が {len(V1_RED) - 1} 枚")
+        asm = shots[3.5]["assembly"]
+        self.assertTrue(asm["shown"])
+        self.assertEqual((asm["lit"], asm["border"]), ("red", RED_RGB))
+        # the large tile: still the last one named with a record (assembly), whatever its colour
+        self.assertEqual(next(x["key"] for x in shots[1.3]["tiles"] if x["featured"]), "n04.tile.assembly")
+        page.close()
+
+    def test_n04_large_tile_without_an_assembly_record(self):
+        """Without assembly records the large tile is the last named one that has a record (nvh)."""
+        layout = grid_layout()
+        events = without_assembly(domain_events())
+        base = self.serve(layout, events={"20261102-120000-grid-v1": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&version=1&t=0")
+        got = page.evaluate(READ, 1.5)
+        self.assertEqual(errors, [])
+        self.assertEqual(next(x["key"] for x in got["tiles"] if x["featured"]), "n04.tile.nvh")
         page.close()
 
     def test_n15_steps_through_the_versions_and_stops_on_the_last(self):

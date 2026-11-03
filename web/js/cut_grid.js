@@ -7,8 +7,9 @@
 // and the order of the tiles come only from layout.json (n04 / n15); a missing key is
 // named on the page.
 //
-// N04: one version (?version=, else the run's last), a version on the way. The crash
-// and NVH tiles are lit at times.crash_s / nvh_s while they are red; from
+// N04: one version (?version=, else the run's last), a version on the way. The tiles the
+// voice names (crash, NVH, assembly) are lit from times.crash_s / nvh_s / assembly_s in
+// the colour of their judgement in the record (green or red; not lit without one); from
 // times.assembly_s the grid gives way to the assembly's box (n16.view), where the newest
 // assembly record's steps go in one after another to the end of the cut (assembly.js).
 // N15: the run's versions in order (up to ?version=), one after the other between
@@ -76,6 +77,10 @@ const TILES = {
 };
 const BEYOND = /-beyond$/;
 const RED = "#c8402a";
+const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
+
+// N04: the tiles the voice names, with the key of layout.json n04.times saying when.
+const NAMED = [["crash", "crash_s"], ["nvh", "nvh_s"], ["assembly", "assembly_s"]];
 
 // The field of a kind a tile colours by (a frame mode first for mode shapes, as N05).
 function fieldFor(ana, kind) {
@@ -167,8 +172,12 @@ export class CutGrid {
   }
 
   // The tile shown large, chosen for the cut's message (layout.json story):
-  //   N04 "まだ赤が 2 枚": a red tile, the first the voice names (times.crash_s, nvh_s, in
-  //     time order) when it is red, else the first red tile in the layout's order;
+  //   N04 "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)":
+  //     the last tile the voice names (times.crash_s, nvh_s, assembly_s in time order) that
+  //     has a record to draw. The message is that everything is looked at at once, not
+  //     that something is red, so the colour does not choose; the voice ends its list on
+  //     it ("…組み立てまで"), and the large tile is the one being named when the grid
+  //     gives way. Without one, the first tile with a record in the layout's order;
   //   N15 "全部の分野が緑になるまで": the tile that turned green last, the one the rounds
   //     were for (the first version from which it stays green to the last is the latest);
   //   else the first tile. A tile with a record to draw for the last version shown comes
@@ -184,10 +193,8 @@ export class CutGrid {
     };
     const first = (list) => list.find(drawn) ?? list[0];
     if (this.name === "n04") {
-      const T = this.spec.times;
-      const named = [["crash", T.crash_s], ["nvh", T.nvh_s]].sort((a, b) => a[1] - b[1]).map(([k]) => k);
-      const reds = [...new Set([...named, ...keys])].filter((k) => keys.includes(k) && state(v, k) === "red");
-      return first(reds) ?? keys[0];
+      const named = this.namedTimes().filter(([k]) => keys.includes(k)).map(([k]) => k);
+      return [...named].reverse().find(drawn) ?? first(keys);
     }
     const vs = this.versions;
     // the first version from which each green tile stays green, the latest first
@@ -201,6 +208,12 @@ export class CutGrid {
       .sort((a, b) => b.from - a.from);
     const latest = greens.filter((g) => g.from === greens[0]?.from).map((g) => g.k);
     return first(latest) ?? first(greens.map((g) => g.k)) ?? keys[0];
+  }
+
+  // N04: [tile, time] of the tiles the voice names, in time order.
+  namedTimes() {
+    const T = this.spec.times;
+    return NAMED.map(([k, key]) => [k, T[key]]).filter(([, at]) => typeof at === "number").sort((a, b) => a[1] - b[1]);
   }
 
   // Rounds it took to reach a version: the versions before it in the run (as roundsUsed).
@@ -265,8 +278,15 @@ export class CutGrid {
       this.asmBox.dataset.box = "n04.assembly";
       Object.assign(this.asmBox.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: this.colors.panel, border: `${st.border_px}px solid ${this.colors.rule}`, borderRadius: `${st.radius_px}px` });
       this.stage.append(this.asmBox);
-      // the assembly fast-forward (the drawing of A7 and N16): every step of the newest record
-      const rec = assemblyRecord(this.s);
+      // the assembly fast-forward (the drawing of A7 and N16): every step of the version's
+      // newest assembly record with steps (the box is lit in that version's colour), else
+      // of the run's newest
+      const own = assemblyFor(this.s, this.versions.at(-1));
+      const withSteps = own?.anas.filter((a) => Array.isArray(a.assembly) && a.assembly.length).at(-1);
+      const rec = withSteps && this.s.designs[withSteps.design_version]
+        ? { ana: withSteps, steps: [...withSteps.assembly].sort((x, y) => x.order - y.order), interferences: own.hits, design: this.s.designs[withSteps.design_version] }
+        : assemblyRecord(this.s);
+      this.asmBox.dataset.version = rec ? String(rec.ana.design_version) : "";
       if (rec) {
         const canvas = document.createElement("canvas");
         Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
@@ -428,7 +448,16 @@ export class CutGrid {
     const T = sp.times;
     // N04 gives way to the assembly's box at assembly_s
     const gridShown = this.name !== "n04" || t < T.assembly_s;
-    if (this.asmBox) this.asmBox.style.visibility = gridShown ? "hidden" : "visible";
+    if (this.asmBox) {
+      this.asmBox.style.visibility = gridShown ? "hidden" : "visible";
+      // the voice names 組み立て as the grid gives way: the box that takes the assembly
+      // tile's place is lit in the assembly's judgement colour of the version (none without one)
+      const st = this.s.judgements[`${this.versions.at(-1)}|assembly`]?.state ?? null;
+      const tone = st === "green" ? GREEN : st === "red" ? sp.overlay.color : null;
+      this.asmBox.dataset.lit = tone ? st : "";
+      this.asmBox.style.borderColor = tone ?? this.colors.rule;
+      this.asmBox.style.boxShadow = tone ? `0 0 0 ${sp.tile.border_px * 2}px ${tone}` : "none";
+    }
     if (this.asm && !gridShown) {
       // the whole order from assembly_s to the end of the cut
       const a = this.asm;
@@ -446,12 +475,15 @@ export class CutGrid {
       tile.el.style.visibility = gridShown ? "visible" : "hidden";
       tile.layers.forEach((l, i) => (l.el.style.display = i === k ? "" : "none"));
       const layer = tile.layers[k];
-      // N04: the crash and NVH tiles are lit from the time the voice names them, while red
-      const litAt = this.name === "n04" ? { crash: T.crash_s, nvh: T.nvh_s }[tile.key] : undefined;
-      const hot = litAt !== undefined && t >= litAt && layer.state === "red";
+      // N04: a tile the voice names is lit from that time in its judgement's colour in the
+      // record (green or red as it is; nothing is turned red), not lit without a judgement
+      const litAt = this.name === "n04" ? this.namedTimes().find(([k]) => k === tile.key)?.[1] : undefined;
+      const tone = litAt === undefined ? null : layer.state === "green" ? GREEN : layer.state === "red" ? sp.overlay.color : null;
+      const hot = tone !== null && t >= litAt;
       tile.el.dataset.hot = hot ? "1" : "";
-      tile.el.style.borderColor = hot ? sp.overlay.color : this.colors.rule;
-      tile.el.style.boxShadow = hot ? `0 0 0 ${sp.tile.border_px * 2}px ${sp.overlay.color}` : "none";
+      tile.el.dataset.lit = hot ? layer.state : "";
+      tile.el.style.borderColor = hot ? tone : this.colors.rule;
+      tile.el.style.boxShadow = hot ? `0 0 0 ${sp.tile.border_px * 2}px ${tone}` : "none";
       if (!gridShown || !layer.view) continue;
       // the record plays from lead_s to the grid's end, squeezed to fit
       const tau = layer.span ? squeeze(t, T.lead_s, end, layer.span[0], layer.span[1]).tau : 0;

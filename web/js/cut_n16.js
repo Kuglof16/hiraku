@@ -10,7 +10,7 @@
 // again to the last one; lead_s is when the caption (the step's sentence) appears.
 
 import * as THREE from "three";
-import { AssemblySeek, AssemblyStage, assemblyRecord, partNames, shortName, stepAt, stepRowsHtml } from "./assembly.js";
+import { AssemblySeek, AssemblyStage, assemblyRecord, nameOf, partNames, shortName, stepAt, stepRowsHtml } from "./assembly.js";
 import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -187,7 +187,7 @@ export class CutN16 {
       this.showWindow();
     }
     const step = this.rec.steps[current - 1];
-    const name = step ? shortName(partNames(this.rec.design)[step.part] ?? step.part) : "";
+    const name = step ? shortName(nameOf(partNames(this.rec.design), step.part)) : "";
     this.caption.replaceChildren();
     if (step) {
       const b = document.createElement("b");

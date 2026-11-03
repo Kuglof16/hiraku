@@ -55,6 +55,14 @@ export function partNames(design) {
 // The name before a bracket ("後右の車輪 (タイヤ…)" -> "後右の車輪").
 export const shortName = (name) => String(name).replace(/\s*[（(].*$/, "") || String(name);
 
+// A step's part by name: the design's part, else a group built first (the contract's
+// "corner:FL" for a suspension corner) as "FL の角の組", else the id.
+export function nameOf(names, id) {
+  if (names[id]) return names[id];
+  const m = /^corner:(.+)$/.exec(String(id));
+  return m ? `${m[1]} の角の組` : String(id);
+}
+
 // "node LB" -> "節点 LB", "member x" -> "部材 x", "part susp_RR" -> that part's name.
 export function fastenTarget(to, names) {
   const [head, ...rest] = String(to).split(" ");
@@ -313,7 +321,7 @@ export function stepRowsHtml(rec, current, opts = {}) {
   const names = partNames(rec.design);
   return rec.steps
     .map((s) => {
-      const name = shortName(names[s.part] ?? s.part);
+      const name = shortName(nameOf(names, s.part));
       const checks = CHECKS.map((c) => `<span class="ck ck-${c.key} ${s[c.key] ? "is-ok" : "is-ng"}" title="${esc(c.title)}">${esc(c.ja)}${mark(s[c.key] === true)}</span>`).join("");
       const blocked = !stepOk(s) && (s.blocked_by ?? []).length ? `<div class="blk">止めているもの: ${esc(s.blocked_by.map((b) => shortName(names[b] ?? b)).join("・"))}</div>` : "";
       const cls = `${s.order === current ? "cur" : ""} ${stepOk(s) ? "" : "has-ng"} ${s.order < current ? "done" : ""}`;
@@ -501,7 +509,7 @@ export class AssemblyPanel {
     const ol = this.q(".asm-steps");
     ol.innerHTML = stepRowsHtml(this.rec, current, { box: "a7.step" });
     const step = this.rec.steps[current - 1];
-    this.q(".asm-caption").innerHTML = step ? `<b>手順 ${step.order}</b> ${esc(step.text ?? shortName(partNames(this.rec.design)[step.part] ?? step.part))}` : "";
+    this.q(".asm-caption").innerHTML = step ? `<b>手順 ${step.order}</b> ${esc(step.text ?? shortName(nameOf(partNames(this.rec.design), step.part)))}` : "";
     const li = ol.querySelector("li.cur");
     if (li) {
       const top = li.offsetTop - ol.clientHeight / 2 + li.offsetHeight / 2;

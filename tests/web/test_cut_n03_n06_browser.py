@@ -35,8 +35,8 @@ N06_TIMES = [0.5, 0.7, 1.2, 2.0, 3.3, 3.4, 3.9, 6.0, 11.6]
 
 
 def n03_n06_layout():
-    """The promo department's proposed values for n03 / n06 (until they are written in
-    layout.json), with the top keys the cut pages read; colours and overlay as n01."""
+    """The promo department's values for n03 / n06 (layout.json as of their commit 6b708f4:
+    the sixth N06 tile is wind), with the top keys the cut pages read; colours and overlay as n01."""
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
@@ -53,7 +53,7 @@ def n03_n06_layout():
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
             "feature": {"x": 96, "y": 96, "w": 1104, "h": 790},
             "list": {"x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24},
-            "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
+            "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "wind"],
             "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}},
             "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55},
             "colors": dict(COLORS),
@@ -235,6 +235,7 @@ READ = """async (t) => {
     tiles: [...document.querySelectorAll(".n06-tile")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el), p: Number(el.dataset.p),
       tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), miss: el.dataset.miss, over: el.dataset.over ?? null, lift: el.dataset.lift ?? null,
       past: el.dataset.past ?? null, clash: el.dataset.clash ?? null, marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
+      case: el.dataset.case ?? null, version: el.dataset.version ?? null,
       outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
       markColor: el.querySelector(".mark") ? getComputedStyle(el.querySelector(".mark")).color : null })),
     bigs: [...document.querySelectorAll(".n06-big")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el),
@@ -442,12 +443,20 @@ class CutN03N06Test(unittest.TestCase):
         self.assertIn("輪が浮く", last["tilt_over"]["text"])
         self.assertIn("電池が熱くなりすぎる", last["battery_hot"]["text"])
         self.assertIn("部品がぶつかる", last["parts_clash"]["text"])
-        self.assertIn("片側の輪が浮く", last["rollover"]["text"])
+        # wind (F1 past the limit): the record's flag slides_first and its criterion not met
+        # (critical_wind_speed 50 < 57 m/s), in the words of FLAGS and CRITERION_JA
+        self.assertIn("横に流される", last["wind"]["text"])
+        self.assertIn("風に耐えられない", last["wind"]["text"])
+        self.assertEqual(last["wind"]["case"], "F1-wind-beyond")
+        self.assertIsNotNone(last["wind"]["tau"])  # it plays the crosswind's motion
+        # step_break: R1's stress past the limit, played on P1's climb of the same step
+        self.assertEqual(last["step_break"]["case"], "R1-step-beyond")
+        self.assertIsNotNone(last["step_break"]["tau"])
         # where the limit is passed, in red: members over the allowable, a part over its
         # limit, a lifted wheel, the parts that interfere
         self.assertEqual(last["step_break"]["over"], "1")
         self.assertEqual(last["battery_hot"]["over"], "1")
-        self.assertEqual((last["tilt_over"]["lift"], last["rollover"]["lift"]), ("1", "1"))
+        self.assertEqual(last["tilt_over"]["lift"], "1")
         self.assertEqual(last["parts_clash"]["clash"], "1")
         self.assertEqual(last["parts_clash"]["marks"], 2)  # the battery and the cross member, both in place
         # each record plays in the large box in its turn (from tile_in_s after the turn starts
@@ -468,6 +477,33 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(early["tilt_over"]["tau"], 0.0)  # in the list: its first pose during its turn
         self.assertEqual(early["parts_clash"]["tau"], 0.0)
         self.assertEqual(early["parts_clash"]["marks"], 1)  # the cross member only: the battery is not in yet
+        page.close()
+
+    def test_n06_takes_the_case_whose_record_passes_the_limit(self):
+        """A lower step past the limit, listed first, that the record climbs: step_stuck takes
+        the higher step that it does not climb (the first case whose record says what went
+        wrong), and its words come from the record's flag and criterion."""
+        layout = n03_n06_layout()
+        events = n03_n06_events()
+        run = events[0]
+        run["data"]["load_cases"].insert(0, _lc("P1-low-beyond", "P1", "powertrain", "限界の外: 少し高い段差 (形の見本)",
+                                                criterion=_crit("climbable", ">=", 1.0, "1")))
+        design = events[1]["data"]
+        t_short = [k * 0.2 for k in range(11)]
+        low = {"analysis_id": "ana-0099", "tool": "step_climb_dynamic", "base": "K2", "load_case_id": "P1-low-beyond",
+               "series": _motion(design, t_short, lambda x: (x * 0.5, 0.0, 0.0), fx=lambda x: 3000.0),
+               "results": [_r("climbed", 1.0, "1"), _r("climbable", 1.0, "1")],
+               "design_version": 1, "prediction_ids": ["pred-0099"], "status": "ok"}
+        events.insert(2, {**events[2], "kind": "analysis.finished", "agent": "system", "design_version": 1, "data": low})
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+        base = self.serve(layout, events={"20261103-120000-n06": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n06&run=20261103-120000-n06&t=0")
+        last = {x["box"].split(".")[-1]: x for x in page.evaluate(READ, 11.6)["tiles"]}
+        self.assertEqual(errors, [])
+        self.assertEqual(last["step_stuck"]["case"], "P1-step-beyond")
+        self.assertIn("越えられない", last["step_stuck"]["text"])
+        self.assertEqual(last["step_stuck"]["version"], "1")
         page.close()
 
     def test_missing_layout_keys_are_named(self):

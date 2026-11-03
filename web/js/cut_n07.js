@@ -20,7 +20,7 @@ import * as THREE from "three";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { esc, fmt, fmtVU, unitLabel } from "./labels.js";
+import { esc, fmt, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 
@@ -29,6 +29,9 @@ const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
+// Short names of judged quantities for the legend's line (else labels.js quantityName).
+const SHORT_JA = { max_hot_spot_stress: "ホットスポット応力" };
+const dec1 = (v) => Number(v).toFixed(1);
 
 const N07_KEYS = [
   "duration_s",
@@ -114,11 +117,55 @@ export class CutN07 {
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
     if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
-    const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
+    // What the colours are. (a) When both versions record a field per element of the judged
+    // quantity itself (a mesh field whose quantity is the criterion's, e.g. the hot-spot
+    // stress per element), the colours are that field, on the criterion's band, and agree
+    // with the verdict (the contract's field has no quantity key yet, so the records so far
+    // are all (b)). (b) Otherwise the colours stay the element stress picked above, and
+    // the legend says in two short lines what the colours are and what is judged (the
+    // criterion's quantity, its recorded value and the allowable), so that a red spot left
+    // after the reinforcement does not contradict "✓ 直った" (which the verdict decides).
+    let fb2 = fb;
+    let fa2 = fa;
+    const judgedOn = (ana) => fieldsOf(ana).filter((f) => crit && f.quantity === crit.quantity && f.mesh_id && s.meshes[f.mesh_id]);
+    const jb = judgedOn(before);
+    if (jb.length) {
+      const pb = preferredField(jb, s.meshes);
+      const pa = after ? judgedOn(after).find((f) => sameField(f, pb)) : null;
+      if (!after || pa) {
+        fb2 = pb;
+        fa2 = pa;
+      }
+    }
+    this.colourBy = fb2 !== fb ? "judged" : "element";
+    const [cb, ca] = onSharedScale([contourOf(before, fb2, crit, s.meshes), fa2 ? contourOf(after, fa2, crit, s.meshes) : null]);
     this.cases = [
-      { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
-      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca, fixed: this.passes(va) }] : []),
+      { version: vb, name: STATE_JA[0], ana: before, field: fb2, ct: cb, judged: this.judgedOf(vb, before) },
+      ...(fa2 ? [{ version: va, name: STATE_JA[1], ana: after, field: fa2, ct: ca, fixed: this.passes(va), judged: this.judgedOf(va, after) }] : []),
     ];
+  }
+
+  // What the record judges for version v on the cut's load case: the value, the operator
+  // that holds between it and the limit, and the limit, from its verdict (the last one for an
+  // analysis of v), else from the analysis's result of the criterion's quantity against the
+  // load case's limit (compared here); null when the records have neither.
+  judgedOf(v, ana) {
+    const s = this.s;
+    const crit = this.lc?.criterion;
+    if (!crit?.quantity || !crit.limit) return null;
+    const ver = Object.values(s.verdicts)
+      .filter((x) => x.load_case_id === this.lc.load_case_id && x.quantity === crit.quantity && s.analyses[s.comparisons[x.comparison_id]?.analysis_id]?.design_version === v)
+      .at(-1);
+    const r = (ana?.results ?? []).find((x) => x.quantity === crit.quantity);
+    const value = ver?.value ?? (r ? { value: r.value, unit: r.unit } : null);
+    const limit = ver?.limit ?? crit.limit;
+    const op = ver?.op ?? crit.op;
+    if (!value || value.unit !== limit.unit) return null;
+    const holds = { "<=": value.value <= limit.value, "<": value.value < limit.value, ">=": value.value >= limit.value, ">": value.value > limit.value }[op];
+    if (holds === undefined) return null;
+    // the sign is what holds between the two numbers written; whether it passes is the verdict's
+    const NOT = { "<=": ">", "<": "≥", ">=": "<", ">": "≤" };
+    return { quantity: crit.quantity, value, limit, sign: holds ? opLabel(op) : NOT[op], pass: ver ? ver.pass === true : holds };
   }
 
   // Does the record judge version v a pass on the cut's load case? Its verdicts on that load
@@ -211,10 +258,26 @@ export class CutN07 {
     const rows = this.cases
       .map((c) => `<div class="row" data-version="${c.version}"><b>${esc(c.name)}</b><span>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</span></div>`)
       .join("");
+    // (b) of pick: the colours are the element stress and the judgement is another quantity:
+    // two short lines, what the colours are and what is judged (for the state shown)
+    const crit = this.lc?.criterion;
+    const explain = this.colourBy === "element" && crit?.quantity && crit.quantity !== "max_stress" && this.cases.some((c) => c.judged);
+    const judgedRows = explain
+      ? this.cases
+          .map((c) => {
+            const j = c.judged;
+            // phrases that break between them, never inside a word
+            const parts = j ? ["判定:", SHORT_JA[j.quantity] ?? quantityName(j.quantity), `${dec1(j.value.value)} ${unitLabel(j.value.unit)} ${j.sign}`, `許容 ${dec1(j.limit.value)}`] : [];
+            return `<p class="judged" data-version="${c.version}" data-pass="${j ? (j.pass ? "1" : "0") : ""}">${parts.map((x) => `<span style="display:inline-block">${esc(x)}</span>`).join(" ")}</p>`;
+          })
+          .join("")
+      : "";
+    el.dataset.colourBy = this.colourBy;
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
       `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
       `<div class="rows" style="font-size:${xp}px">${rows}</div>` +
+      (explain ? `<div class="explain" style="font-size:${xp}px"><p class="colour">${esc(`色: 要素の${FIELD_JA[f.kind] ?? f.kind}`)}</p>${judgedRows}</div>` : "") +
       (ct.limitKnown ? `<p style="font-size:${this.minPx}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
       (this.cases.length > 1 ? `<p class="src" style="font-size:${this.minPx}px">前と後で同じ目盛り</p>` : "");
     this.stage.append(el);
@@ -248,6 +311,7 @@ export class CutN07 {
       if (on) row.dataset.kind = "number";
       else delete row.dataset.kind;
     }
+    for (const p of this.legend.querySelectorAll(".judged")) p.style.display = Number(p.dataset.version) === c.version ? "" : "none";
   }
 
   resize(scale) {
