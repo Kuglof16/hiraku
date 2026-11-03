@@ -2,6 +2,8 @@
 
 n09_events: a run that stops once the domains are picked (run.started, domains.picked,
 run.finished), as the intake department's pick runs do. Its picks are given by the test.
+n09_claude_events: the same with two domains.picked, the catalog's and then Claude's (as the
+plugin's runs).
 design_events: a run that holds only the demo design (data/designs/offroad-4w-v1.json).
 n14_events: the rules there from the start, a dropped file read into rules (once, then again
 with the lines not made into rules), rule checks on the design with one hit, the lead's
@@ -48,6 +50,22 @@ def n09_events(run_id, want, picks, off, assembly_test_ids):
         ("run.started", "system", None, _project(run_id, want), {}),
         ("domains.picked", "lead", f"{len(picks)} 分野", picked, {}),
         ("run.finished", "system", "分野を選ぶところまで", {"status": "stopped", "stop_reason": "分野を選ぶところまで", "stop_code": "not_judged"}, {}),
+    ])
+
+
+def n09_claude_events(run_id, want, catalog, claude, flag_reasons, assembly_test_ids):
+    """A run Claude picks the domains for, as the plugin's runs record it: two domains.picked,
+    the catalog's at start_run (no flag_reasons) and then Claude's (with flag_reasons). catalog
+    and claude are (picks, off)."""
+    first = {"want": want, "flags": {}, "picks": catalog[0], "off": catalog[1], "assembly_test_ids": assembly_test_ids}
+    second = {"want": want, "flags": {}, "flag_reasons": flag_reasons, "picks": claude[0], "off": claude[1], "assembly_test_ids": assembly_test_ids}
+    return _numbered(run_id, [
+        ("run.started", "system", None, _project(run_id, want), {}),
+        ("domains.picked", "lead", f"{len(catalog[0])} 分野", first, {}),
+        ("agent.started", "lead", None, {"agent_id": "lead"}, {}),
+        ("domains.picked", "lead", f"{len(claude[0])} 分野", second, {}),
+        ("agent.stopped", "lead", None, {"agent_id": "lead"}, {}),
+        ("run.finished", "system", "まだ設計がありません", {"status": "stopped", "stop_reason": "まだ設計がありません", "stop_code": "not_judged"}, {}),
     ])
 
 

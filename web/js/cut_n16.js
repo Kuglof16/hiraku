@@ -24,7 +24,7 @@ import { AssemblySeek, AssemblyStage, assemblyRecord, nameOf, partNames, shortNa
 import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
 import { esc } from "./labels.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 
 // The checks of a step in the viewers' words, when they fail: interference stops the
 // part (red); tool and hand make the step hard (orange).
@@ -116,7 +116,7 @@ export class CutN16 {
     this.canvas.dataset.kind = "moving";
     view.append(this.canvas, this.caption);
     this.stage.append(view);
-    this.view = new Workbench3D(null, "zu", { renderer: this.renderer });
+    this.view = cutView(this, "n16");
     this.asm = new AssemblyStage(this.view);
     this.asm.ngChecks = STOPS; // red only for a part that does not fit
     this.asm.setRecord(this.rec);

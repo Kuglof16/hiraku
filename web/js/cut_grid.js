@@ -21,17 +21,22 @@
 // Nothing is coloured by hand: a last version that is not all green stays as it is.
 
 import * as THREE from "three";
-import { clearOfBand, squeeze } from "./compose.js";
+import { clearOfBand } from "./compose.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { esc } from "./labels.js";
 import { channelsOf, motionOf, xSeriesOf } from "./series.js";
 import { AssemblyStage, assemblyRecord } from "./assembly.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
+import { cutLookOf } from "./look.js";
 import { FEATURE_KEYS, listRects, storyOf } from "./cut_n03.js";
 import { TilePets, loadPets, missingPetKeys } from "./cut_pets.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// The tiles' 3D (eight views through one renderer, every frame): the real look's cheapest
+// (look.js QUALITY low: no ambient occlusion, no multisampling, a 1024 px shadow map).
+const GRID_QUALITY = "low";
 
 // Every value the grid cuts read (dotted paths in their layout section).
 const COMMON_KEYS = [
@@ -191,7 +196,10 @@ export class CutGrid {
     this.stage = $("stage");
     this.stage.style.background = colors.bg;
     this.scale = 1;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    // In the real look the tiles are drawn at GRID_QUALITY, without multisampling (look.js QUALITY
+    // low): the canvas is not multisampled either (each tile copied off it would resolve it all)
+    const real = cutLookOf(layout, name, params) === "real";
+    this.renderer = new THREE.WebGLRenderer({ antialias: !real, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
     this.build();
     // the pets come with /pets/pet3d.js; the page waits for them (cut.js awaits loaded)
@@ -408,7 +416,7 @@ export class CutGrid {
         const canvas = document.createElement("canvas");
         Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
         this.asmBox.append(canvas);
-        const view = new Workbench3D(null, "zu", { renderer: this.renderer });
+        const view = cutView(this, this.name, { quality: GRID_QUALITY });
         const stage = new AssemblyStage(view);
         stage.ngChecks = ["no_interference"]; // red only for a part that does not fit (as N16)
         stage.setRecord(rec);
@@ -465,7 +473,7 @@ export class CutGrid {
   // gives that part (from the tile's inner size, so it follows the tile when the tile is
   // placed again in the other box, placeTiles).
   newView(tile, layer, design, areaOf) {
-    const v = new Workbench3D(null, params.get("tilelook") === "real" ? "real" : "zu", { renderer: this.renderer });
+    const v = cutView(this, this.name, { quality: GRID_QUALITY });
     v.setDesign(design);
     layer.areaOf = areaOf;
     this.placeArea(tile, layer, v);
@@ -656,9 +664,13 @@ export class CutGrid {
       const mark = layer.el.querySelector(".mark");
       if (mark) mark.classList.toggle("dim", this.name === "n04" && !hot);
       if (!gridShown || !layer.view) continue;
-      // the record plays from lead_s to the grid's end, squeezed to fit
-      const tau = layer.span ? squeeze(t, T.lead_s, end, layer.span[0], layer.span[1]).tau : 0;
-      if (layer.motion) layer.view.setFrame(layer.motion.frame(tau));
+      // the record plays from lead_s to the grid's end, squeezed to fit and paced (pace.js) so
+      // nothing turns faster than 90 deg/s on the screen
+      if (layer.motion) {
+        layer.pace ??= pacer([{ motion: layer.motion, view: layer.view }], end - T.lead_s, PACE_LIMIT_DEG_S);
+        const share = (t - T.lead_s) / Math.max(1e-9, end - T.lead_s);
+        layer.view.setFrame(layer.motion.frame(layer.motion.t0 + layer.pace(share)));
+      }
       layer.view.animate(t, false); // a mode shape swings with the stage clock
       layer.view.renderInto(layer.canvas.getContext("2d"), layer.canvas.width, layer.canvas.height, this.scale);
     }

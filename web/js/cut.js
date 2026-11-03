@@ -23,7 +23,8 @@ import { CutN04, CutN15 } from "./cut_grid.js";
 import { esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
+import { looksReady } from "./look.js";
 import { CutN16 } from "./cut_n16.js";
 import { CutN07 } from "./cut_n07.js";
 import { CutN03, KINDS, storyOf } from "./cut_n03.js";
@@ -34,6 +35,7 @@ import { CutN14 } from "./cut_n14.js";
 import { CutN11 } from "./cut_n11.js";
 import { CutN12 } from "./cut_n12.js";
 import { CutN13 } from "./cut_n13.js";
+import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -188,7 +190,7 @@ class Cut {
 
   makeView(tile, design) {
     const { lc, ana } = tile.rec;
-    const v = new Workbench3D(null, params.get("tilelook") === "real" ? "real" : "zu", { renderer: this.renderer });
+    const v = cutView(this, "n05");
     v.setDesign(this.s.designs[ana.design_version] ?? design);
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);
@@ -352,7 +354,7 @@ class CutN01 {
 
   view(c, tint) {
     const design = this.s.designs[c.dyn.design_version] ?? this.s.designs[this.s.currentVersion];
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n01");
     v.setDesign(design);
     v.setLoading(c.lc.params?.loading ?? null);
     v.setMotion(c.motion);
@@ -496,7 +498,9 @@ class CutN01 {
 // after another: from times.lead_s to the end is cut in n + m - 1 equal steps (n panes
 // with a record, m = limits.moving) and pane k plays over m of them from step k, holding
 // its first pose before and its last after; so no more than m move at one time. Without a
-// story they all play from lead_s to the end.
+// story they all play from lead_s to the end. Inside its turn a pane's records are paced
+// (pace.js): where the vehicle or the case past the limit turns fast (a roll-over) they play
+// slower and the rest faster, so nothing turns faster than 90 deg/s on the screen.
 
 const N02_KEYS = ["duration_s", "grid", "panes", "pane", "pane.verdict.of_label", "times", "overlay", "colors"];
 const N02_TESTS = {
@@ -536,7 +540,7 @@ class CutN02 {
   }
 
   makeView(c, tint, w, h) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n02");
     v.setDesign(this.s.designs[c.ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(c.lc.params?.loading ?? null);
     v.setMotion(c.motion);
@@ -608,6 +612,8 @@ class CutN02 {
     playing.forEach((p, k) => {
       p.from = m ? T.lead_s + k * d : T.lead_s;
       p.to = m ? p.from + m * d : sp.duration_s;
+      // the case past the limit that stays where it starts is laid over the vehicle (its turn shows as is)
+      p.pace = pacer([{ motion: p.ok.motion, view: p.view }, p.ghost ? { motion: p.over.motion, view: p.ghost } : null], p.to - p.from, PACE_LIMIT_DEG_S);
     });
   }
 
@@ -647,7 +653,7 @@ class CutN02 {
     const sp = this.spec;
     for (const p of this.panes) {
       if (!p.view) continue;
-      const q = squeeze(t, p.from, p.to, 0, p.span);
+      const q = { tau: p.pace((t - p.from) / Math.max(1e-9, p.to - p.from)) };
       if (t >= p.from && t < p.to) p.main.dataset.kind = "moving";
       else delete p.main.dataset.kind;
       const m = p.ok.motion;
@@ -761,6 +767,8 @@ window.hiraku = {
     return drawAt(t);
   },
   png: () => cut?.png?.() ?? null,
+  // the cut's 3D views (workbench3d.js cutView), for the tests
+  views: () => cutViews(),
   // what the story check found at the last frame drawn: { counts, over } (null before)
   story: () => story?.last ?? null,
 };
@@ -773,6 +781,7 @@ async function main() {
     // the events too, in seq order, for the cuts that read them as they came (N09, N13, N14)
     cut = new CUTS[name](layout, stateOf(events), [...events].sort((a, b) => a.seq - b.seq));
     if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
+    await looksReady(); // the real look's Poly Haven files, so a frame at ?t= is the same every time
     window.hiraku.cut = cut;
     if (!ONLY_HERO) initStory(layout, name);
     player.duration = layout[name].duration_s;

@@ -25,6 +25,7 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { ANGLE, LENGTH, lerpAt, nearestAt } from "./series.js";
+import { HAZARD_BAND_MM } from "./look.js";
 
 const PAPER = "#f4f1ea";
 const PAPER_DARK = "#e6e0d3";
@@ -281,6 +282,27 @@ const REAL_OF = {
 const CONE_DRAW = { base: 300, height: 450 };
 const GATE_POST_DRAW = { radius: 25, height: 1000 };
 
+// The painted edge of a step in the real look (look.js hazardMaterial: yellow and black
+// stripes): a band down the face the vehicle meets (toward -1: the -x face, +1: the +x face)
+// and back over the top, on a box of size [sx, sy, sz] centred at 0 in its own frame. Paint
+// for the picture (how far it reaches is look.js HAZARD_BAND_MM), not from the record.
+function hazardEdge(sx, sy, sz, toward, look) {
+  const g = new THREE.Group();
+  const band = Math.min(HAZARD_BAND_MM, sz, sx);
+  const plane = (u, v, n, at) => {
+    const geo = new THREE.PlaneGeometry(sy, band).applyMatrix4(new THREE.Matrix4().makeBasis(u, v, n).setPosition(at));
+    const mesh = new THREE.Mesh(geo, look.hazardMaterial([sy, band]));
+    mesh.receiveShadow = true;
+    g.add(mesh);
+  };
+  const t = toward < 0 ? -1 : 1;
+  // the face: width along y, height along z, facing +-x; the top: width along y, depth along x
+  plane(new THREE.Vector3(0, t, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(t, 0, 0), new THREE.Vector3((t * sx) / 2, 0, sz / 2 - band / 2));
+  plane(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-t, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(t * (sx / 2 - band / 2), 0, sz / 2));
+  g.userData.paint = "hazard";
+  return g;
+}
+
 // One object of the record's scene, in its own box (centre position_mm, size_mm, turned by rpy_deg).
 // A cone without a size (a point) and a gate with no height (a line) stand on position_mm.
 function recordedObject(o, look, ink) {
@@ -310,6 +332,11 @@ function recordedObject(o, look, ink) {
   g.position.set(...o.position_mm);
   const r = o.rpy_deg ?? [0, 0, 0];
   g.rotation.set(deg(r[0]), deg(r[1]), deg(r[2]), "ZYX");
+  if (look.real && o.kind === "step" && sx > 0 && sy > 0 && sz > 0) {
+    // painted on the face toward the vehicle (the design's origin, seen in the box's own frame)
+    const toOrigin = new THREE.Vector3(...o.position_mm).negate().applyQuaternion(g.quaternion.clone().invert());
+    g.add(hazardEdge(sx, sy, sz, toOrigin.x, look));
+  }
   return g;
 }
 
@@ -351,6 +378,12 @@ export class SceneProps {
     if (desc.step) {
       const s = desc.step;
       this.world.add(block(s.x0, s.x1, s.y0, s.y1, 0, s.h, look, this.ink, REAL_OF.step));
+      if (look.real) {
+        // the vehicle meets the step's -x face
+        const edge = hazardEdge(s.x1 - s.x0, s.y1 - s.y0, s.h, -1, look);
+        edge.position.set((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, s.h / 2);
+        this.world.add(edge);
+      }
     }
     if (desc.table && !desc.recorded) {
       const hw = desc.halfWidth + 700;

@@ -40,7 +40,7 @@ import * as THREE from "three";
 import { OVER_COLOR } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { esc, fmt, plainSentence } from "./labels.js";
-import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
+import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
@@ -199,7 +199,7 @@ export class CutN14 {
     this.viewEl.append(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n14");
     v.setDesign(design);
     v.setLoading("empty"); // the parts the rules look at; the people and the load are drawn faint
     v.setScene(null, null);

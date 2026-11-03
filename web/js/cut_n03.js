@@ -20,6 +20,13 @@
 // The squeeze is in the view's corner (rateLabel, as the N05 tiles), as a note
 // (data-kind "note": for the makers, not counted).
 //
+// The drive's record time is played from lead_s to loop_to_s along loop.ease ("in-out":
+// slow at the head and the tail, 0.5 - 0.5 cos(pi p); "linear"), so the battery's colour
+// and the cursor come to rest by loop_to_s; the corner says the mean squeeze. The vehicle
+// stands still in the drive (its records hold no positions), so no course or arc is shown.
+// "✓ 上限より下" shows from times.ok_s; through the acceleration (from accel_s, when the
+// popup charts the speed) the same check stays as "✓ 電池の温度は上限より下" under the speed.
+//
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
 // missing key is named on the page.
 
@@ -28,7 +35,7 @@ import { clearOfBand, rateLabel, squeeze } from "./compose.js";
 import { contourOf } from "./fields.js";
 import { esc, fmt, unitLabel } from "./labels.js";
 import { channelsOf, extent, motionOf, nearestAt, nearestIndex } from "./series.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -94,9 +101,12 @@ export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
   "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title", "popup.ok_of_reading",
-  "times.lead_s", "times.loop_to_s", "times.accel_s",
+  "times.lead_s", "times.loop_to_s", "times.accel_s", "times.ok_s", "loop.ease",
   "colors.bg", "colors.panel", "colors.rule",
 ];
+
+// The eases loop.ease may name: the share of the drive played at the share p of its time.
+export const LOOP_EASES = { "in-out": (p) => 0.5 - 0.5 * Math.cos(Math.PI * p), linear: (p) => p };
 
 // Not in layout.json (written here until the promo department gives keys for them): the
 // view's and the popup's border and the popup's corner, the padding inside the popup and
@@ -186,6 +196,8 @@ function upperLimit(criterion, unit) {
 export class CutN03 {
   constructor(layout, s) {
     this.spec = requireKeys(layout, "n03", N03_KEYS);
+    this.ease = LOOP_EASES[this.spec.loop.ease];
+    if (!this.ease) throw new Error(`layout.json の n03 の loop.ease が分からない: ${this.spec.loop.ease} (${Object.keys(LOOP_EASES).join(" か ")})`);
     this.layout = layout;
     this.story = storyOf(layout, "n03");
     this.s = s;
@@ -246,7 +258,7 @@ export class CutN03 {
     this.popup = pop;
     const chartW = P.w - 2 * pad - 2 * S.border_px;
     // a page of the popup: its title with the tests whose records it charts, then the charts
-    const page = (key, title, charts) => {
+    const page = (key, title, charts, also = null) => {
       const el = document.createElement("div");
       el.className = "n03-page";
       el.dataset.page = key;
@@ -306,6 +318,24 @@ export class CutN03 {
         readings[i].after(ok);
         return ok;
       });
+      // a check carried over from another page (the battery's, through the acceleration)
+      if (also && readings[0]) {
+        const ok = document.createElement("div");
+        ok.className = "n03-ok";
+        ok.dataset.box = `n03.popup.${key}.${also.key}`;
+        ok.dataset.kind = "label";
+        let px = Math.max(textPx, Math.round(Number(readings[0].dataset.px) * P.ok_of_reading));
+        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px`, whiteSpace: "nowrap" });
+        ok.textContent = also.text;
+        readings[0].after(ok);
+        while (ok.scrollWidth > chartW && px > textPx) {
+          px -= 1;
+          ok.style.fontSize = `${px}px`;
+        }
+        oks[0] = oks[0] ?? null;
+        oks.push(ok);
+        this.carried = ok;
+      }
       const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0) - oks.reduce((a, o) => a + (o ? o.offsetHeight + pad : 0), 0);
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
@@ -322,12 +352,16 @@ export class CutN03 {
     const launchCh = this.launch ? channelsOf(this.launch.ana) : new Map();
     this.battery = this.batteryChannel(heatCh, design);
     // one graph at a time (story): the battery's temperature on the long drive, then the speed
+    const drive = page("drive", "長く走ったときの電池の温度", [
+      { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null, op: this.heat?.lc.criterion?.op ?? null,
+        floor: this.ambient(this.battery?.s?.unit) },
+    ]);
+    const kept = drive.charts.some((c) => c.ok);
+    this.carried = null;
     this.pages = {
-      drive: page("drive", "長く走ったときの電池の温度", [
-        { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null, op: this.heat?.lc.criterion?.op ?? null,
-          floor: this.ambient(this.battery?.s?.unit) },
-      ]),
-      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
+      drive,
+      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }],
+        kept ? { key: "battery_ok", text: "✓ 電池の温度は上限より下" } : null),
     };
 
     // the record time spans the two phases play
@@ -358,7 +392,7 @@ export class CutN03 {
   }
 
   makeDriveView(design) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(design);
     v.setLoading((this.drive ?? this.heat)?.lc.params?.loading ?? null);
     v.setScene(null, null);
@@ -371,7 +405,7 @@ export class CutN03 {
 
   makeLaunchView() {
     const { lc, ana } = this.launch;
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(this.s.designs[ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);
@@ -415,7 +449,11 @@ export class CutN03 {
     let tau = null;
     let rate = 0;
     if (phase === "drive" && this.driveSpan) {
-      ({ tau, rate } = squeeze(t, T.lead_s, T.loop_to_s, this.driveSpan[0], this.driveSpan[1]));
+      // eased (loop.ease) from lead_s to loop_to_s; the corner says the mean squeeze
+      const [a, b] = this.driveSpan;
+      const share = Math.max(0, Math.min(1, (t - T.lead_s) / Math.max(1e-9, T.loop_to_s - T.lead_s)));
+      tau = a + this.ease(share) * (b - a);
+      rate = (b - a) / Math.max(1e-9, T.loop_to_s - T.lead_s);
     } else if (phase === "launch" && this.launchSpan) {
       ({ tau, rate } = squeeze(t, T.accel_s, this.spec.duration_s, this.launchSpan[0], this.launchSpan[1]));
     }
@@ -425,9 +463,11 @@ export class CutN03 {
       if (tau === null) continue;
       c.cur.setAttribute("transform", `translate(${c.X(tau).toFixed(1)} 0)`);
       c.now.firstChild.nodeValue = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
-      // the ✓ once the long drive has played to its end (loop_to_s) and kept to the limit
-      if (c.ok) c.ok.style.visibility = phase === "drive" && t >= T.loop_to_s ? "visible" : "hidden";
     }
+    // the ✓ from ok_s when the long drive kept to the limit (on the drive's page only)
+    for (const c of this.pages.drive.charts) if (c.ok) c.ok.style.visibility = phase === "drive" && t >= T.ok_s ? "visible" : "hidden";
+    // and through the acceleration, under the speed
+    if (this.carried) this.carried.style.visibility = phase === "launch" && t >= T.ok_s ? "visible" : "hidden";
     let view;
     if (launch) {
       view = this.launchView;
