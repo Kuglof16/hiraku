@@ -116,9 +116,7 @@ class ShellFrame:
         held = _hold_supports(sup)
         hold_nodes = []
         for sid in held:
-            j = mesh.joints[support_node[sid]]
-            x0 = nodes[support_node[sid]]
-            hold_nodes.append(int(j[np.argmin(np.linalg.norm(mesh.nodes[j] - x0, axis=1))]))
+            hold_nodes.append(hold_node(mesh, support_node[sid], nodes[support_node[sid]]))
         a, b, c = hold_nodes
         fixed = np.concatenate([dofs_of(a, "xyz"), dofs_of(b, "yz"), dofs_of(c, "z")])
         excluded = np.zeros(mesh.n_elements, bool)
@@ -174,6 +172,18 @@ def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
     return out
 
 
+def hold_node(mesh: ShellMesh, node: str, x0) -> int:
+    """The mesh node of design node `node`'s joint nearest x0 that can be held: not the slave of a rigid
+    link (at a tied joint the branch's ring nodes are slaves, and a fixed DOF cannot be on one)."""
+    j = np.asarray(mesh.joints[node], int)
+    slaves = [s for s, _ in mesh.links]
+    cand = j[~np.isin(j, slaves)] if slaves else j
+    if len(cand) == 0:
+        raise DesignError(f"every mesh node of the joint at {node} is tied to another tube, so the support there "
+                          f"cannot hold the shell; carry the support on another node")
+    return int(cand[np.argmin(np.linalg.norm(mesh.nodes[cand] - np.asarray(x0, float), axis=1))])
+
+
 def _hold_supports(sup: list[dict]) -> list[str]:
     """Three supports for the 3-2-1 hold, chosen as k1_frame.model.restrain_free_body does."""
     if len(sup) < 3:
@@ -208,11 +218,18 @@ def _ground(design: dict, summ: dict, g_factor: float, step_mm, step_supports, g
     return ground, statics, ("K0 step" if step_mm is not None else "K0 rest")
 
 
-def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inertia_N) -> float:
-    """k1_frame.analyze's balance test (same masses, same tolerance); raises DesignError when it fails."""
-    weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
-    pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
-    pairs += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in summ["items"]]
+def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inertia_N, gvec=None) -> float:
+    """k1_frame.analyze's balance test (same masses, same tolerance); raises DesignError when it fails.
+    gvec: gravity in the body's axes (m/s^2) when it is not straight down x g_factor."""
+    if gvec is None:
+        weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        pairs += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in summ["items"]]
+    else:
+        gvec = np.asarray(gvec, float)
+        weight = summ["mass_kg"] * float(np.linalg.norm(gvec))
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        pairs += [(it.cg_mm, it.mass_kg * gvec) for it in summ["items"]]
     F, M = resultant(pairs)
     M_cg = M - np.cross(summ["cg_mm"], F)
     span = max(float(np.ptp([s["position_mm"][0] for s in design["supports"]])), 1.0)
@@ -288,7 +305,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         ground, statics, source = _mounts(design, mount_loads), None, "mounts"
     else:
         ground, statics, source = _ground(design, summ, g_factor, step_mm, step_supports, ground_forces)
-        off = check_balance(design, summ, ground, g_factor, inertia_N)
+        off = check_balance(design, summ, ground, g_factor, inertia_N, gravity_mps2)
 
     # ---- masses: shell nodes (point masses) and parts (gussets and through parts are shell elements already)
     in_shell = shell_parts(design, ms)
@@ -377,7 +394,10 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
 
     # ---- solve
     solver = fr.solver()
-    U = solver.solve(Fv)
+    try:
+        U = solver.solve(Fv)
+    except ValueError as e:
+        raise DesignError(str(e)) from None
     react = solver.reactions(U, Fv)
     weight = m_tot * STANDARD_GRAVITY * g_factor if gravity_mps2 is None else m_tot * float(np.linalg.norm(gvec))
     residual = max(float(np.linalg.norm(react[dofs_of(n, "xyz")])) for n in fr.hold_nodes) / weight

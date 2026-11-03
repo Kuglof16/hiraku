@@ -372,7 +372,7 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
     largest hot spot and element stress, their largest instants as results, and an effect."""
     lc_id, ana_id, instants = series
     members = {m["id"] for m in design["members"]}
-    per_element, per_member, peak, hot, hot_at = [], [], [], [], []
+    per_element, per_member, peak, hot, hot_at, hot_t = [], [], [], [], [], []
     for inst in instants:
         r = analyze_shell(design, frame=res["frame"], mount_loads=inst["mount_loads"],
                           gravity_mps2=inst["gravity_mps2"], inertia_N=inst["inertia_N"])
@@ -381,8 +381,10 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
         per_member.append({m: round(v, 2) for m, (v, _) in r["member_max"].items() if m in members})
         peak.append(r["member_max"][r["worst_member"]][0])
         top = r.get("hot_spot_max")
-        hot.append(abs(top["value"]) if top else 0.0)
-        hot_at.append(f"joint {top['joint']} ({top['member']})" if top else "")
+        if top:  # an instant with no hot spot read is left out of the hot-spot series (not 0 MPa)
+            hot.append(abs(top["value"]))
+            hot_at.append(f"joint {top['joint']} ({top['member']})")
+            hot_t.append(inst["t_s"])
     t = [inst["t_s"] for inst in instants]
     src = {"source_analysis_id": ana_id} if ana_id else {}
     fields = [{"kind": "stress", "label": LABEL_FRAMES_MEMBER, "unit": "MPa",
@@ -391,17 +393,27 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
         fields.insert(0, {"kind": "stress", "label": LABEL_FRAMES, "unit": "MPa", "mesh_id": mesh["mesh_id"],
                           "surface": "max", "frames": {"t_s": t, "per_element": per_element,
                                                        "max": [round(max(v), 2) for v in per_element], **src}})
-    k, j = int(np.argmax(hot)), int(np.argmax(peak))
+    j = int(np.argmax(peak))
+    series_out, results = [], []
+    if hot:
+        k = int(np.argmax(hot))
+        series_out.append({"channel": "max_hot_spot_stress", "unit": "MPa", "t_s": hot_t,
+                           "values": [round(v, 3) for v in hot]})
+        results.append(result("max_hot_spot_stress_over_time", hot[k], "MPa", f"{hot_at[k]} at t {hot_t[k]:.3f} s"))
+        said = f"largest hot spot {hot[k]:.1f} MPa at {hot_at[k]}, t {hot_t[k]:.3f} s"
+        if len(hot) < len(t):
+            said += f" (hot spots read at {len(hot)} of the {len(t)} instants)"
+    else:
+        said = "no hot spot read at any instant"
+    series_out.append({"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]})
+    results.append(result("max_stress_over_time", peak[j], "MPa", f"t {t[j]:.3f} s"))
     return {
         "fields": fields,
-        "series": [{"channel": "max_hot_spot_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in hot]},
-                   {"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]}],
-        "results": [result("max_hot_spot_stress_over_time", hot[k], "MPa", f"{hot_at[k]} at t {t[k]:.3f} s"),
-                    result("max_stress_over_time", peak[j], "MPa", f"t {t[j]:.3f} s")],
+        "series": series_out,
+        "results": results,
         "effects": [{"name": (f"shell solved at {len(t)} instants of {lc_id}'s mount forces (t {t[0]:.3f} to "
-                              f"{t[-1]:.3f} s, one factorisation): largest hot spot {hot[k]:.1f} MPa at "
-                              f"{hot_at[k]}, t {t[k]:.3f} s; largest element stress {peak[j]:.1f} MPa at t "
-                              f"{t[j]:.3f} s"), "value": hot[k], "unit": "MPa"}],
+                              f"{t[-1]:.3f} s, one factorisation): {said}; largest element stress {peak[j]:.1f} MPa "
+                              f"at t {t[j]:.3f} s"), "value": hot[k] if hot else peak[j], "unit": "MPa"}],
         "assumptions": [FRAMES_ASSUMPTION.format(lc=lc_id)],
     }
 
@@ -696,6 +708,9 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     if top is None:
         quantity, unit = "max_stress", "MPa"
         values = [r["res"]["member_max"][r["res"]["worst_member"]][0] for r in rows]
+    # edge of the element at the peak on each level: the same on every level when the weld strips' grid sizes it
+    edges = [float(r["res"]["mesh"].edge_lengths()[r["res"]["worst_element"]].max()) for r in rows]
+    peak_fixed = max(edges) <= 1.01 * min(edges)
     levels = []
     for row, v in zip(rows, values):
         lv = {"element_size_mm": float(row["size"]), "elements": int(row["res"]["mesh"].n_elements), "value": float(v)}
@@ -707,8 +722,16 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     notes += left_out
     if quantity == "max_hot_spot_stress":
         notes.append("the strip elements it is read on are t x t on every level (IIW); the levels refine the mesh "
-                     "around them")
+                     "around them, not the read elements, so the verdict says how the value settles as the mesh "
+                     "around the read points is refined")
     rec = convergence_record(quantity, unit, levels, LIMIT_PCT, REFINE_RATIO, "; ".join(notes))
+    if quantity == "max_stress" and peak_fixed and rec["verdict"] == "converged":
+        # the element peak sits in a strip element that does not shrink with element_size (PEAK_ASSUMPTION):
+        # a small change says nothing of convergence there
+        rec["verdict"] = "not_converged"
+        rec["notes"] = "; ".join(x for x in (rec.get("notes"), (
+            f"the element at the peak is {edges[-1]:.2g} mm on every level (sized by the weld strips' grid, not by "
+            f"element_size), so its small change is not convergence; not judged converged")) if x)
 
     # effects: the judged value, the element peak, the error estimate and the time
     sz = " / ".join(f"{s:g}" for s in sizes)
@@ -732,8 +755,7 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     p_rich = f", observed order {prich['observed_order']:.2f}" if prich and prich["observed_order"] is not None else ""
     if prich and prich["extrapolated"] is not None and pv != "singular":
         p_rich += f", extrapolated {prich['extrapolated']:.1f} MPa"
-    edges = [float(r["res"]["mesh"].edge_lengths()[r["res"]["worst_element"]].max()) for r in rows]
-    if max(edges) <= 1.01 * min(edges):
+    if peak_fixed:
         p_rich += (f"; the peak element is {edges[-1]:.2g} mm on every level (sized by the weld strips' grid, not by "
                    f"element_size), so the element at the peak itself is not refined")
     effects.append({"name": (f"mesh convergence of max_stress (the element peak, a reference): {sz} mm -> "

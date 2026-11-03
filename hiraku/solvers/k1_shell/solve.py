@@ -200,6 +200,11 @@ SOLVERS = ("superlu", "pardiso")
 # precision of the same matrix, and their round-off on the demo frame's matrices (free DOF to 3e5) is
 # well below this. An assumption, checked on small models in tests/solvers/test_shell_pardiso.py.
 PARDISO_REL_TOL = 1e-6
+# Largest relative residual |Kr ur - r| / |r| of a solve accepted: a direct solve of a well-held model
+# leaves round-off (about 1e-12 on the demo frame); a model that is barely held (a near mechanism)
+# can give large finite displacements that do not satisfy the equations. The same bound as the
+# solid FE core's (an assumption).
+RESIDUAL_TOL = 1e-6
 
 
 def pardiso_module():
@@ -266,6 +271,16 @@ class _Pardiso:
                                 for j in range(b.shape[1])])
 
 
+def relative_residual(A, x: np.ndarray, b: np.ndarray) -> float:
+    """Largest |A x - b| / |b| over the columns of b (columns with b = 0: |A x|, which must be 0 too)."""
+    r = A @ x - b
+    if b.ndim == 1:
+        r, b = r[:, None], b[:, None]
+    nb = np.linalg.norm(b, axis=0)
+    nr = np.linalg.norm(r, axis=0)
+    return float(np.max(np.where(nb > 0, nr / np.where(nb > 0, nb, 1.0), nr))) if nr.size else 0.0
+
+
 class StaticSolver:
     """Factorise the constrained stiffness once; solve any number of load cases.
 
@@ -312,9 +327,16 @@ class StaticSolver:
         """Displacements (n_dof,) or (n_dof, n_cases) for loads of the same shape."""
         t0 = time.perf_counter()
         F = np.asarray(F, float)
-        ur = self.lu.solve(np.asarray(self.T.T @ F))
+        rhs = np.asarray(self.T.T @ F)
+        ur = self.lu.solve(rhs)
         if not np.all(np.isfinite(ur)):
             raise ValueError("the shell solution is not finite; the model is singular or ill-conditioned")
+        worst = relative_residual(self.Kr, ur, rhs)
+        if worst > RESIDUAL_TOL:
+            raise ValueError(f"the shell solution does not satisfy the equations (relative residual {worst:.1e}, "
+                             f"more than {RESIDUAL_TOL:g}): the model is nearly singular, held by too little "
+                             f"or a part is barely connected")
+        self.model.timings["residual"] = worst
         U = self.T @ ur
         self.model.timings["solve_s"] = time.perf_counter() - t0
         return U

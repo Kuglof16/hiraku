@@ -398,10 +398,14 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
     res = analyze_shell(lad, frame=fr)
     case = f"symmetric ladder at rest on four rigid wheels, shell mesh {element_size_mm:g} mm"
     out = []
-    W = res["mass"]["mass_kg"] * STANDARD_GRAVITY
     total = float(sum(g["force_N"][2] for g in res["ground"].values()))
-    out.append(check_record(case, "total_wheel_load", W, total, "N", 1e-9,
-                            "sum of the ground forces (K0 rigid-body statics) equals the weight"))
+    # the shell's own weight (lumped element masses and the parts it carries as point loads) against the
+    # K0 ground forces it is loaded with: a wrong shell mass shows here, where inertia relief would hide it
+    # from the hold reactions. 1 %: mid-surface tubes overlap at the joints (0.06 % on the ladder; an assumption)
+    out.append(check_record(case, "shell_weight", total, float(res["weight_N"]), "N", 0.01,
+                            "the shell's weight (element masses lumped to the nodes, parts) equals the sum of the "
+                            "ground forces it is loaded with (K0 rigid-body statics of the design's masses); the "
+                            "difference is the mid-surface tubes overlapping at the joints"))
     out.append(check_record(case, "hold_reaction", 0.0, res["residual_ratio"], "1", 1e-6,
                             "loads balanced by inertia relief: the six holding restraints carry nothing "
                             "(reaction / weight)"))
