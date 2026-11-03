@@ -22,8 +22,8 @@ export const DOMAIN_PLAIN_JA = {
   crash: "ぶつかったとき",
   strength: "壊れない",
   nvh: "揺れ・音",
-  thermal: "熱",
-  assembly: "組み立て",
+  thermal: "熱くなりすぎない",
+  assembly: "組める・手が届く",
 };
 
 

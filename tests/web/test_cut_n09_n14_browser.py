@@ -73,7 +73,7 @@ LIT = {p["domain"] for p in PICKS if p["test_ids"]} | {"assembly"}
 # the chips' words: the domain's name as the other cuts (labels.js DOMAIN_JA), and under it the
 # domain in the viewers' words (DOMAIN_PLAIN_JA)
 NAME = {"handling": "操安", "powertrain": "動力", "aero": "空力", "crash": "衝突", "strength": "強度信頼性", "nvh": "音振", "thermal": "熱", "assembly": "組み立て"}
-PLAIN = {"handling": "倒れない・よけられる", "powertrain": "走る力", "aero": "風", "crash": "ぶつかったとき", "strength": "壊れない", "nvh": "揺れ・音", "thermal": "熱", "assembly": "組み立て"}
+PLAIN = {"handling": "倒れない・よけられる", "powertrain": "走る力", "aero": "風", "crash": "ぶつかったとき", "strength": "壊れない", "nvh": "揺れ・音", "thermal": "熱くなりすぎない", "assembly": "組める・手が届く"}
 # a pale chip's reason after its plain name: the record's sentence (ids out, 荷重条件の作り方 -> 試し方),
 # or, when that does not fit the line at 18 px, without its subject (the words before " は")
 PALE = {"powertrain": "アクチュエータの力と速さ は試し方がまだ無いので、この実行では見ない",
