@@ -21,7 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
+from hiraku.tools.shelf import NOT_CHECKED, load_case_stage, tool_stage, unchecked_tools
 from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
@@ -216,7 +216,8 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     }
     parts = {
         "requirements": lambda: p["requirements"],
-        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"])) for lc in ctx.load_cases],
+        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"]), stage=load_case_stage(ctx, lc))
+                               for lc in ctx.load_cases],  # stage: HK5, lower stages first
         "judgements": lambda: s.judgements() if ctx.version else [],
         "records": lambda: {
             "predictions": [_compact_prediction(x) for x in s.records("prediction")],
@@ -312,7 +313,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [s if "not_checked" in s else _tool_line(s) for s in out]
+    return [s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"])) for s in out]
 
 
 def _unchecked_line(name: str, tool: Any) -> Record:
