@@ -1,11 +1,15 @@
 """hiraku.export: a scripted run's records written out (CSV, VTK, report, zip) and read back."""
 
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
 from hiraku.agent.scripted import run_scripted
+from hiraku.store import RunStore
 from hiraku.export import ExportError, export_run, export_zip, read_csv, read_vtk
 from hiraku.export.vtk import VTK_LINE, VTK_QUAD, VTK_TRIANGLE, _mesh_files
 from tests.tools.helpers import RunCase
@@ -139,6 +143,32 @@ class ExportTest(RunCase, unittest.TestCase):
         self.assertEqual(read_csv(self.out / "comparisons.csv"), [])  # no version 2 in this run
         with self.assertRaises(ExportError):
             export_run(self.ctx.store.path, self.out, parts=["pictures"])
+
+
+@unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the demo's scripted run takes a minute (HIRAKU_SLOW_TESTS=1)")
+class DemoRunExportTest(unittest.TestCase):
+    """The demo's scripted run with the real solvers, exported and read back."""
+
+    def test_the_demo_run_reads_back(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, PYTHONUTF8="1")
+            env.pop("ANTHROPIC_API_KEY", None)
+            subprocess.run([sys.executable, "-m", "hiraku", "run", str(root / "data/requirements/offroad-4w.yaml"),
+                            "--scripted", "--runs", tmp], cwd=root, env=env, capture_output=True, timeout=900)
+            (run,) = [p for p in Path(tmp).iterdir() if p.is_dir()]
+            got = export_run(run)
+            store = RunStore.open(run)
+            rows = read_csv(Path(got["out_dir"]) / "comparisons.csv")
+            self.assertEqual([(r["comparison_id"], float(r["analyzed"])) for r in rows],
+                             [(c["comparison_id"], c["analyzed"]["value"]) for c in store.records("comparison")])
+            meshes = [f for f in got["files"] if f.endswith(".vtk") and "-mesh-" in f]
+            self.assertTrue(meshes, "the demo's frame analyses draw on the shell mesh")
+            for rel in meshes[:2]:
+                a = store.get("analysis", Path(rel).name.split("-mesh-")[0])
+                field = next(f for f in a["fields"] if f.get("per_element"))
+                back = read_vtk(Path(got["out_dir"]) / rel)["cell_data"]
+                self.assertIn(field["per_element"], list(back.values()))
 
 
 if __name__ == "__main__":
