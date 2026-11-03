@@ -1230,6 +1230,12 @@
             "type": "string"
           },
           "description": "K0 formula ids that predict this tool's quantities."
+        },
+        "stage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "How heavy the tool is, for the order of checks: 0 layout and rules (geometry, interference, occupants, system chains), 1 light (hand-calc sized models, beams, lumped thermal), 2 dynamics (vehicle time simulations), 3 heavy (shell and solid FE, convergence, fatigue on spectra, time-varying fields). Missing: 1."
         }
       }
     },
