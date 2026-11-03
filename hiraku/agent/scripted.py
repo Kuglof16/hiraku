@@ -19,6 +19,7 @@ import copy
 import importlib
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from hiraku import contract
@@ -346,7 +347,29 @@ def _drop_knowledge(ctx: RunContext, drop: Record) -> None:
     tmp.replace(box / f"{n}-knowledge.json")
 
 
-def _check_rules(ctx: RunContext, agent: str) -> None:
+def _answer_drop(ctx: RunContext, drop: Record) -> None:
+    """The run's next look at the inbox (the dropped file becomes rules), then, for the
+    sentences that need a formula, the lead's answer written in the plan (`answer`: formulas
+    and skip reasons, as Claude would give them): import_knowledge again on the same path."""
+    from hiraku.intake.tools import TOOLS
+
+    told = inbox.take(ctx)
+    answer = drop.get("answer")
+    if not answer:
+        if told:
+            ctx.store.emit("agent.said", agent="system", text="台本の運転なので、Claude には渡しません")
+        return
+    name = drop.get("name") or Path(drop["file"]).name
+    args = {"path": f"{layout.KNOWLEDGE_DIR}/{name}", **{k: answer[k] for k in ("formulas", "skip") if k in answer}}
+    ctx.store.emit("agent.said", agent="lead", text=answer.get("say") or "式にできない文は、理由を書いて規則にしません")
+    try:
+        TOOLS["import_knowledge"]["function"](ctx, args, "lead")
+    except ToolError as e:
+        ctx.store.emit("agent.said", agent="lead", text=f"規則にできませんでした: {e}")
+        raise Stop(f"import_knowledge refused the plan's answer: {e}") from None
+
+
+def _check_rules(ctx: RunContext, agent: str) -> Record | None:
     """The intake's rule_check on this version's parts (rule_check.recorded), said in one line."""
     from hiraku.intake.tools import TOOLS
 
@@ -354,8 +377,21 @@ def _check_rules(ctx: RunContext, agent: str) -> None:
         out = TOOLS["rule_check"]["function"](ctx, {}, agent)
     except ToolError as e:
         ctx.store.emit("agent.said", agent=agent, text=f"規則を当てられませんでした: {e}")
-        return
+        return None
     ctx.store.emit("agent.said", agent=agent, text=out["text"])
+    return out
+
+
+def _ask_on_hits(ctx: RunContext, checked: Record) -> bool:
+    """The lead asks the person what to do about the parts a rule hits (the rule's sentence and
+    the parts come from the rule_check record). False when nothing was hit."""
+    hits = checked.get("hits") or []
+    if not hits:
+        return False
+    named = "、".join(f"{h['rule_id']}「{h['text']}」({'・'.join(h['parts'])})" for h in hits[:3])
+    ctx.store.emit("agent.said", agent="lead",
+                   text=f"規則に当たる部品があります: {named}。設計を直しますか、それとも、この規則は外しますか")
+    return True
 
 
 def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
@@ -406,7 +442,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
-    drop, dropped = plan.get("knowledge_drop"), False
+    drop, dropped, asked = plan.get("knowledge_drop"), False, False
     status, reason, code, interrupted = "done", None, "done", False
 
     def start(agent: str, domain: str | None = None) -> None:
@@ -433,13 +469,16 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     raise Stop(str(e)) from None
                 if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
                     _drop_knowledge(ctx, drop)
+                    _answer_drop(ctx, drop)
                     dropped = True
             _check_stop(ctx)  # what was put in the inbox during the last step
             if plan.get("rule_check"):  # the knowledge rules on this version's parts
                 who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
                 if who != "lead":
                     start(who)
-                _check_rules(ctx, who)
+                checked = _check_rules(ctx, who)
+                if checked and plan.get("ask_on_hits") and not asked:
+                    asked = _ask_on_hits(ctx, checked)
             reds = _red_tiles(ctx)
             if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
                 break

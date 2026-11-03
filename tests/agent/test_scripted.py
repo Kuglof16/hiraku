@@ -316,20 +316,32 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
     def test_a_dropped_file_becomes_rules_that_are_checked_on_the_parts(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan.update(knowledge_drop={"after": "P1-step100", "file": "tests/intake/fixtures/bending-notes.md",
-                                    "text": "板金のメモを渡します"}, rule_check=True)
+                                    "text": "板金のメモを渡します",
+                                    "answer": {"say": "式にできない 2 文は、理由を書いて外します",
+                                               "skip": {"c3": "向きは式にできない", "c5": "部品どうしの距離を測る値が設計に無い"}}},
+                    rule_check=True, ask_on_hits=True)
         run_scripted(self.ctx, plan)
         kinds = self.kinds()
         dropped = [e for e in self.ctx.store.events()
                    if e["kind"] == "knowledge.imported" and e["data"]["doc"]["origin"] == "dropped"]
-        self.assertEqual([e["data"]["doc"]["filename"] for e in dropped], ["bending-notes.md"])
+        # read from the inbox, then the plan's answer for the two sentences without a formula (as the lead would)
+        self.assertEqual([e["data"]["doc"]["filename"] for e in dropped], ["bending-notes.md"] * 2)
+        self.assertEqual(sorted(s["reason"] for s in dropped[-1]["data"]["doc"].get("skipped") or []),
+                         ["向きは式にできない", "部品どうしの距離を測る値が設計に無い"])
         self.assertTrue((self.ctx.store.path / "knowledge" / "bending-notes.md").is_file())
         self.assertEqual(list((self.ctx.store.path / "inbox").iterdir()), [])
         self.assertIn("板金のメモを渡します", [e.get("text") for e in self.ctx.store.events() if e["kind"] == "user.said"])
         # the rules are checked after the file became rules, once per version
         first_check = kinds.index("rule_check.recorded")
         self.assertLess(kinds.index("knowledge.imported", kinds.index("user.said")), first_check)
-        checked = {r["rule_id"] for r in self.ctx.store.records("rule_check")}
-        self.assertTrue(any(rid.startswith(dropped[0]["data"]["doc"]["doc_id"]) for rid in checked))
+        checked = self.ctx.store.records("rule_check")
+        self.assertTrue(any(r["rule_id"].startswith(dropped[0]["data"]["doc"]["doc_id"]) for r in checked))
+        # a part hit by a rule: the lead asks the person, once, naming the rule and the part from the record
+        hit = next(r for r in checked if r["hits"])
+        asks = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and "規則に当たる部品" in e["text"]]
+        self.assertEqual(len(asks), 1)
+        self.assertIn(hit["rule_id"], asks[0])
+        self.assertIn(hit["hits"][0]["part_id"], asks[0])
         self.assert_events_fit()
 
 
