@@ -237,11 +237,14 @@ def r3_calc(design: Record, load_case: Record) -> Record:
 
 
 _END = {k: f"from.{k}" for k in ("e", "a", "w", "L1", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c", "b_j", "h_j", "t_j",
-                                 "misfit_rear", "misfit_front")}
+                                 "misfit_rear", "misfit_front", "give_per_kNm")}
 _END_ASSUME = ["輪はレールより外にあり、輪の力はレールをそのずれの分ねじる",
                "左右そろった分は、後ろの継ぎ手で 1 回だけモーメントを分ける",
-               "左右逆向きの分は、はしご全体が反りのあるねじり (薄肉のはり) でねじれ、張り出しがその率のまま続こうとするのを"
-               "端の横の部材が止める"]
+               "左右逆向きの分は、はしごの左右逆向きの半分を梁の鎖 (レールのねじりと逆向きの曲げ、横の部材の S 字の曲げとねじり。"
+               "回す力は質量の慣性が受ける) で解く。端の横の部材が曲がらないとしたときのレールの端のずれを、その部材とフレームの"
+               "残りが直列のばねのように分けて受ける",
+               "端の横の部材は上下の曲げだけを数え、横の曲げ (慣性の横向きの力による) は入れない",
+               "レールに無い節 (ロールバー) にかかる重さと慣性は、部材でつながるレールの節へ、ずれのモーメントごと剛に移す"]
 _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右の後輪"), ("front_a", "sigma_fa", "左の前輪"),
            ("front_b", "sigma_fb", "右の前輪"))
 # Why the end cross member (the analysis department's check of the demo vehicle, 2026-11-03): the fatigue tool's
@@ -249,9 +252,18 @@ _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右�
 # patterns as warp 7.7, roll 3.7, heave 2.4 and pitch 2.1 MPa of spread (9.1 in all, class C at 40 km/h): left
 # and right differ, not the body's heave and pitch. The wheels stand 200 mm outboard of the rails, so their
 # forces twist the rails, and cross_E holds the overhang's rails by bending. The earlier plan (one quarter car
-# at the rail joint) gave 0.0003 against 0.080. This plan gives 0.057 against 0.080 (version 1) and 0.120
-# against 0.117 (version 2, track 1220 mm); per kN on one wheel the symmetric part is within 1 %, the rear
-# antisymmetric part 21 % low and the front one 58 % high.
+# at the rail joint) gave 0.0003 against 0.080. With the ladder's twist from a warping-torsion beam the plan
+# gave 0.057 against 0.080 (version 1) and 0.081 against 0.134 (track 1220 mm with 4.5 mm rails): cross_E's
+# antisymmetric moment came out low and fell as the rails stiffened, while K1's stayed. In K1 that moment is
+# the redundant of the misfit at the rail ends against cross_E's double-curvature give in series with the
+# rest of the frame's give, which is as large as the overhang's own (the joint's cross member bending, the
+# ladder ahead warping), and where a moment enters matters: as a turn of the rails' own axes (the wheels'
+# offset, the masses' inertia at the nodes) or as a chord couple. A beam chain of the ladder's antisymmetric
+# half carries both, and gives 0.084 against 0.080 (version 1), 0.096 against 0.094 (4.5 mm rails), 0.133
+# against 0.117 (track 1220 mm) and 0.140 against 0.134 (both). Per kN on one wheel at the weld corner the
+# symmetric part is within 1 % (10 % low with 4.5 mm rails), the antisymmetric part 5-7 % low at the rear and
+# 16-19 % high at the front: the gap is cross_E's sideways bending from the masses' sideways inertia (0.8-1.0
+# MPa, the same at the rear and the front), which the hand calculation leaves out.
 R3_PLAN = {
     "tool": "fatigue",
     "say": ("輪はレールより外にあるので、輪の力はレールをねじり、後ろの張り出しの端の横の部材を曲げます。4 輪それぞれ 1 kN "

@@ -304,7 +304,7 @@ class RollbarFrameModelsTest(unittest.TestCase):
         t = {t.name: t for t in solvers.builtin_tools()}["frame_shell"]
         lc = {"load_case_id": "R1-rest", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
               "tolerance_rel": 0.15}
-        rec = t.run(RB, lc, [{"prediction_id": "pred-0001"}], {})
+        rec = t.run(RB, lc, [{"prediction_id": "pred-0001"}], {"mesh_convergence": "off"})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
 
 

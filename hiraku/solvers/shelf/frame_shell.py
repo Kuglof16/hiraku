@@ -16,13 +16,20 @@ it grows as the elements shrink; it is kept as a reference.
 
 Run parameters (analyze's params): element_size, the shell elements' target
 edge (the version's mesh record is made at the default, so another size is
-solved but not drawn on it); mesh_check "half" also solves at half that size
-and reports how much the hot spot and the element peak change (the hot spot
-should hold, the peak at the sharp corner grows).
+solved but not drawn on it); mesh_convergence "3" (default) solves the same
+design on three meshes, coarse to fine by a ratio of 2 (2s, s, s/2; 4s, 2s, s
+when s/2 would be under 5 mm), and writes analysis.mesh_convergence for the
+judged hot spot read at the same weld line on every level (change, Richardson
+order and extrapolation, verdict; k1_shell.convergence), with the element peak
+and the global error estimate of every level in the effects; "off" skips it.
+Every run also carries the Zienkiewicz-Zhu error estimate of the element
+stresses (k1_shell.convergence.zz_error): a per-element field (kind
+error_estimate, %) on the version's mesh when it is the mesh solved here, and
+its largest value, where, and the global value in the effects.
 
 With K2's mount force series upstream (frame_static.upstream_mount_series),
-the shell is solved again at each instant on the same factorisation: the
-element stresses go into field.frames on the version's mesh (when it is the
+the mesh convergence is not run, and the shell is solved again at each
+instant on the same factorisation: the element stresses go into field.frames on the version's mesh (when it is the
 mesh solved here) and per member, and the largest hot spot and element
 stress at each instant into series. The judged results stay those of the
 upstream's vectors.
@@ -35,6 +42,8 @@ import numpy as np
 from ..k1_frame import analyze as beam_analyze
 from ..k1_frame import stress_terms
 from ..k1_frame.surface import wall_von_mises
+from ..k1_shell.convergence import (LIMIT_PCT, REFINE_RATIO, convergence_assumption, convergence_record, verdict_of,
+                                    zz_assumption, zz_error)
 from ..k1_shell.frame import analyze_shell, element_place, membrane_bending
 from ..k1_shell.mesh import ELEMENT_SIZE_MM
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
@@ -54,9 +63,11 @@ ELEMENT_SIZE_RANGE_MM = (5.0, 20.0)
 ELEMENT_SIZE = Param("element_size", "mm", "target edge of the shell elements (the version's mesh record has the default "
                      f"size; another size is solved but not drawn on it); {ELEMENT_SIZE_RANGE_MM[0]:g} to "
                      f"{ELEMENT_SIZE_RANGE_MM[1]:g} mm", default=ELEMENT_SIZE_MM)
-MESH_CHECK = Param("mesh_check", None, "'half': also solve with half the element size (not below "
-                   f"{ELEMENT_SIZE_RANGE_MM[0]:g} mm) and report the change of max_hot_spot_stress and max_stress",
-                   choices=("half",))
+MESH_CONVERGENCE = Param("mesh_convergence", None, "'3': also solve on two more meshes (three levels coarse to fine by "
+                         f"a ratio of {REFINE_RATIO:g}: 2s, s, s/2, or 4s, 2s, s when s/2 is under "
+                         f"{ELEMENT_SIZE_RANGE_MM[0]:g} mm) and write mesh_convergence for max_hot_spot_stress at the "
+                         "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off': not",
+                         default="3", choices=("off", "3"))
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
 LABELS = {
     "max": "シェルの von Mises (外と内の面の大きい方)",
@@ -67,6 +78,7 @@ LABEL_MEMBER = "シェルの von Mises (部材ごとの最大)"
 LABEL_HOT_SPOT = "構造的ホットスポット応力 (溶接線に直角、部材ごとの絶対値の最大)"
 LABEL_BEAM = "梁の von Mises (部材ごとの最大、シェルと同じ地面の力)"
 LABEL_DISP = "シェルの変位 (輪のつなぎ目の剛体の動きを除く)"
+LABEL_ZZ = "誤差の目安 (Zienkiewicz-Zhu: なめらかに直した応力と要素の応力の差、外と内の面)"
 LABEL_FRAMES = "シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと)"
 LABEL_FRAMES_MEMBER = "シェルの von Mises (部材ごとの最大、上流の取付点の力の時刻ごと)"
 SOURCES = {
@@ -106,8 +118,9 @@ HOT_SPOT_ASSUMPTION = (
     "for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (このリポジトリでは確かめていない)。"
     "ガセットの脚の溶接線は読んでいない。IIW ではこれは疲労のための構造応力で、ここでは静的な強さの判定に、溶接の止端の構造応力 "
     "(膜と曲げ) を使う。局所の降伏を許さない、安全側の扱い")
-PEAK_ASSUMPTION = ("max_stress はつなぎ目の鋭い入隅の角の要素の値で、シェルではそこで応力が特異になるため、要素を細かくすると"
-                   "大きくなる。参考として残し、判定には使わない")
+PEAK_ASSUMPTION = ("max_stress はつなぎ目の鋭い入隅の角の要素の値で、シェルではそこで応力が特異になる (角の要素を細かくするほど"
+                   "大きくなる)。角の要素は溶接線の帯の t×t の要素で、要素の大きさ (element_size) を変えても変わらないので、"
+                   "mesh_convergence で値が動かなくても、角を解いた値ではない。参考として残し、判定には使わない")
 MASS_ASSUMPTION = ("質量の二重数えを避けるため、シェルの要素が持つ部品 (板として入れたガセットと、通す形にした節の "
                    "through_ の部品) はシェルでは部品として足さない。全体の質量と重心 (mass_summary、K0・K1・K2) "
                    "にはどちらも部品として入っている。シェルの管の質量 (rho t 面積) と梁の質量 (密度 A L) の差は慣性の"
@@ -321,10 +334,13 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     return out
 
 
-def mesh_fields(res: dict, mesh: Record) -> list[Record]:
-    """Shell stress (three surfaces) and displacement on the passed mesh."""
+def mesh_fields(res: dict, mesh: Record, zz: dict | None = None) -> list[Record]:
+    """Shell stress (three surfaces), the error estimate (zz, when given) and displacement on the passed mesh."""
     out = [{"kind": "stress", "label": LABELS[s], "unit": "MPa", "mesh_id": mesh["mesh_id"], "surface": s,
             "per_element": [round(float(v), 2) for v in res["von_mises"][s]]} for s in ("max", "top", "bottom")]
+    if zz is not None:
+        out.append({"kind": "error_estimate", "label": LABEL_ZZ, "unit": "%", "mesh_id": mesh["mesh_id"],
+                    "per_element": [round(float(v), 1) for v in zz["per_element"]]})
     out.append({"kind": "displacement", "label": LABEL_DISP, "unit": "mm", "mesh_id": mesh["mesh_id"],
                 "per_mesh_node": [[round(float(x), 3) for x in d] for d in res["displacements"]]})
     return out
@@ -382,27 +398,153 @@ def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Reco
     }
 
 
-def mesh_change(out: Record, res: dict, fine: dict) -> None:
-    """Add the half-size solve's hot spot and element peak to out (results, effects)."""
-    a, b = res["mesh"].element_size_mm, fine["mesh"].element_size_mm
-    n_a, n_b = res["mesh"].n_elements, fine["mesh"].n_elements
-    p_a, p_b = res["member_max"][res["worst_member"]][0], fine["member_max"][fine["worst_member"]][0]
-    peak = (f"max_stress {p_a:.1f} -> {p_b:.1f} MPa ({p_b / p_a - 1:+.1%}; the element at the sharp corner, which grows "
-            f"as the elements shrink)")
-    out["results"].append(result("max_stress_half_size", p_b, "MPa", fine["worst_member"]))
-    top_a, top_b = res.get("hot_spot_max"), fine.get("hot_spot_max")
-    if top_a is None or top_b is None:
-        out["effects"].append({"name": f"mesh check {a:g} -> {b:g} mm ({n_a} -> {n_b} elements): no hot spot to "
-                                       f"compare; {peak}", "value": b, "unit": "mm"})
-        return
-    h_a, h_b = abs(top_a["value"]), abs(top_b["value"])
-    change = h_b / h_a - 1.0
-    out["results"] += [result("max_hot_spot_stress_half_size", h_b, "MPa", top_b["member"]),
-                       result("hot_spot_change_half_size", change, "1", top_b["member"])]
-    out["effects"].append({"name": (f"mesh check {a:g} -> {b:g} mm ({n_a} -> {n_b} elements): max_hot_spot_stress "
-                                    f"{h_a:.1f} -> {h_b:.1f} MPa ({change:+.1%}) at joint {top_a['joint']} -> "
-                                    f"{top_b['joint']}; {peak}"),
-                           "value": change, "unit": "1"})
+def convergence_sizes(size: float) -> list[float]:
+    """Element sizes of the three levels, coarse to fine: 2s, s, s/2, or 4s, 2s, s when s/2 is under the range."""
+    r = REFINE_RATIO
+    if size / r < ELEMENT_SIZE_RANGE_MM[0] - 1e-9:
+        return [size * r * r, size * r, size]
+    return [size * r, size, size / r]
+
+
+def hot_spot_key(h: dict) -> tuple:
+    """The weld line and surface a hot spot is read on: joint, side, place, member, towards, surface."""
+    return (h["joint"], h["side"], h["place"], h["member"], h["towards"], h["surface"])
+
+
+def hot_spot_on(res: dict, key: tuple) -> dict | None:
+    """The hot spot of largest size read on the weld line and surface `key` (None when that line is not read)."""
+    hs = [h for h in res.get("hot_spots") or [] if hot_spot_key(h) == key]
+    return max(hs, key=lambda h: abs(h["value"])) if hs else None
+
+
+def _where_hot(key: tuple) -> str:
+    joint, side, place, member, towards, surface = key
+    return (f"joint {joint}, {SIDE[side]} ({member}, {place}, strip towards {towards}), "
+            f"{'outer' if surface == 'top' else 'inner'} surface")
+
+
+def _peak_where(res: dict) -> str:
+    e = res["worst_element"]
+    p = element_place(res, e)
+    return f"{p['member']}, {p['wall']} wall, {p['node_distance_mm']:.0f} mm from node {p['node']}"
+
+
+def zz_effects(res: dict, zz: dict) -> list[Record]:
+    """Effects of the error estimate: its largest value outside the wheel mounts and where, and the global value."""
+    eta = zz["per_element"]
+    kept = ~res["excluded"]
+    idx = np.nonzero(kept)[0] if kept.any() else np.arange(len(eta))
+    e = int(idx[np.argmax(eta[idx])])
+    p = element_place(res, e)
+    floored = int(np.sum(zz["floored"]))
+    out = [
+        {"name": (f"error estimate (Zienkiewicz-Zhu) largest {eta[e]:.1f} % outside the wheel mounts: element {e} of "
+                  f"{p['member']}, {p['wall']} wall, {p['node_distance_mm']:.0f} mm from node {p['node']} "
+                  f"({res['mesh'].joint_kinds.get(p['node'], '?')} joint); where the mesh should be finer"),
+         "value": float(eta[e]), "unit": "%"},
+        {"name": (f"error estimate (Zienkiewicz-Zhu) of the whole model, mesh {res['mesh'].element_size_mm:g} mm "
+                  f"(energy of the difference over that of the recovered stress, all elements); {floored} elements "
+                  f"with little stress measured against the floor of the denominator"),
+         "value": float(zz["global_pct"]), "unit": "%"},
+    ]
+    return out
+
+
+def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None,
+                     zz_res: dict) -> tuple[Record, list[Record]]:
+    """analysis.mesh_convergence and the effects, from res (solved at its element size) and the two other levels
+    of convergence_sizes solved here. The judged hot spot is read on the same weld line and surface on every
+    level: the one of largest size on the level that is the version's mesh (else res's level)."""
+    size = res["mesh"].element_size_mm
+    levels_res = {}
+    times = {}
+    for s in convergence_sizes(size):
+        if abs(s - size) < 1e-9:
+            levels_res[s] = res
+            continue
+        r = analyze_shell(design, element_size_mm=s, **solve)
+        times[s] = r["timings"].get("total_s", 0.0)
+        levels_res[s] = r
+    sizes = list(levels_res)
+    recorded = {s: mesh is not None and same_mesh(r, mesh) is None for s, r in levels_res.items()}
+    base = next((r for s, r in levels_res.items() if recorded[s]), res)
+    # per level: the hot spot on the base's weld line, the element peak, the global error estimate
+    rows = []
+    for s in sizes:
+        r = levels_res[s]
+        zz = zz_error(r["frame"].model, r["stress"]) if r is not res else None
+        rows.append({"size": s, "res": r, "zz": zz})
+    top = base.get("hot_spot_max")
+    notes = []
+    if top is not None:
+        key = hot_spot_key(top)
+        quantity, unit = "max_hot_spot_stress", "MPa"
+        values = []
+        for row in rows:
+            h = hot_spot_on(row["res"], key)
+            if h is None:
+                break
+            values.append(abs(h["value"]))
+            other = row["res"].get("hot_spot_max")
+            if other is not None and hot_spot_key(other) != key:
+                notes.append(f"at {row['size']:g} mm the largest hot spot is elsewhere: {_where_hot(hot_spot_key(other))}, "
+                             f"{abs(other['value']):.1f} MPa")
+        if len(values) < len(rows):
+            top = None  # the weld line is not read on every level: fall back to the element peak
+    if top is None:
+        quantity, unit = "max_stress", "MPa"
+        values = [r["res"]["member_max"][r["res"]["worst_member"]][0] for r in rows]
+    levels = []
+    for row, v in zip(rows, values):
+        lv = {"element_size_mm": float(row["size"]), "elements": int(row["res"]["mesh"].n_elements), "value": float(v)}
+        if recorded[row["size"]]:
+            lv["mesh_id"] = mesh["mesh_id"]
+        levels.append(lv)
+    where = _where_hot(key) if quantity == "max_hot_spot_stress" else "the largest element stress"
+    notes.insert(0, f"read at {where} on every level")
+    if quantity == "max_hot_spot_stress":
+        notes.append("the strip elements it is read on are t x t on every level (IIW); the levels refine the mesh "
+                     "around them")
+    rec = convergence_record(quantity, unit, levels, LIMIT_PCT, REFINE_RATIO, "; ".join(notes))
+
+    # effects: the judged value, the element peak, the error estimate and the time
+    sz = " / ".join(f"{s:g}" for s in sizes)
+    vs = " / ".join(f"{v:.1f}" for v in values)
+    rich = f", observed order {rec['observed_order']:.2f}" if "observed_order" in rec else ""
+    if "extrapolated" in rec:
+        rich += f", extrapolated {rec['extrapolated']:.1f} {unit}"
+        if "error_pct" in rec:
+            rich += f" (finest {rec['error_pct']:.1f} % from it)"
+    effects = [{"name": (f"mesh convergence of {quantity} at {where}: {sz} mm -> {vs} {unit}; change between the two "
+                         f"finest {rec['change_pct']:.1f} % (limit {LIMIT_PCT:g} %){rich}; {rec['verdict']}"),
+                "value": float(rec["change_pct"]), "unit": "%"}]
+    if rec["verdict"] == "singular":
+        effects.append({"name": (f"{quantity} keeps rising as the elements shrink (singular): it cannot be judged as it "
+                                 f"stands")})
+    peaks = [r["res"]["member_max"][r["res"]["worst_member"]][0] for r in rows]
+    pv, pchange, prich = verdict_of(peaks, LIMIT_PCT, REFINE_RATIO)
+    places = [element_place(r["res"], r["res"]["worst_element"]) for r in rows]
+    moved = len({(p["member"], p["wall"], p["node"]) for p in places}) > 1
+    p_rich = f", observed order {prich['observed_order']:.2f}" if prich and prich["observed_order"] is not None else ""
+    if prich and prich["extrapolated"] is not None and pv != "singular":
+        p_rich += f", extrapolated {prich['extrapolated']:.1f} MPa"
+    edges = [float(r["res"]["mesh"].edge_lengths()[r["res"]["worst_element"]].max()) for r in rows]
+    if max(edges) <= 1.01 * min(edges):
+        p_rich += (f"; the peak element is {edges[-1]:.2g} mm on every level (sized by the weld strips' grid, not by "
+                   f"element_size), so the element at the peak itself is not refined")
+    effects.append({"name": (f"mesh convergence of max_stress (the element peak, a reference): {sz} mm -> "
+                             f"{' / '.join(f'{v:.1f}' for v in peaks)} MPa at {'; '.join(_peak_where(r['res']) for r in rows)}"
+                             f"{' (the place moves)' if moved else ''}; change between the two finest {pchange:.1f} %"
+                             f"{p_rich}; {pv}"),
+                    "value": float(pchange), "unit": "%"})
+    globs = [(row["zz"] or zz_res)["global_pct"] for row in rows]
+    effects.append({"name": (f"error estimate (Zienkiewicz-Zhu) of the whole model per level: {sz} mm -> "
+                             f"{' / '.join(f'{g:.1f}' for g in globs)} %"), "value": float(globs[-1]), "unit": "%"})
+    extra = sum(times.values())
+    effects.append({"name": ("mesh convergence solves: " + ", ".join(
+        f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements) {t:.1f} s" for s, t in times.items())),
+        "value": extra, "unit": "s"})
+    return rec, effects
 
 
 class FrameShell(BuiltinTool):
@@ -420,7 +562,7 @@ class FrameShell(BuiltinTool):
         "mass_props.static_wheel_loads",
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
-    run_params = (ELEMENT_SIZE, MESH_CHECK)
+    run_params = (ELEMENT_SIZE, MESH_CONVERGENCE)
     predicts = (
         Predicts("max_hot_spot_stress", "frame_static.joint_wall_bending", "sigma", WALL_INPUTS),
         Predicts("max_stress", "frame_static.rail_joint_stress", "sigma",
@@ -443,9 +585,9 @@ class FrameShell(BuiltinTool):
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
         """Load case params: load_case_params. Run params: upstream_analyses (as
         frame_static: ground forces and the inertia force from an upstream
-        analysis), mesh (the version's shell mesh record: the shell stresses
-        and displacements are added as fields on it when it is the mesh solved
-        here), and run_params."""
+        analysis), mesh (the version's shell mesh record: the shell stresses,
+        the error estimate and the displacements are added as fields on it when
+        it is the mesh solved here), and run_params."""
         design = on_board(design, load_case)
         g = g_factor(load_case)
         up = upstream_ground_forces(params.get("upstream_analyses"), design)
@@ -454,32 +596,33 @@ class FrameShell(BuiltinTool):
         if up is None and step is not None:
             sup = param_list(load_case, "step_supports") or front_supports(design)
         inertia = up[2] if up else None
-        size, check = run_param(params, ELEMENT_SIZE), run_param(params, MESH_CHECK)
+        size, conv = run_param(params, ELEMENT_SIZE), run_param(params, MESH_CONVERGENCE)
         lo, hi = ELEMENT_SIZE_RANGE_MM
         if not lo <= size <= hi:
             raise LoadCaseError(f"run parameter element_size must be {lo:g} to {hi:g} mm, got {size:g} mm")
-        if check == "half" and size / 2.0 < lo:
-            raise LoadCaseError(f"mesh_check 'half' needs element_size {2 * lo:g} mm or more (half of {size:g} mm is "
-                                f"below {lo:g} mm)")
         solve = dict(g_factor=g, step_mm=None if up else step, step_supports=sup, ground_forces=up[1] if up else None,
                      inertia_N=inertia)
         res = analyze_shell(design, element_size_mm=size, **solve)
         ground = {sid: [(k, p, f) for k, p, f in gr["vectors"]] for sid, gr in res["ground"].items()}
         beam = beam_analyze(design, g_factor=g, ground_forces=ground, inertia_N=inertia)
         out = shell_outputs(design, res, beam, up[0] if up else None, None if up else step, sup)
-        if check == "half":
-            fine = analyze_shell(design, element_size_mm=size / 2.0, **solve)
-            mesh_change(out, res, fine)
+        zz = zz_error(res["frame"].model, res["stress"])
+        out["effects"] += zz_effects(res, zz)
+        out.setdefault("assumptions", []).append(zz_assumption())
         mesh, why = mesh_of(design, params)
         if mesh is not None:
             why = same_mesh(res, mesh)
             if why is None:
-                out["fields"] += mesh_fields(res, mesh)
+                out["fields"] += mesh_fields(res, mesh, zz)
         if why:
             out["effects"].append({"name": why})
         series = upstream_mount_series(params.get("upstream_analyses"), design)
         if series:
             add_frames(out, shell_frames(design, res, series, mesh if mesh is not None and why is None else None))
+        elif conv == "3":
+            out["mesh_convergence"], eff = mesh_convergence(design, res, solve, mesh, zz)
+            out["effects"] += eff
+            out["assumptions"].append(convergence_assumption())
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
