@@ -1161,9 +1161,62 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 7 件、既定値 4 件",
+   "text": "質問 7 件、答え 7 件、既定値 14 件",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -1182,21 +1235,57 @@ export const DEMOS = {
       "value": "ISO 13854 (指 25 mm)"
      },
      {
-      "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
       "unit": "mm"
      },
      {
@@ -12699,6 +12788,59 @@ export const DEMOS = {
       "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
      },
      {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
+     {
       "key": "Q50",
       "name": "最高速度",
       "value": 40,
@@ -12903,6 +13045,15 @@ export const DEMOS = {
       "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
      },
      {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
       "key": "Q90",
       "name": "悪路の走行距離 (疲労)",
       "value": 5000,
@@ -12913,20 +13064,47 @@ export const DEMOS = {
      },
      {
       "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
       "unit": "mm"
      }
     ],
@@ -13626,9 +13804,62 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)",
+   "text": "要件のファイルのまま進みます (既定値で足した 14 件: Q44・Q45・Q46・Q47・Q48・Q49・Q57・Q63・Q89・Q93・Q94・Q95・Q96・Q97)",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -13647,21 +13878,57 @@ export const DEMOS = {
       "value": "ISO 13854 (指 25 mm)"
      },
      {
-      "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
       "unit": "mm"
      }
     ]
