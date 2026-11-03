@@ -79,7 +79,7 @@ export class CutN12 {
       "beforeend",
       `<div class="n12-cols" style="font-size:${px}px">` +
         `<div class="n12-col"><p>手計算 (先に書いた予測)</p><b class="n12-num pred" data-kind="number" style="font-size:${big}px"></b><small class="n12-again"></small></div>` +
-        `<div class="n12-col"><p>解析</p><b class="n12-num ana" data-kind="number" style="font-size:${big}px"></b></div>` +
+        `<div class="n12-col"><p>解析</p><b class="n12-num ana" data-kind="number" style="font-size:${big}px"></b><small class="n12-pad"></small></div>` + // the pad keeps the two values level
         `</div>` +
         `<p class="n12-diff" style="font-size:${px}px"><span class="diff"></span> <span class="mark" data-kind="label"></span></p>`,
     );

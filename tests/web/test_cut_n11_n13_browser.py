@@ -153,6 +153,7 @@ def tool_events(run_id):
     events = [
         run, design,
         checked("frame_static", "builtin", True), checked("fatigue", "builtin", True), checked("thermal", "builtin", True),
+        checked("bed_static", "builtin", True), checked("tilt_table", "builtin", True), checked("duty", "builtin", True),
         checked("broken", "builtin", False),
         {**checked(TOOL, "claude", False, [{**CHECKS[0], "got": 1.0, "pass": False}]), **st},
         made,
@@ -190,7 +191,8 @@ STATE = """() => {
     want: text(".n13-want p, p.n13-want"), gap: text(".n13-gap"), made: text(".n13-made"), use: text(".n13-use p"),
     rows: [...document.querySelectorAll(".n13-row")].map((el) => ({ text: el.innerText.trim(), tick: shown(el.querySelector(".mark")) })),
     code: document.querySelector(".n13-lines")?.textContent ?? null,
-    cards: [...document.querySelectorAll(".n13-card")].map((el) => ({ isNew: el.classList.contains("new"), state: el.dataset.state ?? null, top: el.getBoundingClientRect().top })),
+    cards: [...document.querySelectorAll(".n13-card")].map((el) => ({ isNew: el.classList.contains("new"), state: el.dataset.state ?? null, top: el.getBoundingClientRect().top, right: el.getBoundingClientRect().right, bottom: el.getBoundingClientRect().bottom, text: el.textContent })),
+    tag: [...document.querySelectorAll(".n13-tag")].filter(shown).map((el) => { const r = el.getBoundingClientRect(); return { text: el.textContent, kind: el.dataset.kind ?? null, color: getComputedStyle(el).color, top: r.top, right: r.right }; }),
     caret: !!document.querySelector('.n13-caret[data-kind="moving"]'),
     canvasMoving: !!document.querySelector('.n11-result canvas[data-kind="moving"]'),
     canvasShown: !!document.querySelector(".n11-result canvas") && shown(document.querySelector(".n11-result canvas")),
@@ -354,13 +356,22 @@ class CutN11N13Test(unittest.TestCase):
         seen = self.read("n13", self.tool_run, times)
         c = {t: g["cut"] for t, g in seen.items()}
         self.assertEqual(c[T["lead_s"]]["want"], ["やりたいこと: 家で使うベッドを作りたい (形の見本)"])
-        # the shelf from gap_s: the three usable tools checked before (not the unusable one), and the dotted one
+        # the shelf from gap_s: the six usable tools checked before (not the unusable one), and the dotted one
         self.assertEqual(c[T["lead_s"]]["gap"], [])
         g = c[T["gap_s"]]
-        self.assertEqual([x["isNew"] for x in g["cards"]], [False, False, False, True])
+        self.assertEqual([x["isNew"] for x in g["cards"]], [False] * 6 + [True])
+        shelf = g["boxes"]["n13.shelf"]
+        self.assertLessEqual(g["cards"][-1]["right"], shelf[2] - 2, "the new card inside the shelf")
         self.assertEqual(len({round(x["top"]) for x in g["cards"]}), 1)  # one row
         self.assertEqual(g["cards"][-1]["state"], "missing")
         self.assertEqual(g["gap"], ["点線: 「ベッドの使う回数の疲労」を確かめる道具が無い"])
+        # the dotted card's name (a label, red until the checks pass), under it and flush with
+        # its right edge; the other cards have no names
+        self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("使う回数の疲労", "label", RED)])
+        self.assertAlmostEqual(g["tag"][0]["right"], g["cards"][-1]["right"], delta=0.5)
+        self.assertGreaterEqual(g["tag"][0]["top"], g["cards"][-1]["bottom"])
+        self.assertEqual([x["text"] for x in g["cards"]], [""] * 7)
+        self.assertEqual(c[T["lead_s"]]["tag"], [])
         # the code from write_s, typed in up to check_s from the analyse method; the caret moves meanwhile
         self.assertEqual(c[T["gap_s"]]["code"], "")
         mid = c[(T["write_s"] + T["check_s"]) / 2]
@@ -382,9 +393,11 @@ class CutN11N13Test(unittest.TestCase):
         self.assertEqual(rows[2], ["くり返しの力による傷み", "✓", "答え 0.00123 ・ 道具 0.00123", "出典: 梁の手計算の式・国際溶接学会 (IIW) の疲労の線"])
         self.assertEqual(c[ticks[2]]["cards"][-1]["state"], "solid")
         self.assertEqual(c[ticks[2]]["made"], ["Claude がその場で書き、答えの分かっている例で確かめた"])
-        self.assertEqual(seen[ticks[2]]["counts"].get("label"), 3)
+        self.assertEqual(c[ticks[2]]["tag"][0]["color"], GREEN)
+        self.assertEqual(seen[ticks[2]]["counts"].get("label"), 4)  # the three ticks and the new tool's name
         # from shelf_s the analysis made with it: its count of uses, the one figure, and the verdict
         u = c[T["shelf_s"]]
+        self.assertEqual(u["tag"], [])  # the shelf gives way to the analysis
         self.assertEqual(u["numbers"], ["4,321 回"])
         self.assertEqual(u["use"][0], "棚に入った「ベッドの使う回数の疲労」で、設計を解析した")
         self.assertEqual(u["use"][-1], "くり返しの力による傷みは、壊れる目安より小さい")
@@ -396,6 +409,15 @@ class CutN11N13Test(unittest.TestCase):
         got = next(iter(seen.values()))["cut"]
         self.assertEqual(got["none"], ["道具のコードのファイルが無い"])
         self.assertEqual(got["code"], "")
+
+    # ---- the promo department's check times --------------------------------------------
+
+    def test_at_the_check_times(self):
+        """Each cut at layout.json check.times: within the story's limits, the boxes in place, no id."""
+        for cut, run in (("n11", self.hooks_run), ("n12", self.hooks_run), ("n13", self.tool_run)):
+            times = self.layout["check"]["times"][cut]
+            self.assertTrue(times, cut)
+            self.read(cut, run, times)
 
     # ---- missing keys -----------------------------------------------------------------
 
