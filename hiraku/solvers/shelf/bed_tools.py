@@ -152,7 +152,8 @@ class BedStatic(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R5", "S1"]
-    formulas = ["bed.deck_frame_udl", "bed.side_rail_push", "bed.edge_load_tipping", "bed.side_push_tipping"]
+    formulas = ["bed.deck_frame_udl", "bed.side_rail_push", "bed.edge_load_tipping", "bed.side_push_tipping",
+                "bed.side_push_caster"]
     load_case_params = (LOADING,) + LOAD_PARAMS
     predicts = (
         Predicts("max_stress", "bed.deck_frame_udl", "sigma", "the deck's weights only (no load_node)"),
@@ -160,6 +161,9 @@ class BedStatic(BuiltinTool):
         Predicts("lighter_side_load", "bed.edge_load_tipping", "R_far", "an edge load straight down"),
         Predicts("lighter_side_load", "bed.side_push_tipping", "R_far",
                  "a level push outward (the side rail's top bar); the floor takes it at the contact points"),
+        Predicts("min_wheel_load", "bed.side_push_caster", "R_min",
+                 "the same push: the lighter caster of the far side (the roll moment split between the caster pairs "
+                 "by the push point's place along the bed)"),
     )
 
     def known_answers(self) -> list[Record]:
