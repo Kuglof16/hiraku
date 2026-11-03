@@ -52,7 +52,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n05", "n08b", "n18", "check"})
+                                "n00", "n01", "n02", "n05", "n08b", "n10", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -187,6 +187,100 @@ class SharedShape(unittest.TestCase):
     def test_bgm_reads_the_same_times(self):
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), self.rules["n05"]["times"]["burst_s"])
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n18", "open"), self.rules["n18"]["times"]["open_s"])
+
+
+def n10_data() -> dict:
+    """The DATA block of n10.html (plain JSON between 'const DATA = ' and '};')."""
+    html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
+    m = re.search(r"const DATA = (\{.*?\n  \});", html, re.S)
+    return json.loads(m.group(1))
+
+
+def n10_diffs(row: dict) -> list[float]:
+    """(analysis - answer) / answer in %, as HIRAKU compares a prediction with an analysis."""
+    return [100 * (row["cae"]["v"] - c) / c for c in row["claude"]]
+
+
+class N10(unittest.TestCase):
+    """N10: Claude's answers without tools beside HIRAKU's values."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+        self.n = self.rules["n10"]
+        self.html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
+
+    def test_duration_matches_the_page(self):
+        m = re.search(r'data-duration="([0-9.]+)"', self.html)
+        self.assertEqual(float(m.group(1)), self.n["duration_s"])
+        self.assertEqual(self.n["duration_s"], 8.3)
+
+    def test_boxes_stay_above_the_band(self):
+        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
+        t, n = self.n["table"], self.n
+        bottom = t["y"] + t["head_h"] + t["head_gap_px"] + 3 * t["row_h"] + 2 * t["row_gap_px"]
+        self.assertLessEqual(bottom, n["src"]["y"])
+        self.assertLessEqual(n["src"]["y"] + 2 * 1.5 * n["src"]["size_px"], band)  # two lines
+        self.assertLessEqual(n["title"]["y"] + 1.4 * n["title"]["size_px"], t["y"])
+        for b in (t, n["src"]):
+            self.assertGreaterEqual(b["x"], safe["x"])
+            self.assertLessEqual(b["x"] + b["w"], stage["w"] - safe["x"])
+        cols = {k: v for k, v in n["cols"].items() if not k.startswith("_")}
+        self.assertEqual(sum(cols.values()), t["w"])
+        sizes = [v for k, v in n["text"].items() if not k.startswith("_")]
+        self.assertGreaterEqual(min(sizes + [n["src"]["size_px"], n["title"]["size_px"]]), self.rules["min_text_px"])
+
+    def test_times_follow_the_voice(self):
+        t = self.n["times"]
+        for k, v in t.items():
+            if not k.startswith("_"):
+                self.assertTrue(k.endswith("_s"), k)
+        # all three answers are in during sentence 1 (0.30-3.18 s)
+        last_answer = t["rows_s"] + 2 * t["row_step_s"] + t["answer_lag_s"]
+        self.assertLess(last_answer, 3.18)
+        # HIRAKU's values and the ticks come during sentence 2 (3.53-7.62 s)
+        self.assertGreaterEqual(t["check_s"], 3.53)
+        last_tick = t["check_s"] + 2 * t["check_step_s"] + t["tick_lag_s"]
+        self.assertLess(last_tick, 7.62)
+        # the full picture holds still for at least the last second
+        self.assertLessEqual(max(last_tick, t["src_s"]) + 0.5 + 1.0, self.n["duration_s"])
+        self.assertTrue(self.rules["check"]["times"]["n10"])
+
+    def test_page_names_and_words(self):
+        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
+        for name in re.findall(r'data-box="([^"$]+)"', self.html):
+            self.assertTrue(name.startswith("n10."), name)
+        self.assertIn("CAE ツールで確かめる", self.html)
+        self.assertIn("ツールなしの Claude", self.html)
+        self.assertNotIn("ハルシネーション", self.html)
+        self.assertNotIn("道具", self.html)
+        for banned in ("requestAnimationFrame", "Date.now", "Math.random"):
+            self.assertNotIn(banned, self.html)
+
+    def test_data_is_the_record(self):
+        d = n10_data()
+        self.assertEqual(d["asked"], 3)
+        rows = {r["key"]: r for r in d["rows"]}
+        self.assertEqual(list(rows), ["step", "tilt", "stress"])
+        self.assertEqual(rows["step"]["claude"], [1090, 1090, 1090])
+        self.assertEqual([h["v"] for h in rows["step"]["hand"]], [1092.9])
+        self.assertEqual((rows["step"]["cae"]["v"], rows["step"]["cae"]["by"]), (1103.7, "K1"))
+        self.assertEqual(rows["tilt"]["claude"], [39, 38, 39])
+        self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
+        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
+        # only one of the three runs gave a figure for the stress
+        self.assertEqual(rows["stress"]["claude"], [61])
+        self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
+        self.assertEqual((rows["stress"]["cae"]["v"], rows["stress"]["cae"]["by"]), (61.15, "K1"))
+
+    def test_differences(self):
+        rows = {r["key"]: r for r in n10_data()["rows"]}
+        self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
+        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
+        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 0.2459, places=3)
+        # the widths HIRAKU allows for these quantities in the video run's comparisons
+        self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
+        for r in rows.values():
+            self.assertTrue(all(abs(x) <= r["tol_pct"] for x in n10_diffs(r)), r["key"])
 
 
 class Judging(unittest.TestCase):
@@ -418,6 +512,50 @@ class InBrowser(unittest.TestCase):
         self.assertLessEqual(got["value"]["right"], got["bars"]["right"])
         self.assertLess(got["value"]["h"], 1.5 * rules["bars"]["value_size_px"])  # one line
         self.assertEqual(got["times"]["t-right"], 4.8)
+
+    def test_n10_figures_on_screen(self):
+        from promo import export
+
+        cap = export.Capture(lc.SCREENS / "n10.html", scale=0.5)
+        try:
+            cap.page.evaluate("t => window.__export.seek(t)", 8.3)
+            got = cap.page.evaluate("""() => {
+              const text = (s) => {
+                const el = document.querySelector(`[data-box="${s}"] .in`);
+                const parts = [...el.querySelectorAll(".v, .note")].map((e) => e.textContent.trim());
+                return parts.length ? parts.join(" | ") : el.textContent.trim();
+              };
+              const out = {};
+              for (const k of ["step", "tilt", "stress"])
+                for (const c of ["claude", "hand", "cae", "diff", "tick"]) out[`${k}.${c}`] = text(`n10.row.${k}.${c}`);
+              return out;
+            }""")
+            early = cap.page.evaluate("""async () => { await window.__export.seek(3.3);
+              return [...document.querySelectorAll('.tick .in')].map((e) => getComputedStyle(e).opacity); }""")
+        finally:
+            cap.close()
+        self.assertEqual(got["step.claude"], "約 1,090N | 3 回とも")
+        self.assertEqual(got["tilt.claude"], "約 39°・38°・39° | 3 回の答え")
+        self.assertEqual(got["stress.claude"], "約 61MPa | 数字を出したのは 3 回のうち 1 回")
+        self.assertEqual(got["stress.hand"], "40.0MPa | 単純はり | 77.09MPa | つなぎ目、安全側")
+        self.assertEqual(got["step.cae"], "1,103.7N | K1 の解析")
+        # the differences shown are the ones computed from DATA
+        rows = {r["key"]: r for r in n10_data()["rows"]}
+        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+0.2%")):
+            self.assertEqual(got[f"{k}.diff"], want)
+            worst = max(n10_diffs(rows[k]), key=abs)
+            self.assertIn(f"{abs(worst):.1f}", want)
+            self.assertEqual(got[f"{k}.tick"], "✓")
+        # no tick before sentence 2
+        self.assertEqual(early, ["0", "0", "0"])
+
+    def test_n10_has_no_problems(self):
+        layout = lc.load_layout()
+        with tempfile.TemporaryDirectory() as d:
+            res = lc.check_screen(lc.SCREENS / "n10.html", Path(d), layout, None)
+        probs = [p for f in res["frames"] for p in f["problems"]]
+        self.assertEqual(probs, [], json.dumps(probs, ensure_ascii=False))
+        self.assertEqual(res["errors"], [])
 
     def test_cuts_have_no_problems(self):
         layout = lc.load_layout()

@@ -47,7 +47,7 @@ from promo import export  # noqa: E402
 
 SCREENS = Path(__file__).resolve().parent / "screens"
 LAYOUT = SCREENS / "layout.json"
-CUTS = ["n00", "n05", "n08b", "n18"]
+CUTS = ["n00", "n05", "n08b", "n10", "n18"]
 THUMB_LONG = 1280
 SHEET_LONG = 1500
 TOL = 0.5  # design px; boxes touching an edge are not counted

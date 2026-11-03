@@ -124,6 +124,34 @@
       "_note": "left: first figure, with the first sentence; right: second figure, just before the second sentence (voice at 5.0 s)"
     }
   },
+  "n10": {
+    "duration_s": 8.3,
+    "_duration_note": "8.3 s is N10's slot; voice: sentence 1 at 0.30-3.18 s, sentence 2 at 3.53-7.62 s",
+    "title": { "x": 96, "y": 64, "size_px": 60 },
+    "table": { "x": 96, "y": 180, "w": 1728, "head_h": 80, "head_gap_px": 12, "row_h": 176, "row_gap_px": 12,
+               "pad_px": 18, "radius_px": 10, "border_px": 2,
+               "_note": "header row, then three rows (step force, tilt angle, frame stress); bottom 180 + 80 + 12 + 3 x 176 + 2 x 12 = 824" },
+    "cols": { "q": 420, "claude": 430, "hand": 320, "cae": 300, "diff": 170, "tick": 88,
+              "_note": "column widths, left to right; they add up to table.w" },
+    "text": { "head_px": 24, "head_small_px": 20, "q_px": 36, "q_sub_px": 24, "value_px": 44, "value_small_px": 32,
+              "note_px": 22,
+              "_note": "note_px was 20 in the first stills; raised to 22 so the stress row's 'one of three runs' reads at a glance (value_small_px 34 -> 32 to keep the two hand values with their notes in the row)", "diff_px": 36, "tick_px": 64 },
+    "src": { "x": 96, "y": 836, "w": 1728, "size_px": 20, "_note": "two lines (1.5 line height) end at 896, above the band" },
+    "times": {
+      "title_s": 0.15,
+      "head_s": 0.3,
+      "rows_s": 0.5,
+      "row_step_s": 0.75,
+      "answer_lag_s": 0.3,
+      "check_s": 4.3,
+      "check_step_s": 0.45,
+      "cae_lag_s": 0.2,
+      "diff_lag_s": 0.4,
+      "tick_lag_s": 0.55,
+      "src_s": 6.0,
+      "_note": "rows: first question appears, then one per row_step; answer_lag: Claude's answer after its question (all three by 2.3 s, inside sentence 1). check: HIRAKU's hand value of row 1 (sentence 2 starts at 3.53 s), one row per check_step; the analysis, the difference and the tick follow by cae_lag, diff_lag, tick_lag (last tick at 5.75 s). src: the source lines. From 6.0 s to 8.3 s the screen holds still"
+    }
+  },
   "n18": {
     "duration_s": 9.0,
     "light": { "y": 40, "w": 130, "h": 470, "_note": "centred" },
@@ -149,6 +177,7 @@
       "n00": [0.6, 1.8, 3.5, 6.5],
       "n05": [0, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5],
       "n08b": [1.5, 5.2, 5.8, 7.5, 9.8],
+      "n10": [0.6, 2.4, 4.6, 5.6, 8.3],
       "n18": [1.0, 3.2, 5.0, 8.5],
       "app": [2, 8, 15]
     },
