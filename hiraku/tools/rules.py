@@ -15,6 +15,7 @@ from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
 from hiraku.tools.judge import held_cases, latest_verdicts
+from hiraku.tools.shelf import NOT_CHECKED
 
 HK1 = "HK1_prediction_first"
 HK2 = "HK2_tool_usable"
@@ -62,10 +63,15 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
 
     name = args.get("tool") or ""
     spec = ctx.specs.get(name)
+    usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
+    if name in ctx.tools and spec is None:
+        return Denial(HK2, (
+            f"道具 {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
+            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+        ), domain)
     if (name in ctx.tools or spec is not None) and not (spec and spec["usable"]):
         checks = spec["checks"] if spec else []
         failed = [c["case"] for c in checks if not c["pass"]] or ["(答えの分かっている例が無い、またはまだ確かめていない)"]
-        usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
         return Denial(HK2, (
             f"道具 {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
             f"list_tools で usable が true の道具 ({usable}) を選んでください"

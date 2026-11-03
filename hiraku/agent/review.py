@@ -255,8 +255,11 @@ def check_n12(r: RunRecord) -> Finding:
 def check_cost(r: RunRecord) -> Finding:
     """Cost and turns from the last cost.updated (a Claude run's ResultMessage: cost_usd, and since
     model mixes, num_turns and the tokens per model). A weaker model can cost more than expected by
-    taking more turns; informational (always ok)."""
+    taking more turns; informational (always ok). A plugin run (project cost_usd null) has none."""
     ups = r.of_kind("cost.updated")
+    if not ups and r.project.get("cost_usd", 0.0) is None:
+        return Finding("cost and turns", True, f"cost_usd null: not known to HIRAKU (driver {r.project.get('driver')}; "
+                                               "the person's own Claude Code pays)")
     if not ups:
         return Finding("cost and turns", True, "no cost.updated (a scripted run, or one stopped before Claude reported)")
     d = ups[-1].get("data") or {}

@@ -84,6 +84,66 @@ class ReportTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             build_report(self.ctx, {"summary": "x", "next": [{"domain": "crash", "change": "x", "reason": "y"}]}, "lead")
 
+    def add_rule_check(self, rule_id, hit):
+        s, v = self.ctx.store, self.ctx.version
+        hits = [{"part_id": "seat", "values": {"depth_mm": 380.0}, "message": "座面の奥行きが足りない"}] if hit else []
+        return s.add_record("rule_check", {"rule_check_id": s.next_id("rule_check"), "design_version": v,
+                                           "rule_id": rule_id, "targets": ["seat"], "hits": hits, "pass": not hit},
+                            design_version=v, agent="packager")
+
+    def test_a_next_item_answering_a_rule_hit_may_name_a_domain_not_picked(self):
+        item = {"domain": "assembly", "change": "座面を深くする", "reason": "HU-02 に当たった", "rule_id": "HU-02"}
+        self.assertNotIn("assembly", self.ctx.picked)
+        with self.assertRaisesRegex(ToolError, "rule_check で当たった規則ではありません"):
+            build_report(self.ctx, {"summary": "x", "next": [item]}, "lead")  # no rule_check yet
+        self.add_rule_check("HU-02", hit=True)
+        r = build_report(self.ctx, {"summary": "x", "next": [item]}, "lead")
+        self.assertEqual(r["next"], [item])  # the rule_id is kept
+        self.assertEqual(contract.errors("report", r), [])
+        with self.assertRaisesRegex(ToolError, "rule_id を付けて"):  # without the rule_id, still refused
+            build_report(self.ctx, {"summary": "x", "next": [{k: item[k] for k in ("domain", "change", "reason")}]},
+                         "lead")
+        self.add_rule_check("HU-02", hit=False)  # the latest rule_check of HU-02 passes: no hit to answer
+        with self.assertRaisesRegex(ToolError, "HU-02"):
+            build_report(self.ctx, {"summary": "x", "next": [item]}, "lead")
+
+    def test_the_scripted_run_fills_next_by_code(self):
+        rep = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(contract.errors("report", rep), [])
+        (item,) = rep["next"]  # one picked domain (strength), its one verdict
+        ver = self.ctx.store.records("verdict")[-1]
+        ana = self.ctx.store.get("analysis", self.ctx.store.get("comparison", ver["comparison_id"])["analysis_id"])
+        self.assertEqual(item["domain"], "strength")
+        self.assertTrue(item["change"].startswith("台本: "))
+        # the stand-in frame tool's stress falls with a thicker or taller rail: make it bigger
+        self.assertRegex(item["change"], r"^台本: sections\.[^ ]+\.dims_mm\.[th] を大きくする$")
+        for part in (ver["verdict_id"], ana["analysis_id"], "R1 max_stress", "K5", "弾性"):
+            self.assertIn(part, item["reason"])
+        sens = rep["domains"][0]["sensitivity"]
+        path = item["change"].removeprefix("台本: ").split(" ", 1)[0]
+        self.assertTrue(any(t["name"].endswith(path) and t["share"] < 0 for t in sens))  # the K5 terms are kept
+
+    def test_governing_verdicts_and_the_effects_fallback(self):
+        from unittest import mock
+
+        from hiraku.tools import report
+
+        self.assertEqual([v["load_case_id"] for v in report.governing_verdicts(self.ctx, "strength")], ["R1-step100"])
+        self.assertEqual(report.governing_verdicts(self.ctx, "handling"), [])
+        ver = self.ctx.store.records("verdict")[-1]
+        ana = self.ctx.store.get("analysis", self.ctx.store.get("comparison", ver["comparison_id"])["analysis_id"])
+        heavy = dict(ana, wall_time_s=report.K5_MAX_WALL_S + 1,
+                     effects=[{"name": "bending (rail_L0)", "value": 10.0, "unit": "MPa", "share": 0.75}])
+        real_get = self.ctx.store.get
+        with mock.patch.object(self.ctx.store, "get",
+                               lambda kind, i: heavy if kind == "analysis" and i == ana["analysis_id"] else real_get(kind, i)), \
+                mock.patch.object(report, "sensitivities", side_effect=AssertionError("no K5 for a long analysis")):
+            (item,), computed = report.scripted_next(self.ctx)
+        self.assertEqual(computed, [])
+        self.assertEqual(item["change"], "台本: rail_L0 が効いている (向きは出していない)")
+        self.assertIn("75 %", item["reason"])
+        self.assertIn("重い", item["reason"])
+
     def test_design_coordinates_are_not_citable(self):
         coords = {abs(x) for n in self.ctx.store.design()["nodes"] for x in n["xyz_mm"]}
         self.assertIn(400.0, coords)  # a node coordinate of the example design, and no scalar of the records

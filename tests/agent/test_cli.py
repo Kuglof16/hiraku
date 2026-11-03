@@ -165,6 +165,29 @@ class StartInterruptTest(unittest.TestCase):
             with redirect_stdout(out):
                 self.assertEqual(main(["check", str(ctx.store.path)]), 0, out.getvalue())
 
+    def test_a_file_with_tests_picks_only_their_domains_in_the_event_and_the_project(self):
+        from hiraku import contract
+        from tests.tools.helpers import requirements_with_tests
+
+        with tempfile.TemporaryDirectory() as tmp:
+            design = Path(tmp) / "design.json"
+            design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+            req = requirements_with_tests(Path(tmp), ["P1", "R1"])
+            flags_pick = [p["domain"] for p in intake_for(load_requirements(req)).domains["picks"]]
+            self.assertGreater(len(flags_pick), 1)  # the intake alone picks from the flags
+            ctx = start_run(req, design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
+                            tools=fakes.shelf(), intake=True)
+            picked = next(e for e in ctx.store.events() if e["kind"] == "domains.picked")
+            self.assertEqual(contract.errors("event", picked), [])
+            project = [p["domain"] for p in ctx.project["domain_picks"]]
+            self.assertEqual(project, ["strength"])  # R1 has the criterion; P1 feeds it
+            self.assertEqual([p["domain"] for p in picked["data"]["picks"]], project)
+            self.assertEqual(picked["data"]["picks"][0]["test_ids"], ["R1"])
+            off = {o["domain"]: o["reason"] for o in picked["data"]["off"]}
+            self.assertEqual(set(off) | set(project), set(contract.DOMAINS) - {"assembly"})
+            self.assertIn("P1", off["powertrain"])
+            self.assertIn("要件のファイルの試験", off["handling"])
+
     def test_intake_events_given_are_emitted_as_they_are_and_only_the_intakes_kinds(self):
         given = intake_for(load_requirements(REQUIREMENTS)).events
         with tempfile.TemporaryDirectory() as tmp:

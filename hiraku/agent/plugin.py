@@ -17,9 +17,8 @@ Claude Code. project.driver is "claude_code_plugin".
   the start of every tool call, and every POLL_S). What the hooks keep between calls (stop
   blocks, running roles, what the screen sent for the lead) is in STATE_FILE.
 
-These three file names are not in the contract's layout (hiraku/contract/layout.py belongs to
-the lead department); they are kept here. The run folder lock (LOCK_FILE) is taken by the
-hook command and by the server around the state and outbox files.
+The run folder lock (LOCK_FILE) is taken by the hook command and by the server around the
+state and outbox files.
 """
 
 from __future__ import annotations
@@ -46,9 +45,9 @@ Record = dict[str, Any]
 
 DRIVER = "claude_code_plugin"
 CURRENT_FILE = ".plugin_current.json"  # in the runs folder: {"run_dir": ...} of the server's current run
-STATE_FILE = "plugin.hooks.json"  # in the run folder: Hooks.state() between hook calls
-OUTBOX_FILE = "plugin.outbox.jsonl"  # in the run folder: notes from the hook commands for the server
-LOCK_FILE = "plugin.lock"  # in the run folder, while the state or the outbox is read or written
+STATE_FILE = layout.PLUGIN_HOOKS_FILE  # in the run folder: Hooks.state() between hook calls
+OUTBOX_FILE = layout.PLUGIN_OUTBOX_FILE  # in the run folder: notes from the hook commands for the server
+LOCK_FILE = layout.PLUGIN_LOCK_FILE  # in the run folder, while the state or the outbox is read or written
 LOCK_TIMEOUT_S = 10.0
 LOCK_STALE_S = 30.0  # a lock older than this was left by a process that died
 POLL_S = 1.0  # how often the server reads the outbox, the inbox and stop.request

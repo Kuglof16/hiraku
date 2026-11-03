@@ -21,6 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
+from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
 from hiraku.tools.judge import (OP_JA, init_judgements, judged_quantity, make_verdict, prediction_is_unfavourable,
                                 unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
@@ -110,9 +111,16 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     return out
 
 
-def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
-    """K0 formulas, optionally only those a tool lists for its predictions (else those whose
-    id starts with the tool's name) or those of one domain."""
+PAIRS_HOW = ("predicts: 道具のどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
+             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのある道具の横に並ぶ剛体の式は、"
+             "初めの見積もりで、解析とは食い違う)")
+
+
+def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record] | Record:
+    """K0 formulas, optionally only those of one domain. With `tool`: {"tool", "formulas" (those the
+    tool lists for its predictions, else those whose id starts with its name), "predicts" (the
+    tool's own pairing of its result quantities with formula outputs and their notes, from its
+    describe(); [] when it has none), "how"}."""
     args = args or {}
     out = ctx.formulas.list_formulas()
     tool = args.get("tool")
@@ -121,7 +129,22 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
         out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
-    return out
+    if not tool:
+        return out
+    return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
+
+
+def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
+    """The tool's describe()["predicts"]: {quantity, formula_id, output, note?} per pairing."""
+    describe = getattr(ctx.tools.get(name), "describe", None)
+    if not callable(describe):
+        return []
+    try:
+        got = describe().get("predicts") or []
+    except Exception:  # a tool made in the run may describe itself badly; the formulas still list
+        return []
+    keys = ("quantity", "formula_id", "output", "note")
+    return [{k: p[k] for k in keys if k in p} for p in got if isinstance(p, dict)]
 
 
 def _tool_line(spec: Record) -> Record:
@@ -134,17 +157,28 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
     `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
+    lines = {n: _unchecked_line(n, ctx.tools[n]) for n in unchecked_tools(ctx)}
     if args.get("tool"):
-        spec = ctx.specs.get(args["tool"])
+        spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
-            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join(ctx.specs)})")
+            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
         return [spec]
-    out = list(ctx.specs.values())
+    out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
-        out = [s for s in out if s["domain"] == args["domain"]]
+        out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [_tool_line(s) for s in out]
+    return [s if "not_checked" in s else _tool_line(s) for s in out]
+
+
+def _unchecked_line(name: str, tool: Any) -> Record:
+    """list_tools' line for a tool this run did not check (check_shelf): not usable, and why."""
+    line: Record = {"name": name}
+    for key in ("title", "domain", "base", "tests"):
+        value = getattr(tool, key, None)
+        if value is not None:
+            line[key] = list(value) if key == "tests" else value
+    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED}
 
 
 # ---------------------------------------------------------------------------- prediction
@@ -621,7 +655,7 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     if v - 1 >= p["round_limit"]:
         raise ToolError(f"設計の直しは round_limit ({p['round_limit']} 回) まで使い切りました (今の版は {v})。"
                         f"直さずに、今の版の判定で終えてください")
-    if p["cost_usd"] >= p["cost_limit_usd"]:
+    if p["cost_usd"] is not None and p["cost_usd"] >= p["cost_limit_usd"]:  # null: the plugin path, not known
         raise ToolError(f"まとめ役の最後に終わった番の時点で、費用 ({p['cost_usd']:.4g} USD) が上限 "
                         f"{p['cost_limit_usd']} USD に達しているので、設計は直せません")
     design = ctx.store.design()
@@ -667,10 +701,12 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
 # ---------------------------------------------------------------------------- the report (N17)
 
 
-def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None, *,
+                 computed: list[Record] | None = None) -> Record:
     """The lead's report: the summary and the next changes are its words; everything else is put
     together by code from the records (hiraku.tools.report). A number with a unit in the words
-    that matches no recorded value of that unit is refused. Writes report.json, report.written."""
+    that matches no recorded value of that unit is refused. Writes report.json, report.written.
+    computed: sensitivities already computed (the scripted driver's next items)."""
     from hiraku.tools.report import build_report
 
     _check_input("write_report", args)
@@ -679,7 +715,7 @@ def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         raise ToolError("報告を書くのはまとめ役 (lead) です。役の結果はまとめ役に返してください")
     if not args["summary"].strip():
         raise ToolError("summary に、分野ごとの結果を記録の ID と一緒に短く書いてください")
-    return ctx.store.write_report(build_report(ctx, args, agent), agent=agent)
+    return ctx.store.write_report(build_report(ctx, args, agent, computed), agent=agent)
 
 
 # ---------------------------------------------------------------------------- tools made in the run (N13)

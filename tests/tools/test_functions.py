@@ -33,7 +33,7 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(get_context(self.ctx, {"sections": ["design"]})["design"]["design_version"], 1)
 
     def test_list_filters(self):
-        self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})],
+        self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})["formulas"]],
                          ["step_climb.pushed_wheel_load", "step_climb.wheel_force_rigid"])
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"domain": "strength"})], ["frame_static"])
         self.assertTrue(all(t["usable"] for t in list_tools(self.ctx)))
@@ -50,9 +50,34 @@ class StartTest(RunCase, unittest.TestCase):
 
     def test_list_formulas_follows_the_tools_list(self):
         self.ctx.specs["frame_static"]["formulas"] = ["frame_static.rail_bending", "mass_props.front_wheel_load"]
-        got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})]
+        got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})["formulas"]]
         self.assertIn("mass_props.front_wheel_load", got)  # named by the tool, though not its prefix
         self.assertIn("frame_static.rail_step_bending", got)  # its prefix
+
+    def test_list_formulas_for_a_tool_gives_its_pairing_with_the_notes(self):
+        pairs = [{"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma"},
+                 {"quantity": "max_stress", "formula_id": "frame_static.rail_step_bending", "output": "sigma",
+                  "note": "rigid: a first estimate"}]
+        self.tools["frame_static"].describe = lambda: {"name": "frame_static", "params": [], "predicts": pairs}
+        got = list_formulas(self.ctx, {"tool": "frame_static"})
+        self.assertEqual(got["tool"], "frame_static")
+        self.assertEqual(got["predicts"], pairs)
+        self.assertIn("note", got["how"])
+        self.assertEqual(list_formulas(self.ctx, {"tool": "step_climb"})["predicts"], [])  # no describe()
+        self.assertIsInstance(list_formulas(self.ctx), list)  # without tool: the formulas as before
+        from hiraku import contract
+
+        for f in got["formulas"]:
+            self.assertEqual(contract.errors("formula", f), [])  # the formula objects are unchanged
+
+    def test_the_tilt_tool_says_its_rigid_formula_is_a_first_estimate(self):
+        from hiraku.solvers.k2_vehicle.shelf.tilt import TiltTool
+
+        self.ctx.tools["tilt"] = TiltTool()  # describe() reads the tool's pairs; no checks run
+        got = list_formulas(self.ctx, {"tool": "tilt"})["predicts"]
+        rigid = next(p for p in got if p["quantity"] == "tilt_angle" and p["formula_id"] == "tilt.rigid_angle")
+        self.assertIn("rigid", rigid["note"])
+        self.assertTrue(any(p["formula_id"] == "tilt.spring_roll_angle" and p["quantity"] == "tilt_angle" for p in got))
 
 
 class PredictionTest(RunCase, unittest.TestCase):
@@ -515,6 +540,54 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertIn("道具 step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
         self.assertFalse(any("frame_static の照合" in t for t in said))
+
+
+class RunToolsOnlyTest(RunCase, unittest.TestCase):
+    """start_run checks only the tools the run's tests can use; the rest are not usable and say why."""
+
+    def setUp(self):
+        from tests.tools import fakes
+
+        self.extra = {"tilt": fakes.FakeTool("tilt", "handling", ["S1", "S1'"]),
+                      "frame_shell": fakes.FakeTool("frame_shell", "strength", ["R1"])}
+        real_shelf = fakes.shelf
+
+        def shelf(*a, **kw):
+            return {**real_shelf(*a, **kw), **self.extra}
+
+        with mock.patch.object(fakes, "shelf", shelf):
+            super().setUp()
+
+    def test_only_the_tools_of_the_runs_tests_are_checked(self):
+        checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
+        self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
+        self.assertEqual(self.extra["tilt"].runs, [])
+        line = next(t for t in list_tools(self.ctx) if t["name"] == "tilt")
+        self.assertFalse(line["usable"])
+        self.assertEqual(line["not_checked"], "この実行の試験には使わないので確かめていない")
+        self.assertEqual(list_tools(self.ctx, {"tool": "tilt"}), [line])
+        self.assertEqual([t["name"] for t in list_tools(self.ctx, {"test_id": "S1"})], ["tilt"])
+        load, _ = self.predict_p1()
+        args = {"tool": "tilt", "load_case_id": "P1-step100", "prediction_ids": [load["prediction_id"]]}
+        d = rules.check_call(self.ctx, "analyze", args)
+        self.assertEqual(d.rule, rules.HK2)
+        self.assertIn("この実行の試験には使わないので確かめていない", d.reason)
+        with self.assertRaises(ToolError):
+            analyze(self.ctx, args)
+        self.assertEqual(self.extra["tilt"].runs, [])
+
+    def test_the_tests_of_a_run(self):
+        from hiraku.agent.session import run_test_ids
+        from hiraku.tools.shelf import test_family, tools_for_tests
+
+        self.assertEqual([test_family(t) for t in ("S1'", "R1s", "S4b", "P10")], ["S1", "R1", "S4", "P10"])
+        self.assertEqual(tools_for_tests(self.ctx.tools, ["R1s"]), ["frame_static", "frame_shell"])
+        self.assertEqual(tools_for_tests(self.ctx.tools, None), list(self.ctx.tools))
+        self.assertEqual(run_test_ids({"tests": ["S1"]}, self.ctx.load_cases), ["P1", "R1"])  # the load cases first
+        self.assertEqual(run_test_ids({"tests": ["R1"]}, []), ["P1", "R1"])  # before version 1: and what feeds them
+        self.assertIsNone(run_test_ids({}, []))  # not fixed yet: every tool
 
 
 class UnusableToolTest(RunCase, unittest.TestCase):

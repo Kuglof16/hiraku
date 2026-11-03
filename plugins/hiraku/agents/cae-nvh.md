@@ -27,7 +27,7 @@ skills:
 
 進め方:
 1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
-2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式を見る。
+2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのある道具の横の剛体の式は初めの見積もりで、解析とは食い違う)。
    - 合う道具が棚に無いときだけ、道具を書く: check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
 3. record_prediction で手計算の予測を記録する。formula_id・inputs (値と単位を写す)・assumptions を選ぶ。値は K0 が計算する。
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
