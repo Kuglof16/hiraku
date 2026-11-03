@@ -447,8 +447,9 @@ FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driv
 # dimensions and shape but for the checkers); its standard thicknesses are 2.3, 3.2, 4.5, 6.0, ... mm, with a unit
 # mass of 19.73 kg/m2 at 2.3 mm and 26.79 kg/m2 at 3.2 mm (the checkers included). Which standard thickness each
 # part takes is HIRAKU's choice (assumption, not sized): 3.2 mm where people stand or cargo lies, the thinnest
-# standard 2.3 mm for the bulkhead. A plate's mass is its area x thickness x the material's density (plate_masses),
-# without the checkers (7 % less than the catalogue's 26.79 kg/m2 at 3.2 mm, 9 % less than 19.73 at 2.3 mm).
+# standard 2.3 mm for the bulkhead. A plate's mass is its area x the catalogue's unit mass at its thickness
+# (PLATE_KG_M2, plate_mass; the checkers included). Before, it was area x thickness x the material's density, without
+# the checkers (7 % less at 3.2 mm, 9 % less at 2.3 mm).
 PLATE_STEEL = "ss400"
 PLATE_FINISH = "painted"  # assumption
 FLOOR_PLATE_T_MM = 3.2  # the footwell floor, the floor under the seats and the deck (one value: _driver_v1)
@@ -743,18 +744,23 @@ PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "dr
               "seat_L", "seat_belt_L", "occupant_R", "occupant_L", "cargo"]
 
 
-def plate_mass(size, density: float) -> float:
-    """kg of a plate whose box is `size` (mm; the thinnest side its thickness): area x thickness x density."""
-    return float(np.prod([float(s) for s in size])) * density * 1e-9
+def plate_mass(size) -> float:
+    """kg of a plate whose box is `size` (mm; the thinnest side its thickness, one of PLATE_KG_M2's): its area (the
+    two other sides) x the catalogue's unit mass at that thickness."""
+    s = sorted(float(x) for x in size)
+    t = next((k for k in PLATE_KG_M2 if abs(k - s[0]) < 1e-9), None)
+    if t is None:
+        raise DesignGenError(f"no unit mass for a {s[0]:g} mm sheet (PLATE_KG_M2: {sorted(PLATE_KG_M2)} mm)")
+    return s[1] * s[2] * 1e-6 * PLATE_KG_M2[t]
 
 
-def plate_masses(lay: Layout, density: float) -> None:
+def plate_masses(lay: Layout) -> None:
     """The plate parts (PLATE_T_MM) of PLATE_STEEL, each weighing its own sheet (plate_mass): the kits took the
     pedals', the master cylinder's and the rear lamps' masses out of the plates they stand on (kit/body.py,
     kit/safety.py), which held only while the plates' masses were a budget; those parts now weigh on top."""
     for pid in PLATE_T_MM:  # the plate parts
         p = lay.part(pid)
-        p["mass_kg"] = plate_mass(p["box"]["size_mm"], density)
+        p["mass_kg"] = plate_mass(p["box"]["size_mm"])
         p["material"], p["finish"] = PLATE_STEEL, PLATE_FINISH
     fb = lay.part("front_body")
     fb["material"], fb["finish"] = PLATE_STEEL, PLATE_FINISH
@@ -838,12 +844,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                              f"mm; move seat_x back or make the wheelbase longer")
     steel = json.loads(MATERIALS.read_text(encoding="utf-8"))[PLATE_STEEL]
     plate_t = {pid: v[k] for k, pids in PLATE_T_VARS.items() for pid in pids}
-    rho_plate = float(steel["density_kg_m3"])
     ff_size = (floor_front_x - S1, 2.0 * floor_half, plate_t["floor_front"])
-    lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size, rho_plate)),
+    lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size)),
             x=rear_at(S1), y=0.0, z=bottom_at(on_rails))
     fl_size = (S1 - S2, track, plate_t["floor"])
-    lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size, rho_plate)), x=lay.between("S1", "S2"),
+    lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size)), x=lay.between("S1", "S2"),
             y=0.0, z=bottom_at(on_rails))
     deck_len = S2 - DECK_GAP_MM - E
     # the deck and the load between the rear suspension towers and the upper arms' pivot brackets (both stand
@@ -855,7 +860,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
 
     deck_w = min(DECK_WIDTH_MM, 2.0 * inside_mounts(False))
     dk_size = (deck_len, deck_w, plate_t["deck"])
-    lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size, rho_plate)),
+    lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size)),
             x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
     lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0),
                  FRONT_BODY_KG), x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
@@ -930,10 +935,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         raise DesignGenError("the dash cross member under the steering column would be below the rails; "
                              "move steering_x or seat_x")
     bh_size = (plate_t["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
-    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size, rho_plate)),
+    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
-    plate_masses(lay, rho_plate)
+    plate_masses(lay)
     lay.reorder(PART_ORDER)
     materials = {"stkr400": material, PLATE_STEEL: steel}
     # the suspension's mounts on the frame (kit/mounts.py): towers, the lower arms' legs and cross members,

@@ -1,5 +1,5 @@
 """The plate parts of ladder_4w (the floors, the deck, the bulkhead) are boxes as thick as the sheet, of part.material,
-weighing area x thickness x density; load_path builds their strips from that box and that material, and names the
+weighing area x the catalogue's unit mass; load_path builds their strips from that box and that material, and names the
 plates whose material it had to assume."""
 
 from __future__ import annotations
@@ -25,13 +25,14 @@ def part(design, pid):
 
 class PlatePartsTest(unittest.TestCase):
     def test_box_is_the_sheet(self):
-        rho = V1["materials"][ladder_4w.PLATE_STEEL]["density_kg_m3"]
+        # the mass: the area x the catalogue's unit mass at the thickness (Nippon Steel A101, checkers included)
+        kg_m2 = {2.3: 19.73, 3.2: 26.79}
         for pid, t in ladder_4w.PLATE_T_MM.items():
             p = part(V1, pid)
-            s = p["box"]["size_mm"]
-            self.assertAlmostEqual(min(s), t, msg=pid)
+            s = sorted(p["box"]["size_mm"])
+            self.assertAlmostEqual(s[0], t, msg=pid)
             self.assertEqual(p["material"], ladder_4w.PLATE_STEEL, pid)
-            self.assertAlmostEqual(p["mass_kg"], s[0] * s[1] * s[2] * rho * 1e-9, places=9, msg=pid)
+            self.assertAlmostEqual(p["mass_kg"], s[1] * s[2] * 1e-6 * kg_m2[t], places=9, msg=pid)
         self.assertEqual(part(V1, "front_body")["material"], ladder_4w.PLATE_STEEL)
         self.assertEqual(part(V1, "front_body")["mass_kg"], ladder_4w.FRONT_BODY_KG)
 
