@@ -1929,6 +1929,14 @@
           "type": "number",
           "minimum": 0
         },
+        "timings_s": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Clock times of parts of the analysis (name -> seconds, e.g. assembly, factorisation, convergence levels). They change from run to run: clock times go here or in wall_time_s only, never in results, effects, assumptions or text."
+        },
         "assembly": {
           "type": "array",
           "items": {

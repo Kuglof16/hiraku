@@ -213,6 +213,13 @@ class IntakeTest(unittest.TestCase):
             with self.subTest(applies_to=bad):
                 self.assertNotEqual(contract.errors("tool_spec", {**spec, "applies_to": bad}), [])
 
+    def test_analysis_timings(self):
+        a = load("analysis.json")
+        self.assertEqual(contract.errors("analysis", {**a, "timings_s": {"factorisation": 1.25, "level_5mm": 33.0}}), [])
+        for bad in ({"factorisation": -1.0}, {"factorisation": "1 s"}, [1.0]):
+            with self.subTest(timings_s=bad):
+                self.assertNotEqual(contract.errors("analysis", {**a, "timings_s": bad}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
