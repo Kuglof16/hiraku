@@ -213,14 +213,14 @@ class ShellMesh:
         return np.linalg.norm(x - np.roll(x, -1, axis=1), axis=2)
 
     def record(self, mesh_id: str, design_version: int) -> dict:
-        """The contract `mesh` record."""
+        """The contract `mesh` record (node coordinates rounded to 0.0001 mm to keep the record small)."""
         return {
             "mesh_id": mesh_id,
             "design_version": int(design_version),
             "element_type": "shell",
             "formulation": FORMULATION,
             "element_size_mm": float(self.element_size_mm),
-            "nodes_mm": [[float(v) for v in p] for p in self.nodes],
+            "nodes_mm": [[round(float(v), 4) for v in p] for p in self.nodes],
             "elements": [[int(i) for i in e] for e in self.elements],
             "element_member": list(self.element_member),
             "member_thickness_mm": {k: float(v) for k, v in self.member_thickness_mm.items()},

@@ -277,10 +277,16 @@ class DemoMeshTest(unittest.TestCase):
         rec = self.mesh.record("mesh-0001", self.design["design_version"])
         self.assertEqual(len(rec["elements"]), self.mesh.n_elements)
         json.dumps(rec)
-        if "mesh" not in contract.kinds():
-            self.skipTest("the contract on this branch has no mesh record yet")
         contract.validate("mesh", rec)
         contract.validate("field", stress.field_record("mesh-0001", np.zeros(self.mesh.n_elements), "max", "von Mises"))
+
+    def test_frame_mesh_entry_point(self):
+        from hiraku import solvers
+
+        rec = solvers.frame_mesh(self.design)  # the caller (analyze) adds the mesh_id the store gives it
+        self.assertNotIn("mesh_id", rec)
+        contract.validate("mesh", dict(rec, mesh_id="mesh-0001"))
+        self.assertEqual((len(rec["nodes_mm"]), len(rec["elements"])), (self.mesh.n_nodes, self.mesh.n_elements))
 
     def test_assemble_factor_solve_time(self):
         model = ShellModel.from_mesh(self.mesh, self.design)
