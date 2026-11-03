@@ -26,7 +26,7 @@ from scipy.optimize import brentq
 from . import eigen
 from . import mesh as fm
 from .beam import Beam, line_mesh
-from .connect import rigid_link
+from .connect import distributing_link, rigid_link
 from .model import FEModel
 from .shell import MITC4
 from .solid import Hex20
@@ -252,6 +252,134 @@ def plate_buckling(a: float = 300.0, b: float = 200.0, t: float = 2.0, nx: int =
     waves = int(np.sum(np.diff(np.sign(wz)) != 0) + 1)
     return {"sigma_cr": float(r.factors[0] * sigma0), "sigma_formula": s_cr, "k": k, "m": m, "m_fe": waves,
             "factors": r.factors}
+
+
+# ------------------------------------------------------------------ buckling under temperature and given displacements
+
+ALPHA = 1.2e-5  # 1/K, a round value for steel (as load_checks.ALPHA_ST; not from a standard)
+
+
+def thermal_column(kind: str = "beam", n_el: int = 20, L: float = 2000.0, size: float = 40.0, t: float = 2.0,
+                   n_c: int = 16, n_side: int = 1, b: float = 20.0, ends: str = "rbe3") -> dict:
+    """[Thermal column] a pinned column held axially at both ends and heated uniformly by dT buckles at
+    dT_cr = pi^2 I / (alpha A L^2) (the axial force -E A alpha dT reaching Euler's load; derived from
+    [Euler]). The buckling runs on the reference temperature dT = 1 K: eigen.buckling with the thermal load
+    and the thermal strain taken off the stresses. kind 'beam' (square tube section), 'shell' (40 x 2 square
+    tube of MITC4) or 'solid' (b x b HEX20 bar, L = 1000 by default when solid). The shell's end rings and
+    the bar's end faces are joined to nodes on the axis, where the supports are, by distributing links
+    (ends 'rbe3', the default) or rigid links ('rbe2'). A rigid link stops the end section's own thermal
+    expansion, so near the ends the wall is compressed in both directions (sigma_axial up to
+    -E alpha dT / (1 - nu)) and dT_cr comes out low; a distributing link adds no stiffness and lets the
+    section expand."""
+    from . import loads
+
+    dT = 1.0
+    if kind == "beam":
+        sec = polygon_section(tube_section_points("square", size, 4), t)
+        x, c = line_mesh((0, 0, 0), (L, 0, 0), n_el)
+        model = FEModel(x)
+        g = model.add(Beam(c, E_ST, G_ST, sec["A"], sec["Iy"], sec["Iz"], sec["J"], name="column"))
+        m0, m1 = 0, n_el
+        F = loads.beam_thermal(model, g, ALPHA, dT)
+        th = {g.name: (ALPHA, dT)}
+        A, I = sec["A"], sec["Iz"]
+    elif kind == "shell":
+        pts = tube_section_points("square", size, n_c)
+        nodes, q, r0, r1 = tube_shell(pts, L, n_el)
+        model = FEModel(nodes)
+        g = model.add(MITC4(q, t, E_ST, NU_ST, name="column"))
+        m0, m1 = model.add_node((0, 0, 0)), model.add_node((L, 0, 0))
+        link = rigid_link if ends == "rbe2" else distributing_link
+        model.add(link(m0, r0, model.nodes, name="end 0"))
+        model.add(link(m1, r1, model.nodes, name="end 1"))
+        F = loads.shell_thermal(model, g, ALPHA, dT)
+        th = {g.name: (ALPHA, dT, 0.0)}
+        sec = polygon_section(pts, t)
+        A, I = sec["A"], sec["Iz"]
+    elif kind == "solid":
+        L = 1000.0 if L == 2000.0 else L
+        m = bar_mesh(L, b, n_el, n_side)
+        model = FEModel(m.nodes)
+        g = model.add(Hex20(m.conn, E_ST, NU_ST, name="column"))
+        f0 = m.nodes_where(lambda x, y, z: np.abs(x) < 1e-9)
+        f1 = m.nodes_where(lambda x, y, z: np.abs(x - L) < 1e-9)
+        m0, m1 = model.add_node((0, 0, 0)), model.add_node((L, 0, 0))
+        link = rigid_link if ends == "rbe2" else distributing_link
+        model.add(link(m0, f0, model.nodes, name="end 0"))
+        model.add(link(m1, f1, model.nodes, name="end 1"))
+        F = loads.solid_thermal(model, g, ALPHA, dT)
+        th = {g.name: (ALPHA, dT)}
+        A, I = b * b, b ** 4 / 12.0
+    else:
+        raise ValueError(kind)
+    _hold_column(model, m0, m1, "pinned")
+    model.fix(m1, [0])
+    r = eigen.buckling(model, F, 2, thermal=th)
+    expected = math.pi ** 2 * I / (ALPHA * A * L * L)
+    N = None
+    if kind == "beam":
+        N = float(g.axial_force(model.nodes, r.static.element_displacements(g), (ALPHA, dT)).mean())
+    return {"dT_cr": float(r.factors[0] * dT), "dT_formula": expected, "axial_force": N,
+            "axial_expected": -E_ST * A * ALPHA * dT, "factors": r.factors}
+
+
+def thermal_plate(kind: str = "quad", a: float = 200.0, b: float = 200.0, t: float = 2.0, nx: int = 16,
+                  ny: int = 16) -> dict:
+    """[Thermal plate] a simply supported plate (the hard support of plate_buckling) held in plane on all four
+    edges and heated uniformly by dT: sigma_x = sigma_y = -E alpha dT / (1 - nu) everywhere, and equal biaxial
+    compression N buckles at N = pi^2 D (1 / a^2 + 1 / b^2) (m = n = 1; Timoshenko & Gere 1961, chapter 9, the
+    biaxial case - derived here from w = sin sin), so dT_cr = (1 - nu) pi^2 D (1/a^2 + 1/b^2) / (E alpha t).
+    kind 'quad' (MITC4, soft drilling springs), 'tri' (DKT triangles) or 'mixed'."""
+    from . import loads
+    from .shell_checks import drill_springs, mixed_groups
+
+    nodes, q = plate_shell(a, b, nx, ny)
+    model = FEModel(nodes)
+    gs = mixed_groups(model, q, kind, t, E_ST, NU_ST, tri_where=lambda x, y: x > a / 2)
+    if kind != "tri":
+        drill_springs(model, np.arange(len(nodes)), 5)
+    x, y = nodes[:, 0], nodes[:, 1]
+    edge = np.nonzero((x < 1e-9) | (x > a - 1e-9) | (y < 1e-9) | (y > b - 1e-9))[0]
+    model.fix(edge, [0, 1, 2])
+    model.fix(np.nonzero((x < 1e-9) | (x > a - 1e-9))[0], [3])
+    model.fix(np.nonzero((y < 1e-9) | (y > b - 1e-9))[0], [4])
+    dT = 1.0
+    F = sum(loads.shell_thermal(model, g, ALPHA, dT) for g in gs)
+    th = {id(g): (ALPHA, dT, 0.0) for g in gs}
+    r = eigen.buckling(model, F, 2, thermal=th)
+    D = E_ST * t ** 3 / (12 * (1 - NU_ST ** 2))
+    expected = (1 - NU_ST) * math.pi ** 2 * D * (1 / a ** 2 + 1 / b ** 2) / (E_ST * ALPHA * t)
+    nm = gs[0].membrane_forces(model.nodes, r.static.element_displacements(gs[0]), (ALPHA, dT, 0.0))
+    return {"dT_cr": float(r.factors[0] * dT), "dT_formula": expected, "n_membrane": nm,
+            "n_expected": -E_ST * ALPHA * dT * t / (1 - NU_ST), "factors": r.factors}
+
+
+def prescribed_column(kind: str = "beam", n_el: int = 20, L: float = 2000.0, size: float = 40.0, t: float = 2.0,
+                      n_c: int = 16, d: float = 1.0) -> dict:
+    """[Euler] with the load given as a displacement: the top of a pinned column is pushed down by d (ux = -d
+    prescribed, no force), and the buckling factor scales d. P_cr = factor times the reaction at the top.
+    kind 'beam' or 'shell' (square tube of MITC4, the prescribed node the master of the end ring's RBE2)."""
+    if kind == "beam":
+        sec = polygon_section(tube_section_points("square", size, 4), t)
+        x, c = line_mesh((0, 0, 0), (L, 0, 0), n_el)
+        model = FEModel(x)
+        model.add(Beam(c, E_ST, G_ST, sec["A"], sec["Iy"], sec["Iz"], sec["J"]))
+        m0, m1 = 0, n_el
+    else:
+        pts = tube_section_points("square", size, n_c)
+        nodes, q, r0, r1 = tube_shell(pts, L, n_el)
+        model = FEModel(nodes)
+        model.add(MITC4(q, t, E_ST, NU_ST))
+        m0, m1 = model.add_node((0, 0, 0)), model.add_node((L, 0, 0))
+        model.add(rigid_link(m0, r0, model.nodes, name="end 0"))
+        model.add(rigid_link(m1, r1, model.nodes, name="end 1"))
+        sec = polygon_section(pts, t)
+    _hold_column(model, m0, m1, "pinned")
+    model.prescribe(m1, 0, -d)
+    r = eigen.buckling(model, np.zeros((len(model.nodes), 6)), 2)
+    P_ref = float(-r.static.reactions()[m1, 0])  # the force pushing the top down
+    return {"P_cr": float(r.factors[0] * P_ref), "P_euler": euler_load(E_ST, sec["Iz"], L, "pinned"),
+            "P_ref": P_ref, "P_ref_expected": E_ST * sec["A"] * d / L, "factors": r.factors}
 
 
 # ------------------------------------------------------------------ lateral-torsional buckling

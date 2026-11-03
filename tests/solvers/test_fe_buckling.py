@@ -159,6 +159,52 @@ class LateralTorsionalTest(unittest.TestCase):
         self.assertGreater(r["M_cr"] / r["M_formula"], 1.10)
 
 
+class ThermalBucklingTest(unittest.TestCase):
+    """Buckling with the stresses of a temperature change (eigen.buckling(..., thermal=...))."""
+
+    def test_heated_column_held_at_both_ends(self):
+        """dT_cr = pi^2 I / (alpha A L^2) (54.9 K for the 40 x 2 square tube, 2000 mm): beam within 1e-4 and its
+        axial force -E A alpha dT; shell tube (end rings on RBE3) within 1 % (measured -0.40 %); HEX20 bar
+        20 x 20 x 1000 within 1.5 % (+0.92 %)."""
+        r = ec.thermal_column("beam")
+        self.assertLess(abs(r["dT_cr"] / r["dT_formula"] - 1.0), 1e-4)
+        self.assertAlmostEqual(r["axial_force"] / r["axial_expected"], 1.0, delta=1e-9)
+        r = ec.thermal_column("shell", n_el=40)
+        self.assertLess(abs(r["dT_cr"] / r["dT_formula"] - 1.0), 0.01)
+        r = ec.thermal_column("solid", n_el=20)
+        self.assertLess(abs(r["dT_cr"] / r["dT_formula"] - 1.0), 0.015)
+
+    def test_rigid_end_links_lower_the_heated_column(self):
+        """With RBE2 at the ends the end sections cannot expand: the shell tube comes out 2.9 % low and the bar
+        6.6 % low (measured), below the RBE3 answers."""
+        for kind, n in (("shell", 40), ("solid", 20)):
+            a = ec.thermal_column(kind, n_el=n)
+            b = ec.thermal_column(kind, n_el=n, ends="rbe2")
+            self.assertLess(b["dT_cr"], a["dT_cr"] * 0.98, kind)
+
+    def test_heated_plate_held_in_plane(self):
+        """Square 200 x 200 x 2 plate, simply supported and held in plane on its edges: the membrane force is
+        -E alpha dT t / (1 - nu) in every element, and dT_cr = (1 - nu) pi^2 D (2 / b^2) / (E alpha t) = 10.5 K;
+        MITC4 within 1 % (+0.47 %), DKT triangles (+0.02 %) and the mixed mesh (+0.25 %) within 1 %."""
+        for kind in ("quad", "tri", "mixed"):
+            r = ec.thermal_plate(kind)
+            self.assertLess(abs(r["dT_cr"] / r["dT_formula"] - 1.0), 0.01, kind)
+            self.assertLess(np.abs(r["n_membrane"][:, :2] / r["n_expected"] - 1.0).max(), 1e-9, kind)
+            self.assertLess(np.abs(r["n_membrane"][:, 2]).max(), 1e-9 * abs(r["n_expected"]), kind)
+
+
+class PrescribedDisplacementBucklingTest(unittest.TestCase):
+    def test_column_pushed_by_a_given_displacement(self):
+        """The top of the pinned column moved down by 1 mm (no force): the reference force is E A d / L, and
+        factor x force = Euler's load (beam within 1e-4; shell tube through its RBE2 within 1.5 %, measured
+        -0.79 %)."""
+        r = ec.prescribed_column("beam")
+        self.assertAlmostEqual(r["P_ref"] / r["P_ref_expected"], 1.0, delta=1e-9)
+        self.assertLess(abs(r["P_cr"] / r["P_euler"] - 1.0), 1e-4)
+        r = ec.prescribed_column("shell", n_el=40)
+        self.assertLess(abs(r["P_cr"] / r["P_euler"] - 1.0), 0.015)
+
+
 class PlateBucklingTest(unittest.TestCase):
     def test_simply_supported_plate(self):
         """300 x 200 x 2 plate: k = 4.34 at m = 2 half waves; MITC4 30 x 20 within 1 %, the same m."""
