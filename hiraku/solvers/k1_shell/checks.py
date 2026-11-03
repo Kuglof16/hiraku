@@ -18,7 +18,7 @@ from ..shelf import fixtures
 from ..shelf.base import Record, check_record
 from . import element
 from .mesh import build_mesh
-from .solve import ShellModel, StaticSolver, dofs_of
+from .solve import ShellModel, StaticSolver, dofs_of, using
 from .stress import element_stresses
 
 STEEL = fixtures.STEEL
@@ -586,7 +586,12 @@ def convergence_checks(plate_n=(4, 8, 16), l_n=(8, 16, 32)) -> list[Record]:
 
 
 def shell_known_answers() -> list[Record]:
-    """Checks a shell tool runs every time (about 4 s)."""
+    """Checks a shell tool runs every time (about 4 s), with SuperLU whatever HIRAKU_SOLVER says."""
+    with using("superlu"):
+        return _known_answers()
+
+
+def _known_answers() -> list[Record]:
     out, _ = patch_tests()
     got, exp = inplane_cantilever(8, 2)
     out.append(check_record("in-plane cantilever strip 100 x 10 x 1, 8 x 2 elements, end moment", "tip_deflection",

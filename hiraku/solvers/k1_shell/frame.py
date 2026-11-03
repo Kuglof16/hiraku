@@ -61,8 +61,9 @@ import numpy as np
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, node_table, resultant, support_loads
 from ..k1_frame.analyze import BALANCE_TOL, _split, mount_carriers, mount_share, rigid_fit, sprung_items
+from . import cache
 from .mesh import ELEMENT_SIZE_MM, ShellMesh, build_mesh
-from .solve import ShellModel, StaticSolver, dofs_of, spread_load
+from .solve import ShellModel, StaticSolver, dofs_of, solver_choice, spread_load
 from .stress import ShellStress, element_stresses, hot_spots
 
 WALLS = {(0, 0, 1): "upper", (0, 0, -1): "lower", (0, 1, 0): "left (+y)", (0, -1, 0): "right (-y)",
@@ -134,6 +135,28 @@ class ShellFrame:
             except ValueError as e:
                 raise DesignError(str(e)) from None
         return self._solver
+
+
+_FRAMES = cache.LRU(cache.FRAMES)
+
+
+def shared_frame(design: dict, element_size_mm: float = ELEMENT_SIZE_MM,
+                 weld_strips: bool = True) -> tuple[ShellFrame, bool]:
+    """The built and factorised ShellFrame of the design's frame, made once per process for the same
+    frame (cache.design_key: the parts other than gussets do not change it), element size and
+    weld_strips, factorised by the same linear solver (solve.solver_choice); (frame, whether it came
+    from the cache). Only frames small enough for cache.keep_frame are kept. HIRAKU_SHELL_CACHE=0:
+    built every time."""
+    def make():
+        fr = ShellFrame.build(design, element_size_mm, weld_strips)
+        fr.solver()
+        return fr
+
+    if not cache.enabled():
+        return make(), False
+    solver_class = f"{StaticSolver.__module__}.{StaticSolver.__qualname__}"  # a solver patched in (tests) is another key
+    key = cache.design_key(design, "frame", float(element_size_mm), bool(weld_strips), solver_choice(), solver_class)
+    return _FRAMES.get_or_make(key, make, keep=lambda fr: cache.keep_frame(fr.mesh.n_elements))
 
 
 def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
@@ -256,7 +279,10 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     t0 = time.perf_counter()
     summ = mass_summary(design)
     items = summ["items"]
-    fr = frame or ShellFrame.build(design, element_size_mm, weld_strips)
+    reused = frame is None
+    if frame is None:
+        frame, reused = shared_frame(design, element_size_mm, weld_strips)
+    fr = frame
     ms, model = fr.mesh, fr.model
     if mount_loads is not None:
         ground, statics, source = _mounts(design, mount_loads), None, "mounts"
@@ -394,6 +420,8 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
 
     timings = dict(fr.timings, **{k: v for k, v in model.timings.items() if k.endswith("_s")})
     timings["total_s"] = time.perf_counter() - t0
+    if reused:  # mesh_s and factor_s are those of the solve that built the frame
+        timings["frame_reused"] = 1.0
     return {
         "frame": fr,
         "mesh": ms,
@@ -427,6 +455,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "worst_node": worst_node,
         "worst_node_member": node_member.get(worst_node, worst),
         "timings": timings,
+        "linear_solver": getattr(fr.solver(), "solver_name", type(fr.solver()).__name__),
     }
 
 
