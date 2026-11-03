@@ -208,6 +208,39 @@ class Declarations(unittest.TestCase):
         self.assertIn("direction", rec["error"])
 
 
+class StepOrigin(unittest.TestCase):
+    def test_climbed_and_climb_time_do_not_depend_on_the_design_origin(self):
+        # the same vehicle with its design origin under the front axle and 1 m behind it
+        def design(dx_mm):
+            d = box_design(mass=300.0, wheel_mass=15.0, name=f"step origin {dx_mm:g}")
+            for s in d["supports"]:
+                s["position_mm"][0] += dx_mm
+            for p in d["parts"]:
+                p["box"]["center_mm"][0] += dx_mm
+            return d
+
+        lc = {"load_case_id": "x", "params": {"step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"),
+                                              "mu": q(0.8, "1")}}
+        res = []
+        for dx in (0.0, 1000.0):
+            rec = TOOLS["step_climb_dynamic"].run(design(dx), lc, [{"prediction_id": "pred-0001"}], {})
+            self.assertEqual(rec["status"], "ok", rec.get("error"))
+            res.append({r["quantity"]: r["value"] for r in rec["results"]})
+        self.assertEqual(res[0]["climbed"], 1.0)
+        self.assertEqual(res[1]["climbed"], 1.0)
+        self.assertAlmostEqual(res[1]["climb_time"], res[0]["climb_time"], delta=2e-3)
+
+
+class RigidWheelNote(unittest.TestCase):
+    def test_a_rigid_wheel_says_its_mass_only_sets_the_spin_inertia(self):
+        notes = build_vehicle(box_design(susp="rigid")).assumptions
+        self.assertTrue(any("only sets the spin inertia" in n for n in notes), notes)
+        self.assertFalse(any(n.startswith("unsprung mass") for n in notes), notes)
+        notes = build_vehicle(box_design()).assumptions  # sprung corners without wheel parts
+        self.assertTrue(any(n.startswith("unsprung mass") for n in notes), notes)
+        self.assertFalse(any("only sets the spin inertia" in n for n in notes), notes)
+
+
 class KcChannels(unittest.TestCase):
     def test_kc_vehicle_records_camber_and_toe(self):
         from hiraku.solvers.k2_vehicle.record import Recorder

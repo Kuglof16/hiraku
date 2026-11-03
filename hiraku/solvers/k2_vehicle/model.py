@@ -504,6 +504,11 @@ def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinem
     return json.loads(_table_of((tuple(float(x) for x in wc), float(radius), float(travel), bushings)))
 
 
+RIGID_WHEEL_SPIN_NOTE = ("a rigid wheel without wheel parts spins as a solid disc of 5 % of the vehicle mass shared "
+                         "over the supports (at least 1 kg; assumed); that mass only sets the spin inertia: it is not "
+                         "taken out of the body and there is no unsprung mass")
+
+
 def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
     """Give each corner its unsprung mass and spin inertia; return the sprung items.
 
@@ -528,10 +533,11 @@ def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, no
         mw = wheel_mass[i]
         if mw <= 0.0:
             mw = max(1.0, frac * m_all / len(corners))
-            if c.dof or c.kind == "wheel":
-                _note(notes, DEFAULTS["unsprung_fraction"][2])
             if c.dof:
+                _note(notes, DEFAULTS["unsprung_fraction"][2])
                 sprung_items.append((-mw, c.pos, np.zeros((3, 3))))
+            elif c.kind == "wheel" and _given(design, "wheel_inertia") is None:
+                _note(notes, RIGID_WHEEL_SPIN_NOTE)
         if c.dof:
             c.m_u = mw
         c.j_w = 0.5 * mw * c.radius ** 2
@@ -658,10 +664,12 @@ def _tyres(corners: list[Corner], notes: list[str], name: str = DEFAULT_TYRE):
         c.mf = MF61(coeffs, fz0=fz0, r0=c.radius, lmux=c.mu / base.mu_x(fz), lmuy=c.mu / base.mu_y(fz),
                     lkx=c.c_long / base.kxk(fz), lky=c.c_lat / abs(base.kya(fz)))
     notes.append(f"tyre forces: Magic Formula 6.1 with the coefficients of the {coeffs['tyre']} tyre "
-                 f"({coeffs['source']['title']}; not checked against the book), scaled to this vehicle: nominal "
+                 f"({coeffs['source']['title']}; not checked against the book). Not a measured UTV tyre: only "
+                 "the shapes of the passenger car tyre's curves are used, scaled to this vehicle: nominal "
                  f"load {fz0:.0f} N (the mean static wheel load), R0 = the wheel radius, and at each wheel's static "
                  "load the peak friction = mu and the slopes at zero slip = the stiffnesses K2 took (design or "
-                 "defaults above)")
+                 "defaults above); held at the coefficients' nominal inflation pressure (no pressure terms, so "
+                 "nothing is extrapolated to a low-pressure tyre)")
 
 
 def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):

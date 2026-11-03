@@ -76,7 +76,9 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
 
     The table turns at fast_rate until the upper wheels carry less than
     `slow_below` of their starting load, then at slow_rate. The tip angle is
-    where the upper-side load sum crosses zero (linear between two steps).
+    the first step at which the upper-side wheels have lost all load (a wheel's
+    load is never negative, so there is no crossing to interpolate); it lies at
+    most one step (slow_rate * dt) past the true crossing.
     """
     sim = new_sim(veh, dt=dt, settle_s=settle_s)
     rec = Recorder(sim, record_hz) if record_hz > 0 else None
@@ -109,8 +111,7 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
         if rec is not None:
             rec.tick({"table_angle": ("deg", math.degrees(sign * theta))})
         if n_up <= 0.0:
-            t0, n_prev = prev
-            tip = t0 + (theta - t0) * n_prev / (n_prev - n_up) if n_prev > n_up else theta
+            tip = theta
             break
         prev = (theta, n_up)
     snap = None
