@@ -276,6 +276,18 @@ class LoadingTest(unittest.TestCase):
             loading_rule.parts_on_board(self.design("frame", "occupant"), "two")
         self.assertEqual(self.ids(self.design("frame", "cargo"), "two_cargo"), ["frame0", "cargo1"])  # no seats
 
+    def test_body_segments_are_one_person(self):
+        seg = ["torso", "thigh_l", "shin_l"]
+        d = {"parts": [{"id": "frame", "kind": "frame"}]
+             + [{"id": f"{who}.{s}", "kind": "occupant"} for who in ("driver", "passenger") for s in seg]}
+        self.assertEqual(self.ids(d, "driver"), ["frame"] + [f"driver.{s}" for s in seg])
+        self.assertEqual(len(self.ids(d, "two")), 7)
+        self.assertEqual(self.ids(d, "empty"), ["frame"])
+        one = {"parts": d["parts"][:4]}
+        with self.assertRaises(ValueError):
+            loading_rule.parts_on_board(one, "two")
+        self.assertEqual(loading_rule.person_of({"id": "occupant1"}), "occupant1")
+
     def test_unknown_loading(self):
         with self.assertRaises(ValueError):
             loading_rule.parts_on_board(self.design("frame"), "three")
