@@ -775,7 +775,8 @@ window.PROMO_LAYOUT = {
       "title_px": 30,
       "text_px": 22,
       "reading_of_title": 2,
-      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)"
+      "ok_of_reading": 0.55,
+      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width); ok_of_reading: the size of the tick line under it (✓ 上限より下), a share of the reading's size"
     },
     "times": {
       "lead_s": 0.3,
@@ -1290,7 +1291,8 @@ window.PROMO_LAYOUT = {
       "title_px": 34,
       "text_px": 22,
       "change_of_title": 1.5,
-      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)"
+      "domain_of_title": 1.4,
+      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page); domain_of_title: the size of the domain cards (pass / fail), a multiple of title_px"
     },
     "dim_opacity": 0.3,
     "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
