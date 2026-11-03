@@ -664,7 +664,8 @@ function wire() {
   $("nextBtn").onclick = () => go(state.pos + 1);
   $("countdownOn").checked = lsGet(LS.countdown) !== "0";
   $("countdownOn").onchange = (e) => lsSet(LS.countdown, e.target.checked ? "1" : "0");
-  $("synthPlay").onclick = () => playSynth(current().key);
+  // the button is on the page before a script is read; do nothing until there is a sentence
+  $("synthPlay").onclick = () => { const ln = current(); if (ln) playSynth(ln.key); };
   $("exportOne").onclick = exportOne;
   $("exportAll").onclick = () => exportAll(null);
   $("exportDir").onclick = exportToDir;

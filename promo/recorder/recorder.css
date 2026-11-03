@@ -177,3 +177,6 @@ body.recording .prompter { box-shadow: inset 0 0 0 4px var(--miss); background: 
   .grid { grid-template-columns: 260px 1fr 320px; }
   .ja { font-size: 32px; }
 }
+
+/* the hidden attribute wins over the display of .btn and the like */
+[hidden] { display: none !important; }
