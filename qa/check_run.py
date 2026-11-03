@@ -130,6 +130,9 @@ TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
 # a rule_check target (and part_id) standing for the whole design, e.g. a system rule finding a part missing
 WHOLE_DESIGN = "design"
+PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX_FILE", "PLUGIN_LOCK_FILE",
+                                              "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
+UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -397,6 +400,8 @@ class RunChecker:
         for p in sorted(self.path.iterdir()) if self.path.is_dir() else []:
             name = p.name
             if name in (layout.PROJECT_FILE, layout.EVENTS_FILE, layout.REPORT_FILE):
+                continue
+            if name in PLUGIN_FILES:  # claude_code_plugin runs (layout)
                 continue
             finished = any(e.get("kind") == "run.finished" for e in self.events)
             if name == layout.STOP_REQUEST_FILE:
@@ -1002,6 +1007,9 @@ class RunChecker:
     def check_verdicts(self) -> None:
         for vid, (i, v) in self.recs["verdict"].items():
             w = self.where_of[i]
+            if v.get("basis") == UNSUPPORTED:
+                self._check_unsupported_verdict(vid, v, i, w)
+                continue
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
                 continue
@@ -1028,6 +1036,40 @@ class RunChecker:
                     if v.get(f) != crit.get(f):
                         self.error("verdict.criterion", w, f"{vid} {f} {v.get(f)} but the criterion says {crit.get(f)}")
             self._check_verdict_math(vid, v, w)
+
+    def _check_unsupported_verdict(self, vid: str, v: dict, i: int, w: str) -> None:
+        """basis unsupported_load (contract, 荷重の通り道が無いとき): a failing verdict with no prediction
+        or comparison, made from an ok analysis (analysis_id, recorded before it) of the same load case
+        whose results carry unsupported_load > 0; quantity unsupported_load, op <=, limit 0 (unit 1),
+        value from the analysis, margin_pct null."""
+        rule = "verdict.unsupported_load"
+        if v.get("comparison_id") is not None:
+            self.error(rule, w, f"{vid} is unsupported_load but names comparison {v.get('comparison_id')}")
+        a = self._before("analysis", v.get("analysis_id"), i, w, rule, "analysis")
+        if a is None:
+            return
+        if a.get("status") != "ok":
+            self.error(rule, w, f"{vid} made from {v.get('analysis_id')}, a {a.get('status')} analysis")
+        if a.get("load_case_id") != v.get("load_case_id"):
+            self.error(rule, w, f"{vid} is for {v.get('load_case_id')} but {v.get('analysis_id')} "
+                                f"analyzed {a.get('load_case_id')}")
+        got = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED]
+        value = v.get("value")
+        value = value.get("value") if isinstance(value, dict) else value
+        if not got or not isinstance(got[0].get("value"), (int, float)) or got[0]["value"] <= 0:
+            self.error(rule, w, f"{vid}: {v.get('analysis_id')} has no unsupported_load result above 0")
+        elif value != got[0]["value"]:
+            self.error(rule, w, f"{vid} value {value} is not the analysis' unsupported_load {got[0]['value']}")
+        limit = v.get("limit")
+        limit = limit.get("value") if isinstance(limit, dict) else limit
+        if (v.get("quantity"), v.get("op"), limit, v.get("pass"), v.get("value_from", "analysis"), v.get("margin_pct")) \
+                != (UNSUPPORTED, "<=", 0, False, "analysis", None):
+            self.error(rule, w, f"{vid} must be quantity unsupported_load, op <=, limit 0, pass false, "
+                                f"value_from analysis, margin_pct null")
+        lc = self.load_cases.get(v.get("load_case_id")) or {}
+        for f in ("test_id", "domain"):
+            if lc and lc.get(f) is not None and v.get(f) != lc.get(f):
+                self.error(rule, w, f"{vid} {f} {v.get(f)} but the load case says {lc.get(f)}")
 
     def _check_safe_side_verdict(self, vid: str, v: dict, c: dict, crit: dict | None, i: int, w: str) -> None:
         """basis explained_safe_side (contract, record_cause): a mismatch whose own cause,
