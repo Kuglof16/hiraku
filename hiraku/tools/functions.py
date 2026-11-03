@@ -467,6 +467,27 @@ def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> N
                                  design_version=v, agent=agent, domain=pred["domain"])
 
 
+def revised_after_cause(ctx: RunContext, pred: Record, ana: Record) -> bool:
+    """A prediction of the analysis's version and load case, recorded after a cause was written for a
+    mismatch on that analysis: the agreed way to fix a hand calculation (cause, new formula, compare
+    again on the same analysis). qa/check_run.py tolerates the same."""
+    if pred["design_version"] != ana["design_version"] or pred["load_case_id"] != ana["load_case_id"]:
+        return False
+    on_it = {c["comparison_id"] for c in ctx.store.records("comparison")
+             if c["analysis_id"] == ana["analysis_id"] and c["status"] == "mismatch"}
+    causes = {c["cause_id"] for c in ctx.store.records("cause") if c["comparison_id"] in on_it}
+    if not causes:
+        return False
+    first_cause, pred_seq = None, None
+    for e in ctx.store.events():
+        data = e.get("data") or {}
+        if e["kind"] == "cause.recorded" and data.get("cause_id") in causes and first_cause is None:
+            first_cause = e["seq"]
+        elif e["kind"] == "prediction.recorded" and data.get("prediction_id") == pred["prediction_id"]:
+            pred_seq = e["seq"]
+    return first_cause is not None and pred_seq is not None and first_cause < pred_seq
+
+
 def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Compare a prediction with an analysis result. A match against a load case
     with a criterion also makes the verdict and updates the domain's judgement.
@@ -489,10 +510,15 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     _gate(ctx, "compare", args, agent)
     if ana["status"] != "ok":
         raise ToolError(f"解析 {ana['analysis_id']} は失敗しています: {ana.get('error', '')}。照合できません")
-    if pred["prediction_id"] not in ana["prediction_ids"]:
+    if pred["prediction_id"] not in ana["prediction_ids"] and not revised_after_cause(ctx, pred, ana):
+        same = pred["design_version"] == ana["design_version"] and pred["load_case_id"] == ana["load_case_id"]
+        how = ("この解析の照合の食い違いに record_cause を書いたあとに記録した予測なら、この解析と照合できます。"
+               if same else f"この予測は {pred['load_case_id']} (版 {pred['design_version']}) のものです。")
         raise ToolError(
-            f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids'])} に対して走らせたもので、"
-            f"{pred['prediction_id']} は入っていません"
+            f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids']) or 'なし'} に対して走らせたもので、"
+            f"{pred['prediction_id']} は入っていません。{how}そうでなければ、record_prediction で予測を記録してから、"
+            f"analyze(tool=\"{ana['tool']}\", load_case_id=\"{pred['load_case_id']}\", "
+            f"prediction_ids=[\"{pred['prediction_id']}\"]) で解析し直し、その analysis_id と照合してください"
         )
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")

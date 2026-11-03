@@ -314,6 +314,22 @@ class MismatchTest(RunCase, unittest.TestCase):
         self.assertEqual(resolved["resolved_by"], out["comparison"]["comparison_id"])
         self.assert_events_fit()
 
+    def test_a_prediction_recorded_after_the_cause_compares_with_the_same_analysis(self):
+        load, force = self.predict_p1()
+        ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
+                                 "prediction_ids": [load["prediction_id"], force["prediction_id"]]})
+        c1 = compare(self.ctx, {"prediction_id": load["prediction_id"], "analysis_id": ana["analysis_id"]})
+        early, _ = self.predict_p1()  # recorded before the cause: not part of the analysis
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, {"comparison_id": c1["comparison"]["comparison_id"], "cause": "x", "fix": "y"})
+            compare(self.ctx, {"prediction_id": early["prediction_id"], "analysis_id": ana["analysis_id"]})
+        for needle in ("record_prediction", "analyze(tool=\"step_climb\"", early["prediction_id"]):
+            self.assertIn(needle, str(cm.exception))
+        later, _ = self.predict_p1()
+        out = compare(self.ctx, {"prediction_id": later["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertEqual(out["comparison"]["prediction_id"], later["prediction_id"])
+        self.assert_events_fit()
+
     def test_match_needs_no_cause(self):
         self.tools["step_climb"].factor = 1.0
         _, c1, _ = self.run_p1()
