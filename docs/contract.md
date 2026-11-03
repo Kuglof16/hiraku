@@ -1,6 +1,6 @@
 # 契約 (部署のあいだの決まり)
 
-HIRAKU は、Claude Code のセッションを「部署」に見立てて並べて作った。統括部 (契約を書き、各部署の成果を確かめて main に取り込む) と、設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部。各部署は自分の git worktree と branch で、下の表の持ち場のファイルだけを書く。この文書は、その部署どうしが同じ形でつながるための決まり。
+HIRAKU は、Claude Code のセッションを「部署」に見立てて並べて作った。統括部 (契約を書き、各部署の成果を確かめて main に取り込む) と、設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部・受付部、それに HIRAKU をプラグインの道で回して困った所を集める実験部 (コードは書かない)。各部署は自分の git worktree と branch で、下の表の持ち場のファイルだけを書く。この文書は、その部署どうしが同じ形でつながるための決まり。
 
 形の正本は [`hiraku/contract/hiraku.schema.json`](../hiraku/contract/hiraku.schema.json)。この文書は読み方の案内で、食い違ったら schema が正しい。schema を変えたいときは統括部に頼む (部署の中で勝手に足さない)。
 
@@ -46,6 +46,10 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 合否の余裕は `margin_pct` (基準に対する %、合格なら正) と `margin` (基準との差を単位つきで、合格なら正)。基準が 0 のときは `margin_pct` を null にして `margin` で言う。道具が設計にも荷重条件にも無い値を仮定して使ったときは、analysis の `assumptions` に書く。
 
 合否 (`verdict`) は道具の中でだけ作る: 一致した照合から (`compare`、`basis: "match"`、値は解析) か、説明された安全側の食い違いから (`record_cause`、上の 4)。`basis` が無いものは `match`。
+
+分野が緑 (合格) になる条件 (2026-11-03、実験部の 2 本目の実行で、シェルが 472 MPa を出したのに強度が緑で終わったことから): その版の、その分野の荷重条件のどれについても、(a) 合格の `verdict` がある、(b) 照合の食い違いのうち、原因が解けていない (`resolved` が false) ものが無い、(c) 判定に使う量で基準を超えた解析の結果が無い。どれかが欠ければ、その分野は緑にならない (赤か、まだ判定の無い扱い)。あとの解析が基準を超えたら、前の安全側の `verdict` (`explained_safe_side`) は効かなくなる。HK4 は (b)・(c) の残る分野を「まだ判定の無い分野」と同じに扱う (設計役へ渡すか、原因を書いて解くまで終われない)。
+
+判定に使う量: 荷重条件の基準の量 (`criterion.quantity`) が `max_stress` のとき、板 (シェル) の道具 `frame_shell` で判定に使うのは `max_hot_spot_stress` (溶接の止端の構造応力)。要素の最大 `max_stress` は鋭い角で細かくするほど上がる値なので、記録には出すが判定には使わない。`comparison.quantity` には、実際に比べた結果の量の名前を書く (呼ぶときの `result_quantity` と同じ)。
 
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
