@@ -91,6 +91,7 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 | 疲労の強さ (FAT 71・傾き 3・折れ点 1e7 回) | IIW の疲労設計の推奨 (2016) | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_fatigue.py` |
 | 路面の粗さ (ISO 8608 の C 級、G_d(n0) = 256×10⁻⁶ m³) | ISO 8608 の表 | `hiraku/solvers/k2_vehicle/road.py`・`shelf/offroad.py`、`hiraku/solvers/shelf/fatigue.py` |
 | ダブルレーンチェンジのコース (15・30・25・25・15・15 m、横 3.5 m) | ISO 3888-1 | `hiraku/solvers/k2_vehicle/shelf/lane_change.py` |
+| 溶接のホットスポット応力 (溶接の線から板厚 t の 0.5 倍と 1.5 倍の表面の応力を、σ = 1.5σ(0.5t) − 0.5σ(1.5t) で線まで外挿) | IIW の疲労設計の推奨 (Hobbacher 2016) | `hiraku/solvers/k1_shell/stress.py`、`hiraku/solvers/shelf/frame_shell.py` |
 | タイヤの MF 6.1 の係数 (205/60R15 の例のタイヤ、98 個) | Pacejka, Tire and Vehicle Dynamics 3 版 Appendix 3 (公開の .tir から写し、写しが元と一致することは機械で確かめた。本そのものは確かめていない) | `data/tyres/pacejka_tvd3_205_60r15.json` |
 | 静的な安定の基準 T/2h ≥ 1.0 | ROHVA 1-2011・ANSI B71.9-2012 を要約した 79 FR 68964 | `hiraku/catalog/builders/k2_tests.py` |
 | 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の要約・仮定) | `data/requirements/offroad-4w.yaml` |
