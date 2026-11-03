@@ -221,11 +221,16 @@ class Frame:
         area = 2.0 * br["t"] * (br["b"] + br["h"] - 2.0 * br["t"])
         hole = host["t"] * (br["b"] - br["t"]) * (br["h"] - br["t"])
         mass = density_kg_m3 * 1e-9 * (area * run - hole)
+        # the member it continues (welded) and that member's material: the tube's section is the branch's, so a
+        # rule about walls and section ratios can read it there
         return {"id": f"through_{branch}_{node}",
                 "name": f"{node} で {branch} がレールの中を通る分 (手前の壁の穴の分を引いた正味)",
                 "kind": "frame",
                 "box": {"center_mm": [float(x) for x in p], "size_mm": [float(br["b"]), float(run), float(br["h"])]},
-                "mass_kg": float(mass), "carried_by": [node]}
+                "mass_kg": float(mass), "carried_by": [node],
+                "connects_to": [{"to": node, "via": "weld", "carries": "load"},
+                                {"to": branch, "via": "weld", "carries": "load"}],
+                **({"material": m["material"]} if m.get("material") else {})}
 
     # ---------------------------------------------------------------- out
     def part(self) -> Record:

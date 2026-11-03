@@ -62,6 +62,27 @@ def knee_space_inputs(design: dict, loading: str | None = None) -> dict:
     }
 
 
+def knee_angle_inputs(design: dict, loading: str | None = None) -> dict:
+    """occupant.knee_angle_room's inputs for the driver (the occupant with a pedal; the one with the smallest
+    margin when there are more): both body sizes' thigh and shank lengths, their knee angles as K4 seats them
+    (people.poses, each at their best place in the seat's slide) and the comfortable range."""
+    from ..k4_geometry import people
+
+    on = on_board(design, loading) if loading is not None else design
+    angles = people.knee_angles(on)
+    if not angles:
+        raise DesignError("no occupant has a pedal: there is no driver's knee angle")
+    fit = people.fit(on)
+    oid = min(angles, key=lambda o: fit.get(f"knee_angle_room.{o}", (0.0, ""))[0])
+    out = {"theta_lo": quantity(people.KNEE_COMFORT_DEG[0], "deg"),
+           "theta_hi": quantity(people.KNEE_COMFORT_DEG[1], "deg")}
+    for k, size in (("big", people.BIG), ("small", people.SMALL)):
+        l1, l2 = people._links(people.SIZES[size])
+        out.update({f"l1_{k}": quantity(l1, "mm"), f"l2_{k}": quantity(l2, "mm"),
+                    f"theta_{k}": quantity(angles[oid][k], "deg")})
+    return {"inputs": out, "occupant": oid, "source": people.KNEE_COMFORT_SOURCE}
+
+
 LAUNCH_OTHER_INPUTS = {
     "m": "total mass on board for the load case's loading (design summary, loadings.<loading>.mass)",
     "grade": "load case param grade (%)",

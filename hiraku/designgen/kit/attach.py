@@ -221,25 +221,38 @@ def pedal_stands(design: Record, pedals, target: str, rho: float) -> list[Record
     """A stand (kind bracket, id stand_<pedal>) under or ahead of each pedal: target "floor_front" (or any part
     below it): from the part's top face up to the pedal's lowest edge; target "bulkhead" (or any part ahead):
     from its rear face back to the pedal's front-most edge. Across the pedal at its middle, STAND_PAD_MM wide; along
-    the edge STAND_PAD_MM centred on the edge. carried_by: the target's. Raises AttachError when a stand would reach
-    into another body. Returns a row per pedal like mount_parts'."""
+    the edge STAND_PAD_MM centred on the edge. carried_by: the target's. A target "member:<id>" (a frame member ahead
+    of the pedals, square to the axes) takes the member's box (k4_geometry) and its end nodes, and the stands go
+    from its rear face as from the bulkhead's. Raises AttachError when a stand would reach into another body.
+    Returns a row per pedal like mount_parts'."""
     parts = {p["id"]: p for p in design["parts"]}
-    if target not in parts:
+    if target.startswith("member:"):
+        from hiraku.solvers.k4_geometry import model as k4
+
+        body = k4.bodies(design).get(target)
+        box = _aabb(body.obb) if body is not None else None
+        if box is None:
+            raise AttachError(f"no member {target.split(':', 1)[1]!r} square to the axes to stand the pedals on")
+        tc, ts = (box[0] + box[1]) / 2.0, box[1] - box[0]
+        t_nodes, t_key, t_name = sorted(body.nodes), target, target.split(":", 1)[1]
+    elif target in parts:
+        t = parts[target]
+        tc, ts = np.asarray(t["box"]["center_mm"], float), np.asarray(t["box"]["size_mm"], float)
+        t_nodes, t_key, t_name = list(t.get("carried_by") or []), f"part:{target}", target
+    else:
         raise AttachError(f"no part {target!r} to stand the pedals on")
-    t = parts[target]
-    tc, ts = np.asarray(t["box"]["center_mm"], float), np.asarray(t["box"]["size_mm"], float)
     rows = []
     for pid in pedals:
         p = parts[pid]
         cs = _corners(p)
         y = float(p["box"]["center_mm"][1])
-        if target == "bulkhead" or tc[0] > float(np.max(cs[:, 0])):
+        if target == "bulkhead" or t_key.startswith("member:") or tc[0] > float(np.max(cs[:, 0])):
             x0 = float(np.max(cs[:, 0]))
             edge = cs[np.abs(cs[:, 0] - x0) < 1e-6]
             z = float(np.mean(edge[:, 2]))
             lo = [x0, y - STAND_PAD_MM / 2.0, z - STAND_PAD_MM / 2.0]
             hi = [float(tc[0] - ts[0] / 2.0), y + STAND_PAD_MM / 2.0, z + STAND_PAD_MM / 2.0]
-            where = "前の隔壁から"
+            where = "ペダルの梁から" if t_key.startswith("member:") else "前の隔壁から"
         else:
             z0 = float(np.min(cs[:, 2]))
             edge = cs[np.abs(cs[:, 2] - z0) < 1e-6]
@@ -249,17 +262,17 @@ def pedal_stands(design: Record, pedals, target: str, rho: float) -> list[Record
             hi = [x + STAND_PAD_MM / 2.0, y + STAND_PAD_MM / 2.0, z0]
             where = "床から"
         if hi[0] - lo[0] <= 0 or hi[2] - lo[2] <= 0:
-            raise AttachError(f"{pid} is not clear of {target}: no room for a stand")
+            raise AttachError(f"{pid} is not clear of {t_name}: no room for a stand")
         sid = f"stand_{pid}"
-        nodes = list(t.get("carried_by") or [])
+        nodes = list(t_nodes)
         body = _body(sid, lo, hi, nodes)
-        hit = fits(design, body, {f"part:{pid}", f"part:{target}"})
+        hit = fits(design, body, {f"part:{pid}", t_key})
         if hit is not None:
             raise AttachError(f"the stand of {pid} {where} would reach into {hit.split(':', 1)[1]}")
-        gap = float(hi[0] - lo[0]) if where.startswith("前") else float(hi[2] - lo[2])
+        gap = float(hi[0] - lo[0]) if where != "床から" else float(hi[2] - lo[2])
         rec = _record(sid, f"{p['name']}の台 ({where})", lo, hi, nodes, rho, gap)
         design["parts"].append(rec)
-        rows.append({"part": pid, "mounts": [{"id": sid, "member": target, "gap_mm": gap, "size_mm": rec["box"]["size_mm"],
+        rows.append({"part": pid, "mounts": [{"id": sid, "member": t_name, "gap_mm": gap, "size_mm": rec["box"]["size_mm"],
                                               "mass_kg": rec["mass_kg"], "type": "stand"}],
                      "held_by": "mount", "why": None})
     return rows
