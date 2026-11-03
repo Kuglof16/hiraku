@@ -7,15 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from hiraku.catalog import owner_agent
-from hiraku.contract.protocols import AnalysisTool, FormulaRegistry
+from hiraku.contract.protocols import AnalysisTool, FormulaRegistry, ToolError  # noqa: F401 (ToolError re-exported)
 from hiraku.store import RunStore
 
 Record = dict[str, Any]
-
-
-class ToolError(Exception):
-    """A tool call that cannot go ahead. The message is shown to Claude as is,
-    so it says what is wrong and what to do next."""
 
 
 @dataclass
