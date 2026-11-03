@@ -569,6 +569,52 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
+        """On a run this screen started and still going, a file given to A5 lands in the run's
+        knowledge/ with a request in its inbox/ (the run turns it into events), and A5 says so."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        # the sample run under this run's id, without its run.finished: still going
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()][:-1]
+        for e in events:
+            e["run_id"] = run_id
+        events[0]["data"]["run_id"] = run_id
+        going = tmp / "going.jsonl"
+        going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            lau.start("offroad-4w.yaml", "scripted")
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?run={run_id}&tab=A5")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.wait_for_selector(".stop-btn")  # the screen knows the run is its own
+            note = tmp / "曲げの決まり.md"
+            note.write_text("曲げの内側の半径は板厚以上\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(note))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('渡しました')")
+            run = tmp / "runs" / run_id
+            self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_bytes(), note.read_bytes())  # kept as given
+            self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
     def test_intake_screens_in_their_tabs(self):
         """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;

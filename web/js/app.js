@@ -150,7 +150,7 @@ function currentTab(s) {
 // Mounted on first show. They draw from the events applied so far (the replay's
 // playhead, or the live run); listeners hear when that changes (a rewind too).
 const intakeListeners = new Set();
-let intakeApplied = null; // run id and events applied when the listeners last heard
+let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
 let intake = null;
 const intakeApi = {
   events: () => player.events.slice(0, player.applied),
@@ -158,25 +158,46 @@ const intakeApi = {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
   },
-  // Only for a run this screen started while it runs (a replay stays read-only): the
-  // answer goes to the run's folder as hearing.answer.json, which the run waits for.
+  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
+  // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
-    const s = player.state;
-    return ui.stoppable && ui.stoppable === s.runId && s.status === "running" ? answerHearing : undefined;
+    return ownRunGoing() ? answerHearing : undefined;
+  },
+  get dropFile() {
+    return ownRunGoing() ? dropFile : undefined;
   },
 };
 
-async function answerHearing(body) {
-  const res = await fetch("/api/launch/hearing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, answer: body }) });
+function ownRunGoing() {
+  const s = player.state;
+  return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+}
+
+async function postLaunch(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, ...body }) });
   const got = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(got.error ?? `${res.status}`);
   return got;
 }
 
+const answerHearing = (body) => postLaunch("/api/launch/hearing", { answer: body });
+
+// A5 shows the returned line next to the file.
+async function dropFile(name, text) {
+  try {
+    const got = await postLaunch("/api/launch/knowledge", { name, text });
+    return `渡しました (knowledge/${got.file})。実行が読んで規則にします`;
+  } catch (e) {
+    return `渡せませんでした: ${e.message}`;
+  }
+}
+
 function renderIntake(tab) {
   intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
   if (intake.screen !== tab) intake.show(tab);
-  const now = `${player.state.runId}|${player.applied}`;
+  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
   if (now !== intakeApplied) {
     intakeApplied = now;
     const last = player.events[player.applied - 1] ?? null;
