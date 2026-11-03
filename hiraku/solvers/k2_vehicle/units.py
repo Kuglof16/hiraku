@@ -35,7 +35,11 @@ TO_SI = {
     "m/s^2": 1.0,
     "g": G0,
     "Hz": 1.0,
-    "rpm": 2.0 * math.pi / 60.0,
+    # revolutions per minute, a frequency like Hz (cycles per second), as K0 and the QA known
+    # answers read it; one revolution is 2 pi rad, so angular rates (rad/s, deg/s) are kept apart
+    "rpm": 1.0 / 60.0,
+    "rad/s": 1.0,
+    "deg/s": math.pi / 180.0,
     "W": 1.0,
     "kW": 1e3,
     "J": 1.0,
@@ -59,7 +63,7 @@ SI_OF = {
     "s": "s", "h": "s",
     "m/s": "m/s", "km/h": "m/s",
     "m/s^2": "m/s^2", "g": "m/s^2",
-    "Hz": "Hz", "rpm": "rad/s",
+    "Hz": "Hz", "rpm": "Hz", "rad/s": "rad/s", "deg/s": "rad/s",
     "W": "W", "kW": "W",
     "J": "J",
     "mm^2": "m^2", "m^2": "m^2",

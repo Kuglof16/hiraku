@@ -61,11 +61,11 @@ console.log(JSON.stringify(out));
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])
-        self.assertEqual(got["offroad-4w"]["rules"], 20)  # 18 built in + 2 from the sample notes
-        self.assertEqual(got["care-bed"]["rules"], 18)
-        self.assertEqual(got["offroad-4w"]["checks"], 20)
+        self.assertEqual(got["offroad-4w"]["rules"], 29)  # 27 built in + 2 from the sample notes
+        self.assertEqual(got["care-bed"]["rules"], 27)
+        self.assertEqual(got["offroad-4w"]["checks"], 29)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
-        self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造"])
+        self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
         self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
         self.assertEqual(got["care-bed"]["open"], 0)
         self.assertGreater(got["care-bed"]["reqs"], 15)

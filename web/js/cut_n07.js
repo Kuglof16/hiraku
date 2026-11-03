@@ -3,7 +3,11 @@
 // that version's largest element, and the colours go over to the version after it, on
 // one colour scale; then it stays there. The words on the page are only "補強の前" /
 // "補強の後" and the stress's name and unit: the difference is shown by the colours and
-// the shape, not by naming the analyses. Positions, sizes, colours, the length and the
+// the shape, not by naming the analyses. One tag, one colour bar (its two ends) and one
+// number (the largest value of the state shown), as the story's limits ask; the
+// notes under them are small. The tag is large (N07_STYLE), and with the version after it
+// says in green "✓ 直った" when the records judge that version a pass on the load case (its
+// verdicts, else the domain's judgement of the version); otherwise nothing is added. Positions, sizes, colours, the length and the
 // times come from layout.json n07; a missing key is named on the page.
 // cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
 //
@@ -18,11 +22,17 @@ import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
 import { esc, fmt, fmtVU, unitLabel } from "./labels.js";
 import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
+import { storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
+const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
+
+// Not in layout.json (written here until the promo department gives a key for it): the
+// tag's text size as a share of the view's height (at least label.size_px).
+export const N07_STYLE = { label_of_view_h: 0.08 };
 
 const N07_KEYS = [
   "duration_s",
@@ -77,6 +87,7 @@ export class CutN07 {
     this.spec = layout.n07;
     this.minPx = layout.min_text_px;
     this.px = (v) => Math.max(this.minPx, v);
+    this.story = storyOf(layout, "n07");
     this.pick();
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -110,8 +121,24 @@ export class CutN07 {
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
       { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
-      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca }] : []),
+      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca, fixed: this.passes(va) }] : []),
     ];
+  }
+
+  // Does the record judge version v a pass on the cut's load case? Its verdicts on that load
+  // case for an analysis of v (all pass), else the judgement of the load case's domain for v
+  // (green); false when the records say neither.
+  passes(v) {
+    const s = this.s;
+    const lc = this.lc;
+    if (!lc) return false;
+    const vs = Object.values(s.verdicts).filter((x) => {
+      if (x.load_case_id !== lc.load_case_id) return false;
+      const cmp = s.comparisons[x.comparison_id];
+      return s.analyses[cmp?.analysis_id]?.design_version === v;
+    });
+    if (vs.length) return vs.every((x) => x.pass === true);
+    return s.judgements[`${v}|${lc.domain}`]?.state === "green";
   }
 
   place(el, r) {
@@ -139,6 +166,7 @@ export class CutN07 {
     Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${rim} 100%)`, opacity: "0" });
     for (const c of this.cases) {
       c.el = document.createElement("canvas");
+      c.el.dataset.kind = "moving";
       box.append(c.el);
       const v = new Workbench3D(null, "zu", { renderer: this.renderer });
       v.setDesign(this.s.designs[c.version] ?? null);
@@ -162,9 +190,10 @@ export class CutN07 {
     this.buildLabel();
   }
 
-  // A tall legend: the stress's name and unit, the colour bar upright with its ends and
-  // band edges (the scale's own values), the colour past the allowable value, and each
-  // state's largest recorded value.
+  // A tall legend: the stress's name and unit, the colour bar upright with its two ends (the
+  // top says when it is the allowable value), the largest recorded value of the state shown
+  // (the one emphasised number), and small notes: the colour past the allowable value, one
+  // scale for both states.
   buildLegend() {
     const sp = this.spec;
     const L = sp.legend;
@@ -176,22 +205,21 @@ export class CutN07 {
     const ct = this.cases[0].ct;
     const f = this.cases[0].field;
     const unit = unitLabel(f.unit);
-    const tp = this.px(L.title_px);
-    const xp = this.px(L.text_px);
-    // band edges every other band, as on the workbench's legend; the top says when it is the allowable value
-    const ticks = [];
-    for (let i = BANDS; i >= 0; i -= 2) {
-      const v = ct.min + ((ct.max - ct.min) * i) / BANDS;
-      ticks.push(`<span style="top:${((BANDS - i) / BANDS) * 100}%">${esc(i === BANDS && ct.limitKnown ? `許容 ${fmt(v, 4)}` : fmt(v, 3))}</span>`);
-    }
+    // what is read is at least the story's body text size
+    const tp = Math.max(this.px(L.title_px), this.story.bodyPx);
+    const xp = Math.max(this.px(L.text_px), this.story.bodyPx);
+    const ticks = [
+      `<span style="top:0%">${esc(ct.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct.max, 3))}</span>`,
+      `<span style="top:100%">${esc(fmt(ct.min, 3))}</span>`,
+    ];
     const rows = this.cases
       .map((c) => `<div class="row" data-version="${c.version}"><b>${esc(c.name)}</b><span>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</span></div>`)
       .join("");
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
-      `<div class="scale" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
-      (ct.limitKnown ? `<p style="font-size:${xp}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
+      `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
       `<div class="rows" style="font-size:${xp}px">${rows}</div>` +
+      (ct.limitKnown ? `<p style="font-size:${this.minPx}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
       (this.cases.length > 1 ? `<p class="src" style="font-size:${this.minPx}px">前と後で同じ目盛り</p>` : "");
     this.stage.append(el);
     this.legend = el;
@@ -202,7 +230,9 @@ export class CutN07 {
     const el = document.createElement("div");
     el.className = "n07-label";
     el.dataset.box = "n07.label";
-    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${this.px(sp.label.size_px)}px` });
+    el.dataset.kind = "label";
+    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * N07_STYLE.label_of_view_h));
+    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${px}px` });
     this.stage.append(el);
     this.label = el;
     this.labelFor = null;
@@ -212,7 +242,16 @@ export class CutN07 {
     if (this.labelFor === c) return;
     this.labelFor = c;
     this.label.textContent = c.name;
-    for (const row of this.legend.querySelectorAll(".row")) row.classList.toggle("on", Number(row.dataset.version) === c.version);
+    if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
+    this.label.dataset.fixed = c.fixed ? "1" : "0";
+    // only the state shown has its largest value on the legend (the one emphasised number)
+    for (const row of this.legend.querySelectorAll(".row")) {
+      const on = Number(row.dataset.version) === c.version;
+      row.classList.toggle("on", on);
+      row.style.display = on ? "" : "none";
+      if (on) row.dataset.kind = "number";
+      else delete row.dataset.kind;
+    }
   }
 
   resize(scale) {

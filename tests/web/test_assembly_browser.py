@@ -84,9 +84,9 @@ def n16_layout():
         "min_text_px": 18,
         "n16": {
             "duration_s": 6.3,
-            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
+            "view": {"x": 96, "y": 96, "w": 1400, "h": 790},
             "seek": {"x": 120, "y": 814, "w": 1152, "h": 48},
-            "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
+            "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
             "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
         },
