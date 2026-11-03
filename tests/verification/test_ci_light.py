@@ -1,4 +1,4 @@
-"""qa.ci_light: the light tests GitHub Actions runs on main name real test modules, once each."""
+"""qa.ci_light: the light tests name real test modules, once each."""
 
 import importlib
 import unittest
