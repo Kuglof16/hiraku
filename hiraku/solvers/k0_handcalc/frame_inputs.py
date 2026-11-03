@@ -9,8 +9,9 @@ from the x positions; this is plain statics, not the frame model.
 
 end_cross_member_inputs() looks at the rear overhang of a ladder frame (the
 rails behind the rear axle joints and the cross member at their ends) for
-frame_static.end_cross_member_stress, with the overhang's twist misfit from
-the ladder's warping torsion (ladder_twist_rate).
+frame_static.end_cross_member_stress, with the twist misfit at the end cross
+member and the rest of the frame's give against it from a beam chain of the
+ladder's antisymmetric half (antisymmetric_twist).
 
 joint_wall_inputs() shares the wheels' twisting moments among the cross
 members along a torsion chain of the ladder's symmetric half, with the
@@ -26,7 +27,7 @@ from scipy.linalg import solve_banded
 from ...contract.loading import on_board
 from . import sections
 from .units import STANDARD_GRAVITY, quantity
-from .vehicle import DesignError, mass_summary, member_props, node_table
+from .vehicle import DesignError, inertia_tensor, mass_summary, member_props, node_table, support_contact
 
 
 def _rect_dims(section: dict) -> tuple[float, float, float]:
@@ -383,13 +384,159 @@ def _member_between(props: dict, n1: str, n2: str):
     return next((mp for mp in props.values() if {mp["member"]["node_a"], mp["member"]["node_b"]} == {n1, n2}), None)
 
 
+ANTI_DOF = 3  # per station of the antisymmetric chain: v (left rail up), theta (its slope dv/dx), phi (rails' turn)
+
+
+def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str, float]]) -> dict:
+    """The ladder's antisymmetric half as a chain of beams, and what it does to the cross member end_member.
+
+    In the antisymmetric half (the left rail goes up where the right one goes down) every station along
+    the rails has three unknowns: the left rail's rise v (the right one's is -v), its slope theta and the
+    turn phi of both rails about their own axes. Between stations each rail is a beam: bending E I (Iz)
+    in v and theta, St Venant torsion G J / L in phi (the right rail mirrors the left, so twice one rail's
+    stiffness). A cross member at a station bends in double curvature against the difference between
+    the rails' turn and the chord's, phi - 2 v / w (end moment 6 E I / w per radian), and twists with
+    the rails' opposite slopes (G J / w over 2 theta). Members that are neither rails nor cross members
+    are left out.
+
+    pairs: {name: {support id: vertical force N at its ground contact}}. Each force reaches the
+    support's frame node with the moment of its offset; the roll (and pitch, yaw) it puts in is balanced
+    by the masses' d'Alembert loads for the rigid body's acceleration (inertia relief), shared over
+    the frame nodes as the beam model shares them: parts carried by nodes equally with the moment of
+    their offset from the nodes' centroid, members half at each end, unsprung parts at their
+    support's frame node. Only what acts on v, theta and phi is kept (the symmetric rest drops out).
+
+    Returns misfit {name: rad}: phi - 2 v / w at end_member's station with that member's bending taken
+    away (the mismatch it has to close); give (rad per N*mm): how far the rest of the frame lets the
+    mismatch close under a moment of 1 N*mm at each end of end_member (with its shears 2 M / w);
+    moment {name: N*mm}: end_member's end moment, misfit / (w / (6 E I) + give).
+    """
+    nodes = node_table(design)
+    props = member_props(design)
+    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
+             and abs(mp["a"][0] - mp["b"][0]) > 1e-6]
+    if not rails:
+        raise DesignError("the twist chain needs a ladder frame: rails along x")
+    y_l = max(float(mp["a"][1]) for mp in rails)
+    z_r = float(next(mp for mp in rails if abs(mp["a"][1] - y_l) < 1e-6)["a"][2])
+    w = 2.0 * y_l
+    left = sorted((n for n, p in nodes.items() if abs(p[1] - y_l) < 1e-6 and abs(p[2] - z_r) < 1e-6),
+                  key=lambda n: nodes[n][0])
+    where: dict[str, tuple[int, float]] = {}  # node -> (station, +1 left / -1 right)
+    for i, n in enumerate(left):
+        p = nodes[n]
+        m = next((k for k, q in nodes.items() if abs(q[0] - p[0]) < 1e-6 and abs(q[1] + p[1]) < 1e-6
+                  and abs(q[2] - p[2]) < 1e-6), None)
+        if m is None:
+            raise DesignError(f"the twist chain needs the two rails mirrored: rail node {n} has no mirror node")
+        where[n], where[m] = (i, 1.0), (i, -1.0)
+    ns = len(left)
+    K = np.zeros((ANTI_DOF * ns, ANTI_DOF * ns))
+
+    def mat(mp):  # E and G (the material's G_MPa when it has one)
+        E, nu = float(mp["material"]["E_MPa"]), float(mp["material"]["nu"])
+        return E, float(mp["material"].get("G_MPa") or E / (2.0 * (1.0 + nu)))
+
+    for mp in rails:
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        if a not in where or b not in where or where[a][1] < 0:
+            continue  # the right rail is the left one's mirror
+        i, j = sorted((where[a][0], where[b][0]))
+        L = mp["length"]
+        E, G = mat(mp)
+        EI, GJ = E * mp["section"]["Iz"], G * mp["section"]["J"]
+        kb = EI / L**3 * np.array([[12.0, 6 * L, -12.0, 6 * L], [6 * L, 4 * L * L, -6 * L, 2 * L * L],
+                                   [-12.0, -6 * L, 12.0, -6 * L], [6 * L, 2 * L * L, -6 * L, 4 * L * L]])
+        vb = [3 * i, 3 * i + 1, 3 * j, 3 * j + 1]
+        K[np.ix_(vb, vb)] += 2.0 * kb
+        tb = [3 * i + 2, 3 * j + 2]
+        K[np.ix_(tb, tb)] += 2.0 * GJ / L * np.array([[1.0, -1.0], [-1.0, 1.0]])
+    chord = lambda i: np.eye(ANTI_DOF * ns)[3 * i + 2] - 2.0 / w * np.eye(ANTI_DOF * ns)[3 * i]  # noqa: E731
+    end = None
+    for mid, mp in props.items():
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        if a in where and b in where and where[a][0] == where[b][0] and where[a][1] != where[b][1]:
+            i = where[a][0]
+            E, G = mat(mp)
+            k_c = 6.0 * E * mp["section"]["Iz"] / mp["length"]
+            g = chord(i)
+            K_b = 2.0 * k_c * np.outer(g, g)  # energy 6 E I / w (phi - 2 v / w)^2
+            K += K_b
+            K[3 * i + 1, 3 * i + 1] += 4.0 * G * mp["section"]["J"] / mp["length"]  # energy G J / (2 w) (2 theta)^2
+            if mid == end_member:
+                end = (i, k_c, K_b)
+    if end is None:
+        raise DesignError(f"{end_member} is not a cross member joining the two rails at one station")
+    i_e, k_e, K_e = end
+    K_free = K - K_e
+
+    summ = mass_summary(design)
+    items, cg, mass = summ["items"], summ["cg_mm"], summ["mass_kg"]
+    J_inv = np.linalg.inv(inertia_tensor(items, cg))
+    sup = {s["id"]: s for s in design.get("supports", [])}
+
+    def put(Q, node, force, moment):
+        if node not in where:
+            raise DesignError(f"node {node} carries a load but is not on the rails; the twist chain is for a ladder frame")
+        i, s = where[node]
+        Q[3 * i] += s * force[2]
+        Q[3 * i + 1] -= s * moment[1]  # the left rail's slope is minus its turn about y
+        Q[3 * i + 2] += moment[0]
+
+    def solve(Kc, Q):  # the chain is free to roll as a rigid body (v = c w / 2, phi = c): hold phi at station 0
+        keep = [k for k in range(ANTI_DOF * ns) if k != 2]
+        u = np.zeros(ANTI_DOF * ns)
+        u[keep] = np.linalg.solve(Kc[np.ix_(keep, keep)], Q[keep])
+        return u
+
+    misfit, moment = {}, {}
+    for name, forces in pairs.items():
+        Q = np.zeros(ANTI_DOF * ns)
+        F_t, M_t = np.zeros(3), np.zeros(3)
+        for sid, Fz in forces.items():
+            s = sup[sid]
+            p = support_contact(s)
+            f = np.array([0.0, 0.0, float(Fz)])
+            n = s.get("frame_node")
+            if n is None:
+                raise DesignError(f"support {sid} has no frame_node")
+            put(Q, n, f, np.cross(p - nodes[n], f))
+            F_t += f
+            M_t += np.cross(p - cg, f)
+        acc = -F_t / mass  # d'Alembert: minus the rigid body's acceleration (m/s^2 per N/kg)
+        alpha = -(J_inv @ M_t) * 1e3  # rad/s^2
+        for it in items:
+            f = it.mass_kg * (acc + np.cross(alpha, it.cg_mm - cg) * 1e-3)
+            own = (it.inertia_kg_mm2 @ alpha) * 1e-3 if it.inertia_kg_mm2 is not None else np.zeros(3)  # N*mm
+            if it.carrier == "member":
+                m = props[it.carried_by[0]]["member"]
+                for n in (m["node_a"], m["node_b"]):
+                    put(Q, n, f / 2.0, own / 2.0)
+            elif it.carrier == "support":
+                n = sup[it.carried_by[0]].get("frame_node")
+                put(Q, n, f, np.cross(it.cg_mm - nodes[n], f) + own)
+            else:
+                c = sum(nodes[n] for n in it.carried_by) / len(it.carried_by)
+                mo = np.cross(it.cg_mm - c, f) + own
+                for n in it.carried_by:
+                    put(Q, n, f / len(it.carried_by), mo / len(it.carried_by))
+        misfit[name] = float(chord(i_e) @ solve(K_free, Q))
+    Q = 2.0 * 2.0 / w * np.eye(ANTI_DOF * ns)[3 * i_e] - 2.0 * np.eye(ANTI_DOF * ns)[3 * i_e + 2]  # 1 N*mm at each end
+    give = -float(chord(i_e) @ solve(K_free, Q))
+    for name, d0 in misfit.items():
+        moment[name] = d0 / (1.0 / k_e + give)
+    return {"misfit": misfit, "give": give, "moment": moment, "w": w}
+
+
 def end_cross_member_inputs(design: dict, loading: str | None = None) -> dict:
     """Quantities for frame_static.end_cross_member_stress: the rear overhang of a ladder frame.
 
     The rear supports' frame nodes are the rail joints; behind each a rail member ends at a node, and a
-    cross member joins those two end nodes. misfit_rear / misfit_front: the twist the overhang carries on
-    over its length (rad) for 1 kN up at the left and down at the right rear / front wheel, from the
-    ladder's warping torsion with the roll inertia along the frame (ladder_twist_rate).
+    cross member joins those two end nodes. misfit_rear / misfit_front: the twist mismatch (rad) at the
+    end cross member with its bending stiffness taken away, for 1 kN up at the left and down at the
+    right rear / front wheel; give_per_kNm: how far the rest of the frame lets that mismatch close for
+    1 kN*m at each end of the end cross member; both from antisymmetric_twist. The rear pair's sense is
+    taken as positive; misfit_front keeps its sign against it.
     """
     if loading is not None:
         design = on_board(design, loading)
@@ -431,37 +578,25 @@ def end_cross_member_inputs(design: dict, loading: str | None = None) -> dict:
     bj, hj, tj = _rect_dims(design["sections"][joint["member"]["section"]])
     mat = rail["material"]
     E, nu = float(mat["E_MPa"]), float(mat["nu"])
-    G = E / (2.0 * (1.0 + nu))
     w = abs(float(nodes[joints[0]][1]) - float(nodes[joints[1]][1]))
     e = abs(float(rear[0]["position_mm"][1])) - abs(float(nodes[joints[0]][1]))
 
-    # warping torsion of the whole ladder (rails at +-w/2; cross members are members joining the two rails)
-    rail_nodes = [n for n, p in nodes.items() if abs(abs(p[1]) - w / 2.0) < 1e-6]
-    xr = [float(nodes[n][0]) for n in rail_nodes]
-    x_rear_end, x_front_end = min(xr), max(xr)
-    rail_J = sections.properties(design["sections"][rail["member"]["section"]])["J"]
-    cross_GJw = sum(G * mp["section"]["J"] * mp["length"] for mp in props.values()
-                    if abs(abs(mp["a"][1]) - w / 2.0) < 1e-6 and abs(abs(mp["b"][1]) - w / 2.0) < 1e-6
-                    and abs(mp["a"][1] - mp["b"][1]) > 1e-6)
-    GJ = 2.0 * G * rail_J + cross_GJw / (x_front_end - x_rear_end)
-    EIw = E * sections.properties(design["sections"][rail["member"]["section"]])["Iz"] * w**2 / 2.0
-    pieces = roll_inertia_along(design)
-    x_joint = float(nodes[joints[0]][0])
-    a = rail["length"]
-
-    def misfit(pair):
-        track = float(pair[0]["position_mm"][1]) - float(pair[-1]["position_mm"][1])
-        x_in = float(pair[0]["position_mm"][0])
-        return abs(ladder_twist_rate(pieces, x_rear_end, x_front_end, GJ, EIw, x_in, 1000.0 * track, x_joint)) * a
+    # the ladder's antisymmetric half: left wheel up, right wheel down, at the rear and at the front
+    tw = antisymmetric_twist(design, end["member"]["id"], {
+        "rear": {rear[0]["id"]: 1000.0, rear[1]["id"]: -1000.0},
+        "front": {front[0]["id"]: 1000.0, front[-1]["id"]: -1000.0}})
+    sign = 1.0 if tw["misfit"]["rear"] >= 0.0 else -1.0  # the rear pair's sense is the positive one
 
     return {
         "inputs": {
-            "e": quantity(e, "mm"), "a": quantity(a, "mm"), "w": quantity(w, "mm"), "L1": quantity(fwd["length"], "mm"),
-            "E": quantity(E, "MPa"), "nu": quantity(nu, "1"),
+            "e": quantity(e, "mm"), "a": quantity(rail["length"], "mm"), "w": quantity(w, "mm"),
+            "L1": quantity(fwd["length"], "mm"), "E": quantity(E, "MPa"), "nu": quantity(nu, "1"),
             "b": quantity(b, "mm"), "h": quantity(h, "mm"), "t": quantity(t, "mm"),
             "b_c": quantity(bc, "mm"), "h_c": quantity(hc, "mm"), "t_c": quantity(tc, "mm"),
             "b_j": quantity(bj, "mm"), "h_j": quantity(hj, "mm"), "t_j": quantity(tj, "mm"),
-            "misfit_rear": quantity(misfit(rear), "rad"), "misfit_front": quantity(misfit(front), "rad"),
+            "misfit_rear": quantity(sign * tw["misfit"]["rear"], "rad"),
+            "misfit_front": quantity(sign * tw["misfit"]["front"], "rad"),
+            "give_per_kNm": quantity(tw["give"] * 1.0e6, "rad"),
         },
         "supports": [s["id"] for s in rear] + [s["id"] for s in front],
         "end_cross_member": end["member"]["id"],

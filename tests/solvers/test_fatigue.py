@@ -119,6 +119,61 @@ class EndCrossMemberTest(unittest.TestCase):
         flat = dict(ec["inputs"], misfit_rear=q(0.0, "rad"), misfit_front=q(0.0, "rad"))
         out0 = {k: v["value"] for k, v in reg.evaluate("frame_static.end_cross_member_stress", flat)["outputs"].items()}
         self.assertAlmostEqual(out0["sigma_ra"], out0["sigma_rb"], places=12)  # no twist: both rear wheels alike
+        # the formula closes the chain's misfit as the chain does; the front pair bends cross_E the other way
+        # (on the demo vehicle the masses' inertia behind the rear axle twists the overhang against the front pair)
+        from hiraku.contract.loading import on_board
+        from hiraku.solvers.k0_handcalc.frame_inputs import antisymmetric_twist
+
+        tw = antisymmetric_twist(on_board(DESIGN, "two_cargo"), "cross_E", {"rear": {"RL": 1000.0, "RR": -1000.0}})
+        self.assertAlmostEqual(abs(tw["moment"]["rear"]) / 2.0, out["M_anti_rear"], delta=1e-9 * out["M_anti_rear"])
+        self.assertLess(out["M_anti_front"], 0.0)
+
+    def _anti_pair_k1(self, design):
+        """cross_E's vertical bending moment at its end b in K1 for 1 kN up at RL and down at RR, inertia relief."""
+        from hiraku.solvers.k0_handcalc.vehicle import inertia_tensor, mass_summary, support_contact
+        from hiraku.solvers.k1_frame.model import COMBO, build
+
+        pair = {"RL": 1000.0, "RR": -1000.0}
+        summ = mass_summary(design)
+        items, cg = summ["items"], summ["cg_mm"]
+        fm = build(design)
+        M = np.zeros(3)
+        for s in design["supports"]:
+            if s["id"] in pair:
+                p, f = support_contact(s), np.array([0.0, 0.0, pair[s["id"]]])
+                fm.add_force_at(fm.wheel_nodes[s["id"]], p, f)
+                M += np.cross(p - cg, f)
+        fm.add_body_loads(items, np.zeros(3), -(np.linalg.inv(inertia_tensor(items, cg)) @ M) * 1e3, cg)
+        fm.restrain_free_body()
+        fm.solve()
+        pm = fm.model.members["cross_E"]
+        return pm.moment("Mz", pm.L(), COMBO)
+
+    def test_chain_is_the_beam_models_antisymmetric_half(self):
+        """The chain keeps the beam model's antisymmetric vertical bending and torsion and shares the masses' loads
+        over the nodes the same way, so cross_E's end moment agrees with K1's; with the rails' torsion doubled the
+        moment hardly moves in either (the rails twist less, but carry more of the twist in their own torsion,
+        which the end cross member has to take off at the rail ends)."""
+        from hiraku.contract.loading import on_board
+        from hiraku.solvers.k0_handcalc import sections
+        from hiraku.solvers.k0_handcalc.frame_inputs import antisymmetric_twist
+
+        d = on_board(DESIGN, "two_cargo")
+        stiff = copy.deepcopy(d)
+        rail_sec = next(m["section"] for m in stiff["members"] if m["id"] == "rail_L_BE")
+        p = sections.properties(stiff["sections"][rail_sec])
+        stiff["sections"]["rail_2J"] = {"shape": "custom", "A_mm2": p["A"], "Iy_mm4": p["Iy"], "Iz_mm4": p["Iz"],
+                                        "J_mm4": 2.0 * p["J"], "dims_mm": {"cy": p["cy"], "cz": p["cz"]}}
+        for m in stiff["members"]:
+            if m["section"] == rail_sec:
+                m["section"] = "rail_2J"
+        pair = {"rear": {"RL": 1000.0, "RR": -1000.0}}
+        for des in (d, stiff):
+            chain = antisymmetric_twist(des, "cross_E", pair)["moment"]["rear"]
+            k1 = self._anti_pair_k1(des)
+            self.assertAlmostEqual(abs(chain), abs(k1), delta=0.01 * abs(k1))
+        base, twice = (abs(antisymmetric_twist(x, "cross_E", pair)["moment"]["rear"]) for x in (d, stiff))
+        self.assertAlmostEqual(twice, base, delta=0.03 * base)
 
     def test_twist_rate_without_warping_is_st_venant(self):
         from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_rate
