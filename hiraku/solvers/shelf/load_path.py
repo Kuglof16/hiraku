@@ -9,7 +9,8 @@ those nodes still loads the frame and is never found. Here carried_by is not tru
   whose box's thinnest side is at most PLATE_RATIO of its middle side: a floor, a deck, a bulkhead, a net),
   which is a star of plate strips (plate_parts): its centre node (the mass there) joined to a node on its
   mid-plane under each contact (and under each point a push loads) by beam elements of the plate's thickness
-  and material, as wide as the plate across the strip but no wider than the contact's width spread at
+  (the box's thinnest side: the design gives a plate part a box as thick as the sheet) and material
+  (part.material; a plate without it is taken as steel and named in effects), as wide as the plate across the strip but no wider than the contact's width spread at
   PLATE_SPREAD (45 degrees each side) from the contact. A rigid floor joined both rails as one stiff body;
   the strips give them the plate's own bending (b t^3 / 12) and in-plane stiffness (t b^3 / 12, b t);
 - a part is joined to what its box touches - a member's tube (the member's box, k4_geometry) or another part's
@@ -91,7 +92,8 @@ PLATE_MATERIAL = {"name": "steel (assumed)", "E_MPa": 205000.0, "nu": 0.3}
 ASSUMPTIONS = [
     "部品は剛体 (6 自由度、質量は箱の中心)。部材は K1 と同じ断面・材料の梁 (せん断の変形は入れない)",
     f"板の部品 (箱のいちばん薄い向きが、中の向きの {PLATE_RATIO:g} 倍以下: 床・荷台・隔壁・網) は剛体にしない。"
-    "厚さ = 箱の薄い向きの寸法の中身の詰まった板、材料は part.material (無ければ鋼 E 205000 MPa・ν 0.3 とみる)。"
+    "厚さ = 箱の薄い向きの寸法の中身の詰まった板 (設計の側で、板の部品の箱を実物の板の厚さにする)、"
+    "材料は part.material (無ければ鋼 E 205000 MPa・ν 0.3 とみて、その板を effects に出す)。"
     "板の中心の節から、触れた所 (と押す点) の下の中面の節へ、板の帯の梁でつなぐ (曲げ b t³/12、面内 t b³/12、伸び b t)。"
     f"帯の幅は板の幅まで、ただし触れた所の近くは、触れた面の幅 (面積の平方根) から {PLATE_SPREAD_DEG:g}° で広がる幅まで"
     "(集中荷重の 45° の広がり、出典は確かめていない)。帯は中心を通るので、中心から外れた 2 点のあいだは実際より柔らかめ。"
@@ -153,6 +155,7 @@ class Plate:
     E: float  # MPa
     G: float  # MPa
     material: str
+    assumed: bool = False  # no part.material (or not in design.materials): PLATE_MATERIAL taken
 
 
 def plate_parts(design: Record) -> dict[str, Plate]:
@@ -170,14 +173,25 @@ def plate_parts(design: Record) -> dict[str, Plate]:
             continue
         key = p.get("material")
         mat = mats.get(key) if key else None
+        mat_found = mat is not None
         name = key if mat else PLATE_MATERIAL["name"]
         mat = mat or PLATE_MATERIAL
         E = float(mat["E_MPa"])
         G = float(mat.get("G_MPa") or E / (2.0 * (1.0 + float(mat.get("nu", PLATE_MATERIAL["nu"])))))
         out[p["id"]] = Plate(p["id"], np.asarray(o.center, float), np.asarray(o.axes[k[0]], float),
                              np.asarray(o.axes[k[1:]], float), np.asarray(o.half[k[1:]], float),
-                             2.0 * float(o.half[k[0]]), E, G, name)
+                             2.0 * float(o.half[k[0]]), E, G, name, assumed=not mat_found)
     return out
+
+
+def assumed_material_effect(plates: dict[str, Plate]) -> Record | None:
+    """The effect naming the plates whose material was assumed (PLATE_MATERIAL), or None."""
+    ids = [pid for pid, pl in plates.items() if pl.assumed]
+    if not ids:
+        return None
+    m = PLATE_MATERIAL
+    return {"name": f"part.material の無い板 {len(ids)} 枚は仮に鋼 (E {m['E_MPa']:g} MPa・ν {m['nu']:g}) とみた: "
+                    + ", ".join(ids), "value": float(len(ids)), "unit": "1"}
 
 
 def plate_point(pl: Plate, x) -> np.ndarray:
@@ -650,6 +664,9 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
     lp = build(design, contacts, exclude=frozenset(free), holds=holds, plate_points=points) if free else full
     parts = {p["id"]: p for p in design.get("parts", [])}
     effects: list[Record] = []
+    assumed = assumed_material_effect(full.plates)  # the free plates too
+    if assumed is not None:
+        effects.append(assumed)
     results = [result("contacts", len(lp.contacts), "1")]
     results += [result(f"free_part.{pid}", 1.0, "1", pid) for pid in free]
     if free:
