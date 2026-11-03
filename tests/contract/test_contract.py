@@ -265,6 +265,14 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "revise_design"}]}), [])
         self.assertNotEqual(contract.errors("hearing_answered", {"answers": [], "rule_answers": [{"rule_id": "U1-04", "choice": "ignore"}]}), [])
 
+    def test_revise_design_choices(self):
+        ok = {"choices": {"part_mounts": "brackets"}, "reason": "R8-free: 16 parts float"}
+        self.assertEqual(contract.errors("tool_input.revise_design", ok), [])
+        both = {**ok, "changes": {"rail_t": {"value": 4.5, "unit": "mm"}}}
+        self.assertEqual(contract.errors("tool_input.revise_design", both), [])
+        self.assertNotEqual(contract.errors("tool_input.revise_design", {"reason": "nothing"}), [])
+        self.assertNotEqual(contract.errors("tool_input.revise_design", {**ok, "choices": {}}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
