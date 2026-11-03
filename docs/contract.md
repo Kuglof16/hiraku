@@ -51,6 +51,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 判定に使う量: 荷重条件の基準の量 (`criterion.quantity`) が `max_stress` のとき、板 (シェル) の道具 `frame_shell` で判定に使うのは `max_hot_spot_stress` (溶接の止端の構造応力)。要素の最大 `max_stress` は鋭い角で細かくするほど上がる値なので、記録には出すが判定には使わない。`comparison.quantity` には、実際に比べた結果の量の名前を書く (呼ぶときの `result_quantity` と同じ)。
 
+代わりに比べる量: 基準の任意の欄 `stand_in_quantity` (例: 疲労の損傷 `fatigue_damage` に対する応力の幅 `stress_range`)。判定に使う量の予測と解析の結果が、どちらも基準の限度の 1e-6 倍より小さいとき (損傷がほぼ 0 で、比の差に意味が無いとき) は、上の (b) を `stand_in_quantity` のいちばん新しい照合で見る。合否 (a)・(c) は判定に使う量のまま。照合はどちらの量も記録に残す。欄は荷重条件を作るコードが書く
+
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
 | ID | 中身 |
@@ -58,8 +60,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 | HK1 | 同じ版・同じ荷重条件の予測が無い `analyze` は止める |
 | HK2 | 照合 (答えの分かっている例) に通っていない道具の `analyze` は止める |
 | HK3 | 原因の無い食い違いがある分野では `analyze` と `compare` を止める |
-| HK4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける) |
-| HK5 | 軽い計算から確かめる。道具は重さの段 `stage` を持つ (0 レイアウトと規則: 幾何・干渉・乗員の体・ハンドルの切れ・取付点の隙間・系のつながり / 1 軽い: 手計算の大きさのモデル・梁・熱の集中のモデル / 2 車の動き: 時間の積分 / 3 重い: 板とソリッドの有限要素・収束・路面の疲労・時刻ごとの場)。その版で、低い段の道具で確かめる荷重条件に赤か未判定が残る間は、高い段の道具の `analyze` を止める。赤が出たら、重い計算に進む前に設計役が直す (`revise_design`)。同じ段の道具は並べて回してよい。レイアウトが変われば強度や車の動きの数が全部動くので、段 0 から決める |
+| HK4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける)。直す回数を使い切り、待ちの分野が低い段の赤 (HK5) の後ろにあるだけなら、終わりを通す |
+| HK5 | 軽い計算から確かめる。道具は重さの段 `stage` を持つ (0 レイアウトと規則: 幾何・干渉・乗員の体・ハンドルの切れ・取付点の隙間・系のつながり / 1 軽い: 手計算の大きさのモデル・梁・熱の集中のモデル / 2 車の動き: 時間の積分 / 3 重い: 板とソリッドの有限要素・収束・路面の疲労・時刻ごとの場)。その版で、低い段の道具で確かめる荷重条件に赤か未判定が残る間は、高い段の道具の `analyze` を止める。赤が出たら、重い計算に進む前に設計役が直す (`revise_design`)。同じ段の道具は並べて回してよい。レイアウトが変われば強度や車の動きの数が全部動くので、段 0 から決める。直す回数を使い切った版で低い段に赤が残るときは、高い段は回さずに終わる (stop_code `round_limit`。待ちの分野は「低い段の赤が残るので判定していない」と stop_reason と報告に書く) |
 
 照合の使い回し (HK2 の補い): 棚の道具の照合は、hiraku のソース (`.py` を全部) のハッシュが同じ間だけ、前の実行の結果を使ってよい。そのときの `tool_check` に `code_hash` と `cached_from` (使い回した実行の run_id) を書く。コードが 1 行でも変われば照合をやり直す。実行の中で Claude が作った道具の照合は使い回さない
 
@@ -138,6 +140,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 
 - 実行を動かしたもの: project の任意の欄 `driver` (`scripted` 台本・`agent_sdk` HIRAKU のエージェントのループを本人の `ANTHROPIC_API_KEY` で・`claude_code_plugin` 本人の Claude Code のセッションに HIRAKU のプラグインをつないで、本人のサインインで。このとき HIRAKU は Claude を呼ばず、`events.jsonl` を書くのは MCP サーバーのプロセス)
   - プラグインの実行のフォルダの印: `plugin.lock` (`layout.PLUGIN_LOCK_FILE`) は、状態と outbox を読み書きする間だけ取る短い排他で、セッションが実行を持っている印ではない。持っている印は `plugin.alive` (`layout.PLUGIN_ALIVE_FILE`): MCP サーバーが実行を受け持つ間、見回りのたびに触る。画面は、`plugin.alive` の更新が `layout.PLUGIN_ALIVE_S` 秒より新しければ、その実行に Claude Code のセッションが付いていると見る (ヒアリングの答え・ナレッジ・止めるボタンを受ける)
+  - 持ち主のいない実行: `driver` が `claude_code_plugin` で status が running のまま、`plugin.alive` が無いか `PLUGIN_ALIVE_S` より古い実行は、次の `start_run` (どのセッションのものでも) が閉じる。status `stopped`・stop_code `user_stop`・stop_reason「Claude Code のセッションが終わり、実行が閉じられないまま残っていた」で `run.finished` を出す
 
 - 困った所: report の任意の欄 `issues` (`write_report` の入力にも同じ欄)。設計の結果ではなく、HIRAKU そのものが邪魔をした所を書く: `kind` (`missing_tool`・`missing_formula`・`assumed_value`・`unexplained_mismatch`・`tool_error`・`unclear_instruction`・`other`)、`what`、任意で `where`・`record_ids`・`workaround`。実験部が集めて、統括部が部署に振る
 
