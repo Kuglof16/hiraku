@@ -19,6 +19,13 @@ def _cmd_run(a: argparse.Namespace) -> int:
     from hiraku.agent.session import STOPPED_BY_USER, start_run
     from hiraku.catalog import load_requirements
 
+    from hiraku.catalog.mixes import UnknownMix, get_mix
+
+    try:
+        get_mix(a.mix)  # before a run folder is made
+    except UnknownMix as e:
+        print(e, file=sys.stderr)
+        return 2
     if not a.scripted:
         from hiraku.agent.runner import MissingApiKey, require_api_key
 
@@ -51,7 +58,7 @@ def _cmd_run(a: argparse.Namespace) -> int:
         else:
             from hiraku.agent.runner import run_with_claude
 
-            asyncio.run(run_with_claude(ctx, model=a.model, effort=a.effort, max_budget_usd=a.budget,
+            asyncio.run(run_with_claude(ctx, model=a.model, effort=a.effort, mix=a.mix, max_budget_usd=a.budget,
                                         max_turns=a.max_turns))
     except KeyboardInterrupt:
         if ctx.store.project["status"] == "running":  # stopped between the run's own handlers
@@ -117,6 +124,21 @@ def _cmd_hook(a: argparse.Namespace) -> int:
     return hook_main(a.event, a.runs.resolve() if a.runs else None)
 
 
+def _cmd_review(a: argparse.Namespace) -> int:
+    """Print the record checks of hiraku.agent.review; exit 1 when one is not ok."""
+    from hiraku.agent.review import review_run
+
+    if not (Path(a.run) / layout.EVENTS_FILE).is_file():
+        print(f"no {layout.EVENTS_FILE} in {a.run}", file=sys.stderr)
+        return 2
+    findings = review_run(a.run)
+    for f in findings:
+        print(f"[{'ok' if f.ok else 'NG'}] {f.name}: {f.detail}")
+    bad = sum(not f.ok for f in findings)
+    print(f"{len(findings)} checks, {bad} not ok")
+    return 1 if bad else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m hiraku")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -127,8 +149,11 @@ def main(argv: list[str] | None = None) -> int:
                      help="no Claude: call the same tools in a fixed order (data/catalog/scripted.yaml)")
     run.add_argument("--design", type=Path, help="design JSON (default: design_file of the requirements)")
     run.add_argument("--runs", type=Path, default=layout.RUNS_DIR, help="folder for run folders (default: runs)")
-    run.add_argument("--model", default="claude-opus-5-5")
-    run.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
+    run.add_argument("--mix", default="default",
+                     help="model and effort per role: a name in data/catalog/model_mixes.yaml (default: default)")
+    run.add_argument("--model", help="the lead's model instead of the mix's")
+    run.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
+                     help="the lead's effort instead of the mix's")
     run.add_argument("--budget", type=float, help="cost limit in USD (default: cost_limit_usd of the requirements)")
     run.add_argument("--max-turns", type=int, default=200)
     run.add_argument("--no-intake", action="store_true",
@@ -141,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="check a run folder's events.jsonl against the contract")
     check.add_argument("run", type=Path)
     check.set_defaults(fn=_cmd_check)
+
+    review = sub.add_parser("review", help="what the run's record shows a weaker model may have got wrong")
+    review.add_argument("run", type=Path)
+    review.set_defaults(fn=_cmd_review)
 
     mcp = sub.add_parser("mcp", help="the Claude Code plugin's MCP server over stdio (plugins/hiraku)")
     mcp.add_argument("--runs", type=Path, help="folder for run folders (default: runs/ of this repository)")

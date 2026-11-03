@@ -3,8 +3,15 @@
 # request: an A1 request instead of a run: the want of data/requirements/products/<product>.yaml is sent
 #   and Claude picks the domains (those products have no design kind yet: hiraku.designgen.archetypes is
 #   empty for their flags, so a run would stop before version 1).
-# estimate_usd: the rough cost of a real Claude run (hiraku.catalog.cost: the record-writing calls of its scripted
-#   run times the cost per call of the one real run measured), next to the file's cost_limit_usd. An estimate.
+# mix (optional): the model mix a real run uses, a name in data/catalog/model_mixes.yaml (the screen passes it as
+#   `python -m hiraku run ... --mix NAME`; without it, the mix is `default`).
+# estimates_usd: the rough cost of a real Claude run per mix, next to the file's cost_limit_usd. An estimate.
+#   Shape for the screen: {<mix name>: {usd: <number>, upper_usd: <number>}} for every mix in model_mixes.yaml,
+#   or null when there is none. hiraku.catalog.cost.estimate_mix: the record-writing calls of the scripted
+#   run, per agent, times the cost per call of the one real run measured, times the price of that agent's model
+#   relative to Opus 5.5, as a range: usd with the lowest ratio over the kinds of token, upper_usd with the
+#   highest (the measured run's token mix is not known; for Haiku 0.025 and 0.25, its cache read above 100K;
+#   equal when no role is on Haiku). The lead's own tokens are not separated, so lead-sonnet comes out as cae-sonnet.
 # modes: how it is meant to be run. Every file here ran end to end in its scripted run before it was
 # listed, or stops where its line says (tests/tools/test_catalog.py checks the files load). Kept in
 # data/catalog/, not beside the requirements files, so nothing that runs every data/requirements/*.yaml
@@ -35,7 +42,12 @@ runs:
       手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
     file: offroad-4w-n12.yaml
     modes: [claude, scripted]
-    estimate_usd: 1.1  # 7 calls in scripted run 20261103-153411-offroad-4w-scripted (hiraku.catalog.cost)
+    # python -m hiraku.catalog.cost <run folder>: 7 calls (cae.handling 7) in scripted run 20261103-153411-offroad-4w-scripted
+    estimates_usd:
+      default: {usd: 1.07, upper_usd: 1.07}
+      cae-sonnet: {usd: 0.54, upper_usd: 0.54}
+      cae-haiku: {usd: 0.03, upper_usd: 0.27}
+      lead-sonnet: {usd: 0.54, upper_usd: 0.54}
     cuts: [N11, N12]
   - id: n13
     title: ロールバーのツールをその場で作る
@@ -44,7 +56,7 @@ runs:
       答えの分かっている例で確かめてから使う (台本の運転では、R4 は判定の無いまま止まる)
     file: offroad-4w-n13.claude.yaml
     modes: [claude]
-    estimate_usd: null  # its scripted run stops before R4; Claude writing the tool is not in any record yet
+    estimates_usd: null  # its scripted run (20261103-153628) wrote no record before stopping at R4; Claude writing the tool is not in any record yet
     cuts: [N13]
   - id: n14
     title: ナレッジを渡して規則にする
@@ -53,7 +65,12 @@ runs:
       回すときは、実行が始まってから data/knowledge/samples/bending-notes.md を A5 に落とす
     file: offroad-4w-n14.yaml
     modes: [scripted, claude]
-    estimate_usd: 3.5  # 23 calls in scripted run 20261103-153544-offroad-4w-scripted (hiraku.catalog.cost)
+    # python -m hiraku.catalog.cost <run folder>: 23 calls (cae.strength 23) in scripted run 20261103-153544-offroad-4w-scripted
+    estimates_usd:
+      default: {usd: 3.52, upper_usd: 3.52}
+      cae-sonnet: {usd: 1.76, upper_usd: 1.76}
+      cae-haiku: {usd: 0.09, upper_usd: 0.88}
+      lead-sonnet: {usd: 1.76, upper_usd: 1.76}
     cuts: [N14]
   - id: video
     title: 動画の運転 (限界の外を含む)
@@ -62,11 +79,21 @@ runs:
       版 2 で直せる赤は緑になる。限界の外は赤のまま、直しの回数を使い切って止まる
     file: offroad-4w-video.yaml
     modes: [scripted, claude]
-    estimate_usd: 45.7  # 299 calls in scripted run 20261103-153914-offroad-4w-scripted (hiraku.catalog.cost)
+    # python -m hiraku.catalog.cost <run folder>: 299 calls (cae.* 281, packager 18) in scripted run 20261103-153914-offroad-4w-scripted
+    estimates_usd:
+      default: {usd: 45.71, upper_usd: 45.71}
+      cae-sonnet: {usd: 22.86, upper_usd: 22.86}
+      cae-haiku: {usd: 1.14, upper_usd: 11.43}
+      lead-sonnet: {usd: 22.86, upper_usd: 22.86}
     cuts: [N04, N06, N17]
   - id: demo
     title: デモの車の 6 つの試験
     shows: 段差・フレーム・振動・組み立て・加速。版 1 の赤を設計役が直し、版 2 で全部緑
     file: offroad-4w.yaml
     modes: [scripted, claude]
-    estimate_usd: 12.5  # 82 calls in scripted run 20261103-153651-offroad-4w-scripted (hiraku.catalog.cost)
+    # python -m hiraku.catalog.cost <run folder>: 82 calls (cae.* 70, packager 12) in scripted run 20261103-153651-offroad-4w-scripted
+    estimates_usd:
+      default: {usd: 12.54, upper_usd: 12.54}
+      cae-sonnet: {usd: 6.27, upper_usd: 6.27}
+      cae-haiku: {usd: 0.31, upper_usd: 3.13}
+      lead-sonnet: {usd: 6.27, upper_usd: 6.27}

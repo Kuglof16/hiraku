@@ -14,7 +14,8 @@
   (not counted either).
 - The stop button (stop.request in the run folder): every tool call is denied
   and every stop is let through, so the run winds down (runner.converse).
-- SubagentStart / SubagentStop: agent.started / agent.stopped.
+- SubagentStart / SubagentStop: agent.started / agent.stopped. agent.started carries the
+  role's model and effort (models, filled by hiraku.agent.runner from the options).
 
 The decisions are plain methods (decide, one per event) shared by two drivers: the
 Agent SDK run (the async methods below, registered by matchers()) and the Claude Code
@@ -55,6 +56,7 @@ class Hooks:
         self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
         self.stop_requested = False  # set once stop.request is seen; it stays set
         self.for_lead: list[str] = []  # what the screen sent for the lead (inbox), not told yet
+        self.models: dict[str, dict[str, Any]] = {}  # contract agent id -> {"model", "effort"} for agent.started
         self.on_end: Callable[[], None] | None = None  # the lead's stop was let through (the plugin ends the run)
 
     # ------------------------------------------------------------------ state kept between calls
@@ -223,7 +225,7 @@ class Hooks:
             return {}
         self.running[input_data.get("agent_id", "")] = agent
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        self.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
+        self.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **self.models.get(agent, {})})
         return {}
 
     async def subagent_stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
