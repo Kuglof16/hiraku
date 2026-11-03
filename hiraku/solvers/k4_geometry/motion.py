@@ -14,8 +14,7 @@ import math
 import numpy as np
 
 from ..k0_handcalc import units
-from .model import TOUCH_MM, Body, bodies, mounted
-from .obb import overlap
+from .model import TOUCH_MM, Body, bodies, mounted, shape_overlap
 
 STEPS = 7
 
@@ -39,11 +38,11 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
     for k, b in group.items():
         if b.kind == "suspension":
             continue
-        o = (b.obb.turned(R, c) if steer else b.obb).moved([0.0, 0.0, dz])
+        o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
         for k2, other in bs.items():
             if k2 in group or mounted(b, other, design):
                 continue
-            ov = overlap(o, other.obb)
+            ov = shape_overlap(o, other)
             if ov > TOUCH_MM:
                 out.append((k, k2, ov))
     return out
