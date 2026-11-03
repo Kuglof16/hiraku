@@ -123,26 +123,30 @@ def beyond_results(ctx: RunContext, load_case: Record, version: int) -> list[tup
 
 
 def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
-    """(comparison, cause or None) for the version's mismatches of the load case whose cause is not
-    written yet or is written but not resolved. A safe-side cause counts as explained: its verdict
-    stands unless a result beyond the criterion voids it (beyond_results). So does an earlier cause
-    of the quantity that the load case's latest verdict, a safe-side one, was judged on: the chain of
-    re-predictions ended in that verdict (the cause stays unresolved in the record, where resolved_by
-    names only a later match)."""
-    causes = ctx.causes_by_comparison()
-    ver = latest_verdicts(ctx, version).get(load_case["load_case_id"])
-    safe_cmp = (ctx.store.get("comparison", ver["comparison_id"])
-                if ver and ver.get("basis") == "explained_safe_side" else None)
-    out = []
+    """(comparison, cause or None) holding the load case back (docs/contract.md 分野が緑になる条件 (b)):
+    per judged quantity of the load case (the criterion's, the one a tool is judged on, judged_quantity,
+    or a result named by result_quantity for a prediction of the criterion's quantity), the version's
+    latest comparison, when it is a mismatch whose cause is missing or neither resolved nor safe side.
+    Earlier comparisons of that quantity are superseded by the later one and hold nothing (their causes
+    stay as recorded); comparisons of intermediate quantities do not decide the tile."""
+    crit = load_case.get("criterion")
+    if crit is None:
+        return []
+    latest: dict[str, Record] = {}
     for c in ctx.store.records("comparison", version):
-        if c["status"] != "mismatch":
-            continue
         pred = ctx.prediction(c["prediction_id"])
         if pred is None or pred["load_case_id"] != load_case["load_case_id"]:
             continue
+        tool = (ctx.store.get("analysis", c["analysis_id"]) or {}).get("tool")
+        if c["quantity"] in (crit["quantity"], judged_quantity(ctx, tool, crit["quantity"])) \
+                or pred["quantity"] == crit["quantity"]:
+            latest[c["quantity"]] = c  # comparisons come in the order they were made
+    causes = ctx.causes_by_comparison()
+    out = []
+    for c in latest.values():
+        if c["status"] != "mismatch":
+            continue
         cause = causes.get(c["comparison_id"])
-        if cause is not None and safe_cmp is not None and c["quantity"] == safe_cmp["quantity"]:
-            continue  # settled by the later safe-side verdict on the same quantity
         if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
             out.append((c, cause))
     return out

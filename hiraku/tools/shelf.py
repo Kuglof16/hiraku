@@ -132,8 +132,14 @@ def source_hash() -> str:
     return h.hexdigest()
 
 
+REUSE_ENV = "HIRAKU_TOOL_CHECK_REUSE"  # "0": every check runs (a run compared byte for byte with another)
+
+
 def reusable(tool: AnalysisTool) -> bool:
-    """A builtin tool whose code is in the hiraku package, so source_hash covers it."""
+    """A builtin tool whose code is in the hiraku package, so source_hash covers it; never with
+    HIRAKU_TOOL_CHECK_REUSE=0."""
+    if os.environ.get(REUSE_ENV) == "0":
+        return False
     return type(tool).__module__.startswith("hiraku.") and tool.spec().get("origin", "builtin") == "builtin"
 
 
