@@ -210,16 +210,29 @@ def _r1_static(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
+def _r1_joint(spec: Record, req: Record, design: Record) -> Record:
+    """R1s: R1's step, wheel force and limit on the frame as shells (frame_shell), judged on the IIW
+    hot-spot stress of the tube walls where they meet (max_hot_spot_stress)."""
+    lc = _r1_static(spec, req, design)
+    h, suffix, prefix = _step(spec, req)
+    lc.update(load_case_id=f"R1s-step{h:g}{suffix}", test_id="R1s",
+              title=lc["title"].replace("前輪の力をフレームに", "前輪の力で、管のつなぎ目の壁"))
+    lc["criterion"] = {**lc["criterion"], "quantity": "max_hot_spot_stress",
+                       "basis": lc["criterion"]["basis"] + "; the hot-spot stress (IIW) at the tube joints"}
+    return lc
+
+
 Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
 BUILDERS: dict[str, Builder] = {
     "p1_step": _p1_step,
     "r1_static": _r1_static,
+    "r1_joint": _r1_joint,
 }
 
-# Which load case feeds which (P1's wheel force goes into the R1 frame load).
-FEEDS = {"P1": ["R1"]}
+# Which load case feeds which (P1's wheel force goes into the R1 frame load, beams and shells).
+FEEDS = {"P1": ["R1", "R1s"]}
 
 BUILDERS_MODULE = "hiraku.catalog.builders"
 NO_BUILDER = "no load-case builder yet"

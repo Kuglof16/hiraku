@@ -209,7 +209,7 @@ class AutoTestsTest(BuildersCase, unittest.TestCase):
     tests = None  # the requirements file lists no tests: the catalog picks them from the flags
 
     def test_every_buildable_test_is_run_and_the_rest_named(self):
-        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1", "H1"])
+        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1", "H1"])  # R1s only when listed
         (said,) = [e for e in self.events("agent.said") if e["agent"] == "system"]
         self.assertIn("荷重条件の作り方がまだ無い: S1 静的な転倒", said["text"])
         self.assertNotIn("H1", said["text"])

@@ -145,6 +145,17 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
+    def test_r1s_judges_the_joints_of_r1s_step_on_the_shell(self):
+        out = build_load_cases(self.catalog, self.req, loaded_design(), ["P1", "R1", "R1s"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100", "R1s-step100"])
+        r1, r1s = by_id["R1-step100"], by_id["R1s-step100"]
+        self.assertEqual((r1s["criterion"]["quantity"], r1s["criterion"]["limit"]),
+                         ("max_hot_spot_stress", r1["criterion"]["limit"]))
+        self.assertEqual(r1s["params"], r1["params"])
+        self.assertEqual(contract.errors("load_case", r1s), [])
+        self.assertNotIn("R1s", self.catalog.select_tests(self.req["flags"], self.req.get("speed_class")))
+
     def test_a_design_with_too_few_occupants_for_a_loading(self):
         # the contract's rule (hiraku.contract.loading): one occupant part cannot fill "two"
         d = loaded_design()
