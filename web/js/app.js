@@ -1125,7 +1125,11 @@ async function renderLaunch(message = "") {
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
   const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(rid)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
-  box.innerHTML = `<h3>その場で走らせる</h3>${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+  // without the key in the server's window, only scripted runs and replays are there (the key is never asked for)
+  const keyless = info.claude_ready
+    ? ""
+    : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
+  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
 async function launch(file, mode) {
