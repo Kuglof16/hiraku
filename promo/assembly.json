@@ -88,43 +88,10 @@
    "cuts": [
     "N08"
    ],
-   "paint_band": true,
-   "card": {
-    "background": "#131311",
-    "lines": [
-     {
-      "text": "N08  CAE のツールの画面 (広報部が作る、絵はまだ)",
-      "x": 160,
-      "y": 300,
-      "size": 64,
-      "font": "C:/Windows/Fonts/YuGothB.ttc",
-      "color": "#f1ece0"
-     },
-     {
-      "text": "HIRAKU ではない、ふつうの CAE のツールの画面。",
-      "x": 160,
-      "y": 430,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "設定の窓 (メッシュ・材料・拘束・荷重・解く設定) が何枚も重なっていく。",
-      "x": 160,
-      "y": 492,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "分厚い手引き書。値段の数字は出さない。",
-      "x": 160,
-      "y": 554,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     }
-    ]
+   "video": "${WORK}/clips/n08_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.25
    },
    "join": {
     "kind": "dissolve",

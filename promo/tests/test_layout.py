@@ -52,7 +52,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08b", "n10", "n15",
+                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n10", "n15",
                                 "n16", "n17", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
@@ -396,6 +396,104 @@ class N10(unittest.TestCase):
             self.assertTrue(all(abs(x) <= r["tol_pct"] for x in n10_diffs(r)), r["key"])
 
 
+class N08(unittest.TestCase):
+    """N08: an ordinary CAE tool (not HIRAKU), hard to buy and hard to learn."""
+
+    # sentences of the voice (s from the start of the cut), measured from its pauses
+    BUY = (0.9, 3.5)      # CAE のツールは気軽に買えるものではなく、
+    LEARN = (3.6, 4.8)    # 使いこなすのも
+    HARD = (4.9, 6.0)     # 簡単ではありません。
+
+    def setUp(self):
+        self.rules = layout_build.load()
+        self.n = self.rules["n08"]
+        self.html = (lc.SCREENS / "n08.html").read_text(encoding="utf-8")
+
+    def test_duration_matches_the_page(self):
+        m = re.search(r'data-duration="([0-9.]+)"', self.html)
+        self.assertEqual(float(m.group(1)), self.n["duration_s"])
+        self.assertEqual(self.n["duration_s"], 6.4)
+        self.assertEqual(self.n["camera"]["move_dur_s"], self.n["duration_s"])
+
+    def test_boxes_stay_above_the_band(self):
+        band, stage = self.rules["subtitle_band"]["y"], self.rules["stage"]
+        boxes = {k: v for k, v in self.n["win"].items() if not k.startswith("_")}
+        boxes["main"], boxes["books"] = self.n["main"], self.n["books"]
+        for k, b in boxes.items():
+            self.assertGreaterEqual(b["x"], 0, k)
+            self.assertGreaterEqual(b["y"], 0, k)
+            self.assertLessEqual(b["x"] + b["w"], stage["w"], k)
+            self.assertLessEqual(b["y"] + b["h"], band, k)
+        bk = self.n["books"]
+        self.assertLessEqual(sum(bk["heights_px"]), bk["h"])
+        self.assertLessEqual(bk["book_w"] + 2 * bk["shift_px"] + 14, bk["w"])  # 14: the page edges
+
+    def test_text_sizes(self):
+        sizes = [v for k, v in self.n["text"].items() if not k.startswith("_")]
+        self.assertGreaterEqual(min(sizes), self.rules["min_text_px"])
+        # the application is drawn at camera.from_scale at first: still 18 px or more
+        app = [v for k, v in self.n["text"].items() if not k.startswith("_") and k != "book_px"]
+        self.assertGreaterEqual(min(app) * self.n["camera"]["from_scale"], self.rules["min_text_px"])
+
+    def test_times_follow_the_voice(self):
+        t = self.n["times"]
+        for k in t:
+            if not k.startswith("_"):
+                self.assertTrue(k.endswith("_s"), k)
+        # licence windows and the ten module rows while the voice says it is not easy to buy
+        for k in ("license_s", "modules_s", "select_s", "nolicense_s"):
+            self.assertTrue(self.BUY[0] <= t[k] < self.BUY[1], k)
+        last_row = t["module_rows_s"] + 9 * t["module_step_s"] + self.n["anim"]["row_dur_s"]
+        self.assertLess(last_row, self.BUY[1])
+        # settings windows while it says 使いこなすのも
+        settings = [t[k] for k in ("mesh_s", "material_s", "bc_s", "contact_s", "solver_s")]
+        self.assertEqual(settings, sorted(settings))
+        for x in settings:
+            self.assertTrue(self.LEARN[0] <= x < self.LEARN[1], x)
+        # warnings while it says 簡単ではありません
+        for k in ("warn_shape_s", "warn_conv_s", "warn_rigid_s"):
+            self.assertTrue(self.HARD[0] <= t[k] < self.HARD[1], k)
+        # the pointer reaches the fatigue row before it clicks it, and clicks
+        # 計算を始める after the solver window is open and before the warnings
+        path = self.n["pointer"]["path"]
+        ts = [p["t_s"] for p in path]
+        self.assertEqual(ts, sorted(ts))
+        self.assertEqual((ts[0], ts[-1]), (0.0, self.n["duration_s"]))
+        at = lambda x: next(p for p in reversed(path) if p["t_s"] <= x)  # noqa: E731
+        self.assertLess(at(t["select_s"])["t_s"], t["select_s"])
+        self.assertTrue(t["solver_s"] < at(t["run_s"])["t_s"] < t["run_s"] < t["warn_shape_s"])
+        books_in = t["books_s"] + 5 * t["book_step_s"] + self.n["anim"]["book_dur_s"]
+        self.assertLess(books_in, self.HARD[1])
+        # the darkening takes the last half second or so and ends with the cut
+        self.assertGreaterEqual(t["dim_s"], self.HARD[1] - 0.2)
+        self.assertAlmostEqual(t["dim_s"] + self.n["dim"]["fade_dur_s"], self.n["duration_s"], places=6)
+        self.assertTrue(0 < self.n["dim"]["peak_alpha"] < 1)
+        # each dialog has its own time, in the order of the stacking
+        wins = [k for k in self.n["win"] if not k.startswith("_")]
+        self.assertEqual([self.n["win"][k]["z"] for k in wins], sorted(self.n["win"][k]["z"] for k in wins))
+        self.assertEqual([t[k + "_s"] for k in wins], sorted(t[k + "_s"] for k in wins))
+        self.assertTrue(self.rules["check"]["times"]["n08"])
+
+    def test_page_names_and_words(self):
+        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
+        for name in re.findall(r'data-box="([^"$]+)"', self.html):
+            self.assertTrue(name.startswith("n08."), name)
+        for banned in ("requestAnimationFrame", "Date.now", "Math.random", "performance.now"):
+            self.assertNotIn(banned, self.html)
+        # not HIRAKU, and no prices (the price line asks for a quote)
+        self.assertNotIn("HIRAKU", self.html.split("<script>")[1])
+        self.assertIn("お見積もりはお問い合わせください", self.html)
+        self.assertIn("ノード数の上限", self.html)
+        self.assertIn("ライセンスの有効期限", self.html)
+        self.assertIsNone(re.search(r"[¥€￥]|円|ドル", self.html))
+        # the warnings carry words only, no counts
+        for m1, m2 in re.findall(r'msg\((?:WARN|ERR), "([^"]+)", "([^"]+)"\)', self.html):
+            self.assertIsNone(re.search(r"[0-9０-９]", m1 + m2), m1)
+        self.assertEqual(len(re.findall(r'msg\((?:WARN|ERR), ', self.html)), 4)
+        self.assertIn("要素の形が悪い", self.html)
+        self.assertIn("収束しませんでした", self.html)
+
+
 class Judging(unittest.TestCase):
     def test_band(self):
         self.assertFalse(lc.in_band(box(0, 800, 100, 110), 910))      # ends on the band's top
@@ -710,6 +808,41 @@ class InBrowser(unittest.TestCase):
             self.assertEqual(got[f"{k}.tick"], "✓")
         # no tick before sentence 2
         self.assertEqual(early, ["0", "0", "0"])
+
+    def test_n08_pile_and_seeded_parts(self):
+        # every dialog is drawn where layout.json puts it, in its order, and the
+        # seeded mesh and book stack come out the same on every load
+        from promo import export
+
+        script = """() => {
+          const u = document.querySelector('.stage').getBoundingClientRect().width / 1920;
+          const wins = [...document.querySelectorAll('.win')].map((el) => ({
+            key: el.dataset.box.split('.')[2], x: el.offsetLeft / u, y: el.offsetTop / u,
+            w: el.offsetWidth / u, h: el.offsetHeight / u, z: Number(getComputedStyle(el).zIndex) }));
+          return { wins, mesh: document.querySelector('svg.mesh').innerHTML,
+                   bad: document.querySelectorAll('svg.mesh .bad').length,
+                   books: document.querySelector('.books').innerHTML,
+                   dim: getComputedStyle(document.querySelector('.dim')).opacity };
+        }"""
+        got = []
+        for _ in range(2):
+            cap = export.Capture(lc.SCREENS / "n08.html", scale=0.25)
+            try:
+                cap.page.evaluate("t => window.__export.seek(t)", 6.4)
+                got.append(cap.page.evaluate(script))
+            finally:
+                cap.close()
+        a, b = got
+        n = lc.load_layout()["n08"]
+        keys = [k for k in n["win"] if not k.startswith("_")]
+        self.assertEqual([w["key"] for w in a["wins"]], [k.replace("_", "-") for k in keys])
+        for w, k in zip(a["wins"], keys):
+            for c in "xywhz":
+                self.assertAlmostEqual(w[c], n["win"][k][c], delta=0.6)
+        self.assertGreater(a["bad"], 0)
+        self.assertAlmostEqual(float(a["dim"]), n["dim"]["peak_alpha"], places=3)
+        self.assertEqual(a["mesh"], b["mesh"])
+        self.assertEqual(a["books"], b["books"])
 
     def test_n10_has_no_problems(self):
         layout = lc.load_layout()
