@@ -16,8 +16,10 @@ their basis. What it looks at:
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
 - project: project.json keeps the run.started data, except the fields that may
   change and what project.updated re-sends after version 1 (load cases, picks,
-  roles); stop.request is gone once the run finished; tools/ holds each attempt
-  at a tool made in the run as <name>-<n>.py with its .check.json
+  roles); stop.request, the hearing files and inbox/ requests are gone once the
+  run finished (warnings); knowledge/ holds only files a knowledge.imported names;
+  tools/ holds each attempt at a tool made in the run as <name>-<n>.py with its
+  .check.json
 - report: report.json is the last report.written; each report covers the picked
   domains with the state and verdicts of their tiles at that time, and its
   differences are mismatches of that version with their recorded diff_rel and
@@ -104,6 +106,8 @@ FOLLOW_UP = {"HK1_prediction_first": "prediction.recorded", "HK3_cause_before_co
 VERSION_DIR_RE = re.compile(r"^v([0-9]{3})$")
 # tools/<name>-<n>.py and tools/<name>-<n>.check.json: one attempt at a tool made in the run
 TOOL_FILE_RE = re.compile(r"^(\w+)-([0-9]+)(\.py|\.check\.json)$")
+# inbox/<n>-<kind>.json: one request from the screen to a running run
+INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
 REL = 1e-9
 
 
@@ -359,10 +363,28 @@ class RunChecker:
             name = p.name
             if name in (layout.PROJECT_FILE, layout.EVENTS_FILE, layout.REPORT_FILE):
                 continue
+            finished = any(e.get("kind") == "run.finished" for e in self.events)
             if name == layout.STOP_REQUEST_FILE:
-                if any(e.get("kind") == "run.finished" for e in self.events):
+                if finished:
                     self.warn("files.stop_request", name, "left after run.finished (it is there only while "
                                                           "someone asks the run to stop)")
+                continue
+            if name in (layout.HEARING_REQUEST_FILE, layout.HEARING_ANSWER_FILE):
+                if finished:
+                    self.warn("files.request", name, "left after run.finished (the run reads and removes it)")
+                continue
+            if name == layout.INBOX_DIR and p.is_dir():
+                for f in sorted(p.iterdir()):
+                    if not INBOX_FILE_RE.match(f.name):
+                        self.warn("files.unknown", self.rel(f), "not an inbox request (<n>-<kind>.json)")
+                    elif finished:
+                        self.warn("files.request", self.rel(f), "left after run.finished: a request the run never read")
+                continue
+            if name == layout.KNOWLEDGE_DIR and p.is_dir():
+                given = {str((k.get("doc") or {}).get("filename")) for _, k in self.knowledge}
+                for f in sorted(p.iterdir()):
+                    if f.name not in given:
+                        self.warn("files.unknown", self.rel(f), "a knowledge file no knowledge.imported names")
                 continue
             if name == layout.TOOLS_DIR and p.is_dir():
                 self._check_tools_dir(p)

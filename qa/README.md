@@ -28,15 +28,15 @@ python -m qa.judge_scan --ref main                   # 公開する前に main �
 
 ```
 python -m qa.compare_runs --make-baseline data/requirements/offroad-4w-video.yaml   # 直す前に 1 回
-python -m qa.compare_runs --check data/requirements/offroad-4w-video.yaml --rel 1e-6  # 直したあと
-python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml --rel 1e-6  # 2 回回して比べる (決定的か)
+python -m qa.compare_runs --check data/requirements/offroad-4w-video.yaml            # 直したあと
+python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml            # 2 回回して比べる (決定的か)
 python -m qa.compare_runs runs/<run_a> runs/<run_b>                                  # 2 つのフォルダを比べる
 ```
 
 - 比べないもの: 時刻 (event の `ts`・`t`、`created_at`・`wall_time_s`)、`run_id` (文の中の run id と実行のフォルダも)、費用 `cost_usd`
 - 違えば、ファイル (記録は ID の名前)・`events.jsonl` の行・欄の道を出して終了コード 1。比べられないとき (基準の運転が無い、など) は 2
 - `--rel` が無ければ 1 バイトでも違えば違い (キーの順・空白・数の書き方も)。`--rel 1e-6` は数 (文の中の数も) の相対差 1e-6 までと、向きが逆なだけのモードの形 (`mode_shape`) を同じとみて、その数を最後の行に出す
-- `--rel` が要る理由: modal の道具は PyNite の固有値計算 (scipy の `eigsh`) を使い、始めのベクトルが毎回 OS の乱数で決まる。そのため、振動数は 1e-10 ほど違い、モードの形は向きが変わることがある。ほかの記録は 2 回の運転でバイトまで同じ
+- 動画用の要件の台本の運転は、2 回回すとバイトまで同じ (`--twice` で確かめた)。前は modal の道具の固有値計算 (scipy の `eigsh`) が乱数の始めのベクトルから解き、振動数が 1e-10 ほど違い、モードの形の向きが変わっていた。いまは始めのベクトルを固定し、モードの形の向きをそろえている。`--rel` は、乱数を使う道具がまた入ったときのためのもの
 - 基準の運転は `runs/baseline/<要件の名前>/`、`--check` と `--twice` の運転は `runs/compare/` に残る (`--baseline`・`--out` で変えられる)
 
 ## 照合の考え方
@@ -50,7 +50,7 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 - 形: `project.json`・`events.jsonl` の各行・記録のファイルが schema に合う。`seq` が抜けなく続き、時刻が戻らない
 - ファイルと event: 記録のファイル 1 つに同じ中身の event が 1 つある。記録を直すときは同じ ID の event を出し直し、変えてよい欄は契約で決まったものだけ
-- 実行の設定: `project.json` は `run.started` のまま (変えてよい欄を除く)。設計役が版 1 を作る実行では、版 1 のあとの `project.updated` が荷重条件・選んだ分野・役を出し直す。`stop.request` は実行が終われば残らない。`tools/` には、実行の中で作った道具の試みごとに `<名前>-<n>.py` と `.check.json` がそろう
+- 実行の設定: `project.json` は `run.started` のまま (変えてよい欄を除く)。設計役が版 1 を作る実行では、版 1 のあとの `project.updated` が荷重条件・選んだ分野・役を出し直す。`stop.request`・ヒアリングのファイル・`inbox/` の頼みは実行が終われば残らない (残れば注意)。`knowledge/` には `knowledge.imported` が名指すファイルだけがある。`tools/` には、実行の中で作った道具の試みごとに `<名前>-<n>.py` と `.check.json` がそろう
 - 報告: `report.json` は最後の `report.written` と同じ。報告は選んだ分野をすべて持ち、状態と合否の ID はその時のタイルと同じ、食い違いはその版の食い違いの照合で、差と原因は記録と同じ (判定のある荷重条件の食い違いを落としていれば注意)
 - HK1〜HK4: 解析の前に同じ版・同じ荷重条件の予測がある / 照合に通った道具だけを使う / 食い違いに原因が書かれるまで、その分野の解析と照合は進まない / 選んだ分野が判定されるまで done で終わらない (判定されたとは、合否の基準のある荷重条件のすべてに最後の版の合否があること。赤のタイルでも、ほかの試験に合否が無ければ終わっていない)
 - 実行の終わり: `stop_code` は status と合う (`done` ⇔ `done`、`error` ⇔ `failed`)。`not_judged` は判定の無い荷重条件が残っているときだけ、`round_limit` は設計の直しを上限まで使ったときだけ

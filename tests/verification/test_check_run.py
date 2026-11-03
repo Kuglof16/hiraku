@@ -190,6 +190,25 @@ class CheckRun(unittest.TestCase):
         (run / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")
         self.assertIn("files.stop_request", {f.rule for f in cr.check_run(run) if f.level == "warn"})
 
+    def test_requests_from_the_screen_and_knowledge_files(self):
+        knowledge = json.loads((contract.EXAMPLES_DIR / "knowledge_imported.json").read_text(encoding="utf-8"))
+        ev = self._insert(sample_events(), "design.created", "knowledge.imported", knowledge)
+        run = write_run(self.root / "x", ev)
+        (run / layout.KNOWLEDGE_DIR).mkdir()
+        (run / layout.KNOWLEDGE_DIR / knowledge["doc"]["filename"]).write_text("# rules\n", encoding="utf-8")
+        files = lambda: [(f.rule, f.level, f.where) for f in cr.check_run(run) if f.rule.startswith("files")]
+        self.assertEqual(files(), [])
+        (run / layout.KNOWLEDGE_DIR / "other.md").write_text("", encoding="utf-8")
+        (run / layout.INBOX_DIR).mkdir()
+        (run / layout.INBOX_DIR / "0001-user.said.json").write_text("{}", encoding="utf-8")
+        (run / layout.INBOX_DIR / "note.txt").write_text("", encoding="utf-8")
+        (run / layout.HEARING_ANSWER_FILE).write_text("{}", encoding="utf-8")
+        self.assertEqual(sorted(files()), [
+            ("files.request", "warn", layout.HEARING_ANSWER_FILE),
+            ("files.request", "warn", f"{layout.INBOX_DIR}/0001-user.said.json"),  # the run has finished
+            ("files.unknown", "warn", f"{layout.INBOX_DIR}/note.txt"),
+            ("files.unknown", "warn", f"{layout.KNOWLEDGE_DIR}/other.md")])
+
     # --- the report (report.json and report.written) ---------------------------------
     @staticmethod
     def _report(ev, **domain):
