@@ -57,6 +57,8 @@ WEB_DIR = REPO_DIR / "web"
 SAVED_DIR = REPO_DIR / SHOWCASE_DIR  # saved runs kept in the repository
 LAYOUT_FILE = REPO_DIR / "promo" / "screens" / "layout.json"  # the video's layout rules (promo's)
 SAMPLE_ID = "sample"
+# project.driver's values (hiraku.schema.json project.driver, from claude/lead-refactor 75f5484)
+DRIVERS = ("scripted", "agent_sdk", "claude_code_plugin")
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
 # Windows can map .js to text/plain through the registry, which breaks ES modules.
@@ -217,6 +219,8 @@ def _run_summary(run_id: str, events_file: Path, project_file: Path | None) -> d
         "product": project.get("product", ""),
         "status": project.get("status", "unknown"),
         "created_at": project.get("created_at", ""),
+        # what drove the run (contract project.driver); None for records older than the field
+        "driver": project.get("driver") if project.get("driver") in DRIVERS else None,
         "finished": _last_kind(events_file) == "run.finished" if stat else False,
         "events_bytes": stat.st_size if stat else 0,
         "mtime": stat.st_mtime if stat else 0,

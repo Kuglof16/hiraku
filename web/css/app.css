@@ -696,6 +696,7 @@ body.video .mode .stop-btn { display: none; }
 .runlist table { width: 100%; border-collapse: collapse; font-size: 16px; }
 .runlist td, .runlist th { padding: 8px 6px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
 .runlist .rid { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.runlist .drv { font-family: inherit; font-size: 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin-left: 6px; white-space: nowrap; }
 .runlist a { color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; text-decoration: none; white-space: nowrap; margin-right: 6px; }
 .runlist .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
 

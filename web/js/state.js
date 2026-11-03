@@ -156,7 +156,9 @@ export function applyEvent(s, ev) {
       s.runId = d.run_id ?? ev.run_id;
       s.startTs = ev.ts ?? null;
       s.status = "running";
-      s.cost = d.cost_usd ?? 0;
+      // null: HIRAKU cannot know the cost (driver claude_code_plugin); kept as null, not 0.
+      // A record without the field (older runs) starts at 0 as before.
+      s.cost = d.cost_usd === undefined ? 0 : d.cost_usd;
       for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
       log(s, ev, "info", `実行を始めた: ${d.want ?? ""}`);
       setActivity(s, ev, "依頼を読んで分野と試験を決めた");
@@ -409,7 +411,7 @@ export function applyEvent(s, ev) {
       break;
     }
     case "cost.updated": {
-      s.cost = d.cost_usd ?? s.cost;
+      if (d.cost_usd !== undefined) s.cost = d.cost_usd; // null stays null (unknown)
       break;
     }
     default:

@@ -255,6 +255,31 @@ class SavedRunsTest(unittest.TestCase):
         self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
 
 
+class DriverTest(unittest.TestCase):
+    """The run list says what drove each run (project.driver), read from project.json or the
+    first event's data; nothing for records without it."""
+
+    def setUp(self):
+        self.runs = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.runs)
+
+    def run_folder(self, run_id, start_data, project=None):
+        d = self.runs / run_id
+        d.mkdir()
+        (d / "events.jsonl").write_bytes(_line(0, "run.started", data=start_data).encode("utf-8"))
+        if project is not None:
+            (d / "project.json").write_text(json.dumps(project), encoding="utf-8")
+
+    def test_driver_from_project_json_or_the_first_event(self):
+        self.run_folder("20261103-100000-a", {"want": "a"}, project={"want": "a", "driver": "claude_code_plugin"})
+        self.run_folder("20261103-100001-b", {"want": "b", "driver": "agent_sdk"})
+        self.run_folder("20261103-100002-c", {"want": "c", "driver": "scripted"})
+        self.run_folder("20261103-100003-d", {"want": "d"})  # older record: no driver
+        self.run_folder("20261103-100004-e", {"want": "e", "driver": "something-else"})  # not a contract value
+        got = {r["run_id"][-1]: r["driver"] for r in list_runs(self.runs) if not r["sample"]}
+        self.assertEqual(got, {"a": "claude_code_plugin", "b": "agent_sdk", "c": "scripted", "d": None, "e": None})
+
+
 class LayoutTest(unittest.TestCase):
     def test_layout_rules_are_served_or_missing_is_said(self):
         tmp = Path(tempfile.mkdtemp())
