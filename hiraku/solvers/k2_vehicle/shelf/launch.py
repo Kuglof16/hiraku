@@ -159,17 +159,17 @@ class LaunchTool(K2Tool):
               P("max_time", "s", 30.0, "longest run (s of driving); top_speed_power's run on past the motor speed "
                 "limit may take as long again. The analyze call's params may give it too", run_option=True),
               P("rolling_radius", "mm", None, "an effective rolling radius of the driven wheels to set beside K2's "
-                "(the r of K0 launch.peak_tractive_force; default: design variable effective_rolling_radius, else "
-                "none, and K0 then takes the free radius). K2 does not roll on it: its tyre rolls on the result "
+                "(the r of K0 launch.peak_tractive_force; default: design variable rolling_radius, else none: K0 "
+                "then computes the loaded radius at the static load as K2 does). K2 does not roll on it: its tyre rolls on the result "
                 "rolling_radius (the loaded radius at the static load); the record gives the F_max either radius "
-                "gives and their gap", var=("effective_rolling_radius",)),
+                "gives and their gap", var=("rolling_radius",)),
               CD, RHO, FRONT_AREA, MU)
     _launch_inputs = (("v", "target_speed"), ("grade", "grade"), ("P", "motor_power"), ("eta", "efficiency"),
                       ("C_d", "cd"), ("A", "front_area"), ("rho", "rho"))
     _launch_note = ("these inputs: the load case, else the design variables named in describe(); F_max = "
                     "motor_torque gear_ratio efficiency / r (launch.peak_tractive_force), K2's r is the result "
                     "rolling_radius (the loaded radius at the static load; the record gives F_max as "
-                    "peak_tractive_force and says how far an effective_rolling_radius or the free radius is from "
+                    "peak_tractive_force and says how far a given rolling_radius is from "
                     "it); C_rr = design variable "
                     "rolling_resistance (0.015 assumed in K2 when absent); lambda = "
                     "1 + sum(J / r^2) / m, K2 takes J = m_u r^2 / 2 per wheel (a solid disc of the unsprung mass), "
@@ -255,16 +255,15 @@ class LaunchTool(K2Tool):
 
     def _tractive(self, veh, motor: Motor, lp: dict, notes: list) -> list[dict]:
         """rolling_radius (mm) and peak_tractive_force (N) as K2 drives, and the F_max the radius K0
-        takes would give (rolling_radius param / effective_rolling_radius, else the free radius)."""
+        takes would give (a given rolling_radius, else the same loaded radius)."""
         r = driven_rolling_radius(veh)
         f = peak_tractive_force(motor, r)
         driven = [c for c in veh.corners if c.drive]
         given = self.q(lp, "rolling_radius", "m")
         if given is not None:
-            other, what = given, "the given effective rolling radius (rolling_radius / effective_rolling_radius)"
+            other, what = given, "the given rolling_radius (load case or design variable)"
         else:
-            other = sum(c.radius for c in driven) / len(driven)
-            what = "the free radius (no effective rolling radius given, as K0 takes it then)"
+            other, what = r, "K0, with no rolling_radius given, computes the same loaded radius:"
         f_other = peak_tractive_force(motor, other)
         notes.append(f"peak_tractive_force {f:.1f} N = motor_torque {motor.torque:g} N m x gear_ratio {motor.gear:g} x "
                      f"efficiency {motor.efficiency:g} / rolling_radius {r * 1000.0:.1f} mm (K2's effective rolling "

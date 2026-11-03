@@ -103,7 +103,7 @@ class RollingRadius(unittest.TestCase):
             self.assertAlmostEqual(c.rolling_radius, c.radius - c.static_load / c.k_z, places=12)
             self.assertLess(c.rolling_radius, c.radius)
 
-    def test_peak_tractive_force_on_k2s_radius_and_the_gap_to_the_free_radius(self):
+    def test_peak_tractive_force_on_k2s_radius_as_k0_takes_it(self):
         tool, notes = LaunchTool(), []
         tool._vars, tool._assumed = {}, []
         res = {r["quantity"]: r for r in tool._tractive(self.veh, self.motor, {}, notes)}
@@ -111,9 +111,9 @@ class RollingRadius(unittest.TestCase):
         self.assertAlmostEqual(res["rolling_radius"]["value"], r * 1000.0, places=9)
         self.assertEqual(res["rolling_radius"]["unit"], "mm")
         self.assertAlmostEqual(res["peak_tractive_force"]["value"], 20.0 * 8.0 * ETA / r, places=9)
-        free = next(c.radius for c in self.veh.corners if c.drive)
-        self.assertIn(f"the free radius (no effective rolling radius given, as K0 takes it then) {free * 1000.0:.1f} mm "
-                      f"gives {20.0 * 8.0 * ETA / free:.1f} N", notes[0])
+        # no rolling_radius given: K0 computes the same loaded radius, so there is no gap
+        self.assertIn(f"K0, with no rolling_radius given, computes the same loaded radius: {r * 1000.0:.1f} mm "
+                      f"gives {20.0 * 8.0 * ETA / r:.1f} N (+0.00%)", notes[0])
         # the K0 formula on the same r gives the same F_max (where the registry has it)
         if "launch.peak_tractive_force" not in {f["formula_id"] for f in formula_registry().list_formulas()}:
             self.skipTest("launch.peak_tractive_force is not in this K0 registry yet")
@@ -121,13 +121,13 @@ class RollingRadius(unittest.TestCase):
             "T": q(20.0, "N*m"), "i": q(8.0, "1"), "eta": q(ETA, "1"), "r": res["rolling_radius"]})
         self.assertAlmostEqual(out["outputs"]["F_max"]["value"], res["peak_tractive_force"]["value"], places=6)
 
-    def test_a_given_effective_rolling_radius_is_set_beside_k2s(self):
+    def test_a_given_rolling_radius_is_set_beside_k2s(self):
         tool, notes = LaunchTool(), []
-        tool._vars, tool._assumed = {"effective_rolling_radius": q(290.0, "mm")}, []
+        tool._vars, tool._assumed = {"rolling_radius": q(290.0, "mm")}, []
         res = {r["quantity"]: r for r in tool._tractive(self.veh, self.motor, {}, notes)}
         f = res["peak_tractive_force"]["value"]
         self.assertAlmostEqual(f, 20.0 * 8.0 * ETA / driven_rolling_radius(self.veh), places=9)  # K2 keeps its own
-        self.assertIn(f"the given effective rolling radius (rolling_radius / effective_rolling_radius) 290.0 mm gives "
+        self.assertIn(f"the given rolling_radius (load case or design variable) 290.0 mm gives "
                       f"{20.0 * 8.0 * ETA / 0.290:.1f} N", notes[0])
 
 
