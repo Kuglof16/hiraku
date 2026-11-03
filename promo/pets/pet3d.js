@@ -26,6 +26,9 @@
 // aero shows the pressure (stagnation at the nose = high); packager is a 3D
 // puzzle of interlocking pieces; the handling chassis is metal; a new state
 // "run" (in place, or across with opts.run = "across").
+// v7: packager is a six-piece burr (six square bars along the three axes
+// that interlock in the middle); opts.packagerStyle = "rings" gives three
+// interlocked metal rings instead.
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -71,7 +74,7 @@
   const BODIES = {
     "lead": { kind: "fe-sphere", quantity: "相対の応力 (自重と手足)", analysis: "三角の要素の丸い体 (v2 の体)。節点の荷重から計算した応力" },
     "designer": { kind: "cad-model", quantity: null, analysis: "CAD のモデル。落ち着いた単色の面、フィレットの面の境の稜線、平らな面の薄いパラメータの線" },
-    "packager": { kind: "assembly", quantity: null, analysis: "ひとまとまりの 3D のパズル。凹凸で噛み合うピース 4 つがぴったりはまり、色は 2 色" },
+    "packager": { kind: "assembly", quantity: null, analysis: "立体のパズル (6 本組木)。断面が四角い棒 6 本が 3 つの向きに貫き合い、切り欠きで噛み合って 1 つの塊になる。色は向きごとに 3 色" },
     "cae.handling": { kind: "multibody", quantity: "ばねの力 (相対)", analysis: "マルチボディの機構。金属の車体の剛体に上下のアーム・ナックル・車輪がジョイントでつながり、ばねとダンパー。重心の座標の軸と横加速度の矢印" },
     "cae.powertrain": { kind: "combustion", quantity: "燃焼の温度 (相対)", analysis: "エンジンの燃焼室。点火プラグから広がる火炎面の温度、下はピストン、脇に電池のセル" },
     "cae.aero": { kind: "flow", quantity: "圧力 (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の圧力。先端のよどみ点が高く、肩が低い)" },
@@ -1650,153 +1653,387 @@
     };
   }
 
-  // packager: a 3D puzzle, one unit, no contour. The body is four pieces in
-  // two rows and two columns whose cuts carry jigsaw tabs (a round head on a
-  // neck: neck half width 0.075, head radius 0.13, head centre 0.17 off the
-  // cut), extruded front to back, so each piece locks into its neighbours
-  // and can only slide in along z. The outline of the unit has rounded
-  // corners (radius 0.3); each piece is inset by its bevel + SEAM / 2 so the
-  // cuts read as thin grooves (seam 0.006). Two colours in a checker
-  // (--s4 and the role colour, each mixed half with --paper).
-  // Working: the lower left piece slides in from the front (0.5 -> 0) and
-  // stays seated, then comes out again, every 4.4 s (smooth, no jump).
-  // Mismatch: that piece does not seat; it sits forward, turned, tinted red.
+  // Surface nets: a mesh of the level f = 0 sampled on the grid lo + h (i, j, k),
+  // n = samples per axis. One vertex per cell that changes sign (the mean of
+  // the crossings on its edges), one quad per grid edge that changes sign.
+  // Normals are the gradient of f; triangles are turned to agree with them.
+  function surfaceNets(THREE, f, lo, n, h) {
+    const [nx, ny, nz] = n;
+    const val = new Float32Array(nx * ny * nz);
+    const id = (i, j, k) => i + nx * (j + ny * k);
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      val[id(i, j, k)] = f(lo[0] + i * h, lo[1] + j * h, lo[2] + k * h);
+    }
+    const cx = nx - 1, cy = ny - 1;
+    const cell = new Int32Array(cx * cy * (nz - 1)).fill(-1);
+    const cid = (i, j, k) => i + cx * (j + cy * k);
+    const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+    const edges = [];
+    for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) {
+      if (Math.abs(corner[a][0] - corner[b][0]) + Math.abs(corner[a][1] - corner[b][1]) + Math.abs(corner[a][2] - corner[b][2]) === 1) edges.push([a, b]);
+    }
+    const pos = [];
+    const cv = new Float32Array(8);
+    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      let neg = 0;
+      for (let c = 0; c < 8; c++) {
+        cv[c] = val[id(i + corner[c][0], j + corner[c][1], k + corner[c][2])];
+        if (cv[c] < 0) neg++;
+      }
+      if (neg === 0 || neg === 8) continue;
+      let sx = 0, sy = 0, sz = 0, m = 0;
+      for (const [a, b] of edges) {
+        if ((cv[a] < 0) === (cv[b] < 0)) continue;
+        const s = cv[a] / (cv[a] - cv[b]);
+        sx += corner[a][0] + (corner[b][0] - corner[a][0]) * s;
+        sy += corner[a][1] + (corner[b][1] - corner[a][1]) * s;
+        sz += corner[a][2] + (corner[b][2] - corner[a][2]) * s;
+        m++;
+      }
+      cell[cid(i, j, k)] = pos.length / 3;
+      pos.push(lo[0] + (i + sx / m) * h, lo[1] + (j + sy / m) * h, lo[2] + (k + sz / m) * h);
+    }
+    const idx = [];
+    const quad = (a, b, c, d) => {
+      if (a < 0 || b < 0 || c < 0 || d < 0) return;
+      idx.push(a, b, c, a, c, d);
+    };
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const v0 = val[id(i, j, k)] < 0;
+      if (i < nx - 1 && j > 0 && k > 0 && v0 !== val[id(i + 1, j, k)] < 0) {
+        quad(cell[cid(i, j - 1, k - 1)], cell[cid(i, j, k - 1)], cell[cid(i, j, k)], cell[cid(i, j - 1, k)]);
+      }
+      if (j < ny - 1 && i > 0 && k > 0 && v0 !== val[id(i, j + 1, k)] < 0) {
+        quad(cell[cid(i - 1, j, k - 1)], cell[cid(i - 1, j, k)], cell[cid(i, j, k)], cell[cid(i, j, k - 1)]);
+      }
+      if (k < nz - 1 && i > 0 && j > 0 && v0 !== val[id(i, j, k + 1)] < 0) {
+        quad(cell[cid(i - 1, j - 1, k)], cell[cid(i, j - 1, k)], cell[cid(i, j, k)], cell[cid(i - 1, j, k)]);
+      }
+    }
+    // normals from the gradient of f
+    const nrm = new Float32Array(pos.length);
+    const e = h * 0.5;
+    for (let v = 0; v < pos.length; v += 3) {
+      const x = pos[v], y = pos[v + 1], z = pos[v + 2];
+      const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e);
+      const L = Math.hypot(gx, gy, gz) || 1;
+      nrm[v] = gx / L; nrm[v + 1] = gy / L; nrm[v + 2] = gz / L;
+    }
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = 3 * idx[t], b = 3 * idx[t + 1], c = 3 * idx[t + 2];
+      const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2];
+      const wx = pos[c] - pos[a], wy = pos[c + 1] - pos[a + 1], wz = pos[c + 2] - pos[a + 2];
+      const fx = uy * wz - uz * wy, fy = uz * wx - ux * wz, fz = ux * wy - uy * wx;
+      const g = fx * (nrm[a] + nrm[b] + nrm[c]) + fy * (nrm[a + 1] + nrm[b + 1] + nrm[c + 1]) + fz * (nrm[a + 2] + nrm[b + 2] + nrm[c + 2]);
+      if (g < 0) { const s = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = s; }
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geom.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+    geom.setIndex(idx);
+    return geom;
+  }
+
+  // Signed distance to a box (centre c, half sizes s) with its edges rounded by r.
+  function roundBoxSdf(x, y, z, c, s, r) {
+    const qx = Math.abs(x - c[0]) - (s[0] - r), qy = Math.abs(y - c[1]) - (s[1] - r), qz = Math.abs(z - c[2]) - (s[2] - r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - r;
+  }
+
+  // packager (v7): a six-piece burr (a kumiki / bar puzzle). Six square bars,
+  // two along each axis, pass through each other in the middle and hold
+  // together as one cross-shaped unit. Unit u = 0.28: a bar is 2u x 2u in
+  // section and BURR.len = 2.0 long (the ends stick out 0.44 = 1.6 u). The middle cube (4u on a side) is split into
+  // 4 x 4 x 4 cells; a cell that more than one bar passes through goes to one
+  // of them and the others carry a notch there, so no two bars overlap. Each
+  // bar keeps one whole line of cells along its length (its outer line), so
+  // it stays in one piece; the other shared cells go round by (i + j + k).
+  // This is a computed fill without overlaps, not a checked solvable puzzle.
+  // Pairs: the X bars lie side by side in y, the Y bars in z, the Z bars in x
+  // (the two Z ends face the front and carry the eyes). A bar is drawn as a
+  // rounded solid: the distance to the union of its cells (a cell box is
+  // pushed 1.5 r into the bar's own neighbours so flush cells leave no
+  // groove) with the edges rounded by r, meshed by surface nets (step h).
+  // Wood colours by axis: X = --s4 half with --paper; Y = --s4 with 45 %
+  // --s5, then 30 % --ink-soft; Z = the role colour half with --paper.
+  // Working: the bars slide out one at a time along their own axis (0.36,
+  // far enough for a notch to come out of the middle) and back, 1.1 s each, all six in 6.6 s. Pass: the front Y bar snaps in
+  // (0.14 -> 0 in 0.4 s, speeding up) and the unit lights up once in the
+  // bars' own colours (every 3 s). Mismatch: the upper X bar sticks halfway (0.34 out to -x); it is
+  // pushed in a little and stops again, turned slightly, tinted red. Run:
+  // the bars rattle a little with the stride (0.02).
+  // opts.packagerStyle = "rings": three interlocked metal rings instead
+  // (Borromean rings: ellipses in the three planes, see bodyPackagerRings).
+  const BURR = { u: 0.28, len: 2.0, r: 0.05, h: 0.02, slide: 0.36, step: 1.1, stuck: 0.34, pass: 3.0, rattle: 0.02 };
   function bodyPackager(ctx) {
+    if (ctx.opts.packagerStyle === "rings") return bodyPackagerRings(ctx);
     const { THREE, role } = ctx;
-    const SEAM = 0.006, BEVEL = 0.035, RC = 0.3;
-    const XW = 0.96, Y0 = -0.93, Y1 = 0.86, YC = -0.2, D = 0.82;
-    const TAB = { w: 0.075, r: 0.13, h: 0.17 };
-    const sand = mixHex(C.s[3], C.paper, 0.5);
+    const { u, len, r, h } = BURR;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const lightWood = mixHex(C.s[3], C.paper, 0.5);
+    const darkWood = mixHex(mixHex(C.s[3], C.s[4], 0.45), C.inkSoft, 0.3);
     const lilac = mixHex(hexNum(role.color), C.paper, 0.5);
-    const V2 = (x, y) => new THREE.Vector2(x, y);
-    // tabs on the cuts: at = position along the cut, dir = where the head
-    // points (it belongs to the piece on the other side)
-    const TABS = {
-      vUp: { at: 0.55, dir: V2(1, 0) },     // x = 0, upper row
-      vLow: { at: -0.62, dir: V2(-1, 0) },  // x = 0, lower row
-      hLeft: { at: -0.5, dir: V2(0, -1) },  // y = YC, left column
-      hRight: { at: 0.5, dir: V2(0, -1) },  // y = YC, right column
-    };
-    // points of a tab on the edge a -> b of a piece; outward = the piece's
-    // outward normal of that edge
-    const tabPts = (a, b, tab, outward) => {
-      const d = b.clone().sub(a);
-      const L = d.length();
-      d.normalize();
-      const along = Math.abs(d.x) > 0.5 ? ((tab.at - a.x) / (b.x - a.x)) * L : ((tab.at - a.y) / (b.y - a.y)) * L;
-      const sgn = tab.dir.dot(outward) > 0 ? 1 : -1;
-      const n = outward.clone().multiplyScalar(sgn);
-      const at = (s, k) => a.clone().addScaledVector(d, s).addScaledVector(n, k);
-      const { w, r, h } = TAB;
-      const n0 = h - Math.sqrt(r * r - w * w);
-      const out = [at(along - w, 0), at(along - w, n0)];
-      const th0 = Math.atan2(n0 - h, -w), th1 = Math.atan2(n0 - h, w);
-      const sweep = TAU - (th1 - th0);
-      const N = 20;
-      for (let i = 1; i < N; i++) {
-        const th = th0 - (sweep * i) / N;
-        out.push(at(along + r * Math.cos(th), h + r * Math.sin(th)));
+    // a = the bar's axis; cb / cc = its cells on the next two axes
+    // ((a + 1) % 3 and (a + 2) % 3); line = the cells of its outer line;
+    // dir = the way it slides out
+    const DEFS = [
+      { name: "x-upper", label: "横の上", a: 0, cb: [2, 3], cc: [1, 2], line: [3, 1], dir: -1, color: lightWood },
+      { name: "x-lower", label: "横の下", a: 0, cb: [0, 1], cc: [1, 2], line: [0, 2], dir: 1, color: lightWood },
+      { name: "y-front", label: "縦の前", a: 1, cb: [2, 3], cc: [1, 2], line: [3, 2], dir: 1, color: darkWood },
+      { name: "y-back", label: "縦の後ろ", a: 1, cb: [0, 1], cc: [1, 2], line: [0, 1], dir: 1, color: darkWood },
+      { name: "z-right", label: "前後の右", a: 2, cb: [2, 3], cc: [1, 2], line: [3, 2], dir: 1, color: lilac },
+      { name: "z-left", label: "前後の左", a: 2, cb: [0, 1], cc: [1, 2], line: [0, 1], dir: 1, color: lilac },
+    ];
+    const ORDER = ["y-front", "x-upper", "z-right", "y-back", "x-lower", "z-left"];
+    const claims = (d, ijk) => d.cb.includes(ijk[(d.a + 1) % 3]) && d.cc.includes(ijk[(d.a + 2) % 3]);
+    const onLine = (d, ijk) => ijk[(d.a + 1) % 3] === d.line[0] && ijk[(d.a + 2) % 3] === d.line[1];
+    // owner of each middle cell (index into DEFS, or -1 = empty corner)
+    const owner = new Map();
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) {
+      const ijk = [i, j, k];
+      const cl = DEFS.map((d, n) => (claims(d, ijk) ? n : -1)).filter((n) => n >= 0);
+      const ln = cl.filter((n) => onLine(DEFS[n], ijk));
+      owner.set(ijk.join(","), ln.length ? ln[0] : cl.length ? cl[(i + j + k) % cl.length] : -1);
+    }
+    // cell edges along any axis: slice -1 and 4 are the ends outside the middle
+    const span = (s) => (s < 0 ? [-len / 2, -2 * u] : s > 3 ? [2 * u, len / 2] : [(s - 2) * u, (s - 1) * u]);
+    const group = new THREE.Group();
+    const bars = DEFS.map((d, n) => {
+      const b = (d.a + 1) % 3, c = (d.a + 2) % 3;
+      const has = (s, jb, jc) => {
+        if (!d.cb.includes(jb) || !d.cc.includes(jc)) return false;
+        if (s < 0 || s > 3) return s >= -1 && s <= 4;
+        const ijk = [0, 0, 0];
+        ijk[d.a] = s; ijk[b] = jb; ijk[c] = jc;
+        return owner.get(ijk.join(",")) === n;
+      };
+      const boxes = [];
+      let notches = 0;
+      for (let s = -1; s <= 4; s++) for (const jb of d.cb) for (const jc of d.cc) {
+        if (!has(s, jb, jc)) { notches++; continue; }
+        const lo = [0, 0, 0], hi = [0, 0, 0];
+        [lo[d.a], hi[d.a]] = span(s);
+        [lo[b], hi[b]] = span(jb);
+        [lo[c], hi[c]] = span(jc);
+        // push into the neighbours of the same bar
+        const nb = [[s - 1, jb, jc, d.a, 0], [s + 1, jb, jc, d.a, 1], [s, jb - 1, jc, b, 0], [s, jb + 1, jc, b, 1], [s, jb, jc - 1, c, 0], [s, jb, jc + 1, c, 1]];
+        for (const [ss, bb, cc, ax, up] of nb) if (has(ss, bb, cc)) { if (up) hi[ax] += 1.5 * r; else lo[ax] -= 1.5 * r; }
+        boxes.push({ c: lo.map((v, q) => (v + hi[q]) / 2), s: lo.map((v, q) => (hi[q] - v) / 2) });
       }
-      out.push(at(along + w, n0), at(along + w, 0));
-      return out;
-    };
-    // outline of the cell [x0, x1] x [y0, y1]: edges CCW (bottom, right,
-    // top, left), each a tab on a cut or null on the border; round[i] = the
-    // corner at the start of edge i is an outer corner
-    const outline = (x0, x1, y0, y1, edges, round) => {
-      const P = [V2(x0, y0), V2(x1, y0), V2(x1, y1), V2(x0, y1)];
-      const pts = [];
-      for (let i = 0; i < 4; i++) {
-        const a = P[i], b = P[(i + 1) % 4];
-        const d = b.clone().sub(a).normalize();
-        const outward = V2(d.y, -d.x);
-        const s = round[i] ? a.clone().addScaledVector(d, RC) : a.clone();
-        const e = round[(i + 1) % 4] ? b.clone().addScaledVector(d, -RC) : b.clone();
-        pts.push(s);
-        if (edges[i]) pts.push(...tabPts(a, b, edges[i], outward));
-        pts.push(e);
-        if (round[(i + 1) % 4]) {
-          const dn = P[(i + 2) % 4].clone().sub(b).normalize();
-          const c = b.clone().addScaledVector(d, -RC).addScaledVector(dn, RC);
-          const u = e.clone().sub(c), v = b.clone().addScaledVector(dn, RC).sub(c);
-          for (let k = 1; k < 8; k++) {
-            const f = (k / 8) * (Math.PI / 2);
-            pts.push(c.clone().addScaledVector(u, Math.cos(f)).addScaledVector(v, Math.sin(f)));
-          }
+      const sdf = (x, y, z) => {
+        let m = Infinity;
+        for (const B of boxes) {
+          const v = roundBoxSdf(x, y, z, B.c, B.s, r);
+          if (v < m) m = v;
         }
-      }
-      // drop repeated points, then inset by BEVEL + SEAM / 2 (CCW: inward = left)
-      const q = pts.filter((p, i) => p.distanceTo(pts[(i + 1) % pts.length]) > 1e-6);
-      const ins = BEVEL + SEAM / 2;
-      return q.map((p, i) => {
-        const pa = q[(i - 1 + q.length) % q.length], pb = q[(i + 1) % q.length];
-        const d1 = p.clone().sub(pa).normalize(), d2 = pb.clone().sub(p).normalize();
-        const n1 = V2(-d1.y, d1.x), n2 = V2(-d2.y, d2.x);
-        const m = n1.clone().add(n2);
-        if (m.lengthSq() < 1e-9) return p.clone().addScaledVector(n1, ins);
-        m.normalize();
-        return p.clone().addScaledVector(m, ins / Math.max(0.35, m.dot(n1)));
-      });
+        return m;
+      };
+      // bounding box of the bar (+ 2 grid steps)
+      const blo = [0, 0, 0], bhi = [0, 0, 0];
+      [blo[d.a], bhi[d.a]] = [-len / 2, len / 2];
+      [blo[b], bhi[b]] = [span(d.cb[0])[0], span(d.cb[1])[1]];
+      [blo[c], bhi[c]] = [span(d.cc[0])[0], span(d.cc[1])[1]];
+      const lo = blo.map((v) => v - 2 * h);
+      const nn = bhi.map((v, q) => Math.ceil((v + 2 * h - lo[q]) / h) + 1);
+      const g = surfaceNets(THREE, sdf, lo, nn, h);
+      const centre = V(...blo.map((v, q) => (v + bhi[q]) / 2));
+      const obj = new THREE.Group();
+      obj.position.copy(centre);
+      group.add(obj);
+      const mat = std(THREE, d.color, 0.58, 0.02);
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.position.copy(centre).negate();
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.body = true;
+      mesh.userData.bar = d.name;
+      mesh.userData.axis = "xyz"[d.a];
+      obj.add(mesh);
+      addHull(THREE, mesh, 0.026, ctx.hulls);
+      const axis = V(0, 0, 0);
+      axis.setComponent(d.a, 1);
+      return { def: d, obj, mat, centre, axis, notches };
+    });
+    const byName = Object.fromEntries(bars.map((x) => [x.def.name, x]));
+    const sm = (x) => {
+      const q = clamp(x, 0, 1);
+      return q * q * (3 - 2 * q);
     };
-    const piece = (pts) => {
-      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), {
-        depth: 2 * D - 2 * BEVEL, bevelEnabled: true, bevelThickness: BEVEL, bevelSize: BEVEL, bevelSegments: 3, curveSegments: 8,
-      });
-      g.translate(0, 0, -(D - BEVEL));
-      g.computeVertexNormals();
-      return g;
+    // working: which bar is out and how far (0 .. BURR.slide)
+    const workOf = (t) => {
+      const T = BURR.step * ORDER.length;
+      const q = ((t % T) + T) % T;
+      const k = Math.floor(q / BURR.step);
+      const f = (q - k * BURR.step) / BURR.step;
+      const out = f < 0.4 ? sm(f / 0.4) : f < 0.6 ? 1 : 1 - sm((f - 0.6) / 0.4);
+      return { name: ORDER[k], d: BURR.slide * out };
     };
-    const T = TABS;
-    const defs = [
-      { name: "lower-left", cell: [-XW, 0, Y0, YC], edges: [null, T.vLow, T.hLeft, null], round: [true, false, false, false], color: lilac },
-      { name: "lower-right", cell: [0, XW, Y0, YC], edges: [null, null, T.hRight, T.vLow], round: [false, true, false, false], color: sand },
-      { name: "upper-right", cell: [0, XW, YC, Y1], edges: [T.hRight, null, null, T.vUp], round: [false, false, true, false], color: lilac },
-      { name: "upper-left", cell: [-XW, 0, YC, Y1], edges: [T.hLeft, T.vUp, null, null], round: [false, false, false, true], color: sand },
+    // pass: the front Y bar snaps in, then one flash
+    const passOf = (t) => {
+      const q = ((t % BURR.pass) + BURR.pass) % BURR.pass;
+      const d = q < 0.4 ? 0.14 * (1 - (q / 0.4) ** 2) : 0;
+      const glow = q >= 0.4 && q < 1.2 ? Math.sin((Math.PI * (q - 0.4)) / 0.8) ** 2 : 0;
+      return { d, glow };
+    };
+    // mismatch: pushed in a little every 1.2 s, stops at the notch
+    const stuckOf = (t) => {
+      const q = (((t % 1.2) + 1.2) % 1.2) / 1.2;
+      return BURR.stuck - (q < 0.5 ? 0.05 * Math.sin((Math.PI * q) / 0.5) : 0);
+    };
+    const top = V(0, len / 2, -0.12);
+    const place = (t, s) => {
+      const w = s === "working" ? workOf(t) : null;
+      const p = s === "pass" ? passOf(t) : null;
+      const ph = (TAU * t) / RUN.period;
+      bars.forEach((bar, i) => {
+        const d = bar.def;
+        let off = 0;
+        if (w && w.name === d.name) off = w.d;
+        if (p && d.name === "y-front") off = p.d;
+        if (s === "mismatch" && d.name === "x-upper") off = stuckOf(t);
+        if (s === "run") off = BURR.rattle * Math.sin(2 * ph + 1.1 * i);
+        bar.obj.position.copy(bar.centre).addScaledVector(bar.axis, d.dir * off);
+        const mis = s === "mismatch" && d.name === "x-upper";
+        bar.obj.rotation.set(0, mis ? 0.07 : 0, mis ? -0.06 : 0);
+        // pass: the flash is each bar's own colour (brighter, not whiter)
+        bar.mat.emissive.setHex(mis ? C.miss : p ? d.color : 0x000000);
+        bar.mat.emissiveIntensity = mis ? 0.55 : p ? 0.45 * p.glow : 0;
+      });
+      const yb = byName["y-back"];
+      top.set(0, len / 2, -0.12).add(yb.obj.position).sub(yb.centre);
+    };
+    place(0, "idle");
+    // the eyes sit on the front ends of the two Z bars (left eye on z-left)
+    const surface = (dir) => {
+      const bar = dir.x < 0 ? byName["z-left"] : byName["z-right"];
+      bar.obj.updateMatrix();
+      const p = V(dir.x < 0 ? -u : u, 0.05, len / 2).sub(bar.centre).applyMatrix4(bar.obj.matrix);
+      const n = V(0, 0, 1).applyQuaternion(bar.obj.quaternion);
+      return { d: p.length(), point: p, normal: n };
+    };
+    const name = (n) => byName[n].def.label;
+    return {
+      group, top, surface, deforms: true, style: "burr",
+      shoulders: { R: V(0.8, -0.28, 0.12), L: V(-0.8, -0.28, 0.12) },
+      parts: bars.map((b) => ({ name: b.def.name, axis: "xyz"[b.def.a], color: "#" + b.def.color.toString(16).padStart(6, "0"), notches: b.notches })),
+      counts: { bars: 6, axes: 3 },
+      caption: "棒 6 本 · 3 つの向きに噛み合う組木 (6 本組木)",
+      update(t, s) { place(t, s); },
+      contour(t, s) {
+        const info = [
+          s === "working" ? `組み立ての順番を試している · ${name(workOf(t).name)}の棒を抜いて戻す`
+            : s === "pass" ? "最後の棒がぴたっと収まった"
+              : s === "mismatch" ? "横の上の棒が途中で引っかかって入らない (食い違い)"
+                : "6 本の棒が 3 つの向きに噛み合っている",
+          "色は棒の向きごと (コンターではない)",
+        ];
+        return { info };
+      },
+    };
+  }
+
+  // packager, opts.packagerStyle = "rings": three metal rings that hold each
+  // other and do not come apart (Borromean rings). Ring k is an ellipse in a
+  // coordinate plane, semi axis RINGS.b on the first axis and RINGS.a on the
+  // second, in the cyclic order (x, y), (y, z), (z, x): a tall ring facing
+  // the front (the legs hang from its lower arc), a ring front to back (in
+  // front of the face) and a wide flat ring that carries the eyes. Metals:
+  // steel (white with 12 % --s1), brass (--s4 with 25 % --paper) and the role
+  // colour (half with white). Working: the rings turn a little one at a time
+  // (0.12 rad, 1.4 s each); pass: one flash every 3 s; mismatch: the front to
+  // back ring is turned and stuck (0.22 rad), tinted red; run: they rattle.
+  const RINGS = { a: 0.84, b: 0.5, tube: 0.14, step: 1.4, turn: 0.12, stuck: 0.22 };
+  function ringPoint(k, th, out) {
+    const p = [0, 0, 0];
+    p[k] = RINGS.b * Math.cos(th);
+    p[(k + 1) % 3] = RINGS.a * Math.sin(th);
+    return out.set(p[0], p[1], p[2]);
+  }
+  function bodyPackagerRings(ctx) {
+    const { THREE, role } = ctx;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const { a, b, tube } = RINGS;
+    const DEFS = [
+      { name: "ring-xy", label: "正面の輪", color: mixHex(0xffffff, C.s[0], 0.12), spin: V(0, 1, 0) },
+      { name: "ring-yz", label: "前後の輪", color: mixHex(C.s[3], C.paper, 0.25), spin: V(0, 0, 1) },
+      { name: "ring-zx", label: "横の輪", color: mixHex(hexNum(role.color), 0xffffff, 0.5), spin: V(1, 0, 0) },
     ];
     const group = new THREE.Group();
-    const pieces = defs.map((p) => {
-      const g = piece(outline(...p.cell, p.edges, p.round));
+    const rings = DEFS.map((d, k) => {
+      class Ring extends THREE.Curve {
+        getPoint(s, out) { return ringPoint(k, TAU * s, out || new THREE.Vector3()); }
+      }
+      const g = new THREE.TubeGeometry(new Ring(), 160, tube, 20, true);
       const obj = new THREE.Group();
       group.add(obj);
-      const mat = std(THREE, p.color, 0.48, 0.04);
+      const mat = new THREE.MeshPhysicalMaterial({ color: d.color, metalness: 0.85, roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.15 });
       const mesh = new THREE.Mesh(g, mat);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.body = true;
-      mesh.userData.piece = p.name;
+      mesh.userData.ring = d.name;
       obj.add(mesh);
-      addHull(THREE, mesh, 0.028, ctx.hulls);
-      return { name: p.name, color: p.color, g, obj, mat };
+      addHull(THREE, mesh, 0.024, ctx.hulls);
+      return { def: d, obj, mat };
     });
-    const moving = pieces[0];
     const sm = (x) => {
-      const u = clamp(x, 0, 1);
-      return u * u * (3 - 2 * u);
+      const q = clamp(x, 0, 1);
+      return q * q * (3 - 2 * q);
     };
-    // how far the lower left piece is out of its place (working)
-    const slideOf = (t) => {
-      const u = ((t % 4.4) + 4.4) % 4.4;
-      return u < 2.0 ? 0.5 * (1 - sm(u / 2.0)) : u < 3.6 ? 0 : 0.5 * sm((u - 3.6) / 0.8);
+    const workOf = (t) => {
+      const T = RINGS.step * 3;
+      const q = ((t % T) + T) % T;
+      const k = Math.floor(q / RINGS.step);
+      const f = (q - k * RINGS.step) / RINGS.step;
+      return { k, ang: RINGS.turn * Math.sin(Math.PI * sm(f)) };
     };
     const place = (t, s) => {
-      const mis = s === "mismatch";
-      moving.obj.position.set(mis ? -0.03 : 0, mis ? 0.02 : 0, s === "working" ? slideOf(t) : mis ? 0.2 : 0);
-      moving.obj.rotation.set(mis ? -0.06 : 0, mis ? 0.12 : 0, mis ? 0.09 : 0);
-      moving.mat.emissive.setHex(mis ? C.miss : 0x000000);
-      moving.mat.emissiveIntensity = mis ? 0.35 : 0;
+      const w = s === "working" ? workOf(t) : null;
+      const q = ((t % 3) + 3) % 3;
+      const glow = s === "pass" && q < 0.8 ? Math.sin((Math.PI * q) / 0.8) ** 2 : 0;
+      const ph = (TAU * t) / RUN.period;
+      rings.forEach((R, k) => {
+        let ang = 0;
+        if (w && w.k === k) ang = w.ang;
+        const mis = s === "mismatch" && k === 1;
+        if (mis) ang = RINGS.stuck + 0.03 * Math.sin((TAU * t) / 0.6);
+        if (s === "run") ang = 0.03 * Math.sin(2 * ph + 1.3 * k);
+        R.obj.quaternion.setFromAxisAngle(R.def.spin, ang);
+        R.mat.emissive.setHex(mis ? C.miss : glow ? R.def.color : 0x000000);
+        R.mat.emissiveIntensity = mis ? 0.55 : 0.45 * glow;
+      });
     };
     place(0, "idle");
-    // the face sits on the upper pieces, which never move
-    const surfs = pieces.slice(2).map((p) => geomSurface(THREE, p.g));
-    const surface = (d, o) => surfs.map((f) => f(d, o)).filter(Boolean).reduce((b, h) => (!b || h.d > b.d ? h : b), null);
+    // the eyes sit on the front arc of the flat ring (ring-zx, k = 2)
+    const flat = rings[2];
+    const surface = (dir) => {
+      const x = Math.sign(dir.x || 1) * 0.27;
+      const th = Math.asin(x / a);
+      const c = ringPoint(2, th, V());
+      const n = V(c.x / (a * a), 0, c.z / (b * b)).normalize();
+      flat.obj.updateMatrix();
+      const p = c.addScaledVector(n, tube).applyMatrix4(flat.obj.matrix);
+      return { d: p.length(), point: p, normal: n.applyQuaternion(flat.obj.quaternion) };
+    };
+    const shoulder = (sx) => {
+      const c = ringPoint(2, Math.asin((sx * 0.78) / a), V());
+      return c.add(V(0, -0.02, 0));
+    };
     return {
-      group, top: new THREE.Vector3(0, Y1, 0), surface,
-      parts: pieces.map((p) => ({ name: p.name, color: "#" + p.color.toString(16).padStart(6, "0") })),
-      counts: { pieces: 4, tabs: 4 },
-      caption: "ピース 4 · 凹凸 4 · 前後にだけ抜ける 3D のパズル (色 = ピース)",
+      group, top: V(0, a + 0.8 * tube, 0), surface, deforms: true, style: "rings",
+      shoulders: { R: shoulder(1), L: shoulder(-1) },
+      parts: rings.map((R) => ({ name: R.def.name, color: "#" + R.def.color.toString(16).padStart(6, "0") })),
+      counts: { rings: 3 },
+      caption: "金属の輪 3 つ · 絡み合って外れない知恵の輪 (ボロミアンの輪)",
       update(t, s) { place(t, s); },
       contour(t, s) {
-        const info = [s === "working" ? `左下のピースをはめている · 残り ${slideOf(t).toFixed(2)}` : s === "mismatch" ? "左下のピースが向きちがいで入らない (食い違い)" : "ピースがぴったり噛み合っている", "色はピースごと (コンターではない)"];
+        const info = [
+          s === "working" ? `輪を外そうと試している · ${DEFS[workOf(t).k].label}を回す`
+            : s === "pass" ? "輪がきれいに収まった"
+              : s === "mismatch" ? "前後の輪が引っかかって戻らない (食い違い)"
+                : "3 つの輪が絡み合って外れない",
+          "色は輪ごと (コンターではない)",
+        ];
         return { info };
       },
     };
@@ -2704,7 +2941,7 @@
     applyScale();
     update(0, "idle");
     return {
-      group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null },
+      group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null, style: B.style || null },
       counts: B.counts, field: B.field || null,
       // strength: the tension arrows in body coordinates (frame = the body group)
       arrows: B.arrows ? B.arrows.map((a) => Object.assign({ frame: B.group }, a)) : null,

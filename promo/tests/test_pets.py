@@ -115,10 +115,24 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v6(self):
+    def test_version_mark_is_v7(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v6</div>', viewer)
-        self.assertIn("版は v6", (PETS / "README.md").read_text(encoding="utf-8"))
+        self.assertIn('<div id="ver">v7</div>', viewer)
+        self.assertIn("版は v7", (PETS / "README.md").read_text(encoding="utf-8"))
+
+    def test_packager_style_switch(self):
+        # v7: the burr is the default; opts.packagerStyle = "rings" picks the
+        # rings; the viewer has a switch shown for the packager only, in the URL
+        self.assertIn('ctx.opts.packagerStyle === "rings"', PET3D)
+        viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
+        self.assertIn('<div class="seg" data-key="pkg">', viewer)
+        self.assertIn('<button data-v="burr">組木</button><button data-v="rings">輪</button>', viewer)
+        self.assertIn('S.role === "packager"', viewer)
+        self.assertIn('p.set("pkg", S.pkg)', viewer)
+        self.assertIn("packagerStyle: S.pkg", viewer)
+        readme = (PETS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("packagerStyle", readme)
+        self.assertIn("`pkg`", readme)
 
     def test_states_and_buttons(self):
         states = re.search(r"const STATES = \[([^\]]+)\]", PET3D).group(1)
@@ -195,14 +209,19 @@ class Roles(unittest.TestCase):
         self.assertIn("cadMaterial(", des)
         for word in ("addFe(", "contourMaterial(", "addDots(", "ConeGeometry", "dimension"):
             self.assertNotIn(word, des)
-        # packager: no contour, no flow lines, no node dots; seams, not an exploded gap;
-        # v6: puzzle pieces with tabs, no screws
+        # packager: no contour, no flow lines, no node dots, no screws;
+        # v7: a six-piece burr (bars with notches, rounded, surface nets),
+        # not the v6 jigsaw pieces; the rings are the other style
         pkg = fn("bodyPackager")
-        for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots(", "screw"):
-            self.assertNotIn(word, pkg)
-        self.assertRegex(pkg, r"SEAM = 0\.00\d")
-        self.assertIn("tabPts(", pkg)
-        self.assertIn("ExtrudeGeometry", pkg)
+        rings = fn("bodyPackagerRings")
+        for src in (pkg, rings):
+            for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots(", "screw", "tabPts(", "ExtrudeGeometry"):
+                self.assertNotIn(word, src)
+        self.assertIn("surfaceNets(", pkg)
+        self.assertIn("roundBoxSdf(", pkg)
+        self.assertEqual(len(re.findall(r'\{ name: "[xyz]-\w+", label: "[^"]+", a: [012],', pkg)), 6)
+        self.assertIn("TubeGeometry", rings)
+        self.assertIn("MeshPhysicalMaterial", rings)
         # aero: the pressure coefficient (Bernoulli), not the speed
         aero = fn("bodyAero")
         self.assertIn("1 - (1.5 * s) ** 2", aero)
@@ -318,11 +337,17 @@ class Viewer(unittest.TestCase):
                     self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), title, role)
 
                 # the packager and the designer have no contour: no legend in the one-pet view either
-                for role in ("packager", "designer"):
+                for role in ("packager", "packager&pkg=rings", "designer"):
                     page.goto(url.replace("cae.strength", role))
                     page.wait_for_function("window.petViewer !== undefined", timeout=30000)
                     page.evaluate("window.petViewer.ready")
                     self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none", role)
+                    # the burr / rings switch is there for the packager only
+                    shown = page.evaluate("getComputedStyle(document.getElementById('pkg-grp')).display") != "none"
+                    self.assertEqual(shown, role.startswith("packager"), role)
+                    self.assertEqual(page.evaluate("window.petViewer.state.pkg"), "rings" if "rings" in role else "burr", role)
+                    if "rings" in role:
+                        self.assertIn("pkg=rings", page.evaluate("location.search"))
             finally:
                 browser.close()
 
@@ -484,28 +509,78 @@ class Viewer(unittest.TestCase):
           const dc = de.contour(1.0, 'working');
           out.designer = { hk: contourMats(de), cad, quantity: dc.quantity, hasMax: 'max' in dc, info: dc.info.length };
           de.dispose();
-          // packager: no contour; a puzzle of 4 pieces that lock into each other
+          // packager (v7): no contour; a six-piece burr, six bars on three axes
           const pk = HP.create(THREE, { role: 'packager' });
-          pk.update(1.2, 'idle');
-          pk.group.updateMatrixWorld(true);
-          const boxes = {};
           // in body coordinates (the body group, centre of the body at the origin)
-          pk.group.traverse((o) => {
-            if (!o.userData.body) return;
-            o.geometry.computeBoundingBox();
-            boxes[o.userData.piece] = o.geometry.boundingBox.clone().translate(o.parent.position);
-          });
-          const all = new THREE.Box3();
-          Object.values(boxes).forEach((b) => all.union(b));
+          let bodyGroup = null;
+          pk.group.traverse((o) => { if (o.userData.bar) bodyGroup = o.parent.parent; });
+          const bars = () => {
+            pk.group.updateMatrixWorld(true);
+            const inv = new THREE.Matrix4().copy(bodyGroup.matrixWorld).invert();
+            const r = {};
+            pk.group.traverse((o) => {
+              if (!o.userData.bar) return;
+              const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+              o.geometry.computeBoundingBox();
+              const b = o.geometry.boundingBox.clone().applyMatrix4(m);
+              r[o.userData.bar] = { axis: o.userData.axis, box: [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z],
+                                    tris: o.geometry.index.count / 3 };
+            });
+            return r;
+          };
+          pk.update(1.2, 'idle'); const rest = bars();
+          // cells of one bar must not overlap another bar: sample points inside each bar (rays)
+          const barMeshes = [];
+          pk.group.traverse((o) => { if (o.userData.bar) barMeshes.push(o); });
+          const sides = barMeshes.map((o) => o.material.side);
+          barMeshes.forEach((o) => { o.material.side = THREE.DoubleSide; });
+          const barRay = new THREE.Raycaster();
+          const inside = (o, p) => {
+            // odd number of crossings along +x = inside that bar
+            barRay.set(p, new THREE.Vector3(1, 0.0123, 0.0071).normalize());
+            barRay.far = 10;
+            return barRay.intersectObject(o, false).length % 2 === 1;
+          };
+          // the centres of the 4 x 4 x 4 cells of the middle cube (body coordinates, u = 0.28)
+          let both = 0, one = 0, tried = 0;
+          for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) {
+            const p = bodyGroup.localToWorld(new THREE.Vector3(-0.42 + 0.28 * i, -0.42 + 0.28 * j, -0.42 + 0.28 * k));
+            const n = barMeshes.filter((o) => inside(o, p)).length;
+            tried++;
+            if (n > 1) both++;
+            if (n === 1) one++;
+          }
+          barMeshes.forEach((o, i) => { o.material.side = sides[i]; });
           const c = pk.contour(1.0, 'working');
-          // working: the lower left piece slides in along z only
-          const ll = () => { let p = null; pk.group.traverse((o) => { if (o.userData.piece === 'lower-left') p = o.parent.position.clone(); }); return p; };
-          pk.update(0.0, 'working'); const out0 = ll();
-          pk.update(3.0, 'working'); const in3 = ll();
-          out.packager = { hk: contourMats(pk), boxes: Object.fromEntries(Object.entries(boxes).map(([k, b]) => [k, [b.min.x, b.min.y, b.max.x, b.max.y, b.min.z, b.max.z]])),
-                           size: [all.max.x - all.min.x, all.max.y - all.min.y], quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts,
-                           out0: out0.toArray(), in3: in3.toArray() };
+          const states = {}, lit = {};
+          for (const [t, s] of [[0.55, 'working'], [1.65, 'working'], [1.2, 'mismatch'], [0.1, 'pass'], [0.8, 'pass'], [2.0, 'pass']]) {
+            pk.update(t, s);
+            const b = bars();
+            states[s + t] = Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v.box.map((x, q) => x - rest[k].box[q])]));
+            let n = 0;
+            pk.group.traverse((o) => { if (o.userData.bar && o.material.emissiveIntensity > 0.3) n++; });
+            lit[s + t] = n;
+          }
+          const mats = lit;
+          out.packager = { hk: contourMats(pk), rest, quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts, style: pk.body.style,
+                           counts: pk.counts, both, one, tried, states, info: c.info, lit: mats };
           pk.dispose();
+          // the other style: three metal rings, linked (no ring touches another)
+          const rg = HP.create(THREE, { role: 'packager', packagerStyle: 'rings' });
+          const ringMeshes = [];
+          rg.group.traverse((o) => { if (o.userData.ring) ringMeshes.push(o); });
+          const curves = ringMeshes.map((o) => o.geometry.parameters.path);
+          let gap = Infinity;
+          for (let a = 0; a < 3; a++) for (let b = a + 1; b < 3; b++) {
+            for (let i = 0; i < 240; i++) for (let j = 0; j < 240; j++) {
+              gap = Math.min(gap, curves[a].getPoint(i / 240).distanceTo(curves[b].getPoint(j / 240)));
+            }
+          }
+          const rc = rg.contour(1.0, 'idle');
+          out.rings = { n: ringMeshes.length, tube: ringMeshes[0].geometry.parameters.radius, gap, style: rg.body.style, hk: contourMats(rg),
+                        quantity: rc.quantity, hasMax: 'max' in rc, metal: ringMeshes.map((o) => o.material.metalness),
+                        bars: (() => { let n = 0; rg.group.traverse((o) => { if (o.userData.bar) n++; }); return n; })() };
+          rg.dispose();
           // aero: the largest pressure is at the stagnation point on the nose
           const ae = HP.create(THREE, { role: 'cae.aero' });
           const af = ae.field;
@@ -588,23 +663,67 @@ class Viewer(unittest.TestCase):
         self.assertEqual(pk["hk"], 0, "no contour or flow material on the packager")
         self.assertIsNone(pk["quantity"])
         self.assertFalse(pk["hasMax"])
-        b = pk["boxes"]
-        self.assertEqual(sorted(b), ["lower-left", "lower-right", "upper-left", "upper-right"])
-        # one unit about as big as the other bodies
-        self.assertAlmostEqual(pk["size"][0], 1.92, delta=0.03)
-        self.assertAlmostEqual(pk["size"][1], 1.79, delta=0.03)
-        # the tabs reach into the neighbours (interlocked): the box of a piece
-        # with a head crosses the cut by more than 0.2
-        self.assertGreater(b["upper-left"][2], 0.2)      # head into upper-right
-        self.assertLess(b["lower-right"][0], -0.2)       # head into lower-left
-        self.assertLess(b["upper-left"][1], -0.2 - 0.2)  # head into lower-left
-        self.assertLess(b["upper-right"][1], -0.2 - 0.2) # head into lower-right
-        self.assertIn(len({p["color"] for p in pk["parts"]}), (2, 3))
-        # working: the piece slides along z only, and is seated at t = 3
-        self.assertAlmostEqual(pk["out0"][0], 0, places=6)
-        self.assertAlmostEqual(pk["out0"][1], 0, places=6)
-        self.assertGreater(pk["out0"][2], 0.4)
-        self.assertEqual(pk["in3"], [0, 0, 0])
+        self.assertEqual(pk["style"], "burr")
+        self.assertEqual(pk["counts"], {"bars": 6, "axes": 3})
+        rest = pk["rest"]
+        # six bars, two along each of the three axes; a bar is long along its
+        # axis (2.0) and 2u = 0.56 across, and the pair sits side by side
+        self.assertEqual(len(rest), 6)
+        self.assertEqual(sorted(v["axis"] for v in rest.values()), ["x", "x", "y", "y", "z", "z"])
+        for name, v in rest.items():
+            size = [v["box"][q + 3] - v["box"][q] for q in range(3)]
+            a = "xyz".index(v["axis"])
+            self.assertAlmostEqual(size[a], 2.0, delta=0.03, msg=name)
+            for q in range(3):
+                if q != a:
+                    self.assertAlmostEqual(size[q], 0.56, delta=0.03, msg=name)
+            self.assertGreater(v["tris"], 500, name)
+        # all bars cross the middle of the unit (a cross-shaped unit)
+        for name, v in rest.items():
+            for q in range(3):
+                self.assertLess(v["box"][q], 0.01, name)
+                self.assertGreater(v["box"][q + 3], -0.01, name)
+        # interlocked without overlap: no cell centre of the middle cube is
+        # inside two bars; all but the 8 corner cells are inside one
+        self.assertEqual(pk["tried"], 64)
+        self.assertEqual(pk["both"], 0)
+        self.assertEqual(pk["one"], 56)
+        # every bar has notches (cells it gives to the bars that cross it)
+        for p in pk["parts"]:
+            self.assertGreater(p["notches"], 0, p["name"])
+        self.assertEqual(len({p["color"] for p in pk["parts"]}), 3)
+        st = pk["states"]
+        moved = lambda k: [n for n, d in st[k].items() if max(abs(x) for x in d) > 1e-6]
+        # working: one bar at a time slides out along its own axis
+        for k in ("working0.55", "working1.65"):
+            m = moved(k)
+            self.assertEqual(len(m), 1, (k, m))
+            d = st[k][m[0]]
+            a = "xyz".index(rest[m[0]]["axis"])
+            self.assertGreater(abs(d[a]), 0.3, k)
+            for q in range(3):
+                if q != a:
+                    self.assertLess(abs(d[q]), 1e-6, k)
+        self.assertNotEqual(moved("working0.55"), moved("working1.65"))
+        # mismatch: the upper X bar is stuck out to -x and lit red
+        self.assertEqual(moved("mismatch1.2"), ["x-upper"])
+        self.assertLess(st["mismatch1.2"]["x-upper"][0], -0.25)
+        self.assertEqual(pk["lit"]["mismatch1.2"], 1)
+        # pass: the last bar is snapping in at first, then everything is seated and lights up once
+        self.assertEqual(moved("pass0.1"), ["y-front"])
+        self.assertEqual(moved("pass0.8"), [])
+        self.assertEqual(pk["lit"]["pass0.8"], 6)
+        self.assertEqual(pk["lit"]["pass2"], 0)  # JS writes 2.0 as "2"
+        # the rings: three metal rings that do not touch (linked, Borromean)
+        rg = res["rings"]
+        self.assertEqual(rg["style"], "rings")
+        self.assertEqual(rg["n"], 3)
+        self.assertEqual(rg["bars"], 0)
+        self.assertGreater(rg["gap"], 2 * rg["tube"], "the tubes of two rings do not overlap")
+        self.assertTrue(all(m >= 0.8 for m in rg["metal"]))
+        self.assertEqual(rg["hk"], 0, "no contour bands on the rings")
+        self.assertIsNone(rg["quantity"])
+        self.assertFalse(rg["hasMax"])
         ae = res["aero"]
         self.assertEqual(ae["quantity"], "圧力 (相対)")
         self.assertEqual(ae["arg"], ae["nose"], "largest pressure at the stagnation point")
