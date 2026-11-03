@@ -126,7 +126,7 @@ class DemoStepTest(unittest.TestCase):
         self.assertTrue(all(len(v) == 3 for v in disp["per_mesh_node"]))
         size = len(json.dumps(self.with_mesh))
         print(f"  frame_shell record with the mesh fields: {size / 1e6:.2f} MB")
-        self.assertLess(size, 1.5e6)
+        self.assertLess(size, 2.0e6)  # the 10 mm mesh with weld strips: about 35000 elements (1.6 MB)
 
     def test_no_mesh_no_mesh_fields(self):
         self.assertEqual(mesh_fields(self.no_mesh), [])
