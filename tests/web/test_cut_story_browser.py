@@ -44,6 +44,8 @@ BOXED_BODY = {"n03", "n04", "n06", "n07", "n15", "n16", "n17"}
 # The promo department's layout.json (as of their commit 52d12e9: 11e1cc7's values, N03's
 # shorter drive (loop_to_s 2.0), N04's own assembly box, n03.popup.ok_of_reading and
 # n17.page.domain_of_title), the sections the cut pages read, without the notes.
+# n11, n12 and n13 are as of their commit cce1262 (the other sections the cut pages read
+# are the same there).
 LAYOUT_JSON = r"""{
   "stage": {"w": 1920, "h": 1080},
   "subtitle_band": {"y": 910, "h": 170},
@@ -61,6 +63,9 @@ LAYOUT_JSON = r"""{
   "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 84, "h": 84, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48}, "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5, "domain_of_title": 1.4}, "dim_opacity": 0.3, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n11": {"duration_s": 14.6, "memo": {"x": 96, "y": 96, "w": 560, "h": 790, "title_px": 30, "text_px": 24}, "log": {"x": 680, "y": 96, "w": 1144, "h": 360, "title_px": 30, "text_px": 24}, "result": {"x": 680, "y": 480, "w": 1144, "h": 406, "title_px": 30, "text_px": 24}, "times": {"lead_s": 0.3, "plausible_s": 1.5, "memo_s": 4.9, "stop_s": 9.6, "run_s": 11.6}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n12": {"duration_s": 9.2, "table": {"x": 96, "y": 96, "w": 1728, "h": 560, "title_px": 30, "text_px": 28, "value_px": 56}, "cause": {"x": 96, "y": 680, "w": 1728, "h": 206, "title_px": 30, "text_px": 28}, "times": {"lead_s": 0.3, "mismatch_s": 1.0, "cause_s": 5.2, "fixed_s": 7.6}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n13": {"duration_s": 12.0, "want": {"x": 96, "y": 96, "w": 1728, "h": 96, "text_px": 30}, "shelf": {"x": 96, "y": 216, "w": 1100, "h": 670, "title_px": 26, "text_px": 22}, "code": {"x": 1220, "y": 216, "w": 604, "h": 300, "text_px": 18}, "check": {"x": 1220, "y": 540, "w": 604, "h": 346, "title_px": 26, "text_px": 24}, "times": {"lead_s": 0.3, "gap_s": 4.0, "write_s": 4.6, "check_s": 7.6, "shelf_s": 10.4}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "story": {
     "defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
     "cuts": {

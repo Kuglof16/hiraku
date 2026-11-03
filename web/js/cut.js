@@ -29,6 +29,9 @@ import { CutN07 } from "./cut_n07.js";
 import { CutN03, KINDS, storyOf } from "./cut_n03.js";
 import { CutN06 } from "./cut_n06.js";
 import { CutN17 } from "./cut_n17.js";
+import { CutN11 } from "./cut_n11.js";
+import { CutN12 } from "./cut_n12.js";
+import { CutN13 } from "./cut_n13.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -664,8 +667,9 @@ class CutN02 {
   }
 }
 
-// N04 and N15 (the grid of all domains and assembly) are in cut_grid.js; N16 (the assembly order) in cut_n16.js.
-const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16: CutN16, n07: CutN07, n03: CutN03, n06: CutN06, n17: CutN17 };
+// N04 and N15 (the grid of all domains and assembly) are in cut_grid.js; N16 (the assembly order) in cut_n16.js;
+// N11 (the hooks stop), N12 (the comparison and its cause) and N13 (a tool made in the run) in cut_n11.js .. cut_n13.js.
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16: CutN16, n07: CutN07, n03: CutN03, n06: CutN06, n17: CutN17, n11: CutN11, n12: CutN12, n13: CutN13 };
 
 // ---- story check ---------------------------------------------------------------
 // After each frame: the elements with a data-kind shown now, counted by kind against the
@@ -764,7 +768,7 @@ async function main() {
     const name = params.get("cut") ?? "n05";
     if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
-    cut = new CUTS[name](layout, stateOf(events));
+    cut = new CUTS[name](layout, stateOf(events), events); // N13 reads the order of the events too
     if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
     window.hiraku.cut = cut;
     if (!ONLY_HERO) initStory(layout, name);
