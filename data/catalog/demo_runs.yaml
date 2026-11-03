@@ -3,6 +3,8 @@
 # request: an A1 request instead of a run: the want of data/requirements/products/<product>.yaml is sent
 #   and Claude picks the domains (those products have no design kind yet: hiraku.designgen.archetypes is
 #   empty for their flags, so a run would stop before version 1).
+# estimate_usd: the rough cost of a real Claude run (hiraku.catalog.cost: the record-writing calls of its scripted
+#   run times the cost per call of the one real run measured), next to the file's cost_limit_usd. An estimate.
 # modes: how it is meant to be run. Every file here ran end to end in its scripted run before it was
 # listed, or stops where its line says (tests/tools/test_catalog.py checks the files load). Kept in
 # data/catalog/, not beside the requirements files, so nothing that runs every data/requirements/*.yaml
@@ -33,6 +35,7 @@ runs:
       手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
     file: offroad-4w-n12.yaml
     modes: [claude, scripted]
+    estimate_usd: 1.1  # 7 calls in scripted run 20261103-153411-offroad-4w-scripted (hiraku.catalog.cost)
     cuts: [N11, N12]
   - id: n13
     title: ロールバーのツールをその場で作る
@@ -41,6 +44,7 @@ runs:
       答えの分かっている例で確かめてから使う (台本の運転では、R4 は判定の無いまま止まる)
     file: offroad-4w-n13.claude.yaml
     modes: [claude]
+    estimate_usd: null  # its scripted run stops before R4; Claude writing the tool is not in any record yet
     cuts: [N13]
   - id: n14
     title: ナレッジを渡して規則にする
@@ -49,6 +53,7 @@ runs:
       回すときは、実行が始まってから data/knowledge/samples/bending-notes.md を A5 に落とす
     file: offroad-4w-n14.yaml
     modes: [scripted, claude]
+    estimate_usd: 3.5  # 23 calls in scripted run 20261103-153544-offroad-4w-scripted (hiraku.catalog.cost)
     cuts: [N14]
   - id: video
     title: 動画の運転 (限界の外を含む)
@@ -57,9 +62,11 @@ runs:
       版 2 で直せる赤は緑になる。限界の外は赤のまま、直しの回数を使い切って止まる
     file: offroad-4w-video.yaml
     modes: [scripted, claude]
+    estimate_usd: 45.7  # 299 calls in scripted run 20261103-153914-offroad-4w-scripted (hiraku.catalog.cost)
     cuts: [N04, N06, N17]
   - id: demo
     title: デモの車の 6 つの試験
     shows: 段差・フレーム・振動・組み立て・加速。版 1 の赤を設計役が直し、版 2 で全部緑
     file: offroad-4w.yaml
     modes: [scripted, claude]
+    estimate_usd: 12.5  # 82 calls in scripted run 20261103-153651-offroad-4w-scripted (hiraku.catalog.cost)

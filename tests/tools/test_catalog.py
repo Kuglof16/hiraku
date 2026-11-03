@@ -158,6 +158,22 @@ class CatalogTest(unittest.TestCase):
                 else:
                     self.assertTrue((REQUIREMENTS.parent / "products" / f"{r['request']['product']}.yaml").is_file())
 
+    def test_the_cost_estimate_counts_each_record_once(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from hiraku.catalog import cost
+
+        events = [{"kind": "prediction.recorded", "data": {"prediction_id": "pred-0001"}},
+                  {"kind": "comparison.recorded", "data": {"comparison_id": "cmp-0001"}},
+                  {"kind": "comparison.recorded", "data": {"comparison_id": "cmp-0001"}},  # updated: once
+                  {"kind": "agent.said", "data": {}}]
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+            self.assertEqual(cost.record_calls(tmp), 2)
+            self.assertAlmostEqual(cost.estimate_usd(tmp), 2 * cost.CALIBRATION_USD / cost.CALIBRATION_CALLS)
+
     def test_the_frame_yield_leaves_out_another_parts_members(self):
         d = loaded_design()
         frame_y = min_frame_yield(d)[0]
