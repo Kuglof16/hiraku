@@ -86,5 +86,6 @@ HOOK_RULES = {
     "HK1_prediction_first": "analyze needs prediction_ids that exist for the same design_version and load_case_id",
     "HK2_tool_usable": "analyze needs a tool whose spec has usable=true (all known-answer checks pass)",
     "HK3_cause_before_continue": "while a comparison in a domain is a mismatch without a cause, analyze and compare in that domain are denied",
-    "HK4_no_stop_before_judged": "the run may not stop while a picked domain is pending, unless the round or cost limit is reached (blocks are counted and capped)",
+    "HK4_no_stop_before_judged": "the run may not stop while a picked domain of the latest version is pending (the round limit only ends revisions; the latest version is still judged), unless the cost or turn limit is reached or no tool or formula can judge it (blocks are counted and capped)",
+    "HK5_light_first": "in a version, analyze with a tool of stage n is denied while any load case checked with a tool of a lower stage is red or not yet judged; a red goes to revise_design before heavier checks (tools of the same stage may run in parallel; stage 0 is layout and rules)",
 }
