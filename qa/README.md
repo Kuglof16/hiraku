@@ -11,7 +11,8 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `first_look.py` | 動画のカットとアプリの画面を、初めて見る人の目で点検する。絵を 8 枚ずつのシートにし、画像の判定器 (Codex CLI) に、何を言っている絵か・3 秒で分かるか・目が行く所・読めない札と重なり・直し方を絵ごとに聞き、直す所の一覧にする (判定器とモデルの名前も書く)。Pillow と ffmpeg が要る |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
-| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える |
+| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。同じ PC でほかの `qa.run_tests` が回っているときは、始めと終わりの要約に「warning: another qa.run_tests is running on this PC」を出す (システムの一時フォルダの `hiraku-run-tests/<pid>.json` で見る) |
+| `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方
@@ -46,9 +47,9 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
 
-- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転
-- 動画用の要件をもう 1 回回して、バイトで比べる
-- `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く (`MeshFieldRecord`)
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 1200 秒で、かかった秒数を標準エラーに 1 行出す
+- 動画用の要件をもう 1 回回して、バイトで比べる。2 回目は 1 回目と同時に回す (`ScriptedRun_offroad_4w_video` の中で 2 つのスレッド)。なので、そのクラスも運転 1 本ぶんの時間で終わる
+- `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く。ツールごとに 1 つのクラス (`MeshFieldRecord_<ツール名>`、例 `MeshFieldRecord_frame_shell`) なので、これも並べて回す。`HIRAKU_SLOW_TESTS` が無いときは `MeshFieldRecord` が 1 つだけあって、skip の理由を出す
 
 `HIRAKU_SLOW_TESTS=1` で回すのは次のとき:
 
