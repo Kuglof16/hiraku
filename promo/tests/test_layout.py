@@ -194,12 +194,40 @@ class SharedShape(unittest.TestCase):
         right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
         bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
         self.assertLessEqual(bottom, r["subtitle_band"]["y"])
-        self.assertLessEqual(right, n["result"]["x"])  # the grid and the result column side by side
-        res = n["result"]
-        self.assertLessEqual(res["y"] + res["h"], r["subtitle_band"]["y"])
-        self.assertLessEqual(res["x"] + res["w"], r["safe"]["x"] + r["safe"]["w"])
+        self.assertEqual(right, r["safe"]["x"] + r["safe"]["w"])  # full width, no result column
+        self.assertNotIn("result", n)
         self.assertEqual(len(n["panes"]), g["cols"] * g["rows"])
-        self.assertGreaterEqual(min(res["title_px"], res["text_px"], n["pane"]["rate"]["size_px"]), r["min_text_px"])
+        self.assertGreaterEqual(n["pane"]["rate"]["size_px"], r["min_text_px"])
+        self.assertGreater(n["pane"]["verdict"]["of_label"], 1)
+
+    def test_feature_and_list_boxes_fill_the_grid(self):
+        # N04 / N15 / N06: one large box and a small list, side by side in the grid's box
+        r = self.rules
+        for cut, count in (("n04", 7), ("n15", 7), ("n06", 6)):
+            n = r[cut]
+            g, f, ls = n["grid"], n["feature"], n["list"]
+            right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+            bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+            self.assertEqual((f["x"], f["y"], ls["y"]), (g["x"], g["y"], g["y"]), cut)
+            self.assertEqual(f["x"] + f["w"] + g["gap_x"], ls["x"], cut)
+            self.assertEqual((ls["x"] + ls["w"], f["y"] + f["h"], ls["y"] + ls["h"]), (right, bottom, bottom), cut)
+            self.assertGreaterEqual(ls["cols"] * ls["rows"], count, cut)
+            slot_w = (ls["w"] - (ls["cols"] - 1) * ls["gap_x"]) / ls["cols"]
+            slot_h = (ls["h"] - (ls["rows"] - 1) * ls["gap_y"]) / ls["rows"]
+            self.assertLessEqual(slot_w / slot_h, 2.6, cut)  # not a thin strip (was 560 x 111 in N06)
+        self.assertEqual((r["n04"]["feature"], r["n04"]["list"]), (r["n15"]["feature"], r["n15"]["list"]))
+
+    def test_style_keys_for_the_screens_department(self):
+        r = self.rules
+        self.assertEqual(r["n07"]["label"]["of_view_h"], 0.08)
+        self.assertEqual(r["n03"]["popup"]["reading_of_title"], 2)
+        self.assertEqual(r["n17"]["page"]["change_of_title"], 1.5)
+        self.assertTrue(0 < r["n17"]["dim_opacity"] < 1)
+        for cut, col in (("n01", "pane"), ("n16", "steps")):
+            v, c = r[cut]["view"], r[cut][col]
+            self.assertEqual((v["w"], c["x"], c["x"] + c["w"]), (1400, v["x"] + v["w"] + 24, r["safe"]["x"] + r["safe"]["w"]), cut)
+        s, v = r["n16"]["seek"], r["n16"]["view"]
+        self.assertEqual((s["x"] - v["x"], v["x"] + v["w"] - (s["x"] + s["w"])), (24, 24))
 
     def test_n05(self):
         n = self.rules["n05"]

@@ -93,16 +93,16 @@ window.PROMO_LAYOUT = {
     "view": {
       "x": 96,
       "y": 96,
-      "w": 1200,
+      "w": 1400,
       "h": 790,
       "_note": "the 3D view; bottom 886, above the subtitle band"
     },
     "pane": {
-      "x": 1328,
+      "x": 1520,
       "y": 96,
-      "w": 496,
+      "w": 304,
       "h": 790,
-      "_note": "result cards on the right"
+      "_note": "result cards in a narrow column on the right (the 3D is what is read)"
     },
     "card": {
       "gap": 20,
@@ -141,11 +141,11 @@ window.PROMO_LAYOUT = {
       "y": 96,
       "cols": 3,
       "rows": 2,
-      "tile_w": 400,
+      "tile_w": 560,
       "tile_h": 383,
       "gap_x": 24,
       "gap_y": 24,
-      "_note": "five tests and the legend; bottom 886, above the subtitle band"
+      "_note": "five tests and the legend over the full width (right edge 1824); bottom 886, above the subtitle band"
     },
     "panes": [
       "tilt",
@@ -165,18 +165,11 @@ window.PROMO_LAYOUT = {
       },
       "rate": {
         "size_px": 18
+      },
+      "verdict": {
+        "of_label": 2,
+        "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane"
       }
-    },
-    "result": {
-      "x": 1392,
-      "y": 96,
-      "w": 432,
-      "h": 790,
-      "title_px": 30,
-      "text_px": 20,
-      "row_gap": 16,
-      "rows": 2,
-      "_note": "limit values on the right; rows: result lines per test"
     },
     "times": {
       "lead_s": 0.3
@@ -213,6 +206,24 @@ window.PROMO_LAYOUT = {
       "gap_x": 24,
       "gap_y": 24,
       "_note": "seven domains and assembly; bottom 886, above the subtitle band"
+    },
+    "feature": {
+      "x": 96,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "_note": "the one domain shown large"
+    },
+    "list": {
+      "x": 972,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "cols": 2,
+      "rows": 4,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)"
     },
     "tests": [
       "handling",
@@ -289,6 +300,24 @@ window.PROMO_LAYOUT = {
       "gap_y": 24,
       "_note": "seven domains and assembly; bottom 886, above the subtitle band"
     },
+    "feature": {
+      "x": 96,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "_note": "the one domain shown large"
+    },
+    "list": {
+      "x": 972,
+      "y": 160,
+      "w": 852,
+      "h": 726,
+      "cols": 2,
+      "rows": 4,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)"
+    },
     "tests": [
       "handling",
       "powertrain",
@@ -342,26 +371,26 @@ window.PROMO_LAYOUT = {
     "view": {
       "x": 96,
       "y": 96,
-      "w": 1200,
+      "w": 1400,
       "h": 790,
       "_note": "the 3D assembly, the same box as n01.view; bottom 886"
     },
     "seek": {
       "x": 120,
       "y": 814,
-      "w": 1152,
+      "w": 1352,
       "h": 48,
       "_note": "the seek bar over the lower edge of the view, 24 px inside its sides and bottom"
     },
     "steps": {
-      "x": 1328,
+      "x": 1520,
       "y": 96,
-      "w": 496,
+      "w": 304,
       "h": 790,
       "title_px": 30,
       "text_px": 22,
       "row_gap": 12,
-      "_note": "the list of assembly steps on the right"
+      "_note": "the list of assembly steps in a narrow column on the right"
     },
     "times": {
       "lead_s": 0.3,
@@ -730,7 +759,8 @@ window.PROMO_LAYOUT = {
       "h": 790,
       "title_px": 30,
       "text_px": 22,
-      "_note": "battery charge and temperature, then speed, as graphs in the right column"
+      "reading_of_title": 2,
+      "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)"
     },
     "times": {
       "lead_s": 0.3,
@@ -762,6 +792,24 @@ window.PROMO_LAYOUT = {
       "gap_x": 24,
       "gap_y": 24,
       "_note": "bottom 886, above the subtitle band"
+    },
+    "feature": {
+      "x": 96,
+      "y": 96,
+      "w": 1104,
+      "h": 790,
+      "_note": "the one design shown large"
+    },
+    "list": {
+      "x": 1224,
+      "y": 96,
+      "w": 600,
+      "h": 790,
+      "cols": 2,
+      "rows": 3,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247"
     },
     "tests": [
       "step_break",
@@ -820,7 +868,8 @@ window.PROMO_LAYOUT = {
       "x": 120,
       "y": 120,
       "size_px": 30,
-      "_note": "inside the view, top left: 補強の前 / 補強の後"
+      "of_view_h": 0.08,
+      "_note": "inside the view, top left: 補強の前 / 補強の後. Text size: view.h x of_view_h (63 px), at least size_px"
     },
     "times": {
       "lead_s": 0.3,
@@ -1220,8 +1269,11 @@ window.PROMO_LAYOUT = {
       "h": 806,
       "title_px": 34,
       "text_px": 22,
-      "_note": "centred; bottom 886"
+      "change_of_title": 1.5,
+      "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)"
     },
+    "dim_opacity": 0.3,
+    "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
     "times": {
       "lead_s": 0.3,
       "light_s": 5.8,
