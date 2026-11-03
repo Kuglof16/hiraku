@@ -155,14 +155,14 @@ class FrameTubes(BuiltinTool):
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
     needs_mesh = True
-    applies_to = "space_frame_utv"  # the kind of design (hiraku.designgen ARCHETYPES key) the tool is for
+    applies_to = ["space_frame_utv"]  # the kinds of design (hiraku.designgen ARCHETYPES keys) the tool is for
     stage = 3  # contract tool_spec.stage: shell and solid finite elements
 
     def known_answers(self) -> list[Record]:
         return tube_known_answers()
 
     def describe(self) -> Record:
-        return dict(super().describe(), applies_to=self.applies_to, stage=self.stage)
+        return dict(super().describe(), applies_to=list(self.applies_to), stage=self.stage)
 
     def spec(self) -> Record:
         """The tool_spec; applies_to and stage only when the contract's tool_spec has those fields (it allows no
@@ -172,7 +172,7 @@ class FrameTubes(BuiltinTool):
         out = super().spec()
         fields = contract.schema().get("$defs", {}).get("tool_spec", {}).get("properties", {})
         if "applies_to" in fields:
-            out["applies_to"] = [self.applies_to]
+            out["applies_to"] = list(self.applies_to)
         if "stage" in fields:
             out["stage"] = self.stage
         return out

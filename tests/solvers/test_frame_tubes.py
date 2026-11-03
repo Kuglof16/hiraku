@@ -40,7 +40,7 @@ class KnownAnswersTest(unittest.TestCase):
         self.assertTrue(tool.needs_mesh)
         # applies_to and stage: always in describe(); in spec() when the contract's tool_spec has the fields
         desc = tool.describe()
-        self.assertEqual(desc["applies_to"], "space_frame_utv")
+        self.assertEqual(desc["applies_to"], ["space_frame_utv"])
         self.assertEqual(desc["stage"], 3)
         fields = contract.schema()["$defs"]["tool_spec"]["properties"]
         self.assertEqual("applies_to" in spec, "applies_to" in fields)
