@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import importlib
+import re
 import threading
 import time
 from datetime import datetime
@@ -320,10 +321,12 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 # ---------------------------------------------------------------------------- comparison
 
 
-def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None) -> Record:
-    """The analysis result of a quantity. Given at several places, the unfavourable one: for
-    the criterion's quantity the largest under <= and <, the smallest under >= and >;
-    otherwise the largest in size."""
+def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None,
+                 predicted_quantity: str | None = None) -> Record:
+    """The analysis result of a quantity. Given at several places, the unfavourable one: when the
+    comparison is for the criterion (the criterion's quantity is this result's name or the
+    prediction's quantity, predicted_quantity, as when result_quantity names the result) the
+    largest under <= and <, the smallest under >= and >; otherwise the largest in size."""
     hits = [r for r in analysis["results"] if r["quantity"] == quantity]
     if not hits:
         have = ", ".join(sorted({r["quantity"] for r in analysis["results"]})) or "なし"
@@ -331,7 +334,7 @@ def _pick_result(analysis: Record, quantity: str, criterion: Record | None = Non
             f"解析 {analysis['analysis_id']} の結果に {quantity!r} がありません (結果: {have})。"
             f"名前が違うだけなら result_quantity で解析の側の名前を指定してください"
         )
-    if criterion is not None and criterion["quantity"] == quantity:
+    if criterion is not None and criterion["quantity"] in (quantity, predicted_quantity):
         if unfavourable_side(criterion["op"]) == "larger":
             return max(hits, key=lambda r: r["value"])
         return min(hits, key=lambda r: r["value"])
@@ -353,7 +356,11 @@ def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> N
 
 def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Compare a prediction with an analysis result. A match against a load case
-    with a criterion also makes the verdict and updates the domain's judgement."""
+    with a criterion also makes the verdict and updates the domain's judgement.
+
+    diff_rel = (analysed - predicted) / |predicted|. A prediction of 0 (zero predictions can be
+    legitimate, e.g. an interference of 0 mm) divides by |analysed| instead (0 when both are 0),
+    which the contract does not define."""
     _check_input("compare", args)
     pred = ctx.prediction(args["prediction_id"])
     if pred is None:
@@ -372,7 +379,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         )
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit)
+    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"])
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
@@ -576,8 +583,11 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
 
     Checks: only the designer; every variable is a revisable one of the
     design (hiraku.designgen.variables), keeps its unit and stays in its
-    range; a reason; the number of revisions stays within round_limit and the
-    cost within cost_limit_usd. hiraku.designgen.regenerate rebuilds the
+    range; a reason; the number of revisions stays within round_limit; and the
+    project's cost_usd is below cost_limit_usd. cost_usd is the cost as of the lead's
+    last finished turn (written when a ResultMessage ends a turn, runner.MessageLog),
+    so inside a turn this check sees the previous turn's cost; what stops a run in the
+    middle of a turn is the SDK's max_budget_usd. hiraku.designgen.regenerate rebuilds the
     design; then design.created (parent_version, change_reason) and pending
     tiles for the new version, whose load cases are all redone.
     """
@@ -593,7 +603,8 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
         raise ToolError(f"設計の直しは round_limit ({p['round_limit']} 回) まで使い切りました (今の版は {v})。"
                         f"直さずに、今の版の判定で終えてください")
     if p["cost_usd"] >= p["cost_limit_usd"]:
-        raise ToolError(f"費用の上限 {p['cost_limit_usd']} USD に達しているので、設計は直せません")
+        raise ToolError(f"まとめ役の最後に終わった番の時点で、費用 ({p['cost_usd']:.4g} USD) が上限 "
+                        f"{p['cost_limit_usd']} USD に達しているので、設計は直せません")
     design = ctx.store.design()
     found = _variables(ctx, design)
     if found is None:
@@ -674,10 +685,40 @@ def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) 
     return _made_answer(toolmaker.make_tool(code, taken=tuple(ctx.tools)))
 
 
+UNNAMED_TOOL = "unnamed"
+UNKNOWN_TOOL_TITLE = "形の分からない道具 (spec() が契約の tool_spec に合わない)"
+
+
+def attempt_spec(made: Any, agent: str, picked: list[str]) -> Record:
+    """The tool_spec to record for an attempt: its own when it fits the contract, else a minimal one
+    that fits, usable false: the attempt's fields where they fit the contract, otherwise name
+    UNNAMED_TOOL, title UNKNOWN_TOOL_TITLE, the caller's domain (cae.<domain>, else the run's first
+    picked domain), base K0 and no tests (placeholders: the attempt did not say)."""
+    spec = made.spec if isinstance(made.spec, dict) else {}
+    if spec and not contract.errors("tool_spec", spec):
+        return spec
+    bases = contract.schema()["$defs"]["base"]["enum"]
+    caller = agent.split(".", 1)[1] if agent.startswith("cae.") else None
+    domain = next((d for d in (spec.get("domain"), caller, *picked) if d in contract.DOMAINS), contract.DOMAINS[0])
+    name = spec.get("name") if isinstance(spec.get("name"), str) and re.fullmatch(r"[a-z0-9_]+", spec["name"]) else None
+    checks = [c for c in made.checks if not contract.errors("tool_check", c)]
+    return {
+        "name": name or UNNAMED_TOOL,
+        "title": spec["title"] if isinstance(spec.get("title"), str) else UNKNOWN_TOOL_TITLE,
+        "domain": domain,
+        "base": spec["base"] if spec.get("base") in bases else "K0",
+        "tests": [],
+        "origin": "claude",
+        "usable": False,
+        "checks": checks,
+    }
+
+
 def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
-    """Check a tool's code like check_tool; every checked attempt is recorded (tool.checked, and
-    the code under <run>/tools/), and a tool that passes all its known answers goes on the shelf
-    (origin claude), where analyze can run it like a built-in tool."""
+    """Check a tool's code like check_tool; every attempt is recorded (tool.checked, and the code
+    under <run>/tools/): its spec when it fits the contract's tool_spec, else a minimal one
+    (attempt_spec, usable false). A tool that passes all its known answers and whose spec fits the
+    contract goes on the shelf (origin claude), where analyze can run it like a built-in tool."""
     from hiraku.solvers import toolmaker
 
     code = _check_code_input("make_tool", args)
@@ -687,15 +728,17 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
     made = ctx.made_tools.make(code, taken=tuple(ctx.tools), reason=args.get("reason"))
-    spec = made.spec
-    if spec is not None and not contract.errors("tool_spec", spec):
-        ok = "使えます" if made.usable else "使えません (" + "; ".join(made.problems)[:300] + ")"
-        ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"道具 {spec['name']} を作って確かめました: {ok}",
-                       data=spec)
-    if made.usable:
+    spec = attempt_spec(made, agent, list(ctx.picked))
+    usable = bool(made.usable) and spec is made.spec and spec["usable"]
+    ok = "使えます" if usable else "使えません (" + ("; ".join(made.problems) or "spec() の形が契約に合いません")[:300] + ")"
+    ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"道具 {spec['name']} を作って確かめました: {ok}",
+                   data=spec)
+    if usable:
         ctx.tools[made.name] = made.tool
         ctx.specs[made.name] = spec
-    return _made_answer(made)
+    out = _made_answer(made)
+    out["usable"] = usable
+    return out
 
 
 FUNCTIONS = {

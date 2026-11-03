@@ -88,6 +88,17 @@ class HandlerTest(RunCase, unittest.TestCase):
         self.assertTrue(out["is_error"])
         self.assertIn("設計役", out["content"][0]["text"])
 
+    def test_a_role_limited_tool_without_a_hook_record_is_refused(self):
+        for name, args in (("revise_design", {"changes": {"track": {"value": 1150.0, "unit": "mm"}}, "reason": "x"}),
+                           ("propose_design", {"archetype": "ladder_4w", "reason": "x"}),
+                           ("write_report", {"summary": "x", "next": []})):
+            with self.subTest(name=name):
+                out = self.call(name, args)  # nothing pushed: the PreToolUse hook did not see the call
+                self.assertTrue(out["is_error"])
+                self.assertIn("呼んだ役が分からない", out["content"][0]["text"])
+        self.assertEqual(self.ctx.version, 1)
+        self.assertNotIn("report.written", self.kinds())
+
     def test_attribution_reaches_the_record(self):
         args = {"load_case_id": "P1-step100", "quantity": "front_wheel_force", "formula_id": "step_climb.wheel_force_rigid",
                 "output": "F", "inputs": {"r": {"value": 300.0, "unit": "mm"}, "h": {"value": 100.0, "unit": "mm"},
