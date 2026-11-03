@@ -38,6 +38,21 @@ DESIGN_W, DESIGN_H = 1920, 1080
 FRAME_PATTERN = "%05d.png"
 GPU_ARGS = ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"]
 
+# Video encoders. auto: h264_nvenc (the graphics card) when ffmpeg has it and a trial
+# encode works, else libx264. NVENC runs in constant-quality VBR; -cq = x264 CRF +
+# NVENC_CQ_OFFSET gave an SSIM/PSNR to the lossless source at least as high as libx264
+# on the measured clips (promo/ASSEMBLE.md, "GPU").
+ENCODERS = ("auto", "nvenc", "x264")
+NVENC_PRESET = "p7"
+NVENC_LOOKAHEAD = 32
+NVENC_CQ_OFFSET = 0
+# Without a maxrate, VBR with -b:v 0 held the grain cuts to about 17 Mb/s whatever the -cq
+# (cq 8-14 gave the same 11.9 MB file). 240 Mb/s is a ceiling well above the measured
+# grain cut at cq 10 (59.3 MB over 5.53 s, about 86 Mb/s); its relation to H.264 level
+# limits has not been checked.
+NVENC_MAXRATE = "240M"
+NVENC_BUFSIZE = "480M"
+
 # One interface over the two kinds of screen, installed as window.__export.
 ADAPTER = """() => {
   if (window.promo) window.__export = {
@@ -102,12 +117,71 @@ def ffmpeg_path() -> str:
     return found
 
 
+def nvenc_available(ffmpeg: str = "ffmpeg") -> bool:
+    """True when ffmpeg lists h264_nvenc and a short trial encode with it succeeds."""
+    if ffmpeg in _NVENC_OK:
+        return _NVENC_OK[ffmpeg]
+    ok = False
+    try:
+        listed = subprocess.run([ffmpeg, "-hide_banner", "-encoders"], capture_output=True,
+                                text=True, timeout=60).stdout
+        if " h264_nvenc " in listed:
+            trial = subprocess.run(
+                [ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                 "-i", "testsrc2=s=256x144:r=30:d=0.2", *nvenc_args(20), "-f", "null", "-"],
+                capture_output=True, timeout=60)
+            ok = trial.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    _NVENC_OK[ffmpeg] = ok
+    return ok
+
+
+_NVENC_OK: dict[str, bool] = {}
+
+
+def pick_encoder(choice: str, ffmpeg: str = "ffmpeg", available=nvenc_available) -> str:
+    """'nvenc' or 'x264' for an --encoder choice. auto takes nvenc when it works, else x264."""
+    if choice not in ENCODERS:
+        raise ValueError(f"unknown encoder {choice!r}: use one of {', '.join(ENCODERS)}")
+    if choice == "x264":
+        return "x264"
+    if available(ffmpeg):
+        return "nvenc"
+    if choice == "nvenc":
+        raise SystemExit("h264_nvenc is not usable with this ffmpeg or GPU: use --encoder x264 or auto")
+    return "x264"
+
+
+def nvenc_args(cq: float) -> list[str]:
+    """h264_nvenc in constant-quality VBR mode (see NVENC_* above for how the values were chosen)."""
+    return ["-c:v", "h264_nvenc", "-preset", NVENC_PRESET, "-tune", "hq", "-rc", "vbr",
+            "-cq", f"{cq:g}", "-b:v", "0", "-maxrate", NVENC_MAXRATE, "-bufsize", NVENC_BUFSIZE,
+            "-spatial-aq", "1", "-temporal-aq", "1",
+            "-rc-lookahead", str(NVENC_LOOKAHEAD), "-bf", "3", "-b_ref_mode", "middle",
+            "-profile:v", "high"]
+
+
+def nvenc_cq(crf: float) -> float:
+    """The NVENC -cq that matched libx264 at this CRF on the measured clips (promo/ASSEMBLE.md)."""
+    return max(1.0, crf + NVENC_CQ_OFFSET)
+
+
+def video_args(encoder: str, crf: float, x264_preset: str, tune: str | None = None) -> list[str]:
+    """Codec arguments: libx264 at crf/preset (tune), or h264_nvenc at the matching -cq."""
+    if encoder == "nvenc":
+        return nvenc_args(nvenc_cq(crf))
+    out = ["-c:v", "libx264", "-preset", x264_preset, "-crf", str(crf)]
+    return out + (["-tune", tune] if tune else [])
+
+
 def encode_command(frames_dir: Path, out: Path, fps: int, height: int,
-                   crf: int = 14, ffmpeg: str = "ffmpeg") -> list[str]:
+                   crf: int = 14, ffmpeg: str = "ffmpeg", encoder: str = "x264") -> list[str]:
     """ffmpeg arguments that join numbered PNG frames into an H.264 file.
 
     Frames are scaled to ``height`` (16:9) with Lanczos, so frames captured
     at 3840x2160 give a supersampled 1080p clip or a 1:1 4K clip.
+    ``encoder`` is 'x264' or 'nvenc' (resolved already, see pick_encoder).
     """
     width = height * DESIGN_W // DESIGN_H
     vf = (f"scale={width}:{height}:flags=lanczos+accurate_rnd+full_chroma_int"
@@ -117,8 +191,8 @@ def encode_command(frames_dir: Path, out: Path, fps: int, height: int,
         "-framerate", str(fps),
         "-i", str(frames_dir / FRAME_PATTERN),
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "slow", "-crf", str(crf),
-        "-tune", "animation",
+        *video_args(encoder, crf, "slow", "animation"),
+        *(["-pix_fmt", "yuv420p"] if encoder == "nvenc" else []),
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
         "-movflags", "+faststart",
         str(out),
@@ -196,11 +270,18 @@ def export_stills(screen: str | Path, out_dir: Path, at: list[float], scale: flo
     return paths
 
 
-def encode(frames_dir: Path, out: Path, fps: int, height: int, crf: int) -> None:
+def encode(frames_dir: Path, out: Path, fps: int, height: int, crf: int, encoder: str = "auto") -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = encode_command(frames_dir, out, fps, height, crf, ffmpeg=ffmpeg_path())
+    ff = ffmpeg_path()
+    enc = pick_encoder(encoder, ff)
+    cmd = encode_command(frames_dir, out, fps, height, crf, ffmpeg=ff, encoder=enc)
     subprocess.run(cmd, check=True)
-    print(f"wrote {out}")
+    print(f"wrote {out} ({enc})")
+
+
+def encoder_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--encoder", choices=ENCODERS, default="auto",
+                   help="auto: h264_nvenc when it works, else libx264")
 
 
 def parse_size(text: str) -> tuple[int, int]:
@@ -242,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--height", type=int, default=1080)
     p.add_argument("--crf", type=int, default=14)
+    encoder_arg(p)
 
     p = sub.add_parser("clip", help="frames + encode")
     p.add_argument("screen", type=screen_arg)
@@ -250,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--height", type=int, default=1080)
     p.add_argument("--crf", type=int, default=14)
+    encoder_arg(p)
     capture_args(p)
 
     a = ap.parse_args(argv)
@@ -259,10 +342,10 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "frames":
         export_frames(a.screen, a.out_dir, a.fps, a.scale, a.start, a.end, a.layer, a.size, a.gpu)
     elif a.cmd == "encode":
-        encode(a.frames_dir, a.out, a.fps, a.height, a.crf)
+        encode(a.frames_dir, a.out, a.fps, a.height, a.crf, a.encoder)
     elif a.cmd == "clip":
         export_frames(a.screen, a.frames_dir, a.fps, a.scale, 0.0, None, None, a.size, a.gpu)
-        encode(a.frames_dir, a.out, a.fps, a.height, a.crf)
+        encode(a.frames_dir, a.out, a.fps, a.height, a.crf, a.encoder)
     return 0
 
 

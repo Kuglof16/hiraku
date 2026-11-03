@@ -5,6 +5,10 @@ rem this file never writes it or asks for it. Without it, scripted runs and repl
 setlocal
 cd /d "%~dp0"
 set "PY=%~dp0.venv\Scripts\python.exe"
-if not exist "%PY%" set "PY=python"
+if not exist "%PY%" (
+  echo HIRAKU: .venv\Scripts\python.exe was not found. Make the venv first (see README).
+  pause
+  exit /b 1
+)
 "%PY%" -m hiraku.webserve --open
 if errorlevel 1 pause

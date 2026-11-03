@@ -17,9 +17,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,18 +48,35 @@ def _child(code: str, action: str, args: Record | None, timeout_s: float) -> Rec
     """Run the tool's code in its own process; {"ok": False, "error": sentence} on any failure."""
     req = json.dumps({"repo": str(REPO), "code": code, "action": action, "args": args or {}}, ensure_ascii=True)
     env = {k: v for k, v in os.environ.items() if k not in SECRET_ENV}
-    with tempfile.TemporaryDirectory(prefix="hiraku-tool-") as cwd:
-        try:
-            p = subprocess.run([sys.executable, "-I", str(RUNNER)], input=req.encode("ascii"), capture_output=True,
-                               timeout=timeout_s, cwd=cwd, env=env)
-        except subprocess.TimeoutExpired:
-            what = "check()" if action == "check" else "run()"
-            return {"ok": False, "error": f"{what} が時間の上限 {timeout_s:g} s のうちに終わりませんでした"}
-    lines = [ln for ln in p.stdout.decode("ascii", "replace").splitlines() if ln.startswith(MARK)]
+    cwd = tempfile.mkdtemp(prefix="hiraku-tool-")
+    try:
+        p = subprocess.run([sys.executable, "-I", str(RUNNER)], input=req.encode("ascii"), capture_output=True,
+                           timeout=timeout_s, cwd=cwd, env=env)
+    except subprocess.TimeoutExpired:
+        what = "check()" if action == "check" else "run()"
+        return {"ok": False, "error": f"{what} が時間の上限 {timeout_s:g} s のうちに終わりませんでした"}
+    finally:
+        _remove(cwd)
+    lines =[ln for ln in p.stdout.decode("ascii", "replace").splitlines() if ln.startswith(MARK)]
     if not lines:
         tail = p.stderr.decode("utf-8", "replace")[-800:]
         return {"ok": False, "error": f"道具のプロセスが答えを返さずに終わりました (終了コード {p.returncode}): {tail}"}
     return json.loads(lines[-1][len(MARK):])
+
+
+def _remove(path: str, tries: int = 10, wait_s: float = 0.2) -> None:
+    """Remove a tool's working folder. On Windows a process just killed for its time limit can hold the folder
+    for a moment (WinError 32), so the removal is tried again for up to tries x wait_s; after that the folder is
+    left to the system's temporary-file cleaning."""
+    for k in range(tries):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            if k < tries - 1:
+                time.sleep(wait_s)
 
 
 def check_passes(c: Record) -> bool:

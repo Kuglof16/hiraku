@@ -2,7 +2,7 @@
 legend's fields of the beam and the shell analyses, the zoom to the largest element,
 before / after on one scale, and the N07 cut on stand-in layout rules.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (see test_browser.py).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (see test_browser.py).
 """
 
 import copy
@@ -28,7 +28,7 @@ def n07_layout():
         "duration_s": 15.3,
         "view": {"x": 96, "y": 96, "w": 1500, "h": 790},
         "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20},
-        "label": {"x": 120, "y": 120, "size_px": 30},
+        "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08},
         "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0},
         "turn_deg": 90,
         "zoom": {"fill": 0.45},
@@ -70,7 +70,7 @@ VEHICLE_BOXES = """() => { const vp = document.getElementById("viewport");
            legend: [lg.left, lg.top, lg.right, lg.bottom], focus: at(R, rc, f.center) }; }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class ShellBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

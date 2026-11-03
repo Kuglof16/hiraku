@@ -29,6 +29,34 @@ def url(name: str) -> str:
     return (JS / name).as_uri()
 
 
+# A document just big enough for the intake screens to draw into: elements keep their children, their
+# properties and their listeners; there is no layout and no selector engine beyond what dom.js asks for.
+FAKE_DOM = """
+class Node {}
+class Text extends Node { constructor(t) { super(); this.data = t; } }
+class El extends Node {
+  constructor(tag) {
+    super();
+    Object.assign(this, { tag, children: [], className: "", dataset: {}, style: {}, attrs: {}, listeners: {}, value: "", hidden: false,
+      disabled: false, title: "", type: "", rows: 0, placeholder: "", href: "", rel: "", scrollTop: 0 });
+  }
+  get firstChild() { return this.children[0] || null; }
+  removeChild(c) { this.children.splice(this.children.indexOf(c), 1); }
+  append(...kids) { this.children.push(...kids); }
+  setAttribute(k, v) { this.attrs[k] = v; }
+  addEventListener(k, fn) { (this.listeners[k] ||= []).push(fn); }
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+  get classList() { return { add() {}, remove() {} }; }
+  all(tag) { return [this, ...this.children.flatMap((c) => (c instanceof El ? c.all(tag) : []))].filter((e) => e.tag === tag); }
+  text() { return this.children.map((c) => (c instanceof Text ? c.data : c.text())).join(""); }
+}
+globalThis.Node = Node;
+globalThis.El = El;
+globalThis.document = { head: new El("head"), createElement: (t) => new El(t), createTextNode: (t) => new Text(t), querySelectorAll: () => [] };
+"""
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class ModelTest(unittest.TestCase):
     def test_every_demo_stream_builds_the_expected_model(self):
@@ -61,9 +89,9 @@ console.log(JSON.stringify(out));
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])
-        self.assertEqual(got["offroad-4w"]["rules"], 29)  # 27 built in + 2 from the sample notes
-        self.assertEqual(got["care-bed"]["rules"], 27)
-        self.assertEqual(got["offroad-4w"]["checks"], 29)
+        self.assertEqual(got["offroad-4w"]["rules"], 30)  # 28 built in + 2 from the sample notes
+        self.assertEqual(got["care-bed"]["rules"], 28)
+        self.assertEqual(got["offroad-4w"]["checks"], 30)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
         self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
@@ -115,6 +143,23 @@ console.log(JSON.stringify({{ rules: allRules(m).length, hits: ruleState(m, allR
 """)
         self.assertEqual(got, {"rules": 2, "hits": 1, "v": 2})  # two rules; the version-2 check was not replaced by the older one
 
+    def test_a_rule_says_which_values_it_needs(self):
+        got = node(f"""
+import {{ ruleNeeds }} from "{url('model.js')}";
+const facts = {{ wall_mm: {{ label: "肉厚", inDesigns: true }}, hole_edge_mm: {{ label: "穴の縁", inDesigns: false }} }};
+const names = (check) => ruleNeeds({{ check }}, facts).map((n) => [n.name, n.label, n.inDesigns]);
+console.log(JSON.stringify({{
+  wall: names("wall_mm >= 1.6"),
+  declared: names("hole_edge_mm >= 1.2 * hole_diameter_mm and max(1, wall_mm) > 0"),
+  req: names("req_Q19 <= 55 and var_battery_voltage <= 60"),
+  system: names("system:drive_chain"),
+}}));
+""")
+        self.assertEqual(got["wall"], [["wall_mm", "肉厚", True]])
+        self.assertEqual(got["declared"], [["hole_edge_mm", "穴の縁", False], ["wall_mm", "肉厚", True]])  # unknown names and functions are not values
+        self.assertEqual(got["req"], [["req_Q19", "要件 Q19 の数値", True], ["var_battery_voltage", "設計の変数の値", True]])
+        self.assertEqual(got["system"], [])
+
     def test_the_dom_modules_parse_and_their_imports_resolve(self):
         got = node(f"""
 const names = ['dom.js', 'a1.js', 'a2.js', 'a5.js', 'index.js'];
@@ -130,6 +175,67 @@ console.log(JSON.stringify(out));
         self.assertEqual(by["a1.js"], ["renderA1"])
         self.assertEqual(by["a2.js"], ["renderA2"])
         self.assertEqual(by["a5.js"], ["renderA5"])
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class WantTest(unittest.TestCase):
+    """mountIntake(el, api, {want}) and setWant(text) fill A1's request box and never send it."""
+
+    def run_script(self, body: str) -> dict:
+        return node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const sent = [];
+const api = {{ events: () => [], onEvent: () => () => {{}}, send: (t) => sent.push(t) }};
+const box = (el) => el.all("textarea")[0];
+const mount = (options) => {{ const el = new El("div"); return [el, mountIntake(el, api, options)]; }};
+{body}
+""")
+
+    def test_the_option_fills_the_box_without_sending(self):
+        got = self.run_script("""
+const [filled] = mount({ want: "ギターを作りたい" });
+const [bare] = mount({});
+console.log(JSON.stringify({ filled: box(filled).value, bare: box(bare).value, sent }));
+""")
+        self.assertEqual(got, {"filled": "ギターを作りたい", "bare": "", "sent": []})
+
+    def test_set_want_replaces_the_text_on_any_screen_and_the_button_sends_what_is_in_the_box(self):
+        got = self.run_script("""
+const [el, intake] = mount({ want: "ギターを作りたい" });
+intake.setWant("介護ベッドを作りたい");
+const second = box(el).value;
+intake.show("A5");
+intake.setWant("配膳ロボットを作りたい");
+intake.show("A1");
+const third = box(el).value;
+el.all("button").find((b) => b.text() === "送る").listeners.click[0]();
+intake.setWant(undefined);
+console.log(JSON.stringify({ second, third, sent, cleared: box(el).value }));
+""")
+        self.assertEqual(got, {"second": "介護ベッドを作りたい", "third": "配膳ロボットを作りたい",
+                               "sent": ["配膳ロボットを作りたい"], "cleared": ""})
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class RuleDetailTest(unittest.TestCase):
+    def test_the_detail_of_a_rule_lists_the_values_it_needs(self):
+        got = node(f"""{FAKE_DOM}
+import {{ DEMOS }} from "{url('demo-events.js')}";
+import {{ buildModel, allRules }} from "{url('model.js')}";
+import {{ renderA5 }} from "{url('a5.js')}";
+const m = buildModel(DEMOS[Object.keys(DEMOS)[0]]);
+const show = (id) => {{
+  const el = new El("div");
+  const ui = {{ screen: "A5", mode: "category", filter: "all", query: "", selected: id, collapsed: new Set(), disabled: new Set(),
+    dropped: [], litSeen: new Set(), rerender() {{}} }};
+  renderA5(el, m, {{ events: () => [] }}, ui);
+  return el.text();
+}};
+const sm = show("SM-02"), sy = show("SY-01");
+console.log(JSON.stringify({{ sm: [sm.includes("要る値"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計は持っていない値")],
+                              sy: /要る値(?!が)/.test(sy) }}));
+""")
+        self.assertEqual(got, {"sm": [True, True, True], "sy": False})  # a system rule's check is a function, not a list of values
 
 
 class StaticTest(unittest.TestCase):

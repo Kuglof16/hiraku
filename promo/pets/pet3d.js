@@ -29,6 +29,10 @@
 // v7: packager is a six-piece burr (six square bars along the three axes
 // that interlock in the middle); opts.packagerStyle = "rings" gives three
 // interlocked metal rings instead.
+// v8: packager is a clear box packed full of building blocks (the default,
+// opts.packagerStyle = "box"); the v7 burr is kept as "burr" and the rings
+// as "rings". The box body is light (shared block geometry, instanced edge
+// rods; about a twentieth of the triangles of the burr).
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -74,7 +78,7 @@
   const BODIES = {
     "lead": { kind: "fe-sphere", quantity: "相対の応力 (自重と手足)", analysis: "三角の要素の丸い体 (v2 の体)。節点の荷重から計算した応力" },
     "designer": { kind: "cad-model", quantity: null, analysis: "CAD のモデル。落ち着いた単色の面、フィレットの面の境の稜線、平らな面の薄いパラメータの線" },
-    "packager": { kind: "assembly", quantity: null, analysis: "立体のパズル (6 本組木)。断面が四角い棒 6 本が 3 つの向きに貫き合い、切り欠きで噛み合って 1 つの塊になる。色は向きごとに 3 色" },
+    "packager": { kind: "assembly", quantity: null, analysis: "透明な箱に積み木を詰める (3 次元の詰め込み)。立方体の箱の中に、直方体・L 字・T 字・棒の積み木 7 個が 27 升をすき間なく埋める。色は落ち着いた 3 色" },
     "cae.handling": { kind: "multibody", quantity: "ばねの力 (相対)", analysis: "マルチボディの機構。金属の車体の剛体に上下のアーム・ナックル・車輪がジョイントでつながり、ばねとダンパー。重心の座標の軸と横加速度の矢印" },
     "cae.powertrain": { kind: "combustion", quantity: "燃焼の温度 (相対)", analysis: "エンジンの燃焼室。点火プラグから広がる火炎面の温度、下はピストン、脇に電池のセル" },
     "cae.aero": { kind: "flow", quantity: "圧力 (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の圧力。先端のよどみ点が高く、肩が低い)" },
@@ -1762,11 +1766,381 @@
   // bars' own colours (every 3 s). Mismatch: the upper X bar sticks halfway (0.34 out to -x); it is
   // pushed in a little and stops again, turned slightly, tinted red. Run:
   // the bars rattle a little with the stride (0.02).
-  // opts.packagerStyle = "rings": three interlocked metal rings instead
+  // v8: this is opts.packagerStyle = "burr"; the default is the box
+  // (bodyPackagerBox), "rings" gives three interlocked metal rings
   // (Borromean rings: ellipses in the three planes, see bodyPackagerRings).
   const BURR = { u: 0.28, len: 2.0, r: 0.05, h: 0.02, slide: 0.36, step: 1.1, stuck: 0.34, pass: 3.0, rattle: 0.02 };
   function bodyPackager(ctx) {
     if (ctx.opts.packagerStyle === "rings") return bodyPackagerRings(ctx);
+    if (ctx.opts.packagerStyle === "burr") return bodyPackagerBurr(ctx);
+    return bodyPackagerBox(ctx);
+  }
+
+  // Rounded block: a box with half sizes (hx, hy, hz) whose edges and
+  // corners are rounded with radius r. Each of the six faces is a grid of
+  // (2k + 1) x (2k + 1) quads; the tangent coordinates in the rounding band
+  // are (h - r) + r tan(j / k * pi / 4), so each face carries half of every
+  // edge arc and the arcs are sampled at even angles. Point = c + r n, where
+  // c is the cube point clamped into the inner box (h - r) and n the unit
+  // vector from c to the cube point (also the normal).
+  function roundedBlock(THREE, hx, hy, hz, r, k) {
+    const H = [hx, hy, hz];
+    const coords = (h) => {
+      const a = [];
+      for (let j = k; j >= 1; j--) a.push(-(h - r) - r * Math.tan((j / k) * (Math.PI / 4)));
+      a.push(-(h - r), h - r);
+      for (let j = 1; j <= k; j++) a.push(h - r + r * Math.tan((j / k) * (Math.PI / 4)));
+      return a;
+    };
+    const pos = [], nrm = [], idx = [];
+    for (let a = 0; a < 3; a++) for (const sg of [-1, 1]) {
+      const b = (a + 1) % 3, c = (a + 2) % 3;
+      const cb = coords(H[b]), cc = coords(H[c]);
+      const base = pos.length / 3;
+      for (const vb of cb) for (const vc of cc) {
+        const q = [0, 0, 0];
+        q[a] = sg * H[a]; q[b] = vb; q[c] = vc;
+        const cl = q.map((v, i) => clamp(v, -(H[i] - r), H[i] - r));
+        const d = q.map((v, i) => v - cl[i]);
+        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        for (let i = 0; i < 3; i++) {
+          pos.push(cl[i] + (r * d[i]) / L);
+          nrm.push(d[i] / L);
+        }
+      }
+      const n = cc.length;
+      for (let i = 0; i < cb.length - 1; i++) for (let j = 0; j < n - 1; j++) {
+        const p0 = base + i * n + j, p1 = p0 + 1, p2 = p0 + n, p3 = p2 + 1;
+        // outward winding: b x c = a, so (b, c) order faces +a
+        if (sg > 0) idx.push(p0, p2, p3, p0, p3, p1);
+        else idx.push(p0, p3, p2, p0, p1, p3);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+    g.setIndex(idx);
+    return g;
+  }
+
+  // packager (v8, the default style "box"): a clear box packed full of
+  // building blocks (3D packing is the packager's job). The box is a cube of
+  // 3 x 3 x 3 cells (cell PACK.cell = 0.54) with thin glass walls (role
+  // colour with 70 % white, opacity 0.16) and crisp edge rods (role colour
+  // with 55 % ink); the 12 edge rods and 8 corner balls are two
+  // InstancedMesh objects. The lid is a glass plate with its own frame that
+  // slides back to open (a sliding lid); the antenna stands on it. Seven
+  // blocks fill the 27 cells with no hole: four kinds (cuboid, L, T, bar).
+  // A block is the union of one or two rounded boxes (radius 0.035, k = 2);
+  // boxes of the same size share one geometry (and one outline hull),
+  // turned to their axes. Each box is shrunk by PACK.gap so the blocks
+  // touch with a hairline seam. Colours (three, calm): lilac = role colour
+  // with 45 % --paper, wood = --s4 with 40 % --paper and 15 % --ink-soft,
+  // sage = --s3 with 45 % --paper and 20 % --ink-faint.
+  // Working: the lid is open, and the three top blocks are lifted one at a
+  // time (1.5 s each), turned a quarter turn and back, and seated again.
+  // Pass (every 3 s): the T block drops in (0.45 s), the lid slides shut
+  // (0.45 .. 0.95 s, speeding up) and the box lights up once (0.95 .. 1.75 s).
+  // Mismatch: the T block sticks out of the top, tilted and red; the lid
+  // is stopped against it (pushed a little every 1.2 s). Run: the blocks
+  // jiggle a little (0.005, less than half the 0.012 seam, so neighbours
+  // never touch) with the stride. The floor is an opaque plate; the walls
+  // and the lid plate stop just inside the edge rods.
+  const PACK = { cell: 0.54, gap: 0.006, wall: 0.025, rod: 0.026, r: 0.035, k: 2, step: 1.5, lift: 0.62, pass: 3.0, open: 1.72, stuck: 0.4, jiggle: 0.005 };
+  function bodyPackagerBox(ctx) {
+    const { THREE, role } = ctx;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const s = PACK.cell;
+    const lilac = mixHex(hexNum(role.color), C.paper, 0.3);
+    const wood = mixHex(mixHex(C.s[3], C.paper, 0.25), C.inkSoft, 0.2);
+    const sage = mixHex(mixHex(C.s[2], C.paper, 0.3), C.inkFaint, 0.25);
+    // cells (i, j, k): i = x (left to right), j = y (bottom to top),
+    // k = z (back to front). A box is [i0, j0, k0, i1, j1, k1] (inclusive).
+    const DEFS = [
+      { name: "slab", label: "下の板", kind: "cuboid", color: wood, boxes: [[0, 0, 0, 2, 0, 1]] },
+      { name: "l-front", label: "前の L", kind: "L", color: lilac, boxes: [[0, 0, 2, 2, 0, 2], [2, 0, 2, 2, 1, 2]] },
+      { name: "t-top", label: "上の T", kind: "T", color: sage, boxes: [[0, 2, 2, 2, 2, 2], [1, 2, 1, 1, 2, 2]], top: true },
+      { name: "plate", label: "真ん中の板", kind: "cuboid", color: wood, boxes: [[0, 1, 1, 1, 1, 2]] },
+      { name: "l-back", label: "奥の L", kind: "L", color: sage, boxes: [[0, 1, 0, 2, 1, 0], [2, 1, 0, 2, 1, 1]] },
+      { name: "l-top", label: "上の L", kind: "L", color: lilac, boxes: [[0, 2, 0, 1, 2, 0], [0, 2, 0, 0, 2, 1]], top: true },
+      { name: "bar-top", label: "上の棒", kind: "bar", color: wood, boxes: [[2, 2, 0, 2, 2, 1]], top: true },
+    ];
+    const WORK = ["t-top", "l-top", "bar-top"];
+    const half = 1.5 * s;
+    const inner = half + PACK.wall;
+    const cellLo = (i) => -half + i * s;
+    // shared geometry per box size: the size sorted (long, mid, short) is
+    // built along (x, y, z) and turned to the box's own axes
+    const geoms = new Map();
+    const shared = (dims) => {
+      const order = [0, 1, 2].sort((p, q) => dims[q] - dims[p] || p - q);
+      const sorted = order.map((i) => dims[i]);
+      const key = sorted.map((v) => v.toFixed(4)).join(",");
+      if (!geoms.has(key)) {
+        const g = roundedBlock(THREE, sorted[0], sorted[1], sorted[2], PACK.r, PACK.k);
+        geoms.set(key, { g, hull: smoothCopy(THREE, g) });
+      }
+      // basis: local x / y / z go to the world axes order[0] / [1] / [2]
+      const e = [0, 1, 2].map((q) => { const v = V(0, 0, 0); v.setComponent(order[q], 1); return v; });
+      const m = new THREE.Matrix4().makeBasis(e[0], e[1], e[2]);
+      if (m.determinant() < 0) m.makeBasis(e[0], e[1], e[2].negate());
+      return Object.assign({ quat: new THREE.Quaternion().setFromRotationMatrix(m) }, geoms.get(key));
+    };
+    const group = new THREE.Group();
+    const blocks = DEFS.map((d) => {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      const cells = [];
+      for (const b of d.boxes) {
+        for (let q = 0; q < 3; q++) { lo[q] = Math.min(lo[q], cellLo(b[q])); hi[q] = Math.max(hi[q], cellLo(b[q + 3] + 1)); }
+        for (let i = b[0]; i <= b[3]; i++) for (let j = b[1]; j <= b[4]; j++) for (let k = b[2]; k <= b[5]; k++) {
+          const key = [i, j, k].join(",");
+          if (!cells.includes(key)) cells.push(key);
+        }
+      }
+      // the block turns about the centre of its bounding box
+      const centre = V((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+      const obj = new THREE.Group();
+      obj.position.copy(centre);
+      group.add(obj);
+      const mat = std(THREE, d.color, 0.55, 0.02);
+      d.boxes.forEach((b, nb) => {
+        const bl = [cellLo(b[0]), cellLo(b[1]), cellLo(b[2])];
+        const bh = [cellLo(b[3] + 1), cellLo(b[4] + 1), cellLo(b[5] + 1)];
+        // the second box of an L or T sits 0.003 inside the first one's
+        // faces, so the two never draw the same plane (no depth ties)
+        const dims = [0, 1, 2].map((q) => (bh[q] - bl[q]) / 2 - PACK.gap - (nb ? 0.003 : 0));
+        const sh = shared(dims);
+        const mesh = new THREE.Mesh(sh.g, mat);
+        mesh.position.set((bl[0] + bh[0]) / 2, (bl[1] + bh[1]) / 2, (bl[2] + bh[2]) / 2).sub(centre);
+        mesh.quaternion.copy(sh.quat);
+        mesh.castShadow = true;
+        // no received shadow: the blocks sit behind glass, where the soft
+        // shadow edges on grazing faces made two GPU shots differ slightly
+        mesh.receiveShadow = false;
+        mesh.userData.body = true;
+        mesh.userData.block = d.name;
+        obj.add(mesh);
+        const hull = new THREE.Mesh(sh.hull, null);
+        // thinner than the 0.012 seam: a hull never reaches into the next block
+        hull.userData.hullWidth = 0.01;
+        hull.position.copy(mesh.position);
+        hull.quaternion.copy(mesh.quaternion);
+        obj.add(hull);
+        ctx.hulls.push(hull);
+      });
+      return { def: d, obj, mat, centre, cells, minY: lo[1] };
+    });
+    const byName = Object.fromEntries(blocks.map((b) => [b.def.name, b]));
+
+    // glass: five walls (no top) and the lid plate
+    const tint = mixHex(hexNum(role.color), 0xffffff, 0.7);
+    const edge = mixHex(hexNum(role.color), C.ink, 0.55);
+    // the glass is drawn as two single-sided passes in a fixed order (inner
+    // faces, then outer faces) rather than one double-sided material
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: tint, transparent: true, opacity: 0.16, roughness: 0.08, metalness: 0, side: THREE.FrontSide, depthWrite: false,
+    });
+    const glassBack = glassMat.clone();
+    glassBack.side = THREE.BackSide;
+    const quad = (pts) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pts.flat(), 3));
+      g.setIndex([0, 1, 2, 0, 2, 3]);
+      g.computeVertexNormals();
+      return g;
+    };
+    const I = inner;
+    // each wall stops just inside the edge rods (J), so no rod passes
+    // through a glass plane (no near-equal depths where they would cross)
+    const J = I - 1.2 * PACK.rod;
+    const walls = [
+      [[-J, -J, I], [J, -J, I], [J, J, I], [-J, J, I]], // front
+      [[J, -J, -I], [-J, -J, -I], [-J, J, -I], [J, J, -I]], // back
+      [[-I, -J, -J], [-I, -J, J], [-I, J, J], [-I, J, -J]], // left
+      [[I, -J, J], [I, -J, -J], [I, J, -J], [I, J, J]], // right
+    ];
+    // the floor is an opaque plate (no view through two glass layers down
+    // to the soft shadow on the ground)
+    const floorMat = new THREE.MeshStandardMaterial({ color: mixHex(hexNum(role.color), C.paper, 0.55), roughness: 0.6 });
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(2 * J, 0.02, 2 * J), floorMat);
+    floor.position.y = -I + 0.002;
+    floor.castShadow = true;
+    floor.userData.floor = true;
+    group.add(floor);
+    const wallGeom = new THREE.BufferGeometry();
+    {
+      const p = [], ix = [];
+      walls.forEach((w, n) => { p.push(...w.flat()); ix.push(4 * n, 4 * n + 1, 4 * n + 2, 4 * n, 4 * n + 2, 4 * n + 3); });
+      wallGeom.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+      wallGeom.setIndex(ix);
+      wallGeom.computeVertexNormals();
+    }
+    const glassIn = new THREE.Mesh(wallGeom, glassBack);
+    glassIn.userData.glass = true;
+    glassIn.renderOrder = 1;
+    group.add(glassIn);
+    const glass = new THREE.Mesh(wallGeom, glassMat);
+    glass.userData.body = true;
+    glass.userData.glass = true;
+    glass.renderOrder = 2;
+    group.add(glass);
+    // glints: two thin white strips across the upper left of the front wall
+    // and the right wall, the usual mark of a glass pane
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false });
+    const strip = (u0, w, z) => {
+      const a = I * 0.92;
+      return [[u0, a, z], [u0 + w, a, z], [u0 + w - 0.5, a - 0.5, z], [u0 - 0.5, a - 0.5, z]];
+    };
+    const glintPos = [], glintIx = [];
+    const front = [strip(-0.22, 0.09, I + 0.004), strip(-0.04, 0.04, I + 0.004)];
+    // right wall: the same strips with x and z swapped (seen from +x)
+    const side = front.map((q) => q.map(([x, y]) => [I + 0.004, y, -x]));
+    [...front, ...side].forEach((q, n) => { glintPos.push(...q.flat()); glintIx.push(4 * n, 4 * n + 1, 4 * n + 2, 4 * n, 4 * n + 2, 4 * n + 3); });
+    const glintGeom = new THREE.BufferGeometry();
+    glintGeom.setAttribute("position", new THREE.Float32BufferAttribute(glintPos, 3));
+    glintGeom.setIndex(glintIx);
+    const glint = new THREE.Mesh(glintGeom, glintMat);
+    glint.material.side = THREE.DoubleSide;
+    glint.renderOrder = 3;
+    glint.userData.glint = true;
+    group.add(glint);
+    // edge rods (one cylinder, instanced) and corner balls (instanced)
+    const rodMat = new THREE.MeshStandardMaterial({ color: edge, roughness: 0.35, metalness: 0.2, emissive: new THREE.Color(edge), emissiveIntensity: 0 });
+    const rodGeom = new THREE.CylinderGeometry(PACK.rod, PACK.rod, 1, 8, 1, true);
+    const rodsOf = (segs, parent, rad) => {
+      const im = new THREE.InstancedMesh(rodGeom, rodMat, segs.length);
+      const m = new THREE.Matrix4(), qq = new THREE.Quaternion(), up = V(0, 1, 0);
+      segs.forEach(([a, b], n) => {
+        const pa = V(...a), pb = V(...b);
+        qq.setFromUnitVectors(up, pb.clone().sub(pa).normalize());
+        m.compose(pa.clone().add(pb).multiplyScalar(0.5), qq, V(rad / PACK.rod, pa.distanceTo(pb), rad / PACK.rod));
+        im.setMatrixAt(n, m);
+      });
+      im.castShadow = true;
+      im.userData.rods = segs.length;
+      // the frame is the outline of the box (counts for its height)
+      if (parent === group) im.userData.body = true;
+      parent.add(im);
+      return im;
+    };
+    const c8 = [];
+    for (const x of [-I, I]) for (const y of [-I, I]) for (const z of [-I, I]) c8.push([x, y, z]);
+    const segs = [];
+    for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) {
+      const diff = [0, 1, 2].filter((q) => c8[a][q] !== c8[b][q]).length;
+      if (diff === 1) segs.push([c8[a], c8[b]]);
+    }
+    rodsOf(segs, group, PACK.rod);
+    const ballGeom = new THREE.SphereGeometry(PACK.rod * 1.35, 8, 6);
+    const balls = new THREE.InstancedMesh(ballGeom, rodMat, 8);
+    c8.forEach((c, n) => balls.setMatrixAt(n, new THREE.Matrix4().makeTranslation(c[0], c[1], c[2])));
+    balls.userData.body = true;
+    group.add(balls);
+    // lid: plate + thin frame, a little above the top rim; slides back (-z)
+    const lid = new THREE.Group();
+    group.add(lid);
+    const LY = I + 2.2 * PACK.rod;
+    const lidPlate = new THREE.Mesh(quad([[-J, LY, J], [J, LY, J], [J, LY, -J], [-J, LY, -J]]), glassMat);
+    lidPlate.userData.glass = true;
+    lidPlate.userData.lid = true;
+    lidPlate.renderOrder = 2;
+    lid.add(lidPlate);
+    const lr = 0.75 * PACK.rod;
+    rodsOf([[[-I, LY, I], [I, LY, I]], [[I, LY, I], [I, LY, -I]], [[I, LY, -I], [-I, LY, -I]], [[-I, LY, -I], [-I, LY, I]]], lid, lr);
+
+    const sm = (x) => {
+      const q = clamp(x, 0, 1);
+      return q * q * (3 - 2 * q);
+    };
+    const mod = (t, T) => ((t % T) + T) % T;
+    // working: which top block is up, how high and how far turned
+    const workOf = (t) => {
+      const q = mod(t, PACK.step * WORK.length);
+      const n = Math.floor(q / PACK.step);
+      const f = (q - n * PACK.step) / PACK.step;
+      const up = f < 0.25 ? sm(f / 0.25) : f < 0.8 ? 1 : 1 - sm((f - 0.8) / 0.2);
+      const turn = f < 0.25 || f > 0.75 ? 0 : (Math.PI / 2) * Math.sin((Math.PI * (f - 0.25)) / 0.5);
+      return { name: WORK[n], lift: PACK.lift * up, turn };
+    };
+    // pass: drop in, lid slides shut, one flash
+    const passOf = (t) => {
+      const q = mod(t, PACK.pass);
+      const drop = q < 0.45 ? PACK.lift * (1 - (q / 0.45) ** 2) : 0;
+      const lidOff = q < 0.45 ? PACK.open : q < 0.95 ? PACK.open * (1 - ((q - 0.45) / 0.5) ** 2) : 0;
+      const glow = q >= 0.95 && q < 1.75 ? Math.sin((Math.PI * (q - 0.95)) / 0.8) ** 2 : 0;
+      return { drop, lidOff, glow };
+    };
+    // mismatch: the T block stays up; pushed down a little every 1.2 s
+    const stuckOf = (t) => {
+      const q = mod(t, 1.2) / 1.2;
+      return PACK.stuck - (q < 0.5 ? 0.06 * Math.sin((Math.PI * q) / 0.5) : 0);
+    };
+    // the lid stops with its front edge against the back of the T stem
+    const STUCK_LID = I - cellLo(1) + 0.02;
+    const top = V(0, LY + 0.01, 0);
+    const lidState = { off: 0 };
+    const place = (t, st) => {
+      const w = st === "working" ? workOf(t) : null;
+      const p = st === "pass" ? passOf(t) : null;
+      const ph = (TAU * t) / RUN.period;
+      blocks.forEach((b, i) => {
+        const d = b.def;
+        let y = 0, turn = 0, rx = 0, rz = 0;
+        if (w && w.name === d.name) { y = w.lift; turn = w.turn; }
+        if (p && d.name === "t-top") y = p.drop;
+        const mis = st === "mismatch" && d.name === "t-top";
+        if (mis) { y = stuckOf(t); rx = -0.1; rz = 0.09; }
+        if (st === "run") y = PACK.jiggle * Math.sin(2 * ph + 1.3 * i);
+        b.obj.position.copy(b.centre);
+        b.obj.position.y += y;
+        b.obj.rotation.set(rx, turn, rz);
+        b.mat.color.setHex(mis ? mixHex(d.color, C.miss, 0.65) : d.color);
+        b.mat.emissive.setHex(mis ? C.miss : p ? d.color : 0x000000);
+        b.mat.emissiveIntensity = mis ? 0.55 : p ? 0.5 * p.glow : 0;
+      });
+      let off = 0;
+      if (st === "working") off = PACK.open;
+      if (p) off = p.lidOff;
+      if (st === "mismatch") off = STUCK_LID + 0.05 * Math.max(0, Math.sin((TAU * t) / 1.2));
+      lidState.off = off;
+      lid.position.set(0, st === "run" ? 0.006 * Math.sin(2 * ph + 0.5) : 0, -off);
+      top.set(0, LY + 0.01 + lid.position.y, -off);
+      const glow = p ? p.glow : 0;
+      rodMat.emissiveIntensity = 0.9 * glow;
+      glassMat.opacity = 0.16 + 0.14 * glow;
+      glassBack.opacity = glassMat.opacity;
+    };
+    place(0, "idle");
+    // eyes on the front glass wall, standing a little proud of it
+    const surface = (dir) => {
+      const p = V(Math.sign(dir.x || 1) * 0.3, 0.2, I + 0.09);
+      return { d: p.length(), point: p, normal: V(0, 0, 1) };
+    };
+    const name = (n) => byName[n].def.label;
+    return {
+      group, top, surface, deforms: true, style: "box",
+      // the arms start clear of the side walls (arm radius 0.06)
+      shoulders: { R: V(I + 0.07, -0.28, 0.12), L: V(-I - 0.07, -0.3, 0.12) },
+      parts: blocks.map((b) => ({ name: b.def.name, kind: b.def.kind, color: "#" + b.def.color.toString(16).padStart(6, "0"), cells: b.cells.slice() })),
+      box: { inner: I, cell: s, cells: 3 },
+      lid: lidState,
+      counts: { blocks: DEFS.length, cells: 27 },
+      caption: "透明な箱 · 積み木 7 個 (直方体・L 字・T 字・棒) で 27 升をすき間なく詰める",
+      update(t, st) { place(t, st); },
+      contour(t, st) {
+        const info = [
+          st === "working" ? `詰め方を試している · ${name(workOf(t).name)}を持ち上げて向きを変える`
+            : st === "pass" ? "最後の 1 個が入って、ふたがぴったり閉じた"
+              : st === "mismatch" ? "上の T が箱からはみ出して入らない (食い違い)"
+                : "7 個の積み木が箱にすき間なく詰まっている",
+          "色は積み木ごと (コンターではない)",
+        ];
+        return { info };
+      },
+    };
+  }
+
+  function bodyPackagerBurr(ctx) {
     const { THREE, role } = ctx;
     const { u, len, r, h } = BURR;
     const V = (x, y, z) => new THREE.Vector3(x, y, z);

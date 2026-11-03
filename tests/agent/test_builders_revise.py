@@ -270,6 +270,17 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
         self.assertIsNone(get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"])
 
+    def test_the_cost_refusal_says_whose_cost_it_reads(self):
+        self.ctx.project["cost_usd"] = self.ctx.project["cost_limit_usd"]  # as written at the end of the lead's turn
+        with self.assertRaises(ToolError) as cm:
+            revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertIn("まとめ役の最後に終わった番の時点で", str(cm.exception))
+
+    def test_a_null_cost_does_not_stop_a_revision(self):
+        self.ctx.project["cost_usd"] = None  # the plugin path: HIRAKU cannot know the cost
+        out = revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertEqual(out["design_version"], 2)
+
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
     def plan(self, revise=True):

@@ -1,5 +1,4 @@
 # Built-in rules: tolerance (公差). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the standard; the standard was not opened for this repository.
 doc_id: KN-TL
 title: 公差の決まり
 category: tolerance
@@ -16,4 +15,12 @@ rules:
     check: position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2
     trust: 2
     basis: >-
-      ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)
+      Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, "GD&T: Application and
+      Interpretation", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened).
+      There T = position tolerance applied to all holes (the value in the feature control frame, at MMC),
+      H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest
+      fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the
+      largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a
+      projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance
+      holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of
+      https://www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)

@@ -1,0 +1,5 @@
+# Optional: a faster sparse direct solver for the shell and solid models (Intel MKL PARDISO).
+# Native code; Windows and Linux only (not Apple-silicon macOS). HIRAKU falls back to SciPy's
+# SuperLU when it is missing, and the known answers and golden checks run on SuperLU.
+pypardiso==0.4.7
+mkl==2025.3.1

@@ -20,7 +20,7 @@ def has_ref(node):
 class SchemaTest(unittest.TestCase):
     def test_every_run_tool_has_a_standalone_schema(self):
         self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design", "propose_design",
-                                              "make_tool", "check_tool", "write_report",
+                                              "make_tool", "check_tool", "get_tool_template", "write_report",
                                               "pick_domains", "ask_user", "import_knowledge", "rule_check"})
         self.assertEqual(set(INPUT_SCHEMAS), set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
@@ -87,6 +87,18 @@ class HandlerTest(RunCase, unittest.TestCase):
         out = self.call("revise_design", args)
         self.assertTrue(out["is_error"])
         self.assertIn("設計役", out["content"][0]["text"])
+
+    def test_a_role_limited_tool_without_a_hook_record_is_refused(self):
+        for name, args in (("revise_design", {"changes": {"track": {"value": 1150.0, "unit": "mm"}}, "reason": "x"}),
+                           ("propose_design", {"archetype": "ladder_4w", "reason": "x"}),
+                           ("write_report", {"summary": "x", "next": []})):
+            with self.subTest(name=name):
+                out = self.call(name, args)  # nothing pushed: the PreToolUse hook did not see the call
+                self.assertTrue(out["is_error"])
+                self.assertIn("どの役が呼んだのかを確かめられなかった", out["content"][0]["text"])
+                self.assertNotIn("hooks", out["content"][0]["text"])  # it is not the person's hooks setup
+        self.assertEqual(self.ctx.version, 1)
+        self.assertNotIn("report.written", self.kinds())
 
     def test_attribution_reaches_the_record(self):
         args = {"load_case_id": "P1-step100", "quantity": "front_wheel_force", "formula_id": "step_climb.wheel_force_rigid",

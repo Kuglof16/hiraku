@@ -210,6 +210,16 @@ export function ruleTree(m, { mode = "category", filter = "all", query = "", dis
 }
 
 /** A value with its unit: 50 kg. Numbers are shown as they came (the code did the arithmetic). */
+/** The values a rule's check asks for, in the order they appear: [{name, label, inDesigns}].
+ *  `facts` is data.js FACTS; requirement numbers (req_Qnn) and design variables (var_x) come with the design or the run. */
+export function ruleNeeds(rule, facts = {}) {
+  const names = [...new Set(String(rule.check || "").match(/[A-Za-z_][A-Za-z0-9_]*/g) || [])];
+  return names
+    .filter((n) => facts[n] || /^req_Q[0-9]{2}$/.test(n) || n.startsWith("var_"))
+    .map((n) => ({ name: n, inDesigns: facts[n] ? facts[n].inDesigns !== false : true,
+                   label: facts[n]?.label || (n.startsWith("req_") ? `要件 ${n.slice(4)} の数値` : "設計の変数の値") }));
+}
+
 export function showValue(v, unit) {
   if (typeof v === "number") return unit && unit !== "1" ? `${+v.toFixed(4)} ${unit}` : `${+v.toFixed(4)}`;
   return unit && unit !== "1" ? `${v} ${unit}` : String(v);

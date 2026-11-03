@@ -7,7 +7,7 @@ as the open MFeval solver (M. Furlan Tassara, BSD licence) states them. Not chec
 against the book. Written here from those equations; equation numbers are in the comments.
 
 Conditions of this implementation: nominal inflation pressure (dpi = 0, so the pressure
-terms vanish), no turn slip (all zeta = 1), no speed-decaying friction (LMUV = 0, so
+terms vanish; they are not read from the file at all, see below), no turn slip (all zeta = 1), no speed-decaying friction (LMUV = 0, so
 LMU* = LMU' = LMU), forward rolling. ISO signs (TYRESIDE LEFT): kappa > 0 drives,
 tan(alpha) = V_sy / |V_cx| (slip velocity to the left), Fy < 0 for alpha > 0, Mz about
 the road normal (up), gamma > 0 tilts the wheel top to the right (-y).
@@ -16,6 +16,14 @@ Inputs: Fz (N), kappa (1), tan_alpha (1; the book's alpha* = tan(alpha) sgn(V_cx
 gamma (rad, the inclination to the road). Scaling: lmux, lmuy (peak friction), lkx
 (slip stiffness), lky (cornering stiffness), fz0 and r0 (the size); the other scaling
 factors are 1.
+
+Inflation pressure: the one coefficient file (data/tyres/pacejka_tvd3_205_60r15.json) is a
+205/60R15 passenger car tyre fitted at 2.2 bar, not a measured UTV tyre. The vehicles K2
+models run 25x8-12 UTV tyres at about 0.5 bar (7 psi), far outside the pressure the
+coefficients were fitted at, so the MF 6.1 pressure terms (NOMPRES, PPX*, PPY*, PPZ*, ...)
+would only extrapolate. K2 therefore keeps the tyre at its nominal pressure: MF61 reads only
+the longitudinal, lateral and aligning groups (PRESSURE_TERMS_READ is False) and the size,
+peaks and stiffnesses come from the design through fz0, r0 and the lambda factors.
 """
 
 from __future__ import annotations
@@ -29,6 +37,8 @@ TWO_OVER_PI = 2.0 / math.pi
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "tyres"
 DEFAULT_TYRE = "pacejka_tvd3_205_60r15"
+COEFFICIENT_GROUPS = ("longitudinal", "lateral", "aligning")  # the only groups MF61 reads
+PRESSURE_TERMS_READ = False  # the tyre stays at its nominal pressure (dpi = 0); see the module text
 
 
 def load_coefficients(name: str = DEFAULT_TYRE) -> dict:
@@ -63,7 +73,7 @@ class MF61:
     def __init__(self, coeffs: dict, *, fz0: float | None = None, r0: float | None = None, lmux: float = 1.0,
                  lmuy: float = 1.0, lkx: float = 1.0, lky: float = 1.0):
         self.coeffs = coeffs
-        for group in ("longitudinal", "lateral", "aligning"):
+        for group in COEFFICIENT_GROUPS:
             for k, v in coeffs[group].items():
                 setattr(self, k, float(v))
         rg = coeffs["ranges"]
