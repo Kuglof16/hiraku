@@ -60,6 +60,7 @@ def intake(
     exclude: list[str] | None = None,
     docs: bool = True,
     from_file: bool = False,
+    slug: str | None = None,
 ) -> IntakeResult:
     """Pick the domains, settle the hearing, and list the events. `requirements`: what the request already says.
 
@@ -67,10 +68,11 @@ def intake(
     stands, nothing is asked but a `must` item it lacks, and a default is added (source default) for an item
     it lacks and has one for. Without it (a request typed in A1) every missing `must` and `confirm` item is asked.
     The merged requirements are `result.requirements_file["requirements"]`: use them as project.requirements.
+    slug: what the requirements file calls the product (default: `product`, else a name made of the sentence).
     """
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
                            exclude=exclude)
-    slug = product or slug_for(want)
+    slug = slug or product or slug_for(want)  # slug: the file's name for the product when no file of its own lends values
     own: dict[str, Record] = {}
     if product and product in product_files():
         own = {r["key"]: r for r in load_product(product)["requirements"]}
