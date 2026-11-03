@@ -1,0 +1,109 @@
+"""Write the plugin's agents and command from hiraku.agent.prompts (the same text as the SDK run).
+
+    python -m hiraku.agent.plugin_files        rewrite plugins/hiraku/agents/*.md and commands/run.md
+
+tests/agent/test_plugin_path.py checks that the files equal what this writes now, so a change
+of a prompt is followed by running this.
+
+- agents/<name>.md: designer, packager and cae-<domain> for every domain but assembly. In the
+  person's Claude Code they are hiraku:designer, hiraku:packager, hiraku:cae-<domain>
+  (agent_id_from_sdk takes the "hiraku:" off). The lead is the main session.
+- commands/run.md: /hiraku:run <requirements file>: start_run, then the lead's prompt.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from hiraku import contract
+from hiraku.agent import prompts
+from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, PACKAGER_TOOLS, PLUGIN_DIR,
+                                PLUGIN_NAME, plugin_skills, sdk_name)
+
+GENERATED = "<!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->"
+
+
+def plugin_tool(name: str) -> str:
+    """A tool of the plugin's MCP server as Claude Code names it: mcp__plugin_<plugin>_<server>__<tool>."""
+    return f"mcp__plugin_{PLUGIN_NAME}_{contract.MCP_SERVER}__{name}"
+
+
+def _frontmatter(fields: dict) -> str:
+    lines = ["---"]
+    for k, v in fields.items():
+        if isinstance(v, list):
+            lines.append(f"{k}:")
+            lines += [f"  - {json.dumps(x, ensure_ascii=False)}" for x in v]
+        else:
+            lines.append(f"{k}: {json.dumps(v, ensure_ascii=False) if isinstance(v, str) else v}")
+    lines.append("---")
+    return "\n".join(lines) + "\n"
+
+
+def _agent(name: str, description: str, prompt: str, tools: tuple[str, ...], effort: str, skills: bool) -> str:
+    fields: dict = {"name": name, "description": description,
+                    "tools": ", ".join(plugin_tool(t) for t in tools), "model": "inherit", "effort": effort}
+    if skills:
+        fields["skills"] = plugin_skills()
+    return _frontmatter(fields) + "\n" + GENERATED + "\n\n" + prompt.rstrip("\n") + "\n"
+
+
+def agent_files() -> dict[str, str]:
+    out = {"agents/designer.md": _agent("designer", prompts.DESIGNER_DESCRIPTION, prompts.DESIGNER_PROMPT,
+                                        DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False),
+           "agents/packager.md": _agent("packager", prompts.cae_description("assembly"), prompts.cae_prompt("assembly"),
+                                        PACKAGER_TOOLS, CAE_EFFORT, skills=True)}
+    for domain in contract.DOMAINS:
+        if domain == "assembly":
+            continue
+        name = sdk_name(f"cae.{domain}")
+        out[f"agents/{name}.md"] = _agent(name, prompts.cae_description(domain), prompts.cae_prompt(domain),
+                                          CAE_TOOLS, CAE_EFFORT, skills=True)
+    return out
+
+
+RUN_COMMAND_INTRO = f"""\
+HIRAKU の実行を、この会話で進めます。あなたはまとめ役です。
+
+1. MCP の道具 {plugin_tool("start_run")} を requirements_file="$ARGUMENTS" で 1 回呼びます (道具の棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
+2. 返った task が、まとめ役の最初の仕事です。下の「まとめ役の決まり」に従って進めます。
+   - HIRAKU の道具は {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
+   - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。
+   - Skill の hiraku:<名前> は、このプラグインの skill です。
+3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
+
+まとめ役の決まり:
+
+"""
+
+
+def command_files() -> dict[str, str]:
+    tools = [plugin_tool(n) for n in ("start_run", "open_run", "get_context", "write_report", "pick_domains", "ask_user",
+                                      "import_knowledge", "rule_check")]
+    fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める",
+              "argument-hint": "<要件のファイル (例 data/requirements/offroad-4w.yaml)>",
+              "allowed-tools": ", ".join(tools)}
+    body = RUN_COMMAND_INTRO + prompts.LEAD_PROMPT.rstrip("\n") + "\n"
+    return {"commands/run.md": _frontmatter(fields) + "\n" + GENERATED + "\n\n" + body}
+
+
+def files() -> dict[str, str]:
+    return {**agent_files(), **command_files()}
+
+
+def write(plugin_dir: Path = PLUGIN_DIR) -> list[Path]:
+    """Write every file (LF line ends, UTF-8); returns their paths."""
+    written = []
+    for rel, text in files().items():
+        path = Path(plugin_dir) / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.encode("utf-8"))
+        written.append(path)
+    return written
+
+
+if __name__ == "__main__":
+    for p in write():
+        print(p, file=sys.stdout)

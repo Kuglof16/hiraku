@@ -1,4 +1,6 @@
-"""Command line: python -m hiraku run <requirements.yaml> [--scripted]."""
+"""Command line: python -m hiraku run <requirements.yaml> [--scripted] | check <run> | mcp | hook <Event>.
+
+mcp and hook are the Claude Code plugin's (plugins/hiraku, hiraku.agent.plugin)."""
 
 from __future__ import annotations
 
@@ -34,7 +36,8 @@ def _cmd_run(a: argparse.Namespace) -> int:
         slug = req["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
         done = json.loads(a.intake_events.read_text(encoding="utf-8")) if a.intake_events else None
         ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug,
-                        intake=not a.no_intake, intake_events=done)
+                        intake=not a.no_intake, intake_events=done,
+                        driver="scripted" if a.scripted else "agent_sdk")
     except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:  # json errors are ValueErrors
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2
@@ -95,6 +98,25 @@ def _cmd_check(a: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def _cmd_mcp(a: argparse.Namespace) -> int:
+    """The plugin's MCP server over stdio (hiraku.agent.plugin). Started by the person's Claude Code."""
+    import os
+
+    from hiraku.agent.plugin import default_runs, serve
+    from hiraku.catalog import REPO_ROOT
+
+    runs = (a.runs or default_runs()).resolve()
+    os.chdir(REPO_ROOT)  # Claude Code starts it in the person's project folder; HIRAKU's data is here
+    return serve(runs)
+
+
+def _cmd_hook(a: argparse.Namespace) -> int:
+    """One hook call of the plugin (hooks/hooks.json): input JSON on stdin, the answer on stdout."""
+    from hiraku.agent.plugin import hook_main
+
+    return hook_main(a.event, a.runs.resolve() if a.runs else None)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m hiraku")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -119,6 +141,15 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="check a run folder's events.jsonl against the contract")
     check.add_argument("run", type=Path)
     check.set_defaults(fn=_cmd_check)
+
+    mcp = sub.add_parser("mcp", help="the Claude Code plugin's MCP server over stdio (plugins/hiraku)")
+    mcp.add_argument("--runs", type=Path, help="folder for run folders (default: runs/ of this repository)")
+    mcp.set_defaults(fn=_cmd_mcp)
+
+    hook = sub.add_parser("hook", help="one hook call of the Claude Code plugin (input JSON on stdin)")
+    hook.add_argument("event", choices=["PreToolUse", "PostToolUse", "Stop", "SubagentStart", "SubagentStop"])
+    hook.add_argument("--runs", type=Path, help="folder for run folders (default: runs/ of this repository)")
+    hook.set_defaults(fn=_cmd_hook)
 
     a = ap.parse_args(argv)
     return a.fn(a)

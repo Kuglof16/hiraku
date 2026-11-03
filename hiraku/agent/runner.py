@@ -141,9 +141,15 @@ def final_status(ctx: RunContext, result: Any, hooks: Hooks | None = None) -> tu
         return "stopped", "turn limit reached", "turn_limit"
     if result is None or getattr(result, "is_error", False):
         return "failed", error_text(ctx, result), "error"
+    return end_status(ctx, hooks.stop_blocks if hooks is not None else 0)
+
+
+def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
+    """(status, stop_reason, stop_code) of a run whose lead has stopped, Claude having reported
+    no error or limit: not_judged while a picked domain is pending (blocks: how many stops HK4
+    turned down first), else rules.judged_end. Shared with the plugin (hiraku.agent.plugin)."""
     left = rules.stop_reason(ctx)
     if left:
-        blocks = hooks.stop_blocks if hooks is not None else 0
         why = (f"まとめ役が、判定の付いていない分野を残して止まりました (止めるのを {blocks} 回断ったあと、上限で終了)。"
                if blocks else "まとめ役が、判定の付いていない分野を残して止まりました。")
         return "stopped", why + left, "not_judged"

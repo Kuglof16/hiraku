@@ -33,9 +33,16 @@ def _check_input(name: str, args: dict[str, Any]) -> None:
         raise ToolError(f"{name} の入力の形が合いません: " + "; ".join(errs))
 
 
-def _gate(ctx: RunContext, name: str, args: dict[str, Any]) -> None:
+def _gate(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None = None) -> None:
+    """HK1-HK3 again inside the tool. A call that gets here was not denied by a PreToolUse hook
+    (that hook records its own denial and the call never runs), so a denial here is recorded
+    once, as hook.denied, the same way: a direct call, a hook that did not run or answered
+    allow on an older state (the plugin's hook command is a separate process)."""
     denial = rules.check_call(ctx, name, args)
     if denial:
+        ctx.store.emit("hook.denied", agent=agent or "lead", domain=denial.domain, text=denial.reason,
+                       data={"hook": "PreToolUse", "tool": contract.mcp_name(name), "rule": denial.rule,
+                             "tool_input": args, "gate": "tool"})
         raise ToolError(denial.reason)
 
 
@@ -241,7 +248,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if name not in ctx.tools:
         raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
-    _gate(ctx, "analyze", args)
+    _gate(ctx, "analyze", args, agent)
 
     upstream = {}
     for up in ctx.upstream_of(lc["load_case_id"]):
@@ -355,7 +362,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if hit is None:
         raise ToolError(f"解析 {args['analysis_id']!r} はありません (get_context の records.analyses)")
     v, ana = hit
-    _gate(ctx, "compare", args)
+    _gate(ctx, "compare", args, agent)
     if ana["status"] != "ok":
         raise ToolError(f"解析 {ana['analysis_id']} は失敗しています: {ana.get('error', '')}。照合できません")
     if pred["prediction_id"] not in ana["prediction_ids"]:

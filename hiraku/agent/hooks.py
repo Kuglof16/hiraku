@@ -15,6 +15,13 @@
 - The stop button (stop.request in the run folder): every tool call is denied
   and every stop is let through, so the run winds down (runner.converse).
 - SubagentStart / SubagentStop: agent.started / agent.stopped.
+
+The decisions are plain methods (decide, one per event) shared by two drivers: the
+Agent SDK run (the async methods below, registered by matchers()) and the Claude Code
+plugin (hiraku.agent.plugin: one hook command per call, which keeps the state between
+calls in a file, see state()/load_state(), and hands its events and the caller's agent
+to the MCP server process through `emit` and the attribution, since only the run
+process writes events.jsonl).
 """
 
 from __future__ import annotations
@@ -26,6 +33,8 @@ from hiraku.agent.roles import agent_id_from_sdk
 from hiraku.tools import Attribution, RunContext, rules
 
 PREFIX = f"mcp__{contract.MCP_SERVER}__"
+# A plugin's MCP server's tools are named mcp__plugin_<plugin>_<server>__<tool> in Claude Code.
+PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。道具を呼ばずに、ここまでのことを 1 文で言って番を終えてください"
@@ -33,9 +42,11 @@ STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止�
 
 class Hooks:
     def __init__(self, ctx: RunContext, attribution: Attribution, *, max_stop_blocks: int = MAX_STOP_BLOCKS,
-                 max_subagent_stop_blocks: int = MAX_SUBAGENT_STOP_BLOCKS) -> None:
+                 max_subagent_stop_blocks: int = MAX_SUBAGENT_STOP_BLOCKS,
+                 emit: Callable[..., Any] | None = None) -> None:
         self.ctx = ctx
         self.attribution = attribution
+        self.emit = emit or ctx.store.emit  # where the hooks' events go (the plugin: to the MCP server)
         self.max_stop_blocks = max_stop_blocks
         self.max_subagent_stop_blocks = max_subagent_stop_blocks
         self.stop_blocks = 0
@@ -44,6 +55,19 @@ class Hooks:
         self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
         self.stop_requested = False  # set once stop.request is seen; it stays set
         self.for_lead: list[str] = []  # what the screen sent for the lead (inbox), not told yet
+        self.on_end: Callable[[], None] | None = None  # the lead's stop was let through (the plugin ends the run)
+
+    # ------------------------------------------------------------------ state kept between calls
+
+    STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead")
+
+    def state(self) -> dict[str, Any]:
+        return {k: getattr(self, k) for k in self.STATE_FIELDS}
+
+    def load_state(self, state: dict[str, Any]) -> None:
+        for k in self.STATE_FIELDS:
+            if k in state:
+                setattr(self, k, state[k])
 
     # ------------------------------------------------------------------ helpers
 
@@ -53,7 +77,10 @@ class Hooks:
 
     @staticmethod
     def _short(tool_name: str) -> str | None:
-        return tool_name[len(PREFIX):] if tool_name.startswith(PREFIX) else None
+        for prefix in (PREFIX, PLUGIN_PREFIX):
+            if tool_name.startswith(prefix):
+                return tool_name[len(prefix):]
+        return None
 
     # ------------------------------------------------------------------ PreToolUse
 
@@ -63,7 +90,20 @@ class Hooks:
             self.stop_requested = True
         return self.stop_requested
 
+    def decide(self, event: str, input_data: dict[str, Any]) -> dict:
+        """The answer to one hook event (PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop)."""
+        return {
+            "PreToolUse": self.decide_pre_tool_use,
+            "PostToolUse": self.decide_post_tool_use,
+            "Stop": self.decide_stop,
+            "SubagentStart": self.decide_subagent_start,
+            "SubagentStop": self.decide_subagent_stop,
+        }[event](input_data)
+
     async def pre_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        return self.decide_pre_tool_use(input_data)
+
+    def decide_pre_tool_use(self, input_data: dict[str, Any]) -> dict:
         name = input_data.get("tool_name", "")
         if self.stopping():  # no more work of any kind, HIRAKU's tools or the Agent tool
             return {"hookSpecificOutput": {
@@ -80,15 +120,16 @@ class Hooks:
             denial = rules.check_call(self.ctx, short, args)
         except Exception:
             denial = None  # the tool function checks again and reports the problem itself
+        full = contract.mcp_name(short)  # one name on both drivers (the plugin's tools are mcp__plugin_...)
         if denial is not None:
-            self.ctx.store.emit("hook.denied", agent=agent, domain=denial.domain, text=denial.reason,
-                                data={"hook": "PreToolUse", "tool": name, "rule": denial.rule, "tool_input": args})
+            self.emit("hook.denied", agent=agent, domain=denial.domain, text=denial.reason,
+                      data={"hook": "PreToolUse", "tool": full, "rule": denial.rule, "tool_input": args})
             return {"hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
                 "permissionDecisionReason": denial.reason,
             }}
-        self.attribution.push(name, args, agent)
+        self.attribution.push(full, args, agent)
         return {}
 
     # ------------------------------------------------------------------ PostToolUse
@@ -128,6 +169,9 @@ class Hooks:
         return "\n".join(texts)
 
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        return self.decide_post_tool_use(input_data)
+
+    def decide_post_tool_use(self, input_data: dict[str, Any]) -> dict:
         short = self._short(input_data.get("tool_name", ""))
         hint = None
         if short is not None:
@@ -144,8 +188,16 @@ class Hooks:
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        return self.decide_stop(input_data)
+
+    def _end(self) -> dict:
+        if self.on_end is not None:
+            self.on_end()
+        return {}
+
+    def decide_stop(self, input_data: dict[str, Any]) -> dict:
         if self.stopping():  # the stop button: let it end
-            return {}
+            return self._end()
         told = self.take_for_lead()
         if told:  # the person said something the lead has not heard: go on with it (not HK4, not counted)
             return {"decision": "block", "reason": told}
@@ -153,9 +205,9 @@ class Hooks:
             return {}
         reason = rules.stop_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
-            return {}
+            return self._end()
         self.stop_blocks += 1
-        self.ctx.store.emit("hook.blocked_stop", agent="lead", text=reason, data={
+        self.emit("hook.blocked_stop", agent="lead", text=reason, data={
             "hook": "Stop", "rule": rules.HK4, "count": self.stop_blocks, "limit": self.max_stop_blocks,
         })
         return {"decision": "block", "reason": reason}
@@ -163,15 +215,21 @@ class Hooks:
     # ------------------------------------------------------------------ subagents
 
     async def subagent_start(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        return self.decide_subagent_start(input_data)
+
+    def decide_subagent_start(self, input_data: dict[str, Any]) -> dict:
         agent = agent_id_from_sdk(input_data.get("agent_type"))
         if agent is None:
             return {}
         self.running[input_data.get("agent_id", "")] = agent
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        self.ctx.store.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
+        self.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
         return {}
 
     async def subagent_stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
+        return self.decide_subagent_stop(input_data)
+
+    def decide_subagent_stop(self, input_data: dict[str, Any]) -> dict:
         agent = agent_id_from_sdk(input_data.get("agent_type"))
         if agent is None:
             return {}
@@ -182,13 +240,13 @@ class Hooks:
             if left and n < self.max_subagent_stop_blocks:
                 self.subagent_stop_blocks[agent] = n + 1
                 reason = rules.stop_reason(self.ctx) or ""
-                self.ctx.store.emit("hook.blocked_stop", agent=agent, domain=domain, text=reason, data={
+                self.emit("hook.blocked_stop", agent=agent, domain=domain, text=reason, data={
                     "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })
                 return {"decision": "block", "reason": reason}
         was_running = bool(self.running)
         self.running.pop(input_data.get("agent_id", ""), None)
-        self.ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+        self.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
         if was_running and not self.running and self.on_roles_done is not None:
             self.on_roles_done()
         return {}
