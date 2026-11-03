@@ -44,6 +44,21 @@ FIT_TIME_S = 900.0  # the driver fit's time limit when the plan gives none (a gu
 FIT_EVALS = 150  # designs the driver fit measures when the plan gives no fit_evals
 
 
+def range_ends(design: Record, changes: dict[str, Record]) -> list[str]:
+    """The changes that sit on the lower or upper bound of their variable's range (designgen.variables),
+    as 'name value unit (下限|上限)'."""
+    from hiraku import designgen
+
+    spec = {s["name"]: s for s in designgen.variables(design)}
+    out = []
+    for k, q in changes.items():
+        s = spec.get(k) or {}
+        for bound, word in (("min", "下限"), ("max", "上限")):
+            if bound in s and abs(q["value"] - s[bound]) < 1e-9:
+                out.append(f"{k} {q['value']:g} {q['unit']} ({word})")
+    return out
+
+
 def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None,
                evals: Any = None) -> tuple[dict, str]:
     """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
@@ -62,6 +77,9 @@ def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s:
     found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
     text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
             f"いちばん小さい余裕は {small['name']} {small['value']:.1f} {small['unit']} ({small.get('where') or '-'})")
+    ends = range_ends(base, got["changes"])
+    if ends:  # the answer sits on a bound of the variable's range, and those bounds are not checked
+        text += f"。範囲の端 (確かめていない値) で決まった: {'、'.join(ends)}"
     return {**changes, **got["changes"]}, text
 
 
