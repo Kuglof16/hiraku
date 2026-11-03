@@ -59,7 +59,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 1,
-      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+      "basis": "林道規程 (林野庁) 第 20 条: 縦断勾配 12 % は第 1 項のただし書、14 % は第 4 項の 2 級林道の例外 (the steepest stretch), https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (the article and its paragraphs read for this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
      },
      {
       "key": "Q14",
@@ -194,7 +194,7 @@ export const DEMOS = {
       "unit": "deg",
       "source": "default",
       "trust": 1,
-      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized in the CPSC staff briefing of 2016-11-22 (PDF p.11), which also gives 33 deg for two people (both read on that page for this repository); 35 deg empty: an assumption (no source found)"
      },
      {
       "key": "Q61",
@@ -1172,7 +1172,7 @@ export const DEMOS = {
     "change_reason": "first version (fixed demo design)",
     "variables": {
      "wheelbase": {
-      "value": 1700.0,
+      "value": 2020.0,
       "unit": "mm"
      },
      "track": {
@@ -1391,8 +1391,28 @@ export const DEMOS = {
       "value": 2.3,
       "unit": "mm"
      },
+     "tower_b": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "tower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "lower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_cross": {
+      "value": 1.0,
+      "unit": "1"
+     },
      "seat_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "seat_y": {
@@ -1400,11 +1420,11 @@ export const DEMOS = {
       "unit": "mm"
      },
      "steering_x": {
-      "value": -250.0,
+      "value": -570.0,
       "unit": "mm"
      },
      "battery_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "front_spring_rate": {
@@ -1504,12 +1524,16 @@ export const DEMOS = {
       "unit": "kg*m^2"
      },
      "motor_rotor_inertia": {
-      "value": 0.005149582473980394,
+      "value": 0.005147246483552594,
       "unit": "kg*m^2"
      },
      "reducer_output_inertia": {
-      "value": 0.005767532370858041,
+      "value": 0.005764916061578906,
       "unit": "kg*m^2"
+     },
+     "driveshaft_inner_drop": {
+      "value": 32.0,
+      "unit": "mm"
      }
     },
     "supports": [
@@ -1548,22 +1572,22 @@ export const DEMOS = {
         "uca_front": [
          100.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
          -100.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
          0.0,
          460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
          -120.0,
-         234.16946130672684,
-         277.15846945514807
+         226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
          -120.0,
@@ -1582,8 +1606,8 @@ export const DEMOS = {
         ],
         "damper_upper": [
          0.0,
-         371.8,
-         570.0000000000001
+         428.8,
+         603.0
         ]
        }
       },
@@ -1629,22 +1653,22 @@ export const DEMOS = {
         "uca_front": [
          100.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
          -100.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
          0.0,
          -460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
          -120.0,
-         -234.16946130672684,
-         277.15846945514807
+         -226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
          -120.0,
@@ -1663,8 +1687,8 @@ export const DEMOS = {
         ],
         "damper_upper": [
          0.0,
-         -371.8,
-         570.0000000000001
+         -428.8,
+         603.0
         ]
        }
       },
@@ -1679,7 +1703,7 @@ export const DEMOS = {
       "id": "RL",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        550.0,
        300.0
       ],
@@ -1693,59 +1717,59 @@ export const DEMOS = {
        "kc_table": "builtin:double_wishbone",
        "hardpoints_mm": {
         "lca_front": [
-         -1580.0,
+         -1900.0,
          196.0,
          180.0
         ],
         "lca_rear": [
-         -1819.9999999999998,
+         -2140.0,
          196.0,
          180.0
         ],
         "lca_outer": [
-         -1700.0,
+         -2020.0,
          490.00000000000006,
          180.0
         ],
         "uca_front": [
-         -1599.9999999999998,
+         -1920.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
-         -1800.0,
+         -2120.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
-         -1700.0,
+         -2020.0,
          460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
-         -1819.9999999999998,
-         234.16946130672684,
-         277.15846945514807
+         -2140.0,
+         226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
-         -1819.9999999999998,
+         -2140.0,
          475.00000000000006,
          285.0
         ],
         "wheel_center": [
-         -1700.0,
+         -2020.0,
          550.0,
          300.0
         ],
         "damper_lower": [
-         -1700.0,
+         -2020.0,
          401.80000000000007,
          180.0
         ],
         "damper_upper": [
-         -1700.0,
-         371.8,
-         570.0000000000001
+         -2020.0,
+         428.8,
+         603.0
         ]
        }
       },
@@ -1760,7 +1784,7 @@ export const DEMOS = {
       "id": "RR",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        -550.0,
        300.0
       ],
@@ -1774,59 +1798,59 @@ export const DEMOS = {
        "kc_table": "builtin:double_wishbone",
        "hardpoints_mm": {
         "lca_front": [
-         -1580.0,
+         -1900.0,
          -196.0,
          180.0
         ],
         "lca_rear": [
-         -1819.9999999999998,
+         -2140.0,
          -196.0,
          180.0
         ],
         "lca_outer": [
-         -1700.0,
+         -2020.0,
          -490.00000000000006,
          180.0
         ],
         "uca_front": [
-         -1599.9999999999998,
+         -1920.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
-         -1800.0,
+         -2120.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
-         -1700.0,
+         -2020.0,
          -460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
-         -1819.9999999999998,
-         -234.16946130672684,
-         277.15846945514807
+         -2140.0,
+         -226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
-         -1819.9999999999998,
+         -2140.0,
          -475.00000000000006,
          285.0
         ],
         "wheel_center": [
-         -1700.0,
+         -2020.0,
          -550.0,
          300.0
         ],
         "damper_lower": [
-         -1700.0,
+         -2020.0,
          -401.80000000000007,
          180.0
         ],
         "damper_upper": [
-         -1700.0,
-         -371.8,
-         570.0000000000001
+         -2020.0,
+         -428.8,
+         603.0
         ]
        }
       },
@@ -1845,7 +1869,7 @@ export const DEMOS = {
       "kind": "battery",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         330.0
        ],
@@ -1897,7 +1921,7 @@ export const DEMOS = {
       "kind": "switch",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         190.0,
         300.0
        ],
@@ -1909,16 +1933,10 @@ export const DEMOS = {
       },
       "mass_kg": 0.3,
       "carried_by": [
-       "LA",
        "LS1"
       ],
       "system": "battery",
       "connects_to": [
-       {
-        "to": "LA",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "LS1",
         "via": "bolt",
@@ -1937,9 +1955,9 @@ export const DEMOS = {
       "kind": "motor",
       "box": {
        "center_mm": [
-        -1495.0,
+        -1815.0,
         0.0,
-        300.0
+        268.0
        ],
        "size_mm": [
         250.0,
@@ -1947,7 +1965,7 @@ export const DEMOS = {
         220.0
        ]
       },
-      "mass_kg": 11.770474226240898,
+      "mass_kg": 11.765134819548786,
       "carried_by": [
        "LB",
        "RB"
@@ -1977,17 +1995,17 @@ export const DEMOS = {
       "kind": "reducer",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         0.0,
-        300.0
+        268.0
        ],
        "size_mm": [
         160.0,
         392.0,
-        100.0
+        164.0
        ]
       },
-      "mass_kg": 7.846982817493933,
+      "mass_kg": 7.8434232130325245,
       "carried_by": [
        "LB",
        "RB"
@@ -2022,17 +2040,22 @@ export const DEMOS = {
       "kind": "driveshaft",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         373.0,
-        300.0
+        284.0
        ],
        "size_mm": [
+        385.44338508403837,
         30.0,
-        384.0,
         30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        90.0
        ]
       },
-      "mass_kg": 2.6912714781325846,
+      "mass_kg": 2.6957209837093448,
       "system": "drive",
       "connects_to": [
        {
@@ -2048,17 +2071,22 @@ export const DEMOS = {
       "kind": "driveshaft",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -373.0,
-        300.0
+        284.0
        ],
        "size_mm": [
+        385.44338508403837,
         30.0,
-        384.0,
         30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        -90.0
        ]
       },
-      "mass_kg": 2.6912714781325846,
+      "mass_kg": 2.6957209837093448,
       "system": "drive",
       "connects_to": [
        {
@@ -2074,7 +2102,7 @@ export const DEMOS = {
       "kind": "controller",
       "box": {
        "center_mm": [
-        -1110.0,
+        -1430.0,
         0.0,
         300.0
        ],
@@ -2114,7 +2142,7 @@ export const DEMOS = {
       "kind": "electrical",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         0.0,
         300.0
        ],
@@ -2126,23 +2154,11 @@ export const DEMOS = {
       },
       "mass_kg": 5.7,
       "carried_by": [
-       "LA",
-       "RA",
        "LS1",
        "RS1"
       ],
       "system": "electrical",
       "connects_to": [
-       {
-        "to": "LA",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RA",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "LS1",
         "via": "bolt",
@@ -2166,32 +2182,32 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -225.0,
+        -540.8888249672586,
         0.0,
         440.0
        ],
        "size_mm": [
-        450.0,
-        600.0,
+        458.2223500654828,
+        911.0,
         20.0
        ]
       },
-      "mass_kg": 3.6000000000000005,
+      "mass_kg": 6.87645690910344,
       "carried_by": [
-       "LA",
-       "RA",
+       "LAp2",
+       "RAp2",
        "LS1",
        "RS1"
       ],
       "system": "body",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAp2",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -2213,7 +2229,7 @@ export const DEMOS = {
       "kind": "accelerator_pedal",
       "box": {
        "center_mm": [
-        -69.76882046860206,
+        -389.76882046860203,
         -330.0,
         508.8360923856119
        ],
@@ -2224,19 +2240,19 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        -20.000000000000092,
+        -19.999999999999535,
         0.0
        ]
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "control",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -2249,6 +2265,11 @@ export const DEMOS = {
         "to": "controller",
         "via": "wire",
         "carries": "signal"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
        }
       ]
      },
@@ -2258,7 +2279,7 @@ export const DEMOS = {
       "kind": "brake_pedal",
       "box": {
        "center_mm": [
-        -69.76882046860206,
+        -389.76882046860203,
         -220.0,
         508.8360923856119
        ],
@@ -2269,19 +2290,19 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        -20.000000000000092,
+        -19.999999999999535,
         0.0
        ]
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "brake",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -2308,7 +2329,7 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -20.0,
+        -350.0,
         -220.0,
         714.5183687566542
        ],
@@ -2320,13 +2341,13 @@ export const DEMOS = {
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "brake",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -2356,7 +2377,7 @@ export const DEMOS = {
         "carries": "brake"
        },
        {
-        "to": "front_body",
+        "to": "bulkhead",
         "via": "bolt",
         "carries": "load"
        }
@@ -2368,7 +2389,7 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         440.0
        ],
@@ -2415,17 +2436,17 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
         440.0
        ],
        "size_mm": [
         950.0,
-        880.0,
+        483.6,
         20.0
        ]
       },
-      "mass_kg": 18.0,
+      "mass_kg": 9.891818181818183,
       "carried_by": [
        "LS2",
        "RS2",
@@ -2480,7 +2501,7 @@ export const DEMOS = {
        ],
        "size_mm": [
         360.0,
-        600.0,
+        483.6,
         280.0
        ]
       },
@@ -2488,8 +2509,8 @@ export const DEMOS = {
       "carried_by": [
        "LF",
        "RF",
-       "LA",
-       "RA"
+       "LAp1",
+       "RAp1"
       ],
       "system": "body",
       "connects_to": [
@@ -2504,12 +2525,71 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "LA",
+        "to": "LAp1",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
+        "to": "RAp1",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bulkhead",
+      "name": "前の隔壁 (足元と前の区画の仕切りの板)",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -280.0,
+        0.0,
+        630.4431784698709
+       ],
+       "size_mm": [
+        20.0,
+        740.0,
+        400.88635693974163
+       ]
+      },
+      "mass_kg": 6.592353425231306,
+      "carried_by": [
+       "LAt2",
+       "LDT",
+       "RAt2",
+       "RDT",
+       "LAp2",
+       "RAp2"
+      ],
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        }
@@ -2521,7 +2601,7 @@ export const DEMOS = {
       "kind": "steering",
       "box": {
        "center_mm": [
-        -400.0,
+        -720.0,
         -300.0,
         1205.411492555231
        ],
@@ -2532,24 +2612,24 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        35.00000000000015,
+        35.00000000000025,
         0.0
        ]
       },
-      "mass_kg": 2.559843507744881,
+      "mass_kg": 2.5537001056615427,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
@@ -2566,41 +2646,46 @@ export const DEMOS = {
       "kind": "steering_column",
       "box": {
        "center_mm": [
-        -260.0,
+        -420.0,
         -300.0,
-        1107.3824372058716
+        995.3492310923181
        ],
        "size_mm": [
-        381.8168848532077,
+        772.4647532568737,
         40.0,
         40.0
        ],
        "rpy_deg": [
         0.0,
-        34.99999999999999,
+        35.00000000000001,
         0.0
        ]
       },
-      "mass_kg": 2.047874806195905,
+      "mass_kg": 2.042960084529234,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
        {
         "to": "steering_shaft",
         "via": "pin",
+        "carries": "steer"
+       },
+       {
+        "to": "dash_cross",
+        "via": "bolt",
         "carries": "steer"
        }
       ]
@@ -2612,34 +2697,34 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        -195.0,
-        643.2559256558302
+        -235.0,
+        531.8082994683936
        ],
        "size_mm": [
-        785.7147692846985,
+        547.360052837795,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        73.99663870148639,
+        75.61744543525063,
         90.0
        ]
       },
-      "mass_kg": 1.0239374030979524,
+      "mass_kg": 1.021480042264617,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
@@ -2658,40 +2743,28 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         0.0,
-        277.15846945514807
+        278.32962930738194
        ],
        "size_mm": [
         50.0,
-        518.3389226134536,
+        502.69326195850175,
         50.0
        ]
       },
-      "mass_kg": 4.607718313940786,
+      "mass_kg": 4.596660190190777,
       "carried_by": [
-       "LA",
-       "RA",
-       "LS1",
-       "RS1"
+       "LAu2",
+       "RAu2"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAu2",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
+        "to": "RAu2",
         "via": "bolt",
         "carries": "load"
        },
@@ -2714,21 +2787,21 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        354.58473065336347,
-        281.07923472757403
+        350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "steering",
       "connects_to": [
        {
@@ -2745,21 +2818,21 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        -354.58473065336347,
-        281.07923472757403
+        -350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         -90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "steering",
       "connects_to": [
        {
@@ -2775,7 +2848,7 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         -300.0,
         580.0
        ],
@@ -2810,7 +2883,7 @@ export const DEMOS = {
       "kind": "seat_belt",
       "box": {
        "center_mm": [
-        -1000.0,
+        -1320.0,
         -540.0,
         710.0
        ],
@@ -2849,7 +2922,7 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         300.0,
         580.0
        ],
@@ -2884,7 +2957,7 @@ export const DEMOS = {
       "kind": "seat_belt",
       "box": {
        "center_mm": [
-        -1000.0,
+        -1320.0,
         540.0,
         710.0
        ],
@@ -2923,17 +2996,17 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         -300.0,
-        970.0
+        1202.6
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "RS1",
        "RS2"
@@ -2953,17 +3026,17 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         300.0,
-        970.0
+        1202.6
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "LS1",
        "LS2"
@@ -2983,13 +3056,13 @@ export const DEMOS = {
       "kind": "cargo",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
         600.0
        ],
        "size_mm": [
         900.0,
-        880.0,
+        483.6,
         300.0
        ]
       },
@@ -3007,6 +3080,566 @@ export const DEMOS = {
        {
         "to": "deck",
         "via": "rest",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_L",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -208.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_L",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -208.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_L",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -111.175,
+        1276.4557462776156
+       ],
+       "size_mm": [
+        592.3093334270051,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696633,
+        -3.2899932439578037
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_L",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -208.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_R",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -392.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_R",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -392.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_R",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -488.825,
+        1276.4557462776156
+       ],
+       "size_mm": [
+        592.3093334270051,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696633,
+        3.2899932439578
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_R",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -392.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_L",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        392.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_L",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        392.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_L",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        447.325,
+        1179.7799424023287
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        -13.624631766406635
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_L",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        392.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_R",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        208.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_R",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        208.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_R",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        152.675,
+        1179.7799424023287
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        13.624631766406637
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_R",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        208.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
         "carries": "load"
        }
       ]
@@ -3054,25 +3687,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー)",
+      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        410.0,
-        330.0
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
       "mass_kg": 4.0,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAd",
         "via": "bushing",
         "carries": "load"
        },
@@ -3126,25 +3779,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー)",
+      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        -410.0,
-        330.0
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
       "mass_kg": 4.0,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAd",
         "via": "bushing",
         "carries": "load"
        },
@@ -3161,7 +3834,7 @@ export const DEMOS = {
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         550.0,
         300.0
        ],
@@ -3198,25 +3871,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー)",
+      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        410.0,
-        330.0
+        -2020.0,
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 3.119687015489763,
+      "mass_kg": 3.1074002113230854,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LBd",
         "via": "bushing",
         "carries": "load"
        },
@@ -3233,7 +3926,7 @@ export const DEMOS = {
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -550.0,
         300.0
        ],
@@ -3270,25 +3963,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー)",
+      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        -410.0,
-        330.0
+        -2020.0,
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 3.119687015489763,
+      "mass_kg": 3.1074002113230854,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RBd",
         "via": "bushing",
         "carries": "load"
        },
@@ -3307,12 +4020,12 @@ export const DEMOS = {
        "center_mm": [
         -60.0,
         475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
         160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -3338,12 +4051,12 @@ export const DEMOS = {
        "center_mm": [
         -60.0,
         -475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
         160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -3367,14 +4080,14 @@ export const DEMOS = {
       "kind": "knuckle",
       "box": {
        "center_mm": [
-        -1760.0,
+        -2080.0,
         475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
-        159.99999999999977,
+        160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -3393,22 +4106,22 @@ export const DEMOS = {
       "kind": "tie_rod",
       "box": {
        "center_mm": [
-        -1819.9999999999998,
-        354.58473065336347,
-        281.07923472757403
+        -2140.0,
+        350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "suspension",
       "connects_to": [
        {
@@ -3417,7 +4130,7 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "LB",
+        "to": "bracket_lca_RL2",
         "via": "ball_joint",
         "carries": "load"
        }
@@ -3429,14 +4142,14 @@ export const DEMOS = {
       "kind": "knuckle",
       "box": {
        "center_mm": [
-        -1760.0,
+        -2080.0,
         -475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
-        159.99999999999977,
+        160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -3455,22 +4168,22 @@ export const DEMOS = {
       "kind": "tie_rod",
       "box": {
        "center_mm": [
-        -1819.9999999999998,
-        -354.58473065336347,
-        281.07923472757403
+        -2140.0,
+        -350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         -90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "suspension",
       "connects_to": [
        {
@@ -3479,7 +4192,7 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "RB",
+        "to": "bracket_lca_RR2",
         "via": "ball_joint",
         "carries": "load"
        }
@@ -3553,7 +4266,7 @@ export const DEMOS = {
       "kind": "brake_caliper",
       "box": {
        "center_mm": [
-        -1810.0,
+        -2130.0,
         490.0,
         300.0
        ],
@@ -3584,7 +4297,7 @@ export const DEMOS = {
       "kind": "brake_caliper",
       "box": {
        "center_mm": [
-        -1810.0,
+        -2130.0,
         -490.0,
         300.0
        ],
@@ -3610,12 +4323,511 @@ export const DEMOS = {
       ]
      },
      {
+      "id": "bracket_uca_FL1",
+      "name": "前左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL2",
+      "name": "前左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR1",
+      "name": "前右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR2",
+      "name": "前右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL1",
+      "name": "後左の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL2",
+      "name": "後左の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL1",
+      "name": "後左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL2",
+      "name": "後左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR1",
+      "name": "後右の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR2",
+      "name": "後右の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR1",
+      "name": "後右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR2",
+      "name": "後右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FL",
+      "name": "前左のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FR",
+      "name": "前右のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RL",
+      "name": "後左のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RR",
+      "name": "後右のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_column",
+      "name": "ステアリングのコラムの金具 (ダッシュの横の部材の上)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -285.0,
+        -300.0,
+        851.8934450716384
+       ],
+       "size_mm": [
+        50.0,
+        70.0,
+        12.014176263793615
+       ]
+      },
+      "mass_kg": 0.04225145508450939,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
       "id": "rollbar",
       "name": "ロールバー (横転のときに乗る人を守る枠。管は骨組みの部材)",
       "kind": "rollbar",
       "box": {
        "center_mm": [
-        -1080.0,
+        -1400.0,
         0.0,
         1810.0
        ],
@@ -3669,7 +4881,7 @@ export const DEMOS = {
      {
       "id": "LS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        350.0,
        380.0
       ]
@@ -3677,7 +4889,7 @@ export const DEMOS = {
      {
       "id": "LS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        350.0,
        380.0
       ]
@@ -3685,7 +4897,7 @@ export const DEMOS = {
      {
       "id": "LB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        350.0,
        380.0
       ]
@@ -3693,7 +4905,7 @@ export const DEMOS = {
      {
       "id": "LE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        350.0,
        380.0
       ]
@@ -3717,7 +4929,7 @@ export const DEMOS = {
      {
       "id": "RS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        -350.0,
        380.0
       ]
@@ -3725,7 +4937,7 @@ export const DEMOS = {
      {
       "id": "RS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        -350.0,
        380.0
       ]
@@ -3733,7 +4945,7 @@ export const DEMOS = {
      {
       "id": "RB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        -350.0,
        380.0
       ]
@@ -3741,15 +4953,223 @@ export const DEMOS = {
      {
       "id": "RE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        -350.0,
        380.0
       ]
      },
      {
+      "id": "LAp1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAp2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu1",
+      "xyz_mm": [
+       100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu2",
+      "xyz_mm": [
+       -100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAm",
+      "xyz_mm": [
+       0.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAd",
+      "xyz_mm": [
+       0.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAl1",
+      "xyz_mm": [
+       120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LAl2",
+      "xyz_mm": [
+       -120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAp1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAp2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu1",
+      "xyz_mm": [
+       100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu2",
+      "xyz_mm": [
+       -100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAm",
+      "xyz_mm": [
+       0.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAd",
+      "xyz_mm": [
+       0.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAl1",
+      "xyz_mm": [
+       120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAl2",
+      "xyz_mm": [
+       -120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LBd",
+      "xyz_mm": [
+       -2020.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LBm",
+      "xyz_mm": [
+       -2022.0,
+       370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RBd",
+      "xyz_mm": [
+       -2020.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RBm",
+      "xyz_mm": [
+       -2022.0,
+       -370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LDT",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       845.8863569397416
+      ]
+     },
+     {
+      "id": "RDT",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       845.8863569397416
+      ]
+     },
+     {
       "id": "LH",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        350.0,
        380.0
       ]
@@ -3757,7 +5177,7 @@ export const DEMOS = {
      {
       "id": "LHO",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        600.0,
        380.0
       ]
@@ -3765,7 +5185,7 @@ export const DEMOS = {
      {
       "id": "LHT",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        600.0,
        1810.0
       ]
@@ -3773,7 +5193,7 @@ export const DEMOS = {
      {
       "id": "RH",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -350.0,
        380.0
       ]
@@ -3781,7 +5201,7 @@ export const DEMOS = {
      {
       "id": "RHO",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -600.0,
        380.0
       ]
@@ -3789,7 +5209,7 @@ export const DEMOS = {
      {
       "id": "RHT",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -600.0,
        1810.0
       ]
@@ -3799,14 +5219,46 @@ export const DEMOS = {
      {
       "id": "rail_L_FA",
       "node_a": "LF",
+      "node_b": "LAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAp1_LAu1",
+      "node_a": "LAp1",
+      "node_b": "LAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu1_LA",
+      "node_a": "LAu1",
       "node_b": "LA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_L_AS1",
+      "id": "rail_L_LA_LAu2",
       "node_a": "LA",
+      "node_b": "LAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu2_LAp2",
+      "node_a": "LAu2",
+      "node_b": "LAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_AS1",
+      "node_a": "LAp2",
       "node_b": "LS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -3847,14 +5299,46 @@ export const DEMOS = {
      {
       "id": "rail_R_FA",
       "node_a": "RF",
+      "node_b": "RAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAp1_RAu1",
+      "node_a": "RAp1",
+      "node_b": "RAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu1_RA",
+      "node_a": "RAu1",
       "node_b": "RA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_R_AS1",
+      "id": "rail_R_RA_RAu2",
       "node_a": "RA",
+      "node_b": "RAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu2_RAp2",
+      "node_a": "RAu2",
+      "node_b": "RAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_AS1",
+      "node_a": "RAp2",
       "node_b": "RS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -3941,6 +5425,190 @@ export const DEMOS = {
       "part": "frame"
      },
      {
+      "id": "tower_post_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA1",
+      "node_a": "LAt1",
+      "node_b": "LAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA2",
+      "node_a": "LAm",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LA",
+      "node_a": "LAm",
+      "node_b": "LAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA1",
+      "node_a": "RAt1",
+      "node_b": "RAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA2",
+      "node_a": "RAm",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RA",
+      "node_a": "RAm",
+      "node_b": "RAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LB",
+      "node_a": "LB",
+      "node_b": "LBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LB",
+      "node_a": "LBm",
+      "node_b": "LBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RB",
+      "node_a": "RB",
+      "node_b": "RBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RB",
+      "node_a": "RBm",
+      "node_b": "RBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A1",
+      "node_a": "LAl1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A2",
+      "node_a": "LAl2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_L",
+      "node_a": "LAt2",
+      "node_b": "LDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_R",
+      "node_a": "RAt2",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_cross",
+      "node_a": "LDT",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
       "id": "rollbar_foot_L",
       "node_a": "LH",
       "node_b": "LHO",
@@ -3998,6 +5666,14 @@ export const DEMOS = {
        "t": 2.3
       }
      },
+     "rt30x30x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 30.0,
+       "h": 30.0,
+       "t": 2.3
+      }
+     },
      "ct42.7x2.3": {
       "shape": "round_tube",
       "dims_mm": {
@@ -4044,7 +5720,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -4068,6 +5745,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "bend_radius_mm"
       ]
@@ -4092,7 +5775,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -4116,6 +5800,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "hole_edge_mm"
       ]
@@ -4141,13 +5831,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4158,7 +5857,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -4191,7 +5913,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -4234,6 +5991,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -4311,6 +6096,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -4337,13 +6283,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4354,7 +6309,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -4387,7 +6365,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -4430,6 +6443,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -4507,6 +6548,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -4530,12 +6732,20 @@ export const DEMOS = {
     "rule_id": "WD-01",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4546,7 +6756,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -4567,12 +6800,20 @@ export const DEMOS = {
     "rule_id": "WD-02",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4583,12 +6824,63 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
      {
       "part_id": "rail_L_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -4631,6 +6923,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -4712,6 +7032,167 @@ export const DEMOS = {
        "weld_length_mm",
        "weld_throat_mm"
       ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
      }
     ],
     "pass": true
@@ -4731,12 +7212,20 @@ export const DEMOS = {
     "rule_id": "WD-03",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4747,7 +7236,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -4771,13 +7283,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4788,7 +7309,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -4821,7 +7365,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -4864,6 +7443,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -4941,6 +7548,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -4967,13 +7735,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -4984,7 +7761,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -5021,7 +7821,47 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -5070,6 +7910,38 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -5158,6 +8030,190 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -5243,12 +8299,20 @@ export const DEMOS = {
      "susp_RL",
      "susp_RR",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -5259,7 +8323,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -5289,6 +8376,30 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_L_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "closing_gap_mm"
       ]
@@ -5325,6 +8436,30 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "closing_gap_mm"
       ]
@@ -5394,6 +8529,144 @@ export const DEMOS = {
       "missing": [
        "closing_gap_mm"
       ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "closing_gap_mm"
+      ]
      }
     ],
     "pass": true
@@ -5460,6 +8733,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "seat_R",
      "seat_L",
@@ -5513,6 +8787,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "steering_column",
      "steering_shaft",
@@ -5526,6 +8801,22 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "occupant_R.thigh_L",
+     "occupant_R.shank_L",
+     "occupant_R.arm_L",
+     "occupant_R.foot_L",
+     "occupant_R.thigh_R",
+     "occupant_R.shank_R",
+     "occupant_R.arm_R",
+     "occupant_R.foot_R",
+     "occupant_L.thigh_L",
+     "occupant_L.shank_L",
+     "occupant_L.arm_L",
+     "occupant_L.foot_L",
+     "occupant_L.thigh_R",
+     "occupant_L.shank_R",
+     "occupant_L.arm_R",
+     "occupant_L.foot_R",
      "wheel_FL",
      "susp_FL",
      "wheel_FR",
@@ -5544,6 +8835,23 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
      "rollbar"
     ],
     "hits": [],
@@ -5611,12 +8919,20 @@ export const DEMOS = {
     "rule_id": "MF-01",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -5627,7 +8943,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -5839,7 +9178,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -5863,6 +9203,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "bend_radius_mm"
       ]
@@ -5940,7 +9286,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (0)・強度信頼性 (2)・騒音 (0)・熱 (デューティ) (0)",
+   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (3)・騒音 (0)・熱 (デューティ) (1)",
    "data": {
     "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
     "flags": {
@@ -5977,16 +9323,19 @@ export const DEMOS = {
      {
       "domain": "powertrain",
       "shown_name": "動力 (アクチュエータ)",
-      "reason": "電 に当てはまる。P5 アクチュエータの力と速さ は荷重条件の作り方がまだ無いので、この実行では見ない",
-      "test_ids": []
+      "reason": "電 に当てはまるので、P5 アクチュエータの力と速さ を当てる",
+      "test_ids": [
+       "P5"
+      ]
      },
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "預・荷 に当てはまるので、R1 静的強度・R3 疲労・耐久 を当てる。R2 衝撃 (落錘・落下・段差)・R5 たわみ・ゆがみ は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ を当てる。R2 衝撃 (落錘・落下・段差) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R3"
+       "R3",
+       "R5"
       ]
      },
      {
@@ -5998,8 +9347,10 @@ export const DEMOS = {
      {
       "domain": "thermal",
       "shown_name": "熱 (デューティ)",
-      "reason": "電 に当てはまる。T3 使い方とデューティ は荷重条件の作り方がまだ無いので、この実行では見ない",
-      "test_ids": []
+      "reason": "電 に当てはまるので、T3 使い方とデューティ を当てる",
+      "test_ids": [
+       "T3"
+      ]
      }
     ],
     "off": [
@@ -6014,7 +9365,6 @@ export const DEMOS = {
     ],
     "assembly_test_ids": [
      "H1",
-     "H3",
      "H5"
     ]
    }
@@ -8963,7 +12313,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 1,
-      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+      "basis": "林道規程 (林野庁) 第 20 条: 縦断勾配 12 % は第 1 項のただし書、14 % は第 4 項の 2 級林道の例外 (the steepest stretch), https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (the article and its paragraphs read for this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
      },
      {
       "key": "Q14",
@@ -9107,7 +12457,7 @@ export const DEMOS = {
       "unit": "deg",
       "source": "default",
       "trust": 1,
-      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized in the CPSC staff briefing of 2016-11-22 (PDF p.11), which also gives 33 deg for two people (both read on that page for this repository); 35 deg empty: an assumption (no source found)"
      },
      {
       "key": "Q61",
@@ -9933,7 +13283,7 @@ export const DEMOS = {
     "change_reason": "first version (fixed demo design)",
     "variables": {
      "wheelbase": {
-      "value": 1700.0,
+      "value": 2020.0,
       "unit": "mm"
      },
      "track": {
@@ -10152,8 +13502,28 @@ export const DEMOS = {
       "value": 2.3,
       "unit": "mm"
      },
+     "tower_b": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "tower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "lower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_cross": {
+      "value": 1.0,
+      "unit": "1"
+     },
      "seat_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "seat_y": {
@@ -10161,11 +13531,11 @@ export const DEMOS = {
       "unit": "mm"
      },
      "steering_x": {
-      "value": -250.0,
+      "value": -570.0,
       "unit": "mm"
      },
      "battery_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "front_spring_rate": {
@@ -10265,12 +13635,16 @@ export const DEMOS = {
       "unit": "kg*m^2"
      },
      "motor_rotor_inertia": {
-      "value": 0.005149582473980394,
+      "value": 0.005147246483552594,
       "unit": "kg*m^2"
      },
      "reducer_output_inertia": {
-      "value": 0.005767532370858041,
+      "value": 0.005764916061578906,
       "unit": "kg*m^2"
+     },
+     "driveshaft_inner_drop": {
+      "value": 32.0,
+      "unit": "mm"
      }
     },
     "supports": [
@@ -10309,22 +13683,22 @@ export const DEMOS = {
         "uca_front": [
          100.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
          -100.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
          0.0,
          460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
          -120.0,
-         234.16946130672684,
-         277.15846945514807
+         226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
          -120.0,
@@ -10343,8 +13717,8 @@ export const DEMOS = {
         ],
         "damper_upper": [
          0.0,
-         371.8,
-         570.0000000000001
+         428.8,
+         603.0
         ]
        }
       },
@@ -10390,22 +13764,22 @@ export const DEMOS = {
         "uca_front": [
          100.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
          -100.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
          0.0,
          -460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
          -120.0,
-         -234.16946130672684,
-         277.15846945514807
+         -226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
          -120.0,
@@ -10424,8 +13798,8 @@ export const DEMOS = {
         ],
         "damper_upper": [
          0.0,
-         -371.8,
-         570.0000000000001
+         -428.8,
+         603.0
         ]
        }
       },
@@ -10440,7 +13814,7 @@ export const DEMOS = {
       "id": "RL",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        550.0,
        300.0
       ],
@@ -10454,59 +13828,59 @@ export const DEMOS = {
        "kc_table": "builtin:double_wishbone",
        "hardpoints_mm": {
         "lca_front": [
-         -1580.0,
+         -1900.0,
          196.0,
          180.0
         ],
         "lca_rear": [
-         -1819.9999999999998,
+         -2140.0,
          196.0,
          180.0
         ],
         "lca_outer": [
-         -1700.0,
+         -2020.0,
          490.00000000000006,
          180.0
         ],
         "uca_front": [
-         -1599.9999999999998,
+         -1920.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
-         -1800.0,
+         -2120.0,
          266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
-         -1700.0,
+         -2020.0,
          460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
-         -1819.9999999999998,
-         234.16946130672684,
-         277.15846945514807
+         -2140.0,
+         226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
-         -1819.9999999999998,
+         -2140.0,
          475.00000000000006,
          285.0
         ],
         "wheel_center": [
-         -1700.0,
+         -2020.0,
          550.0,
          300.0
         ],
         "damper_lower": [
-         -1700.0,
+         -2020.0,
          401.80000000000007,
          180.0
         ],
         "damper_upper": [
-         -1700.0,
-         371.8,
-         570.0000000000001
+         -2020.0,
+         428.8,
+         603.0
         ]
        }
       },
@@ -10521,7 +13895,7 @@ export const DEMOS = {
       "id": "RR",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        -550.0,
        300.0
       ],
@@ -10535,59 +13909,59 @@ export const DEMOS = {
        "kc_table": "builtin:double_wishbone",
        "hardpoints_mm": {
         "lca_front": [
-         -1580.0,
+         -1900.0,
          -196.0,
          180.0
         ],
         "lca_rear": [
-         -1819.9999999999998,
+         -2140.0,
          -196.0,
          180.0
         ],
         "lca_outer": [
-         -1700.0,
+         -2020.0,
          -490.00000000000006,
          180.0
         ],
         "uca_front": [
-         -1599.9999999999998,
+         -1920.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_rear": [
-         -1800.0,
+         -2120.0,
          -266.8,
-         420.0
+         478.0
         ],
         "uca_outer": [
-         -1700.0,
+         -2020.0,
          -460.00000000000006,
-         435.0
+         493.0
         ],
         "tie_inner": [
-         -1819.9999999999998,
-         -234.16946130672684,
-         277.15846945514807
+         -2140.0,
+         -226.34663097925088,
+         278.32962930738194
         ],
         "tie_outer": [
-         -1819.9999999999998,
+         -2140.0,
          -475.00000000000006,
          285.0
         ],
         "wheel_center": [
-         -1700.0,
+         -2020.0,
          -550.0,
          300.0
         ],
         "damper_lower": [
-         -1700.0,
+         -2020.0,
          -401.80000000000007,
          180.0
         ],
         "damper_upper": [
-         -1700.0,
-         -371.8,
-         570.0000000000001
+         -2020.0,
+         -428.8,
+         603.0
         ]
        }
       },
@@ -10606,7 +13980,7 @@ export const DEMOS = {
       "kind": "battery",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         330.0
        ],
@@ -10658,7 +14032,7 @@ export const DEMOS = {
       "kind": "switch",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         190.0,
         300.0
        ],
@@ -10670,16 +14044,10 @@ export const DEMOS = {
       },
       "mass_kg": 0.3,
       "carried_by": [
-       "LA",
        "LS1"
       ],
       "system": "battery",
       "connects_to": [
-       {
-        "to": "LA",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "LS1",
         "via": "bolt",
@@ -10698,9 +14066,9 @@ export const DEMOS = {
       "kind": "motor",
       "box": {
        "center_mm": [
-        -1495.0,
+        -1815.0,
         0.0,
-        300.0
+        268.0
        ],
        "size_mm": [
         250.0,
@@ -10708,7 +14076,7 @@ export const DEMOS = {
         220.0
        ]
       },
-      "mass_kg": 11.770474226240898,
+      "mass_kg": 11.765134819548786,
       "carried_by": [
        "LB",
        "RB"
@@ -10738,17 +14106,17 @@ export const DEMOS = {
       "kind": "reducer",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         0.0,
-        300.0
+        268.0
        ],
        "size_mm": [
         160.0,
         392.0,
-        100.0
+        164.0
        ]
       },
-      "mass_kg": 7.846982817493933,
+      "mass_kg": 7.8434232130325245,
       "carried_by": [
        "LB",
        "RB"
@@ -10783,17 +14151,22 @@ export const DEMOS = {
       "kind": "driveshaft",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         373.0,
-        300.0
+        284.0
        ],
        "size_mm": [
+        385.44338508403837,
         30.0,
-        384.0,
         30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        90.0
        ]
       },
-      "mass_kg": 2.6912714781325846,
+      "mass_kg": 2.6957209837093448,
       "system": "drive",
       "connects_to": [
        {
@@ -10809,17 +14182,22 @@ export const DEMOS = {
       "kind": "driveshaft",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -373.0,
-        300.0
+        284.0
        ],
        "size_mm": [
+        385.44338508403837,
         30.0,
-        384.0,
         30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        -90.0
        ]
       },
-      "mass_kg": 2.6912714781325846,
+      "mass_kg": 2.6957209837093448,
       "system": "drive",
       "connects_to": [
        {
@@ -10835,7 +14213,7 @@ export const DEMOS = {
       "kind": "controller",
       "box": {
        "center_mm": [
-        -1110.0,
+        -1430.0,
         0.0,
         300.0
        ],
@@ -10875,7 +14253,7 @@ export const DEMOS = {
       "kind": "electrical",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         0.0,
         300.0
        ],
@@ -10887,23 +14265,11 @@ export const DEMOS = {
       },
       "mass_kg": 5.7,
       "carried_by": [
-       "LA",
-       "RA",
        "LS1",
        "RS1"
       ],
       "system": "electrical",
       "connects_to": [
-       {
-        "to": "LA",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RA",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "LS1",
         "via": "bolt",
@@ -10927,32 +14293,32 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -225.0,
+        -540.8888249672586,
         0.0,
         440.0
        ],
        "size_mm": [
-        450.0,
-        600.0,
+        458.2223500654828,
+        911.0,
         20.0
        ]
       },
-      "mass_kg": 3.6000000000000005,
+      "mass_kg": 6.87645690910344,
       "carried_by": [
-       "LA",
-       "RA",
+       "LAp2",
+       "RAp2",
        "LS1",
        "RS1"
       ],
       "system": "body",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAp2",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -10974,7 +14340,7 @@ export const DEMOS = {
       "kind": "accelerator_pedal",
       "box": {
        "center_mm": [
-        -69.76882046860206,
+        -389.76882046860203,
         -330.0,
         508.8360923856119
        ],
@@ -10985,19 +14351,19 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        -20.000000000000092,
+        -19.999999999999535,
         0.0
        ]
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "control",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -11010,6 +14376,11 @@ export const DEMOS = {
         "to": "controller",
         "via": "wire",
         "carries": "signal"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
        }
       ]
      },
@@ -11019,7 +14390,7 @@ export const DEMOS = {
       "kind": "brake_pedal",
       "box": {
        "center_mm": [
-        -69.76882046860206,
+        -389.76882046860203,
         -220.0,
         508.8360923856119
        ],
@@ -11030,19 +14401,19 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        -20.000000000000092,
+        -19.999999999999535,
         0.0
        ]
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "brake",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -11069,7 +14440,7 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -20.0,
+        -350.0,
         -220.0,
         714.5183687566542
        ],
@@ -11081,13 +14452,13 @@ export const DEMOS = {
       },
       "mass_kg": 0.8,
       "carried_by": [
-       "RA",
+       "RAp2",
        "RS1"
       ],
       "system": "brake",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        },
@@ -11117,7 +14488,7 @@ export const DEMOS = {
         "carries": "brake"
        },
        {
-        "to": "front_body",
+        "to": "bulkhead",
         "via": "bolt",
         "carries": "load"
        }
@@ -11129,7 +14500,7 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         440.0
        ],
@@ -11176,17 +14547,17 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
         440.0
        ],
        "size_mm": [
         950.0,
-        880.0,
+        483.6,
         20.0
        ]
       },
-      "mass_kg": 18.0,
+      "mass_kg": 9.891818181818183,
       "carried_by": [
        "LS2",
        "RS2",
@@ -11241,7 +14612,7 @@ export const DEMOS = {
        ],
        "size_mm": [
         360.0,
-        600.0,
+        483.6,
         280.0
        ]
       },
@@ -11249,8 +14620,8 @@ export const DEMOS = {
       "carried_by": [
        "LF",
        "RF",
-       "LA",
-       "RA"
+       "LAp1",
+       "RAp1"
       ],
       "system": "body",
       "connects_to": [
@@ -11265,12 +14636,71 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "LA",
+        "to": "LAp1",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
+        "to": "RAp1",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bulkhead",
+      "name": "前の隔壁 (足元と前の区画の仕切りの板)",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -280.0,
+        0.0,
+        630.4431784698709
+       ],
+       "size_mm": [
+        20.0,
+        740.0,
+        400.88635693974163
+       ]
+      },
+      "mass_kg": 6.592353425231306,
+      "carried_by": [
+       "LAt2",
+       "LDT",
+       "RAt2",
+       "RDT",
+       "LAp2",
+       "RAp2"
+      ],
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
         "via": "bolt",
         "carries": "load"
        }
@@ -11282,7 +14712,7 @@ export const DEMOS = {
       "kind": "steering",
       "box": {
        "center_mm": [
-        -400.0,
+        -720.0,
         -300.0,
         1205.411492555231
        ],
@@ -11293,24 +14723,24 @@ export const DEMOS = {
        ],
        "rpy_deg": [
         0.0,
-        35.00000000000015,
+        35.00000000000025,
         0.0
        ]
       },
-      "mass_kg": 2.559843507744881,
+      "mass_kg": 2.5537001056615427,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
@@ -11327,41 +14757,46 @@ export const DEMOS = {
       "kind": "steering_column",
       "box": {
        "center_mm": [
-        -260.0,
+        -420.0,
         -300.0,
-        1107.3824372058716
+        995.3492310923181
        ],
        "size_mm": [
-        381.8168848532077,
+        772.4647532568737,
         40.0,
         40.0
        ],
        "rpy_deg": [
         0.0,
-        34.99999999999999,
+        35.00000000000001,
         0.0
        ]
       },
-      "mass_kg": 2.047874806195905,
+      "mass_kg": 2.042960084529234,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
        {
         "to": "steering_shaft",
         "via": "pin",
+        "carries": "steer"
+       },
+       {
+        "to": "dash_cross",
+        "via": "bolt",
         "carries": "steer"
        }
       ]
@@ -11373,34 +14808,34 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        -195.0,
-        643.2559256558302
+        -235.0,
+        531.8082994683936
        ],
        "size_mm": [
-        785.7147692846985,
+        547.360052837795,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        73.99663870148639,
+        75.61744543525063,
         90.0
        ]
       },
-      "mass_kg": 1.0239374030979524,
+      "mass_kg": 1.021480042264617,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "LDT",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RS1",
+        "to": "RDT",
         "via": "bolt",
         "carries": "load"
        },
@@ -11419,40 +14854,28 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         0.0,
-        277.15846945514807
+        278.32962930738194
        ],
        "size_mm": [
         50.0,
-        518.3389226134536,
+        502.69326195850175,
         50.0
        ]
       },
-      "mass_kg": 4.607718313940786,
+      "mass_kg": 4.596660190190777,
       "carried_by": [
-       "LA",
-       "RA",
-       "LS1",
-       "RS1"
+       "LAu2",
+       "RAu2"
       ],
       "system": "steering",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAu2",
         "via": "bolt",
         "carries": "load"
        },
        {
-        "to": "RA",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
+        "to": "RAu2",
         "via": "bolt",
         "carries": "load"
        },
@@ -11475,21 +14898,21 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        354.58473065336347,
-        281.07923472757403
+        350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "steering",
       "connects_to": [
        {
@@ -11506,21 +14929,21 @@ export const DEMOS = {
       "box": {
        "center_mm": [
         -120.0,
-        -354.58473065336347,
-        281.07923472757403
+        -350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         -90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "steering",
       "connects_to": [
        {
@@ -11536,7 +14959,7 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         -300.0,
         580.0
        ],
@@ -11571,7 +14994,7 @@ export const DEMOS = {
       "kind": "seat_belt",
       "box": {
        "center_mm": [
-        -1000.0,
+        -1320.0,
         -540.0,
         710.0
        ],
@@ -11610,7 +15033,7 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         300.0,
         580.0
        ],
@@ -11645,7 +15068,7 @@ export const DEMOS = {
       "kind": "seat_belt",
       "box": {
        "center_mm": [
-        -1000.0,
+        -1320.0,
         540.0,
         710.0
        ],
@@ -11684,17 +15107,17 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         -300.0,
-        970.0
+        1202.6
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "RS1",
        "RS2"
@@ -11714,17 +15137,17 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         300.0,
-        970.0
+        1202.6
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "LS1",
        "LS2"
@@ -11744,13 +15167,13 @@ export const DEMOS = {
       "kind": "cargo",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
         600.0
        ],
        "size_mm": [
         900.0,
-        880.0,
+        483.6,
         300.0
        ]
       },
@@ -11768,6 +15191,566 @@ export const DEMOS = {
        {
         "to": "deck",
         "via": "rest",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_L",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -208.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_L",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -208.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_L",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -111.175,
+        1276.4557462776156
+       ],
+       "size_mm": [
+        592.3093334270051,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696633,
+        -3.2899932439578037
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_L",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -208.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_R",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -392.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_R",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -392.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_R",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -488.825,
+        1276.4557462776156
+       ],
+       "size_mm": [
+        592.3093334270051,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696633,
+        3.2899932439578
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_R",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -392.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_L",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        392.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_L",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        392.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_L",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        447.325,
+        1179.7799424023287
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        -13.624631766406635
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_L",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        392.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_R",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        208.0,
+        856.0299424023287
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_R",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        208.0,
+        733.9891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_R",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        152.675,
+        1179.7799424023287
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        13.624631766406637
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_R",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        208.0,
+        534.9397034561874
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
         "carries": "load"
        }
       ]
@@ -11815,25 +15798,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー)",
+      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        410.0,
-        330.0
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
       "mass_kg": 4.0,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "LA",
+        "to": "LAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAd",
         "via": "bushing",
         "carries": "load"
        },
@@ -11887,25 +15890,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー)",
+      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        -410.0,
-        330.0
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
       "mass_kg": 4.0,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "RA",
+        "to": "RAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAd",
         "via": "bushing",
         "carries": "load"
        },
@@ -11922,7 +15945,7 @@ export const DEMOS = {
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         550.0,
         300.0
        ],
@@ -11959,25 +15982,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー)",
+      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        410.0,
-        330.0
+        -2020.0,
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 3.119687015489763,
+      "mass_kg": 3.1074002113230854,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LBd",
         "via": "bushing",
         "carries": "load"
        },
@@ -11994,7 +16037,7 @@ export const DEMOS = {
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -550.0,
         300.0
        ],
@@ -12031,25 +16074,45 @@ export const DEMOS = {
      },
      {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー)",
+      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        -410.0,
-        330.0
+        -2020.0,
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 3.119687015489763,
+      "mass_kg": 3.1074002113230854,
       "system": "suspension",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RBd",
         "via": "bushing",
         "carries": "load"
        },
@@ -12068,12 +16131,12 @@ export const DEMOS = {
        "center_mm": [
         -60.0,
         475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
         160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -12099,12 +16162,12 @@ export const DEMOS = {
        "center_mm": [
         -60.0,
         -475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
         160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -12128,14 +16191,14 @@ export const DEMOS = {
       "kind": "knuckle",
       "box": {
        "center_mm": [
-        -1760.0,
+        -2080.0,
         475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
-        159.99999999999977,
+        160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -12154,22 +16217,22 @@ export const DEMOS = {
       "kind": "tie_rod",
       "box": {
        "center_mm": [
-        -1819.9999999999998,
-        354.58473065336347,
-        281.07923472757403
+        -2140.0,
+        350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "suspension",
       "connects_to": [
        {
@@ -12178,7 +16241,7 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "LB",
+        "to": "bracket_lca_RL2",
         "via": "ball_joint",
         "carries": "load"
        }
@@ -12190,14 +16253,14 @@ export const DEMOS = {
       "kind": "knuckle",
       "box": {
        "center_mm": [
-        -1760.0,
+        -2080.0,
         -475.00000000000006,
-        307.5
+        336.5
        ],
        "size_mm": [
-        159.99999999999977,
+        160.0,
         70.0,
-        295.0
+        353.0
        ]
       },
       "mass_kg": 2.5,
@@ -12216,22 +16279,22 @@ export const DEMOS = {
       "kind": "tie_rod",
       "box": {
        "center_mm": [
-        -1819.9999999999998,
-        -354.58473065336347,
-        281.07923472757403
+        -2140.0,
+        -350.67331548962545,
+        281.664814653691
        ],
        "size_mm": [
-        256.9581664284861,
+        264.74282255081414,
         16.0,
         16.0
        ],
        "rpy_deg": [
         0.0,
-        -1.8649127058044157,
+        -1.536646988053206,
         -90.0
        ]
       },
-      "mass_kg": 0.8803129845102374,
+      "mass_kg": 0.8925997886769148,
       "system": "suspension",
       "connects_to": [
        {
@@ -12240,7 +16303,7 @@ export const DEMOS = {
         "carries": "load"
        },
        {
-        "to": "RB",
+        "to": "bracket_lca_RR2",
         "via": "ball_joint",
         "carries": "load"
        }
@@ -12314,7 +16377,7 @@ export const DEMOS = {
       "kind": "brake_caliper",
       "box": {
        "center_mm": [
-        -1810.0,
+        -2130.0,
         490.0,
         300.0
        ],
@@ -12345,7 +16408,7 @@ export const DEMOS = {
       "kind": "brake_caliper",
       "box": {
        "center_mm": [
-        -1810.0,
+        -2130.0,
         -490.0,
         300.0
        ],
@@ -12371,12 +16434,511 @@ export const DEMOS = {
       ]
      },
      {
+      "id": "bracket_uca_FL1",
+      "name": "前左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL2",
+      "name": "前左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR1",
+      "name": "前右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR2",
+      "name": "前右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL1",
+      "name": "後左の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL2",
+      "name": "後左の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL1",
+      "name": "後左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL2",
+      "name": "後左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR1",
+      "name": "後右の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR2",
+      "name": "後右の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR1",
+      "name": "後右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR2",
+      "name": "後右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FL",
+      "name": "前左のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FR",
+      "name": "前右のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RL",
+      "name": "後左のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RR",
+      "name": "後右のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_column",
+      "name": "ステアリングのコラムの金具 (ダッシュの横の部材の上)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -285.0,
+        -300.0,
+        851.8934450716384
+       ],
+       "size_mm": [
+        50.0,
+        70.0,
+        12.014176263793615
+       ]
+      },
+      "mass_kg": 0.04225145508450939,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
       "id": "rollbar",
       "name": "ロールバー (横転のときに乗る人を守る枠。管は骨組みの部材)",
       "kind": "rollbar",
       "box": {
        "center_mm": [
-        -1080.0,
+        -1400.0,
         0.0,
         1810.0
        ],
@@ -12430,7 +16992,7 @@ export const DEMOS = {
      {
       "id": "LS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        350.0,
        380.0
       ]
@@ -12438,7 +17000,7 @@ export const DEMOS = {
      {
       "id": "LS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        350.0,
        380.0
       ]
@@ -12446,7 +17008,7 @@ export const DEMOS = {
      {
       "id": "LB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        350.0,
        380.0
       ]
@@ -12454,7 +17016,7 @@ export const DEMOS = {
      {
       "id": "LE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        350.0,
        380.0
       ]
@@ -12478,7 +17040,7 @@ export const DEMOS = {
      {
       "id": "RS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        -350.0,
        380.0
       ]
@@ -12486,7 +17048,7 @@ export const DEMOS = {
      {
       "id": "RS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        -350.0,
        380.0
       ]
@@ -12494,7 +17056,7 @@ export const DEMOS = {
      {
       "id": "RB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        -350.0,
        380.0
       ]
@@ -12502,15 +17064,223 @@ export const DEMOS = {
      {
       "id": "RE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        -350.0,
        380.0
       ]
      },
      {
+      "id": "LAp1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAp2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu1",
+      "xyz_mm": [
+       100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu2",
+      "xyz_mm": [
+       -100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAm",
+      "xyz_mm": [
+       0.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAd",
+      "xyz_mm": [
+       0.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAl1",
+      "xyz_mm": [
+       120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LAl2",
+      "xyz_mm": [
+       -120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAp1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAp2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu1",
+      "xyz_mm": [
+       100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu2",
+      "xyz_mm": [
+       -100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAm",
+      "xyz_mm": [
+       0.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAd",
+      "xyz_mm": [
+       0.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAl1",
+      "xyz_mm": [
+       120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAl2",
+      "xyz_mm": [
+       -120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LBd",
+      "xyz_mm": [
+       -2020.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LBm",
+      "xyz_mm": [
+       -2022.0,
+       370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RBd",
+      "xyz_mm": [
+       -2020.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RBm",
+      "xyz_mm": [
+       -2022.0,
+       -370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LDT",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       845.8863569397416
+      ]
+     },
+     {
+      "id": "RDT",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       845.8863569397416
+      ]
+     },
+     {
       "id": "LH",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        350.0,
        380.0
       ]
@@ -12518,7 +17288,7 @@ export const DEMOS = {
      {
       "id": "LHO",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        600.0,
        380.0
       ]
@@ -12526,7 +17296,7 @@ export const DEMOS = {
      {
       "id": "LHT",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        600.0,
        1810.0
       ]
@@ -12534,7 +17304,7 @@ export const DEMOS = {
      {
       "id": "RH",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -350.0,
        380.0
       ]
@@ -12542,7 +17312,7 @@ export const DEMOS = {
      {
       "id": "RHO",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -600.0,
        380.0
       ]
@@ -12550,7 +17320,7 @@ export const DEMOS = {
      {
       "id": "RHT",
       "xyz_mm": [
-       -1080.0,
+       -1400.0,
        -600.0,
        1810.0
       ]
@@ -12560,14 +17330,46 @@ export const DEMOS = {
      {
       "id": "rail_L_FA",
       "node_a": "LF",
+      "node_b": "LAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAp1_LAu1",
+      "node_a": "LAp1",
+      "node_b": "LAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu1_LA",
+      "node_a": "LAu1",
       "node_b": "LA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_L_AS1",
+      "id": "rail_L_LA_LAu2",
       "node_a": "LA",
+      "node_b": "LAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu2_LAp2",
+      "node_a": "LAu2",
+      "node_b": "LAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_AS1",
+      "node_a": "LAp2",
       "node_b": "LS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -12608,14 +17410,46 @@ export const DEMOS = {
      {
       "id": "rail_R_FA",
       "node_a": "RF",
+      "node_b": "RAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAp1_RAu1",
+      "node_a": "RAp1",
+      "node_b": "RAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu1_RA",
+      "node_a": "RAu1",
       "node_b": "RA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_R_AS1",
+      "id": "rail_R_RA_RAu2",
       "node_a": "RA",
+      "node_b": "RAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu2_RAp2",
+      "node_a": "RAu2",
+      "node_b": "RAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_AS1",
+      "node_a": "RAp2",
       "node_b": "RS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -12702,6 +17536,190 @@ export const DEMOS = {
       "part": "frame"
      },
      {
+      "id": "tower_post_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA1",
+      "node_a": "LAt1",
+      "node_b": "LAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA2",
+      "node_a": "LAm",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LA",
+      "node_a": "LAm",
+      "node_b": "LAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA1",
+      "node_a": "RAt1",
+      "node_b": "RAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA2",
+      "node_a": "RAm",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RA",
+      "node_a": "RAm",
+      "node_b": "RAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LB",
+      "node_a": "LB",
+      "node_b": "LBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LB",
+      "node_a": "LBm",
+      "node_b": "LBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RB",
+      "node_a": "RB",
+      "node_b": "RBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RB",
+      "node_a": "RBm",
+      "node_b": "RBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A1",
+      "node_a": "LAl1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A2",
+      "node_a": "LAl2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_L",
+      "node_a": "LAt2",
+      "node_b": "LDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_R",
+      "node_a": "RAt2",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_cross",
+      "node_a": "LDT",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
       "id": "rollbar_foot_L",
       "node_a": "LH",
       "node_b": "LHO",
@@ -12759,6 +17777,14 @@ export const DEMOS = {
        "t": 2.3
       }
      },
+     "rt30x30x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 30.0,
+       "h": 30.0,
+       "t": 2.3
+      }
+     },
      "ct42.7x2.3": {
       "shape": "round_tube",
       "dims_mm": {
@@ -12805,7 +17831,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -12829,6 +17856,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "bend_radius_mm"
       ]
@@ -12853,7 +17886,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -12877,6 +17911,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "hole_edge_mm"
       ]
@@ -12902,13 +17942,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -12919,7 +17968,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -12952,7 +18024,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -12995,6 +18102,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -13072,6 +18207,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -13098,13 +18394,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13115,7 +18420,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -13148,7 +18476,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -13191,6 +18554,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -13268,6 +18659,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -13291,12 +18843,20 @@ export const DEMOS = {
     "rule_id": "WD-01",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13307,7 +18867,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -13328,12 +18911,20 @@ export const DEMOS = {
     "rule_id": "WD-02",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13344,12 +18935,63 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
      {
       "part_id": "rail_L_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -13392,6 +19034,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -13473,6 +19143,167 @@ export const DEMOS = {
        "weld_length_mm",
        "weld_throat_mm"
       ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
      }
     ],
     "pass": true
@@ -13492,12 +19323,20 @@ export const DEMOS = {
     "rule_id": "WD-03",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13508,7 +19347,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -13532,13 +19394,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13549,7 +19420,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -13582,7 +19476,42 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -13625,6 +19554,34 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -13702,6 +19659,167 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "clearance_mm",
        "tolerance_stack_mm"
@@ -13728,13 +19846,22 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -13745,7 +19872,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -13782,7 +19932,47 @@ export const DEMOS = {
       ]
      },
      {
+      "part_id": "bulkhead",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
       "part_id": "rail_L_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -13831,6 +20021,38 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -13919,6 +20141,190 @@ export const DEMOS = {
      },
      {
       "part_id": "cross_E",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -14004,12 +20410,20 @@ export const DEMOS = {
      "susp_RL",
      "susp_RR",
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -14020,7 +20434,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -14050,6 +20487,30 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_L_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
       "missing": [
        "closing_gap_mm"
       ]
@@ -14086,6 +20547,30 @@ export const DEMOS = {
      },
      {
       "part_id": "rail_R_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
       "missing": [
        "closing_gap_mm"
       ]
@@ -14155,6 +20640,144 @@ export const DEMOS = {
       "missing": [
        "closing_gap_mm"
       ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "closing_gap_mm"
+      ]
      }
     ],
     "pass": true
@@ -14221,6 +20844,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "seat_R",
      "seat_L",
@@ -14274,6 +20898,7 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
+     "bulkhead",
      "steering_wheel",
      "steering_column",
      "steering_shaft",
@@ -14287,6 +20912,22 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "occupant_R.thigh_L",
+     "occupant_R.shank_L",
+     "occupant_R.arm_L",
+     "occupant_R.foot_L",
+     "occupant_R.thigh_R",
+     "occupant_R.shank_R",
+     "occupant_R.arm_R",
+     "occupant_R.foot_R",
+     "occupant_L.thigh_L",
+     "occupant_L.shank_L",
+     "occupant_L.arm_L",
+     "occupant_L.foot_L",
+     "occupant_L.thigh_R",
+     "occupant_L.shank_R",
+     "occupant_L.arm_R",
+     "occupant_L.foot_R",
      "wheel_FL",
      "susp_FL",
      "wheel_FR",
@@ -14305,6 +20946,23 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
      "rollbar"
     ],
     "hits": [],
@@ -14372,12 +21030,20 @@ export const DEMOS = {
     "rule_id": "MF-01",
     "targets": [
      "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
      "rail_L_AS1",
      "rail_L_S1S2",
      "rail_L_S2H",
      "rail_L_HB",
      "rail_L_BE",
      "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
      "rail_R_AS1",
      "rail_R_S1S2",
      "rail_R_S2H",
@@ -14388,7 +21054,30 @@ export const DEMOS = {
      "cross_S1",
      "cross_S2",
      "cross_B",
-     "cross_E"
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -14600,7 +21289,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -14624,6 +21314,12 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
       "missing": [
        "bend_radius_mm"
       ]
