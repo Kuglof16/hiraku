@@ -76,6 +76,7 @@ export function apply(m, e) {
       break;
     case "hearing.asked":
       m.hearing.asked = d;
+      m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
       break;
     case "hearing.answered":
       m.hearing.answered = d;
@@ -136,6 +137,18 @@ export function hearingRows(m) {
     return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : "asking" };
   });
 }
+
+/** The rule hits the lead asked about (hearing.asked rule_questions), each with the person's answer once there is one. */
+export function ruleRows(m) {
+  const asked = m.hearing.asked?.rule_questions || [];
+  const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
+  return asked.map((q) => {
+    const a = answers.get(q.rule_id) || null;
+    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : "asking" };
+  });
+}
+
+export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "この規則を外す" };
 
 /** Requirements that rest on an assumption (trust 3): they stay in the report as "not checked". */
 export function assumptions(m) {

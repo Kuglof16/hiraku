@@ -45,14 +45,18 @@ def store_records(store: Any, kind: str) -> bool:
 
 
 def asked_event(asked: Record) -> Record:
-    n = len(asked["questions"])
-    return {"kind": HEARING_ASKED, "agent": "lead", "text": f"足りない要件が {n} 件あります。まとめて聞きます", "data": asked}
+    """hearing.asked: the missing requirements (questions) and the rule hits to decide on (rule_questions), asked together.
+    The contract wants one of them at least, and `questions` not empty when it is there."""
+    data = {k: v for k, v in asked.items() if v or k not in ("questions", "rule_questions")}
+    n, m = len(data.get("questions", [])), len(data.get("rule_questions", []))
+    what = " と ".join(t for t in ((f"足りない要件が {n} 件" if n else ""), (f"当たった規則の相談が {m} 件" if m else "")) if t)
+    return {"kind": HEARING_ASKED, "agent": "lead", "text": f"{what}あります。まとめて聞きます", "data": data}
 
 
 def hearing_events(prepared: Prepared) -> list[Record]:
     """hearing.asked (when anything was asked) then hearing.answered."""
     out: list[Record] = []
-    if prepared.asked["questions"]:
+    if prepared.asked["questions"] or prepared.asked.get("rule_questions"):
         out.append(asked_event(prepared.asked))
     out.append({"kind": HEARING_ANSWERED, "agent": "lead", "text": hearing_text(prepared), "data": prepared.answered})
     return out

@@ -135,8 +135,39 @@ def _answers_from_file(path: str) -> tuple[dict[str, Any], str | None]:
                       "data/requirements/products/<名前>.answers.yaml のパスで渡してください")
 
 
+def _rule_questions(ctx: Any, raw: Any) -> list[Record]:
+    """The rule hits the lead wants the person to decide on, checked: the contract's shape, rules this run has."""
+    out: list[Record] = []
+    known = {r["rule_id"] for r in _enabled_rules(ctx)}
+    for q in raw or []:
+        problems = contract.errors("rule_question", q)
+        if problems:
+            raise IntakeError("rule_hits の 1 件が契約の形ではありません: " + "; ".join(str(p) for p in problems[:2]))
+        if q["rule_id"] not in known:
+            raise IntakeError(f"規則 {q['rule_id']} はこの実行にありません。ある規則: {', '.join(sorted(known))}")
+        out.append({**q, "choices": list(q.get("choices") or hearing.RULE_CHOICES)})
+    return out
+
+
+def dropped_rules(ctx: Any) -> dict[str, str]:
+    """rule_id -> why, for the rules a person dropped for this run (rule_answers of hearing.answered, the newest wins)."""
+    events = getattr(_store(ctx), "events", None)
+    out: dict[str, str] = {}
+    for e in events() if events else []:
+        if e.get("kind") != ev.HEARING_ANSWERED:
+            continue
+        for a in (e.get("data") or {}).get("rule_answers", []):
+            if a.get("choice") == "drop_rule":
+                out[a["rule_id"]] = a.get("note") or "人が、この実行ではこの規則を外すと答えた"
+            else:
+                out.pop(a["rule_id"], None)
+    return out
+
+
 @_guard
 def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
+    rule_questions = _rule_questions(ctx, args.get("rule_hits"))
+    rule_answers: list[Record] = []
     answers: dict[str, Any] = dict(args.get("answers") or {})
     note = args.get("note")
     if args.get("answers_file"):
@@ -153,18 +184,25 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if wait > 0 and not answers and run_path is not None:
         # wait for a person: show the questions now (A2), then take what the screen writes into the run folder
         plan = hearing.plan_hearing(req, product_defaults=defaults, wording=wording, choices=choices)
-        if plan.questions:
+        if plan.questions or rule_questions:
             hearing.clear_mailbox(run_path)
-            if (p := _emit(ctx, ev.asked_event({"questions": plan.questions}))):
-                problems.append(p)
+            asked = {"questions": plan.questions, "rule_questions": rule_questions}
+            problem, repeated = _emit_changed(ctx, ev.asked_event(asked))
+            if problem:
+                problems.append(problem)
             asked_early = True
-            hearing.write_request(run_path, {"questions": plan.questions})
+            hearing.write_request(run_path, {k: v for k, v in asked.items() if v})
             got = hearing.wait_for_answer(run_path, wait)
             hearing.clear_mailbox(run_path)
             if got:
                 answers = dict(got.get("answers") or {})
                 note = note or got.get("note")
+                rule_answers = hearing.check_rule_answers(got.get("rule_answers"), rule_questions)
     prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
+    if rule_questions:
+        prepared.asked["rule_questions"] = rule_questions
+    if rule_answers:
+        prepared.answered["rule_answers"] = rule_answers
     to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
     unchanged = []
     for e in to_emit:  # the same questions, or the same (empty) answers, are not recorded again
@@ -191,6 +229,18 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "requirements_recorded": recorded_req,
         "recorded": not problems,
     }
+    if rule_questions:
+        out["rule_questions"] = rule_questions
+        out["rule_answers"] = rule_answers
+        waiting = [q["rule_id"] for q in rule_questions if q["rule_id"] not in {a["rule_id"] for a in rule_answers}]
+        if waiting:
+            out["rules_waiting"] = waiting
+        dropped = [a["rule_id"] for a in rule_answers if a["choice"] == "drop_rule"]
+        revise = [a["rule_id"] for a in rule_answers if a["choice"] == "revise_design"]
+        if dropped:
+            out["rules_dropped"] = dropped  # rule_check leaves them out of this run from now on
+        if revise:
+            out["rules_to_revise"] = revise  # the designer changes the design for these
     if unchanged:
         out["unchanged"] = f"{' と '.join(unchanged)} は前に記録した内容と同じなので、記録は増やしていません"
     if not recorded_req and new:
@@ -315,7 +365,8 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     version = args.get("design_version") or store.design_version
     design = store.design(version)
     rules = _enabled_rules(ctx)
-    disabled = set(args.get("disable") or [])
+    dropped = dropped_rules(ctx)  # a person dropped these for this run (hearing.answered rule_answers)
+    disabled = set(args.get("disable") or []) | set(dropped)
     stray = sorted(disabled - {r["rule_id"] for r in rules})
     if stray:
         raise IntakeError(f"規則 {', '.join(stray)} はありません。使えるのは {', '.join(r['rule_id'] for r in rules)} です")
@@ -349,6 +400,7 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
                           for c in checks if c["not_evaluable"]],
         "recorded": persist and not problems,
         **({"not_recorded": problems[0]} if problems else {}),
+        **({"dropped_rules": [{"rule_id": r, "reason": why} for r, why in dropped.items()]} if dropped else {}),
     }
 
 

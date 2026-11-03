@@ -243,6 +243,69 @@ console.log(JSON.stringify({{ sm: [sm.includes("要る値"), sm.includes("穴の
         self.assertEqual(got, {"sm": [True, True, True], "sy": False})  # a system rule's check is a function, not a list of values
 
 
+@unittest.skipUnless(NODE, "node is not installed")
+class RuleQuestionTest(unittest.TestCase):
+    """A2 draws the rule hits the lead asked about and sends the decisions with the answers."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ ruleRows }} from "{url('model.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const asked = e(1, 'hearing.asked', {{ questions: [{{ req_key: 'Q34', name: 'x', text: 'どうしますか', ask: 'confirm' }}],
+  rule_questions: [{{ rule_id: 'U1-04', parts: ['battery'], text: '電池が重い。直しますか、外しますか' }},
+                   {{ rule_id: 'SM-01', parts: ['floor'], text: '曲げの半径', choices: ['drop_rule'] }}] }});
+const answered = e(2, 'hearing.answered', {{ answers: [], rule_answers: [{{ rule_id: 'U1-04', choice: 'drop_rule', note: '電池は替える' }}] }});
+let events = [asked];
+const sent = [], focused = [];
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b) }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2', onRuleFocus: (ids) => focused.push(ids) }});
+const texts = () => el.text();
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_rule_hits_are_rows_with_their_choices_and_answers(self):
+        got = self.run_body("""
+const open1 = ruleRows(intake.model).map((r) => [r.rule_id, r.state, r.choices]);
+events = [asked, answered]; intake.update();
+const done = ruleRows(intake.model).map((r) => [r.rule_id, r.state, r.answer && r.answer.choice]);
+console.log(JSON.stringify({ open1, done, text: texts().includes('電池が重い') }));
+""")
+        self.assertEqual(got["open1"], [["U1-04", "asking", ["revise_design", "drop_rule"]], ["SM-01", "asking", ["drop_rule"]]])
+        self.assertEqual(got["done"], [["U1-04", "answered", "drop_rule"], ["SM-01", "open", None]])
+        self.assertTrue(got["text"])
+
+    def test_the_screen_shows_the_hit_parts_the_two_choices_and_sends_the_decision(self):
+        got = self.run_body("""
+const card = (id) => el.all('article').find((a) => a.dataset.rule === id);
+const buttons = (id) => card(id).all('button').map((b) => b.text());
+const shown = { u1: buttons('U1-04'), sm: buttons('SM-01'), parts: card('U1-04').text().includes('battery') };
+card('U1-04').listeners.mouseenter[0]();
+card('U1-04').listeners.mouseleave[0]();
+card('U1-04').all('button').find((b) => b.text() === 'この規則を外す').listeners.click[0]();
+const send = el.all('button').find((b) => b.text() === '答えて進める');
+send.listeners.click[0]();
+await new Promise((r) => setTimeout(r, 20));
+console.log(JSON.stringify({ shown, focused, sent }));
+""")
+        self.assertEqual(got["shown"]["u1"], ["設計を直す", "この規則を外す"])
+        self.assertEqual(got["shown"]["sm"], ["この規則を外す"])  # only the choices that were offered
+        self.assertTrue(got["shown"]["parts"])
+        self.assertEqual(got["focused"], [["battery"], []])  # the host is told which parts to light, then to stop
+        self.assertEqual(got["sent"][0]["ruleAnswers"], [{"rule_id": "U1-04", "choice": "drop_rule"}])
+
+    def test_a_new_asking_resets_the_earlier_answers(self):
+        got = self.run_body("""
+events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: 'U1-04', parts: ['battery'], text: 'もう一度' }] })];
+intake.update();
+console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
+""")
+        self.assertEqual(got, [["U1-04", "asking"]])
+
+
 class StaticTest(unittest.TestCase):
     def test_the_files_a_screen_needs_are_there(self):
         for name in ("index.js", "model.js", "dom.js", "a1.js", "a2.js", "a5.js", "data.js", "intake.css", "demo.html", "demo-events.js"):

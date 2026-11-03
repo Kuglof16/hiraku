@@ -4,6 +4,8 @@
 //   const intake = mountIntake(hostElement, api, { nav: true, screen: "A1", want: "ギターを作りたい" });
 //   intake.show("A5"); intake.update(); intake.setWant("介護ベッドを作りたい"); intake.destroy();
 //
+// options: onRuleFocus(partIds) is called when a person points at a rule hit in A2 (its part ids; [] when they leave), so
+// the host can light those parts in its 3D view.
 // options: nav (false hides the tab bar), screen (the first one shown), want (a request text put in A1's
 // input box, not sent: the person reads it and presses 送る). setWant(text) does the same later; "" empties the box.
 //
@@ -38,7 +40,8 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, litSeen: new Set(), error: "", sending: false,
+    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {},
+    onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };
