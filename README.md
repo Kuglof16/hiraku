@@ -97,7 +97,6 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 | 静的な安定の基準 T/2h ≥ 1.0 | ROHVA 1-2011・ANSI B71.9-2012 を要約した 79 FR 68964 | `hiraku/catalog/builders/k2_tests.py` |
 | 要件の値 (摩擦係数・坂・風・停止距離・倒れない角度・航続 など) | 各項目の `basis` (林道規程・気象庁・細目告示からの借用・CPSC の要約・仮定) | `data/requirements/offroad-4w.yaml` |
 | 人体の寸法 (座高・肩幅・腰幅・膝) と工具の開口 | AIST 人体寸法データベース 1991-92、MIL-STD-1472H | `hiraku/solvers/k4_geometry/people.py`・`assembly.py` |
-| 人の体の部分の質量の割合 (頭と首 0.081・胴 0.497・上腕 0.028・前腕 0.016・手 0.006・腿 0.100・すね 0.0465・足 0.0145) | D. A. Winter『Biomechanics and Motor Control of Human Movement』4 版 表 4.1 (Dempster 1955 から) | `hiraku/designgen/kit/body.py` |
 | 製品ごとの要件の値 (ギター・介護ベッド・配膳ロボ) | 各項目の `basis` (JIS T 9254 の写し・アクチュエーターの仕様書・FDA の指針・配膳ロボの製品の仕様・ISO/TS 15066 を引いた論文・弦の張力の表・仮定。URL つき) | `data/requirements/products/*.yaml`、答えの見本 `*.answers.yaml` |
 | ヒアリングの既定値 (風 20 m/s・最低地上高 180 mm・体重 76.6 kg と 55 kg・身長の幅・指の隙間 25 mm など) | 気象庁「風の強さと吹き方」・EU 規則 168/2013 付属書 I・AIST 1991-92・細目告示 第 2 節・ISO 13854 (URL つき) | `hiraku/intake/requirement_items.yaml` |
 | 門形の梁の式 (ロールバーの横・後ろ・上からの力、たわみ角法と塑性ヒンジ) | 構造力学の教科書 (Heyman『Plastic Design of Frames』・Neal『The Plastic Methods of Structural Analysis』) の方法。式はコードで組み、片持ち・両端固定などの答えの分かる形で試験した。本は開いていない | `hiraku/solvers/k0_handcalc/library_portal.py` |
