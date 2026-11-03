@@ -4,6 +4,7 @@ import unittest
 from hiraku import contract
 from hiraku.catalog import (CatalogError, applies, build_load_cases, builder_for, load_catalog, load_requirements,
                             min_frame_yield, owner_agent, parts_on_board, project_fields, read_data)
+from hiraku.catalog import CATALOG_DIR
 from hiraku.tools.summary import design_summary
 from tests.tools.fakes import example_design, loaded_design
 from tests.tools.helpers import REQUIREMENTS
@@ -146,7 +147,7 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
     def test_the_demo_runs_point_at_files_that_load(self):
-        listed = read_data(REQUIREMENTS.parent / "demo_runs.yaml")["runs"]
+        listed = read_data(CATALOG_DIR / "demo_runs.yaml")["runs"]
         self.assertEqual(len({r["id"] for r in listed}), len(listed))
         for r in listed:
             with self.subTest(run=r["id"]):

@@ -4,7 +4,9 @@
 #   and Claude picks the domains (those products have no design kind yet: hiraku.designgen.archetypes is
 #   empty for their flags, so a run would stop before version 1).
 # modes: how it is meant to be run. Every file here ran end to end in its scripted run before it was
-# listed, or stops where its line says (tests/tools/test_catalog.py checks the files load).
+# listed, or stops where its line says (tests/tools/test_catalog.py checks the files load). Kept in
+# data/catalog/, not beside the requirements files, so nothing that runs every data/requirements/*.yaml
+# takes it for one.
 runs:
   - id: n09-electric-guitar
     title: ギターの分野を選ぶ
