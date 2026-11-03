@@ -1,6 +1,7 @@
 """The real look of the parts a vehicle people ride in has (tests/web/body_fixture.py): body
 panels, split seats, brackets and the roll cage take the materials the table in web/js/look.js
-(MATERIAL_OF) gives by kind and id; part.material, when a part has it, wins; plain boxes have
+(MATERIAL_OF) gives by kind and id, by part.material (a key into design.materials) and by
+part.finish (the contract's six values); plain boxes have
 rounded edges in the real look only; the diagram look (zu) of the designs that were there
 before is drawn as it was; and a part's contour colour is the legend's colour on a rounded box.
 
@@ -18,7 +19,7 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
-from tests.web.body_fixture import body_design, body_events
+from tests.web.body_fixture import body_design, body_events, schema_has_part_material
 
 try:
     from playwright.sync_api import sync_playwright
@@ -30,23 +31,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # kind and id -> the finish the table gives (web/js/look.js MATERIAL_OF; the order is in its comment)
 EXPECTED_FINISH = {
-    "hood": "body_paint",
-    "fender_FL": "body_paint",
-    "fender_FR": "body_paint",
+    "hood": "body_paint",  # spcc, painted: the body's paint
+    "fender_FL": "resin",  # pp, molded: moulded plastic in the body's colour
+    "fender_FR": "resin",
     "side_panel_L": "body_paint",
     "side_panel_R": "body_paint",
     "bulkhead": "body_paint",
     "front_body": "body_paint",
-    "floor": "tread_plate",
+    "floor": "tread_plate",  # a5052, bare: still the diamond plate
     "floor_front": "tread_plate",
     "deck": "tread_plate",
     "seat_R_back": "vinyl",
     "seat_R_cushion": "vinyl",
     "seat_L_back": "vinyl",
     "seat_L_cushion": "vinyl",
-    "bracket_seat_R_F": "black_steel",
-    "bracket_seat_L_B": "black_steel",
-    "bracket_column": "black_steel",
+    "bracket_seat_R_F": "powder_coat",  # ss400, powder_coat
+    "bracket_seat_L_B": "powder_coat",
+    "bracket_column": "black_steel",  # ss400, painted: the bracket's black coat
     "bracket_column_stay": "black_steel",
     "rollbar": "painted_steel",
 }
@@ -145,9 +146,9 @@ class BodyLookBrowserTest(unittest.TestCase):
         # the backrest and the cushion: the same cover
         for side in "RL":
             self.assertEqual(parts[f"seat_{side}_back"][0]["color"], parts[f"seat_{side}_cushion"][0]["color"])
-        # brackets are dark (black coat)
-        dark = int(parts["bracket_column"][0]["color"][1:3], 16)
-        self.assertLess(dark, 0x40)
+        # brackets are dark (black coat, painted or powder coated in the bracket's colour)
+        for pid in ("bracket_column", "bracket_seat_R_F"):
+            self.assertLess(int(parts[pid][0]["color"][1:3], 16), 0x40, pid)
         # the cage: painted tube, a colour apart from the frame's, the same on its members and its part
         members = got["members"]
         cage = {k: v for k, v in members.items() if k.startswith("rollbar_")}
@@ -162,26 +163,65 @@ class BodyLookBrowserTest(unittest.TestCase):
         # a split seat is drawn as its boxes (one mesh each), not the one-box seat shape
         self.assertEqual(len(parts["seat_R_back"]), 1)
 
-    def test_part_material_wins_over_kind_and_id(self):
+    def test_part_material_is_looked_up_in_the_design_materials(self):
+        """part.material is a key into design.materials; the material there decides (no finish given)."""
         design = body_design()
         by_id = {p["id"]: p for p in design["parts"]}
-        by_id["hood"]["material"] = "A5052 aluminium sheet"
-        by_id["fender_FL"]["material"] = "PP (polypropylene)"
-        by_id["side_panel_L"]["material"] = "SPCC"  # steel: stays the body's paint
-        by_id["bracket_column"]["material"] = "SS400"  # steel: stays the black coat
-        by_id["floor"]["material"] = "EPDM rubber mat"
-        by_id["seat_R_back"]["finish"] = "fabric"
+        for pid, key in (("hood", "a5052"), ("fender_FL", "pp"), ("floor", "epdm"), ("side_panel_L", "no_such_key"), ("bracket_column", "stock_77")):
+            by_id[pid]["material"] = key
+            by_id[pid].pop("finish", None)
         got = self.look_of("real", design)["parts"]
         finish = lambda pid: {m["finish"] for m in got[pid]}
-        self.assertEqual(finish("hood"), {"aluminium"})
-        self.assertEqual(finish("fender_FL"), {"resin"})
-        self.assertEqual(finish("side_panel_L"), {"body_paint"})
-        self.assertEqual(finish("bracket_column"), {"black_steel"})
-        self.assertEqual(finish("floor"), {"rubber"})
-        self.assertEqual(finish("seat_R_back"), {"fabric"})
+        self.assertEqual(finish("hood"), {"aluminium"})  # A5052 by its name
+        self.assertEqual(finish("fender_FL"), {"resin"})  # PP
+        self.assertEqual({m["color"] for m in got["fender_FL"]}, {"#2b2e33"})  # the plastic's own colour
+        self.assertEqual(finish("floor"), {"rubber"})  # EPDM
+        self.assertEqual(finish("side_panel_L"), {"body_paint"})  # the key is not in materials: kind and id
+        self.assertEqual(finish("bracket_column"), {"aluminium"})  # a name that says nothing: its numbers
         # the parts without them keep the table's
-        self.assertEqual(finish("fender_FR"), {"body_paint"})
         self.assertEqual(finish("seat_R_cushion"), {"vinyl"})
+
+    def test_each_finish_and_material(self):
+        """look.js partEntry for each part.finish of the contract, over the kind and id's entry and the material's sort."""
+        cases = [
+            # (part, expected {finish, color})
+            ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "painted"}, {"finish": "black_steel"}),
+            ({"id": "susp", "kind": "suspension", "material": "ss400", "finish": "painted"}, {"finish": "painted_steel", "color": "#2f3438"}),
+            ({"id": "motor", "kind": "motor", "material": "a5052", "finish": "painted"}, {"finish": "painted_steel", "color": "#a9b0b6"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "powder_coat"}, {"finish": "powder_coat", "color": "#1b1c1e"}),
+            ({"id": "hood", "kind": "body", "material": "spcc", "finish": "powder_coat"}, {"finish": "powder_coat", "color": "#40535f"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "bare"}, {"finish": "bare_steel"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "a5052", "finish": "bare"}, {"finish": "aluminium"}),
+            ({"id": "floor", "kind": "body", "material": "a5052", "finish": "bare"}, {"finish": "tread_plate"}),
+            ({"id": "bracket_x", "kind": "bracket", "finish": "bare"}, {"finish": "bare_steel"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "a5052", "finish": "anodized"}, {"finish": "anodized"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "galvanized"}, {"finish": "galvanized"}),
+            ({"id": "fender_FL", "kind": "body", "material": "pp", "finish": "molded"}, {"finish": "resin", "color": "#40535f"}),
+            ({"id": "switch", "kind": "switch", "material": "pp", "finish": "molded"}, {"finish": "resin", "color": "#b33a2a"}),
+            ({"id": "bracket_x", "kind": "bracket", "material": "pp", "finish": "molded"}, {"finish": "resin"}),
+            # a material and no finish: as the material is used
+            ({"id": "hood", "kind": "body", "material": "spcc"}, {"finish": "body_paint"}),
+            ({"id": "seat_R_back", "kind": "seat", "material": "pp"}, {"finish": "resin"}),
+            ({"id": "rollbar", "kind": "rollbar", "material": "stkm13a"}, {"finish": "painted_steel", "color": "#c4c1b8"}),
+            # neither, or a key that is not there: kind and id
+            ({"id": "seat_R_back", "kind": "seat"}, {"finish": "vinyl"}),
+            ({"id": "hood", "kind": "body", "material": "no_such_key"}, {"finish": "body_paint"}),
+            ({"id": "deck", "kind": "body"}, {"finish": "tread_plate"}),
+        ]
+        page, errors = self.open("real")
+        got = page.evaluate(
+            """async ([cases, materials]) => {
+              const { partEntry, PART_FINISHES } = await import("./js/look.js");
+              return { finishes: PART_FINISHES, entries: cases.map((p) => { const e = partEntry(p, materials); return e.color ? { finish: e.finish, color: e.color } : { finish: e.finish }; }) };
+            }""",
+            [[c[0] for c in cases], body_design()["materials"]],
+        )
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertEqual(set(got["finishes"]), {"painted", "powder_coat", "bare", "anodized", "galvanized", "molded"})
+        self.assertEqual({c[0]["finish"] for c in cases if "finish" in c[0]}, set(got["finishes"]))  # every value is tried
+        for (part, want), entry in zip(cases, got["entries"]):
+            self.assertEqual(entry, want, part)
 
     def test_boxes_are_rounded_in_the_real_look_only(self):
         design = body_design()
@@ -282,6 +322,24 @@ class BodyFixtureTest(unittest.TestCase):
         # the base design file is not changed
         self.assertIsNot(design, body_design())
         self.assertEqual(copy.deepcopy(design), body_design())
+
+    def test_fixture_material_and_finish_are_in_the_contract_shape(self):
+        """part.material is a key of design.materials; part.finish is one of the contract's six values."""
+        design = body_design()
+        finishes = {"painted", "powder_coat", "bare", "anodized", "galvanized", "molded"}
+        with_material = [p for p in design["parts"] if "material" in p]
+        self.assertGreaterEqual(len(with_material), 10)
+        for p in with_material:
+            self.assertIn(p["material"], design["materials"], p["id"])
+        self.assertEqual({p["finish"] for p in design["parts"] if "finish" in p}, {"painted", "powder_coat", "bare", "molded"})
+        self.assertLessEqual({p["finish"] for p in design["parts"] if "finish" in p}, finishes)
+
+    def test_fixture_passes_the_contract_schema(self):
+        if not schema_has_part_material():
+            self.skipTest("this branch's contract has no part.material / part.finish yet (lead commit a4ad2f6 not merged)")
+        from hiraku import contract
+
+        self.assertEqual(contract.errors("design", body_design()), [])
 
 
 if __name__ == "__main__":

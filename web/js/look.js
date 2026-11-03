@@ -307,44 +307,62 @@ const TEXTURES = {
 // Finishes of the real look. These are look choices (how the surface reads in the
 // picture), not measured properties of the parts.
 //   type: "physical" (MeshPhysicalMaterial) or "standard" (MeshStandardMaterial)
+//   family: what the surface is (a coat of paint, bare aluminium, ...): two finishes of
+//     one family are the same surface for decide() below
 //   normal: a canvas normal map (TEXTURES) and its strength
 //   surface: a ground-like texture that a Poly Haven asset can replace (ASSETS)
 const FINISH = {
-  painted_steel: { type: "physical", color: "#3d4840", roughness: 0.5, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 },
+  painted_steel: { family: "paint", type: "physical", color: "#3d4840", roughness: 0.5, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 },
   // a body panel's paint (painted sheet steel or moulded plastic): one calm colour, a thin clearcoat
-  body_paint: { type: "physical", color: "#40535f", roughness: 0.42, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.2 },
+  body_paint: { family: "paint", type: "physical", color: "#40535f", roughness: 0.42, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.2 },
   // brackets: steel in a black satin coat
-  black_steel: { type: "physical", color: "#1b1c1e", roughness: 0.55, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.4 },
+  black_steel: { family: "paint", type: "physical", color: "#1b1c1e", roughness: 0.55, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.4 },
+  // a powder coat: thick, satin, no clearcoat (its colour comes from the part's kind and id)
+  powder_coat: { family: "paint", type: "standard", color: "#2a2c2f", roughness: 0.62, metalness: 0 },
+  // steel as it comes from the mill: grey metal
+  bare_steel: { family: "steel", type: "standard", color: "#8d9196", roughness: 0.45, metalness: 1 },
   // a seat's cover: vinyl (the fabric finish is the woven one)
-  vinyl: { type: "physical", color: "#242528", roughness: 0.6, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.5, sheen: 0.3, sheenRoughness: 0.5, sheenColor: "#4a4c52", normal: "fabric", normalScale: 0.15 },
+  vinyl: { family: "vinyl", type: "physical", color: "#242528", roughness: 0.6, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.5, sheen: 0.3, sheenRoughness: 0.5, sheenColor: "#4a4c52", normal: "fabric", normalScale: 0.15 },
   // a floor: anti-slip diamond plate (aluminium)
-  tread_plate: { type: "standard", color: "#a9aeb3", roughness: 0.4, metalness: 1, normal: "plate", normalScale: 1 },
-  aluminium: { type: "standard", color: "#b9bec4", roughness: 0.32, metalness: 1 },
-  galvanized: { type: "standard", color: "#a3a9ad", roughness: 0.48, metalness: 1 },
-  rubber: { type: "standard", color: "#1d1e20", roughness: 0.88, metalness: 0, normal: "tread", normalScale: 1 },
-  fabric: { type: "physical", color: "#2a2b2f", roughness: 0.95, metalness: 0, sheen: 0.6, sheenRoughness: 0.6, sheenColor: "#5a5c63", normal: "fabric", normalScale: 0.6 },
-  resin: { type: "physical", color: "#2b2e33", roughness: 0.42, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 },
-  skin: { type: "standard", color: "#d8c7b0", roughness: 0.85, metalness: 0 },
-  wood: { type: "standard", color: "#ffffff", roughness: 0.85, metalness: 0, map: "wood" },
-  concrete: { type: "standard", color: "#ffffff", roughness: 0.95, metalness: 0, surface: "concrete" },
+  tread_plate: { family: "aluminium", type: "standard", color: "#a9aeb3", roughness: 0.4, metalness: 1, normal: "plate", normalScale: 1 },
+  aluminium: { family: "aluminium", type: "standard", color: "#b9bec4", roughness: 0.32, metalness: 1 },
+  // anodised aluminium: the oxide layer dulls and greys the metal a little
+  anodized: { family: "anodized", type: "physical", color: "#9ea3a8", roughness: 0.5, metalness: 0.85, clearcoat: 0.2, clearcoatRoughness: 0.5 },
+  galvanized: { family: "galvanized", type: "standard", color: "#a3a9ad", roughness: 0.48, metalness: 1 },
+  rubber: { family: "rubber", type: "standard", color: "#1d1e20", roughness: 0.88, metalness: 0, normal: "tread", normalScale: 1 },
+  fabric: { family: "fabric", type: "physical", color: "#2a2b2f", roughness: 0.95, metalness: 0, sheen: 0.6, sheenRoughness: 0.6, sheenColor: "#5a5c63", normal: "fabric", normalScale: 0.6 },
+  // moulded plastic as it comes from the mould
+  resin: { family: "resin", type: "physical", color: "#2b2e33", roughness: 0.42, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 },
+  skin: { family: "skin", type: "standard", color: "#d8c7b0", roughness: 0.85, metalness: 0 },
+  wood: { family: "wood", type: "standard", color: "#ffffff", roughness: 0.85, metalness: 0, map: "wood" },
+  concrete: { family: "concrete", type: "standard", color: "#ffffff", roughness: 0.95, metalness: 0, surface: "concrete" },
 };
 
 // What each part and each frame member is made of in the real look: one table. An
 // entry is { finish (a FINISH key), color? }; a colour here overrides the finish's own.
 //
-// A part's entry is decided in this order (partEntry):
-//   1. part.material (a material's name, e.g. "SPCC", "A5052", "PP"): the rows of
-//      `material` (first match) give the finish. A steel row (painted steel) keeps the
-//      entry of step 3 when that is a paint too (a steel hood stays the body colour).
-//   2. part.finish (a FINISH key), when given, replaces the finish of step 1 or 3.
-//   3. kind and id: the first row of `id[kind]` whose pattern matches the id, else
-//      `kind[kind]`, else `kind.default`.
-// part.material and part.finish are not in the contract yet (2026-11-03); without them
-// kind and id decide. A piece of a part's shape (shapes.js: tyre, rim, hub, spring)
-// takes `sub[piece]`, whatever the part.
+// A part's entry (partEntry) starts from its kind and id: the first row of `id[kind]`
+// whose pattern matches the id, else `kind[kind]`, else `kind.default`. Then, with the
+// contract's fields (docs/contract.md: part.material and part.finish):
+//   1. part.material is a key into design.materials. The material there is sorted
+//      (steel, galvanized steel, aluminium, plastic, rubber, vinyl, fabric, wood) by
+//      materialSort: the words of its name first (the `material` rows: a JIS grade such
+//      as STKM13A / SPCC / A5052, or a word such as "steel", "PP", "EPDM"), then, when the
+//      name says nothing, its density_kg_m3 and E_MPa (byNumbers). A key that is not in
+//      design.materials sorts nothing: the kind and id decide.
+//   2. part.finish (painted, powder_coat, bare, anodized, galvanized, molded) decides
+//      the surface; the sort only says what "bare" is (bare steel, bare aluminium, ...).
+//      painted and powder_coat take the kind and id's colour.
+//   3. With a sort and no finish: the material as it is used (AS_USED; steel is drawn
+//      painted, as the frame always was).
+//   Wherever the surface comes out in the same family as the kind and id's entry, that
+//   entry is kept (a painted steel hood stays the body colour, a bare aluminium floor
+//   stays the diamond plate).
+//   With neither field, the kind and id decide.
+// A piece of a part's shape (shapes.js: tyre, rim, hub, spring) takes `sub[piece]`,
+// whatever the part.
 // A frame member's entry (memberEntry): `kind[member.part]` (e.g. "rollbar"), else
-// `kind.frame`, then its material's name (design.materials[m.material].name) through the
-// same `material` rows, by the same rule as step 1.
+// `kind.frame`, then its material (design.materials[m.material]) as in 1 and 3.
 export const MATERIAL_OF = {
   sub: {
     tyre: { finish: "rubber" },
@@ -392,42 +410,88 @@ export const MATERIAL_OF = {
     cargo: { finish: "wood" },
     default: { finish: "painted_steel", color: "#7d828a" },
   },
-  // a material's name (part.material, or a member's design.materials name): words in it (first match)
+  // a material's sort from words in its design.materials name (first match)
   material: [
-    { match: /alumin|A\d{4}\b/i, finish: "aluminium" },
-    { match: /galvani|亜鉛|SGCC|ZAM/i, finish: "galvanized" },
-    { match: /steel|STK|SS\d{3}|STKR|STKM|SPCC|SPHC|SAPH|鋼/i, finish: "painted_steel" },
-    { match: /plastic|resin|樹脂|\bPP\b|\bABS\b|\bPE\b|\bPC\b|FRP|GFRP|CFRP|nylon|\bPA\d*\b/i, finish: "resin" },
-    { match: /rubber|ゴム|EPDM/i, finish: "rubber" },
-    { match: /vinyl|PVC|ビニル|leather|革/i, finish: "vinyl" },
-    { match: /fabric|cloth|布|polyester/i, finish: "fabric" },
-    { match: /wood|木|plywood|合板/i, finish: "wood" },
+    { match: /alumin|アルミ|\bA\d{4}\b|\bA\d{4}-?[HOT]\d*|\bAC\d[A-C]\b|\bADC\d+\b/i, sort: "aluminium" },
+    { match: /galvani|亜鉛|SGCC|SGHC|ZAM/i, sort: "galvanized_steel" },
+    { match: /steel|鋼|STK|SS\d{3}|SPCC|SPHC|SAPH|SPFC|S\d\dC|SCM\d|SUS\d/i, sort: "steel" },
+    { match: /vinyl|PVC|ビニル|leather|革/i, sort: "vinyl" },
+    { match: /rubber|ゴム|EPDM|\bNBR\b|\bSBR\b/i, sort: "rubber" },
+    { match: /plastic|resin|樹脂|\bPP\b|\bABS\b|\bPE\b|HDPE|\bPC\b|FRP|nylon|\bPA\d*\b|polyprop|polyeth/i, sort: "plastic" },
+    { match: /fabric|cloth|布|polyester/i, sort: "fabric" },
+    { match: /wood|木|plywood|合板/i, sort: "wood" },
   ],
+  // the finish of each sort with no part.finish (3), and of each sort when it is "bare" (2)
+  AS_USED: { steel: "painted_steel", galvanized_steel: "galvanized", aluminium: "aluminium", plastic: "resin", rubber: "rubber", vinyl: "vinyl", fabric: "fabric", wood: "wood" },
+  BARE: { steel: "bare_steel", galvanized_steel: "galvanized", aluminium: "aluminium", plastic: "resin", rubber: "rubber", vinyl: "vinyl", fabric: "fabric", wood: "wood" },
 };
 
-// The finishes that are a coat of paint on steel.
-const PAINTS = new Set(["painted_steel", "body_paint", "black_steel"]);
-
-// Step 1 and 2 of the order above, over the entry of kind and id (or of a member's part).
-function refine(base, materialName, finish) {
-  let entry = base;
-  const row = materialName ? MATERIAL_OF.material.find((e) => e.match.test(materialName)) : null;
-  if (row && !(row.finish === "painted_steel" && PAINTS.has(base.finish))) entry = { finish: row.finish, color: row.color };
-  if (finish && FINISH[finish] && finish !== entry.finish) entry = { finish };
-  return entry;
+// A material whose name says nothing, sorted by its numbers. The bands are wide around
+// each family (steel about 7850 kg/m3 and 205 GPa, aluminium about 2700 kg/m3 and 70 GPa,
+// plastics under 2000 kg/m3 and a few GPa, rubber a few MPa), only to tell them apart
+// for the picture; they are not used for any strength or mass.
+function byNumbers(m) {
+  const E = m.E_MPa;
+  const rho = m.density_kg_m3;
+  if (!(E > 0) || !(rho > 0)) return null;
+  if (E < 100) return "rubber";
+  if (rho >= 7000 && rho <= 8500 && E >= 150000) return "steel";
+  if (rho >= 2500 && rho <= 3000 && E >= 60000 && E <= 85000) return "aluminium";
+  if (rho < 2000 && E < 20000) return "plastic";
+  return null;
 }
 
-// The table's entry for a part ({ id, kind, material?, finish? }).
-export function partEntry(part) {
-  const rows = MATERIAL_OF.id[part.kind] ?? [];
-  const byId = rows.find((r) => r.match.test(part.id ?? ""));
-  const base = byId ? { finish: byId.finish, color: byId.color } : (MATERIAL_OF.kind[part.kind] ?? MATERIAL_OF.kind.default);
-  return refine(base, part.material ?? null, part.finish ?? null);
+// The sort of a design.materials entry (or of a bare name), or null.
+export function materialSort(material) {
+  if (!material) return null;
+  const m = typeof material === "string" ? { name: material } : material;
+  const row = MATERIAL_OF.material.find((e) => e.match.test(m.name ?? ""));
+  return row ? row.sort : byNumbers(m);
 }
 
-// The table's entry for a frame member: its part ("frame", "rollbar") and its material's name.
-export function memberEntry(materialName, part = null) {
-  return refine(MATERIAL_OF.kind[part] ?? MATERIAL_OF.kind.frame, materialName ?? null, null);
+// The values of part.finish in the contract.
+export const PART_FINISHES = ["painted", "powder_coat", "bare", "anodized", "galvanized", "molded"];
+
+// The entry from the kind and id's (base), the material's sort and part.finish (the steps above).
+function decide(base, sort, finish) {
+  const family = (f) => FINISH[f]?.family;
+  const baseColor = base.color ?? FINISH[base.finish]?.color;
+  // the base when it is the same surface; else the finish (with a colour, when one is given)
+  const to = (f, color = null) => (family(f) === family(base.finish) ? base : color ? { finish: f, color } : { finish: f });
+  switch (PART_FINISHES.includes(finish) ? finish : null) {
+    case "painted":
+      return to("painted_steel", baseColor);
+    case "powder_coat":
+      return { finish: "powder_coat", color: baseColor };
+    case "bare":
+      return to(MATERIAL_OF.BARE[sort] ?? "bare_steel");
+    case "anodized":
+      return to("anodized");
+    case "galvanized":
+      return to("galvanized");
+    case "molded":
+      // a moulded body panel keeps the body's colour (coloured plastic)
+      return to("resin", base.finish === "body_paint" ? baseColor : null);
+    default:
+      return sort ? to(MATERIAL_OF.AS_USED[sort]) : base;
+  }
+}
+
+function kindIdEntry(part) {
+  const byId = (MATERIAL_OF.id[part.kind] ?? []).find((r) => r.match.test(part.id ?? ""));
+  return byId ? { finish: byId.finish, color: byId.color } : (MATERIAL_OF.kind[part.kind] ?? MATERIAL_OF.kind.default);
+}
+
+// The table's entry for a part ({ id, kind, material?, finish? }) of a design with these materials.
+export function partEntry(part, materials = null) {
+  const mat = part.material != null ? materials?.[part.material] : null;
+  return decide(kindIdEntry(part), materialSort(mat), part.finish ?? null);
+}
+
+// The table's entry for a frame member: its material (a design.materials entry, or its
+// name) and its part ("frame", "rollbar").
+export function memberEntry(material, part = null) {
+  return decide(MATERIAL_OF.kind[part] ?? MATERIAL_OF.kind.frame, materialSort(material), null);
 }
 
 // Colours of the parts in the diagram look (pale, see-through).
@@ -661,18 +725,20 @@ export class Look {
   }
 
   // Frame members (the contour colours them; in the real look the paint is the colour).
-  memberMaterial(materialName = null, part = null) {
+  // material: the member's design.materials entry (or its name); part: member.part.
+  memberMaterial(material = null, part = null) {
     if (!this.real) return new THREE.MeshLambertMaterial({ color: GRAY });
-    return this.fromEntry(memberEntry(materialName, part));
+    return this.fromEntry(memberEntry(material, part));
   }
 
-  // A part's material: `part` is the design's part (or just a kind); sub picks a piece
-  // of its shape ("spring", "tyre", "rim", "hub").
-  partMaterial(part, sub = null) {
+  // A part's material: `part` is the design's part (or just a kind), `materials` the
+  // design's (part.material is a key into them); sub picks a piece of its shape
+  // ("spring", "tyre", "rim", "hub").
+  partMaterial(part, sub = null, materials = null) {
     const p = typeof part === "string" ? { kind: part } : part;
     const kind = p.kind;
     if (this.real) {
-      const entry = (sub && MATERIAL_OF.sub[sub]) || partEntry(p);
+      const entry = (sub && MATERIAL_OF.sub[sub]) || partEntry(p, materials);
       const m = this.fromEntry(entry);
       m.userData.baseColor = "#" + m.color.getHexString();
       return m;

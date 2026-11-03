@@ -468,7 +468,7 @@ export class Workbench3D {
     for (const m of design.members ?? []) {
       const g = memberGeometry(design, m, nodes);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material]?.name ?? null, m.part ?? null));
+      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
       mesh.castShadow = mesh.receiveShadow = this.look.real;
       mesh.matrixAutoUpdate = false;
@@ -566,7 +566,7 @@ export class Workbench3D {
         holder.updateMatrix();
         const lines = [];
         for (const pc of pieces) {
-          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p, pc.sub));
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p, pc.sub, design.materials ?? null));
           mesh.material.userData.sub = pc.sub;
           mesh.renderOrder = 2;
           mesh.castShadow = mesh.receiveShadow = this.look.real;
