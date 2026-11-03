@@ -28,10 +28,10 @@ BEFORE = {"battery": 50.0, "motor": 25.0, "controller": 4.0, "aux": 6.0, "floor_
 
 
 def panel_kg(design, pid):
-    """The plates (the floors, the deck, the bulkhead) weigh their own sheet: area x thickness x density."""
-    s = next(p for p in design["parts"] if p["id"] == pid)["box"]["size_mm"]
-    rho = design["materials"][ladder_4w.PLATE_STEEL]["density_kg_m3"]
-    return s[0] * s[1] * s[2] * rho * 1e-9
+    """The plates (the floors, the deck, the bulkhead) weigh their own sheet: area x the catalogue's unit mass at the
+    thickness (ladder_4w.PLATE_KG_M2)."""
+    s = sorted(next(p for p in design["parts"] if p["id"] == pid)["box"]["size_mm"])
+    return s[1] * s[2] * 1e-6 * ladder_4w.PLATE_KG_M2[round(s[0], 6)]
 
 
 def q(v, u):

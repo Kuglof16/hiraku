@@ -185,8 +185,8 @@ class DemoV1Test(unittest.TestCase):
     def test_pedals_moved_to_touch_are_held(self):
         """Both pedals are held once they touch. The accelerator on a tower post passes; the brake pedal on the
         bulkhead, a 2.3 mm sheet (designgen.ladder_4w.PLATE_T_MM) and not the 20 mm solid box it was, moves more
-        than Q69. The K0 prediction (load_path.control_deflection) has no plate bending, so it is not compared
-        here (it was while the bulkhead was 20 mm thick)."""
+        than Q69. The K0 prediction with the plate strip (load_path.plate_strip) against the tool is in
+        test_load_path_plate_k0."""
         d = touch_nearest(V1, "pedal_brake", "part:bulkhead")
         d = touch_nearest(d, "pedal_accel", "member:tower_post_RA2")
         lc = self.cases["R7-foot-500N"]

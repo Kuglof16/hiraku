@@ -325,6 +325,9 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
         if name == "gusset_leg" and 0.0 < val < GUSSET_LEG_MIN_MM:
             raise DesignGenError(f"gusset_leg is 0 (no gussets) or {GUSSET_LEG_MIN_MM:g} to {var.hi:g} mm, got {val:g}")
+        if name in PLATE_T_VARS and val not in PLATE_KG_M2:
+            raise DesignGenError(f"{name} is a standard sheet thickness: one of "
+                                 f"{', '.join(f'{t:g}' for t in PLATE_KG_M2)} mm, got {val:g}")
         if name in INTEGERS and val != round(val):
             raise DesignGenError(f"{name} is a whole number, got {val:g}")
         if name in ZERO_OR_AT_LEAST and 0.0 < val < ZERO_OR_AT_LEAST[name]:
@@ -444,14 +447,22 @@ FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driv
 # dimensions and shape but for the checkers); its standard thicknesses are 2.3, 3.2, 4.5, 6.0, ... mm, with a unit
 # mass of 19.73 kg/m2 at 2.3 mm and 26.79 kg/m2 at 3.2 mm (the checkers included). Which standard thickness each
 # part takes is HIRAKU's choice (assumption, not sized): 3.2 mm where people stand or cargo lies, the thinnest
-# standard 2.3 mm for the bulkhead. A plate's mass is its area x thickness x the material's density (plate_masses),
-# without the checkers (7 % less than the catalogue's 26.79 kg/m2 at 3.2 mm, 9 % less than 19.73 at 2.3 mm).
+# standard 2.3 mm for the bulkhead. A plate's mass is its area x the catalogue's unit mass at its thickness
+# (PLATE_KG_M2, plate_mass; the checkers included). Before, it was area x thickness x the material's density, without
+# the checkers (7 % less at 3.2 mm, 9 % less at 2.3 mm).
 PLATE_STEEL = "ss400"
 PLATE_FINISH = "painted"  # assumption
 FLOOR_PLATE_T_MM = 3.2  # the footwell floor, the floor under the seats and the deck (one value: _driver_v1)
 BULKHEAD_PLATE_T_MM = 2.3
 PLATE_T_MM = {"floor_front": FLOOR_PLATE_T_MM, "floor": FLOOR_PLATE_T_MM, "deck": FLOOR_PLATE_T_MM,
-              "bulkhead": BULKHEAD_PLATE_T_MM}
+              "bulkhead": BULKHEAD_PLATE_T_MM}  # the defaults of the thickness variables (PLATE_T_VARS)
+# The catalogue's unit mass (kg/m2, the checkers included) of each NFP-400 standard thickness read from A101 (see
+# above). Only these thicknesses may be chosen: 4.5, 6.0 mm and the others are standard sizes too, but their unit
+# masses were not read here.
+PLATE_KG_M2 = {2.3: 19.73, 3.2: 26.79}
+# The plate thickness variables and the plate parts each sets (floor_t: both floors, the seats and the feet on one
+# level, as _driver_v1 takes it)
+PLATE_T_VARS = {"floor_t": ("floor_front", "floor"), "deck_t": ("deck",), "bulkhead_t": ("bulkhead",)}
 # The front body (outer panel and bumper) is a box around them, not one plate: its mass stays the first v1's
 # (assumption) and it is taken as steel of PLATE_STEEL (assumption, not checked)
 FRONT_BODY_KG = 15.0
@@ -598,10 +609,13 @@ _OPTION_VARS: dict[str, Var] = {
                                "0: none (the parts rest where they are placed, ON_RAILS_MM and the other gaps)")
     for k in MOUNT_GROUPS}
 _OPTION_VARS["pedal_mount"] = Var(
-    "1", 0.0, 0.0, 2.0, "0: the pedals are placed without a mount; 1: a stand under each pedal from the footwell "
+    "1", 0.0, 0.0, 3.0, "0: the pedals are placed without a mount; 1: a stand under each pedal from the footwell "
     "floor up to the pedal's lowest edge (the floor must be held: mount_floor = 1); 2: a bracket from the front "
-    "bulkhead's rear face back to each pedal's front edge (a pedal box). The stands follow pedal_x (kit/attach."
-    "pedal_stands; SS400, painted)")
+    "bulkhead's rear face back to each pedal's front edge (a pedal box); 3: a beam (frame member pedal_beam, the "
+    "tower tube) out from the front tower's rear post on the pedals' side, inboard at the height of the pedals' "
+    "front edges to PEDAL_BEAM_PAST_MM past the innermost pedal's stand, and a stand from its rear face back to each "
+    "pedal's front edge (build_pedal_beam). The stands follow pedal_x (kit/attach.pedal_stands; SS400, painted)")
+PEDAL_BEAM_PAST_MM = 0.0  # the pedal beam ends at the inner side of the innermost stand (assumption)
 # - side guard (FN-05 push at point R, FN-07): a side frame each side outboard of the seats
 from hiraku.solvers.k4_geometry import people as _people  # noqa: E402
 
@@ -666,6 +680,17 @@ OPTIONAL.update({
     "rollbar_front_posts": ("rollbar_front_posts",),
     "fenders": ("fenders", "fender_front_deg", "fender_rear_deg", "fender_width", "fender_gap"),
 })
+_PLATE_WORDS = {"floor_t": "the footwell floor and the floor under the seats (the seats, the people, the pedals and the "
+                           "steering wheel stand on its top, so they move up or down with it)",
+                "deck_t": "the deck (the cargo on it)", "bulkhead_t": "the front bulkhead"}
+for _k, _pids in PLATE_T_VARS.items():
+    _t0 = PLATE_T_MM[_pids[0]]
+    VARIABLES[_k] = Var("mm", _t0, min(PLATE_KG_M2), max(PLATE_KG_M2),
+                        f"the sheet thickness of {_PLATE_WORDS[_k]}: one of the NFP-400 standard thicknesses whose unit "
+                        f"mass was read from Nippon Steel's catalogue A101 ({', '.join(f'{t:g}' for t in PLATE_KG_M2)} "
+                        f"mm; PLATE_KG_M2). The default {_t0:g} mm is an assumption, not sized. Written into "
+                        "design.variables only when it is not the default")
+    OPTIONAL[_k] = (_k,)
 SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
 SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
 FENDER_T_MM = 3.0  # fender wall (assumption)
@@ -691,7 +716,8 @@ JOINT_VALUES = {"butt": {"gusset_leg": 0.0, "cross_members_through": 0.0},
 # stays; fenders.
 OPTION_VALUES: dict[str, dict[str, dict[str, float]]] = {
     "part_mounts": {"none": {k: 0.0 for k in MOUNT_GROUPS}, "brackets": {k: 1.0 for k in MOUNT_GROUPS}},
-    "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0}},
+    "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0},
+                    "post": {"pedal_mount": 3.0}},
     "side_guard": {"none": {"side_bars": 0.0, "side_net": 0.0}, "bars": {"side_bars": 1.0, "side_net": 0.0},
                    "bars_net": {"side_bars": 1.0, "side_net": 1.0}},
     "rops": {"hoop": {"rollbar_stays": 0.0, "rollbar_front_posts": 0.0},
@@ -718,18 +744,23 @@ PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "dr
               "seat_L", "seat_belt_L", "occupant_R", "occupant_L", "cargo"]
 
 
-def plate_mass(size, density: float) -> float:
-    """kg of a plate whose box is `size` (mm; the thinnest side its thickness): area x thickness x density."""
-    return float(np.prod([float(s) for s in size])) * density * 1e-9
+def plate_mass(size) -> float:
+    """kg of a plate whose box is `size` (mm; the thinnest side its thickness, one of PLATE_KG_M2's): its area (the
+    two other sides) x the catalogue's unit mass at that thickness."""
+    s = sorted(float(x) for x in size)
+    t = next((k for k in PLATE_KG_M2 if abs(k - s[0]) < 1e-9), None)
+    if t is None:
+        raise DesignGenError(f"no unit mass for a {s[0]:g} mm sheet (PLATE_KG_M2: {sorted(PLATE_KG_M2)} mm)")
+    return s[1] * s[2] * 1e-6 * PLATE_KG_M2[t]
 
 
-def plate_masses(lay: Layout, density: float) -> None:
+def plate_masses(lay: Layout) -> None:
     """The plate parts (PLATE_T_MM) of PLATE_STEEL, each weighing its own sheet (plate_mass): the kits took the
     pedals', the master cylinder's and the rear lamps' masses out of the plates they stand on (kit/body.py,
     kit/safety.py), which held only while the plates' masses were a budget; those parts now weigh on top."""
-    for pid in PLATE_T_MM:
+    for pid in PLATE_T_MM:  # the plate parts
         p = lay.part(pid)
-        p["mass_kg"] = plate_mass(p["box"]["size_mm"], density)
+        p["mass_kg"] = plate_mass(p["box"]["size_mm"])
         p["material"], p["finish"] = PLATE_STEEL, PLATE_FINISH
     fb = lay.part("front_body")
     fb["material"], fb["finish"] = PLATE_STEEL, PLATE_FINISH
@@ -812,12 +843,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                              f"sweep) to the seat cross member S1 ({S1:g} mm) is shorter than {MIN_STATION_GAP_MM:g} "
                              f"mm; move seat_x back or make the wheelbase longer")
     steel = json.loads(MATERIALS.read_text(encoding="utf-8"))[PLATE_STEEL]
-    rho_plate = float(steel["density_kg_m3"])
-    ff_size = (floor_front_x - S1, 2.0 * floor_half, PLATE_T_MM["floor_front"])
-    lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size, rho_plate)),
+    plate_t = {pid: v[k] for k, pids in PLATE_T_VARS.items() for pid in pids}
+    ff_size = (floor_front_x - S1, 2.0 * floor_half, plate_t["floor_front"])
+    lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size)),
             x=rear_at(S1), y=0.0, z=bottom_at(on_rails))
-    fl_size = (S1 - S2, track, PLATE_T_MM["floor"])
-    lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size, rho_plate)), x=lay.between("S1", "S2"),
+    fl_size = (S1 - S2, track, plate_t["floor"])
+    lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size)), x=lay.between("S1", "S2"),
             y=0.0, z=bottom_at(on_rails))
     deck_len = S2 - DECK_GAP_MM - E
     # the deck and the load between the rear suspension towers and the upper arms' pivot brackets (both stand
@@ -828,8 +859,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         return min(rail_y - v["tower_b"] / 2.0, uca - mounts.BRACKET_PAD_MM) - DECK_TOWER_GAP_MM
 
     deck_w = min(DECK_WIDTH_MM, 2.0 * inside_mounts(False))
-    dk_size = (deck_len, deck_w, PLATE_T_MM["deck"])
-    lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size, rho_plate)),
+    dk_size = (deck_len, deck_w, plate_t["deck"])
+    lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size)),
             x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
     lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0),
                  FRONT_BODY_KG), x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
@@ -903,11 +934,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if bh_h <= 0:
         raise DesignGenError("the dash cross member under the steering column would be below the rails; "
                              "move steering_x or seat_x")
-    bh_size = (PLATE_T_MM["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
-    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size, rho_plate)),
+    bh_size = (plate_t["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
+    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
-    plate_masses(lay, rho_plate)
+    plate_masses(lay)
     lay.reorder(PART_ORDER)
     materials = {"stkr400": material, PLATE_STEEL: steel}
     # the suspension's mounts on the frame (kit/mounts.py): towers, the lower arms' legs and cross members,
@@ -931,6 +962,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     _check_rear_post(supports, post_x, v["tower_b"])
     dash = build_dash(frame, lay, post_x, dash_z, rail_y, tower, rho)
     lay.part("bulkhead")["carried_by"] = dash["bulkhead_nodes"]
+    if v["pedal_mount"] == 3:
+        root = build_pedal_beam(frame, lay, post_x, rail_y, tower, v["tower_b"])
+        # the bulkhead lies on the beam's front face as on the posts' (the same 2.3 mm into the tube's box)
+        lay.part("bulkhead")["carried_by"] = sorted(set(dash["bulkhead_nodes"]) | {root})
     rack_nodes = [lay.part(f"bracket_tie_{s['id']}")["carried_by"][0] for s in supports if s["actuation"]["steer"]]
     lay.part("steering_rack")["carried_by"] = rack_nodes  # the rack hangs on its clamps
     for pid in ("steering_column", "steering_wheel", "steering_shaft"):
@@ -1138,6 +1173,59 @@ def build_dash(frame: Frame, lay: Layout, post_x: float, dash_z: float, rail_y: 
     posts_low = [m["node_a"] for m in frame.members if m["id"].startswith("dash_post_")]
     return {"column_nodes": nodes, "bulkhead_nodes": sorted(set(posts_low) | set(nodes)) +
             sorted({m["node_a"] for m in frame.members if m["node_b"] in posts_low and m["id"].startswith("tower_post_")})}
+
+
+def pedal_beam_line(lay: Layout, post_x: float, rail_y: float, tower_b: float) -> Record:
+    """Where the pedal beam (pedal_mount = 3) goes, from the pedals and the front tower's rear post: side ("L" or
+    "R": the pedals' side of the centre line), z (the mean height of the pedals' front edges, where
+    kit/attach.pedal_stands puts the stands' middle), the root on the post's axis [post_x, +-rail_y, z] and the
+    tip, inboard along y to the inner side of the innermost pedal's stand (attach.STAND_PAD_MM / 2 past the pedal's
+    middle) plus PEDAL_BEAM_PAST_MM. Raises DesignGenError when a pedal is outboard of the post's axis or the beam
+    would be shorter than the tube is wide."""
+    from hiraku.designgen.kit import attach
+
+    pedals = [p for p in lay.parts if p["kind"] in ("accelerator_pedal", "brake_pedal")]
+    if not pedals:
+        raise DesignGenError("pedal_mount = 3 needs the pedals")
+    ys = [float(p["box"]["center_mm"][1]) for p in pedals]
+    sy = 1.0 if sum(ys) > 0 else -1.0
+    zs = []
+    for p in pedals:
+        cs = attach._corners(p)
+        x0 = float(np.max(cs[:, 0]))
+        zs.append(float(np.mean(cs[np.abs(cs[:, 0] - x0) < 1e-6][:, 2])))
+    inboard = [rail_y - sy * y for y in ys]  # each pedal's middle this far inboard of the post's axis
+    if min(inboard) < 0.0:
+        raise DesignGenError(f"a pedal is outboard of the front tower's post (y = {sy * rail_y:g} mm): no pedal beam "
+                             f"from the post reaches its stand")
+    length = max(inboard) + attach.STAND_PAD_MM / 2.0 + PEDAL_BEAM_PAST_MM
+    if length < tower_b:
+        raise DesignGenError(f"the pedal beam would be {length:.0f} mm long, shorter than the tube ({tower_b:g} mm)")
+    z = float(np.mean(zs))
+    return {"side": "L" if sy > 0 else "R", "z": z, "length": length, "root": [post_x, sy * rail_y, z],
+            "tip": [post_x, sy * (rail_y - length), z]}
+
+
+def build_pedal_beam(frame: Frame, lay: Layout, post_x: float, rail_y: float, section: str, tower_b: float) -> str:
+    """The pedal beam (pedal_mount = 3, pedal_beam_line): the front tower's rear post on the pedals' side is split at
+    the beam's height (node <side>AK; pieces tower_post_<side>A2 below and tower_post_<side>A2_up above) and the
+    member pedal_beam goes from there inboard along y to node <side>AKT, of the tower's section. Returns the root
+    node. Raises DesignGenError when the height is not on the post at least tower_b off its ends."""
+    line = pedal_beam_line(lay, post_x, rail_y, tower_b)
+    side, z = line["side"], line["z"]
+    post = next((m for m in frame.members if m["id"].startswith("tower_post_")
+                 and all(abs(frame.nodes[m[k]][0] - post_x) < 1e-6 and abs(frame.nodes[m[k]][1] - line["root"][1]) < 1e-6
+                         for k in ("node_a", "node_b"))), None)
+    if post is None:
+        raise DesignGenError(f"no front tower post at x = {post_x:.0f} mm on the {side} rail for the pedal beam")
+    lo, hi = sorted(frame.nodes[post[k]][2] for k in ("node_a", "node_b"))
+    if not lo + tower_b <= z <= hi - tower_b:
+        raise DesignGenError(f"the pedals' front edges (z = {z:.0f} mm) are not on the front tower's post ({lo:.0f} to "
+                             f"{hi:.0f} mm, {tower_b:g} mm off its ends) for the pedal beam; move pedal_x")
+    root = frame.split(post["id"], f"{side}AK", line["root"], (post["id"], post["id"] + "_up"))
+    tip = frame.node(f"{side}AKT", line["tip"])
+    frame.member("pedal_beam", root, tip, section)
+    return root
 
 
 def write_hardpoints(design: dict, rail: dict | None = None, top_half: float = 0.0) -> dict:
@@ -1367,7 +1455,7 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
             design["parts"].extend(fender_parts(s, v, float(HDPE["density_kg_m3"])))
         design["materials"]["hdpe"] = dict(HDPE)
     if v["pedal_mount"]:
-        target = "floor_front" if v["pedal_mount"] == 1 else "bulkhead"
+        target = {1.0: "floor_front", 2.0: "bulkhead", 3.0: "member:pedal_beam"}[v["pedal_mount"]]
         if target == "floor_front" and v["mount_floor"] != 1:
             raise DesignGenError("pedal_mount = 1 stands the pedals on the footwell floor, which is held only with "
                                  "mount_floor = 1")
@@ -1386,7 +1474,7 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
     _check_options_clear(design)
 
 
-OPTION_MEMBERS = ("rops_", "side_")  # the options' members
+OPTION_MEMBERS = ("rops_", "side_", "pedal_")  # the options' members
 OPTION_PARTS = ("side_net_", "fender_")  # the options' parts (the mounts and stands check themselves: kit/attach)
 
 
