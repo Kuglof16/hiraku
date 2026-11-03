@@ -65,6 +65,15 @@ class DemoGeometryTest(unittest.TestCase):
         self.assertNotIn("part:cargo", order)
         self.assertLess(order.index("part:susp_FL"), order.index("part:wheel_FL"))  # arms before the wheel
 
+    def test_a_step_without_tool_room_names_what_takes_it(self):
+        from hiraku.solvers.k4_geometry.assembly import steps
+
+        cramped = [s for s in steps(DESIGN) if s["no_interference"] and not s["tool_clearance"]]
+        self.assertTrue(cramped)
+        for s in cramped:
+            self.assertTrue(s["blocked_by"], s["part"])
+            self.assertIn("tool's opening", s["note"])
+
     def test_people(self):
         f = fit(DESIGN)
         self.assertAlmostEqual(f["shoulder_room"][0], 1300 - 2 * 495.3, places=6)

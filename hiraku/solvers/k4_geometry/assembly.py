@@ -123,11 +123,14 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
         part = bs[k]
         pid = k.split(":", 1)[1]
         d_from = -np.asarray(DIRECTIONS[d_in], float)  # the hands work from where the part comes from
-        tool_ok, reach_ok, reach = _access(part, members + placed, d_from)
+        tool_ok, reach_ok, reach, in_way = _access(part, members + placed, d_from)
         touching = sorted(o.id.split(":", 1)[1] for o in placed if overlap(part.obb, o.obb) > -TOUCH_MM)
         step = {"order": i + 1, "part": pid, "direction": d_in, "depends_on": touching,
                 "no_interference": True, "tool_clearance": tool_ok, "hand_reach": reach_ok,
                 "note": f"face {reach:.0f} mm in from the outside of what is built"}
+        if in_way:  # the part goes in, but the tool's opening in front of it is taken
+            step["blocked_by"] = [b.split(":", 1)[1] for b in in_way]
+            step["note"] += f"; the tool's opening is taken by {', '.join(step['blocked_by'])}"
         moves = _clear_of(part, asm["routes"][k], extent)
         fast = part_fastenings(design, pid, bs)
         extra = {"fastenings": fast, "path_mm": path_in(part.obb.center, moves),
@@ -165,7 +168,8 @@ def _step_fields() -> set[str]:
     return set(contract.schema()["$defs"]["assembly_step"]["properties"])
 
 
-def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, bool, float]:
+def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, bool, float, list[str]]:
+    """(tool fits, hand reaches, face depth mm, ids of what is in the tool's opening)."""
     reach_out = float(np.sum(part.obb.half * np.abs(part.obb.axes @ d_from)))
     face = part.obb.center + d_from * reach_out
     k = int(np.argmax(np.abs(d_from)))
@@ -173,14 +177,14 @@ def _access(part: Body, placed: list[Body], d_from: np.ndarray) -> tuple[bool, b
     axes = np.eye(3)[[k, *others]]
     half = np.array([TOOL_DEPTH_MM / 2.0, TOOL_OPENING_MM[0] / 2.0, TOOL_OPENING_MM[1] / 2.0])
     corridor = OBB(face + d_from * (TOOL_DEPTH_MM / 2.0 + TOUCH_MM), axes, half)
-    tool_ok = all(overlap(corridor, o.obb) <= TOUCH_MM for o in placed)
+    in_way = sorted(o.id for o in placed if overlap(corridor, o.obb) > TOUCH_MM)
     if placed:
         pts = np.vstack([o.obb.corners() for o in placed])
         edge = float(np.max(pts @ d_from))
         depth = max(edge - float(face @ d_from), 0.0)
     else:
         depth = 0.0
-    return tool_ok, depth <= REACH_MM, depth
+    return not in_way, depth <= REACH_MM, depth, in_way
 
 
 def _reverse(direction: str) -> str:
