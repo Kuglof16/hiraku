@@ -129,7 +129,8 @@ DESCRIPTIONS = {
     ),
     "list_tools": (
         "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
-        "tool を付けるとその道具の全体 (答えの分かっている例・式)"
+        "各行の params は荷重条件で道具が読む名前の短い一覧 (単位 [..]・選べる値 (..)、run は analyze の params)。"
+        "tool を付けるとその道具の全体 (答えの分かっている例・式・params の名前・単位・意味・既定・選べる値)"
     ),
     "record_prediction": (
         "解析の前に、手計算の予測を記録する。式 (formula_id) と入力 (inputs、値と単位) と前提を選ぶだけで、"

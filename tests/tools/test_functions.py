@@ -90,6 +90,27 @@ class StartTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             list_tools(self.ctx, {"tool": "nope"})
 
+    def test_list_tools_shows_the_params(self):
+        """A tool's params (name, unit, meaning, default, choices) from its describe(): whole with tool=...,
+        short in the one-line entries (the launch tool's until: target|top_speed)."""
+        from hiraku.solvers.k2_vehicle.shelf.launch import LaunchTool
+
+        self.ctx.tools["launch"] = LaunchTool()  # describe() only; no checks run
+        self.ctx.specs["launch"] = {"name": "launch", "title": "launch", "domain": "powertrain", "base": "K2",
+                                    "tests": ["P2"], "usable": True, "checks": []}
+        (whole,) = list_tools(self.ctx, {"tool": "launch"})
+        until = next(p for p in whole["params"] if p["name"] == "until")
+        self.assertEqual(until["choices"], ["target", "top_speed"])
+        self.assertEqual(until["default"], "target")
+        self.assertIn("meaning", until)
+        speed = next(p for p in whole["params"] if p["name"] == "target_speed")
+        self.assertEqual((speed["unit"], speed["default"]), ("km/h", {"value": 40.0, "unit": "km/h"}))
+        self.assertIn("params_how", whole)
+        line = next(t for t in list_tools(self.ctx) if t["name"] == "launch")
+        self.assertIn("until (target|top_speed)", line["params"])
+        self.assertIn("target_speed [km/h]", line["params"])
+        self.assertNotIn("checks", line)
+
     def test_list_formulas_follows_the_tools_list(self):
         self.ctx.specs["frame_static"]["formulas"] = ["frame_static.rail_bending", "mass_props.front_wheel_load"]
         got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})["formulas"]]
@@ -1019,3 +1040,24 @@ class UnpredictableCaseTest(RunCase, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToolParamsTest(RunCase, unittest.TestCase):
+    """list_tools shows a tool's params (from its describe()), so a role need not guess them."""
+
+    def test_params_in_the_line_and_in_the_whole_spec(self):
+        from hiraku.tools.functions import PARAMS_HOW
+
+        tool = self.tools["step_climb"]
+        tool.describe = lambda: {"params": [{"name": "step_height", "kind": "quantity", "unit": "mm", "required": True,
+                                              "meaning": "step"}],
+                                 "run_params": [{"name": "until", "kind": "string", "choices": ["climbed", "time"],
+                                                 "required": False, "meaning": "when to stop"}]}
+        (line,) = [t for t in list_tools(self.ctx) if t["name"] == "step_climb"]
+        self.assertEqual(line["params"], ["step_height [mm]", "until (climbed|time) run"])
+        (whole,) = list_tools(self.ctx, {"tool": "step_climb"})
+        self.assertEqual(whole["params"][0]["name"], "step_height")
+        self.assertEqual(whole["run_params"][0]["choices"], ["climbed", "time"])
+        self.assertEqual(whole["params_how"], PARAMS_HOW)
+        (plain,) = [t for t in list_tools(self.ctx) if t["name"] == "frame_static"]
+        self.assertNotIn("params", plain)

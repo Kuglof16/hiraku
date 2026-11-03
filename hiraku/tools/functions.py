@@ -428,13 +428,49 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
             raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
-        return [for_role(spec)]
+        load, run = tool_params(ctx, args["tool"])
+        whole = dict(spec)
+        if load or run:
+            whole.update(params=load, run_params=run, params_how=PARAMS_HOW)
+        return [for_role(whole)]
     out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
         out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"])) for s in out]
+    rows = []
+    for s in out:
+        row = s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"]))
+        short = _params_short(*tool_params(ctx, s["name"]))
+        rows.append(dict(row, params=short) if short else row)
+    return rows
+
+
+PARAMS_HOW = ("params は荷重条件の params で道具が読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
+              "unit の量は {value, unit} で、choices があればその中から選ぶ")
+
+
+def tool_params(ctx: RunContext, name: str) -> tuple[list[Record], list[Record]]:
+    """The tool's describe() params and run_params ({name, kind, required, meaning, unit?, default?,
+    choices?} each, from hiraku.solvers.shelf.base Param.describe); ([], []) when it does not describe itself."""
+    describe = getattr(ctx.tools.get(name), "describe", None)
+    if not callable(describe):
+        return [], []
+    try:
+        d = describe()
+    except Exception:  # a tool made in the run may describe itself badly
+        return [], []
+    pick = lambda xs: [dict(x) for x in xs or [] if isinstance(x, dict) and x.get("name")]  # noqa: E731
+    return pick(d.get("params")), pick(d.get("run_params"))
+
+
+def _params_short(load: list[Record], run: list[Record]) -> list[str]:
+    """One string per param for list_tools' one-line entries: name, then [unit] or (choice|choice);
+    analyze's run params marked run."""
+    def one(p: Record, run_param: bool) -> str:
+        tail = f" ({'|'.join(map(str, p['choices']))})" if p.get("choices") else (f" [{p['unit']}]" if p.get("unit") else "")
+        return f"{p['name']}{tail}" + (" run" if run_param else "")
+    return [one(p, False) for p in load] + [one(p, True) for p in run]
 
 
 def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
