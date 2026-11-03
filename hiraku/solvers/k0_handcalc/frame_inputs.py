@@ -15,7 +15,9 @@ the ladder's warping torsion (ladder_twist_rate).
 joint_wall_inputs() shares the wheels' twisting moments among the cross
 members along a torsion chain of the ladder's symmetric half, with the
 joints' wall rotation from frame_static.joint_wall_bending, for that
-formula at the joint where the wall's bending is largest.
+formula at the joint where the wall's bending is largest. The suspension's
+mount members join the chain as roll springs (mount_roll_stiffness: a small
+3D beam frame with the rail wall's bending under each member's foot).
 
 portal_frame_inputs() reads a roll bar (members rollbar_post_L/R and
 rollbar_top, optionally rollbar_foot_L/R outriggers) as a portal frame for
@@ -266,7 +268,7 @@ def _rail_torques(design: dict, summ: dict, ground: dict, rail_y: float, rail_z:
 
 
 def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float | None = None,
-                      step_supports: list[str] | None = None, g_factor: float = 1.0) -> dict:
+                      step_supports: list[str] | None = None, g_factor: float = 1.0, mounts: bool = True) -> dict:
     """Quantities for frame_static.joint_wall_bending at the joint where it is largest, and every joint's numbers.
 
     The ladder's symmetric half: each rail twists in St Venant torsion (G J / length between stations); at
@@ -275,8 +277,11 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
     the gussets' spread where the design has gusset parts at the node). The moments about the rail's axis
     from the wheels (ground forces at rest or on a step from K0 statics, support_loads, and the unsprung
     weights at their offsets) are put in at the supports' frame nodes; the left and right rails' moments are
-    averaged as a mirror pair (the antisymmetric rest, the ladder's twist, is left out). Each cross member's
-    end moment is its spring times the rail's twist there; joint_wall_bending then gives each joint's stress.
+    averaged as a mirror pair (the antisymmetric rest, the ladder's twist, is left out). With mounts (the
+    default) the suspension's mount members (towers, lower arms' legs, lower cross members, dash) resist the
+    rails' roll too, as springs among the rail nodes they stand on (mount_roll_stiffness); mount_moments_Nmm is
+    what they take. Each cross member's end moment is its spring times the rail's twist there;
+    joint_wall_bending then gives each joint's stress.
     The joints at the supports' frame nodes where the rail runs on (the wheel mounts) are in the chain but not
     compared: frame_shell leaves the elements inside the mounts out of its peak (the bracket covers the wall).
     """
@@ -358,6 +363,9 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
         K[j, i] -= k
     for r in rows:
         K[idx[r["node"]], idx[r["node"]]] += r["k"]
+    mr = mount_roll_stiffness(design) if mounts else {"nodes": [], "K": np.zeros((0, 0)), "members": []}
+    mi = [idx[n] for n in mr["nodes"]]
+    K[np.ix_(mi, mi)] += mr["K"]
     T = np.array([T_sym[n] for n in left])
     phi = np.linalg.solve(K, T)
     for r in rows:
@@ -384,8 +392,145 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
                     "kind": ("through" if r["values"]["through"] else "gusset" if r["values"]["leg"] else "butt")
                             + (" (rail end)" if r["values"]["open_end"] else "")} for r in rows],
         "twisting_moments_Nmm": {n: float(T_sym[n]) for n in left},
+        "mount_moments_Nmm": {n: float(m) for n, m in zip(mr["nodes"], mr["K"] @ phi[mi])} if mi else {},
         "mode": st["mode"],
     }
+
+
+def member_axes(e: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Local y and z of a member along the unit vector e, as K1 orients them: a vertical member's local y along x;
+    otherwise local z horizontal (e x z_up), local y = z x e (up for a horizontal member)."""
+    if abs(e[0]) < 1e-9 and abs(e[1]) < 1e-9:
+        y = np.array([1.0, 0.0, 0.0])
+        return y, np.cross(e, y)
+    z = np.cross(e, [0.0, 0.0, 1.0])
+    z /= np.linalg.norm(z)
+    return np.cross(z, e), z
+
+
+def beam_stiffness(p0, p1, sec: dict, E: float, G: float) -> np.ndarray:
+    """12 x 12 stiffness (N, mm, rad) of a slender 3D beam from p0 to p1 in the design's axes: DOFs u_x, u_y, u_z,
+    rot_x, rot_y, rot_z at each end; axial E A / L, torsion G J / L, bending E I_z (local x-y plane) and E I_y
+    (local x-z plane), no shear deformation (textbook matrix structural analysis)."""
+    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+    L = float(np.linalg.norm(p1 - p0))
+    e = (p1 - p0) / L
+    y, z = member_axes(e)
+    k = np.zeros((12, 12))
+    a, t = E * sec["A"] / L, G * sec["J"] / L
+    for i, j, v in ((0, 0, a), (6, 6, a), (0, 6, -a), (6, 0, -a), (3, 3, t), (9, 9, t), (3, 9, -t), (9, 3, -t)):
+        k[i, j] += v
+    for dofs, I, s in (((1, 5, 7, 11), sec["Iz"], 1.0), ((2, 4, 8, 10), sec["Iy"], -1.0)):
+        c = E * I / L**3
+        m = c * np.array([[12, 6 * L * s, -12, 6 * L * s], [6 * L * s, 4 * L * L, -6 * L * s, 2 * L * L],
+                          [-12, -6 * L * s, 12, -6 * L * s], [6 * L * s, 2 * L * L, -6 * L * s, 4 * L * L]])
+        k[np.ix_(dofs, dofs)] += m
+    R = np.vstack([e, y, z])
+    T = np.kron(np.eye(4), R)
+    return T.T @ k @ T
+
+
+def mount_roll_stiffness(design: dict) -> dict:
+    """The mounts' stiffness against the rails' roll in mirror (the left rail turning about its axis, the right one
+    the other way), condensed to the left rail's nodes where they stand: {"nodes": [...], "K": matrix N*mm/rad,
+    "members": [...]}.
+
+    The mount members are the members off the rails other than the roll bar (towers, the lower arms' legs, the
+    lower cross members, the dash on the towers). They and the ladder (the rails and the cross members joining
+    them) make a small 3D beam frame (beam_stiffness, both sides). The rails' roll is prescribed (1 rad at the
+    node and minus that at its mirror, 0 at the other rail nodes); the rail nodes are held along x and up (the
+    rails' axial and vertical stiffness, large beside the rest) but move sideways and pitch and yaw on the
+    rails' and cross members' bending, as the shell's rails do when the mounts push them; the nodes off the
+    rails are free. Each mount member's foot on a rail turns about x against the rail through the rail wall's
+    plate bending (foot_wall_theta, the wall the member's axis leaves the rail by), in series; its other
+    movements go with the rail node. The spring is the moment those foot springs put on the rail nodes about x;
+    the rails' own torsion and the cross members' share are left to the chain, which has them."""
+    nodes, props, left, y_r, z_r = _left_rail(design)
+    rails = {n for n, p in nodes.items() if abs(abs(p[1]) - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6}
+    mems = [(mid, mp) for mid, mp in props.items()
+            if not ({mp["member"]["node_a"], mp["member"]["node_b"]} <= rails) and not mid.startswith("rollbar_")]
+    ladder = [(mid, mp) for mid, mp in props.items() if {mp["member"]["node_a"], mp["member"]["node_b"]} <= rails]
+    base = sorted({mp["member"][k] for _, mp in mems for k in ("node_a", "node_b")} & {n for n in rails if nodes[n][1] > 0},
+                  key=lambda n: -nodes[n][0])
+    if not base:
+        return {"nodes": [], "K": np.zeros((0, 0)), "members": [], "feet": []}
+    used = sorted({mp["member"][k] for _, mp in mems + ladder for k in ("node_a", "node_b")})
+    idx = {n: i for i, n in enumerate(used)}
+    feet = [(mid, n) for mid, mp in mems for n in (mp["member"]["node_a"], mp["member"]["node_b"]) if n in rails]
+    foot_dof = {f: 6 * len(used) + i for i, f in enumerate(feet)}  # each foot's own rotation about x
+    K = np.zeros((6 * len(used) + len(feet),) * 2)
+    for mid, mp in mems + ladder:
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        E = float(mp["material"]["E_MPa"])
+        G = E / (2.0 * (1.0 + float(mp["material"]["nu"])))
+        dofs = [foot_dof.get((mid, n), 6 * idx[n] + i) if i == 3 else 6 * idx[n] + i for n in (a, b) for i in range(6)]
+        K[np.ix_(dofs, dofs)] += beam_stiffness(nodes[a], nodes[b], mp["section"], E, G)
+    springs = []
+    for (mid, n), d in foot_dof.items():
+        theta = foot_wall_theta(design, props[mid], n, y_r, z_r)
+        k = np.inf if theta <= 0.0 else 1.0e6 / theta
+        springs.append((mid, n, d, k, theta))
+        r = 6 * idx[n] + 3
+        if np.isfinite(k):
+            K[np.ix_([r, d], [r, d])] += k * np.array([[1.0, -1.0], [-1.0, 1.0]])
+    rigid = [(d, 6 * idx[n] + 3) for _, n, d, k, _ in springs if not np.isfinite(k)]
+    held = sorted(6 * idx[n] + i for n in used if n in rails for i in (0, 2, 3))
+    tied = {d for d, _ in rigid}
+    free = [d for d in range(len(K)) if d not in set(held) and d not in tied]
+    # a mirror field has no sideways rigid movement; a tiny spring on u_y keeps the free set solvable
+    eps = 1e-9 * float(np.max(np.diag(K)))
+    Kff = K[np.ix_(free, free)] + eps * np.diag([float(d < 6 * len(used) and d % 6 == 1) for d in free])
+    out = np.zeros((len(base), len(base)))
+    for j, n in enumerate(base):
+        u = np.zeros(len(K))
+        u[6 * idx[n] + 3] = 1.0
+        m = _mirror(nodes, n)
+        if m in idx:
+            u[6 * idx[m] + 3] = -1.0
+        for d, r in rigid:
+            u[d] = u[r]
+        fixed = held + sorted(tied)
+        u[free] = -np.linalg.solve(Kff, K[np.ix_(free, fixed)] @ u[fixed])
+        f = K @ u  # at a rigid foot: the moment the rail must give the member
+        for i, b in enumerate(base):  # the moment the rail at b gives the mount members through their feet
+            r = 6 * idx[b] + 3
+            out[i, j] = sum(k * (u[r] - u[d]) for _, fn, d, k, _ in springs if fn == b and np.isfinite(k))
+            out[i, j] += sum(f[d] for d, rr in rigid if rr == r)
+    return {"nodes": base, "K": (out + out.T) / 2.0, "members": [mid for mid, _ in mems],
+            "feet": [{"member": mid, "node": n, "theta_per_kNm": th} for mid, n, _, _, th in springs]}
+
+
+def foot_wall_theta(design: dict, mp: dict, node: str, y_r: float, z_r: float) -> float:
+    """Rotation (rad per kN*m) about the rail's axis of a member's foot on the rail at node, from the plate bending
+    of the rail wall it stands on (library_joint.joint_wall, a butt end, no gussets): the wall the member's axis
+    leaves the rail's box by (a side wall when it leaves sideways first, else the upper or lower wall, whose
+    width is the rail's b), the member's tube across that wall from its local axis nearer to the wall's width.
+    0 (rigid) when the member is not a rectangular tube or does not fit inside the wall."""
+    from .library_joint import joint_wall
+
+    nodes = node_table(design)
+    rail = next(x for x in member_props(design).values() if node in (x["member"]["node_a"], x["member"]["node_b"])
+                and abs(x["a"][1] - x["b"][1]) < 1e-6 and abs(x["a"][2] - x["b"][2]) < 1e-6)
+    b, h, t = _rect_dims(design["sections"][rail["member"]["section"]])
+    sec = design["sections"][mp["member"]["section"]]
+    if sec.get("shape") != "rect_tube":
+        return 0.0
+    d = sec["dims_mm"]
+    bc, hc, tc = float(d["b"]), float(d["h"]), float(d["t"])
+    other = mp["b"] if mp["member"]["node_a"] == node else mp["a"]
+    e = (np.asarray(other, float) - np.asarray(nodes[node], float))
+    e /= np.linalg.norm(e)
+    side = abs(e[1]) / (b / 2.0) > abs(e[2]) / (h / 2.0)
+    width = h if side else b  # the wall's width (across the rail)
+    across = np.array([0.0, 0.0, 1.0]) if side else np.array([0.0, 1.0, 0.0])
+    ly, lz = member_axes(e)
+    h_across, b_along = (hc, bc) if abs(ly @ across) >= abs(lz @ across) else (bc, hc)
+    if h_across - tc >= width - t or 2 * t >= min(b, h) or 2 * tc >= min(bc, hc):
+        return 0.0
+    v = {"b": (h if not side else b), "h": width, "t": t, "b_c": b_along, "h_c": h_across, "t_c": tc,
+         "E": float(rail["material"]["E_MPa"]), "nu": float(rail["material"]["nu"]), "leg": 0.0, "through": 0.0,
+         "open_end": 0.0, "M": 1.0e6}
+    return float(joint_wall(v)["theta_per_kNm"])
 
 
 def _member_between(props: dict, n1: str, n2: str):

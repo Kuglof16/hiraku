@@ -88,10 +88,11 @@ class JointWallInputsTest(unittest.TestCase):
         cls.butt = frame_inputs.joint_wall_inputs(V1, loading="two_cargo")
         cls.through = frame_inputs.joint_wall_inputs(designgen.regenerate(V1, {"joints": "through"}), loading="two_cargo")
 
-    def test_cross_members_take_all_the_twisting_moment(self):
+    def test_cross_members_and_mounts_take_all_the_twisting_moment(self):
         for ji in (self.butt, self.through):
             total = sum(ji["twisting_moments_Nmm"].values())
-            self.assertAlmostEqual(sum(j["M_Nmm"] for j in ji["joints"]), abs(total), delta=1e-6 * abs(total))
+            taken = sum(j["M_Nmm"] for j in ji["joints"]) * np.sign(total) + sum(ji["mount_moments_Nmm"].values())
+            self.assertAlmostEqual(taken, total, delta=1e-6 * abs(total))
 
     def test_picks_a_joint_off_the_wheel_mounts(self):
         for ji in (self.butt, self.through):
