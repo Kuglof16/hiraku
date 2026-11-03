@@ -4,7 +4,8 @@ The wheels (unsprung parts other than kind suspension) move up and down by
 half the suspension travel each way and, on steered supports, turn about the
 vertical axis through the wheel centre by up to the design variable
 max_steer_angle. Suspension arms pivot at the frame, so a rigid box would
-overstate their motion; their boxes are not swept.
+overstate their motion; their boxes are not swept. Links (model.LINK_KINDS: driveshafts, tie
+rods) keep their inner end in place and move their outer end with the wheel.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import math
 import numpy as np
 
 from ..k0_handcalc import units
-from .model import TOUCH_MM, Body, bodies, mounted, shape_overlap
+from .model import LINK_KINDS, TOUCH_MM, Body, bodies, mounted, shape_overlap
 
 STEPS = 7
 
@@ -38,7 +39,10 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
     for k, b in group.items():
         if b.kind == "suspension":
             continue
-        o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
+        if b.kind in LINK_KINDS and b.capsule is not None:
+            o = _link_moved(b, R, c, dz, steer)
+        else:
+            o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
         for k2, other in bs.items():
             if k2 in group or mounted(b, other, design):
                 continue
@@ -46,6 +50,18 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
             if ov > TOUCH_MM:
                 out.append((k, k2, ov))
     return out
+
+
+def _link_moved(b: Body, R: np.ndarray, c: np.ndarray, dz: float, steer: float) -> Body:
+    """A link with the inner end (nearer the centre line) in place and the outer end moved with the wheel."""
+    from dataclasses import replace
+
+    from .capsule import Capsule
+
+    a, e = b.capsule.a, b.capsule.b
+    inner, outer = (a, e) if abs(a[1]) <= abs(e[1]) else (e, a)
+    moved = (c + R @ (outer - c) if steer else outer) + np.array([0.0, 0.0, dz])
+    return replace(b, capsule=Capsule(inner, moved, b.capsule.r, b.capsule.name))
 
 
 def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:

@@ -366,13 +366,16 @@ def hand_way(point, side: np.ndarray, around: list[Body], skip: set[str],
              own: set[str] = frozenset()) -> tuple[float, list[str]]:
     """The hands going straight in to `point` from `side`: (how deep the point is, mm, from the
     outer face of what the way meets, the ids of the bodies in the way). The way is hand_sweep()
-    out past everything. Bodies in `skip` are not in the way (the boxes are rough around a
-    shared mount) but still make the point deep, except those in `own` (the part's own box)."""
+    out past everything; a body that starts more than REACH_MM out along it is not met (the way
+    is straight only for the arm's reach: beyond it the arm goes around, e.g. under a roll bar's
+    top tube). Bodies in `skip` are not in the way (the boxes are rough around a shared mount)
+    but still make the point deep, except those in `own` (the part's own box)."""
     p = np.asarray(point, float)
     s = np.asarray(side, float)
     far = max(float(np.max(o.obb.corners() @ s)) for o in around) if around else float(p @ s)
     way = hand_sweep(p, s, far + TOOL_DEPTH_MM)
-    met = [o for o in around if o.id not in own and shape_overlap(way, o) > TOUCH_MM]
+    met = [o for o in around if o.id not in own and shape_overlap(way, o) > TOUCH_MM
+           and float(np.min(o.obb.corners() @ s)) - float(p @ s) <= REACH_MM]  # farther out: the arm goes around it
     edge = max([float(p @ s)] + [float(np.max(o.obb.corners() @ s)) for o in met])
     return edge - float(p @ s), sorted(o.id for o in met if o.id not in skip)
 
@@ -380,7 +383,8 @@ def hand_way(point, side: np.ndarray, around: list[Body], skip: set[str],
 def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.ndarray,
            at_node: dict[str, set[str]] | None = None) -> dict:
     """Whether the hands get to every fastening point of the unit, each from the side the unit
-    comes in from or else from another side (above first): {"ok", "depth" (the deepest point
+    comes in from or else from another side (above first), the first free side within REACH_MM
+    when there is one: {"ok", "depth" (the deepest point
     reached, mm in along the way), "in_way" (body ids in the way where no side is free),
     "note"}. In the way is anything in `around` other than the part that has the fastening,
     what it is fastened to there, and the other parts bolted at the same node (`at_node`: node
@@ -397,7 +401,7 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
         skip = {f["owner"]}
         kind, name = f["to"].split(" ", 1)
         if kind == "node":
-            skip |= {o.id for o in around if o.kind == "member" and name in o.nodes}
+            skip |= {o.id for o in around if o.kind == "member" and (name in o.nodes or _ends_near(o, f["at_mm"]))}
             skip |= (at_node or {}).get(name, set())
         else:
             skip.add(f"{kind}:{name}")
@@ -412,14 +416,18 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
         if where in seen:
             continue
         seen.add(where)
-        tried = None
+        tried, free = None, None
         for n in sides:
             deep, in_way = hand_way(p, np.asarray(DIRECTIONS[n], float), around, skip, own)
             if tried is None:
                 tried = (n, in_way, deep)
             if not in_way:
-                done.append((where, n, deep))
-                break
+                free = free or (where, n, deep)
+                if deep <= REACH_MM:  # the first free side within reach (else the first free side)
+                    free = (where, n, deep)
+                    break
+        if free is not None:
+            done.append(free)
         else:
             failed.append((where, *tried))
     depth = max([d for *_, d in done] + [d for *_, d in failed] + [0.0])
@@ -428,6 +436,15 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
               f"{', '.join(i.split(':', 1)[1] for i in iw)}" for w, n, iw, _ in failed]
     in_way = sorted({i for *_, iw, _ in failed for i in iw})
     return {"ok": not failed, "depth": depth, "in_way": in_way, "note": "; ".join(parts)}
+
+
+def _ends_near(member: Body, point) -> bool:
+    """Whether a member ends within half the hands' opening of a point (a member of the same joint,
+    e.g. the next piece of a rail split at a node beside it)."""
+    o = member.obb
+    p = np.asarray(point, float)
+    ends = (o.center + o.axes[0] * o.half[0], o.center - o.axes[0] * o.half[0])
+    return min(float(np.linalg.norm(e - p)) for e in ends) <= TOOL_OPENING_MM[0] / 2.0 + float(max(o.half[1:]))
 
 
 def _reverse(direction: str) -> str:

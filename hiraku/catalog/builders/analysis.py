@@ -562,6 +562,9 @@ H3_PLAN = {
 
 
 NOT_ASSEMBLED = ("occupant", "cargo")  # people and load ride in, they are not assembled (as in k4_geometry)
+# Parts welded into the frame (gussets, through pieces, the roll bar's part) are in place before
+# assembly, as the frame is (k4_geometry.model.WELDED): not assembly steps either.
+NOT_ASSEMBLED += ("frame", "gusset", "rollbar")
 
 
 def _assembled(design: Record) -> int:
