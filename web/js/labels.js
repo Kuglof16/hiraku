@@ -249,7 +249,23 @@ const PLAIN_JA = {
   cycles_at_FAT: "基準の強さで壊れるまでの回数",
   seat_stress_range: "人が乗る・降りるときの枠の応力の幅",
   cycles_counted: "くり返しの回数",
+  // the known-answer checks of the roll bar tool (N13, rops_pushover): a cantilever's tip
+  // deflection and the side load that collapses a fixed-base portal
+  tip_deflection: "片持ちの管の先のたわみ",
+  collapse_load: "門形の枠が横に崩れる力",
 };
+
+// Names for viewers of tools Claude wrote in a run (tool.checked name; their titles are
+// sentences for the makers). A tool not listed has none (null).
+const PLAIN_TOOL_JA = {
+  // title: "K1 の骨組で、ロールバーに塑性ヒンジを順に入れて押す (…) と、乗員の空間との隙間"
+  // (run 20261103-234711-offroad-4w, test R4: the roll-over protective structure)
+  rops_pushover: "転倒の守り",
+};
+
+export function plainToolName(name) {
+  return PLAIN_TOOL_JA[name] ?? null;
+}
 
 export function plainName(q) {
   return PLAIN_JA[q] ?? quantityName(q);
@@ -292,6 +308,7 @@ export function checkSourceShort(source) {
   const out = [];
   if (/range\s*=|I\s*=|simply supported/i.test(s)) out.push("梁の手計算の式");
   if (/\bIIW\b/.test(s)) out.push("国際溶接学会 (IIW) の疲労の線");
+  if (/\bNeal\b|Plastic Methods/.test(s)) out.push("骨組が崩れる力の教科書 (Neal)");
   return out.length ? out.join("・") : null;
 }
 

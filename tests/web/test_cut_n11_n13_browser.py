@@ -3,7 +3,8 @@
 N11: an analysis called without a prediction is stopped by the hooks, the prediction is
 written, then the analysis runs. N12: the hand calculation and the analysis disagree, the
 cause (a unit mistaken in the request) is found, and after the fix they agree. N13: a tool
-the shelf does not have is written by Claude, checked against known answers and used.
+the shelf does not have is written by Claude, checked against known answers and put on the
+shelf (what the analyses made with it judged is not shown).
 
 For each cut: the boxes where layout.json puts them and nothing in the subtitle band, what
 is shown at each time, the record's numbers as they are, no record id, rule id, tool name
@@ -12,10 +13,12 @@ or word of the trade on the page, the story's limits, and a missing layout key n
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser) and Playwright is installed.
 The records are made here (shape examples: values chosen, not computed): for N11 / N12
 k2_fixture's tilt-table run with a denial, two predictions, two analyses, two comparisons
-and a cause; for N13 the contract sample with a shelf, a tool made in the run (one failed
-attempt, then a usable one with its code in tools/) and an analysis made with it. The
-layout is the story test's copy of the promo department's layout.json (commit 8e295cf;
-n11-n13 are unchanged there since cce1262).
+and a cause; for N13 the contract sample shaped like the experiment department's off-road
+run 20261103-234711-offroad-4w: a shelf, a tool made in the run (one failed attempt, then a
+usable one with two checks and its code in tools/) and two analyses made with it whose
+verdicts fail on the safe side's prediction. The layout is the story test's copy of the
+promo department's layout.json (n11-n13 boxes and times unchanged since cce1262; n13's
+check.times as of 8b569cf).
 """
 
 import copy
@@ -34,7 +37,8 @@ from tests.web.test_cut_story_browser import FIT, KINDS, READ, limits_of, story_
 # What must not be on the page: record ids, rule ids, requirement and test ids, tool names
 # and the trade's words.
 IDS = ["pred-", "ana-", "cmp-", "cause-", "ver-", "HK1", "HK_", "Q41", "S1-", "R3", "tilt", "use_fatigue", "record_prediction",
-       "formula", "spring_roll", "cycles_counted", "fatigue_damage", "S-N", "Miner", "マイナー", "FAT", "load_case"]
+       "formula", "spring_roll", "cycles_counted", "fatigue_damage", "S-N", "Miner", "マイナー", "FAT", "load_case",
+       "rops", "pushover", "K1", "塑性", "ヒンジ", "tip_deflection", "collapse_load", "R4", "frame_static", "tilt_table"]
 
 PRED1, ANA, PRED2 = 41.2, 32.5, 33.8  # deg (shape example)
 SETTING = 62  # mm, the request as written (shape example)
@@ -107,62 +111,82 @@ def hooks_events(run_id):
     return out
 
 
-TOOL = "use_fatigue"
-CODE = "\n".join(["import math", "", "", "class UseFatigue:", "    name = 'use_fatigue'", "", "    def analyse(self, design, load_case, params):"]
+TOOL = "rops_pushover"
+CODE = "\n".join(["import math", "", "", "class RopsPushover:", "    name = 'rops_pushover'", "", "    def analyse(self, design, load_case, params):"]
                  + [f"        x{i} = {i} * 2  # line {i}" for i in range(30)]) + "\n"
-CYCLES = 4321.0
+# The shape of the experiment department's run 20261103-234711-offroad-4w (tool.checked seq
+# 49): two known-answer checks, each with its source. Values chosen, not computed.
 CHECKS = [
-    {"case": "c1", "quantity": "cycles_at_FAT", "expected": 2.0e6, "got": 1999999.9999, "unit": "1", "tolerance_rel": 1e-9, "pass": True,
-     "source": "the FAT class is the stress range at 2e6 cycles (IIW S-N curve definition)"},
-    {"case": "c2", "quantity": "seat_stress_range", "expected": 12.34, "got": 12.34, "unit": "MPa", "tolerance_rel": 1e-6, "pass": True,
-     "source": "simply supported rail: range = (P L / 4)(h / 2) / I"},
-    {"case": "c3", "quantity": "fatigue_damage", "expected": 0.00123, "got": 0.00123, "unit": "1", "tolerance_rel": 1e-6, "pass": True,
-     "source": "Miner D = n / N (IIW S-N curve above the knee); range = (P L / 4)(h / 2) / I"},
+    {"case": "c1", "quantity": "tip_deflection", "expected": 79.58, "got": 79.58, "unit": "mm", "tolerance_rel": 0.001, "pass": True,
+     "source": "closed form delta = P L^3 / (3 E I), I = pi (D^4 - d^4) / 64 (beam theory, any textbook)"},
+    {"case": "c2", "quantity": "collapse_load", "expected": 2260.0, "got": 2261.0, "unit": "N", "tolerance_rel": 0.001, "pass": True,
+     "source": "sway mechanism of a fixed-base portal H_c = 4 Mp / h (B. G. Neal, The Plastic Methods of Structural Analysis)"},
 ]
+CLEARANCE_PRED = -413.5  # mm, the safe side's prediction the verdict takes (shape example)
+# The shelf's tools the run did not check, as the system names them (hiraku/tools/shelf.py).
+UNCHECKED = ["frame_static", "frame_shell", "step_climb", "thermal"]
 
 
 def tool_events(run_id):
-    """The contract sample with a shelf of three tools, a tool made by Claude (attempt 1 not
-    usable, attempt 2 usable with three checks), an analysis made with it and a passing
-    verdict. Shape example."""
+    """The contract sample shaped like the off-road run: the system naming the shelf's tools it
+    does not check, two checked builtin tools (one not usable), a tool made by Claude (attempt 1
+    not usable, attempt 2 usable with two checks), two analyses made with it in two versions,
+    and their verdicts failing on the safe side's prediction. Shape example."""
     src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
     run, design = copy.deepcopy(src[0]), copy.deepcopy(src[1])
-    run["data"]["want"] = "家で使うベッドを作りたい (形の見本)"
-    lc = {"load_case_id": "R3-uses", "test_id": "R3", "domain": "strength", "title": "使う回数の疲労 (形の見本)", "params": {}, "tolerance_rel": 0.5,
-          "criterion": {"quantity": "fatigue_damage", "op": "<", "limit": {"value": 1.0, "unit": "1"}}}
+    run["data"]["want"] = "林道を走れる小さな車両 (形の見本)。横転しても、乗っている人を守りたい"
+    lc = {"load_case_id": "R4-rops", "test_id": "R4", "domain": "strength", "title": "横転の保護枠 (形の見本)", "params": {}, "tolerance_rel": 0.25,
+          "criterion": {"quantity": "rops_occupant_clearance", "op": ">=", "limit": {"value": 0.0, "unit": "mm"}}}
     run["data"]["load_cases"] = [lc]
     sysv = {"agent": "system"}
     st = {"agent": "cae.strength", "domain": "strength", "design_version": 1}
 
     def checked(name, origin, usable, checks=()):
         return {**sysv, "kind": "tool.checked", "data": {"name": name, "title": f"{name} の道具 (形の見本)", "domain": "strength", "base": "K1",
-                                                         "tests": ["R3"], "origin": origin, "usable": usable, "checks": list(checks)}}
+                                                         "tests": ["R4"], "origin": origin, "usable": usable, "checks": list(checks)}}
 
     made = {**checked(TOOL, "claude", True, CHECKS), **st}
-    made["data"]["title"] = "ベッドの使う回数の疲労 (形の見本: 応力の幅 → S-N)"
-    ana = {"analysis_id": "ana-0001", "tool": TOOL, "base": "K1", "design_version": 1, "load_case_id": "R3-uses", "prediction_ids": ["pred-0001"],
-           "status": "ok", "results": [{"quantity": "fatigue_damage", "value": 1e-9, "unit": "1"}, {"quantity": "cycles_counted", "value": CYCLES, "unit": "1"}]}
-    cmp = {"comparison_id": "cmp-0001", "prediction_id": "pred-0001", "analysis_id": "ana-0001", "quantity": "fatigue_damage",
-           "predicted": {"value": 1e-9, "unit": "1"}, "analyzed": {"value": 1e-9, "unit": "1"}, "diff_abs": 0.0, "diff_rel": 0.0, "tolerance_rel": 0.5,
-           "status": "match", "cause_id": None}
-    ver = {"verdict_id": "ver-0001", "comparison_id": "cmp-0001", "load_case_id": "R3-uses", "test_id": "R3", "domain": "strength",
-           "quantity": "fatigue_damage", "value": {"value": 1e-9, "unit": "1"}, "op": "<", "limit": {"value": 1.0, "unit": "1"}, "pass": True, "margin_pct": 99.9}
-    pred = {"prediction_id": "pred-0001", "design_version": 1, "load_case_id": "R3-uses", "test_id": "R3", "domain": "strength", "agent": "cae.strength",
-            "quantity": "fatigue_damage", "value": 1e-9, "unit": "1", "formula_id": "fatigue.constant_amplitude_damage", "inputs": {}, "assumptions": [],
-            "created_at": run["ts"]}
+    made["data"]["title"] = "K1 の骨組で、ロールバーに塑性ヒンジを順に入れて押す (形の見本) と、乗員の空間との隙間"
+    design2 = copy.deepcopy(design)
+    design2["design_version"] = 2
+    design2["data"].update({"design_version": 2, "parent_version": 1, "change_reason": "a thicker roll bar (shape example)"})
+
+    def used(v):
+        n = f"000{v}"
+        h = {**st, "design_version": v}
+        pred = {"prediction_id": f"pred-{n}", "design_version": v, "load_case_id": "R4-rops", "test_id": "R4", "domain": "strength", "agent": "cae.strength",
+                "quantity": "rops_occupant_clearance", "value": CLEARANCE_PRED, "unit": "mm", "formula_id": "frame_static.rops_occupant_clearance",
+                "inputs": {}, "assumptions": [], "created_at": run["ts"]}
+        ana = {"analysis_id": f"ana-{n}", "tool": TOOL, "base": "K1", "design_version": v, "load_case_id": "R4-rops", "prediction_ids": [f"pred-{n}"],
+               "status": "ok", "results": [{"quantity": "rops_occupant_clearance", "value": 29.1, "unit": "mm"}]}
+        cmp = {"comparison_id": f"cmp-{n}", "prediction_id": f"pred-{n}", "analysis_id": f"ana-{n}", "quantity": "rops_occupant_clearance",
+               "predicted": {"value": CLEARANCE_PRED, "unit": "mm"}, "analyzed": {"value": 29.1, "unit": "mm"}, "diff_abs": 29.1 - CLEARANCE_PRED,
+               "diff_rel": (29.1 - CLEARANCE_PRED) / abs(CLEARANCE_PRED), "tolerance_rel": 0.25, "status": "mismatch", "cause_id": f"cause-{n}"}
+        cause = {"cause_id": f"cause-{n}", "comparison_id": f"cmp-{n}", "cause": "the hand calculation is coarse (shape example)", "fix": "none",
+                 "resolved": True, "safe_side": True, "safe_side_reason": "the prediction is the unfavourable side (shape example)"}
+        ver = {"verdict_id": f"ver-{n}", "comparison_id": f"cmp-{n}", "load_case_id": "R4-rops", "test_id": "R4", "domain": "strength",
+               "quantity": "rops_occupant_clearance", "value": {"value": CLEARANCE_PRED, "unit": "mm"}, "op": ">=", "limit": {"value": 0.0, "unit": "mm"},
+               "pass": False, "margin": {"value": CLEARANCE_PRED, "unit": "mm"}, "margin_pct": None,
+               "basis": "explained_safe_side", "value_from": "prediction", "cause_id": f"cause-{n}"}
+        return [
+            {**h, "kind": "prediction.recorded", "data": pred},
+            {**h, "kind": "analysis.started", "data": {"analysis_id": f"ana-{n}", "tool": TOOL, "load_case_id": "R4-rops", "prediction_ids": [f"pred-{n}"]}},
+            {**h, "kind": "analysis.finished", "data": ana},
+            {**h, "kind": "comparison.recorded", "data": cmp},
+            {**h, "kind": "cause.recorded", "data": cause},
+            {**h, "kind": "verdict.recorded", "data": ver},
+        ]
+
     events = [
         run, design,
-        checked("frame_static", "builtin", True), checked("fatigue", "builtin", True), checked("thermal", "builtin", True),
-        checked("bed_static", "builtin", True), checked("tilt_table", "builtin", True), checked("duty", "builtin", True),
-        checked("broken", "builtin", False),
+        {**sysv, "kind": "agent.said", "text": "この実行の試験 (R4) には使わないので確かめない道具: " + "、".join(UNCHECKED), "data": {}},
+        checked("tilt_table", "builtin", True), checked("broken", "builtin", False),
         {**checked(TOOL, "claude", False, [{**CHECKS[0], "got": 1.0, "pass": False}]), **st},
         made,
-        {**st, "kind": "prediction.recorded", "data": pred},
-        {**st, "kind": "analysis.started", "data": {"analysis_id": "ana-0001", "tool": TOOL, "load_case_id": "R3-uses", "prediction_ids": ["pred-0001"]}},
-        {**st, "kind": "analysis.finished", "data": ana},
-        {**st, "kind": "comparison.recorded", "data": cmp},
-        {**st, "kind": "verdict.recorded", "data": ver},
-        {**sysv, "kind": "run.finished", "data": {"status": "done", "stop_code": "done"}},
+        *used(1),
+        design2,
+        *used(2),
+        {**sysv, "kind": "run.finished", "data": {"status": "stopped", "stop_code": "round_limit"}},
     ]
     out = []
     for i, ev in enumerate(events):
@@ -188,7 +212,7 @@ STATE = """() => {
     boxes: Object.fromEntries([...document.querySelectorAll("[data-box]")].map((el) => [el.dataset.box, (() => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()])),
     memo: text(".n11-lines p"), memoValue: text(".n11-value"), log: text(".n11-log p"), setting: text(".n11-setting"),
     cause: text(".n12-why"), fix: text(".n12-fix"), diff: text(".n12-diff"), again: text(".n12-again"),
-    want: text(".n13-want p, p.n13-want"), gap: text(".n13-gap"), made: text(".n13-made"), use: text(".n13-use p"),
+    want: text(".n13-want p, p.n13-want"), gap: text(".n13-gap"), made: text(".n13-made"),
     rows: [...document.querySelectorAll(".n13-row")].map((el) => ({ text: el.innerText.trim(), tick: shown(el.querySelector(".mark")) })),
     code: document.querySelector(".n13-lines")?.textContent ?? null,
     cards: [...document.querySelectorAll(".n13-card")].map((el) => ({ isNew: el.classList.contains("new"), state: el.dataset.state ?? null, top: el.getBoundingClientRect().top, right: el.getBoundingClientRect().right, bottom: el.getBoundingClientRect().bottom, text: el.textContent })),
@@ -349,28 +373,31 @@ class CutN11N13Test(unittest.TestCase):
 
     # ---- N13 --------------------------------------------------------------------------
 
-    def test_n13_the_missing_tool_is_written_checked_and_used(self):
+    def test_n13_the_missing_tool_is_written_checked_and_put_on_the_shelf(self):
         T = self.layout["n13"]["times"]
-        ticks = [T["check_s"] + (i + 1) * (T["shelf_s"] - T["check_s"]) / 4 for i in range(3)]
-        times = [T["lead_s"], T["gap_s"], T["write_s"], (T["write_s"] + T["check_s"]) / 2, T["check_s"], ticks[0], ticks[2], T["shelf_s"], self.layout["n13"]["duration_s"] - 0.1]
+        end = self.layout["n13"]["duration_s"] - 0.1
+        ticks = [T["check_s"] + (i + 1) * (T["shelf_s"] - T["check_s"]) / 3 for i in range(2)]
+        times = [T["lead_s"], T["gap_s"], T["write_s"], (T["write_s"] + T["check_s"]) / 2, T["check_s"], ticks[0], ticks[1], T["shelf_s"], end]
         seen = self.read("n13", self.tool_run, times)
         c = {t: g["cut"] for t, g in seen.items()}
-        self.assertEqual(c[T["lead_s"]]["want"], ["やりたいこと: 家で使うベッドを作りたい (形の見本)"])
-        # the shelf from gap_s: the six usable tools checked before (not the unusable one), and the dotted one
+        # the want's last sentence (the wish)
+        self.assertEqual(c[T["lead_s"]]["want"], ["やりたいこと: 横転しても、乗っている人を守りたい"])
+        # the shelf from gap_s: the tools the run named as not checked, the usable one checked
+        # before (not the unusable one, not the made tool's failed attempt), and the dotted one
         self.assertEqual(c[T["lead_s"]]["gap"], [])
         g = c[T["gap_s"]]
-        self.assertEqual([x["isNew"] for x in g["cards"]], [False] * 6 + [True])
+        self.assertEqual([x["isNew"] for x in g["cards"]], [False] * (len(UNCHECKED) + 1) + [True])
         shelf = g["boxes"]["n13.shelf"]
         self.assertLessEqual(g["cards"][-1]["right"], shelf[2] - 2, "the new card inside the shelf")
         self.assertEqual(len({round(x["top"]) for x in g["cards"]}), 1)  # one row
         self.assertEqual(g["cards"][-1]["state"], "missing")
-        self.assertEqual(g["gap"], ["点線: 「ベッドの使う回数の疲労」を確かめる道具が無い"])
+        self.assertEqual(g["gap"], ["点線: 「転倒の守り」を確かめる道具が無い"])
         # the dotted card's name (a label, red until the checks pass), under it and flush with
         # its right edge; the other cards have no names
-        self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("使う回数の疲労", "label", RED)])
+        self.assertEqual([(x["text"], x["kind"], x["color"]) for x in g["tag"]], [("転倒の守り", "label", RED)])
         self.assertAlmostEqual(g["tag"][0]["right"], g["cards"][-1]["right"], delta=0.5)
         self.assertGreaterEqual(g["tag"][0]["top"], g["cards"][-1]["bottom"])
-        self.assertEqual([x["text"] for x in g["cards"]], [""] * 7)
+        self.assertEqual([x["text"] for x in g["cards"]], [""] * (len(UNCHECKED) + 2))
         self.assertEqual(c[T["lead_s"]]["tag"], [])
         # the code from write_s, typed in up to check_s from the analyse method; the caret moves meanwhile
         self.assertEqual(c[T["gap_s"]]["code"], "")
@@ -384,25 +411,32 @@ class CutN11N13Test(unittest.TestCase):
         self.assertFalse(c[T["check_s"]]["caret"])
         # the checks from check_s, ticked one by one; the known answer and the tool's as recorded
         self.assertEqual(c[T["write_s"]]["rows"][0]["tick"], False)
-        self.assertEqual([r["tick"] for r in c[T["check_s"]]["rows"]], [False, False, False])
-        self.assertEqual([r["tick"] for r in c[ticks[0]]["rows"]], [True, False, False])
-        self.assertEqual([r["tick"] for r in c[ticks[2]]["rows"]], [True, True, True])
-        rows = [[x for x in r["text"].split("\n") if x.strip()] for r in c[ticks[2]]["rows"]]
-        self.assertEqual(rows[0], ["基準の強さで壊れるまでの回数", "✓", "答え 2,000,000 回 ・ 道具 2,000,000 回", "出典: 国際溶接学会 (IIW) の疲労の線"])
-        self.assertEqual(rows[1], ["人が乗る・降りるときの枠の応力の幅", "✓", "答え 12.34 MPa ・ 道具 12.34 MPa", "出典: 梁の手計算の式"])
-        self.assertEqual(rows[2], ["くり返しの力による傷み", "✓", "答え 0.00123 ・ 道具 0.00123", "出典: 梁の手計算の式・国際溶接学会 (IIW) の疲労の線"])
-        self.assertEqual(c[ticks[2]]["cards"][-1]["state"], "solid")
-        self.assertEqual(c[ticks[2]]["made"], ["Claude がその場で書き、答えの分かっている例で確かめた"])
-        self.assertEqual(c[ticks[2]]["tag"][0]["color"], GREEN)
-        self.assertEqual(seen[ticks[2]]["counts"].get("label"), 4)  # the three ticks and the new tool's name
-        # from shelf_s the analysis made with it: its count of uses, the one figure, and the verdict
-        u = c[T["shelf_s"]]
-        self.assertEqual(u["tag"], [])  # the shelf gives way to the analysis
-        self.assertEqual(u["numbers"], ["4,321 回"])
-        self.assertEqual(u["use"][0], "棚に入った「ベッドの使う回数の疲労」で、設計を解析した")
-        self.assertEqual(u["use"][-1], "くり返しの力による傷みは、壊れる目安より小さい")
+        self.assertEqual([r["tick"] for r in c[T["check_s"]]["rows"]], [False, False])
+        self.assertEqual([r["tick"] for r in c[ticks[0]]["rows"]], [True, False])
+        self.assertEqual(c[ticks[0]]["cards"][-1]["state"], "writing")
+        self.assertEqual(c[ticks[0]]["tag"][0]["color"], RED)
+        self.assertEqual([r["tick"] for r in c[ticks[1]]["rows"]], [True, True])
+        rows = [[x for x in r["text"].split("\n") if x.strip()] for r in c[ticks[1]]["rows"]]
+        self.assertEqual(rows[0], ["片持ちの管の先のたわみ", "✓", "答え 79.58 mm ・ 道具 79.58 mm", "出典: 梁の手計算の式"])
+        self.assertEqual(rows[1], ["門形の枠が横に崩れる力", "✓", "答え 2,260 N ・ 道具 2,261 N", "出典: 骨組が崩れる力の教科書 (Neal)"])
+        # once both are ticked: the new card is solid in the shelf and its name green, to the end
+        for t in (ticks[1], T["shelf_s"], end):
+            self.assertEqual(c[t]["cards"][-1]["state"], "solid", t)
+            self.assertEqual([x["isNew"] for x in c[t]["cards"]], [False] * (len(UNCHECKED) + 1) + [True], t)
+            self.assertEqual([(x["text"], x["color"]) for x in c[t]["tag"]], [("転倒の守り", GREEN)], t)
+            self.assertEqual(c[t]["made"], ["Claude がその場で書き、答えの分かっている例で確かめた"], t)
+            self.assertEqual(c[t]["gap"], [], t)
+            self.assertEqual(c[t]["marks"], [["転倒の守り", GREEN], ["✓", GREEN], ["✓", GREEN]], t)
+            self.assertEqual(seen[t]["counts"].get("label"), 3, t)  # the two ticks and the new tool's name
+        # the analyses made with it are not shown: no figure, no verdict (they fail on the safe
+        # side's prediction), nothing red once the checks have passed
         for t in times:
-            self.assertLessEqual(seen[t]["counts"].get("number", 0), 1, t)
+            self.assertEqual(c[t]["numbers"], [], t)
+            self.assertNotIn("目安", c[t]["text"], t)
+            self.assertNotIn("解析した", c[t]["text"], t)
+            self.assertNotIn("413", c[t]["text"], t)
+            self.assertNotIn("29.1", c[t]["text"], t)
+        self.assertNotIn(RED, [m[1] for m in c[end]["marks"]])
 
     def test_n13_without_the_code_file_says_so(self):
         seen = self.read("n13", self.nocode_run, [self.layout["n13"]["times"]["check_s"]])
