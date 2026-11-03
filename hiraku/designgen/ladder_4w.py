@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from hiraku.designgen.kit import body, drivetrain, steering
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
@@ -76,7 +77,8 @@ VARIABLES: dict[str, Var] = {
     # people and parts
     "seat_x": Var("mm", -725.0, -1100.0, -500.0, "seat centre (x); the seat cross members are 275 mm ahead and behind"),
     "seat_y": Var("mm", 300.0, 220.0, 400.0, "seat centre off the centre line, each side"),
-    "steering_x": Var("mm", -250.0, -400.0, 0.0, "centre of the steering column and pedal box (x)"),
+    "steering_x": Var("mm", -250.0, -400.0, 0.0, "steering position (x): the steering wheel's centre is "
+                      "150 mm behind it (where the back of the earlier steering box was)"),
     "battery_x": Var("mm", -725.0, -1300.0, -300.0, "battery centre (x); it hangs from the cross members either side "
                      "and must fit between them (seat_x moves the seat cross members)"),
     # chassis
@@ -154,6 +156,9 @@ VARIABLES: dict[str, Var] = {
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
                                      "as a multiple of the wheel's static load"),
     "bump_stop_factor": Var("1", 10.0, meaning="assumption: bump and rebound stop stiffness, as a multiple of the spring"),
+    # driveshafts: steel tubes from the reducer to the driven wheels (kit/drivetrain.py), assumptions
+    "driveshaft_diameter": Var("mm", 30.0, meaning="assumption: driveshaft tube outer diameter"),
+    "driveshaft_wall": Var("mm", 5.0, meaning="assumption: driveshaft tube wall"),
     # joint reinforcement at the T joints (where a cross member ends on the side of a rail): the shape
     # follows from these variables alone (CHOICES["joints"] is a short way to set them). Written into
     # design.variables only when changed from their defaults, so a design without reinforcement is
@@ -177,6 +182,10 @@ LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, wh
 DERIVED = {
     "tyre_relaxation_length": ("mm", "assumption: the tyre's relaxation length, taken as the wheel radius"),
     "wheel_inertia": ("kg*m^2", "rotary inertia of one wheel part, as a solid disc: m r^2 / 2"),
+    "motor_rotor_inertia": ("kg*m^2", "rotary inertia of the motor's rotor (kit/drivetrain.py: a solid cylinder, "
+                            "assumption)"),
+    "reducer_output_inertia": ("kg*m^2", "rotary inertia of the reducer's output gear, turning with the wheels "
+                               "(kit/drivetrain.py: a disc, assumption)"),
 }
 WHEEL_MASS_KG = 14.0  # tyre, rim, hub and brake of one wheel (assumption)
 # Order of design.variables as in the first v1 file (the variables added later come after them).
@@ -296,13 +305,15 @@ def _q(v: float, unit: str) -> Record:
 # Layout clearances and offsets (design choices, assumptions), used against the frame and the parts:
 ON_RAILS_MM = 10.0  # floors, deck, front body and suspension tops sit this far above the rail top (brackets)
 DECK_GAP_MM = 150.0  # the deck starts this far behind the rear seat cross member
-MOTOR_GAP_MM = 25.0  # the motor's back face this far ahead of the rear axle station
 CONTROLLER_LEAD_MM = 15.0  # the controller's front face this far ahead of the rear seat cross member
 AUX_DROP_MM = 10.0  # the wiring box's top this far above the rail bottom
-STEERING_LIFT_MM = 50.0  # the steering and pedal box starts this far above the footwell floor
-STEERING_INBOARD_MM = 100.0  # its centre this far inboard of the driver's seat centre
+STEERING_INBOARD_MM = 100.0  # the pinion this far inboard of the driver's seat centre
 OCCUPANT_BACK_MM = 55.0  # the occupant's mass box centre this far behind the seat centre
 CARGO_SHORT_MM = 50.0  # the cargo box is this much shorter than the deck
+STEERING_WHEEL_BEHIND_MM = 150.0  # the steering wheel's centre this far behind steering_x
+# The occupants' bodies as parts (kit/body.py): off until hiraku.contract.loading counts a person's
+# parts as one occupant (kit/body.person_of); the occupant stays one mass box until then.
+BODY_PARTS = False
 TITLE = "2 人乗り 4 輪のはしご形フレームの電動車 (前輪で操舵、後輪で駆動、右ハンドル)"
 DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive"
 # How the T joints (a cross member ending on the side of a rail) are made: butt (the cross member
@@ -322,8 +333,9 @@ def applies(flags: dict) -> bool:
 
 
 # Part list order of v1 (the rest after them as placed: each wheel, then its suspension)
-PART_ORDER = ["battery", "motor", "controller", "aux", "floor_front", "floor", "deck", "front_body", "steering", "seat_R",
-              "seat_L", "occupant_R", "occupant_L", "cargo"]
+PART_ORDER = ["battery", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux", "floor_front",
+              "pedal_accel", "pedal_brake", "floor", "deck", "front_body", "steering_wheel", "steering_column", "steering_rack",
+              "tie_rod_FL", "tie_rod_FR", "seat_R", "seat_L", "occupant_R", "occupant_L", "cargo"]
 
 
 def build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
@@ -380,20 +392,31 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                  (b_l, b_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale),
             x=v["battery_x"], y=0.0, z=top_at(lay.bottom_of("floor")))
     motor_mass = MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"])
-    lay.put(Item("motor", "モーターと減速機", "motor", (250.0, 300.0, 220.0), motor_mass),
-            x=rear_at(lay.station_x("B") + MOTOR_GAP_MM), y=0.0, z=top_at(lay.rail_top()), carried_by=lay.at("B"))
+    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
+    rho = float(material["density_kg_m3"])
+    drive = drivetrain.place(lay, motor_mass, "B", (v["driveshaft_diameter"], v["driveshaft_wall"]), rho)
     lay.put(Item("controller", "モーターの制御器", "controller", (250.0, 200.0, 80.0), 4.0),
             x=front_at(S2 + CONTROLLER_LEAD_MM), y=0.0, z=top_at(lay.rail_bottom()), carried_by=lay.at("S2"))
     lay.put(Item("aux", "配線と 12 V の補機", "electrical", (300.0, 300.0, 100.0), 6.0),
             x=rear_at(S1), y=0.0, z=top_at(lay.rail_bottom() + AUX_DROP_MM))
-    lay.put(Item("steering", "ハンドルとペダル", "steering", (300.0, 200.0, 500.0), 12.0),
-            x=v["steering_x"], y=-seat_y + STEERING_INBOARD_MM, z=bottom_at(lay.top_of("floor_front") + STEERING_LIFT_MM))
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
         lay.put(Item(pid, label, "seat", (500.0, 500.0, 260.0), 12.0), x=seat_x, y=y, z=bottom_at(lay.top_of("floor")))
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
                 x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
+    # pedals from the driver's foot, then the steering from the driver's knee (kit/body.py, kit/steering.py)
+    feet = body.place_pedals(lay, "seat_R", "floor_front")
+    knee = feet["pose"].legs["R"].knee
+    steering.place(lay, 12.0, v["steering_x"] - STEERING_WHEEL_BEHIND_MM, -seat_y, -seat_y + STEERING_INBOARD_MM,
+                           float(knee[2]) + feet["pose"].radii["thigh"], rho)
+    if BODY_PARTS:
+        from hiraku.solvers.k4_geometry.people import grip_points
+
+        for occ, seat in (("occupant_R", "seat_R"), ("occupant_L", "seat_L")):
+            pose = feet["pose"] if occ == "occupant_R" else body.driver_pose(lay, seat, "floor_front")
+            grips = grip_points(lay.part("steering_wheel")) if occ == "occupant_R" else None
+            body.occupant_parts(lay, occ, pose, grips)
     lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, 880.0, v["cargo_height"]), v["cargo_mass"]),
             x=lay.part("deck")["box"]["center_mm"][0], y=0.0, z=bottom_at(lay.top_of("deck")), carried_by=lay.at("S2", "B", "E"))
     for s in supports:  # each wheel (unsprung) and its arms, their tops level with the floors, inner face on the rail
@@ -404,9 +427,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
                      (250.0, 120.0, 200.0), 8.0),
                 x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
+    steering.place_corners(lay, rho)  # knuckles and the rear toe links, out of the suspension parts
     lay.reorder(PART_ORDER)
-    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
-    rho = float(material["density_kg_m3"])
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
         for st in tee:
@@ -426,6 +448,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                       if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
     variables["tyre_relaxation_length"] = _q(r, "mm")
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
+    variables["motor_rotor_inertia"] = _q(drive["rotor_inertia"], "kg*m^2")
+    variables["reducer_output_inertia"] = _q(drive["gear_inertia"], "kg*m^2")
     return {
         "design_version": version,
         "parent_version": parent,
