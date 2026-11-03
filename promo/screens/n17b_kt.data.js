@@ -73,6 +73,42 @@ window.KT_DATA = {
    "h": 32,
    "size_px": 19
   },
+  "lift": {
+   "fig_dy_px": -175,
+   "fig_scale": 0.6,
+   "cap_dy_px": -86,
+   "sub_dy_px": -290,
+   "_note": "after the walls start to open, the figure (scaled by fig_scale), the caption and the commits line move up by these amounts over times.lift_s, to leave room for the depth"
+  },
+  "depth": {
+   "head": {
+    "y": 446,
+    "h": 64,
+    "size_px": 42
+   },
+   "cards": {
+    "x": 96,
+    "y": 560,
+    "w": 1728,
+    "h": 270,
+    "gap_px": 36,
+    "rule_px": 2,
+    "lab_px": 30,
+    "num_px": 116,
+    "unit_em": 0.34,
+    "sub_px": 24,
+    "layers": 14,
+    "depth_px": 30,
+    "from_z_px": -1400,
+    "from_rx_deg": 24,
+    "rise_px": 40,
+    "from_ry_deg": -20,
+    "ry_deg": -6,
+    "rail_dim": 0.8,
+    "perspective_px": 1200
+   },
+   "_note": "sentence 2: the heading (one run) and four cards in a row, in the order of a run: what is judged, with what, checked how, and the end. Each card comes forward from from_z_px (tilted back by from_rx_deg) over times.card_in_s and its figure (extruded: layers copies over depth_px, the unit on the face only) counts up over times.card_count_s (from the card's start), turning from from_ry_deg to ry_deg. The corridor's rails dim by rail_dim as the cards come in (they would cross the cards' text)"
+  },
   "times": {
    "cam_s": [
     0.0,
@@ -89,6 +125,18 @@ window.KT_DATA = {
     4.6
    ],
    "sub_s": 2.4,
+   "lift_s": [
+    2.75,
+    3.3
+   ],
+   "head_s": 3.0,
+   "cards_s": 3.25,
+   "card_step_s": 0.25,
+   "card_in_s": 0.45,
+   "card_count_s": [
+    0.1,
+    0.65
+   ],
    "stamp_s": 4.5
   },
   "cam_ease": [
@@ -349,7 +397,20 @@ window.KT_DATA = {
     "sha": "27cccf7",
     "text": "Layout: hiraku/export/ belongs to the design…"
    }
-  ]
+  ],
+  "depth": {
+   "run_id": "20261103-182809-offroad-4w-scripted",
+   "domains": 7,
+   "assembly": true,
+   "areas": 8,
+   "passed": 8,
+   "versions": 2,
+   "tools": 17,
+   "known_cases": 295,
+   "comparisons": 73,
+   "mismatches": 8,
+   "explained": 8
+  }
  },
- "counted_at": "2026-11-03T23:55+09:00"
+ "counted_at": "2026-11-04T01:23+09:00"
 };

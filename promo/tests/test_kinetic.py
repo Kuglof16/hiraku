@@ -76,6 +76,43 @@ class Data(unittest.TestCase):
         self.assertEqual({k: x for k, x in again.items() if k not in ("ref", "head")},
                          {k: x for k, x in v.items() if k not in ("ref", "head")})
 
+    def test_n17b_depth_is_the_runs(self):
+        d = kd.read_js(kd.OUT_N17B)["values"]["depth"]
+        self.assertEqual(tuple(d), kd.DEPTH_KEYS)
+        # the same four cards as N17b: the depth N17b's data file holds
+        self.assertEqual(d, {k: nd.read_data(nd.OUT)["depth"][k] for k in kd.DEPTH_KEYS})
+        # and, where the run's record is in this clone, the depth counted from it again
+        run = kd.ROOT / "runs" / d["run_id"]
+        if (run / "events.jsonl").exists():
+            self.assertEqual(d, kd.n17b_depth(run))
+        self.assertEqual(d["areas"], d["domains"] + (1 if d["assembly"] else 0))
+        self.assertLessEqual(d["passed"], d["areas"])
+        self.assertLessEqual(d["explained"], d["mismatches"])
+        self.assertLessEqual(d["mismatches"], d["comparisons"])
+
+    def test_n17b_depth_is_counted_by_n17b_data(self):
+        events = [
+            {"kind": "domains.picked", "run_id": "r", "data": {"picks": [{"domain": "a", "shown_name": "A"},
+                                                                         {"domain": "b", "shown_name": "B"}]}},
+            {"kind": "design.created", "run_id": "r", "data": {}},
+            {"kind": "tool.checked", "run_id": "r", "data": {"name": "t1", "usable": True,
+                                                             "checks": [{"pass": True}, {"pass": True}]}},
+            {"kind": "comparison.recorded", "run_id": "r", "data": {"comparison_id": "c1", "status": "match"}},
+            {"kind": "comparison.recorded", "run_id": "r", "data": {"comparison_id": "c2", "status": "mismatch",
+                                                                    "cause_id": "k1"}},
+            {"kind": "cause.recorded", "run_id": "r", "data": {"cause_id": "k1", "resolved": True}},
+            {"kind": "judgement.updated", "run_id": "r", "data": {"domain": "a", "state": "green", "design_version": 1}},
+            {"kind": "judgement.updated", "run_id": "r", "data": {"domain": "b", "state": "red", "design_version": 1}},
+        ]
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+            d = kd.n17b_depth(run)
+        self.assertEqual(d, {"run_id": "r", "domains": 2, "assembly": False, "areas": 2, "passed": 1, "versions": 1,
+                             "tools": 1, "known_cases": 2, "comparisons": 2, "mismatches": 1, "explained": 1})
+
     def test_n17b_subjects(self):
         r, v = kd.RULES["n17b_kt"], kd.read_js(kd.OUT_N17B)["values"]
         self.assertEqual(len(v["messages"]), min(r["messages"], v["subjects_from"]))
@@ -106,12 +143,24 @@ class Rules(unittest.TestCase):
         # the extruded figure's line box (line height 1.5) is above the caption
         n = r8["num"]
         self.assertLess(n["cy"] + 0.75 * n["size_px"], r8["cap"]["y"])
+        # N17b's depth: the heading over the cards, the cards over the stamp
+        h, c = r17["depth"]["head"], r17["depth"]["cards"]
+        self.assertLessEqual(h["y"] + h["h"], c["y"])
+        self.assertLessEqual(c["y"] + c["h"], r17["stamp"]["y"])
+        self.assertLessEqual(c["x"] + c["w"], self.layout["stage"]["w"] - c["x"])
+        # the commits line, moved up, stays under the figure and over the heading
+        lf, sub = r17["lift"], r17["sub"]
+        self.assertLessEqual(sub["y"] + lf["sub_dy_px"] + sub["h"], h["y"])
 
     def test_text_sizes(self):
         r8, r17 = kd.RULES["n08b_kt"], kd.RULES["n17b_kt"]
         for size in (r8["cap"]["size_px"], r8["src"]["size_px"], r17["cap"]["size_px"], r17["sub"]["size_px"],
                      r17["stamp"]["size_px"], r17["corridor"]["size_px"]):
             self.assertGreaterEqual(size, self.min_px)
+        c = r17["depth"]["cards"]
+        body = self.layout["story"]["defaults"]["body_text_px"]
+        for size in (r17["depth"]["head"]["size_px"], c["lab_px"], c["sub_px"], c["num_px"] * c["unit_em"]):
+            self.assertGreaterEqual(size, body)
 
     def test_times_follow_the_voice(self):
         r = kd.RULES["n08b_kt"]
@@ -129,6 +178,12 @@ class Rules(unittest.TestCase):
         self.assertTrue(s1a <= t["count_s"][1] <= s1b)
         self.assertTrue(s2a <= t["open_s"][0] and s2a <= t["sub_s"] < s2b)
         self.assertLessEqual(t["cam_s"][1], r["duration_s"])
+        # the depth comes with sentence 2: the heading and every card land, and
+        # every card's figure has counted up, before the sentence ends
+        self.assertTrue(s2a <= t["lift_s"][0] and t["lift_s"][0] <= t["head_s"] < t["cards_s"])
+        last = t["cards_s"] + 3 * t["card_step_s"]
+        self.assertLess(last + t["card_in_s"], s2b)
+        self.assertLess(last + t["card_count_s"][1], s2b)
 
     def test_pages_are_driven_by_t_only(self):
         for cut, page in PAGES.items():
@@ -196,8 +251,26 @@ class Pages(unittest.TestCase):
         finally:
             cap.close()
 
+    def test_n17b_cards_count_to_the_depth(self):
+        from promo import export
+        d = kd.read_js(kd.OUT_N17B)["values"]["depth"]
+        want = {"areas": d["domains"], "tools": d["tools"], "comparisons": d["comparisons"], "passed": d["passed"]}
+        cap = export.Capture(PAGES["n17b_kt"], scale=1.0)
+        try:
+            read = ("() => Object.fromEntries([...document.querySelectorAll('[data-box^=\"n17b_kt.depth.\"].card')]"
+                    ".map(c => [c.dataset.box.split('.').pop(), c.querySelector('.fl:last-child .d').textContent]))")
+            cap.page.evaluate("t => window.__export.seek(t)", 2.0)
+            self.assertEqual(cap.page.evaluate("() => [...document.querySelectorAll('.card')]"
+                                               ".map(c => getComputedStyle(c).visibility)"), ["hidden"] * 4)
+            cap.page.evaluate("t => window.__export.seek(t)", 5.7)
+            self.assertEqual(cap.page.evaluate(read), {k: f"{v:,}" for k, v in want.items()})
+            self.assertEqual(dict(cap.page.evaluate("() => window.N17B_KT.cards")), want)
+            self.assertEqual(list(cap.errors), [])
+        finally:
+            cap.close()
+
     def test_same_t_same_pixels(self):
-        for cut, t in (("n08b_kt", 7.8), ("n17b_kt", 1.2)):
+        for cut, t in (("n08b_kt", 7.8), ("n17b_kt", 1.2), ("n17b_kt", 3.6), ("n17b_kt", 5.7)):
             (a, b), cap = self.shoot(PAGES[cut], [t, t])
             cap.close()
             self.assertEqual(a, b, cut)

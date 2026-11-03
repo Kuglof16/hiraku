@@ -13,8 +13,11 @@
      entrance), while the lines of code written count up as a large extruded
      figure held in front of the camera (sentence 1 of the voice). With
      sentence 2 the walls move apart (the way opens) and the commits and the
-     days come in under the figure. Every figure and subject comes from git
-     through promo/kinetic_data.py (n17b_kt.data.js, rules in the same file).
+     days come in under the figure; then the figure, the caption and that line
+     move up, "1 回の運転で" comes in and four cards (the depth of one run, as
+     N17b's) come forward one after another, each figure extruded and counting
+     up. Every figure and subject comes from git and the run's record through
+     promo/kinetic_data.py (n17b_kt.data.js, rules in the same file).
      Every frame is drawn from t by the onSeek hook below (no CSS animation,
      no wall clock, no random numbers).
      Faces: Noto Sans JP and Noto Serif JP (SIL Open Font License 1.1),
@@ -75,6 +78,28 @@
   .sub b { font-weight: 500; color: var(--glow); margin-right: 0.15em; }
   .sub .sep { color: var(--on-night-soft); margin: 0 0.7em; }
   .stamp { position: absolute; text-align: right; white-space: nowrap; font-family: var(--kt-sans); color: var(--on-night-soft); }
+  .head { font-weight: 300; letter-spacing: 0.03em; color: var(--on-night); }
+  .head em { font-style: normal; font-family: var(--kt-serif); font-weight: 900; color: var(--warm); margin: 0 0.08em; }
+  .cards { position: absolute; }
+  .card { position: absolute; top: 0; transform-style: preserve-3d; transform-origin: 50% 100%; }
+  .card .rule { position: absolute; left: 0; top: 0; width: 100%; background: var(--glow); }
+  .card .lab { white-space: nowrap; font-family: var(--kt-sans); font-weight: 500; line-height: 1.5; color: var(--on-night); }
+  .card .fig { position: relative; display: inline-block; vertical-align: top; transform-style: preserve-3d; }
+  .card .fl {
+    position: absolute;
+    left: 0;
+    top: -0.175em;  /* a line of 1.5 (room for the glyphs) centred on the 1.15 em of .fig */
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    backface-visibility: hidden;
+  }
+  .card .fl .d { display: inline-block; text-align: right; }
+  .card .fl .u { font-family: var(--kt-serif); font-weight: 900; margin-left: 0.18em; }
+  .card .cs { white-space: nowrap; font-family: var(--kt-sans); font-weight: 300; line-height: 1.5; color: var(--on-night-soft); }
+  .card .cs b { font-weight: 500; color: var(--on-night); }
 </style>
 </head>
 <body data-duration="5.8">
@@ -194,6 +219,16 @@
       for (const s of digits) s.style.width = `${d}px`;
       Object.assign(fig.style, { width: `${all.width}px`, height: `${all.height}px`,
                                  left: `${-all.width / 2}px`, top: `${-all.height / 2}px` });
+      // each card's digits keep the width of its final figure, so the unit stays put while counting
+      for (const c of CARDS) {
+        probe.innerHTML = `<span class="d">${fmt(c.v)}</span><span class="u" ` +
+          `style="font-size:${CD.unit_em}em;margin-left:0.18em">${c.unit}</span>`;
+        probe.style.fontSize = px(CD.num_px);
+        const w = probe.querySelector(".d").getBoundingClientRect().width;
+        for (const s of c.digits) s.style.width = `${w}px`;
+        c.el.querySelector(".fig").style.width = `${probe.getBoundingClientRect().width}px`;
+      }
+      probe.style.fontSize = px(N.size_px);
     }
 
     // --- flat lines: caption, commits and days, the stamp ------------------------
@@ -214,8 +249,53 @@
     const S = R.stamp;
     const at = K.counted_at ? K.counted_at.replace("T", " ").replace(/\+.*$/, "") : "";
     const stamp = flat("stamp", "n17b_kt.stamp", S,
-      `数えた日時 ${at}  ·  git の ${V.ref} (${V.head})  ·  壁はコミットの題 ${V.messages.length} 件 (${fmt(V.subjects_from)} 件から等間隔)`, "note");
+      `数えた日時 ${at}  ·  git の ${V.ref} (${V.head})  ·  壁はコミットの題 ${V.messages.length} 件 (${fmt(V.subjects_from)} 件から等間隔)` +
+      `  ·  運転の記録 ${V.depth.run_id}`, "note");
     Object.assign(stamp.style, { left: px(S.x), width: px(S.w) });
+
+    // --- the depth (sentence 2): the heading and four cards ----------------------
+    const DP = R.depth, CD = DP.cards, Dv = V.depth;
+    const head = flat("line head", "n17b_kt.head", DP.head, "1 回の<em>運転</em>で", "label");
+    // in the order of a run: what is judged, with what, checked how, and the end
+    const CARDS = [
+      { key: "areas", lab: "見る分野", v: Dv.domains, unit: Dv.assembly ? "分野 + 組み立て" : "分野",
+        sub: "1 台の車を、分野をまたいで判断" },
+      { key: "tools", lab: "解析のツール", v: Dv.tools, unit: "本",
+        sub: `答えの分かっている例 <b>${fmt(Dv.known_cases)}</b> 件で確認` },
+      { key: "comparisons", lab: "手計算と解析の照合", v: Dv.comparisons, unit: "回",
+        sub: Dv.explained === Dv.mismatches ? `食い違い <b>${Dv.mismatches}</b> 件は原因を特定`
+          : `食い違い <b>${Dv.mismatches}</b> 件、原因を特定 <b>${Dv.explained}</b> 件` },
+      { key: "passed", lab: "直して、合格", v: Dv.passed, unit: `/ ${Dv.areas}`,
+        sub: `設計を直した <b>${Dv.versions}</b> 版目で` },
+    ];
+    const deck = document.createElement("div");
+    deck.className = "cards";
+    deck.style.cssText = `left:${px(CD.x)};top:${px(CD.y)};width:${px(CD.w)};height:${px(CD.h)}`;
+    safe.appendChild(deck);
+    const cw = (CD.w - 3 * CD.gap_px) / 4;
+    for (const [i, c] of CARDS.entries()) {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.dataset.box = `n17b_kt.depth.${c.key}`;
+      el.style.cssText = `left:${px(i * (cw + CD.gap_px))};width:${px(cw)};height:${px(CD.h)}`;
+      let ly = "";
+      for (let k = CD.layers - 1; k >= 0; k--) {
+        const col = k === 0 ? front : mix(sideC, night, 0.25 + 0.6 * (k / (CD.layers - 1)));
+        ly += `<div class="fl" style="color:${col};transform:translateZ(${px(-k * CD.depth_px / (CD.layers - 1))})">` +
+          `<span class="d"></span><span class="u" style="font-size:${CD.unit_em}em;color:${warm};` +
+          `${k === 0 ? "" : "visibility:hidden"}">${c.unit}</span></div>`;
+      }
+      el.innerHTML = `<div class="rule" style="height:${px(CD.rule_px)}"></div>` +
+        `<div class="lab" data-kind="label" style="font-size:${px(CD.lab_px)};padding-top:${px(16)}">${c.lab}</div>` +
+        `<div class="fig" data-box="n17b_kt.depth.${c.key}.num" data-kind="number" ` +
+        `style="font-size:${px(CD.num_px)};height:${px(CD.num_px * 1.15)};margin-top:${px(2)}">${ly}</div>` +
+        `<div class="cs" style="font-size:${px(CD.sub_px)};margin-top:${px(10)}">${c.sub}</div>`;
+      deck.appendChild(el);
+      c.el = el;
+      c.layers = [...el.querySelectorAll(".fl")];
+      c.digits = [...el.querySelectorAll(".fl .d")];
+      c.parts = [...el.querySelectorAll(".rule, .lab, .cs, .fl")];
+    }
 
     // --- the frame at t ----------------------------------------------------------
     function fadeIn(el, t, at, dur, rise) {
@@ -246,12 +326,13 @@
         m.gone = near > P - C.near_px;   // too close (or behind): not drawn
         m.depth = clamp01((C.far_px + mid) / (C.far_px * 0.45));
       }
+      const dim = 1 - R.depth.cards.rail_dim * easeOut(lin(t, T.cards_s, T.cards_s + 0.6));
       for (const r of RAILS) {
         // left: from z into the distance; right: from z - seg towards the camera
         const z = r.side < 0 ? r.z : r.z - C.rail_seg_px;
         r.el.style.transform = `translate3d(${px(r.side * half)}, ${px(r.y)}, ${px(z)}) rotateY(${r.side < 0 ? 90 : -90}deg)`;
         const near = r.z + go, mid = r.z - C.rail_seg_px / 2 + go;
-        const a = near > P - C.near_px ? 0 : C.rail_alpha * clamp01((C.far_px + mid) / (C.far_px * 0.45));
+        const a = near > P - C.near_px ? 0 : dim * C.rail_alpha * clamp01((C.far_px + mid) / (C.far_px * 0.45));
         r.el.style.opacity = a.toFixed(3);
         r.el.style.visibility = a < 0.01 ? "hidden" : "visible";
       }
@@ -264,8 +345,40 @@
       // the middle of its box comes within fade_px of them (the far subjects
       // gather at the vanishing point behind the figure, and would show
       // through its sides)
-      fig.style.transform = figTurn(t);
+      // with sentence 2 the amount moves up to leave room for the depth
+      const up = easeInOut(lin(t, T.lift_s[0], T.lift_s[1]));
+      const LF = R.lift;
+      fig.style.transform = `translateY(${px(LF.fig_dy_px * up)}) scale(${1 + (LF.fig_scale - 1) * up}) ` + figTurn(t);
+      fadeIn(cap, t, T.cap_s, 0.5, 12);
+      fadeIn(sub, t, T.sub_s, 0.5, 16);
+      cap.style.transform += ` translateY(${px(LF.cap_dy_px * up)})`;
+      sub.style.transform += ` translateY(${px(LF.sub_dy_px * up)})`;
+      // the heading, then the cards one after another: each comes forward from the
+      // depth of the corridor, and its figure counts up
+      const hq = easeOut(lin(t, T.head_s, T.head_s + 0.45));
+      head.style.opacity = String(hq);
+      head.style.transform = `translateY(${px(18 * (1 - hq))})`;
+      head.style.letterSpacing = `${0.03 + 0.3 * (1 - hq)}em`;
+      for (const [i, c] of CARDS.entries()) {
+        const s0 = T.cards_s + i * T.card_step_s;
+        const q = easeOut(lin(t, s0, s0 + T.card_in_s));
+        // opacity on the parts, not the card: opacity on the card would flatten the extruded figure
+        const a = q < 0.01 ? "0" : Math.min(1, q * 1.4).toFixed(3);
+        for (const p of c.parts) p.style.opacity = a;
+        c.el.style.visibility = q < 0.01 ? "hidden" : "visible";
+        // each card has its own perspective (about its bottom middle), so a far card
+        // shrinks into its own place and not toward the screen's middle (into its neighbour)
+        c.el.style.transform = `perspective(${px(CD.perspective_px)}) ` +
+          `translate3d(0, ${px(CD.rise_px * (1 - q))}, ${px(CD.from_z_px * (1 - q))}) ` +
+          `rotateX(${CD.from_rx_deg * (1 - q)}deg)`;
+        const n = fmt(counted(c.v, t, s0 + T.card_count_s[0], s0 + T.card_count_s[1]));
+        for (const d of c.digits) d.textContent = n;
+        // the figure turns a little toward the camera as it lands
+        c.el.querySelector(".fig").style.transform = `rotateY(${CD.ry_deg + (CD.from_ry_deg - CD.ry_deg) * (1 - q)}deg)`;
+      }
       const keep = [box(fig), box(cap.firstChild), box(sub.firstChild)];
+      if (hq > 0) keep.push(box(head.firstChild));
+      for (const c of CARDS) if (c.el.style.visibility === "visible") keep.push(box(c.el));
       const apart = (a, b) => {
         const cx = (a.x0 + a.x1) / 2, cy = (a.y0 + a.y1) / 2;
         return Math.max(b.x0 - cx, cx - b.x1, b.y0 - cy, cy - b.y1);
@@ -285,11 +398,9 @@
       for (const l of layers) l.style.opacity = String(on);
       const v = counted(V.lines_total, t, T.count_s[0], T.count_s[1]);
       for (const s of digits) s.textContent = fmt(v);
-      fadeIn(cap, t, T.cap_s, 0.5, 12);
-      fadeIn(sub, t, T.sub_s, 0.5, 16);
       fadeIn(stamp, t, T.stamp_s, 0.4, 0);
     }
-    window.N17B_KT = { draw, MSGS, counted };
+    window.N17B_KT = { draw, MSGS, counted, cards: CARDS.map((c) => [c.key, c.v]) };
     window.__ktDraw = draw;
   })();
 </script>

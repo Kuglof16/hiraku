@@ -9,7 +9,10 @@ opened from file://):
 - promo/screens/n17b_kt.data.js (``window.KT_DATA``): from the git record of one
   ref (main by default), the lines of code written (counted as N17b counts them,
   promo/n17b_data.py), the commits, the days, and the subjects of a spread of
-  commits for the corridor (English, cut short).
+  commits for the corridor (English, cut short); and the depth of one run for
+  the four cards (n17b_data.depth: from the run's events.jsonl with --run, else
+  the depth held by promo/screens/n17b.data.js, which n17b_data.py counted from
+  its run).
 
 Both files also carry the page's rules (RULES below: placement in 1920x1080
 design px, times in seconds from the cut's start, camera). These two pages are
@@ -17,6 +20,7 @@ samples; their rules live here and not in layout.json.
 
     py promo/kinetic_data.py                 # both, git counted on main
     py promo/kinetic_data.py --ref HEAD      # count another ref
+    py promo/kinetic_data.py --run <runs/<run_id> folder>   # count the depth from a run
 
 Run it again after a merge into main to bring N17b's figures up to date.
 """
@@ -105,9 +109,27 @@ RULES = {
         "cap": {"y": 178, "h": 52, "size_px": 34},
         "sub": {"y": 640, "h": 60, "size_px": 40},
         "stamp": {"x": 96, "y": 858, "w": 1728, "h": 32, "size_px": 19},
+        "lift": {"fig_dy_px": -175, "fig_scale": 0.6, "cap_dy_px": -86, "sub_dy_px": -290,
+                 "_note": "after the walls start to open, the figure (scaled by fig_scale), the caption and the "
+                          "commits line move up by these amounts over times.lift_s, to leave room for the depth"},
+        "depth": {
+            "head": {"y": 446, "h": 64, "size_px": 42},
+            "cards": {"x": 96, "y": 560, "w": 1728, "h": 270, "gap_px": 36, "rule_px": 2,
+                      "lab_px": 30, "num_px": 116, "unit_em": 0.34, "sub_px": 24,
+                      "layers": 14, "depth_px": 30, "from_z_px": -1400, "from_rx_deg": 24, "rise_px": 40,
+                      "from_ry_deg": -20, "ry_deg": -6, "rail_dim": 0.8, "perspective_px": 1200},
+            "_note": "sentence 2: the heading (one run) and four cards in a row, in the order of a run: what is "
+                     "judged, with what, checked how, and the end. Each card comes forward from from_z_px "
+                     "(tilted back by from_rx_deg) over times.card_in_s and its figure (extruded: layers copies "
+                     "over depth_px, the unit on the face only) counts up over times.card_count_s (from the card's "
+                     "start), turning from "
+                     "from_ry_deg to ry_deg. The corridor's rails dim by rail_dim as the cards come in (they "
+                     "would cross the cards' text)",
+        },
         "times": {
             "cam_s": [0.0, 4.9], "count_s": [0.35, 1.9], "num_in_s": 0.2, "cap_s": 0.3,
-            "open_s": [2.3, 4.6], "sub_s": 2.4, "stamp_s": 4.5,
+            "open_s": [2.3, 4.6], "sub_s": 2.4, "lift_s": [2.75, 3.3], "head_s": 3.0,
+            "cards_s": 3.25, "card_step_s": 0.25, "card_in_s": 0.45, "card_count_s": [0.1, 0.65], "stamp_s": 4.5,
         },
         "cam_ease": [0.4, 0.0, 0.2, 1.0],
         "count_steps": 40,
@@ -172,8 +194,21 @@ def pick(items: list, k: int) -> list:
     return [items[round(i * (len(items) - 1) / (k - 1))] for i in range(k)]
 
 
-def n17b(repo: Path = ROOT, ref: str = "main", rules: dict | None = None) -> dict:
-    """Lines, commits and days of ref (as N17b counts them) and the corridor's subjects."""
+DEPTH_KEYS = ("run_id", "domains", "assembly", "areas", "passed", "versions", "tools", "known_cases",
+              "comparisons", "mismatches", "explained")
+
+
+def n17b_depth(run: Path | None = None) -> dict:
+    """The depth of one run as N17b counts it (n17b_data.depth): from the run's
+    events.jsonl when its folder is given, else the depth N17b's data file holds
+    (promo/screens/n17b.data.js, counted by n17b_data.py from its run)."""
+    d = n17b_data.depth(n17b_data.read_events(run)) if run is not None else n17b_data.read_data(n17b_data.OUT)["depth"]
+    return {k: d[k] for k in DEPTH_KEYS}
+
+
+def n17b(repo: Path = ROOT, ref: str = "main", rules: dict | None = None, depth: dict | None = None) -> dict:
+    """Lines, commits and days of ref (as N17b counts them), the corridor's
+    subjects, and the depth of one run (n17b_depth() when depth is None)."""
     r = rules or RULES["n17b_kt"]
     am = n17b_data.amount(repo, ref)
     log = n17b_data.read_log(repo, ref)  # parents before children
@@ -187,6 +222,7 @@ def n17b(repo: Path = ROOT, ref: str = "main", rules: dict | None = None) -> dic
         "days": am["days"],
         "subjects_from": len(plain),
         "messages": [{"sha": c["sha"][:7], "text": shorten(c["subject"], r["message_chars"])} for c in chosen],
+        "depth": depth if depth is not None else n17b_depth(),
     }
 
 
@@ -210,10 +246,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", type=Path, default=ROOT)
     ap.add_argument("--ref", default="main")
+    ap.add_argument("--run", type=Path, default=None,
+                    help="a run's folder (holds events.jsonl) to count the depth from; "
+                         "by default the depth of promo/screens/n17b.data.js")
     a = ap.parse_args(argv)
     v8 = n08b()
     OUT_N08B.write_text(render_js("n08b_kt", v8), encoding="utf-8", newline="\n")
-    v17 = n17b(a.repo, a.ref)
+    v17 = n17b(a.repo, a.ref, depth=n17b_depth(a.run))
     now = datetime.now(n17b_data.JST).isoformat(timespec="minutes")
     OUT_N17B.write_text(render_js("n17b_kt", v17, now), encoding="utf-8", newline="\n")
     m = v8["manufacturing"]
@@ -221,6 +260,11 @@ def main(argv: list[str] | None = None) -> int:
           f"CAE {v8['cae_adoption']['small']['pct']} % -> {v8['cae_adoption']['small']['shown']} %")
     print(f"n17b_kt: {v17['ref']} {v17['head']}: {v17['lines_total']:,} lines, {v17['commits']} commits, "
           f"day {v17['days']}, {len(v17['messages'])} subjects of {v17['subjects_from']}")
+    d = v17["depth"]
+    print(f"  depth ({d['run_id']}): {d['domains']} domains" + (" + assembly" if d["assembly"] else "")
+          + f", {d['tools']} tools on {d['known_cases']} known-answer cases, {d['comparisons']} comparisons "
+          f"({d['mismatches']} mismatches, {d['explained']} explained), {d['passed']}/{d['areas']} green "
+          f"in version {d['versions']}")
     print(f"wrote {OUT_N08B}\nwrote {OUT_N17B}")
     return 0
 
