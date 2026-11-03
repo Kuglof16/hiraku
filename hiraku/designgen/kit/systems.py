@@ -16,9 +16,12 @@ The links follow from the parts the kits place (their kinds and ids) and the fra
   every braked support;
 - power: battery -> main switch -> controller -> motor; the wiring box (12 V) from the battery,
   the lamps from the wiring box; the accelerator pedal signals the controller;
-- the corners (load): suspension part to its support's frame node and to the support, knuckle to
-  the suspension part, wheel to the knuckle and to the support (it stands there), caliper and toe
-  link to the knuckle, toe link to the frame node;
+- the corners (load): suspension part to what holds its body-side hard points (body_mounts: the
+  tower's and legs' end nodes, the brackets; else its support's frame node) and to the support,
+  knuckle to the suspension part, wheel to the knuckle and to the support (it stands there),
+  caliper and toe link to the knuckle, toe link to the bracket at its inner end (else the frame node);
+- the steering column to the dash cross member that holds it (bolt, steer; ladder_4w.build_dash);
+- brackets (kind bracket) are welded to their carried_by nodes;
 - restraint: each seat belt to its seat and to the cross member behind the seat;
 - rops: the roll bar to the rail nodes it stands on (welded).
 
@@ -39,10 +42,14 @@ SYSTEM_OF_KIND = {
     "tie_rod": "steering", "brake_pedal": "brake", "brake_master_cylinder": "brake", "brake_caliper": "brake",
     "wheel": "suspension", "suspension": "suspension", "knuckle": "suspension",
     "seat": "seat", "seat_belt": "restraint", "rollbar": "rops", "occupant": "occupant", "cargo": "cargo",
-    "body": "body", "frame": "frame", "gusset": "frame",
+    "body": "body", "frame": "frame", "gusset": "frame", "bracket": "frame",
     "headlamp": "lighting", "taillamp": "lighting", "stoplamp": "lighting", "turn_signal": "lighting",
 }
-WELDED_KINDS = ("frame", "gusset", "rollbar")  # joined to their nodes by welds
+WELDED_KINDS = ("frame", "gusset", "rollbar", "bracket")  # joined to their nodes by welds
+# the suspension's hard points on the body (K2's mounts): the arms and the damper are joined there
+BODY_MOUNTS = ("lca_front", "lca_rear", "uca_front", "uca_rear", "damper_upper")
+MOUNT_TOL_MM = 1.0
+DASH_MEMBER = "dash_cross"  # the frame member across the dash that holds the steering column (ladder_4w.build_dash)
 SWITCH_KINDS = ("fuse", "switch", "contactor", "breaker")
 LAMP_KINDS = ("headlamp", "taillamp", "stoplamp", "turn_signal")
 
@@ -124,7 +131,12 @@ def links(design: Record) -> dict[str, Record]:
     for s in sups:  # the corners
         sid = s["id"]
         susp, knuckle, wheel = f"susp_{sid}", f"knuckle_{sid}", f"wheel_{sid}"
-        if s.get("frame_node"):
+        held = body_mounts(design, s)
+        if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
+            for mount in BODY_MOUNTS:
+                if mount in held:
+                    add(susp, _c(held[mount], "bushing", "load"))
+        elif s.get("frame_node"):
             add(susp, _c(s["frame_node"], "bushing", "load"))
         add(susp, _c(sid, "bushing", "load"))
         add(knuckle, _c(susp, "ball_joint", "load"))
@@ -133,8 +145,9 @@ def links(design: Record) -> dict[str, Record]:
         toe = f"toe_link_{sid}"
         if toe in ids:
             add(toe, _c(knuckle, "ball_joint", "load"))
-            if s.get("frame_node"):
-                add(toe, _c(s["frame_node"], "ball_joint", "load"))
+            inner = held.get("tie_inner") if held else None
+            if inner or s.get("frame_node"):
+                add(toe, _c(inner or s["frame_node"], "ball_joint", "load"))
     # drive
     motor, reducer = first("motor"), first("reducer")
     if motor and reducer:
@@ -153,6 +166,9 @@ def links(design: Record) -> dict[str, Record]:
     vias = {"steering_column": "spline", "steering_shaft": "pin", "steering_rack": "spline"}
     for a, b in zip(chain, chain[1:]):
         add(a, _c(b, vias.get(_kind(parts, b), "spline"), "steer"))
+    column = first("steering_column")
+    if column and any(m["id"] == DASH_MEMBER for m in design.get("members", [])):
+        add(column, _c(DASH_MEMBER, "bolt", "steer"))  # the column is held by the dash cross member (its bracket)
     rack = first("steering_rack")
     for s in sups:
         if not s["actuation"]["steer"]:
@@ -209,6 +225,30 @@ def links(design: Record) -> dict[str, Record]:
         cross = _cross_member_at(design, float(_part(parts, belt)["box"]["center_mm"][0]))
         if cross:
             add(belt, _c(cross, "bolt", "load"))
+    return out
+
+
+def body_mounts(design: Record, support: Record) -> dict[str, str]:
+    """{hard point: what holds it} for a support's body-side hard points (BODY_MOUNTS and tie_inner): the
+    design node at the point (a tower's top, a leg's end), else the bracket part whose box holds it.
+    Empty without hardpoints_mm or when nothing holds them (a design without mounts)."""
+    import numpy as np
+
+    hp = (support.get("suspension") or {}).get("hardpoints_mm") or {}
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    brackets = [p for p in design.get("parts", []) if p["kind"] == "bracket"]
+    out = {}
+    for k in (*BODY_MOUNTS, "tie_inner"):
+        if k not in hp:
+            continue
+        q = np.asarray(hp[k], float)
+        at = next((n for n, x in nodes.items() if float(np.linalg.norm(x - q)) <= MOUNT_TOL_MM), None)
+        if at is None:
+            at = next((p["id"] for p in brackets
+                       if np.all(np.abs(q - np.asarray(p["box"]["center_mm"], float))
+                                 <= np.asarray(p["box"]["size_mm"], float) / 2.0 + MOUNT_TOL_MM)), None)
+        if at is not None:
+            out[k] = at
     return out
 
 

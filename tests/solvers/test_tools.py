@@ -222,14 +222,16 @@ class StepClimbTest(unittest.TestCase):
         """The static lever rule misses the push couple; step_climb.pushed_wheel_load includes it."""
         from hiraku.solvers.k0_handcalc.vehicle import mass_summary
         s = mass_summary(DESIGN)
-        ins = {"m": q(s["mass_kg"], "kg"), "a": q(-s["cg_mm"][0], "mm"), "L": q(1700, "mm"), "n": q(2, "1")}
+        wb = DESIGN["variables"]["wheelbase"]["value"]
+        ins = {"m": q(s["mass_kg"], "kg"), "a": q(-s["cg_mm"][0], "mm"), "L": q(wb, "mm"), "n": q(2, "1")}
         F = solvers.formula_registry()
         static = F.evaluate("mass_props.front_wheel_load", ins)["outputs"]["W"]["value"]
         pushed = F.evaluate("step_climb.pushed_wheel_load", dict(ins, r=q(300, "mm"), h=q(100, "mm")))["outputs"]
         got = results(self.run_case(step_height=q(100, "mm")))
         for name, pred in (("front_wheel_load", pushed["W"]["value"]), ("front_wheel_force", pushed["F"]["value"])):
             self.assertLess(abs(got[name]["value"] - pred) / pred, 0.03, name)
-        self.assertGreater(abs(got["front_wheel_load"]["value"] - static) / static, 0.15)
+        # the static rule misses by 13 % on the demo (wheelbase 2020 mm; more on the first v1's 1700 mm)
+        self.assertGreater(abs(got["front_wheel_load"]["value"] - static) / static, 0.10)
 
     def test_rear_wheels_on_the_step_are_named_step(self):
         d = copy.deepcopy(DESIGN)
