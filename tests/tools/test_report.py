@@ -68,7 +68,7 @@ class ReportTest(RunCase, unittest.TestCase):
         self.assert_events_fit()
 
     def test_issues_are_kept_as_the_lead_wrote_them(self):
-        issues = [{"kind": "missing_tool", "what": "横転の保護枠を当てる道具が棚に無い", "where": "R4-rops",
+        issues = [{"kind": "missing_tool", "what": "横転の保護枠を当てるツールが棚に無い", "where": "R4-rops",
                    "workaround": "make_tool で作った"},
                   {"kind": "unexplained_mismatch", "what": "差の原因を言えない", "record_ids": ["cmp-0001"]}]
         rep = write_report(self.ctx, {"summary": "強度は合格", "next": [], "issues": issues}, "lead")

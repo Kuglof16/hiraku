@@ -22,7 +22,8 @@ pivots are nodes at the ends of legs down from the rail (joined left to right by
 cross members, lower_cross), and brackets (parts of kind bracket) hold the upper arms'
 pivots and the tie rods' and toe links' inner ends. The footwell starts behind the front
 wheels' steering sweep, at a front bulkhead (a panel) with the dash posts and the dash
-cross member that holds the steering column (build_dash).
+cross member that holds the steering column (build_dash); bulkhead_dx brings the bulkhead (in the front
+towers' rear posts) forward where a wider track leaves the sweep farther forward.
 The driver's place comes from four variables: the seats' cushion top seat_height above the floor; the
 accelerator's pad at pedal_x with the large driver's right foot on it (kit/body.place_pedals); the
 steering wheel's centre steering_wheel_height above the seats' cushion top at steering_x less
@@ -36,6 +37,14 @@ their bodies as parts (kit/body.py): the trunk keeps the occupant's id, each lim
 <occupant id>.<segment>_<L|R> (one person per id before the first ".", as
 hiraku.contract.loading.person_of reads them); the segments' mass shares are D. A. Winter's
 (kit/body.SEGMENT_SHARE, not checked in this repository).
+
+Options a failed requirement may call for, all off by default (each a variable, CHOICES the short ways to set
+them): mounts from the parts to the frame (mount_<group>, kit/attach.py; FN-15, load_path R8 free parts), stands
+for the pedals (pedal_mount; FN-12, R7 foot), a side frame outboard of the seats (side_bars, side_net; FN-05 and
+FN-07, R8 push at point R), the roll bar's outrigger section, rear stays and front posts (rollbar_foot_*,
+rollbar_stays, rollbar_front_posts; FN-01, R4) and fenders on the uprights (fenders; FN-19, shape only). The
+members the options add start with rops_ or side_, and build() refuses an option whose members or parts reach
+into another body further than K4 allows.
 
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
@@ -51,6 +60,8 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from hiraku.designgen.kit import body, drivetrain, mounts, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
@@ -314,21 +325,41 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
         if name == "gusset_leg" and 0.0 < val < GUSSET_LEG_MIN_MM:
             raise DesignGenError(f"gusset_leg is 0 (no gussets) or {GUSSET_LEG_MIN_MM:g} to {var.hi:g} mm, got {val:g}")
+        if name in INTEGERS and val != round(val):
+            raise DesignGenError(f"{name} is a whole number, got {val:g}")
+        if name in ZERO_OR_AT_LEAST and 0.0 < val < ZERO_OR_AT_LEAST[name]:
+            raise DesignGenError(f"{name} is 0 (as the cross members) or {ZERO_OR_AT_LEAST[name]:g} to {var.hi:g} "
+                                 f"{var.unit}, got {val:g}")
         vals[name] = val
+    if vals["side_bar_low"] >= vals["side_bar_high"] and vals["side_bars"] == 1:
+        raise DesignGenError(f"side_bar_low ({vals['side_bar_low']:g} mm) must be below side_bar_high "
+                             f"({vals['side_bar_high']:g} mm)")
     return vals
 
 
 def choice_values(choices: dict | None) -> dict[str, Record]:
-    """The variables a set of CHOICES stands for ({"joints": "gusset"} -> gusset_leg 60 mm, cross_members_through 0).
-    A size it sets (CHOICE_SIZES) may be given as a value too; the switches may not."""
+    """The variables a set of CHOICES stands for ({"joints": "gusset"} -> gusset_leg 60 mm, cross_members_through 0;
+    {"part_mounts": "brackets"} -> mount_floor 1, ...). A size it sets (CHOICE_SIZES) may be given as a value too;
+    the switches may not."""
     out: dict[str, Record] = {}
     for k, opt in (choices or {}).items():
         if k not in CHOICES:
             raise DesignGenError(f"no choice {k!r}; the choices: {', '.join(CHOICES)}")
         if opt not in CHOICES[k]:
             raise DesignGenError(f"{k} must be one of {', '.join(CHOICES[k])}, got {opt!r}")
-        out.update({name: _q(v, VARIABLES[name].unit) for name, v in JOINT_VALUES[opt].items()})
+        table = JOINT_VALUES if k == "joints" else OPTION_VALUES[k]
+        out.update({name: _q(v, VARIABLES[name].unit) for name, v in table[opt].items()})
     return out
+
+
+def _option(k: str, v: dict) -> str:
+    """The option of choice k that the variables make (missing ones at their defaults); "some" when none matches."""
+    if k == "joints":
+        return _joints(v)
+    for opt, sets in OPTION_VALUES[k].items():
+        if all(float(v.get(n, VARIABLES[n].default)) == x for n, x in sets.items()):
+            return opt
+    return "some"
 
 
 def apply_choices(choices: dict | None, values: dict) -> dict:
@@ -340,10 +371,10 @@ def apply_choices(choices: dict | None, values: dict) -> dict:
         raise DesignGenError(f"{', '.join(clash)} come from the choices {choices}; do not give them as values")
     out = {**set_by, **values}
     for k, opt in (choices or {}).items():
-        got = _joints({n: (q["value"] if isinstance(q, dict) else q) for n, q in out.items()})
+        got = _option(k, {n: (q["value"] if isinstance(q, dict) else q) for n, q in out.items()})
         if got != opt:
-            raise DesignGenError(f"{k} = {opt} does not go with the values given (they make {got}); "
-                                 f"a gusset needs gusset_leg > 0")
+            raise DesignGenError(f"{k} = {opt} does not go with the values given (they make {got})"
+                                 + ("; a gusset needs gusset_leg > 0" if k == "joints" else ""))
     return out
 
 
@@ -357,7 +388,8 @@ def _joints(v: dict) -> str:
 
 def choices_of(design: Record) -> dict[str, str]:
     """The CHOICES a design was built with (from its variables)."""
-    return {"joints": _joints({k: q["value"] for k, q in values_of(design).items()})}
+    v = {k: q["value"] for k, q in values_of(design).items()}
+    return {k: _option(k, v) for k in CHOICES}
 
 
 def values_of(design: Record) -> dict[str, Record]:
@@ -397,6 +429,12 @@ TYRE_GAP_MM = 10.0  # the bulkhead and the footwell floor this far behind the fr
 # leg from the rear post's foot to the lower arm's rear pivot passes behind the rack's clamp (assumption: v1's
 # value, where the steering sweep puts the bulkhead)
 TOWER_MIN_DX_MM = 285.0
+# bulkhead_dx's lower end: the front towers' rear post (the bulkhead and the dash post in it) GAP_MM (kit/mounts)
+# behind the bracket of the upper arm's rear pivot, which stands on the rail beside it: v1's upper arm rear pivot
+# is 100 mm behind the axle (K2's builtin double wishbone), the bracket reaches mounts.BRACKET_HALF_X_MM (25) behind
+# it, then GAP_MM (10) and the post's half width (tower_b 30 / 2). Computed from v1's hard points in
+# tests/solvers/test_designgen_footroom.py; build() checks each design's own (_check_rear_post).
+BULKHEAD_DX_MIN_MM = 150.0
 FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driver's feet, each side
 PANEL_T_MM = 20.0  # floor and bulkhead panels' thickness (as the first floors)
 PANEL_KG_M2 = 6.0 / (0.45 * 0.6)  # the first v1's footwell floor (6 kg, 450 x 600 mm) per area: footwell and bulkhead
@@ -488,8 +526,123 @@ _DRIVER_VARS = {
                    "deg, in the seat at its rearmost seat_x, to the front axle (the footwell is behind it); whether "
                    "the pads stand on the footwell floor clear of the bulkhead is K4's (foot_support, foot_room)"),
 }
+_DRIVER_VARS["bulkhead_dx"] = Var(
+    "mm", TOWER_MIN_DX_MM, BULKHEAD_DX_MIN_MM, TOWER_MIN_DX_MM,
+    "the front towers' rear posts' centre line at least this far behind the front axle (the front bulkhead's "
+    "front face is at the posts' front face, the dash posts stand on them, the footwell floor's front edge is at "
+    "their rear face); farther back where the "
+    "front wheels' steering sweep at the rails' outer face reaches farther (TYRE_GAP_MM behind it), and the "
+    "footwell floor's front edge no farther forward than the sweep at the floor's width allows. Less than the "
+    "default moves only the front towers' rear posts forward: the lower arms' rear legs keep their rail nodes "
+    "(v1's leg passes 0.2 mm behind the rack's clamp; a post moved with it would reach the clamp). Range: from "
+    f"{BULKHEAD_DX_MIN_MM:g} mm (the post GAP_MM behind the bracket of the upper arm's rear pivot on the rail, at "
+    "v1's hard points; build() refuses a design where it is nearer) to the default (v1's, TOWER_MIN_DX_MM: farther "
+    "back only shortens the footwell). Written into design.variables only when it is not the default")
 VARIABLES = {k: x for name, var in VARIABLES.items()
              for k, x in ([(name, var)] + (list(_DRIVER_VARS.items()) if name == "battery_x" else []))}
+OPTIONAL["bulkhead_dx"] = ("bulkhead_dx",)
+
+# Options a failed requirement may call for (off by default, so that the defaults still build v1). Each is a
+# variable (or a few) the designer may revise, with CHOICES below as short ways to set them.
+# - part mounts (FN-15, R8 free_parts): a spacer or bracket (kit/attach.py) from each part of a group to the
+#   nearest frame member, sized from the gap; a part none can reach is held through what it touches.
+MOUNT_GROUPS = {
+    "mount_floor": ("floor", "floor_front", "deck", "front_body"),
+    "mount_electrics": ("battery", "controller", "aux", "main_switch"),
+    "mount_seats": ("seat_R", "seat_L", "seat_belt_R", "seat_belt_L"),
+    "mount_drive": ("reducer", "motor"),
+}
+_MOUNT_WORDS = {"mount_floor": "the floor panels, the deck and the front body (each on the rails or cross members "
+                               "under it)",
+                "mount_electrics": "the battery, the controller, the wiring box and the main switch (to the cross "
+                                   "members beside, above or below them)",
+                "mount_seats": "the seats and the seat belts' anchors (the seats stand on the floor, so a seat is "
+                               "held through the floor; each belt's anchor goes to the nearest member). Without "
+                               "mount_floor the floor, the seats and what touches them hang on the two belt anchors "
+                               "alone (load_path R8-stress on version 1 with mount_seats only: 357 MPa in "
+                               "rollbar_post_L, against 163 MPa allowed)",
+                "mount_drive": "the reducer and the motor (to the rear cross member)"}
+_OPTION_VARS: dict[str, Var] = {
+    k: Var("1", 0.0, 0.0, 1.0, f"1: mounts (kit/attach.py: a spacer up to {20:g} mm, else a bracket of two plates; "
+                               f"SS400, painted) from {_MOUNT_WORDS[k]}, sized from the gap to the nearest member; "
+                               "0: none (the parts rest where they are placed, ON_RAILS_MM and the other gaps)")
+    for k in MOUNT_GROUPS}
+_OPTION_VARS["pedal_mount"] = Var(
+    "1", 0.0, 0.0, 2.0, "0: the pedals are placed without a mount; 1: a stand under each pedal from the footwell "
+    "floor up to the pedal's lowest edge (the floor must be held: mount_floor = 1); 2: a bracket from the front "
+    "bulkhead's rear face back to each pedal's front edge (a pedal box). The stands follow pedal_x (kit/attach."
+    "pedal_stands; SS400, painted)")
+# - side guard (FN-05 push at point R, FN-07): a side frame each side outboard of the seats
+from hiraku.solvers.k4_geometry import people as _people  # noqa: E402
+
+_BIG = _people.SIZES[_people.BIG]
+_OPTION_VARS.update({
+    "side_bars": Var("1", 0.0, 0.0, 1.0, "1: a side frame each side, outboard of the seats at rollbar_width / 2: "
+                     "posts on outriggers from the rails at the seat cross members' stations S1 and S2, and "
+                     "side_bar_count bars along x between them from side_bar_low to side_bar_high above the seats' "
+                     "cushion top (round tube side_bar_d x side_bar_t, STKM13A); with rollbar_front_posts = 1 the "
+                     "posts at S1 are the front posts; 0: none"),
+    "side_bar_count": Var("1", 2.0, 1.0, 4.0, "bars each side (whole number): evenly from side_bar_low to "
+                          "side_bar_high (one bar: at side_bar_high)"),
+    "side_bar_low": Var("mm", _BIG["trochanter_height"], 40.0, 400.0,
+                        "the lowest bar's centre line above the seats' cushion top; the default is the hip of point R "
+                        "(AIST young adult male 95th percentile trochanterion height sitting I11, k4_geometry.people), "
+                        "where load_path pushes"),
+    "side_bar_high": Var("mm", _BIG["shoulder_height"], 200.0, 800.0,
+                         "the highest bar's centre line above the seats' cushion top (the posts' top); the default is "
+                         "the shoulder of point R (AIST male 95th percentile acromiale height sitting I3)"),
+    "side_bar_d": Var("mm", 42.7, 25.0, 60.5, "side bar and side post round tube outside diameter"),
+    "side_bar_t": Var("mm", 2.3, 1.6, 4.5, "side bar and side post tube wall"),
+    "side_net": Var("1", 0.0, 0.0, 1.0, "1: a net between the lowest and highest bar and the posts each side "
+                    "(welded wire mesh, SS400 galvanized: SIDE_NET_WIRE_MM wires at SIDE_NET_PITCH_MM, an "
+                    "assumption); needs side_bars = 1 and side_bar_count >= 2; 0: none"),
+    # - ROPS shape (FN-01, R4)
+    "rollbar_foot_b": Var("mm", 0.0, 0.0, 80.0, "outrigger (the roll bar's feet out from the rails, also the side "
+                          "frame's) rect tube width; 0: as the cross members (cross_b), else at least 30 mm"),
+    "rollbar_foot_h": Var("mm", 0.0, 0.0, 120.0, "outrigger rect tube height; 0: as the cross members (cross_h), else "
+                          "at least 30 mm"),
+    "rollbar_foot_t": Var("mm", 0.0, 0.0, 4.5, "outrigger tube wall; 0: as the cross members (cross_t), else at least "
+                          "1.6 mm"),
+    "rollbar_stays": Var("1", 0.0, 0.0, 1.0, "1: a rear stay each side from the roll bar's top corner back and down to "
+                         "the rail at the frame's rear end E (members rops_stay_L/R, round tube rollbar_stay_d x "
+                         "rollbar_stay_t of the roll bar's material); needs rollbar = 1; 0: none"),
+    "rollbar_stay_d": Var("mm", 42.7, 25.0, 60.5, "rear stay round tube outside diameter"),
+    "rollbar_stay_t": Var("mm", 2.3, 1.6, 4.5, "rear stay tube wall"),
+    "rollbar_front_posts": Var("1", 0.0, 0.0, 1.0, "1: four posts: front posts on outriggers at the seat front cross "
+                               "member S1 up to the roll bar's top height, a top rail each side back to the roll bar's "
+                               "corners and a front top beam (members rops_*; the roll bar's tube); needs rollbar = 1; "
+                               "0: the roll bar alone"),
+    # - fenders (FN-19, shape only: the spray is not computed yet)
+    "fenders": Var("1", 0.0, 0.0, 1.0, "1: a fender over each wheel on its upright (turns and travels with the wheel, "
+                   "unsprung), from fender_front_deg ahead of the top to fender_rear_deg behind it, fender_gap over the "
+                   "tyre, fender_width wide (molded HDPE, FENDER_T_MM thick, FENDER_PIECES straight pieces); 0: none"),
+    "fender_front_deg": Var("deg", 30.0, 0.0, 90.0, "how far the fender reaches ahead of the wheel's top, as the angle at "
+                            "the wheel centre from the vertical; the default is the intake department's FN-19 value "
+                            "(細目告示 第 178 条 第 2 項 in their table, not read here)"),
+    "fender_rear_deg": Var("deg", 50.0, 0.0, 120.0, "how far it reaches behind the top (FN-19's 50 deg, as above)"),
+    "fender_width": Var("mm", 240.0, 120.0, 400.0, "fender width across the wheel (at least the tyre's)"),
+    "fender_gap": Var("mm", 40.0, 10.0, 150.0, "the fender's inner face this far over the tyre (assumption)"),
+})
+INTEGERS = ("side_bar_count", "pedal_mount")
+ZERO_OR_AT_LEAST = {"rollbar_foot_b": 30.0, "rollbar_foot_h": 30.0, "rollbar_foot_t": 1.6}
+SWITCHES = SWITCHES + tuple(MOUNT_GROUPS) + ("side_bars", "side_net", "rollbar_stays", "rollbar_front_posts", "fenders")
+VARIABLES.update(_OPTION_VARS)
+OPTIONAL.update({
+    "part_mounts": tuple(MOUNT_GROUPS),
+    "pedal_mount": ("pedal_mount",),
+    "side_bars": ("side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t", "side_net"),
+    "rollbar_foot": ("rollbar_foot_b", "rollbar_foot_h", "rollbar_foot_t"),
+    "rollbar_stays": ("rollbar_stays", "rollbar_stay_d", "rollbar_stay_t"),
+    "rollbar_front_posts": ("rollbar_front_posts",),
+    "fenders": ("fenders", "fender_front_deg", "fender_rear_deg", "fender_width", "fender_gap"),
+})
+SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
+SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
+FENDER_T_MM = 3.0  # fender wall (assumption)
+FENDER_PIECES = 4
+HDPE = {"name": "HDPE (high-density polyethylene), molded", "E_MPa": 1000.0, "nu": 0.4, "density_kg_m3": 950.0,
+        "yield_MPa": 25.0, "source": "assumption: round values of the order of HDPE's; not checked against a cited "
+                                    "source", "verified": False}
 # The occupants' bodies as parts (kit/body.py, hiraku.contract.loading.person_of: the parts of a person
 # share the id before the first "."): the trunk keeps the occupant's id, the limbs are <id>.<segment>_<L|R>.
 BODY_PARTS = True
@@ -499,10 +652,26 @@ DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right
 # welded on the rail's side, the first version), gusset (plus triangular plates, gusset_leg and
 # gusset_thickness) or through (the cross member through the rail's inner wall to its outer wall).
 # A shortcut for the variables in JOINT_VALUES; the variables alone give the same design.
-CHOICES: dict[str, tuple[str, ...]] = {"joints": ("butt", "gusset", "through")}
 JOINT_VALUES = {"butt": {"gusset_leg": 0.0, "cross_members_through": 0.0},
                 "gusset": {"gusset_leg": GUSSET_LEG_MM, "cross_members_through": 0.0},
                 "through": {"gusset_leg": 0.0, "cross_members_through": 1.0}}
+# The other choices: each option stands for the switches it sets (the variables alone give the same design).
+# part_mounts: none or brackets for every group (MOUNT_GROUPS; a mix of groups reads as "some"); pedal_mount;
+# side_guard: none, bars or bars and a net; rops: the roll bar alone (hoop), with rear stays, or four posts with
+# stays; fenders.
+OPTION_VALUES: dict[str, dict[str, dict[str, float]]] = {
+    "part_mounts": {"none": {k: 0.0 for k in MOUNT_GROUPS}, "brackets": {k: 1.0 for k in MOUNT_GROUPS}},
+    "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0}},
+    "side_guard": {"none": {"side_bars": 0.0, "side_net": 0.0}, "bars": {"side_bars": 1.0, "side_net": 0.0},
+                   "bars_net": {"side_bars": 1.0, "side_net": 1.0}},
+    "rops": {"hoop": {"rollbar_stays": 0.0, "rollbar_front_posts": 0.0},
+             "hoop_stays": {"rollbar_stays": 1.0, "rollbar_front_posts": 0.0},
+             "four_post": {"rollbar_stays": 0.0, "rollbar_front_posts": 1.0},
+             "four_post_stays": {"rollbar_stays": 1.0, "rollbar_front_posts": 1.0}},
+    "fenders": {"none": {"fenders": 0.0}, "wheel": {"fenders": 1.0}},
+}
+CHOICES: dict[str, tuple[str, ...]] = {"joints": ("butt", "gusset", "through"),
+                                       **{k: tuple(opts) for k, opts in OPTION_VALUES.items()}}
 CHOICE_SIZES = ("gusset_leg",)  # set by a choice, but may be given as a value with it
 
 
@@ -583,9 +752,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
 
     sweep_r = math.hypot(r, ww / 2.0)
     x_a = lay.station_x("A")
-    bulkhead_front = min(x_a - _behind(sweep_r, track / 2.0 - rail_y - v["rail_b"] / 2.0) - TYRE_GAP_MM,
-                         x_a - TOWER_MIN_DX_MM + v["tower_b"] / 2.0)
+    sweep_front = x_a - _behind(sweep_r, track / 2.0 - rail_y - v["rail_b"] / 2.0) - TYRE_GAP_MM
+    bulkhead_front = min(sweep_front, x_a - v["bulkhead_dx"] + v["tower_b"] / 2.0)
     post_x = bulkhead_front - v["tower_b"] / 2.0
+    # the towers' posts and the lower arms' legs everywhere else as at bulkhead_dx's default
+    post_dx = x_a - (min(sweep_front, x_a - TOWER_MIN_DX_MM + v["tower_b"] / 2.0) - v["tower_b"] / 2.0)
     feet_half = seat_y + people.leg_spacing(people.BIG) + people.SIZES[people.BIG]["foot_breadth"] / 2.0
     floor_half = feet_half + FOOT_FLOOR_MARGIN_MM
     floor_front_x = min(post_x - v["tower_b"] / 2.0, x_a - _behind(sweep_r, track / 2.0 - floor_half) - TYRE_GAP_MM)
@@ -700,10 +871,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     try:
         placed = mounts.place(frame, lay, supports, {"tower": tower, "leg": lower, "lower": lower,
                                                      "dims": {"lower": {"b": v["lower_b"], "h": v["lower_b"]}}},
-                              rho, x_a - post_x, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
-                              whole=REAR_OVERHANG_RAILS)
+                              rho, post_dx, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
+                              whole=REAR_OVERHANG_RAILS,
+                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None)
     except (mounts.MountError, ValueError) as e:
         raise DesignGenError(str(e)) from None
+    _check_rear_post(supports, post_x, v["tower_b"])
     dash = build_dash(frame, lay, post_x, dash_z, rail_y, tower, rho)
     lay.part("bulkhead")["carried_by"] = dash["bulkhead_nodes"]
     rack_nodes = [lay.part(f"bracket_tie_{s['id']}")["carried_by"][0] for s in supports if s["actuation"]["steer"]]
@@ -738,9 +911,23 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         for st in tee:
             for side in "LR":
                 lay.parts.append(frame.through_part(f"{side}{st}", f"cross_{st}", rho))
+    foot = cross
+    if any(v[k] for k in ZERO_OR_AT_LEAST):
+        fb, fh, ft = (v[f"rollbar_foot_{k}"] or v[f"cross_{k}"] for k in ("b", "h", "t"))
+        if 2.0 * ft >= min(fb, fh):
+            raise DesignGenError(f"the outriggers' wall ({ft:g} mm) must be less than half of their size ({fb:g} x {fh:g} mm)")
+        foot = frame.section(*rect_tube(fb, fh, ft))
     if v["rollbar"] == 1:
-        key = build_rollbar(frame, lay, v, cross)
+        key = build_rollbar(frame, lay, v, foot)
         materials.setdefault(key, json.loads(MATERIALS.read_text(encoding="utf-8"))[key])
+    elif v["rollbar_stays"] == 1 or v["rollbar_front_posts"] == 1:
+        raise DesignGenError("rollbar_stays and rollbar_front_posts need the roll bar (rollbar = 1)")
+    columns = build_rops_extra(frame, lay, v, foot) if v["rollbar"] == 1 else {}
+    guard = build_side_guard(frame, lay, v, foot, columns) if v["side_bars"] == 1 else None
+    if v["side_net"] == 1 and (guard is None or len(guard["heights"]) < 2):
+        raise DesignGenError("side_net needs the side bars (side_bars = 1) and at least two of them (side_bar_count >= 2)")
+    if guard is not None:
+        materials.setdefault("stkm13a", json.loads(MATERIALS.read_text(encoding="utf-8"))["stkm13a"])
 
     written ={k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
@@ -763,7 +950,13 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "materials": materials,
     }
     safety.add_rollbar_part(design)
+    for m in design["members"]:
+        if m["id"].startswith("rops_"):
+            m["part"] = safety.ROLLBAR_PART
+    add_options(design, v, guard, rho)
     systems.write(design)  # system and connects_to of every part, when the contract has them
+    if x_a - post_x != post_dx:
+        _check_rear_legs(design)
     return design
 
 
@@ -771,6 +964,46 @@ def _behind(radius: float, across: float) -> float:
     """How far (mm) behind a wheel's centre its steering sweep reaches at `across` mm inboard of the centre:
     the disc of the tyre box's corner radius (any steer angle; the safe side)."""
     return math.sqrt(radius * radius - across * across) if across < radius else 0.0
+
+
+def rear_post_room(supports: list[Record], post_x: float, tower_b: float) -> float:
+    """How far (mm) the front towers' rear posts' front face is behind the brackets of the front upper arms'
+    rear pivots (which stand on the rail beside the post, kit/mounts), less mounts.GAP_MM: negative, the post
+    is too near."""
+    pivots = [s["suspension"]["hardpoints_mm"]["uca_rear"][0] for s in supports
+              if s["actuation"]["steer"] and "hardpoints_mm" in s.get("suspension", {})]
+    if not pivots:
+        return math.inf
+    return min(pivots) - mounts.BRACKET_HALF_X_MM - (post_x + tower_b / 2.0) - mounts.GAP_MM
+
+
+def _check_rear_post(supports: list[Record], post_x: float, tower_b: float) -> None:
+    room = rear_post_room(supports, post_x, tower_b)
+    if room < 0.0:
+        raise DesignGenError(f"the front towers' rear posts (x = {post_x:.0f} mm) come {-room:.1f} mm too near the "
+                             f"brackets of the upper arms' rear pivots; make bulkhead_dx larger")
+
+
+def _check_rear_legs(design: Record) -> None:
+    """With the front towers' rear posts moved forward (bulkhead_dx), each front lower arm's rear leg starts
+    from its own rail node behind the post: it must not pass through the post or the rail beside it (K4's
+    member boxes, more than k4_geometry.model.TOUCH_MM into a member it shares no node with)."""
+    from hiraku.solvers.k4_geometry.model import TOUCH_MM, bodies, shape_overlap
+
+    bs = {k: b for k, b in bodies(design).items() if b.kind == "member"}
+    for side in "LR":
+        leg = bs.get(f"member:lower_leg_{side}A2")
+        if leg is None:
+            continue
+        for k, b in bs.items():
+            if b is leg or leg.nodes & b.nodes:
+                continue
+            o = shape_overlap(leg, b)
+            if o > TOUCH_MM:
+                raise DesignGenError(f"with bulkhead_dx = {design['variables']['bulkhead_dx']['value']:g} mm the front "
+                                     f"lower arm's rear leg (from its rail node behind the moved post) goes {o:.1f} mm "
+                                     f"into {k.split(':', 1)[1]}; move the post farther forward (smaller bulkhead_dx) "
+                                     f"or leave it at the default")
 
 
 def _dash_height(lay: Layout, x: float, b: float) -> float:
@@ -900,3 +1133,218 @@ def build_rollbar(frame: Frame, lay: Layout, v: dict[str, float], foot_section: 
         frame.member(f"rollbar_post_{side}", foot, corners[side], sec, mat)
     frame.member("rollbar_top", corners["L"], corners["R"], sec, mat)
     return mat
+
+
+def _rollbar_section(frame: Frame, v: dict[str, float]) -> tuple[str, str]:
+    """(section key, material key) of the roll bar's tube (as build_rollbar makes them)."""
+    if v["rollbar_square"] == 1:
+        return frame.section(*rect_tube(v["rollbar_b"], v["rollbar_b"], v["rollbar_t"])), ROLLBAR_MATERIALS[1.0]
+    return frame.section(*round_tube(v["rollbar_d"], v["rollbar_t"])), ROLLBAR_MATERIALS[0.0]
+
+
+def _seat_top(lay: Layout) -> float:
+    return max(lay.top_of(p["id"]) for p in lay.parts if p["kind"] == "seat")
+
+
+def side_heights(v: dict[str, float]) -> list[float]:
+    """The side bars' heights above the seats' cushion top (side_bar_count of them, side_bar_low to side_bar_high)."""
+    n = int(round(v["side_bar_count"]))
+    lo, hi = v["side_bar_low"], v["side_bar_high"]
+    return [hi] if n == 1 else [lo + (hi - lo) * k / (n - 1) for k in range(n)]
+
+
+def _outrigger(frame: Frame, mid: str, root: str, xyz, section: str) -> str:
+    """A member across from a rail node out to xyz (none when xyz is the node): its outer node <root>O."""
+    if float(np.linalg.norm(np.asarray(frame.nodes[root]) - np.asarray(xyz, float))) <= frame.merge_mm:
+        return root
+    tip = frame.node(f"{root}O", xyz)
+    frame.member(mid, root, tip, section)
+    return tip
+
+
+def _column(frame: Frame, name: str, node_prefix: str, foot: str, x: float, y: float, zs: list[float], section: str,
+            material: str) -> list[str]:
+    """Straight up from `foot` through the heights zs (ascending): members <name> (one piece) or <name>_<k>, nodes
+    <node_prefix><k>; returns the nodes at zs."""
+    out, below = [], foot
+    for k, z in enumerate(zs, 1):
+        n = frame.node(f"{node_prefix}{k}", [x, y, z])
+        frame.member(name if len(zs) == 1 else f"{name}_{k}", below, n, section, material)
+        out.append(n)
+        below = n
+    return out
+
+
+def build_rops_extra(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str) -> dict:
+    """The roll bar's rear stays and front posts (rollbar_stays, rollbar_front_posts), on the roll bar build_rollbar
+    placed. Stays: rops_stay_<L|R> from the corner <side>HT to the rail node <side>E at the frame's rear end. Front
+    posts: an outrigger rops_front_foot_<side> from the rail node <side>S1 out to rollbar_width / 2, the post up to
+    the roll bar's top height (rops_front_post_<side>, in pieces at the side bars' heights when side_bars = 1), a
+    top rail rops_roof_<side> back to the corner and rops_front_top across. The members start with rops_, not
+    rollbar_: the K0 portal (frame_inputs.portal_frame_inputs) and the gaps (rops_inputs) read the hoop alone.
+    Returns {side: [the front post's nodes at the side bars' heights]} for build_side_guard ({} without front posts)."""
+    s1, e = lay.station_x("S1"), lay.station_x("E")
+    half, rail_y, rail_z = v["rollbar_width"] / 2.0, v["rail_spacing"] / 2.0, v["rail_height"]
+    seat_top = _seat_top(lay)
+    z_top = seat_top + v["rollbar_height"]
+    h = ROLLBAR_STATION
+    out: dict[str, list[str]] = {}
+    sec, mat = _rollbar_section(frame, v)
+    if v["rollbar_stays"] == 1:
+        stay = frame.section(*round_tube(v["rollbar_stay_d"], v["rollbar_stay_t"]))
+        if 2.0 * v["rollbar_stay_t"] >= v["rollbar_stay_d"]:
+            raise DesignGenError("rollbar_stay_t must be less than half of rollbar_stay_d")
+        for side in "LR":
+            frame.member(f"rops_stay_{side}", f"{side}{h}T", f"{side}E", stay, mat)
+    if v["rollbar_front_posts"] == 1:
+        tops = {}
+        for side, sy in (("L", 1.0), ("R", -1.0)):
+            root = f"{side}S1"
+            tip = _outrigger(frame, f"rops_front_foot_{side}", root, [s1, sy * half, rail_z], foot_section)
+            zs = sorted({seat_top + z for z in side_heights(v)} if v["side_bars"] == 1 else set())
+            zs = [z for z in zs if z < z_top - MIN_STATION_GAP_MM / 2.0] + [z_top]
+            nodes = _column(frame, f"rops_front_post_{side}", f"{side}S1V", tip, s1, sy * half, zs, sec, mat)
+            tops[side] = nodes[-1]
+            out[side] = nodes[:-1]
+            frame.member(f"rops_roof_{side}", tops[side], f"{side}{h}T", sec, mat)
+        frame.member("rops_front_top", tops["L"], tops["R"], sec, mat)
+    return out
+
+
+def build_side_guard(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str, front: dict) -> dict:
+    """The side frame each side (side_bars): an outrigger side_foot_<side><S1|S2> from the rail node at the seat
+    cross members' stations out to rollbar_width / 2, a post up to the highest bar (side_post_<side><S1|S2>, in
+    pieces at the bars' heights), and the bars side_bar_<side><k> along x between the posts (round tube side_bar_d x
+    side_bar_t, STKM13A). With front posts (build_rops_extra) the post at S1 is the front post. Returns {"heights"
+    (above the seats' top), "x": (S2, S1), "y": half width, "d", "nodes": {side: [node ids]}, "members": {side: [ids]}}."""
+    s1, s2 = lay.station_x("S1"), lay.station_x("S2")
+    half, rail_y, rail_z = v["rollbar_width"] / 2.0, v["rail_spacing"] / 2.0, v["rail_height"]
+    if half < rail_y:
+        raise DesignGenError("side_bars need rollbar_width at least rail_spacing (the side frame stands out from the rails)")
+    d, t = v["side_bar_d"], v["side_bar_t"]
+    if 2.0 * t >= d:
+        raise DesignGenError("side_bar_t must be less than half of side_bar_d")
+    seat_top = _seat_top(lay)
+    heights = side_heights(v)
+    zs = [seat_top + z for z in heights]
+    sec = frame.section(*round_tube(d, t))
+    before = {m["id"] for m in frame.members}
+    nodes: dict[str, list[str]] = {}
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        cols = {}
+        for st, x in (("S2", s2), ("S1", s1)):
+            if st == "S1" and front.get(side):
+                cols[st] = [n for n in front[side] if any(abs(frame.nodes[n][2] - z) < 1e-6 for z in zs)]
+                continue
+            tip = _outrigger(frame, f"side_foot_{side}{st}", f"{side}{st}", [x, sy * half, rail_z], foot_section)
+            cols[st] = _column(frame, f"side_post_{side}{st}", f"{side}{st}V", tip, x, sy * half, zs, sec, "stkm13a")
+        if len(cols["S1"]) != len(zs):
+            raise DesignGenError("the front posts do not meet the side bars' heights")
+        for k, (a, b) in enumerate(zip(cols["S2"], cols["S1"]), 1):
+            frame.member(f"side_bar_{side}{k}", a, b, sec, "stkm13a")
+        nodes[side] = cols["S2"] + cols["S1"]
+    members = {side: [m["id"] for m in frame.members if m["id"] not in before and m["id"].startswith("side_")
+                      and m["id"][len("side_"):].split("_", 1)[-1][:1] == side] for side in "LR"}
+    return {"heights": heights, "x": (s2, s1), "y": half, "d": d, "nodes": nodes, "members": members, "z": zs}
+
+
+def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: float) -> None:
+    """The parts of the options, on the finished design (after the roll bar part): the side nets,
+    the fenders, the pedal stands, then the part mounts (kit/attach.py). The materials they name are added."""
+    from hiraku.designgen.kit import attach
+
+    mats = json.loads(MATERIALS.read_text(encoding="utf-8"))
+    used = set()
+    if guard is not None:
+        for side in "LR":
+            # the side frame's members carry the label part = side_guard (no part record: the tubes are members,
+            # their mass is the members')
+            for m in design["members"]:
+                if m["id"] in guard["members"][side]:
+                    m["part"] = "side_guard"
+            if v["side_net"] == 1:
+                x0, x1 = guard["x"][0] + guard["d"] / 2.0, guard["x"][1] - guard["d"] / 2.0
+                z0, z1 = guard["z"][0] + guard["d"] / 2.0, guard["z"][-1] - guard["d"] / 2.0
+                y = guard["y"] if side == "L" else -guard["y"]
+                w = SIDE_NET_WIRE_MM
+                areal = 2.0 * math.pi * w * w / 4.0 / SIDE_NET_PITCH_MM * float(mats["ss400"]["density_kg_m3"]) * 1e-9
+                design["parts"].append({
+                    "id": f"side_net_{side}", "name": f"{'左' if side == 'L' else '右'}の横の網 (棒と柱のあいだ)",
+                    "kind": "side_net", "box": {"center_mm": [(x0 + x1) / 2.0, y, (z0 + z1) / 2.0],
+                                                 "size_mm": [x1 - x0, w, z1 - z0]},
+                    "mass_kg": float(areal * (x1 - x0) * (z1 - z0)), "carried_by": list(guard["nodes"][side]),
+                    "material": "ss400", "finish": "galvanized"})
+                used.add("ss400")
+    if v["fenders"] == 1:
+        if v["fender_width"] < v["wheel_width"]:
+            raise DesignGenError(f"fender_width ({v['fender_width']:g} mm) must be at least the tyre's ({v['wheel_width']:g} mm)")
+        for s in design["supports"]:
+            design["parts"].extend(fender_parts(s, v, float(HDPE["density_kg_m3"])))
+        design["materials"]["hdpe"] = dict(HDPE)
+    if v["pedal_mount"]:
+        target = "floor_front" if v["pedal_mount"] == 1 else "bulkhead"
+        if target == "floor_front" and v["mount_floor"] != 1:
+            raise DesignGenError("pedal_mount = 1 stands the pedals on the footwell floor, which is held only with "
+                                 "mount_floor = 1")
+        try:
+            attach.pedal_stands(design, [p["id"] for p in design["parts"] if p["kind"] in ("accelerator_pedal", "brake_pedal")],
+                                target, rho)
+        except attach.AttachError as e:
+            raise DesignGenError(str(e)) from None
+        used.add("ss400")
+    ids = [pid for k, group in MOUNT_GROUPS.items() if v[k] == 1 for pid in group]
+    if ids:
+        attach.mount_parts(design, ids, rho, always=ids)
+        used.add("ss400")
+    for k in sorted(used):
+        design["materials"].setdefault(k, mats[k])
+    _check_options_clear(design)
+
+
+OPTION_MEMBERS = ("rops_", "side_")  # the options' members
+OPTION_PARTS = ("side_net_", "fender_")  # the options' parts (the mounts and stands check themselves: kit/attach)
+
+
+def _check_options_clear(design: Record) -> None:
+    """The options' members and parts reach into nothing further than K4 allows (k4_geometry.model.allowance);
+    else DesignGenError naming the first clash."""
+    from hiraku.solvers.k4_geometry import model as k4
+
+    mine = [f"member:{m['id']}" for m in design["members"] if m["id"].startswith(OPTION_MEMBERS)]
+    mine += [f"part:{p['id']}" for p in design["parts"] if p["id"].startswith(OPTION_PARTS)]
+    if not mine:
+        return
+    bs = k4.bodies(design)
+    for k in mine:
+        b = bs[k]
+        r = float(np.linalg.norm(b.obb.half))
+        for o, ob in bs.items():
+            if o == k or np.linalg.norm(ob.obb.center - b.obb.center) > r + float(np.linalg.norm(ob.obb.half)) + 1.0:
+                continue
+            ov = k4.shape_overlap(b, ob)
+            if ov > k4.allowance(b, ob, design):
+                raise DesignGenError(f"{k.split(':', 1)[1]} goes {ov:.1f} mm into {o.split(':', 1)[1]}; "
+                                     + ("make rollbar_width wider (the side frame and the front posts stand at "
+                                        "rollbar_width / 2)" if k.startswith("member:") else "change the option's sizes"))
+
+
+def fender_parts(support: Record, v: dict[str, float], density: float) -> list[Record]:
+    """A fender over a wheel: FENDER_PIECES flat pieces (kind fender, no carried_by: on the upright, with the wheel)
+    from fender_front_deg ahead of the top to fender_rear_deg behind, each tangent at its middle to the circle
+    fender_gap over the tyre (radius wheel_radius + fender_gap), fender_width across, centred on the wheel."""
+    x, y, z = (float(c) for c in support["position_mm"])
+    R = float(support["radius_mm"]) + v["fender_gap"]
+    a0, a1 = -math.radians(v["fender_front_deg"]), math.radians(v["fender_rear_deg"])
+    step = (a1 - a0) / FENDER_PIECES
+    out = []
+    for k in range(FENDER_PIECES):
+        th = a0 + (k + 0.5) * step  # from the top, positive toward the rear
+        r = R + FENDER_T_MM / 2.0
+        length = 2.0 * R * math.tan(step / 2.0)
+        c = [x - r * math.sin(th), y, z + r * math.cos(th)]
+        out.append({"id": f"fender_{support['id']}_{k + 1}", "name": f"{support['id']} の泥よけ ({k + 1})", "kind": "fender",
+                    "box": {"center_mm": [float(q) for q in c], "size_mm": [length, v["fender_width"], FENDER_T_MM],
+                            "rpy_deg": [0.0, float(-math.degrees(th)), 0.0]},
+                    "mass_kg": float(density * 1e-9 * length * v["fender_width"] * FENDER_T_MM),
+                    "material": "hdpe", "finish": "molded"})
+    return out

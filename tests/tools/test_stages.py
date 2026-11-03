@@ -46,6 +46,13 @@ class StageTest(RunCase, unittest.TestCase):
         self.ctx.specs["frame_static"] = dict(self.ctx.specs["frame_static"], usable=False)
         self.assertIsNone(load_case_stage(self.ctx, lc))  # no usable tool checks it
 
+    def test_a_tool_for_another_kind_of_design_does_not_set_the_stage(self):
+        lc = self.ctx.load_case("R1-step100")
+        self.ctx.specs["frame_static"] = dict(self.ctx.specs["frame_static"], stage=3)
+        self.ctx.specs["bed_only"] = {"name": "bed_only", "usable": True, "tests": ["R1"], "stage": 0,
+                                      "applies_to": ["care_bed"]}
+        self.assertEqual(load_case_stage(self.ctx, lc), 3)  # the care bed's stage-0 tool does not check this design
+
     def test_the_hook_command_reads_the_servers_stages(self):
         kept = stages_of(self.ctx)
         self.ctx.tools = {}
@@ -82,6 +89,24 @@ class StageTest(RunCase, unittest.TestCase):
         self.assertEqual(d.rule, rules.HK5)
         self.assertIn("赤、ver-0009", d.reason)
         self.assertIn("revise_design", d.reason)
+
+    def test_hk5_a_lighter_tools_red_on_the_same_case_holds_the_heavier_tool(self):
+        from unittest import mock
+
+        self.ctx.specs["shell_x"] = {"name": "shell_x", "usable": True, "tests": ["R1"], "stage": 3, "checks": []}
+        args = {"tool": "shell_x", "load_case_id": "R1-step100", "prediction_ids": []}
+        # not judged yet on the beam: the heavy tool on the same case is not held by HK5 (HK1 comes next)
+        self.assertEqual(rules.check_analyze(self.ctx, args).rule, rules.HK1)
+        red = {"R1-step100": {"verdict_id": "ver-0009", "load_case_id": "R1-step100", "pass": False,
+                              "comparison_id": "cmp-0001"}}
+        with mock.patch.object(rules, "latest_verdicts", return_value=red):
+            with mock.patch.object(rules, "_verdict_tool", return_value="frame_static"):  # red on the beam (stage 1)
+                d = rules.check_analyze(self.ctx, args)
+                self.assertEqual(d.rule, rules.HK5)
+                self.assertIn("R1-step100 (段 1 (軽い計算)、赤、ver-0009)", d.reason)
+                self.assertIn("revise_design", d.reason)
+            with mock.patch.object(rules, "_verdict_tool", return_value="shell_x"):  # red from the heavy tool itself
+                self.assertEqual(rules.check_analyze(self.ctx, args).rule, rules.HK1)
 
     def test_hk4_names_the_stage_of_each_pending_case(self):
         text = rules.stop_reason(self.ctx)

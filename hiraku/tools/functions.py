@@ -37,7 +37,7 @@ def _check_input(name: str, args: dict[str, Any]) -> None:
 
 
 def _gate(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None = None) -> None:
-    """HK1-HK3 again inside the tool. A call that gets here was not denied by a PreToolUse hook
+    """HK1-HK3 and HK5 again inside the tool. A call that gets here was not denied by a PreToolUse hook
     (that hook records its own denial and the call never runs), so a denial here is recorded
     once, as hook.denied, the same way: a direct call, a hook that did not run or answered
     allow on an older state (the plugin's hook command is a separate process)."""
@@ -69,7 +69,7 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "archetypes", "joint_wall_inputs", "formula_inputs")
+                    "design_variables", "design_choices", "archetypes", "joint_wall_inputs", "formula_inputs")
 DEFAULT_CONTEXT_SECTIONS = ()  # no sections asked: context_overview (counts and ids), every section by name
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
@@ -200,6 +200,7 @@ SECTION_HINTS = {
     "design_summary": "手計算の入力になる設計の値",
     "design": "設計の要約 (design_part・offset・limit で中身を少しずつ)",
     "design_variables": "設計役が変えられる変数 (範囲と今の値)",
+    "design_choices": "いくつかの変数をまとめて決める近道と選べる値 (revise_design の choices)",
     "archetypes": "設計の型 (archetype で 1 つに絞れる)",
     "joint_wall_inputs": "つなぎ目の壁の曲げの式の入力 (load_case_id が要る)",
     "formula_inputs": "荷重条件ごとの式の入力 (load_case_id か domain で絞れる)",
@@ -325,6 +326,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
         "design": lambda: _design_section(ctx, args),
         "design_variables": lambda: design_variables(ctx),
+        "design_choices": lambda: design_choices(ctx),
         "archetypes": kinds,
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, args.get("load_case_id")),
         "formula_inputs": formula_inputs,
@@ -334,8 +336,8 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     return out
 
 
-PAIRS_HOW = ("predicts: 道具のどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
-             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのある道具の横に並ぶ剛体の式は、"
+PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
+             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのあるツールの横に並ぶ剛体の式は、"
              "初めの見積もりで、解析とは食い違う)")
 
 
@@ -416,8 +418,8 @@ def _check_applies_to(ctx: RunContext, name: str) -> None:
     if kind in kinds:
         return
     what = f"この版の設計の型は {kind} です" if kind else "この版の設計は、型から作った設計ではありません (型が分からない)"
-    raise ToolError(f"道具 {name} は、設計の型 {', '.join(kinds)} のための道具です。{what}。"
-                    f"list_tools で、applies_to の無い道具か、この型を含む道具を選んでください")
+    raise ToolError(f"ツール {name} は、設計の型 {', '.join(kinds)} のためのツールです。{what}。"
+                    f"list_tools で、applies_to の無いツールか、この型を含むツールを選んでください")
 
 
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
@@ -428,7 +430,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     if args.get("tool"):
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
-            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
+            raise ToolError(f"ツール {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
         load, run = tool_params(ctx, args["tool"])
         whole = dict(spec)
         if load or run:
@@ -447,7 +449,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     return rows
 
 
-PARAMS_HOW = ("params は荷重条件の params で道具が読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
+PARAMS_HOW = ("params は荷重条件の params でツールが読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
               "unit の量は {value, unit} で、choices があればその中から選ぶ")
 
 
@@ -594,7 +596,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     _check_input("analyze", args)
     name = args["tool"]
     if name not in ctx.tools:
-        raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
+        raise ToolError(f"ツール {name!r} は棚にありません。list_tools でツールを選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
     _check_applies_to(ctx, name)
     _gate(ctx, "analyze", args, agent)
@@ -971,6 +973,26 @@ def design_variables(ctx: RunContext) -> list[Record] | None:
              "value": {"value": s["value"], "unit": s["unit"]}} for s in found if s.get("revisable")]
 
 
+CHOICES_HOW = ("revise_design の choices に {名前: 選ぶ値} で書ける近道 (いくつかの変数をまとめて決める)。"
+               "同じことは design_variables の変数でも書ける。どの変数が動いたかは revise_design の答えの changes に出る")
+
+
+def design_choices(ctx: RunContext) -> Record | None:
+    """The short ways to set several variables at once (the generator's CHOICES: {name: [values]}), which
+    revise_design takes like a variable (designgen.regenerate); None without a generated design."""
+    if not ctx.version or ctx.designgen is None:
+        return None
+    gen_of = getattr(ctx.designgen, "generator_of", None)
+    try:
+        gen = gen_of(ctx.store.design()) if gen_of else None
+    except Exception:  # a design no generator made (written by hand)
+        gen = None
+    choices = getattr(gen, "CHOICES", None)
+    if not choices:
+        return None
+    return {"choices": {k: list(v) for k, v in choices.items()}, "how": CHOICES_HOW}
+
+
 def archetypes(ctx: RunContext) -> list[Record] | None:
     """The kinds of design hiraku.designgen can make for this product's flags (propose_design)."""
     if ctx.designgen is None or not hasattr(ctx.designgen, "archetypes"):
@@ -1141,7 +1163,15 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     spec = {s["name"]: s for s in found}
     revisable = [n for n, s in spec.items() if s.get("revisable")]
     problems = []
-    for name, q in args["changes"].items():
+    given = args.get("changes") or {}
+    choices = dict(args.get("choices") or {})
+    known = (design_choices(ctx) or {}).get("choices") or {}
+    for name, opt in choices.items():  # contract tool_input.revise_design.choices: the generator's short ways
+        if name not in known:
+            problems.append(f"近道 {name!r} はありません (この設計の近道: {', '.join(known) or 'なし'}。get_context の design_choices)")
+        elif opt not in known[name]:
+            problems.append(f"{name} は {', '.join(map(str, known[name]))} のどれかです ({opt!r} ではなく)")
+    for name, q in given.items():
         s = spec.get(name)
         if s is None or not s.get("revisable"):
             what = "ありません" if s is None else "直せない変数です"
@@ -1152,10 +1182,9 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
             problems.append(f"{name} は {s['min']:g}〜{s['max']:g} {s['unit']} の範囲で選んでください ({q['value']:g} は外)")
     if problems:
         raise ToolError("設計の変数の指定が合いません: " + "; ".join(problems))
-    changes = {k: {"value": float(q["value"]), "unit": q["unit"]} for k, q in args["changes"].items()}
-    before = {k: {"value": spec[k]["value"], "unit": spec[k]["unit"]} for k in changes}
+    changes = {k: {"value": float(q["value"]), "unit": q["unit"]} for k, q in given.items()}
     try:
-        new = dict(ctx.designgen.regenerate(copy.deepcopy(design), changes))
+        new = dict(ctx.designgen.regenerate(copy.deepcopy(design), {**changes, **choices}))
     except ValueError as e:
         raise ToolError(f"この変数では設計を組めません: {e}。値を変えて revise_design を呼び直してください") from None
     new.update(design_version=v + 1, parent_version=v, change_reason=reason)
@@ -1164,11 +1193,18 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
         raise ToolError("組み直した設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     ctx.store.write_design(new, agent=agent)
     init_judgements(ctx, v + 1)
+    # every variable that moved: those given, and those a choice set (read back from the new design)
+    after = {x["name"]: x for x in (_variables(ctx, new) or [])}
+    moved = [k for k in revisable if k in after and (after[k]["value"], after[k]["unit"]) != (spec[k]["value"], spec[k]["unit"])]
+    moved += [k for k in changes if k not in moved]
     return {
         "design_version": v + 1,
         "parent_version": v,
         "change_reason": reason,
-        "changes": [{"variable": k, "from": before.get(k), "to": q} for k, q in changes.items()],
+        "changes": [{"variable": k, "from": {"value": spec[k]["value"], "unit": spec[k]["unit"]},
+                     "to": {"value": after[k]["value"], "unit": after[k]["unit"]} if k in after else changes[k]}
+                    for k in moved],
+        **({"choices": choices} if choices else {}),
         "redo": [lc["load_case_id"] for lc in ctx.load_cases],
         "revisions_left": p["round_limit"] - v,
     }
@@ -1199,7 +1235,7 @@ def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None
 def _check_code_input(name: str, args: dict[str, Any]) -> str:
     _check_input(name, args)
     if not args["code"].strip():
-        raise ToolError(f"{name} の code が空です。道具の Python の文を書いてください")
+        raise ToolError(f"{name} の code が空です。ツールの Python の文を書いてください")
     return args["code"]
 
 
@@ -1243,7 +1279,7 @@ def made_refusals(ctx: RunContext, made: Any) -> list[str]:
     out = []
     formulas = [f for f in spec.get("formulas") or [] if isinstance(f, str)]
     if not formulas:
-        out.append("spec の formulas が空です。この道具の結果を予測する K0 の式の formula_id (list_formulas) を "
+        out.append("spec の formulas が空です。このツールの結果を予測する K0 の式の formula_id (list_formulas) を "
                    "formulas = [...] に書いてください。判定には手計算の予測が要ります")
     else:
         known = {f["formula_id"] for f in ctx.formulas.list_formulas()}
@@ -1253,9 +1289,9 @@ def made_refusals(ctx: RunContext, made: Any) -> list[str]:
     good = [c for c in made.checks if isinstance(c.get("expected"), (int, float)) and c["expected"] != 0
             and _names_reference(str(c.get("source") or ""), spec)]
     if not good:
-        out.append("答えの分かっている例に、expected が 0 でなく、source が道具の外の出典 (閉じた式・教科書・規格、"
+        out.append("答えの分かっている例に、expected が 0 でなく、source がツールの外の出典 (閉じた式・教科書・規格、"
                    "例: \"closed form sigma = F L / 4 (h / 2) / I, worked out by hand\") を名指しするものがありません。"
-                   "そういう例を known_answers に少なくとも 1 つ足してください (道具自身の式の値は出典になりません)")
+                   "そういう例を known_answers に少なくとも 1 つ足してください (ツール自身の式の値は出典になりません)")
     return out
 
 
@@ -1306,7 +1342,7 @@ def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) 
 
 
 UNNAMED_TOOL = "unnamed"
-UNKNOWN_TOOL_TITLE = "形の分からない道具 (spec() が契約の tool_spec に合わない)"
+UNKNOWN_TOOL_TITLE = "形の分からないツール (spec() が契約の tool_spec に合わない)"
 
 
 def attempt_spec(made: Any, agent: str, picked: list[str]) -> Record:
@@ -1344,7 +1380,7 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
     code = _check_code_input("make_tool", args)
     agent = agent or "lead"
     if agent == "designer":
-        raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
+        raise ToolError("ツールを作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
     shelf = ctx.made_tools
@@ -1357,7 +1393,7 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
     spec = attempt_spec(made, agent, list(ctx.picked))
     usable = bool(made.usable) and spec is made.spec and spec["usable"]
     ok = "使えます" if usable else "使えません (" + ("; ".join(made.problems) or "spec() の形が契約に合いません")[:300] + ")"
-    ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"道具 {spec['name']} を作って確かめました: {ok}",
+    ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"ツール {spec['name']} を作って確かめました: {ok}",
                    data=spec)
     if usable:
         ctx.tools[made.name] = made.tool

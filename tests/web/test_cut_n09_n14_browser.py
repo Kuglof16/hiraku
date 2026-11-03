@@ -117,25 +117,28 @@ CLAUDE_ASM = ["H1", "H2"]
 CLAUDE_ORDER = list(CLAUDE_REASON) + ["assembly"]
 
 
-def lit_lines(d):
-    """A lit chip's second line: Claude's reason, or cut at its joins when it does not fit
-    (first "…か" without "を確かめる", then without the cause before the first "、")."""
-    out = [CLAUDE_REASON[d]]
-    s = re.sub(r"かを確かめる$", "か", out[-1])
-    if s != out[-1]:
-        out.append(s)
-    if "、" in out[-1]:
-        out.append(out[-1].split("、", 1)[1].strip())
-    return out
+# A reason longer than the chip's width at 18 px (shape example): it goes on two lines, after
+# its first "、" (the only join whose two parts each fit).
+LONG_REASON = "林道の長い上り坂を連続で走るとき、モーターと制御器と電池の温度が、使える上限を超えないかを確かめる"
+LONG_LINES = ["林道の長い上り坂を連続で走るとき、", "モーターと制御器と電池の温度が、使える上限を超えないかを確かめる"]
+# the chips box that leaves room for a name and two lines of 18 px in each of the eight rows,
+# its bottom on the subtitle band (the values proposed to the promo department)
+TALL_CHIPS = {"h": 670, "text_px": 24, "row_gap": 6}
 
 N09_STATE = """() => {
   const rows = {};
   for (const el of document.querySelectorAll(".n09-chip")) {
     const line = el.querySelector(".line");
+    const R = el.getBoundingClientRect(), L = line.getBoundingClientRect(), N = el.querySelector(".name").getBoundingClientRect();
+    const lh = parseFloat(getComputedStyle(line).lineHeight);
     rows[el.dataset.domain] = { state: el.dataset.state, name: el.querySelector(".name").textContent, nameKind: el.querySelector(".name").dataset.kind ?? null,
-      line: line.textContent };
+      line: line.textContent, linePx: parseFloat(getComputedStyle(line).fontSize), lineKind: line.dataset.kind ?? null,
+      lines: [...line.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent),
+      rows: Math.round(L.height / lh), cutWide: line.scrollWidth > line.clientWidth + 0.5,
+      inside: N.top >= R.top + 1.5 && L.bottom <= R.bottom - 1.5 && L.left >= R.left && L.right <= R.right && el.scrollHeight <= el.clientHeight + 0.5,
+      over: el.dataset.over === "1" };
   }
-  return { rows, want: document.querySelector(".n09-request .want")?.textContent ?? null, text: document.getElementById("stage").innerText,
+  return { rows, over: document.documentElement.dataset.n09Over ?? null, want: document.querySelector(".n09-request .want")?.textContent ?? null, text: document.getElementById("stage").innerText,
            none: document.querySelector(".n09-view .none")?.textContent ?? null };
 }"""
 
@@ -175,6 +178,9 @@ class CutN09N14Test(unittest.TestCase):
         write_run(runs, cls.n09, n09_events(cls.n09, WANT, PICKS, OFF, ASM))
         cls.n09c = "20261103-120003-n09-claude-shape"
         write_run(runs, cls.n09c, n09_claude_events(cls.n09c, WANT, (CATALOG_PICKS, CATALOG_OFF), (CLAUDE_PICKS, []), FLAG_REASONS, CLAUDE_ASM))
+        cls.n09long = "20261103-120004-n09-claude-long"
+        long_picks = [{**p, "reason": LONG_REASON} if p["domain"] == "thermal" else p for p in CLAUDE_PICKS]
+        write_run(runs, cls.n09long, n09_claude_events(cls.n09long, WANT, (CATALOG_PICKS, CATALOG_OFF), (long_picks, []), FLAG_REASONS, CLAUDE_ASM))
         write_run(runs, cls.design_run, design_events(cls.design_run))
         write_run(runs, cls.n14, n14_events(cls.n14))
         cls.layout_file = cls.tmp / "layout.json"
@@ -286,15 +292,50 @@ class CutN09N14Test(unittest.TestCase):
                 elif d == "assembly":
                     self.assertEqual((r["state"], r["line"]), ("lit", PLAIN[d]), (t, d))
                 else:
-                    self.assertEqual(r["state"], "lit", (t, d))
-                    self.assertIn(r["line"], lit_lines(d), (t, d))
+                    # Claude's reason as the record has it (not cut), at 18 px, a note
+                    self.assertEqual((r["state"], r["line"], r["linePx"], r["lineKind"]), ("lit", CLAUDE_REASON[d], 18, "note"), (t, d))
+                    self.assertFalse(r["cutWide"], (t, d))
+                # one size for every chip's second line (the promo department), assembly's included
+                self.assertEqual(r["linePx"], 18, (t, d))
+                # every chip's words inside the chip
+                self.assertTrue(r["inside"], (t, d, r))
+                self.assertFalse(r["over"], (t, d))
+            self.assertEqual(c["over"], "", t)
         end = seen[self.layout["n09"]["duration_s"] - 0.05]["cut"]["rows"]
         lit = sorted(d for d, r in end.items() if r["state"] == "lit")
         self.assertEqual(lit, sorted(CLAUDE_ORDER))
         self.assertEqual(len([d for d in lit if d != "assembly"]), 7)
         self.assertIn("thermal", lit)
-        self.assertIn(end["thermal"]["line"], lit_lines("thermal"))
-        self.assertTrue(end["thermal"]["line"].startswith("連続走行でモーターと電池が熱くなりすぎないか"))
+        self.assertEqual(end["thermal"]["line"], "連続走行でモーターと電池が熱くなりすぎないかを確かめる")
+
+    def long_reason_end(self, layout):
+        self.layout_file.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
+        t = layout["n09"]["duration_s"] - 0.05
+        got = self.read("n09", f"run={self.n09long}&design_run={self.design_run}", [t], N09_STATE, ['[data-box="n09.chips"]'])[t]
+        return got, got["cut"]["rows"]["thermal"]
+
+    def test_n09_a_long_reason_goes_on_two_lines_in_a_tall_enough_box(self):
+        """A reason wider than the chip at 18 px is on two lines, broken after its "、", whole;
+        with the proposed chips box every chip's words are inside it."""
+        layout = n09_n14_layout()
+        layout["n09"]["chips"].update(TALL_CHIPS)
+        got, r = self.long_reason_end(layout)
+        self.assertIsNone(got["err"])
+        self.assertEqual(got["page"]["over"], [])
+        self.assertEqual(got["fit"]["over"], [])
+        self.assertLessEqual(got["fit"]["lowest"], layout["subtitle_band"]["y"])
+        self.assertEqual((r["line"], r["lines"], r["rows"], r["linePx"]), (LONG_REASON, LONG_LINES, 2, 18))
+        for d, x in got["cut"]["rows"].items():
+            self.assertTrue(x["inside"], (d, x))
+        self.assertEqual(got["cut"]["over"], "")
+
+    def test_n09_a_reason_past_its_chip_is_marked_not_cut(self):
+        """With the layout's chips box a two-line reason does not fit its row: the chip is
+        marked (not cut), the reason still whole."""
+        got, r = self.long_reason_end(n09_n14_layout())
+        self.assertEqual((r["line"], r["rows"], r["linePx"]), (LONG_REASON, 2, 18))
+        self.assertTrue(r["over"])
+        self.assertEqual(got["cut"]["over"], "thermal")
 
     def test_n09_without_a_design_says_so(self):
         got = self.read("n09", f"run={self.n09}", [1.0], N09_STATE, [])[1.0]

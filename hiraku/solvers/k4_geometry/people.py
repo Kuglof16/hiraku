@@ -90,6 +90,14 @@ BIG, SMALL = "m95", "f5"
 FOOT_ANGLE_DEG = 20.0
 KNEE_ANGLE_DEG = 100.0
 KNEE_MAX_DEG = 150.0
+# The comfortable range of the knee angle (between thigh and shank) in the driving posture: 99-138 deg,
+# Porter and Gyi 1998 (Int. J. Vehicle Design 19(3) 255-266; 55 drivers' preferred postures, goniometer on the
+# right side), as Schmidt et al. 2014 reproduce it (Applied Ergonomics 45, 247-260, Table 1, p. 251). Read in
+# that review; the original paper was not read (not verified). The review does not draw the angle; that it is
+# the inner angle (180 = straight leg), as KNEE_ANGLE_DEG here, is taken from its values (assumption).
+KNEE_COMFORT_DEG = (99.0, 138.0)
+KNEE_COMFORT_SOURCE = ("knee angle 99-138 deg: Porter and Gyi 1998 (IJVD 19(3) 255-266), read in Schmidt et al. 2014, "
+                       "Applied Ergonomics 45 247-260, Table 1 p. 251; the original not verified")
 PEDAL_KINDS = ("pedal", "accelerator_pedal", "brake_pedal")
 WHEEL_KINDS = ("steering", "steering_wheel")  # the steering wheel (designs with pedals only, see body_fit)
 # Bodies the legs and feet are not checked against: the person's own seat, the occupants' mass
@@ -407,7 +415,9 @@ def body_fit(design: dict) -> dict[str, tuple[float, str]]:
     foot_room (the big person's feet to the nearest body other than what they rest on), foot_support
     (how far inside the floor's edge in plan the feet are), leg_clearance (the big person's thighs and
     shanks to the nearest body, as capsules), pedal_reach (the small person's ball of the foot onto the
-    pedal: the hip-ankle distance with the knee at KNEE_MAX_DEG less the distance needed) and wheel_reach
+    pedal: the hip-ankle distance with the knee at KNEE_MAX_DEG less the distance needed), knee_angle_room (the
+    smaller of knee_angle_margins over the big and the small person: the pedal foot's knee angle inside
+    KNEE_COMFORT_DEG, as mm of the hip-ankle distance) and wheel_reach
     (the small person's arm reach, C3 - C16, less the distance from the shoulder to the grip on the
     steering wheel's rim beside its centre)."""
     from .model import bodies, shape_overlap
@@ -451,6 +461,8 @@ def body_fit(design: dict) -> dict[str, tuple[float, str]]:
         out[f"foot_support.{oid}"] = (float(min(margins)), ps["floor"]["id"])
         if ps["small"] is not None:
             out[f"pedal_reach.{oid}"] = (pedal_margin(ps["small"]), ps["pedal"]["id"])
+            out[f"knee_angle_room.{oid}"] = (min(min(knee_angle_margins(ps[k])) for k in ("big", "small")),
+                                             ps["pedal"]["id"])
             wheel = steering_wheel_of(design, ps["seat"])
             if wheel is not None:
                 out[f"wheel_reach.{oid}"] = (wheel_margin(ps["small"], wheel), wheel["id"])
@@ -466,6 +478,31 @@ def pedal_margin(pose: Pose, knee_max: float = KNEE_MAX_DEG) -> float:
     d_max = math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * math.cos(math.radians(knee_max)))
     need = float(np.linalg.norm((g.ankle - g.hip)[[0, 2]]))
     return d_max - need
+
+
+def _hip_ankle(s: dict, knee_angle: float) -> float:
+    """The hip-ankle distance (mm, side view) of a leg of sizes s with the knee at knee_angle (deg)."""
+    l1, l2 = _links(s)
+    return math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * math.cos(math.radians(knee_angle)))
+
+
+def knee_angle_margins(pose: Pose, comfort: tuple[float, float] = KNEE_COMFORT_DEG) -> tuple[float, float]:
+    """The right leg's (the pedal foot's) knee angle against the comfortable range, as mm of the hip-ankle
+    distance (side view, as pedal_margin): (bent, straight). bent = the distance now less the distance at the
+    range's lower angle (negative: the knee is bent more than the range, the pedal too near); straight = the
+    distance at the upper angle less the distance now (negative: the leg is straighter than the range, the
+    pedal too far). The distance grows with the angle, so each is negative exactly when the angle is out of range."""
+    s = SIZES[pose.size]
+    g = pose.legs["R"]
+    now = float(np.linalg.norm((g.ankle - g.hip)[[0, 2]]))
+    return now - _hip_ankle(s, comfort[0]), _hip_ankle(s, comfort[1]) - now
+
+
+def knee_angles(design: dict) -> dict[str, dict[str, float]]:
+    """{occupant id: {"big": deg, "small": deg}}: the right knee's angle of the drivers (the occupants with a
+    pedal), as the poses have them. A leg that does not reach its pedal is at 180."""
+    return {oid: {k: float(ps[k].legs["R"].knee_angle) for k in ("big", "small")}
+            for oid, ps in poses(design).items() if ps["small"] is not None}
 
 
 def steering_wheel_of(design: dict, seat: dict) -> dict | None:

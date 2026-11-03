@@ -60,7 +60,7 @@ def compare_input_schema() -> Record:
 
 
 API_OF = {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": (
-    "入出力と説明 (docstring) を見たい名前: 道具が import できる HIRAKU のモジュール (例 hiraku.solvers.k4_geometry.rollbar) "
+    "入出力と説明 (docstring) を見たい名前: ツールが import できる HIRAKU のモジュール (例 hiraku.solvers.k4_geometry.rollbar) "
     "か、その中の関数・クラス (例 hiraku.solvers.k4_geometry.rollbar.occupant_clearance)。モジュールなら中の関数の一覧")}
 
 
@@ -82,7 +82,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
                                     "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
-                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables。"
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
@@ -99,10 +99,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
     "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {"api_of": API_OF}},
-    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
+    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "このツールが予測に使う式だけ"}}),
     "list_tools": _domain_filter({
-        "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
-        "test_id": {"type": "string", "description": "この試験を解析できる道具だけ"},
+        "tool": {"type": "string", "description": "このツールの全体 (答えの分かっている例と式の一覧)"},
+        "test_id": {"type": "string", "description": "この試験を解析できるツールだけ"},
     }),
     "record_prediction": contract_input_schema("record_prediction"),
     "analyze": contract_input_schema("analyze"),
@@ -130,26 +130,26 @@ DESCRIPTIONS = {
         "荷重条件から出したもの) が返る"
     ),
     "get_tool_template": (
-        "道具を書く (check_tool・make_tool) ときの見本。強度の試験の道具 1 つ分の通して動くコード (code) と、"
+        "ツールを書く (check_tool・make_tool) ときの見本。強度の試験のツール 1 つ分の通して動くコード (code) と、"
         "決まりの説明: 定義するクラスと欄、analyse() の引数 (design・load_case・params) の中身、結果 (results) の欄、"
         "答えの分かっている例 known_answers() と check_record の引数、使える import。examples.k1_frame は K1 の骨組で解く"
-        "強度の道具の見本。rule は道具が使えるための決まり (formulas に予測の式、出典つきで 0 でない答えの例)"
+        "強度のツールの見本。rule はツールが使えるための決まり (formulas に予測の式、出典つきで 0 でない答えの例)"
     ),
     "list_formulas": (
-        "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "
-        "predicts: 道具の結果の量と式の出力の対 (note つき)}"
+        "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: そのツールの式, "
+        "predicts: ツールの結果の量と式の出力の対 (note つき)}"
     ),
     "list_tools": (
-        "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
-        "各行の params は荷重条件で道具が読む名前の短い一覧 (単位 [..]・選べる値 (..)、run は analyze の params)。"
-        "tool を付けるとその道具の全体 (答えの分かっている例・式・params の名前・単位・意味・既定・選べる値)"
+        "解析のツールの棚 (1 行ずつ)。usable が true のツールだけ analyze で使える。test_id で絞る。"
+        "各行の params は荷重条件でツールが読む名前の短い一覧 (単位 [..]・選べる値 (..)、run は analyze の params)。"
+        "tool を付けるとそのツールの全体 (答えの分かっている例・式・params の名前・単位・意味・既定・選べる値)"
     ),
     "record_prediction": (
         "解析の前に、手計算の予測を記録する。式 (formula_id) と入力 (inputs、値と単位) と前提を選ぶだけで、"
         "値は K0 が計算する。返った prediction_id を analyze に渡す。値を自分で計算して書かないこと"
     ),
     "analyze": (
-        "解析の道具をすべてこの 1 つの入口から呼ぶ。tool・load_case_id・同じ版と同じ荷重条件の prediction_ids が要る。"
+        "解析のツールをすべてこの 1 つの入口から呼ぶ。tool・load_case_id・同じ版と同じ荷重条件の prediction_ids が要る。"
         "結果は analysis の記録 (analysis_id、results)"
     ),
     "compare": (
@@ -161,7 +161,7 @@ DESCRIPTIONS = {
     "record_cause": (
         "食い違った照合の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
         "安全側から押さえていると判断できるときだけ safe_side: true と理由 (safe_side_reason) を付ける。"
-        "道具が数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る"
+        "ツールが数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る"
     ),
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
@@ -169,22 +169,22 @@ DESCRIPTIONS = {
     ),
     "propose_design": (
         "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
-        "最初の版を作る。座標は道具が出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
+        "最初の版を作る。座標はツールが出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
         "版 1 ができると試験の荷重条件と担当の役が決まる"
     ),
     "write_report": (
         "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
-        "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は道具が記録から入れる。"
+        "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値はツールが記録から入れる。"
         "文の中の「数 + 単位」は記録にある値と合わなければ断られる"
     ),
     "check_tool": (
-        "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
-        "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api は道具が import して"
+        "ツールの Python の文 (code) を、そのツール自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
+        "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api はツールが import して"
         "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。api_of に名前を付けると、その関数の入出力と説明が返る。"
         "make_tool の前の試しに使う"
     ),
     "make_tool": (
-        "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
+        "棚に試験に合うツールが無いときに、ツールを書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
         "全部通れば棚に入り (origin claude)、analyze で使える。code は hiraku.solvers.shelf.base の BuiltinTool を継ぐ"
         "クラス 1 つ (name・title・domain・base・tests・formulas・load_case_params、known_answers() は check_record で閉じた式や"
         "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
@@ -232,6 +232,29 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
 RECORDED_REFUSALS = ("propose_design",)
 
 
+TOOL_ERRORS_FILE = "tool.errors.log"  # in the run folder: the traceback of each exception a tool let out
+
+
+def tool_failure(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None, e: BaseException) -> str:
+    """Write the exception's traceback to <run>/TOOL_ERRORS_FILE, say it in the record (agent.said of system,
+    data.tool_error), and give the caller a sentence to act on (the same call can be tried again)."""
+    import traceback
+    from datetime import datetime
+
+    what = f"{type(e).__name__}: {e}"
+    try:
+        with (ctx.store.path / TOOL_ERRORS_FILE).open("a", encoding="utf-8") as f:
+            f.write(f"--- {datetime.now().isoformat(timespec='seconds')} {name} by {agent or '?'}\n"
+                    f"args: {json.dumps(args, ensure_ascii=False, default=str)[:2000]}\n"
+                    + "".join(traceback.format_exception(type(e), e, e.__traceback__)))
+        ctx.store.emit("agent.said", agent="system", text=f"ツール {name} の中で思わぬ失敗がありました ({what[:300]})",
+                       data={"tool_error": name, "agent": agent, "error": what[:2000], "log": TOOL_ERRORS_FILE})
+    except Exception:  # the answer below still goes back
+        pass
+    return (f"ツール {name} の中で思わぬ失敗がありました ({what[:500]})。HIRAKU の側の不具合で、記録 ({TOOL_ERRORS_FILE}) に"
+            "残しました。同じ入力でもう一度呼んでください。同じ失敗が続くときは、そう報告して先へ進んでください")
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
@@ -246,6 +269,8 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
                 ctx.store.emit("agent.said", agent="system", text=f"{name} は断られました: {e}",
                                data={"refused": name, "agent": agent, "reason": str(e)})
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:  # a bug in a tool: kept with its traceback in the run folder, the caller told
+            return {"content": [{"type": "text", "text": tool_failure(ctx, name, args, agent, e)}], "is_error": True}
         return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 
     return handler

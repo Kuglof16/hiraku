@@ -1,6 +1,6 @@
-"""SDK hooks: the contract's HK1-HK4, agent start/stop events and next-step hints.
+"""SDK hooks: the contract's HK1-HK5, agent start/stop events and next-step hints.
 
-- PreToolUse: HK1-HK3 (hiraku.tools.rules.check_call). A denial is recorded as a
+- PreToolUse: HK1-HK3 and HK5 (hiraku.tools.rules.check_call). A denial is recorded as a
   hook.denied event and its reason (what is missing, what to call next) goes to Claude.
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
@@ -50,7 +50,7 @@ PREFIX = f"mcp__{contract.MCP_SERVER}__"
 PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
-STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。道具を呼ばずに、ここまでのことを 1 文で言って番を終えてください"
+STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
 ROLE_RETURN_FOR_MESSAGE = ("まとめ役に、画面の人から伝言が届いています。今の荷重条件を区切りのよい所 (照合まで。食い違ったなら "
                            "record_cause を書いた所) まで進めたら、新しい荷重条件は始めずに、ここまでの結果をまとめ役に返して"

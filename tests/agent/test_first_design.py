@@ -92,6 +92,59 @@ class PicksOnlyTest(unittest.TestCase):
             self.assertFalse(rules.picks_done(self.ctx))
 
 
+class HearingByClaudeTest(unittest.TestCase):
+    """docs/contract.md hearing claude: start_run leaves the open items for the lead's ask_user (no hearing.* events,
+    the file's requirements as they are); the project carries hearing, and the lead is told to ask."""
+
+    def test_the_open_items_are_left_for_ask_user(self):
+        from hiraku.agent.prompts import HEARING_CLAUDE_TEXT, lead_task
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = requirements_without_design(root, ["P1", "R1"])
+            req = json.loads(path.read_text(encoding="utf-8"))
+            req["hearing"] = "claude"
+            req["requirements"] = req["requirements"][:5]  # most items left open
+            path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
+            ctx = start_run(path, root=root / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf(), intake=True)
+            kinds = [e["kind"] for e in ctx.store.events()]
+            self.assertEqual(ctx.project["hearing"], "claude")
+            self.assertEqual(contract.errors("project", ctx.project), [])
+            self.assertNotIn("hearing.answered", kinds)
+            self.assertIn("domains.picked", kinds)
+            self.assertEqual([r["key"] for r in ctx.project["requirements"]], [r["key"] for r in req["requirements"]])
+            self.assertIn(HEARING_CLAUDE_TEXT, lead_task(ctx))
+
+
+class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
+    """Contract cb66036: revise_design takes the generator's choices (get_context design_choices) besides changes."""
+
+    def setUp(self):
+        super().setUp()
+        propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+
+    def test_a_choice_sets_its_variables(self):
+        from hiraku.tools.functions import revise_design
+
+        got = get_context(self.ctx, {"sections": ["design_choices"]})["design_choices"]
+        self.assertIn("bulkhead", got["choices"]["pedal_mount"])
+        out = revise_design(self.ctx, {"choices": {"pedal_mount": "bulkhead"}, "reason": "R7: ペダルの力を隔壁へ"},
+                            "designer")
+        moved = {c["variable"]: c for c in out["changes"]}
+        self.assertEqual(moved["pedal_mount"]["to"]["value"], 2)  # the variable the choice stands for
+        self.assertEqual(out["choices"], {"pedal_mount": "bulkhead"})
+        self.assertEqual(self.ctx.version, 2)
+
+    def test_an_unknown_choice_or_value_is_refused(self):
+        from hiraku.tools.functions import revise_design
+
+        with self.assertRaisesRegex(ToolError, "design_choices"):
+            revise_design(self.ctx, {"choices": {"no_such": "x"}, "reason": "r"}, "designer")
+        with self.assertRaisesRegex(ToolError, "bulkhead"):
+            revise_design(self.ctx, {"choices": {"pedal_mount": "roof"}, "reason": "r"}, "designer")
+        self.assertEqual(self.ctx.version, 1)
+
+
 class FirstDesignTest(FirstDesignCase, unittest.TestCase):
     def test_the_run_starts_without_a_design(self):
         self.assertEqual(self.ctx.version, 0)

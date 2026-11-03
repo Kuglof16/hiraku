@@ -1,11 +1,18 @@
 // What a part looks like, by its kind, inside its box (ISO mm: x forward, y
 // left, z up). The design gives only a kind and a box per part; the shapes
 // here stay inside that box and add nothing the design does not list (a seat's
-// backrest is part of the seat; a wheel is drawn from its support).
-// Kinds without a shape here are drawn as their box.
+// backrest is part of the seat; a wheel is drawn from its support). What the
+// design lists as its own part (the steering column and the pedals, the reducer
+// beside the motor) is not drawn again inside another part's box.
+// The suspension is drawn from the design's mounting points (support.suspension
+// .hardpoints_mm): its arms and its damper with the spring, where the design puts
+// them (they reach outside the part's box); without the points it is its box.
+// Kinds without a shape here are drawn as their box. Thicknesses of rods and rings
+// (an arm's, a ring's tube) are drawing values, not from the design.
 
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 // One piece of a part: a geometry in the part's local frame (box centre at 0),
 // and which sub-material it takes (null = the part's own).
@@ -47,35 +54,37 @@ function seat([sx, sy, sz]) {
   ];
 }
 
-// Steering wheel and column at the rear top of the box, pedals at the front bottom.
+// The steering wheel: a ring filling the box across (y, z), its axis along the box's x,
+// and its hub. The column and the pedals are the design's own parts.
 function steering([sx, sy, sz]) {
-  const ringR = Math.max(40, Math.min(sy, sz) * 0.45);
-  const tube = Math.max(6, ringR * 0.12);
-  const hub = [-sx / 2 + ringR * 0.5 + tube, 0, sz / 2 - ringR - tube];
-  const ring = new THREE.TorusGeometry(ringR, tube, 10, 40).rotateY(Math.PI / 2 - 0.45).translate(...hub);
-  const out = [{ geo: ring, sub: null }];
-  out.push({ geo: rod(hub, [sx / 2 - 20, 0, -sz / 2 + sz * 0.35], Math.max(8, tube * 0.9)), sub: null });
-  for (const y of [-sy * 0.22, sy * 0.22]) out.push(piece(new THREE.BoxGeometry(20, Math.min(70, sy * 0.3), 90).rotateY(-0.3), sx / 2 - 40, y, -sz / 2 + 60));
-  return out;
+  const tube = Math.max(6, Math.min(sx / 2, Math.min(sy, sz) * 0.05));
+  const ringR = Math.max(20, Math.min(sy, sz) / 2 - tube);
+  return [
+    { geo: new THREE.TorusGeometry(ringR, tube, 10, 48).rotateY(Math.PI / 2), sub: null },
+    { geo: new THREE.CylinderGeometry(ringR * 0.22, ringR * 0.22, Math.max(10, sx * 0.8), 24).rotateZ(Math.PI / 2), sub: null },
+  ];
 }
 
 function battery([sx, sy, sz]) {
-  const out = [piece(rounded(sx * 0.98, sy * 0.98, sz * 0.9, 12), 0, 0, -sz * 0.05)];
-  for (const [y, sub] of [[-sy * 0.3, "rim"], [-sy * 0.18, "rim"]]) {
-    out.push(piece(new THREE.CylinderGeometry(14, 14, sz * 0.1, 16).rotateX(Math.PI / 2), sx * 0.32, y, sz * 0.45 - sz * 0.05, sub));
-  }
-  return out;
+  return [piece(rounded(sx * 0.98, sy * 0.98, sz * 0.98, 12))];
 }
 
-// Motor (a drum across the vehicle) and its reduction gear (a box beside it).
+// Motor: a drum across the vehicle with its end cover (the reducer is the design's own part).
 function motor([sx, sy, sz]) {
   const r = Math.min(sx, sz) * 0.47;
-  const len = sy * 0.62;
-  return [
-    piece(cylY(r, len, 40), 0, sy / 2 - len / 2, 0),
-    piece(cylY(r * 0.75, 12, 32), 0, sy / 2 - len - 6, 0, "hub"),
-    piece(rounded(sx * 0.7, sy - len - 12, sz * 0.8, 10), 0, -sy / 2 + (sy - len - 12) / 2, 0),
-  ];
+  return [piece(cylY(r, sy - 12, 40), 0, 6, 0), piece(cylY(r * 0.75, 12, 32), 0, -sy / 2 + 6, 0, "hub")];
+}
+
+// A rod (a tie rod, a shaft, a column, a bar) along its box's longest side, as thick as the box.
+function rodPart(size) {
+  const k = size.indexOf(Math.max(...size));
+  const others = size.filter((_, i) => i !== k);
+  const r = Math.max(2, Math.min(...others) / 2);
+  const a = [0, 0, 0];
+  const b = [0, 0, 0];
+  a[k] = -size[k] / 2;
+  b[k] = size[k] / 2;
+  return [{ geo: rod(a, b, r, 16), sub: null }];
 }
 
 // A box with cooling fins on top.
@@ -102,10 +111,7 @@ function nose([sx, sy, sz]) {
   const geo = new THREE.ExtrudeGeometry(shape, { depth: sy * 0.94, bevelEnabled: true, bevelSize: 8, bevelThickness: 8, bevelSegments: 2 });
   // extruded along +z in the shape's frame: shape x -> ISO x, shape y -> ISO z, depth -> ISO y
   geo.rotateX(Math.PI / 2).translate(0, sy * 0.47, 0);
-  return [
-    { geo, sub: null },
-    piece(new THREE.CylinderGeometry(22, 22, sy, 20), sx / 2 - 22, 0, -sz / 2 + sz * 0.2, "hub"),
-  ];
+  return [{ geo, sub: null }];
 }
 
 // The corner radius of a box drawn with rounded edges (the real look), from its
@@ -159,33 +165,53 @@ function crates([sx, sy, sz]) {
   return out;
 }
 
-// Suspension between the frame (inner side) and the wheel (outer side): two
-// wishbone arms and a damper with its spring, all inside the box. The side
-// that faces the wheel is the side farther from the vehicle's centre line.
-function suspension([sx, sy, sz], center) {
-  const out = center[1] >= 0 ? 1 : -1; // +y is the outer side on the left
-  const yi = (-out * sy) / 2;
-  const yo = (out * sy) / 2;
-  const r = Math.max(6, Math.min(sx, sz) * 0.05);
-  const arms = [];
-  for (const z of [-sz * 0.32, sz * 0.22]) {
-    const tip = [0, yo, z];
-    arms.push({ geo: rod([-sx * 0.42, yi, z], tip, r), sub: null }, { geo: rod([sx * 0.42, yi, z], tip, r), sub: null });
+// The support a suspension part belongs to: the one whose id ends its id ("susp_FL" -> "FL"),
+// else the nearest to its box.
+function supportOf(part, design) {
+  const sups = (design?.supports ?? []).filter((s) => s.suspension?.hardpoints_mm);
+  const byId = sups.find((s) => new RegExp(`(^|[_.:-])${s.id}$`).test(part.id));
+  if (byId) return byId;
+  const c = part.box.center_mm;
+  let best = null;
+  for (const s of sups) {
+    const d = Math.hypot(s.position_mm[0] - c[0], s.position_mm[1] - c[1], s.position_mm[2] - c[2]);
+    if (!best || d < best.d) best = { s, d };
   }
-  const lo = [0, yo - out * sy * 0.15, -sz * 0.3];
-  const hi = [0, yi + out * sy * 0.1, sz * 0.48];
-  arms.push({ geo: rod(lo, hi, r * 1.6, 14), sub: "hub" });
-  // the coil: rings along the damper
-  const a = new THREE.Vector3(...lo);
-  const b = new THREE.Vector3(...hi);
-  const dir = b.clone().sub(a);
-  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
-  for (let i = 1; i < 8; i += 1) {
-    const p = a.clone().addScaledVector(dir, 0.15 + (0.7 * i) / 8);
-    const ring = new THREE.TorusGeometry(r * 3.2, r * 0.55, 6, 18).applyQuaternion(q).translate(p.x, p.y, p.z);
-    arms.push({ geo: ring, sub: "spring" });
+  return best?.s ?? null;
+}
+
+// Suspension from the design's mounting points (ISO mm, the design's frame): each wishbone
+// from its two inner points to its outer one (lca_*, uca_*), and the damper from
+// damper_lower to damper_upper with its spring round it. A pair that is not in the points
+// is not drawn; with none of them the part is its box (null).
+function suspension(size, center, part, design) {
+  const hp = supportOf(part, design)?.suspension?.hardpoints_mm;
+  if (!hp) return null;
+  const local = (name) => (Array.isArray(hp[name]) ? hp[name].map((v, i) => v - center[i]) : null);
+  const r = 9; // an arm's radius (mm), a drawing value
+  const out = [];
+  for (const arm of ["lca", "uca"]) {
+    const tip = local(`${arm}_outer`);
+    if (!tip) continue;
+    for (const end of ["front", "rear"]) {
+      const inner = local(`${arm}_${end}`);
+      if (inner) out.push({ geo: rod(inner, tip, r), sub: null });
+    }
   }
-  return arms;
+  const lo = local("damper_lower");
+  const hi = local("damper_upper");
+  if (lo && hi) {
+    out.push({ geo: rod(lo, hi, r * 1.6, 14), sub: "hub" });
+    // the spring: rings along the damper (their size and count are drawing values)
+    const a = new THREE.Vector3(...lo);
+    const dir = new THREE.Vector3(...hi).sub(a);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
+    for (let i = 1; i < 8; i += 1) {
+      const p = a.clone().addScaledVector(dir, 0.15 + (0.7 * i) / 8);
+      out.push({ geo: new THREE.TorusGeometry(r * 3.2, r * 0.55, 6, 18).applyQuaternion(q).translate(p.x, p.y, p.z), sub: "spring" });
+    }
+  }
+  return out.length ? out : null;
 }
 
 const SHAPES = {
@@ -197,6 +223,12 @@ const SHAPES = {
   electrical: finned,
   cargo: crates,
   suspension,
+  tie_rod: rodPart,
+  driveshaft: rodPart,
+  steering_column: rodPart,
+  steering_shaft: rodPart,
+  steering_rack: rodPart,
+  // rollbar: its box (the cage's tubes are frame members; the part's box keeps the cage's finish)
 };
 
 // A seat given as its pieces (seat_R_back, seat_R_cushion, ...): each is drawn as its box,
@@ -204,13 +236,47 @@ const SHAPES = {
 const SEAT_PIECE = /_(back|backrest|cushion|base|bottom|headrest)$/i;
 
 // Pieces of a part in its local frame (box centre at the origin, box rotation not applied).
-// Every kind without a shape is its plain box (rounded when `round`, the real look).
-export function partPieces(part, { round = false } = {}) {
+// Every kind without a shape is its plain box (rounded when `round`, the real look); so is
+// a suspension without mounting points. design: the part's design (the suspension reads
+// its support's mounting points).
+export function partPieces(part, { round = false, design = null } = {}) {
   const size = part.box.size_mm;
   const kind = part.kind;
   if (kind === "body") return isPlate(size) ? plate(size, round) : nose(size);
   const make = kind === "seat" && SEAT_PIECE.test(part.id ?? "") ? null : SHAPES[kind];
-  return make ? make(size, part.box.center_mm) : [{ geo: boxGeometry(size, round), sub: null }];
+  return (make ? make(size, part.box.center_mm, part, design) : null) ?? [{ geo: boxGeometry(size, round), sub: null }];
+}
+
+// The pieces of one part (or wheel) that take the same material (sub) as one geometry each:
+// one draw call per material instead of one per piece (a view through a shared renderer is
+// drawn many times a frame). The pieces' geometries are used up (disposed).
+export function mergePieces(pieces) {
+  const bySub = new Map();
+  for (const pc of pieces) {
+    if (!bySub.has(pc.sub)) bySub.set(pc.sub, []);
+    bySub.get(pc.sub).push(pc.geo);
+  }
+  const out = [];
+  for (const [sub, geos] of bySub) {
+    if (geos.length === 1) {
+      out.push({ geo: geos[0], sub });
+      continue;
+    }
+    // the same attributes on each (position, normal, uv), none indexed, so they merge
+    const flat = geos.map((g) => {
+      const f = g.index ? g.toNonIndexed() : g.clone();
+      for (const name of Object.keys(f.attributes)) if (!["position", "normal", "uv"].includes(name)) f.deleteAttribute(name);
+      if (!f.attributes.normal) f.computeVertexNormals();
+      if (!f.attributes.uv) f.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(f.attributes.position.count * 2), 2));
+      f.clearGroups();
+      return f;
+    });
+    const merged = mergeGeometries(flat, false);
+    if (geos[0].userData.round_mm !== undefined) merged.userData.round_mm = geos[0].userData.round_mm;
+    for (const g of [...geos, ...flat]) g.dispose();
+    out.push({ geo: merged, sub });
+  }
+  return out;
 }
 
 // A wheel (tyre with a rounded tread, rim, hub and spokes) around ISO y, centre at 0.

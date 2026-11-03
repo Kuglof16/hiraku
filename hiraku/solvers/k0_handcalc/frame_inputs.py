@@ -22,9 +22,10 @@ mount members join the chain as roll springs (mount_roll_stiffness: a small
 
 portal_frame_inputs() reads a roll bar (members rollbar_post_L/R and
 rollbar_top, optionally rollbar_foot_L/R outriggers) as a portal frame for
-frame_static.portal_frame_side / _rear / _top: post and beam lengths, second
-moments, plastic moments, and the feet's rotation from the outriggers and the
-rail they stand on.
+frame_static.portal_frame_side / _rear / _top (library_portal.COMMON_INPUTS):
+post and beam lengths, the outrigger's length, the rail's lengths to where it is
+held (the wheels' nodes), and each member's area, second moments, torsion
+constant, plastic moments and plastic torque.
 """
 
 from __future__ import annotations
@@ -1009,23 +1010,65 @@ def plastic_torque(section: dict, tau_y: float) -> float:
     raise DesignError(f"the portal frame inputs need round_tube or rect_tube sections, got {section.get('shape')!r}")
 
 
-def portal_frame_inputs(design: dict) -> dict:
-    """Quantities for frame_static.portal_frame_side, _rear and _top from a roll bar (all but E_in, f and F,
-    which the load case gives).
+def _member_group(mp: dict, design: dict, g: str) -> dict[str, float]:
+    """A member's inputs of library_portal (A_g, Iy_g, Iz_g, J_g, Mpy_g, Mpz_g, Tp_g) from its section and its
+    material's yield stress (plastic torque with the shear yield f_y / sqrt 3, von Mises)."""
+    sec, fy = mp["section"], float(mp["material"]["yield_MPa"])
+    raw = design["sections"][mp["member"]["section"]]
+    zp_z, zp_y = plastic_modulus(raw)
+    return {f"A_{g}": sec["A"], f"Iy_{g}": sec["Iy"], f"Iz_{g}": sec["Iz"], f"J_{g}": sec["J"],
+            f"Mpy_{g}": zp_y * fy, f"Mpz_{g}": zp_z * fy, f"Tp_{g}": plastic_torque(raw, fy / np.sqrt(3.0))}
 
-    The posts rollbar_post_L/R stand from a foot node up to the top corners, joined by rollbar_top. A post's
-    foot is either a rail node or the outboard end of an outrigger rollbar_foot_<side> from a rail node. Section
-    axes as K1: a vertical post's local y is along x, so the portal's sideways (in-plane) bending uses Iy and
-    the bending along the vehicle Iz; the top beam's in-plane (vertical) bending uses Iz; the outrigger (along
-    y) bends vertically on Iz and twists on J; the rail (along x) twists on J and bends vertically on Iz.
 
-    Feet (assumptions): the outrigger a cantilever from the rail node (rotation M L_o / (E I) for the side
-    moment, M L_o / (G J) for the moment along the vehicle); the rail held against twist and vertical
-    rotation at its next nodes either side (L_a, L_b), so the side moment twists it with G J (1/L_a + 1/L_b)
-    and the moment along the vehicle bends it with 4 E I (1/L_a + 1/L_b). theta_f = 1e6 x the two
-    flexibilities in series. Plastic moment at a foot: the smallest of the post's, the outrigger's (bending
-    or torsion) and the rail's (2 x, the rail on both sides of the node). The posts are taken alike; the
-    left one is read."""
+def _rail_holds(design: dict, nodes: dict, props: dict, root: str, rail_hold: str) -> dict:
+    """The rail through the root node along x, walked ahead (+x) and behind (-x) to where it is held: with
+    rail_hold "wheels", the first node a wheel stands on (a support's frame_node: the vehicle held on its wheels as
+    on a test bed); with "next", the next node. {"L_a", "L_b" (mm, 0: not held that way), "members" (the rail
+    pieces at the root), "held" (node or None per way), "note"}."""
+    p = nodes[root]
+    on_line = [mp for mp in props.values() if abs(mp["a"][1] - p[1]) < 1e-6 and abs(mp["b"][1] - p[1]) < 1e-6
+               and abs(mp["a"][2] - p[2]) < 1e-6 and abs(mp["b"][2] - p[2]) < 1e-6
+               and abs(mp["a"][0] - mp["b"][0]) > 1e-6]
+    wheels = {s["frame_node"] for s in design.get("supports", []) if s.get("frame_node")}
+    note = None
+    if rail_hold == "wheels" and not wheels:
+        rail_hold, note = "next", "no support names a frame_node; the rail taken as held at its next nodes"
+    out = {"L_a": 0.0, "L_b": 0.0, "members": [], "held": {}, "rail_hold": rail_hold, "note": note}
+    for way, sign in (("L_a", 1.0), ("L_b", -1.0)):
+        at, length, held = root, 0.0, None
+        while True:
+            nxt = [mp for mp in on_line if at in (mp["member"]["node_a"], mp["member"]["node_b"])
+                   and sign * ((mp["b"][0] if mp["member"]["node_a"] == at else mp["a"][0]) - nodes[at][0]) > 1e-6]
+            if not nxt:
+                break
+            mp = nxt[0]
+            if at == root:
+                out["members"].append(mp)
+            at = mp["member"]["node_b"] if mp["member"]["node_a"] == at else mp["member"]["node_a"]
+            length += mp["length"]
+            if rail_hold == "next" or at in wheels:
+                held = at
+                break
+        out[way] = length if held else 0.0
+        out["held"][way] = held
+    return out
+
+
+def portal_frame_inputs(design: dict, rail_hold: str = "wheels") -> dict:
+    """Inputs of frame_static.portal_frame_side, _rear and _top (library_portal.COMMON_INPUTS) from a roll bar,
+    all but E_in, f, F (the load case's) and, for _top, f_y (given here as the posts' yield stress).
+
+    The posts rollbar_post_L/R stand from a foot node up to the top corners, joined by rollbar_top. A post's foot
+    is either a rail node or the outboard end of an outrigger rollbar_foot_<side> across the vehicle from a rail
+    node (its root). Section axes as K1 (member_axes): a vertical post's local y is along x, so the portal's
+    sideways bending is about local y (Iy) and the bending along the vehicle about local z (Iz); a horizontal
+    member's local y is up, so its vertical bending is about local z (Iz) and its horizontal bending about local y.
+
+    The rail is walked from the root both ways to where it is held (rail_hold "wheels": the nodes the wheels stand
+    on, the vehicle held on its wheels; "next": the next nodes), giving L_a (ahead) and L_b (behind); a way that
+    reaches the rail's end unheld gives 0. The rail pieces' section is the one at the root (the softer of the two
+    if they differ). The posts are taken alike; the left one is read. The cross members, the other rail and the
+    rest of the chassis are not in the model (library_portal)."""
     nodes = node_table(design)
     props = member_props(design)
     missing = [m for m in (*ROLLBAR_POSTS, ROLLBAR_TOP) if m not in props]
@@ -1034,73 +1077,63 @@ def portal_frame_inputs(design: dict) -> dict:
     post, top = props[ROLLBAR_POSTS[0]], props[ROLLBAR_TOP]
     pm = post["member"]
     corners = {top["member"]["node_a"], top["member"]["node_b"]}
+    if not (pm["node_a"] in corners or pm["node_b"] in corners):
+        raise DesignError(f"{ROLLBAR_POSTS[0]} does not meet the top beam's ends")
     foot = pm["node_a"] if pm["node_b"] in corners else pm["node_b"]
+    corner = pm["node_b"] if foot == pm["node_a"] else pm["node_a"]
+    d = nodes[corner] - nodes[foot]
+    if d[2] <= 0 or np.hypot(d[0], d[1]) > 1e-6 * post["length"]:
+        raise DesignError("the portal frame inputs need upright posts")
     mat = post["material"]
     E, fy = float(mat["E_MPa"]), float(mat["yield_MPa"])
-    sp, sb = (design["sections"][x["member"]["section"]] for x in (post, top))
-    zp_post_z, zp_post_y = plastic_modulus(sp)
-    Mp_post_side, Mp_post_rear = zp_post_y * fy, zp_post_z * fy
-    Mp_top = plastic_modulus(sb)[0] * float(top["material"]["yield_MPa"])
+    vals: dict[str, float] = {"E": E, "nu": float(mat["nu"]), "h": post["length"], "w": top["length"]}
+    vals.update(_member_group(post, design, "c"))
+    vals.update(_member_group(top, design, "b"))
 
     out_mp = next((mp for mid, mp in props.items() if mid.startswith("rollbar_foot_")
                    and foot in (mp["member"]["node_a"], mp["member"]["node_b"])), None)
-    c_side = c_rear = 0.0
-    caps_side, caps_rear = [Mp_post_side], [Mp_post_rear]
-    breakdown: dict = {}
-    rail_node = foot
+    breakdown: dict = {"foot_node": foot}
+    root = foot
+    e = 0.0
     if out_mp is not None:
         om = out_mp["member"]
-        rail_node = om["node_a"] if om["node_b"] == foot else om["node_b"]
-        omat = out_mp["material"]
-        Eo, fyo = float(omat["E_MPa"]), float(omat["yield_MPa"])
-        Go = Eo / (2.0 * (1.0 + float(omat["nu"])))
-        osec = design["sections"][om["section"]]
-        Lo = out_mp["length"]
-        c_o_side = Lo / (Eo * out_mp["section"]["Iz"])
-        c_o_rear = Lo / (Go * out_mp["section"]["J"])
-        c_side += c_o_side
-        c_rear += c_o_rear
-        caps_side.append(plastic_modulus(osec)[0] * fyo)
-        caps_rear.append(plastic_torque(osec, fyo / np.sqrt(3.0)))
-        breakdown.update(outrigger=om["id"], outrigger_length_mm=Lo, theta_outrigger_side_per_kNm=1e6 * c_o_side,
-                         theta_outrigger_rear_per_kNm=1e6 * c_o_rear)
-    p = nodes[rail_node]
-    rails = [mp for mp in props.values() if rail_node in (mp["member"]["node_a"], mp["member"]["node_b"])
-             and abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
-             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and abs(mp["a"][1] - p[1]) < 1e-6]
-    if len(rails) == 2:
-        rmat = rails[0]["material"]
-        Er, fyr = float(rmat["E_MPa"]), float(rmat["yield_MPa"])
-        Gr = Er / (2.0 * (1.0 + float(rmat["nu"])))
-        rsec = design["sections"][rails[0]["member"]["section"]]
-        inv = sum(1.0 / r["length"] for r in rails)
-        c_r_side = 1.0 / (Gr * rails[0]["section"]["J"] * inv)
-        c_r_rear = 1.0 / (4.0 * Er * rails[0]["section"]["Iz"] * inv)
-        c_side += c_r_side
-        c_rear += c_r_rear
-        caps_side.append(2.0 * plastic_torque(rsec, fyr / np.sqrt(3.0)))
-        caps_rear.append(2.0 * plastic_modulus(rsec)[0] * fyr)
-        breakdown.update(rail_node=rail_node, rail_members=[r["member"]["id"] for r in rails],
-                         rail_lengths_mm=[r["length"] for r in rails], theta_rail_side_per_kNm=1e6 * c_r_side,
-                         theta_rail_rear_per_kNm=1e6 * c_r_rear)
-    else:  # the foot is not on a rail running on both sides: taken as fixed there
-        breakdown.update(rail_node=None, note="the foot's node has no rail on both sides; taken as fixed there")
+        root = om["node_a"] if om["node_b"] == foot else om["node_b"]
+        r, fp = nodes[root], nodes[foot]
+        if abs(r[0] - fp[0]) > 1e-6 or abs(r[2] - fp[2]) > 1e-6:
+            raise DesignError(f"outrigger {om['id']} must run straight across the vehicle at the foot's height")
+        e = abs(fp[1]) - abs(r[1])
+        vals.update(_member_group(out_mp, design, "o"))
+        breakdown.update(outrigger=om["id"], outrigger_length_mm=out_mp["length"])
+    else:
+        vals.update({k.replace("_c", "_o"): 0.0 for k in _member_group(post, design, "c")})
+    vals["e"] = e
+    holds = _rail_holds(design, nodes, props, root, rail_hold)
+    vals["L_a"], vals["L_b"] = holds["L_a"], holds["L_b"]
+    if holds["members"] and (holds["L_a"] > 0 or holds["L_b"] > 0):
+        rail = min(holds["members"], key=lambda mp: mp["section"]["Iz"])
+        vals.update(_member_group(rail, design, "r"))
+    else:
+        vals.update({k.replace("_c", "_r"): 0.0 for k in _member_group(post, design, "c")})
+    breakdown.update(root_node=root, rail_hold=holds["rail_hold"], held_ahead=holds["held"].get("L_a"),
+                     held_behind=holds["held"].get("L_b"), rail_members=[mp["member"]["id"] for mp in holds["members"]],
+                     L_a_mm=holds["L_a"], L_b_mm=holds["L_b"])
+    if holds["note"]:
+        breakdown["note"] = holds["note"]
+    if not (holds["L_a"] > 0 or holds["L_b"] > 0):
+        breakdown["note"] = "the rail is not held either way from the foot; the root taken as fixed"
 
-    pp = post["section"]
-    q = quantity
-    common = {"E": q(E, "MPa"), "h": q(post["length"], "mm")}
-    M_pt = min(Mp_post_side, Mp_top)
+    units = {"E": "MPa", "nu": "1", "h": "mm", "w": "mm", "e": "mm", "L_a": "mm", "L_b": "mm"}
+    for k in vals:
+        if k not in units:
+            units[k] = {"A": "mm^2", "Iy": "mm^4", "Iz": "mm^4", "J": "mm^4"}.get(k.split("_")[0], "N*mm")
+    common = {k: quantity(float(v), units[k]) for k, v in vals.items()}
     return {
-        "side": {**common, "w": q(top["length"], "mm"), "I_c": q(pp["Iy"], "mm^4"), "I_b": q(top["section"]["Iz"], "mm^4"),
-                 "theta_f": q(1e6 * c_side, "rad"), "M_pf": q(min(caps_side), "N*mm"), "M_pt": q(M_pt, "N*mm")},
-        "rear": {**common, "I_c": q(pp["Iz"], "mm^4"), "theta_f": q(1e6 * c_rear, "rad"),
-                 "M_pf": q(min(caps_rear), "N*mm")},
-        "top": {**common, "w": q(top["length"], "mm"), "I_c": q(pp["Iy"], "mm^4"), "I_b": q(top["section"]["Iz"], "mm^4"),
-                "I_min": q(min(pp["Iy"], pp["Iz"]), "mm^4"), "A_c": q(pp["A"], "mm^2"),
-                "theta_f": q(1e6 * c_side, "rad"), "M_pb": q(Mp_top, "N*mm"), "M_pt": q(M_pt, "N*mm"),
-                "f_y": q(fy, "MPa")},
+        "side": dict(common),
+        "rear": dict(common),
+        "top": {**common, "f_y": quantity(fy, "MPa")},
         "members": {"posts": list(ROLLBAR_POSTS), "top": ROLLBAR_TOP, "foot_node": foot},
         "foot": breakdown,
-        "plastic_moments_Nmm": {"post_side": Mp_post_side, "post_rear": Mp_post_rear, "top": Mp_top,
-                                "foot_side": min(caps_side), "foot_rear": min(caps_rear)},
+        "plastic_moments_Nmm": {"post_side": vals["Mpy_c"], "post_rear": vals["Mpz_c"], "top": vals["Mpz_b"],
+                                "outrigger_vertical": vals["Mpz_o"], "outrigger_torque": vals["Tp_o"],
+                                "rail_vertical": vals["Mpz_r"], "rail_torque": vals["Tp_r"]},
     }

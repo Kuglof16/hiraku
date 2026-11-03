@@ -239,10 +239,10 @@ class HooksTest(RunCase, unittest.TestCase):
         pending (load case id, test id or domain); a pending case the issues do not name still blocks."""
         from hiraku.agent.runner import end_status
 
-        self.report([{"kind": "missing_tool", "what": "段差の道具が止まる", "where": "P1-step100"}])
+        self.report([{"kind": "missing_tool", "what": "段差のツールが止まる", "where": "P1-step100"}])
         self.assertEqual(self.stop()["decision"], "block")  # strength's R1 is pending and not named
         self.assertIn("R1-step100", self.hooks_reason())
-        self.report([{"kind": "missing_tool", "what": "段差の道具が止まる", "where": "P1-step100"},
+        self.report([{"kind": "missing_tool", "what": "段差のツールが止まる", "where": "P1-step100"},
                      {"kind": "missing_formula", "what": "合う式が無い", "record_ids": ["cmp-0009"], "where": "R1"}])
         self.assertIsNotNone(rules.excused_pending(self.ctx))
         self.assertEqual(self.stop(), {})

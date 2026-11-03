@@ -31,7 +31,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 1,
+    "round_limit": 2,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -353,7 +353,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (3)・音振 (1)・熱 (2)",
+   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
     "flags": {
@@ -420,11 +420,13 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "乗・悪・走・預・荷・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
-       "R4"
+       "R4",
+       "R7",
+       "R8"
       ]
      },
      {
@@ -1159,7 +1161,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 4 件、答えが無いまま 3 件",
    "data": {
     "answers": [
      {
@@ -1178,6 +1180,24 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      },
      {
       "key": "Q34",
@@ -1534,6 +1554,22 @@ export const DEMOS = {
      },
      "battery_x": {
       "value": -1045.0,
+      "unit": "mm"
+     },
+     "seat_height": {
+      "value": 260.0,
+      "unit": "mm"
+     },
+     "steering_column_angle": {
+      "value": 35.0,
+      "unit": "deg"
+     },
+     "steering_wheel_height": {
+      "value": 495.411492555231,
+      "unit": "mm"
+     },
+     "pedal_x": {
+      "value": -393.1890219018587,
       "unit": "mm"
      },
      "front_spring_rate": {
@@ -9476,7 +9512,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (3)・騒音 (0)・熱 (デューティ) (1)",
+   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (4)・騒音 (0)・熱 (デューティ) (1)",
    "data": {
     "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
     "flags": {
@@ -9521,11 +9557,12 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ を当てる。R2 衝撃 (落錘・落下・段差)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
-       "R5"
+       "R5",
+       "R8"
       ]
      },
      {
@@ -10547,7 +10584,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "2 分野: 強度 (弦の張力) (2)・音振 (1)",
+   "text": "2 分野: 強度 (弦の張力) (3)・音振 (1)",
    "data": {
     "want": "電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい",
     "flags": {
@@ -10576,10 +10613,11 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度 (弦の張力)",
-      "reason": "R1 静的強度・R3 疲労・耐久 を当てる。R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "R1 静的強度・R3 疲労・耐久・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる",
       "test_ids": [
        "R1",
-       "R3"
+       "R3",
+       "R8"
       ]
      },
      {
@@ -11362,7 +11400,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (2)・動力 (4)・液体のこぼれ (0)・人との接触 (0)・強度信頼性 (2)・音振 (1)・熱 (2)",
+   "text": "7 分野: 操安 (2)・動力 (4)・液体のこぼれ (0)・人との接触 (0)・強度信頼性 (3)・音振 (1)・熱 (2)",
    "data": {
     "want": "飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい",
     "flags": {
@@ -11423,10 +11461,11 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久 を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R3"
+       "R3",
+       "R8"
       ]
      },
      {
@@ -12505,7 +12544,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 1,
+    "round_limit": 2,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -12828,6 +12867,24 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption (no public basis found)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      }
     ],
     "domain_picks": [],
@@ -12844,7 +12901,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (3)・音振 (1)・熱 (2)",
+   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
     "flags": {
@@ -12911,11 +12968,13 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "乗・悪・預・荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "乗・悪・走・預・荷・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
        "R3",
-       "R4"
+       "R4",
+       "R7",
+       "R8"
       ]
      },
      {
@@ -13524,7 +13583,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)",
    "data": {
     "answers": [
      {
@@ -13543,6 +13602,24 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      }
     ]
    }
@@ -13865,6 +13942,22 @@ export const DEMOS = {
      },
      "battery_x": {
       "value": -1045.0,
+      "unit": "mm"
+     },
+     "seat_height": {
+      "value": 260.0,
+      "unit": "mm"
+     },
+     "steering_column_angle": {
+      "value": 35.0,
+      "unit": "deg"
+     },
+     "steering_wheel_height": {
+      "value": 495.411492555231,
+      "unit": "mm"
+     },
+     "pedal_x": {
+      "value": -393.1890219018587,
       "unit": "mm"
      },
      "front_spring_rate": {

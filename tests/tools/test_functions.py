@@ -826,7 +826,7 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
         check_shelf(self.ctx)
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("道具 step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
+        self.assertIn("ツール step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
         self.assertFalse(any("frame_static の照合" in t for t in said))
 
 
@@ -850,7 +850,11 @@ class RunToolsOnlyTest(RunCase, unittest.TestCase):
         checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
         self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
+        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめないツール: tilt", said)
+        (ev,) = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and "確かめないツール" in e["text"]]
+        self.assertEqual(ev["data"], {"tests": ["P1", "R1"], "checked": ["step_climb", "frame_static", "frame_shell"],
+                                      "not_checked": ["tilt"]})
+        self.assert_events_fit()
         self.assertEqual(self.extra["tilt"].runs, [])
         line = next(t for t in list_tools(self.ctx) if t["name"] == "tilt")
         self.assertFalse(line["usable"])
@@ -1041,6 +1045,18 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
         self.assertIn("F", entry["missing"])  # a prediction not recorded yet
 
+    def test_the_retried_formula_comes_first_for_the_roles(self):
+        """P1's scripted scene predicts with the lever rule on purpose and misses; a role is given the
+        couple's formula first, and the lever rule after it with the scene's cause."""
+        out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "P1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        ids = [e["formula_id"] for e in case["formulas"]]
+        self.assertEqual(ids[0], "step_climb.pushed_wheel_load")
+        lever = next(e for e in case["formulas"] if e["formula_id"] == "mass_props.front_wheel_load")
+        self.assertIn("台本の場面", lever["when"])
+        self.assertIn("偶力", lever["when"])
+        self.assertLess(ids.index("step_climb.pushed_wheel_load"), ids.index("mass_props.front_wheel_load"))
+
     def test_a_tool_made_in_the_run_replaces_the_no_tool_note(self):
         """Once a made tool for the test is on the shelf, formula_inputs names it instead of saying there is none."""
         import types
@@ -1121,7 +1137,7 @@ class UnpredictableCaseTest(RunCase, unittest.TestCase):
         self.assertEqual(rules.unpredictable_cases(self.ctx), {})
         reason = rules.stop_reason(self.ctx)
         part = reason[reason.index("R4-x"):]
-        self.assertIn("棚に R4 を解析できる使える道具がありません", part)
+        self.assertIn("棚に R4 を解析できる使えるツールがありません", part)
         self.assertIn("get_tool_template", part)
         self.assertIn("make_tool", part)
         self.assertNotIn("棚に R1", reason)  # frame_static is on the shelf for R1

@@ -179,16 +179,21 @@ STAGE_NAMES_JA = {0: "レイアウトと規則", 1: "軽い計算", 2: "車の�
 
 def load_case_stage(ctx: RunContext, load_case: Record) -> int | None:
     """The lowest stage among the usable tools on the shelf whose tests cover the load case's test
-    (test_family) and that give the quantity its criterion judges (_gives; all covering tools when
+    (test_family), that apply to the version's kind of design (applies_to), and that give the quantity its criterion judges (_gives; all covering tools when
     none says so). None when no usable tool covers it (no tool checks it, so HK5 does not wait for
     it). Without the tools (the plugin's hook command) the run's server worked it out (ctx.stages)."""
     kept = ((getattr(ctx, "stages", None) or {}).get("cases") or {})
     if not ctx.tools and load_case["load_case_id"] in kept:
         got = kept[load_case["load_case_id"]]
         return None if got is None else int(got)
+    from hiraku.tools.functions import design_kind
+
     fam = test_family(load_case["test_id"])
+    kind = design_kind(ctx)
+    # a tool for other kinds of design (tool_spec.applies_to, e.g. the care bed's use_fatigue) does not check this one
     covering = [n for n, s in ctx.specs.items()
-                if s.get("usable") and any(test_family(t) == fam for t in s.get("tests") or [])]
+                if s.get("usable") and any(test_family(t) == fam for t in s.get("tests") or [])
+                and (not s.get("applies_to") or kind in s["applies_to"])]
     q = (load_case.get("criterion") or {}).get("quantity")
     if q:
         giving = [n for n in covering if _gives(ctx.tools.get(n), q) is not False]
@@ -267,7 +272,7 @@ def keep_check(folder: Path, code: str, name: str, run_id: str, spec: Record) ->
 
 
 NOT_YET = "試験がまだ決まっていないので、まだ確かめていない"
-DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、道具は版 1 の試験が決まってから、その試験に使う分だけ確かめます"
+DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、ツールは版 1 の試験が決まってから、その試験に使う分だけ確かめます"
 
 
 def defer_shelf(ctx: RunContext) -> None:
@@ -287,8 +292,10 @@ def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_chec
     left = [n for n in ctx.tools if n not in names and n not in ctx.specs]
     if left:
         ctx.store.emit("agent.said", agent="system",
-                       text=f"この実行の試験 ({'・'.join(test_ids or [])}) には使わないので確かめない道具: "
-                            + "、".join(left))
+                       text=f"この実行の試験 ({'・'.join(test_ids or [])}) には使わないので確かめないツール: "
+                            + "、".join(left),
+                       # the names for the screen, so it need not cut them out of the sentence
+                       data={"tests": list(test_ids or []), "checked": list(names), "not_checked": list(left)})
     code = source_hash()
     folder = ctx.store.path.parent
     for name in names:
@@ -308,8 +315,8 @@ def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_chec
         ok = "使えます" if spec["usable"] else "使えません (答えの分かっている例に通らない)"
         how = f" (ソースが同じ前の実行 {got[1]} の照合を使いました)" if got is not None else ""
         ctx.store.emit("tool.checked", agent="system", domain=spec["domain"],
-                       text=f"道具 {name} を確かめました: {ok}{how}", data=spec)
+                       text=f"ツール {name} を確かめました: {ok}{how}", data=spec)
         if getattr(tool, "checks_from_cache", False):  # the tests' disk cache (HIRAKU_CHECK_CACHE=1), never a real run
             ctx.store.emit("agent.said", agent="system",
-                           text=f"道具 {name} の照合は、試験のために覚えておいた前の結果を使いました")
+                           text=f"ツール {name} の照合は、試験のために覚えておいた前の結果を使いました")
     return ctx.specs

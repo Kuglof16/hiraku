@@ -237,11 +237,14 @@ def _corner_name(s: Record) -> str:
 
 
 def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: float, post_dx: float,
-          rail: Record, avoid: tuple[str, ...] = (), lower_cross: bool = True, whole: tuple[str, ...] = ()) -> Record:
+          rail: Record, avoid: tuple[str, ...] = (), lower_cross: bool = True, whole: tuple[str, ...] = (),
+          rear_post_dx: dict[str, float] | None = None) -> Record:
     """Add each corner's tower, lower arm legs and cross members to the frame and its brackets to the
     parts (see the module doc). sections: {"tower", "leg", "lower"} section keys of the frame; rail:
     {"y", "z", "b", "h"}; whole: rail members not to split (a post there stands on the wheel's station
-    node, a bracket there is carried by it). Returns {"members": [ids], "brackets": [ids], "skipped_cross": [why]}."""
+    node, a bracket there is carried by it); rear_post_dx: {axle station: dx} puts that axle's rear posts
+    dx behind the wheel centre instead of post_dx (the lower arm's rear leg still starts from the rail
+    node post_dx behind, a node of its own). Returns {"members": [ids], "brackets": [ids], "skipped_cross": [why]}."""
     from hiraku.solvers.k4_geometry.obb import from_box, from_member, overlap
 
     stations = {n for n in frame.nodes}  # nodes before this: the ladder's stations (and any others)
@@ -269,7 +272,12 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
 
         # rail nodes: the posts and below the upper arm pivots; on a piece kept whole there is no post (the top
         # beam reaches over from the other post) and the bracket is carried by the wheel's own station node
-        posts = {i: on_rail(x0 + dx, f"{tag}p{i}") for i, dx in ((1, post_dx), (2, -post_dx))}
+        behind = float((rear_post_dx or {}).get(st, post_dx))
+        dxs = {1: post_dx, 2: -behind}
+        posts = {i: on_rail(x0 + dx, f"{tag}p{i}") for i, dx in dxs.items()}
+        leg_feet = dict(posts)  # the rail nodes the lower arm's legs start from
+        if behind != post_dx:
+            leg_feet[2] = on_rail(x0 - post_dx, f"{tag}q2")
         under_u = {i: on_rail(float(hp[k][0]), f"{tag}u{i}") or s["frame_node"]
                    for i, k in ((1, "uca_front"), (2, "uca_rear"))}
         # the tower
@@ -284,7 +292,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
             frame.nodes.pop(over)
             over = frame.node(f"{tag}m", [float(du[0]) - SINGLE_POST_LEAN_X_MM, ry + sy * SINGLE_POST_LEAN_MM, z_top])
             out["members"].append(frame.member(f"tower_post_{tag}", s["frame_node"], over, sections["tower"]))
-        for i, dx in ((1, post_dx), (2, -post_dx)):
+        for i, dx in dxs.items():
             if posts[i] is None:
                 continue
             top = frame.node(f"{tag}t{i}", [x0 + dx, ry, z_top])
@@ -297,7 +305,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
         # held by a bracket hanging from that node instead
         corner = _corner_name(s)
         for i, k in ((1, "lca_front"), (2, "lca_rear")):
-            if posts[i] is None:
+            if leg_feet[i] is None:
                 p = hp[k]
                 ys = sorted((float(p[1]) - sy * BRACKET_PAD_MM, ry))
                 zs = sorted((float(p[2]) - BRACKET_PAD_MM, max(rail["z"] - rail["h"] / 2.0, float(p[2]) + BRACKET_PAD_MM)))
@@ -309,7 +317,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
                 out["brackets"].append(pid)
                 continue
             n = frame.node(f"{tag}l{i}", hp[k].tolist())
-            out["members"].append(frame.member(f"lower_leg_{tag}{i}", posts[i], n, sections["leg"]))
+            out["members"].append(frame.member(f"lower_leg_{tag}{i}", leg_feet[i], n, sections["leg"]))
             pivots.setdefault((st, k), {})[side] = n
         # brackets at the upper arm pivots, standing on the rail
         for i, k in ((1, "uca_front"), (2, "uca_rear")):

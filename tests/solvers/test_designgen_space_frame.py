@@ -118,6 +118,25 @@ class SpaceFrameDesignTest(unittest.TestCase):
         self.assertGreater(reach, r + 10.0)
         self.assertAlmostEqual(gap, r + 40.0 - reach - rt, delta=0.1)
 
+    def test_rear_link_has_its_own_tube(self):
+        v = sf.VARIABLES
+        self.assertEqual((v["rear_link_tube_d"].default, v["rear_link_tube_d"].lo, v["rear_link_tube_d"].hi),
+                         (34.0, 27.2, 60.5))
+        self.assertEqual((v["rear_link_tube_t"].default, v["rear_link_tube_t"].lo, v["rear_link_tube_t"].hi),
+                         (2.3, 2.0, 4.0))
+        self.assertTrue(v["rear_link_tube_d"].revisable)
+        sec = {m["id"]: m["section"] for m in self.d["members"]}
+        self.assertEqual(sec["rear_lower_link_L"], "ct34x2.3")  # the default design is as before
+        d2 = sf.build({"rear_link_tube_d": 42.7})
+        sec2 = {m["id"]: m["section"] for m in d2["members"]}
+        self.assertEqual(sec2["rear_lower_link_L"], "ct42.7x2.3")
+        self.assertEqual(sec2["rear_lower_link_R"], "ct42.7x2.3")
+        changed = {m for m in sec if sec[m] != sec2[m]}
+        self.assertEqual(changed, {"rear_lower_link_L", "rear_lower_link_R"})
+        self.assertEqual(contract.errors("design", d2), [])
+        with self.assertRaisesRegex(ladder_4w.DesignGenError, "outside"):
+            sf.build({"rear_link_tube_d": 70.0})
+
     def test_dash_bar_has_its_own_tube(self):
         sec = {m["id"]: m["section"] for m in self.d["members"]}
         self.assertEqual(sec["dash_bar_L"], "ct48.6x3.2")

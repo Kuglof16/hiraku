@@ -133,9 +133,9 @@ def s1_tipping(spec: Record, req: Record, design: Record) -> list[Record]:
                   f"{RAIL_PUSH_SHARE:.0%}、仮定。利用者は降り、マットレスは載せたまま)"),
         "params": {"loading": LOADING_EMPTY, "load_node": "LSM", "load_y": q(P, "N")},
         "requirement_keys": ["Q33", *keys],
-        "criterion": {"quantity": "lighter_side_load", "op": ">=", "limit": q(0.0, "N"),
-                      "basis": (f"with the side rail pushed outward by {P:g} N (half of Q33, an assumption) the casters of "
-                                "the far side keep a load (below 0 the bed tips); the casters are taken not to slide"),
+        "criterion": {"quantity": "min_wheel_load", "op": ">=", "limit": q(0.0, "N"),
+                      "basis": (f"with the side rail pushed outward by {P:g} N (half of Q33, an assumption) every caster "
+                                "keeps a load (one below 0 lifts: the bed starts to tip); the casters are taken not to slide"),
                       "requirement_keys": ["Q33"]},
         "tolerance_rel": tolerance(spec, S1_TOL),
     }
@@ -168,7 +168,9 @@ S1_STEP = {
 
 
 def s1_push_inputs(design: Record, load_case: Record) -> Record:
-    """W, y_cg (toward the pushed side), F, h_F (above the floor), y_s of bed.side_push_tipping."""
+    """W, y_cg (toward the pushed side), F, h_F (above the floor), y_s of bed.side_push_tipping, and x_cg, x_F, x_r,
+    L_x (along the bed: the centre of gravity, the push, the far side's rear caster, the caster base) of
+    bed.side_push_caster."""
     from hiraku.contract.loading import loading_of, on_board
     from hiraku.solvers.k0_handcalc import units
     from hiraku.solvers.k0_handcalc.vehicle import mass_summary
@@ -180,8 +182,11 @@ def s1_push_inputs(design: Record, load_case: Record) -> Record:
     side = 1.0 if Fy >= 0 else -1.0
     node = {n["id"]: n["xyz_mm"] for n in design["nodes"]}[p["load_node"]]
     y_s = min(abs(s["position_mm"][1]) for s in design["supports"] if s["position_mm"][1] * side > 0)
+    far = [float(s["position_mm"][0]) for s in design["supports"] if s["position_mm"][1] * side < 0]
     return {"W": q(ms["mass_kg"] * G0, "N"), "y_cg": q(side * float(ms["cg_mm"][1]), "mm"), "F": q(abs(Fy), "N"),
-            "h_F": q(node[2], "mm"), "y_s": q(y_s, "mm")}
+            "h_F": q(node[2], "mm"), "y_s": q(y_s, "mm"),
+            "x_cg": q(float(ms["cg_mm"][0]), "mm"), "x_F": q(float(node[0]), "mm"), "x_r": q(min(far), "mm"),
+            "L_x": q(max(far) - min(far), "mm")}
 
 
 S1_PUSH_STEP = {
@@ -190,6 +195,12 @@ S1_PUSH_STEP = {
     "predictions": [{"quantity": "lighter_side_load", "formula_id": "bed.side_push_tipping", "output": "R_far",
                      "assumptions": ["ベッドは硬い", "床は水平", "キャスターは滑らない (床が押す力を接地点で受ける)"],
                      "inputs": {k: f"from.{k}" for k in ("W", "y_cg", "F", "h_F", "y_s")},
+                     "inputs_from": s1_push_inputs},
+                    {"quantity": "min_wheel_load", "formula_id": "bed.side_push_caster", "output": "R_min",
+                     "assumptions": ["ベッドは硬い", "床は水平", "キャスターは滑らない (床が押す力を接地点で受ける)",
+                                     "枠はねじれる: 押す力の横転のモーメントは、前と後ろのキャスターの組に、両端で支えた軸の"
+                                     "ねじりのように押す点からの距離の逆の比で分かれる"],
+                     "inputs": {k: f"from.{k}" for k in ("W", "y_cg", "F", "h_F", "y_s", "x_cg", "x_F", "x_r", "L_x")},
                      "inputs_from": s1_push_inputs}],
 }
 

@@ -62,12 +62,23 @@ def _stage_ja(n: int) -> str:
     return f"段 {n} ({STAGE_NAMES_JA.get(n, '?')})"
 
 
+def _verdict_tool(ctx: RunContext, ver: Record) -> str | None:
+    """The tool of the analysis a verdict came from (through its comparison, or analysis_id for unsupported_load)."""
+    ana_id = ver.get("analysis_id")
+    if ana_id is None and ver.get("comparison_id"):
+        ana_id = (ctx.store.get("comparison", ver["comparison_id"]) or {}).get("analysis_id")
+    return (ctx.store.get("analysis", ana_id) or {}).get("tool") if ana_id else None
+
+
 def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> list[tuple[int, Record, str]]:
     """HK5: the load cases of the current version, of a stage below `stage` (shelf.load_case_stage),
     in the picked domains and assembly, that are red (a failing verdict), not judged, or held back
-    from passing (judge.held_cases): [(stage, load case, what)], lowest stage first. Not counted: the
-    load case `skip` (the one being analyzed), cases past the limit (catalog.is_beyond: meant to
-    fail), cases no usable tool checks and those no K0 formula can predict (unpredictable_cases)."""
+    from passing (judge.held_cases): [(stage, load case, what)], lowest stage first. The load case
+    `skip` (the one being analyzed) counts only when its latest verdict is red and came from a tool of
+    a lower stage (red on the beam: revise before the heavy analysis); not judged or held, it waits as
+    the others do not (its heavier tool may be what settles it). Not counted: cases past the limit
+    (catalog.is_beyond: meant to fail), cases no usable tool checks and those no K0 formula can
+    predict (unpredictable_cases)."""
     v = ctx.version
     if not v or stage <= 0:
         return []
@@ -77,12 +88,17 @@ def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> li
     out = []
     for lc in ctx.load_cases:
         lc_id = lc["load_case_id"]
-        if lc_id == skip or "criterion" not in lc or lc["domain"] not in domains or is_beyond(lc):
+        if "criterion" not in lc or lc["domain"] not in domains or is_beyond(lc):
             continue
         n = load_case_stage(ctx, lc)
         if n is None or n >= stage:
             continue
         ver = verdicts.get(lc_id)
+        if lc_id == skip:  # the same load case: only a red from a lighter tool stops the heavier one
+            made_by = _verdict_tool(ctx, ver) if ver is not None and not ver["pass"] else None
+            if made_by is not None and tool_stage(ctx, made_by) < stage:
+                out.append((n, lc, f"赤、{ver['verdict_id']}"))
+            continue
         if ver is not None and not ver["pass"]:
             out.append((n, lc, f"赤、{ver['verdict_id']}"))
             continue
@@ -111,9 +127,9 @@ def _h5(ctx: RunContext, lc_id: str, tool: str, domain: str | None) -> Denial | 
         red_hint = (f"赤のもの ({ids}) は、重い計算に進む前に、設計役 (designer) に通らなかった試験と合否の ID を渡して "
                     f"revise_design で次の版 (版 {ctx.version + 1}) を作らせてください (新しい版は段 0 からやり直す)。")
     return Denial(HK5, (
-        f"{tool} は{_stage_ja(n)}の道具なので、{lc_id} の解析は止めました。版 {ctx.version} で、それより軽い段の荷重条件に"
+        f"{tool} は{_stage_ja(n)}のツールなので、{lc_id} の解析は止めました。版 {ctx.version} で、それより軽い段の荷重条件に"
         f"赤か未判定が残っています: {named}。軽い段から確かめてください: 未判定のものは予測 → analyze → compare で"
-        f"判定を付けます。{red_hint}同じ段の道具は並べて回してかまいません"
+        f"判定を付けます。{red_hint}同じ段のツールは並べて回してかまいません"
     ), domain)
 
 
@@ -130,15 +146,15 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
     if name in ctx.tools and spec is None:
         return Denial(HK2, (
-            f"道具 {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
-            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+            f"ツール {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
+            f"list_tools で usable が true のツール ({usable}) を選んでください"
         ), domain)
     if (name in ctx.tools or spec is not None) and not (spec and spec["usable"]):
         checks = spec["checks"] if spec else []
         failed = [c["case"] for c in checks if not c["pass"]] or ["(答えの分かっている例が無い、またはまだ確かめていない)"]
         return Denial(HK2, (
-            f"道具 {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
-            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+            f"ツール {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
+            f"list_tools で usable が true のツール ({usable}) を選んでください"
         ), domain)
 
     if lc_id is None or not ctx.has_load_case(lc_id):
@@ -356,7 +372,7 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
-                first = (f"棚に {lc['test_id']} を解析できる使える道具がありません。get_tool_template で道具の形を見て書き、"
+                first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
             steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")

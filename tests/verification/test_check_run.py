@@ -243,6 +243,11 @@ class CheckRun(unittest.TestCase):
         ev = self._report(sample_events())
         by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y"}]
         self.assertFlags(ev, "report.domains")
+        # an item answering a rule's hit may name a domain the run did not pick (warned when no hit)
+        by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y",
+                                                          "rule_id": "SM-01"}]
+        self.assertNotIn("report.domains", self.rules(ev))
+        self.assertIn("report.domains", self.rules(ev, "warn"))  # the sample has no rule_check hit
 
     def test_report_file_is_the_last_report_written(self):
         run = write_run(self.root / "x", self._report(sample_events()))
@@ -311,6 +316,35 @@ class CheckRun(unittest.TestCase):
         for e in ev[i:]:
             e["t"] = max(e["t"], cmp_ev["t"])
         self.assertFlags(renumber(ev), "HK3_cause_before_continue")
+
+    def test_a_run_that_stops_after_the_picks_is_done_without_a_design(self):
+        # project.stop_after "picks" (from the requirements file): domains picked and the hearing, then done;
+        # no design is made. A done without a design and without it is still wrong, whatever events it has.
+        def run(stop_after):
+            ev = [e for e in sample_events()
+                  if e["kind"] in ("run.started", "agent.started", "agent.stopped", "run.finished")]
+            ev.insert(1, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "domains.picked",
+                          "agent": "lead", "data": {"want": ev[0]["data"].get("want", ""), "flags": {},
+                                                    "picks": ev[0]["data"].get("domain_picks", []), "off": []}})
+            if stop_after:
+                ev[0]["data"]["stop_after"] = stop_after
+            return renumber(ev)
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run("picks")))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(None)))
+
+    def test_h4_does_not_wait_for_a_domain_with_no_test_to_build(self):
+        # a picked domain whose tests have no way to build their load cases: test_ids empty, not judged
+        def run(test_ids, reason):
+            ev = sample_events()
+            picks = [*ev[0]["data"]["domain_picks"],
+                     {"domain": "nvh", "shown_name": "音振", "reason": reason, "test_ids": test_ids}]
+            ev[0]["data"]["domain_picks"] = picks
+            return ev
+        said = "騒音 N3 は荷重条件の作り方が無いので、この実行では見ない"
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said)))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run([], "騒音"), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(["N3"], said)))  # tests to judge, no tile
 
     def test_h4_done_while_a_picked_domain_is_pending(self):
         ev = sample_events()
@@ -403,6 +437,22 @@ class CheckRun(unittest.TestCase):
         self.assertIn("HK4_no_stop_before_judged", self.rules(stopped("pending")))
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red")))
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red"), "warn"))
+
+    def test_round_limit_may_leave_cases_behind_a_lower_stage_red(self):
+        # HK4 / HK5's dead end: revisions used up with a red left, the heavier cases are not run (contract)
+        def stopped(reason):
+            ev = self._unjudged_case(self._red(sample_events()))  # R1 red, R3-qa without a verdict
+            ev = self._finish(ev, "stopped", "round_limit", "red")
+            ev[0]["data"]["round_limit"] = 0
+            ev[0]["data"]["stop_reason"] = reason
+            by_kind(ev, "run.finished")["data"]["stop_reason"] = reason
+            return ev
+        said = stopped("R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
+        silent = stopped("R1 が赤のまま直しの回数を使い切った")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(silent))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(silent, "warn"))
 
     def test_comparison_where_picks_the_result(self):
         ev = sample_events()
@@ -661,10 +711,31 @@ class CheckRun(unittest.TestCase):
         # frame_shell (stage 3) after frame_static's R1 (stage 1) passed: allowed
         ev = self._stages(self._shell_after_green(sample_events(), 100.0), frame_static=1, frame_shell=3)
         self.assertNotIn("HK5_light_first", self.rules(ev))
-        # started before R1 had its verdict: HK5 denies it
+        # on R1 itself before R1 had its verdict: allowed (the heavier tool may be what settles it)
         early = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
                              frame_static=1, frame_shell=3)
-        self.assertFlags(early, "HK5_light_first")
+        self.assertNotIn("HK5_light_first", self.rules(early))
+        # on R1 after frame_static's verdict on R1 was red: HK5 denies it (revise first)
+        red = sample_events()
+        by_kind(red, "verdict.recorded")["data"]["pass"] = False
+        red = self._stages(self._shell_after_green(red, 100.0, after="verdict.recorded"), frame_static=1, frame_shell=3)
+        self.assertIn("HK5_light_first", self.rules(red))
+        # on another load case while R1 has no verdict yet: HK5 denies it
+        other = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
+                             frame_static=1, frame_shell=3)
+        for e in other:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertFlags(other, "HK5_light_first")
+        # a case past the limit (-beyond) is meant to fail: its red does not hold back the heavier tools
+        beyond = json.loads(json.dumps(sample_events()).replace("R1-step100", "R1-step100-beyond"))
+        by_kind(beyond, "verdict.recorded")["data"]["pass"] = False
+        beyond = self._stages(self._shell_after_green(beyond, 100.0, after="verdict.recorded"),
+                              frame_static=1, frame_shell=3)
+        for e in beyond:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertNotIn("HK5_light_first", self.rules(beyond))
         # tools of one stage may run side by side, and without stages every tool is stage 1
         self.assertNotIn("HK5_light_first", self.rules(self._stages(
             self._shell_after_green(sample_events(), 100.0, after="analysis.finished"), frame_static=1, frame_shell=1)))

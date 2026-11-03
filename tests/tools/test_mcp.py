@@ -40,6 +40,23 @@ class HandlerTest(RunCase, unittest.TestCase):
         super().setUp()
         self.attribution = Attribution()
 
+    def test_an_exception_in_a_tool_is_logged_and_answered(self):
+        from hiraku.tools.mcp import TOOL_ERRORS_FILE
+
+        def broken(ctx, args, agent):
+            raise KeyError("verdict_id")
+
+        out = asyncio.run(make_handler(self.ctx, self.attribution, "compare", broken)({"prediction_id": "pred-0001"}))
+        self.assertTrue(out["is_error"])
+        self.assertIn("KeyError", out["content"][0]["text"])
+        self.assertIn("もう一度", out["content"][0]["text"])
+        log = (self.ctx.store.path / TOOL_ERRORS_FILE).read_text(encoding="utf-8")
+        self.assertIn("Traceback", log)
+        self.assertIn("compare", log)
+        said = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and (e.get("data") or {}).get("tool_error")]
+        self.assertEqual(said[-1]["data"]["tool_error"], "compare")
+        self.assert_events_fit()
+
     def test_server_builds(self):
         cfg = build_server(self.ctx, self.attribution)
         self.assertEqual(cfg["name"], "hiraku")

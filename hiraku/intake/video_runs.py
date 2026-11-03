@@ -108,7 +108,7 @@ DROP_TEXT = "板金と電池のメモです。規則にしてください"
 def prepare_n14_real(folder: Path | str) -> Path:
     """The vehicle's N14 requirements as a person left them: the hearing's items are missing, no intake events."""
     req = load_requirements(N14_FILE)
-    req = {k: v for k, v in req.items() if k != "stop_after"}
+    req = {**{k: v for k, v in req.items() if k != "stop_after"}, "hearing": "claude"}  # the lead asks, not start_run
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / N14_REAL_NAME

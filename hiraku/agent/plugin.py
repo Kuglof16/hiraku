@@ -255,7 +255,7 @@ def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: 
 def hook_main(event: str, runs: Path | None = None, stdin: Any = None, stdout: Any = None) -> int:
     """`python -m hiraku hook <Event>`: hook input JSON on stdin, the answer as JSON on stdout.
     A failure lets the call through (exit 0, {}) and says why on stderr: the tools check
-    HK1-HK3 again themselves (hiraku.tools.functions._gate). Claude Code sends UTF-8; the
+    HK1-HK3 and HK5 again themselves (hiraku.tools.functions._gate). Claude Code sends UTF-8; the
     process's own stdin encoding (cp932 on a Japanese Windows) is not used, or a Japanese
     argument would not match the server's Attribution key."""
     stdout = stdout or sys.stdout
@@ -287,7 +287,7 @@ OPEN_RUN_SCHEMA: Record = {
 OWN_TOOLS: dict[str, tuple[str, Record]] = {
     "start_run": (
         "HIRAKU の実行を始める。要件のファイルから実行のフォルダを作り (分野選び・ヒアリング・ナレッジは CLI と同じ)、"
-        "道具の棚を確かめ、この会話の実行にする。ほかの道具はこの実行に働く。返る task がまとめ役の最初の仕事",
+        "ツールの棚を確かめ、この会話の実行にする。ほかのツールはこの実行に働く。返る task がまとめ役の最初の仕事",
         START_RUN_SCHEMA,
     ),
     "open_run": (
@@ -340,7 +340,7 @@ class PluginServer:
                 return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
             return {"content": [{"type": "text", "text": json.dumps(got, ensure_ascii=False)}]}
         if name not in HANDLERS:
-            return {"content": [{"type": "text", "text": f"道具 {name!r} はありません"}], "is_error": True}
+            return {"content": [{"type": "text", "text": f"ツール {name!r} はありません"}], "is_error": True}
         ctx = self.ctx
         if ctx is None or ctx.project["status"] != "running":
             return {"content": [{"type": "text", "text": NO_RUN}], "is_error": True}

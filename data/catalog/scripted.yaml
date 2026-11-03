@@ -49,7 +49,9 @@
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   # The designer's revisions, one per round, used when a tile comes out red
-  # (revise_design: the variables of hiraku.designgen, absolute values).
+  # (revise_design: the variables of hiraku.designgen, absolute values). With `fit: driver` the seat,
+  # steering and pedals are searched by code on the design with the entry's changes
+  # (hiraku.designgen.driver_fit, `fit_time_s` its time limit) and added to them.
   revise:
     # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
@@ -58,18 +60,18 @@ offroad-4w:
         steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を前へ出す (steering_x -570 mm から -200 mm へ)
       source: >-
-        the demo scripted run 20261103-225321-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
-        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (226.6 mm)
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (268.6 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 12, unit: kW}
+        motor_peak_power: {value: 13, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: >-
-        the demo scripted run 20261103-225321-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.479 s against 6 s); version 3 with this change:
-        P3 ver-0012 (5.744 s)
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.878 s against 6 s); version 3 with this change
+        (13 kW): P3 ver-0012 (5.834 s). 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
   steps:
     - &p1_step
       load_case: P1-step100
@@ -303,26 +305,28 @@ offroad-4w-n15:
   # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
   # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
   notes:
-    - この台本の運転は、Claude が作った道具を使いません。R4 (横転時の保護枠) は回していません (R4 の道具は棚に無く、Claude との運転で作ります)
+    - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
   revise:
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       changes:
         track: {value: 1220, unit: mm}
-        steering_x: {value: -520, unit: mm}
+        steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
-        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -520 mm へ、50 mm 前へ出す
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -200 mm へ前へ出す
       source: >-
-        the N15 scripted run 20261103-221019-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
-        version 2 with this change: H1 ver-0004 (30 deg), H3 ver-0005 (226.6 mm)
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0004 (30 deg), H3 ver-0005 (268.6 mm). steering_x is the demo plan's value,
+        until the seat and steering values are searched by code (the analysis department's driver fit)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 13, unit: kW}
+        motor_peak_power: {value: 15, unit: kW}
       reason: >-
-        P3: 40 km/h までが 6.48 s で 6 s を超えるので、モーターの最大出力を 10 kW から 13 kW に上げる
+        P3: 40 km/h までが 6.88 s で 6 s を超えるので、モーターの最大出力を 10 kW から 15 kW に上げる
+        (あとで強度のためにレールを重くしても 6 s に収まるように)
       source: >-
-        the N15 scripted run 20261103-221019-offroad-4w-scripted, version 2: P3 ver-0019 (time_to_speed 6.479 s); version 3 with this change: P3 ver-0035 (5.513 s);
-        version 4 (heavier rails): P3 ver-0053 (5.716 s)
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 2: P3 ver-0019 (time_to_speed 6.878 s); version 3 with this change: P3 ver-0035 (5.519 s);
+        version 4 (heavier rails): P3 ver-0053 (5.746 s). On version 4 the launch tool gives 6.080 s at 13 kW and 5.886 s at 14 kW
     - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
       changes:
         rail_t: {value: 4.5, unit: mm}
@@ -331,12 +335,12 @@ offroad-4w-n15:
         cross_h: {value: 50, unit: mm}
       reason: >-
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
-        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足す
-        (版 3 で、つなぎ目のホットスポットは 613 MPa、限界 163 MPa)
+        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
+        (版 3 で、つなぎ目のホットスポットは 560 MPa、限界 163 MPa)
       source: >-
-        the N15 scripted run 20261103-221019-offroad-4w-scripted, version 3: R1s ver-0036 (frame_shell ana-0046 max_hot_spot_stress 613.0 MPa at rail_L_BE;
-        joint_wall_bending pred-0078 600.8 MPa, cmp-0076 match); version 4 with this change: R1s ver-0054
-        (frame_shell ana-0070 151.1 MPa at rail_L_BE; joint_wall_bending pred-0123 142.0 MPa, cmp-0116 match)
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 3: R1s ver-0036 (frame_shell ana-0046 max_hot_spot_stress 559.7 MPa at rail_L_BE, cmp-0076);
+        version 4 with this change: R1s ver-0054 (frame_shell ana-0070 123.0 MPa at rail_L_BE, cmp-0116).
+        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake

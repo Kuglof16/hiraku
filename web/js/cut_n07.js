@@ -39,7 +39,7 @@ import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
 import { esc, fmt, unitLabel } from "./labels.js";
-import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
+import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { PACE_LIMIT_DEG_S } from "./pace.js";
 
@@ -200,7 +200,7 @@ export class CutN07 {
       c.el = document.createElement("canvas");
       c.el.dataset.kind = "moving";
       box.append(c.el);
-      const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+      const v = cutView(this, "n07");
       v.setDesign(this.s.designs[c.version] ?? null);
       v.setLoading(this.lc?.params?.loading ?? null);
       v.setScene(this.lc, c.ana);

@@ -282,6 +282,13 @@
             "picks"
           ],
           "description": "A run that ends on purpose after an early step. picks: after domains.picked and the hearing (records for picking domains only; no design is made). The run ends done, with the reason saying so."
+        },
+        "hearing": {
+          "enum": [
+            "code",
+            "claude"
+          ],
+          "description": "Who settles the missing requirement items. code (missing = code): start_run fills them from the file and defaults before the agents start. claude: start_run leaves them open and the lead asks the person with ask_user (wait_seconds). Copied to the project when the run starts."
         }
       }
     },
@@ -2655,9 +2662,6 @@
     "hearing_asked": {
       "description": "data of hearing.asked: the missing requirements, asked once together (screen A2).",
       "type": "object",
-      "required": [
-        "questions"
-      ],
       "additionalProperties": false,
       "properties": {
         "questions": {
@@ -2666,8 +2670,26 @@
           "items": {
             "$ref": "#/$defs/question"
           }
+        },
+        "rule_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_question"
+          }
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "questions"
+          ]
+        },
+        {
+          "required": [
+            "rule_questions"
+          ]
+        }
+      ]
     },
     "hearing_answered": {
       "description": "data of hearing.answered: the answers (or defaults) as requirements. They are also in project.requirements.",
@@ -2700,6 +2722,31 @@
         "note": {
           "type": "string",
           "description": "Free text the person added."
+        },
+        "rule_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "rule_id",
+              "choice"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "choice": {
+                "enum": [
+                  "revise_design",
+                  "drop_rule"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -3127,6 +3174,13 @@
             "picks"
           ],
           "description": "Copied from the requirements file's stop_after when the run starts, so every process that opens the run reads it."
+        },
+        "hearing": {
+          "enum": [
+            "code",
+            "claude"
+          ],
+          "description": "Who settles the missing requirement items. code (missing = code): start_run fills them from the file and defaults before the agents start. claude: start_run leaves them open and the lead asks the person with ask_user (wait_seconds). Copied to the project when the run starts."
         }
       }
     },
@@ -4017,10 +4071,9 @@
       }
     },
     "tool_input.revise_design": {
-      "description": "Agent-facing MCP tool for the designer only. hiraku.designgen rebuilds the design from the changed variables; the store makes the next version with parent_version and change_reason.",
+      "description": "Agent-facing MCP tool for the designer only. hiraku.designgen rebuilds the design from the changed variables and generator choices (changes, choices, or both); the store makes the next version with parent_version and change_reason.",
       "type": "object",
       "required": [
-        "changes",
         "reason"
       ],
       "additionalProperties": false,
@@ -4036,8 +4089,32 @@
         "reason": {
           "type": "string",
           "description": "which test failed and what the change does about it"
+        },
+        "choices": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "generator choice name -> chosen value (as in propose_design.choices; the choices a design's generator offers are in get_context design_choices)",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "changes"
+          ]
+        },
+        {
+          "required": [
+            "choices"
+          ]
+        }
+      ]
     },
     "scene_object": {
       "description": "Something in the test scene that is not the vehicle: a step, a road profile, a slope, the tilt table, a cone, a gate, a wall. Positions in mm in the road frame of the test (x along the road, z up), the vehicle starting at its design origin.",
@@ -4582,6 +4659,13 @@
             }
           },
           "description": "選択肢の言い換え {番号: [{label, value, unit?}]}"
+        },
+        "rule_hits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_question"
+          },
+          "description": "Rule hits that need the person's decision (change the design or drop the rule); asked with the requirement questions."
         }
       }
     },
@@ -4707,6 +4791,41 @@
         "workaround": {
           "type": "string",
           "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
+        }
+      }
+    },
+    "rule_question": {
+      "description": "A rule hit the person must decide on: change the design, or drop the rule for this run.",
+      "type": "object",
+      "required": [
+        "rule_id",
+        "parts",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "text": {
+          "type": "string",
+          "description": "The question in the person's words (the rule, what it hit, why it matters)."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "revise_design",
+              "drop_rule"
+            ]
+          },
+          "description": "Missing: both."
         }
       }
     }

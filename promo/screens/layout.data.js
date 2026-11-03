@@ -32,7 +32,10 @@ window.PROMO_LAYOUT = {
     "_duration_note": "8.6 s is N00's slot in narration draft 6 (0:00-0:08.6): the voice is the longer line that says what HIRAKU is (7.86 s from 0.3 s)",
     "name": {
       "y": 172,
-      "size_px": 210
+      "size_px": 210,
+      "in_dur_s": 0.5,
+      "in_step_s": 0.05,
+      "_note": "the letters come in one after another from times.name_s, in_step_s apart, each in in_dur_s (0.7 s and 0.07 s until 2026-11-03), so all six stand by 0.25 + 5 x 0.05 + 0.5 = 1.0 s, while the voice says the name (from 0.3 s)"
     },
     "rule": {
       "y": 430,
@@ -50,9 +53,76 @@ window.PROMO_LAYOUT = {
       "y": 544,
       "w": 160,
       "h": 180,
-      "pitch_px": 168,
-      "group_gap_px": 36,
-      "_note": "added 2026-11-03: the ten 3D pets of promo/pets/pet3d.js (v7, packager = six-piece burr) in one row, in pet3d's ROLES order: lead, designer, packager, then the seven CAE domains in the order the chips light. Box i is w x h at y, centred on cx_i = 960 - span / 2 + w / 2 + i x pitch_px (+ group_gap_px from the fourth on), span = 9 x pitch_px + group_gap_px + w = 1708 (x 106 to 1814, inside safe). Each box is a 2D canvas: one WebGL renderer off the page (the size of one box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box"
+      "pitch_px": 210,
+      "_note": "the seven CAE domain pets of promo/pets/pet3d.js (v8) stand in one row over their chips until their chip lights, in the order the chips light. Box k is w x h at y, centred on cx_k = 960 - span / 2 + w / 2 + k x pitch_px, span = 6 x pitch_px + w = 1420 (x 250 to 1670, inside safe). Each pet is a 2D canvas: one WebGL renderer off the page (the size of one row box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box. Until the title pets (2026-11-03) the row held all ten pets (pitch 168, a 36 px gap after the third) and lead, designer and packager wore name tags under them"
+    },
+    "title_pets": {
+      "h_em": 0.6,
+      "_note": "the ten pets sitting on the top edge of the six letters of the name (shared with N18, which uses the same seats on its own name). All lengths are relative to the name: a seat box is h_em x the name's font size high and as wide as pets.w / pets.h of that; letter is the index of the letter in HIRAKU (0 = H ... 5 = U); at is where the pet's feet stand across that letter's ink, 0 = the left edge of the ink, 1 = the right edge (the ink box of each letter is measured with canvas measureText (actualBoundingBoxLeft / Right) in the name's font and size, from the left edge of the letter's own span); the feet stand on the letter's ink top (baseline - actualBoundingBoxAscent of that letter; baseline = the name's top + (font size - (fontBoundingBoxAscent + fontBoundingBoxDescent)) / 2 + fontBoundingBoxAscent, as line-height is 1). The feet point (the pet's origin, projected with the n00 camera) is put on (x of at, ink top) plus lift_px up. yaw_deg turns the pet about its vertical axis (positive: its front turns towards screen right); the camera is n00.camera. At 0.6 em the pet's body is about 0.4 of the letter height, so the letters stay readable under it",
+      "lift_px": 0,
+      "seats": [
+        {
+          "role": "designer",
+          "letter": 0,
+          "at": 0.12,
+          "yaw_deg": 18
+        },
+        {
+          "role": "cae.handling",
+          "letter": 0,
+          "at": 0.88,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.powertrain",
+          "letter": 1,
+          "at": 0.5,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.aero",
+          "letter": 2,
+          "at": 0.06,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.crash",
+          "letter": 2,
+          "at": 0.72,
+          "yaw_deg": 0
+        },
+        {
+          "role": "lead",
+          "letter": 3,
+          "at": 0.5,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.strength",
+          "letter": 4,
+          "at": 0.12,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.nvh",
+          "letter": 4,
+          "at": 0.88,
+          "yaw_deg": 0
+        },
+        {
+          "role": "cae.thermal",
+          "letter": 5,
+          "at": 0.12,
+          "yaw_deg": 0
+        },
+        {
+          "role": "packager",
+          "letter": 5,
+          "at": 0.88,
+          "yaw_deg": -12
+        }
+      ],
+      "_seats_note": "lead on the apex of the A in the middle; designer and packager on the outer stems of H and U; the seven domains fill the rest from left to right in the order their chips light, so the jumps go from left to right"
     },
     "camera": {
       "fov_deg": 24,
@@ -66,17 +136,64 @@ window.PROMO_LAYOUT = {
       "size_px": 24,
       "_note": "the seven domain chips, centred under their pets. 27 px until 2026-11-03; 24 px (story body_text_px) so 強度信頼性 (about 178 px wide) clears its neighbours at pitch 168"
     },
-    "tag": {
-      "gap_above_px": 12,
-      "h": 40,
-      "size_px": 24,
-      "_note": "name tags of lead, designer and packager (no domain chip, never lit): thin faint border, ink-soft"
-    },
     "motion": {
       "pass_dur_s": 0.9,
       "hop_period_s": 0.9,
-      "_note": "a domain's pet is idle until its chip lights at light_s + k x step_s, then does one pass hop (pass_dur_s) and stays in report (leans to tell). hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager stay idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) with t from timeline.js only",
+      "jump_over_px": 36,
+      "_note": "a domain's pet is idle in the row until its chip lights at light_s + k x step_s, then jumps onto its seat on the name (title_pets) in pass_dur_s and stays there in report (leans to tell). The jump: the feet point goes from the row (its box's feet point) to the seat on one parabola in time (linear in x, the box size linear from the row's to the seat's), topping out jump_over_px above the seat, so the pet comes down onto the letter; the pet does its pass hop (pet3d: squash, a small hop, the tick) on the way. hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager sit on the name from the start: each comes in with its letter (the letter's letter-in, the same delay) and stays idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) and the place a function of t, with t from timeline.js only",
       "idle_shift_s": 1.3
+    },
+    "play": {
+      "from_s": 1.4,
+      "still_s": 7.5,
+      "land": {
+        "dur_s": 0.45,
+        "sink_px": 8,
+        "squash": 0.05
+      },
+      "crash": {
+        "dur_s": 0.6,
+        "sink_px": 18,
+        "squash": 0.12,
+        "toss": {
+          "role": "cae.aero",
+          "delay_s": 0.1,
+          "dur_s": 0.42,
+          "up_px": 30
+        }
+      },
+      "shake": {
+        "letter": 4,
+        "start_s": 5.05,
+        "dur_s": 0.55,
+        "hz": 8,
+        "rot_deg": 3,
+        "dx_px": 20,
+        "tilt_deg": 5
+      },
+      "push": {
+        "roles": [
+          "cae.thermal",
+          "packager"
+        ],
+        "start_s": 5.75,
+        "dur_s": 0.6,
+        "lean_deg": 16,
+        "step_px": [
+          16,
+          20
+        ]
+      },
+      "cheer": {
+        "role": "lead",
+        "start_s": 6.2,
+        "dur_s": 0.9,
+        "up_px": 44,
+        "land_dur_s": 0.3,
+        "sink_px": 6,
+        "squash": 0.04
+      },
+      "_note": "the pets play with the letters of the name after the name has been said (the voice says HIRAKU from 0.3 s; the letters stand still and in line until from_s, and everything is back in line and still at still_s). Each letter is a box inside its span, moved by translate / rotate / scale about the bottom centre of the letter's line box; a pet on a letter moves with that point of the letter. land: when a domain pet lands on its letter (lit + motion.pass_dur_s) the letter sinks sink_px and comes back (d(u) = sin(3 pi u) (1 - u)^2 scaled to a peak of 1, u = time since landing / dur_s; the letter squashes by squash x d at the same time). crash: the crash pet lands harder (its own dur, sink and squash), and the pet already on that letter (toss.role) is tossed up_px on a parabola delay_s after the landing. shake: after the NVH pet lands, the letter (index into HIRAKU, 4 = K) shakes (rot_deg at hz, dying out) and slides dx_px right and tilts tilt_deg (eased) in dur_s, the two pets on it riding along; it stays so until push. push: the two pets on the next letter (roles) lean towards it (lean_deg, about their feet) and step left (step_px each) and the letter goes back in line (eased) in dur_s. cheer: lead does the pass hop (pet3d pass, the tick over its head) from start_s with its clock at 0, lifted up_px on a parabola, and its letter gives a small land when it comes down (land_dur_s, sink_px, squash)"
     },
     "times": {
       "name_s": 0.25,
@@ -778,11 +895,16 @@ window.PROMO_LAYOUT = {
       "ok_of_reading": 0.55,
       "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width); ok_of_reading: the size of the tick line under it (✓ 上限より下), a share of the reading's size"
     },
+    "loop": {
+      "ease": "in-out",
+      "_note": "the long drive's time runs through the record with this ease (in-out or linear)"
+    },
     "times": {
       "lead_s": 0.3,
-      "loop_to_s": 2.0,
+      "loop_to_s": 2.6,
+      "ok_s": 2.3,
       "accel_s": 2.9,
-      "_note": "0.3-2.0 s the long loop, then the tick (below the limit) holds to 2.9 s while the voice says オーバーヒートしないか (1.44-2.56 s in the maker's recording) (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
+      "_note": "0.3-2.6 s the long loop (eased in and out), the tick (below the limit) from ok_s 2.3 s as the loop slows, and it stays through the acceleration; the voice says オーバーヒートしないか at 1.44-2.56 s in the maker's recording (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
     },
     "overlay": {
       "color": "#c8402a",
@@ -1640,39 +1762,66 @@ window.PROMO_LAYOUT = {
   },
   "n18": {
     "duration_s": 9.0,
+    "_ground_note": "v3 (2026-11-03): ends on paper, the same ground as N00 (common.css --paper #f4f1ea with the faint 40 px grid, class paper-grid; layout.json colors has no paper entry). The night of N17b is the closed door (door.*) in front of the paper; it opens at times.open_s and is gone by open_s + door.crack_dur_s + door.hold_dur_s + door.open_dur_s (1.45 s)",
     "light": {
-      "y": 40,
+      "y": 60,
       "w": 130,
-      "h": 470,
+      "h": 850,
       "grow_dur_s": 0.4,
-      "_note": "centred. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s (title.css grows it over 0.6 s; N18 sets its own since v2)"
+      "out_dur_s": 0.35,
+      "_note": "centred, safe.y to the subtitle band. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s; it is the light in the door's seam, opens with the crack (title.css light-open) and fades over out_dur_s from the swing (v3: was y 40, h 470, a band the vehicle stood on)"
+    },
+    "door": {
+      "crack_dur_s": 0.15,
+      "crack_deg": 14,
+      "crack_ease": [
+        0.25,
+        0,
+        0.3,
+        1
+      ],
+      "hold_dur_s": 0.05,
+      "open_dur_s": 0.45,
+      "angle_deg": 100,
+      "perspective_px": 3600,
+      "ease": [
+        0.4,
+        0,
+        0.6,
+        1
+      ],
+      "line_px": 2,
+      "thickness_px": 44,
+      "spill_dur_s": 1.4,
+      "shade_alpha": 0.55,
+      "_note": "two night leaves (the N17b ground split down the middle), hinged on their outer edges, as N05's door: from times.open_s they part by crack_deg over crack_dur_s (crack_ease), hold hold_dur_s, then swing out towards the viewer to angle_deg over open_dur_s (ease), darkening to shade_alpha as they turn; each leaf's free edge has a lit thickness (thickness_px) and its other three sides a faint outline (line_px), unseen while the door is shut (it lies on the stage's edges). The first stills (crack 10 deg over 0.2 s, hold 0.1 s, swing 0.5 s with N05's ease) were still mostly dark at 1.4 s; the second (perspective 2400 as N05) threw the leaves out of the frame by about 1.28 s, so the swing was hard to see. Behind them warm light on the paper (the spill) fades over spill_dur_s from the swing, so from about 2.6 s the ground is bare paper. Hidden once open"
     },
     "vehicle": {
-      "y": 130,
-      "w": 420,
-      "_note": "centred"
+      "y": 70,
+      "w": 460,
+      "_note": "centred; ink lines on the paper (no halo). Height w / 2 (viewBox 600 x 300). Was at y 110 (bottom 340) until the pets sat on the name (2026-11-04): their boxes reach up to about 324, 310 while they hop (n18.pets); at 70 the bottom is 300"
     },
     "title": {
       "name": {
-        "y": 545,
+        "y": 400,
         "size_px": 170
       },
       "tag": {
-        "y": 745,
+        "y": 618,
         "size_px": 48
       }
     },
     "url": {
-      "y": 826,
+      "y": 724,
       "size_px": 30,
-      "_note": "was at y 856 until v2; moved up 30 px to leave room for the credit under it"
+      "_note": "ink-soft. Was at y 826 (night ground) until v3"
     },
     "credit": {
-      "y": 872,
+      "y": 776,
       "size_px": 20,
       "alpha": 0.62,
       "fade_dur_s": 0.8,
-      "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band"
+      "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Ink at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 801, above the subtitle band"
     },
     "gather": {
       "count": 150,
@@ -1695,29 +1844,86 @@ window.PROMO_LAYOUT = {
       "seed_glow_alpha": 0.5,
       "_note": "before the line (v2, after the reference's closing): count motes at seeded places in a w x h ellipse about (stage centre, cy), kept margin_px inside the stage and above the subtitle band, each of a seeded radius dot_*_px, are drawn in to seeded points on the line (x = stage centre, y within the light box, more towards its middle) over gather_dur_s (ease: slow, then fast) after a seeded delay of up to stagger_s from times.gather_s; they brighten from start_alpha and go out as they reach the line. A faint glow on the line's place rises to seed_glow_alpha meanwhile and hands over to the light at times.line_s. All motes are in by gather_s + stagger_s + gather_dur_s = times.line_s"
     },
-    "name_bloom": {
-      "peak_blur_px": 54,
-      "rest_blur_px": 14,
-      "peak_alpha": 0.95,
-      "rest_alpha": 0.28,
-      "settle_dur_s": 1.6,
-      "halo_w": 1180,
-      "halo_h": 300,
-      "halo_peak_alpha": 0.2,
-      "halo_rest_alpha": 0.06,
-      "_note": "the name comes up in a bloom of light (v2): each letter, as it rises (title.css letter-in), wears a warm glow (text-shadow) of peak_blur_px at peak_alpha, held for the first 30 % of settle_dur_s (while the letter fades in), that settles to rest_blur_px at rest_alpha by the end of settle_dur_s; behind the name a soft halo (halo_w x halo_h, centred on the name) rises to halo_peak_alpha at 45 % of settle_dur_s (as the last letters come in) and settles to halo_rest_alpha. The first stills had it peak at 18 % and 0.3: a bright patch ran ahead of the letters on the right"
+    "rule": {
+      "y": 596,
+      "w": 400,
+      "h": 2,
+      "_note": "centred, ink, under the name as on N00; grows from the centre with the name (0.6 s from times.name_s + 0.55 s)"
+    },
+    "pets": {
+      "_note": "the ten 3D pets of promo/pets/pet3d.js (v8) on the top edge of the name, in the seats of n00.title_pets (read from there, not copied, so N00 and N18 always have the same order; lengths relative to the name, so they scale with n18.title.name.size_px), seen with n00.camera, in a box of n00.pets' aspect, idle clocks shifted by n00.motion.idle_shift_s x index as on N00. Each pet comes in with its letter (title.css letter-in: 0.7 s, 0.07 s a letter from times.name_s). fix: the letter (index into HIRAKU, 4 = K) stands tilted tilt_deg and moved dx_px right (about the bottom centre of its line box, as n00.play) from the start; when it is in (settle_s = name_s + 4 x 0.07 + 0.7) it wobbles settle_deg at settle_hz, dying out over settle_dur_s. try: the pet on the next letter (role) leans lean_deg towards it and steps step_px left (a hump over dur_s, from start_s); the letter goes back give of the way and springs out again. help: a second pet (role) hops left to_px (up_px high, hop_dur_s) from start_s, to just behind the first; push: from start_s both lean (lean_deg) and step (step_px, in roles order) over dur_s and the letter goes back in line (eased); help.back_s: the helper hops back to its seat. report: from start_s, one pet every step_s in order (left to right on the name), each does a small hop (up_px over hop_dur_s) and stays in report (pet3d: leans to tell). stop: from from_s the pets' clocks slow to a halt at still_s (the clock's speed falls linearly to 0), so from still_s nothing on the screen moves. Every pose is a function of t only",
+      "fix": {
+        "letter": 4,
+        "tilt_deg": 7,
+        "dx_px": 10,
+        "settle_s": 4.38,
+        "settle_dur_s": 0.45,
+        "settle_hz": 3.5,
+        "settle_deg": 2.5
+      },
+      "try": {
+        "role": "cae.thermal",
+        "start_s": 4.85,
+        "dur_s": 0.75,
+        "lean_deg": 22,
+        "step_px": 16,
+        "give": 0.55
+      },
+      "help": {
+        "role": "packager",
+        "start_s": 5.3,
+        "hop_dur_s": 0.35,
+        "to_px": 34,
+        "up_px": 18,
+        "back_s": 6.5
+      },
+      "push": {
+        "roles": [
+          "cae.thermal",
+          "packager"
+        ],
+        "start_s": 5.7,
+        "dur_s": 0.7,
+        "lean_deg": 20,
+        "step_px": [
+          14,
+          14
+        ]
+      },
+      "report": {
+        "order": [
+          "designer",
+          "cae.handling",
+          "cae.powertrain",
+          "cae.aero",
+          "cae.crash",
+          "lead",
+          "cae.strength",
+          "cae.nvh",
+          "cae.thermal",
+          "packager"
+        ],
+        "start_s": 6.9,
+        "step_s": 0.1,
+        "hop_dur_s": 0.35,
+        "up_px": 14
+      },
+      "stop": {
+        "from_s": 7.92,
+        "still_s": 8.18,
+        "_note": "the clocks are t + idle_shift_s x index (N00's), and pet3d blinks while clock % 4.3 < 0.16: lead's clock + 5.2 (index 4) blinks at about 7.70-7.86 s and index 7's at 8.10-8.26 s; the slowing clock runs from from_s to from_s + (still_s - from_s) / 2 = 8.05, between the two, so no pet holds still with its eyes shut (the first stills, from 7.9 to 8.4, froze index 7 mid-blink)"
+      }
     },
     "times": {
       "gather_s": 0.0,
       "line_s": 0.4,
       "open_s": 0.8,
-      "draw_s": 1.1,
-      "name_s": 2.3,
-      "tag_s": 3.0,
-      "url_s": 3.6,
-      "credit_s": 4.2,
-      "out_s": 8.2,
-      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: it opens into a band; draw: vehicle strokes start; credit: the small line under the URL; out: fade to black. line was 0.15 until v2 (2026-11-03): it moved to 0.4 to leave the motes time to gather first; open_s (read by bgm.py) and the order did not change"
+      "draw_s": 1.7,
+      "name_s": 3.4,
+      "tag_s": 4.4,
+      "url_s": 5.5,
+      "credit_s": 6.0,
+      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: the door parts at the line (door.*; swings from 1.0 s, gone by 1.45 s); draw: the vehicle's ink strokes start on the paper; name: first letter, just before the voice says HIRAKU (sentence 2 of the maker's recording, 3.61-7.07 s; sentence 1 runs 0.30-3.26 s); tag: about a second into sentence 2, while it says the tag's words; url, credit: after the tag is in, done by 6.8 s; then still to the end on paper. v3 (2026-11-03): name, tag, url, credit were 2.3, 3.0, 3.6, 4.2 and out_s 8.2 faded to black; open_s (read by bgm.py) did not change"
     }
   },
   "labels": {
@@ -1779,9 +1985,9 @@ window.PROMO_LAYOUT = {
       "n00": {
         "message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)",
         "limits": {
-          "label": 10,
+          "label": 7,
           "moving": 12,
-          "why": "the seven domain chips under the pets are the point of the cut; lead, designer and packager carry a small name tag each (7 + 3 = 10). Since 2026-11-03 the ten pets are 3D (data-kind moving): all ten breathe in one row as one family, so they count 10, plus the name or a chip as it lights (12)"
+          "why": "the seven domain chips are the point of the cut (7); lead, designer and packager wear no tag since they sit on the name (2026-11-03; 10 with their tags before). The ten pets are 3D (data-kind moving) and all breathe, so they count 10 wherever they are (the row of seven counts as one while it rises, being one moving thing with its pets inside), plus a chip as it lights or the name and its line while they come in (12)"
         }
       },
       "n01": {
@@ -1903,7 +2109,11 @@ window.PROMO_LAYOUT = {
         }
       },
       "n18": {
-        "message": "解析の前に予測し、理由を説明する — HIRAKU"
+        "message": "解析の前に予測し、理由を説明する — HIRAKU",
+        "limits": {
+          "moving": 12,
+          "why": "the ten 3D pets on the name (n18.pets) are data-kind moving while they breathe and play (they stop by n18.pets.stop.still_s), the same ten as N00's end; with them the name and then the tag come in (11 measured at 3.8 and 4.6 s)"
+        }
       }
     }
   },
@@ -1915,8 +2125,11 @@ window.PROMO_LAYOUT = {
         1.8,
         2.5,
         3.5,
+        4.3,
         4.5,
-        6.5,
+        5.65,
+        6.05,
+        6.65,
         8.0
       ],
       "n03": [
@@ -2045,11 +2258,18 @@ window.PROMO_LAYOUT = {
         0.6,
         1.0,
         1.2,
-        2.5,
-        3.2,
+        1.4,
+        1.8,
+        2.6,
         3.8,
-        5.0,
+        4.6,
+        5.1,
+        5.5,
+        5.8,
+        6.1,
+        6.7,
         7.0,
+        7.5,
         8.5
       ],
       "labels_n01": [
@@ -2112,6 +2332,12 @@ window.PROMO_LAYOUT = {
     ],
     "allow_overlap": [
       {
+        "cut": "n00",
+        "a": "n00.pet.*",
+        "b": "n00.*",
+        "why": "a pet's box is a transparent canvas bigger than the pet in it. Seated, the box's lower edge reaches past the letter's ink top into the name's line box, and the two pets on one letter (and on neighbouring letters) have boxes that touch; while a pet jumps from the row onto its letter, its box passes over the line, the tagline and the chips. The pet is drawn on the letter's top edge and never inside the letter (title_pets puts the feet on the ink top)"
+      },
+      {
         "cut": "n07",
         "a": "n07.view",
         "b": "n07.label",
@@ -2128,6 +2354,18 @@ window.PROMO_LAYOUT = {
         "a": "n18.light",
         "b": "n18.vehicle",
         "why": "the vehicle is drawn over the vertical light on purpose"
+      },
+      {
+        "cut": "n18",
+        "a": "n18.pet.*",
+        "b": "n18.pet.*",
+        "why": "as on N00: a pet's box is a transparent canvas bigger than the pet; the two pets on one letter (and on neighbouring letters) have boxes that touch, and the helper hops to just behind the first pusher (n18.pets.help)"
+      },
+      {
+        "cut": "n18",
+        "a": "n18.pet.*",
+        "b": "n18.title.name",
+        "why": "as on N00: seated, the box's lower edge reaches past the letter's ink top into the name's line box; the pet is drawn on the letter's top edge and never inside the letter (n00.title_pets puts the feet on the ink top)"
       },
       {
         "cut": "n05",
