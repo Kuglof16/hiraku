@@ -70,7 +70,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic"])
+                                 "step_climb_dynamic", "kc_bench"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -117,10 +117,11 @@ class Declarations(unittest.TestCase):
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
+        no_k0_yet = {"kc_bench"}  # K0 has no K&C formula (roll centre, compliance steer) yet
         for name, tool in TOOLS.items():
             desc = tool.describe()
             declared = {p["name"]: p for p in desc["params"]}
-            self.assertTrue(desc["predicts"], name)
+            self.assertEqual(bool(desc["predicts"]), name not in no_k0_yet, name)
             self.assertEqual(tool.spec()["formulas"], desc["formulas"])
             for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
@@ -315,7 +316,11 @@ class Runs(unittest.TestCase):
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")
         v = 35.0 / 3.6
-        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * 0.6 * 9.80665), delta=0.05 * r["braking_distance"])
+        # the wheels lock: the Magic Formula tyre slides at kappa = -1, below its peak mu 0.6
+        veh = build_vehicle(on_board(demo_design(), "two_cargo"), {"mu": 0.6})
+        mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / veh.m_total / 9.80665
+        self.assertLess(mu_lock, 0.6)
+        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * mu_lock * 9.80665), delta=0.05 * r["braking_distance"])
         self.assertEqual(r["min_rear_wheel_load"], r["min_wheel_load"])  # load moves forward: a rear wheel is lightest
         self.assertGreater(r["max_pitch"], 0.0)  # nose down
 

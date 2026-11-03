@@ -52,7 +52,8 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n05", "n08b", "n10", "n18", "check"})
+                                "n00", "n01", "n02", "n04", "n05", "n08b", "n10", "n15", "n16",
+                                "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -72,6 +73,36 @@ class SharedShape(unittest.TestCase):
             self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
         self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
         self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_n04_n15_n16_for_the_screens_department(self):
+        # drawn by the screens department from these values; N04 and N15 share one grid
+        r = self.rules
+        band, safe = r["subtitle_band"]["y"], r["safe"]
+        for cut in ("n04", "n15"):
+            n = r[cut]
+            g = n["grid"]
+            right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+            bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+            self.assertLessEqual(bottom, band, cut)
+            self.assertEqual(right, safe["x"] + safe["w"], cut)
+            self.assertLessEqual(n["header"]["y"] + n["header"]["h"], g["y"], cut)
+            self.assertEqual(len(n["tests"]), g["cols"] * g["rows"], cut)
+            self.assertGreaterEqual(min(n["tile"]["label"]["size_px"], n["header"]["size_px"]), r["min_text_px"])
+        for k in ("header", "grid", "tests", "tile"):
+            self.assertEqual(r["n04"][k], r["n15"][k], k)
+        self.assertEqual((r["n04"]["duration_s"], r["n15"]["duration_s"], r["n16"]["duration_s"]), (4.0, 5.1, 6.3))
+        n = r["n16"]
+        v, s, st = n["view"], n["seek"], n["steps"]
+        self.assertLessEqual(v["y"] + v["h"], band)
+        self.assertLessEqual(st["y"] + st["h"], band)
+        self.assertLessEqual(v["x"] + v["w"], st["x"])  # side by side
+        self.assertGreaterEqual(s["x"], v["x"])
+        self.assertLessEqual(s["x"] + s["w"], v["x"] + v["w"])
+        self.assertLessEqual(s["y"] + s["h"], v["y"] + v["h"])  # over the view's lower edge
+        self.assertGreaterEqual(min(st["title_px"], st["text_px"]), r["min_text_px"])
+        t = n["times"]
+        self.assertLess(t["steps_to_s"], t["scrub_s"])
+        self.assertLess(t["scrub_to_s"], n["duration_s"])
 
     def test_n02_boxes_stay_above_the_band(self):
         # N02 is drawn by the screens department from these values
@@ -104,10 +135,12 @@ class SharedShape(unittest.TestCase):
         n = self.rules["n05"]
         d = n["door"]
         # a double door behind the vehicle: it cracks, holds, then swings wide
-        self.assertEqual(set(d) - {"_note"}, {
+        self.assertEqual({k for k in d if not k.startswith("_")}, {
             "crack_dur_s", "crack_deg", "crack_ease", "hold_dur_s", "open_dur_s", "angle_deg",
             "perspective_px", "ease", "seam_w_px", "seam_glow_w_px", "spill_dur_s",
-            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle"})
+            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle",
+            "crack_overshoot_deg", "settle_dur_s", "latch_dur_s", "latch_deg", "thickness_px",
+            "dolly_px", "dolly_ease", "bolt"})
         self.assertEqual(len(d["ease"]), 4)
         self.assertEqual(len(d["crack_ease"]), 4)
         self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 180)
@@ -140,6 +173,50 @@ class SharedShape(unittest.TestCase):
         self.assertTrue([x for x in at if t["door_open_s"] < x < t["burst_s"]])
         self.assertTrue([x for x in at if x > t["tag_s"]])
 
+    def test_n05_door_weight_and_light(self):
+        n = self.rules["n05"]
+        d, t = n["door"], n["times"]
+        # the bolt goes and the leaves jolt while the door is still shut
+        self.assertLess(t["latch_s"] + d["latch_dur_s"], t["door_open_s"] + 1e-9)
+        self.assertLess(d["latch_deg"], d["crack_deg"])
+        # the crack runs past and settles back inside the pause
+        self.assertLess(d["crack_overshoot_deg"], d["crack_deg"])
+        self.assertLessEqual(d["settle_dur_s"], d["hold_dur_s"])
+        # the view moves in, but stays in front of the eye
+        self.assertLess(d["dolly_px"], d["perspective_px"])
+        self.assertEqual(len(d["dolly_ease"]), 4)
+        self.assertEqual(set(d["bolt"]), {"w_px", "h_px", "reach_px", "travel_px", "gap_px"})
+        self.assertGreater(d["bolt"]["travel_px"], d["bolt"]["reach_px"])   # it clears the seam
+        # the flood of light does not burn the screen white
+        self.assertLess(n["bloom"]["peak_alpha"], 0.5)
+        self.assertLess(n["rays"]["peak_alpha"], 0.5)
+        # shafts, motes and the flood are gone by 2.0 s: after that ?layer=fg
+        # holds only the name and the tiles' glows
+        for k in ("rays", "dust"):
+            self.assertLessEqual(t["burst_s"] + n[k]["out_dur_s"], 2.0, k)
+        self.assertLessEqual(t["burst_s"] + n["bloom"]["fall_dur_s"], 2.0)
+        self.assertGreater(n["rays"]["count"], 0)
+        self.assertGreater(n["dust"]["count"], 0)
+
+    def test_n05_mesh_and_tile_fx(self):
+        n = self.rules["n05"]
+        d, t, m = n["door"], n["times"], n["hero_mesh"]
+        # the mesh shows while the door is shut and the vehicle has come apart
+        # (its last element gone) by the time the leaves are out
+        self.assertLess(t["mesh_in_s"] + m["in_dur_s"], t["mesh_out_s"])
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        last = t["mesh_out_s"] + m["spread_dur_s"] + m["jitter_dur_s"] + m["el_dur_s"]
+        self.assertLessEqual(last, swing + d["hero_fade_dur_s"] + 1e-9)
+        self.assertLessEqual(swing + d["hero_fade_dur_s"], t["burst_s"])
+        self.assertTrue(0 < m["end_scale"] < 1)
+        self.assertTrue(0 <= m["jitter"] < 0.5)          # nodes do not cross
+        self.assertGreater(m["size_px"], 10)
+        # trails stay within one flight; the wipe and its afterglow end inside the cut
+        fx = n["tile_fx"]
+        self.assertLess(fx["ghosts"] * fx["ghost_lag_s"], t["tile_in_s"])
+        w = n["name_wipe"]
+        self.assertLess(t["name_s"] + w["wipe_dur_s"] + w["afterglow_dur_s"], n["duration_s"])
+
     def test_n05_page_door_and_vehicle(self):
         html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
         self.assertIn('class="door"', html)
@@ -156,6 +233,15 @@ class SharedShape(unittest.TestCase):
         self.assertIn("src", self.rules["n05"]["hero"])
         # the door is behind the vehicle (earlier in the page)
         self.assertLess(html.index('class="door"'), html.index('class="hero"'))
+        # v4: thick leaves, a bolt, the view moving in, shafts and motes, the
+        # mesh over the picture, the tiles' trails (not .bg-only) and the wipe
+        for part in ('class="door-cam"', 'class="edge"', 'class="bolt"', 'svg class="rays"',
+                     'svg class="dust"', "meshedPicture", 'operator="in"', 'class="tile-fx"',
+                     'class="bloom"', 'class="name-sweep"'):
+            self.assertIn(part, html)
+        # nothing moves by the wall clock or unseeded randomness
+        for banned in ("Math.random", "Date.now", "requestAnimationFrame", "performance.now"):
+            self.assertNotIn(banned, html)
 
     def test_units_in_names(self):
         def walk(obj, path):
@@ -458,6 +544,55 @@ class InBrowser(unittest.TestCase):
             self.assertFalse(lc.in_band(a, rules["subtitle_band"]["y"]))
             for b in cells[i + 1:]:
                 self.assertIsNone(lc.intersection(a, b))
+
+    def test_n05_effects_follow_the_rules(self):
+        # the landing glows sit on the tiles' cells, the mesh's last element is
+        # gone in time, and the seeded parts come out the same on every load
+        from promo import export
+
+        script = """() => {
+          const u = document.querySelector('.stage').getBoundingClientRect().width / 1920;
+          const box = (el) => ({ x: el.offsetLeft / u, y: el.offsetTop / u, w: el.offsetWidth / u, h: el.offsetHeight / u });
+          const ks = [...document.querySelectorAll('.cells polygon')]
+            .map((p) => parseFloat(p.style.getPropertyValue('--k')));
+          return {
+            land: [...document.querySelectorAll('.land')].map(box),
+            ghosts: document.querySelectorAll('.ghost').length,
+            cells: window.promoLayout.gridCells(window.promoLayout.cutRules.grid),
+            ks: [Math.min(...ks), Math.max(...ks)], tris: ks.length,
+            wire: document.querySelectorAll('.wire polygon').length,
+            rays: document.querySelector('svg.rays').innerHTML,
+            dust: document.querySelector('svg.dust').innerHTML,
+            meshed: document.querySelector('.hero').classList.contains('meshed'),
+          };
+        }"""
+        got = []
+        for _ in range(2):
+            cap = export.Capture(lc.SCREENS / "n05.html", scale=0.25, layer="fg")
+            try:
+                cap.page.evaluate("t => window.__export.seek(t)", 4.5)
+                got.append(cap.page.evaluate(script))
+            finally:
+                cap.close()
+        a, b = got
+        n = lc.load_layout()["n05"]
+        d, t, m = n["door"], n["times"], n["hero_mesh"]
+        self.assertTrue(a["meshed"])
+        self.assertEqual(len(a["land"]), len(a["cells"]))
+        self.assertEqual(a["ghosts"], len(a["cells"]) * n["tile_fx"]["ghosts"])
+        for land, cell in zip(a["land"], a["cells"]):
+            for k in "xywh":
+                self.assertAlmostEqual(land[k], cell[k], delta=0.6)
+        self.assertGreater(a["tris"], 100)
+        self.assertEqual(a["wire"], a["tris"])
+        self.assertGreaterEqual(a["ks"][0], t["mesh_out_s"] - 1e-3)
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertLessEqual(a["ks"][1] + m["el_dur_s"], swing + d["hero_fade_dur_s"] + 1e-3)
+        self.assertEqual(a["rays"].count("<polygon"), n["rays"]["count"])
+        self.assertEqual(a["dust"].count("<circle"), n["dust"]["count"])
+        self.assertEqual(a["rays"], b["rays"])
+        self.assertEqual(a["dust"], b["dust"])
+        self.assertEqual(a["ks"], b["ks"])
 
     def test_variable_forms(self):
         # layout.js turns each kind of value into its CSS form

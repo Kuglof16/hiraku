@@ -8,12 +8,15 @@ the builder had to assume is listed in Vehicle.assumptions.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 import numpy as np
 
 from . import kinematics
+from .magic_formula import DEFAULT_TYRE, MF61, load_coefficients
 from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
@@ -45,6 +48,12 @@ DEFAULTS = {
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
     "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
                                                    "max_steer_angle)"),
+    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed; the "
+                                             "design has no bushing_radial_stiffness)"),
+    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed; the "
+                                              "design has no bushing_axial_stiffness)"),
+    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed; the design has no "
+                                       "tie_rod_stiffness)"),
 }
 
 
@@ -82,6 +91,8 @@ class Corner:
     c_rr: float = 0.015
     static_load: float = 0.0
     mirror: int = -1
+    mf: MF61 | None = None  # the wheel's Magic Formula tyre (None: legs and casters)
+    table: dict | None = None  # the K&C table the path was fitted to (kc_table supports)
 
     @property
     def dof(self) -> bool:
@@ -247,6 +258,7 @@ def build_vehicle(design: dict, overrides: dict | None = None) -> Vehicle:
     m_total, cg_total, m_s, cg_s, i_s = _body(items, sprung_items, symmetric)
     loads = _static_loads(corners, m_total, cg_total, symmetric)
     _settle(corners, loads, sups, design, st, notes)
+    _tyres(corners, notes)
     side_area, side_cp, front_area, front_cp = _aero(items, corners, symmetric, notes)
     x_ref, l_steer = _steering(corners, cg_total)
     return Vehicle(
@@ -352,14 +364,30 @@ def _corner(s: dict, mirror: int, st: _Settings, design: dict, notes: list[str])
         if ref.startswith("builtin:"):
             hp_pos = pos.copy()
             hp_pos[1] = abs(hp_pos[1])
-            table = kinematics.build_table(kinematics.generic_sla(hp_pos, radius), max(travel, 0.02) * 0.6)
-            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle)")
+            bushings = kinematics.Bushings(_var(design, "bushing_radial_stiffness", "N/m", notes),
+                                           _var(design, "bushing_axial_stiffness", "N/m", notes),
+                                           _var(design, "tie_rod_stiffness", "N/m", notes))
+            table = _builtin_table(hp_pos, radius, max(travel, 0.02) * 0.6, bushings)
+            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle), with its "
+                         "compliance from the bushings and the tie rod; longitudinal forces taken at the contact point")
         else:
             table = kinematics.load_table(ref)
         c.path = kinematics.PathPoly.from_table(table)
+        c.table = table
     else:
         c.path = kinematics.PathPoly.vertical()
     return c
+
+
+@lru_cache(maxsize=32)
+def _table_of(key: tuple) -> str:
+    wc, radius, travel, bushings = key
+    return json.dumps(kinematics.build_table(kinematics.generic_sla(np.array(wc), radius), travel, bushings=bushings))
+
+
+def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinematics.Bushings) -> dict:
+    """The builtin K&C table of a corner (computed once per geometry and bushings in a process)."""
+    return json.loads(_table_of((tuple(float(x) for x in wc), float(radius), float(travel), bushings)))
 
 
 def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
@@ -495,6 +523,31 @@ def _settle(corners: list[Corner], loads: np.ndarray, sups: list[dict], design: 
                 c.c_lat = _var(design, "tire_cornering_coeff", "1", notes) * f
     if _given(design, "tyre_relaxation_length") is None:
         notes.append(DEFAULTS["tyre_relaxation_length"][2])
+
+
+def _tyres(corners: list[Corner], notes: list[str], name: str = DEFAULT_TYRE):
+    """The Magic Formula tyre of every wheel: one coefficient file scaled to the vehicle.
+
+    Nominal load = the mean static load of the wheels (one tyre size for the vehicle),
+    R0 = the wheel's radius; the scaling factors make, at each wheel's static load, the
+    peak friction mu (both directions), the slip stiffness c_long and the cornering
+    stiffness c_lat, so that the hand calculations (K0), which take those numbers, see the
+    same tyre at small slip."""
+    wheels = [c for c in corners if c.kind == "wheel"]
+    if not wheels:
+        return
+    coeffs = load_coefficients(name)
+    fz0 = sum(c.static_load for c in wheels) / len(wheels)
+    for c in wheels:
+        base = MF61(coeffs, fz0=fz0, r0=c.radius)
+        fz = c.static_load
+        c.mf = MF61(coeffs, fz0=fz0, r0=c.radius, lmux=c.mu / base.mu_x(fz), lmuy=c.mu / base.mu_y(fz),
+                    lkx=c.c_long / base.kxk(fz), lky=c.c_lat / abs(base.kya(fz)))
+    notes.append(f"tyre forces: Magic Formula 6.1 with the coefficients of the {coeffs['tyre']} tyre "
+                 f"({coeffs['source']['title']}; not checked against the book), scaled to this vehicle: nominal "
+                 f"load {fz0:.0f} N (the mean static wheel load), R0 = the wheel radius, and at each wheel's static "
+                 "load the peak friction = mu and the slopes at zero slip = the stiffnesses K2 took (design or "
+                 "defaults above)")
 
 
 def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):

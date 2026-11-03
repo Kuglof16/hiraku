@@ -7,7 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens)
+//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -20,9 +20,11 @@ import { FIELD_JA, contourOf, fieldsOf, preferredField, variantName, variantOf }
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
+import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
+import { AssemblyPanel } from "./assembly.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -35,7 +37,8 @@ const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", 
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
-const TABS = ["bench", "grid", ...INTAKE_TABS];
+const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
+let asmPanel = null; // mounted on first show
 
 const ui = {
   pinnedLc: null,
@@ -142,7 +145,7 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
-  if (INTAKE_TABS.includes(s.focus.screen)) return s.focus.screen;
+  if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4" || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
 }
 
@@ -203,6 +206,13 @@ function renderIntake(tab) {
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
+let shelf = null;
+function renderShelf() {
+  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId });
+  shelf.render();
 }
 
 function renderTop(s) {
@@ -403,7 +413,12 @@ function renderLegend(ct) {
     rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
   }
   rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
-  const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>` : "";
+  const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
+  const over = ct.limitKnown
+    ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
+    : ct.partLimit
+      ? `<div class="lim">${swatch}${esc(ct.partLimit.part)} の許容 ${fmt(ct.partLimit.value, 4)} ${esc(unit)} を超えたとき</div>`
+      : "";
   const chips =
     (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
     (ct.variants.length > 1 ? `<div class="kinds variants">${ct.variants.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>` : "");
@@ -654,10 +669,13 @@ function draw() {
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     $("view-intake").hidden = !intakeTab;
-    $("main").classList.toggle("wide", tab === "grid" || intakeTab); // A6 and the intake screens use the whole width
+    $("view-shelf").hidden = tab !== "A4";
+    $("view-asm").hidden = tab !== "A7";
+    $("main").classList.toggle("wide", tab === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
     if (intakeTab) renderIntake(tab);
+    if (tab === "A4") renderShelf();
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
@@ -679,6 +697,7 @@ function draw() {
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") bench.render();
   else if (tab === "grid") board.tick(player.playhead);
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
 }
 
 let lastTs = null;
