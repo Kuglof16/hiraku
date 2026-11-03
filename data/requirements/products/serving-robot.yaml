@@ -6,7 +6,7 @@
 # cited source at the place named, in a source check on that date; "secondary" = only a summary gave it.
 # Public numbers for this kind of product are few: most values
 # are the makers' published specifications or borrowed from standards for industrial robots.
-# The required answers (Q30, Q40, Q50) are in serving-robot.answers.yaml.
+# The required answers (Q40, Q50) are in serving-robot.answers.yaml.
 
 want: 飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい
 product: serving-robot

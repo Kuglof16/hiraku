@@ -10,9 +10,11 @@ answers:
     trust: 3
     basis: assumption (a sample answer; no source)
   Q30:
-    value: 利用者 1 人 + 介助者 1 人
+    value: driver
     trust: 3
-    basis: assumption (a sample answer)
+    basis: >-
+      assumption (a sample answer): the one occupant is the bed's user; the carer stands beside the bed and is
+      not counted (only people on board are)
   Q40:
     value: 1700
     unit: N

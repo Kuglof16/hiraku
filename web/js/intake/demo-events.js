@@ -6695,9 +6695,27 @@ export const DEMOS = {
      {
       "req_key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "text": "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。",
+      "text": "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
       "ask": "must",
-      "allow_other": true
+      "allow_other": true,
+      "choices": [
+       {
+        "label": "空車",
+        "value": "empty"
+       },
+       {
+        "label": "運転者だけ",
+        "value": "driver"
+       },
+       {
+        "label": "2 人",
+        "value": "two"
+       },
+       {
+        "label": "2 人 + 荷",
+        "value": "two_cargo"
+       }
+      ]
      },
      {
       "req_key": "Q34",
@@ -6907,10 +6925,10 @@ export const DEMOS = {
      {
       "key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "value": "利用者 1 人 + 介助者 1 人",
+      "value": "driver",
       "source": "hearing",
       "trust": 3,
-      "basis": "assumption (a sample answer)"
+      "basis": "assumption (a sample answer): the one occupant is the bed's user; the carer stands beside the bed and is not counted (only people on board are)"
      },
      {
       "key": "Q34",
@@ -8717,7 +8735,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 15 件、答え 3 件、既定値 21 件、答えが無いまま 4 件",
+   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件",
    "data": {
     "answers": [
      {
@@ -8914,14 +8932,6 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption",
       "value": "10 h/日 を 5 年"
-     },
-     {
-      "key": "Q30",
-      "name": "人数と荷重の組み合わせ",
-      "value": "周りの客",
-      "source": "hearing",
-      "trust": 3,
-      "basis": "assumption (a sample answer)"
      }
     ]
    }

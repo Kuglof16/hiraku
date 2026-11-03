@@ -99,7 +99,8 @@ items:
     name: 人数と荷重の組み合わせ
     applies_if: ride or lean
     ask: must
-    question: "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。"
+    question: "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"
+    choices: [{label: 空車, value: empty}, {label: 運転者だけ, value: driver}, {label: 2 人, value: two}, {label: 2 人 + 荷, value: two_cargo}]
 
   - key: Q31
     name: 体格の範囲

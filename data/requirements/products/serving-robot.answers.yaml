@@ -5,10 +5,6 @@
 # been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
 # cited source in a source check on that date.
 answers:
-  Q30:
-    value: 周りの客
-    trust: 3
-    basis: assumption (a sample answer)
   Q40:
     value: 40
     unit: kg
