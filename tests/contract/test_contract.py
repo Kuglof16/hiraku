@@ -227,6 +227,13 @@ class IntakeTest(unittest.TestCase):
         bad = {**lc, "criterion": {**lc["criterion"], "stand_in_quantity": 3}}
         self.assertNotEqual(contract.errors("load_case", bad), [])
 
+    def test_part_material_and_finish(self):
+        des = load("design.json")
+        part = {**des["parts"][0], "material": "SPCC", "finish": "painted"}
+        self.assertEqual(contract.errors("design", {**des, "parts": [part, *des["parts"][1:]]}), [])
+        bad = {**part, "finish": "shiny"}
+        self.assertNotEqual(contract.errors("design", {**des, "parts": [bad, *des["parts"][1:]]}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
