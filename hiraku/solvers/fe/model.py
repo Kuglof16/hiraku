@@ -376,21 +376,30 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
     """Master-slave elimination. Returns T (n_dof x n_r) csr, g (n_dof,), free (n_r,) global DOFs, info dict.
 
     u = T u_r + g satisfies every fixed value and every equation.
+    info["G"] (n_dof x n_fixed, columns in info["fixed_dofs"] order) is du/dc of every fixed value c: a
+    dependent DOF's constant is tracked as a combination of the fixed values, so the reaction at a fixed DOF
+    that only constraints touch (e.g. the master of a rigid link) is G^T (K u - F) (virtual work: the
+    reduced residual T^T (K u - F) is zero, so only the fixed values' own motion does work).
     """
     dep: dict[int, dict] = {}  # dependent DOF -> {independent DOF: coef}
     dep_c: dict[int, float] = {}  # dependent DOF -> constant
+    dep_f: dict[int, dict] = {}  # dependent DOF -> {fixed DOF: coef} (the constant's dependence on fixed values)
     users: dict[int, set] = {}  # independent DOF -> dependents whose expression uses it
     redundant = 0
     for eq in equations:
         row: dict[int, float] = {}
         rhs = float(eq.rhs)
+        rf: dict[int, float] = {}
         scale = max(abs(t[2]) for t in eq.terms) if eq.terms else 1.0
         for node, comp, coef in eq.terms:
             d = lay.dof(node, comp)
             if d in fixed:
                 rhs -= coef * fixed[d]
+                rf[d] = rf.get(d, 0.0) - coef
             elif d in dep:
                 rhs -= coef * dep_c[d]
+                for k, v in dep_f[d].items():
+                    rf[k] = rf.get(k, 0.0) - coef * v
                 for k, v in dep[d].items():
                     row[k] = row.get(k, 0.0) + coef * v
             else:
@@ -412,6 +421,7 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
         cp = row.pop(pick)
         expr = {k: -v / cp for k, v in row.items()}
         const = rhs / cp
+        constf = {k: v / cp for k, v in rf.items() if v != 0.0}
         # substitute the new dependent DOF out of earlier expressions
         for other in list(users.get(pick, ())):
             e = dep[other]
@@ -419,6 +429,10 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
             if a is None:
                 continue
             dep_c[other] += a * const
+            if constf:
+                of = dep_f[other]
+                for k, v in constf.items():
+                    of[k] = of.get(k, 0.0) + a * v
             for k, v in expr.items():
                 nv = e.get(k, 0.0) + a * v
                 if abs(nv) > 0.0:
@@ -430,6 +444,7 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
         users.pop(pick, None)
         dep[pick] = expr
         dep_c[pick] = const
+        dep_f[pick] = constf
         for k in expr:
             users.setdefault(k, set()).add(pick)
     is_indep = np.ones(n_dof, bool)
@@ -453,7 +468,18 @@ def eliminate(n_dof: int, fixed: dict, equations: list, lay: Layout, tol: float 
             vals.append(np.fromiter(e.values(), float, len(e)))
     T = sp.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
                       shape=(n_dof, len(free))).tocsr()
-    return T, g, free, {"n_dependent": len(dep), "n_fixed": len(fixed), "redundant_equations": redundant}
+    fixed_dofs = np.fromiter(fixed.keys(), np.int64, len(fixed))
+    fcol = {int(d): i for i, d in enumerate(fixed_dofs)}
+    gr, gc, gv = list(fixed_dofs), list(range(len(fixed_dofs))), [1.0] * len(fixed_dofs)
+    for d, ef in dep_f.items():
+        for k, v in ef.items():
+            if v != 0.0:
+                gr.append(d)
+                gc.append(fcol[k])
+                gv.append(v)
+    G = sp.coo_matrix((gv, (gr, gc)), shape=(n_dof, len(fixed_dofs))).tocsr()
+    return T, g, free, {"n_dependent": len(dep), "n_fixed": len(fixed), "redundant_equations": redundant,
+                        "G": G, "fixed_dofs": fixed_dofs}
 
 
 # ------------------------------------------------------------------ solving
@@ -471,6 +497,7 @@ class Solution:
     fixed: dict
     method: str
     info: dict = field(default_factory=dict)
+    G: sp.csr_matrix | None = None  # du/dc of the fixed values (columns in the order of `fixed`), from eliminate
 
     @property
     def displacements(self) -> np.ndarray:
@@ -482,11 +509,13 @@ class Solution:
         return self.layout.node_array(self.K @ self.U - self.F)
 
     def reactions(self) -> np.ndarray:
-        """(N, 6) forces the supports apply (non-zero only at fixed DOFs)."""
+        """(N, 6) forces the supports apply (non-zero only at fixed DOFs). With constraints eliminated, a
+        fixed DOF's reaction includes what the constraints carry to it (G^T (K u - F), see eliminate), so a
+        support on the master of a rigid link gets the forces of its slaves."""
         r = self.K @ self.U - self.F
         out = np.zeros(self.layout.n_dof)
         idx = np.fromiter(self.fixed.keys(), np.int64, len(self.fixed))
-        out[idx] = r[idx]
+        out[idx] = (self.G.T @ r) if self.G is not None else r[idx]
         return self.layout.node_array(out)
 
     def element_forces(self, group) -> np.ndarray:
@@ -539,9 +568,14 @@ class StaticSolver:
                                  f"{', '.join(rb['free_motions'])}); add supports before solving")
         if method == "eliminate":
             self.T, self.g, self.free, info = eliminate(lay.n_dof, self.fixed, eqs, lay)
+            self.G = info.pop("G")
+            info.pop("fixed_dofs")
             A = (self.T.T @ self.K @ self.T).tocsc()
         elif method in ("penalty", "lagrange"):
             self.T, self.g, self.free, info = eliminate(lay.n_dof, self.fixed, [], lay)
+            info.pop("G")
+            info.pop("fixed_dofs")
+            self.G = None
             C, gc = model.constraint_matrix(lay)
             Cr = (C @ self.T).tocsr()
             rc = gc - C @ self.g
@@ -600,7 +634,7 @@ class StaticSolver:
         b = rhs if self.method != "lagrange" else np.concatenate([rhs, rc])
         rel = float(np.linalg.norm(r - b) / max(np.linalg.norm(b), 1e-300))
         sol = Solution(self.model, self.layout, U, F, self.K, self.fixed, self.method,
-                       {**self.info, "solve_residual": rel})
+                       {**self.info, "solve_residual": rel}, self.G)
         if rel > 1e-6:
             raise ModelError(f"the linear solve did not converge (relative residual {rel:.2e}): the model is nearly "
                              f"singular (a mechanism or a part held only weakly)")

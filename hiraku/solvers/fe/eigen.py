@@ -23,9 +23,15 @@ Natural modes
 -------------
 K phi = omega^2 M phi with M assembled from group.mass(nodes, lumped) plus point masses on the
 translations, solved by eigsh shift-invert (sigma = 0 for a held model, a small negative sigma when the
-model can move as a rigid body so the factorisation of K - sigma M exists). The choice of mass matrix
-is in `modes` (lumped=False by default; see the report of tests/solvers/test_fe_eigen.py for the
-numbers behind it).
+model can move as a rigid body so the factorisation of K - sigma M exists).
+
+Mass matrix: consistent by default (lumped=True gives k1_shell's lumped shell mass and HRZ-lumped bricks).
+Measured on the checks of tests/solvers/test_fe_modes.py, the two differ little: cantilever plate strip
+(40 x 4 MITC4) +0.72 % consistent / +0.70 % lumped against the beam formula; 40 x 2 square tube (16 x 50)
+-0.29 % / -0.31 %; round tube -0.15 % / -0.17 %; HEX20 bar (10 bricks) +1.02 % / +0.68 %; the offroad-4w-v1
+frame's first 8 modes within 0.002 % (the part masses dominate). Consistent is kept because it is the
+variationally consistent one (with a conforming stiffness the frequencies converge from above, so the
+error has a known sign), and because the factorisation of K - sigma M, not M's sparsity, sets the cost.
 
 Units: N, mm, tonne, so omega^2 is in 1/s^2.
 """
@@ -184,6 +190,7 @@ def modes(model: FEModel, n_modes: int = 6, lumped: bool = False, sigma: float |
     M = mass_matrix(model, lay, lumped)
     fixed = model.fixed_dofs(lay)
     T, _, free, info = eliminate(lay.n_dof, fixed, model.equations(lay.counts), lay)
+    info = {k: v for k, v in info.items() if k not in ("G", "fixed_dofs")}
     Kr = (T.T @ K @ T).tocsc()
     Mr = (T.T @ M @ T).tocsc()
     if sigma is None:
