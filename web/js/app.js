@@ -7,7 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens)
+//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -20,6 +20,7 @@ import { FIELD_JA, contourOf, fieldsOf, preferredField, variantName, variantOf }
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
+import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
@@ -35,7 +36,7 @@ const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", 
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
-const TABS = ["bench", "grid", ...INTAKE_TABS];
+const TABS = ["bench", "grid", "A4", ...INTAKE_TABS]; // A4: the tool shelf (js/shelf.js)
 
 const ui = {
   pinnedLc: null,
@@ -142,7 +143,7 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
-  if (INTAKE_TABS.includes(s.focus.screen)) return s.focus.screen;
+  if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
 }
 
@@ -203,6 +204,13 @@ function renderIntake(tab) {
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
+let shelf = null;
+function renderShelf() {
+  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId });
+  shelf.render();
 }
 
 function renderTop(s) {
@@ -659,10 +667,12 @@ function draw() {
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     $("view-intake").hidden = !intakeTab;
-    $("main").classList.toggle("wide", tab === "grid" || intakeTab); // A6 and the intake screens use the whole width
+    $("view-shelf").hidden = tab !== "A4";
+    $("main").classList.toggle("wide", tab === "grid" || tab === "A4" || intakeTab); // A6, A4 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
     if (intakeTab) renderIntake(tab);
+    if (tab === "A4") renderShelf();
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
