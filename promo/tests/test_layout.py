@@ -15,6 +15,48 @@ def box(x, y, w, h):
     return {"x": x, "y": y, "w": w, "h": h}
 
 
+def cut_rules(rules: dict, cut: str) -> dict:
+    """The rules a checked page reads: its cut's, or for an entry page of the
+    labels (labels_n01 ...) the labels' with the length of the cut it lies over."""
+    if cut.startswith("labels_"):
+        return {**rules["labels"], "duration_s": rules[cut.split("_", 1)[1]]["duration_s"]}
+    return rules[cut]
+
+
+def box_prefix(cut: str) -> str:
+    return "labels." if cut.startswith("labels_") else cut + "."
+
+
+def hero_mask(png: Path, box_w: float, box_h: float, cell: float, threshold: int = 128,
+              cover: float = 0.5) -> list[str]:
+    """Where a picture is, cell by cell, as layout.json n05.hero_points.mask.rows_hex.
+
+    The picture is fitted into a box_w x box_h box (contain, centred) as the page
+    draws it; a cell of cell x cell box px is set when at least cover of the
+    picture's pixels in it have alpha above threshold. One hex string per row,
+    the first column in the high bit of the first digit, padded to whole digits.
+    """
+    from PIL import Image
+
+    alpha = Image.open(png).getchannel("A")
+    iw, ih = alpha.size
+    k = min(box_w / iw, box_h / ih)
+    ox, oy = (box_w - iw * k) / 2, (box_h - ih * k) / 2
+    cols, rows = round(box_w / cell), round(box_h / cell)
+    px = alpha.load()
+    out = []
+    for r in range(rows):
+        bits = ""
+        for c in range(cols):
+            xs = range(max(0, int((c * cell - ox) / k)), min(iw, int(((c + 1) * cell - ox) / k)))
+            ys = range(max(0, int((r * cell - oy) / k)), min(ih, int(((r + 1) * cell - oy) / k)))
+            n = sum(1 for y in ys for x in xs if px[x, y] > threshold)
+            bits += "1" if n / max(1, len(xs) * len(ys)) >= cover else "0"
+        bits += "0" * (-len(bits) % 4)
+        out.append("".join(f"{int(bits[i:i + 4], 2):x}" for i in range(0, len(bits), 4)))
+    return out
+
+
 class GeneratedData(unittest.TestCase):
     def test_data_js_matches_layout_json(self):
         rules = layout_build.load()
@@ -34,7 +76,7 @@ class GeneratedData(unittest.TestCase):
     def test_check_times_name_every_cut(self):
         rules = layout_build.load()
         for cut in lc.CUTS:
-            self.assertIn(cut, rules)
+            self.assertTrue(cut_rules(rules, cut))
             self.assertTrue(rules["check"]["times"][cut])
 
     def test_every_allowance_gives_a_reason(self):
@@ -53,7 +95,7 @@ class SharedShape(unittest.TestCase):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
                                 "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n10", "n15",
-                                "n16", "n17", "n18", "story", "check"})
+                                "n16", "n17", "n17b", "n18", "labels", "story", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -294,14 +336,14 @@ class SharedShape(unittest.TestCase):
                 elif path.endswith(".times"):
                     self.assertTrue(k.endswith("_s"), f"{path}.{k}")
         for cut in lc.CUTS:
-            walk(self.rules[cut], cut)
-            self.assertIn("duration_s", self.rules[cut])
+            walk(cut_rules(self.rules, cut), cut)
+            self.assertIn("duration_s", cut_rules(self.rules, cut))
 
     def test_duration_matches_the_page(self):
         for cut in lc.CUTS:
             html = (lc.SCREENS / f"{cut}.html").read_text(encoding="utf-8")
             m = re.search(r'data-duration="([0-9.]+)"', html)
-            self.assertEqual(float(m.group(1)), self.rules[cut]["duration_s"], cut)
+            self.assertEqual(float(m.group(1)), cut_rules(self.rules, cut)["duration_s"], cut)
 
     def test_pages_hold_no_times_or_old_names(self):
         for cut in lc.CUTS:
@@ -309,11 +351,210 @@ class SharedShape(unittest.TestCase):
             self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", html), f"{cut}: a time set in the page")
             self.assertNotIn("data-check", html)
             for name in re.findall(r'data-box="([^"$]+)"', html):
-                self.assertTrue(name.startswith(cut + "."), name)
+                self.assertTrue(name.startswith(box_prefix(cut)), name)
 
     def test_bgm_reads_the_same_times(self):
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), self.rules["n05"]["times"]["burst_s"])
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n18", "open"), self.rules["n18"]["times"]["open_s"])
+
+
+BANNED = ("Math.random", "Date.now", "requestAnimationFrame", "performance.now")
+
+
+class ReferenceLook(unittest.TestCase):
+    """N05's point cloud, N18's closing and the labels of N01-N04 (after the reference video)."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+
+    def test_n05_points_before_the_picture(self):
+        n = self.rules["n05"]
+        t, p = n["times"], n["hero_points"]
+        # the door's and the title's times stay as they were
+        for k, v in (("latch_s", 0.38), ("door_open_s", 0.55), ("burst_s", 1.25), ("tiles_s", 1.35),
+                     ("name_s", 1.75), ("tag_s", 2.3), ("mesh_in_s", 0.2), ("mesh_out_s", 0.78)):
+            self.assertEqual(t[k], v, k)
+        # every point is in before the picture fades in; it is in by about 0.45 s;
+        # the points are gone before the mesh comes apart
+        self.assertEqual(t["points_s"], 0.0)
+        self.assertLessEqual(t["points_s"] + p["stagger_s"] + p["gather_dur_s"], t["hero_in_s"] + 1e-9)
+        self.assertLessEqual(t["hero_in_s"] + p["hero_in_dur_s"], 0.5)
+        self.assertGreaterEqual(t["points_out_s"], t["hero_in_s"])
+        self.assertLess(t["points_out_s"] + p["fade_dur_s"], t["mesh_out_s"])
+        self.assertTrue(0 < p["outline_keep"] <= 1)
+        self.assertTrue(0 <= p["jitter"] < 0.5)            # an outline point stays in its cell
+        self.assertLess(p["scatter_min_px"], p["scatter_max_px"])
+        self.assertEqual(len(p["ease"]), 4)
+
+    def test_n05_mask_shape(self):
+        n = self.rules["n05"]
+        k = n["hero_points"]["mask"]
+        self.assertEqual(k["cols"] * k["cell_px"], n["hero"]["w"])
+        self.assertEqual(k["rows"] * k["cell_px"], n["hero"]["h"])
+        self.assertEqual(k["src"], n["hero"]["src"])
+        self.assertEqual(len(k["rows_hex"]), k["rows"])
+        for row in k["rows_hex"]:
+            self.assertRegex(row, rf"^[0-9a-f]{{{-(-k['cols'] // 4)}}}$")
+        self.assertGreater(sum(bin(int(r, 16)).count("1") for r in k["rows_hex"]), 500)
+
+    @unittest.skipUnless(importlib.util.find_spec("PIL"), "needs Pillow")
+    def test_n05_mask_is_the_picture(self):
+        n = self.rules["n05"]
+        k = n["hero_points"]["mask"]
+        got = hero_mask(lc.SCREENS / k["src"], n["hero"]["w"], n["hero"]["h"], k["cell_px"],
+                        k["threshold"], k["cover"])
+        self.assertEqual(got, k["rows_hex"], "the picture changed: put hero_mask()'s rows in layout.json")
+
+    def test_n05_page_points(self):
+        html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
+        for part in ("heroPoints", "meshNodes(seeded(R.hero_mesh.seed))", 'class="pic"', 'svg class="pts"'):
+            self.assertIn(part, html)
+
+    def test_n18_closing(self):
+        r, n = self.rules, self.rules["n18"]
+        t = n["times"]
+        order = ["gather_s", "line_s", "open_s", "draw_s", "name_s", "tag_s", "url_s", "credit_s", "out_s"]
+        self.assertEqual([k for k in t if not k.startswith("_")], order)
+        self.assertEqual([t[k] for k in order], sorted(t[k] for k in order))
+        self.assertEqual(n["duration_s"], 9.0)
+        self.assertEqual(t["open_s"], 0.8)                 # bgm.py starts its swell here
+        # the motes are in when the line starts, and the line is grown when it opens
+        g = n["gather"]
+        self.assertLessEqual(t["gather_s"] + g["stagger_s"] + g["gather_dur_s"], t["line_s"] + 1e-9)
+        self.assertGreaterEqual(t["line_s"] - t["gather_s"], 0.3)
+        self.assertAlmostEqual(t["line_s"] + n["light"]["grow_dur_s"], t["open_s"])
+        # the credit: under the URL, small but not below the minimum, above the band
+        c, u = n["credit"], n["url"]
+        self.assertGreaterEqual(c["size_px"], r["min_text_px"])
+        self.assertLess(c["size_px"], u["size_px"])
+        self.assertLessEqual(u["y"] + u["size_px"], c["y"])
+        self.assertLess(c["y"] + 1.25 * c["size_px"], r["subtitle_band"]["y"])
+        self.assertTrue(0 < c["alpha"] < 1)
+        self.assertLess(t["credit_s"] + c["fade_dur_s"], t["out_s"])
+        b = n["name_bloom"]
+        self.assertGreater(b["peak_blur_px"], b["rest_blur_px"])
+        self.assertGreater(b["halo_peak_alpha"], b["halo_rest_alpha"])
+
+    def test_n18_page(self):
+        html = (lc.SCREENS / "n18.html").read_text(encoding="utf-8")
+        self.assertIn('<p class="credit" data-box="n18.credit" data-kind="note">Built with Claude</p>', html)
+        for part in ('svg class="gather"', 'class="seed-line"', 'class="name-halo"', "letter-bloom"):
+            self.assertIn(part, html)
+        self.assertNotIn("<img", html)                     # no logo
+        for banned in BANNED:
+            self.assertNotIn(banned, html)
+
+    def test_labels(self):
+        r, lab = self.rules, self.rules["labels"]
+        self.assertEqual(set(lab["cuts"]), {"n01", "n02", "n03", "n04"})
+        for i, (cut, w) in enumerate(sorted(lab["cuts"].items()), 1):
+            self.assertEqual(w["num"], f"{i:02d}")
+            self.assertTrue(w["text"])
+            # it is in for a while: in, then out before the end
+            d = r[cut]["duration_s"]
+            self.assertLess(lab["times"]["in_s"] + lab["in_dur_s"], d - lab["times"]["out_before_end_s"] - lab["out_dur_s"])
+        self.assertEqual((r["n01"]["duration_s"], r["n02"]["duration_s"], r["n03"]["duration_s"],
+                          r["n04"]["duration_s"]), (4.0, 7.0, 5.0, 4.0))
+        self.assertEqual(lab["times"], {"in_s": 0.2, "out_before_end_s": 0.3})
+        b = lab["box"]
+        self.assertLessEqual(b["y"] + b["h"], r["subtitle_band"]["y"])
+        self.assertGreaterEqual(b["x"], r["safe"]["x"])
+        self.assertGreaterEqual(min(lab["num_size_px"], lab["text_size_px"]), r["min_text_px"])
+        self.assertLess(b["h"], 2.5 * lab["text_size_px"])  # small: one line
+
+    def test_label_pages(self):
+        js = (lc.SCREENS / "labels.js").read_text(encoding="utf-8")
+        for banned in BANNED:
+            self.assertNotIn(banned, js)
+        for name in ["labels"] + [f"labels_n0{i}" for i in range(1, 5)]:
+            html = (lc.SCREENS / f"{name}.html").read_text(encoding="utf-8")
+            self.assertIn('data-cut="labels"', html)
+            self.assertLess(html.index('src="labels.js"'), html.index('src="timeline.js"'))
+            self.assertIn('class="label-ground bg-only"', html)
+            if name != "labels":
+                self.assertIn(f'data-label-cut="{name[7:]}"', html)
+                self.assertIn(name, lc.CUTS)
+
+
+class N17b(unittest.TestCase):
+    """N17b: the Claude Code sessions side by side, then the counts from git."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+        self.n = self.rules["n17b"]
+        self.html = (lc.SCREENS / "n17b.html").read_text(encoding="utf-8")
+
+    def test_duration_matches_the_page(self):
+        m = re.search(r'data-duration="([0-9.]+)"', self.html)
+        self.assertEqual(float(m.group(1)), self.n["duration_s"])
+        self.assertEqual(self.n["duration_s"], 5.8)
+        self.assertTrue(self.rules["check"]["times"]["n17b"])
+        self.assertIn("n17b", lc.CUTS)
+
+    def test_boxes_stay_above_the_band(self):
+        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
+        n = self.n
+        for name in ("vision", "lanes", "counts"):
+            b = n[name]
+            self.assertLessEqual(b["y"] + b["h"], band, name)
+            self.assertGreaterEqual(b["x"], safe["x"], name)
+            self.assertLessEqual(b["x"] + b["w"], stage["w"] - safe["x"], name)
+        ln = n["lanes"]
+        self.assertLessEqual(ln["top"] + 8 * ln["pitch_px"], ln["axis_y"])           # eight lanes above the dates
+        self.assertLessEqual(ln["axis_y"] + 1.3 * ln["axis_size_px"], ln["h"])
+        self.assertLessEqual(ln["label_w"], ln["graph_x"])
+        self.assertLessEqual(ln["graph_x"] + ln["graph_w"], ln["w"])
+        self.assertLessEqual(n["lanes"]["y"] + n["lanes"]["h"], n["counts"]["y"])      # the counts under the lanes
+        c = n["counts"]
+        cols = {k: v for k, v in c["cols"].items() if not k.startswith("_")}
+        self.assertEqual(list(cols), ["days", "commits", "lines", "tests"])
+        self.assertEqual(sum(cols.values()) + 3 * c["gap_px"], c["w"])
+        sizes = [ln["label_size_px"], ln["axis_size_px"], n["vision"]["cap_size_px"], c["head_size_px"],
+                 c["stamp_size_px"], c["label_size_px"], c["sub_size_px"], c["unit_size_px"]]
+        self.assertGreaterEqual(min(sizes), self.rules["min_text_px"])
+        self.assertGreaterEqual(ln["label_size_px"], self.rules["story"]["defaults"]["body_text_px"])
+
+    def test_times_follow_the_voice(self):
+        t, v, c = self.n["times"], self.n["vision"], self.n["count"]
+        for k in t:
+            if not k.startswith("_"):
+                self.assertTrue(k.endswith("_s"), k)
+        # 100,000 comes with sentence 1 (0.30-2.08 s) and is gone before the counts
+        self.assertGreaterEqual(t["vision_s"], 0.3)
+        gone = t["vision_out_s"] + v["out_dur_s"]
+        self.assertLessEqual(gone, t["flow_s"])
+        self.assertLess(gone, t["counts_s"])
+        # the lanes start growing during sentence 1; the stream runs with sentence 2 (2.43-5.54 s)
+        self.assertLess(t["lanes_s"], 2.08)
+        self.assertLess(t["lanes_s"], t["lanes_to_s"])
+        self.assertLessEqual(t["lanes_to_s"], t["flow_s"])
+        self.assertLess(t["flow_s"], t["flow_to_s"])
+        self.assertLess(t["flow_to_s"], 5.54)
+        # the last count stops before 5.5 s, and the picture holds still to the end
+        last = t["counts_s"] + 3 * c["stagger_s"] + c["dur_s"]
+        self.assertLessEqual(last, 5.5)
+        self.assertLessEqual(t["calm_s"] + 0.8, 5.5)
+        self.assertGreaterEqual(self.n["duration_s"] - 5.5, 0.3 - 1e-9)
+
+    def test_page_names_and_words(self):
+        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
+        for name in re.findall(r'data-box="([^"$]+)"', self.html):
+            self.assertTrue(name.startswith("n17b."), name)
+        self.assertIn('<script src="n17b.data.js"></script>', self.html)
+        self.assertIn("構想の見通し", self.html)
+        self.assertIn("数えた日時", self.html)
+        for banned in ("requestAnimationFrame", "Date.now", "Math.random", "参加者"):
+            self.assertNotIn(banned, self.html)
+        # the voice's words are burnt in as subtitles, not drawn on the screen
+        self.assertNotIn("拓きました", self.html)
+        # no figure from git is typed into the page: they come from N17B_DATA
+        self.assertIsNone(re.search(r"\b(524|71,?001|1,?162)\b", self.html))
+
+    def test_story_limits(self):
+        lim = self.rules["story"]["cuts"]["n17b"]["limits"]
+        self.assertEqual(self.html.count('data-kind="number"'), 2)    # the 100,000 and the counts' template
+        self.assertGreaterEqual(lim["number"], 4)
+        self.assertGreaterEqual(lim["label"], 8)
 
 
 def n10_data() -> dict:
@@ -603,6 +844,60 @@ class Judging(unittest.TestCase):
         items = [self.item("a", box(0, 0, 100, 100)), self.item("b", box(200, 0, 100, 100))]
         self.assertEqual(lc.judge(items, self._layout(), "x"), [])
 
+    STORY = {"defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24, "_note": "x"},
+             "cuts": {"a": {"message": "m"},
+                      "b": {"message": "m", "limits": {"label": 5, "body_text_px": 20, "why": "w"}}}}
+
+    def census(self, labels=0, numbers=0, moving=0, fonts=()):
+        e = lambda i: {"label": f"e{i}", "text": "", "box": box(10 * i, 0, 5, 5)}  # noqa: E731
+        return {"cut": None, "kinds": {"label": [e(i) for i in range(labels)], "number": [e(i) for i in range(numbers)]},
+                "moving": [e(i) for i in range(moving)],
+                "body": [{**e(i), "font": f} for i, f in enumerate(fonts)]}
+
+    def test_story_cut(self):
+        self.assertEqual(lc.story_cut(None, "a", self.STORY), "a")          # the file name
+        self.assertEqual(lc.story_cut("b", "cut", self.STORY), "b")         # ?cut= or <body data-cut> first
+        self.assertIsNone(lc.story_cut(None, "fixture", self.STORY))        # not in the story: not counted
+
+    def test_story_limits(self):
+        self.assertEqual(lc.story_limits(self.STORY, "a"),
+                         {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24})
+        b = lc.story_limits(self.STORY, "b")
+        self.assertEqual((b["label"], b["body_text_px"], b["number"]), (5, 20, 1))
+        self.assertNotIn("why", b)
+
+    def test_census_counts(self):
+        c = lc.census_counts(self.census(labels=2, moving=4, fonts=(30, 22.5)))
+        self.assertEqual(c, {"label": 2, "graph": 0, "legend": 0, "number": 0, "moving": 4, "body_text_px": 22.5})
+        self.assertIsNone(lc.census_counts(self.census())["body_text_px"])
+
+    def test_busy_over_the_limits(self):
+        probs = lc.judge_busy(self.census(labels=4, numbers=2, moving=4, fonts=(30, 20)),
+                              lc.story_limits(self.STORY, "a"), "a")
+        self.assertEqual(sorted(p["element"] for p in probs), ["body_text_px", "label", "moving", "number"])
+        self.assertTrue(all(p["kind"] == "busy" for p in probs))
+        label = next(p for p in probs if p["element"] == "label")
+        self.assertIn("label 4 > 3", label["detail"])
+        self.assertEqual(label["box"], box(0, 0, 35, 5))                      # around the four counted
+        self.assertIn("20.0 px < 24", next(p for p in probs if p["element"] == "body_text_px")["detail"])
+
+    def test_busy_at_the_limits(self):
+        at = self.census(labels=3, numbers=1, moving=3, fonts=(24,))
+        self.assertEqual(lc.judge_busy(at, lc.story_limits(self.STORY, "a"), "a"), [])
+
+    def test_busy_limits_of_the_cut(self):
+        c = self.census(labels=5, fonts=(20,))
+        self.assertEqual(len(lc.judge_busy(c, lc.story_limits(self.STORY, "a"), "a")), 2)
+        self.assertEqual(lc.judge_busy(c, lc.story_limits(self.STORY, "b"), "b"), [])
+
+    def test_real_story_limits_give_reasons(self):
+        story = lc.load_layout()["story"]
+        for cut, s in story["cuts"].items():
+            self.assertTrue(s.get("message"), cut)
+            if "limits" in s:
+                self.assertTrue(s["limits"].get("why"), cut)
+                self.assertTrue(set(s["limits"]) - {"why"} <= set(lc.COUNTED) | {"moving", "body_text_px"}, cut)
+
     def test_markdown_lists_problems(self):
         res = {"problems": 1, "screens": [{"cut": "n05", "errors": [], "frames": [
             {"t": 2.0, "items": 3, "problems": [{"kind": "band", "element": "tag", "text": "a|b",
@@ -628,6 +923,92 @@ html, body { margin: 0; overflow: hidden; } .f { position: absolute; font: 30px/
   <span style="position:absolute;left:0;top:200px">clipped</span></div>
 <script>window.promo = { ready: async () => {}, seek: async (t) => t, duration: 1 };</script>
 </body></html>"""
+
+
+# A small busy screen for the story check: 4 labels (one with a label inside
+# it, counted once; one transparent, not counted), 1 graph, 2 numbers, 4
+# things moving (a name whose 3 letters move is one; 2 boxes moving on their
+# own; one marked data-kind="moving"; a box whose animation has ended is not
+# moving), body text 22 px, and a 20 px note that is not body text.
+BUSY = """<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; overflow: hidden; } .f { position: absolute; font: 30px/1.2 sans-serif; margin: 0; }
+.spin { animation: turn 2s linear infinite; } @keyframes turn { to { transform: rotate(1turn); } }
+.done { animation: turn 0.001s linear both; }
+</style></head><body data-cut="tcut">
+<div class="f" data-kind="label" style="left:100px;top:100px">札 1 <span data-kind="label">内</span></div>
+<div class="f" data-kind="label" style="left:300px;top:100px">札 2</div>
+<div class="f" data-kind="label" style="left:500px;top:100px">札 3</div>
+<div class="f" data-kind="label" style="left:700px;top:100px">札 4</div>
+<div class="f" data-kind="label" style="left:900px;top:100px;opacity:0">札 5</div>
+<div class="f" data-kind="graph" style="left:100px;top:200px;width:300px;height:100px;background:#888"></div>
+<div class="f" data-kind="number" style="left:500px;top:200px">99 %</div>
+<div class="f" data-kind="number" style="left:700px;top:200px">16 %</div>
+<div class="f" data-box="t.name" style="left:100px;top:400px"><span class="spin" style="display:inline-block">A</span><span
+  class="spin" style="display:inline-block">B</span><span class="spin" style="display:inline-block">C</span></div>
+<div class="f spin" style="left:400px;top:400px;width:40px;height:40px;background:#000"></div>
+<div class="f spin" style="left:500px;top:400px;width:40px;height:40px;background:#000"></div>
+<div class="f done" style="left:600px;top:400px;width:40px;height:40px;background:#000"></div>
+<div class="f" data-kind="moving" style="left:700px;top:400px;width:40px;height:40px;background:#000"></div>
+<p class="f" data-box="t.body" style="left:100px;top:600px;font-size:22px">本文 22 px</p>
+<p class="f" data-box="t.src" data-kind="note" style="left:100px;top:700px;font-size:20px">出典 20 px</p>
+<script>window.promo = { ready: async () => {}, duration: 1, seek: async (t) => {
+  for (const a of document.getAnimations()) { a.pause(); a.currentTime = t * 1000; } return t; } };</script>
+</body></html>"""
+
+
+@unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
+class Busy(unittest.TestCase):
+    def check(self, story: dict, body_cut: str = "tcut") -> dict:
+        layout = copy.deepcopy(lc.load_layout())
+        layout["story"] = story
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "busy.html"
+            page.write_text(BUSY.replace('data-cut="tcut"', f'data-cut="{body_cut}"'), encoding="utf-8")
+            res = lc.check_screen(page, Path(d), layout, [0.5])
+        return res
+
+    def story(self, limits: dict | None = None) -> dict:
+        cut = {"message": "m"}
+        if limits:
+            cut["limits"] = {**limits, "why": "test"}
+        return {"defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
+                "cuts": {"tcut": cut}}
+
+    def busy(self, res: dict) -> dict:
+        return {p["element"]: p["detail"] for p in res["frames"][0]["problems"] if p["kind"] == "busy"}
+
+    def test_counts(self):
+        res = self.check(self.story())
+        self.assertEqual(res["story_cut"], "tcut")                      # from <body data-cut>
+        self.assertEqual(res["frames"][0]["counts"],
+                         {"label": 4, "graph": 1, "legend": 0, "number": 2, "moving": 4, "body_text_px": 22})
+
+    def test_over_the_limits_is_busy(self):
+        got = self.busy(self.check(self.story()))
+        self.assertEqual(sorted(got), ["body_text_px", "label", "moving", "number"])
+        self.assertIn("label 4 > 3 (tcut)", got["label"])
+        self.assertIn("number 2 > 1", got["number"])
+        self.assertIn("moving 4 > 3", got["moving"])
+        self.assertIn("22.0 px < 24 px", got["body_text_px"])
+
+    def test_within_the_limits_is_not_busy(self):
+        roomy = {"defaults": {"label": 9, "graph": 9, "legend": 9, "number": 9, "moving": 9, "body_text_px": 18},
+                 "cuts": {"tcut": {"message": "m"}}}
+        res = self.check(roomy)
+        self.assertEqual(self.busy(res), {})
+        self.assertEqual(res["frames"][0]["problems"], [])            # and the fixture is clean otherwise
+
+    def test_limits_of_the_cut_override_the_defaults(self):
+        got = self.busy(self.check(self.story({"label": 4, "number": 2, "moving": 4, "body_text_px": 22})))
+        self.assertEqual(got, {})
+        got = self.busy(self.check(self.story({"label": 4})))
+        self.assertEqual(sorted(got), ["body_text_px", "moving", "number"])
+
+    def test_cut_not_in_the_story_is_not_counted(self):
+        res = self.check(self.story(), body_cut="other")
+        self.assertIsNone(res["story_cut"])
+        self.assertIsNone(res["frames"][0]["counts"])
+        self.assertEqual(self.busy(res), {})
 
 
 @unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
@@ -858,6 +1239,48 @@ class InBrowser(unittest.TestCase):
         self.assertEqual(a["mesh"], b["mesh"])
         self.assertEqual(a["books"], b["books"])
 
+    def test_n17b_counts_and_lanes_on_screen(self):
+        # the figures shown at the end are the ones in n17b.data.js; one dot per commit
+        # (not merges), one curve per department merge into main; nothing counted yet at 2.5 s
+        from promo import export
+
+        text = (lc.SCREENS / "n17b.data.js").read_text(encoding="utf-8")
+        d = json.loads(text[text.index("{"):text.rindex("}") + 1])
+        cap = export.Capture(lc.SCREENS / "n17b.html", scale=0.5)
+        try:
+            script = """() => {
+              const shown = (el) => {
+                const rows = el.querySelector('.rows'), box = el.querySelector('.count').getBoundingClientRect();
+                return [...rows.children].filter((s) => {
+                  const r = s.getBoundingClientRect();
+                  return r.top >= box.top - 1 && r.bottom <= box.bottom + 1;
+                }).map((s) => s.textContent);
+              };
+              const out = {};
+              for (const k of ['days', 'commits', 'lines', 'tests'])
+                out[k] = shown(document.querySelector(`[data-box="n17b.counts.${k}.num"]`));
+              return { out, dots: document.querySelectorAll('circle.dot').length,
+                       merges: document.querySelectorAll('path.merge').length,
+                       names: [...document.querySelectorAll('.lane-name')].map((e) => e.textContent),
+                       tiles: getComputedStyle(document.querySelector('.tile')).opacity,
+                       vision: getComputedStyle(document.querySelector('.vision')).opacity };
+            }"""
+            cap.page.evaluate("t => window.__export.seek(t)", 5.8)
+            end = cap.page.evaluate(script)
+            cap.page.evaluate("t => window.__export.seek(t)", 2.5)
+            early = cap.page.evaluate(script)
+        finally:
+            cap.close()
+        fmt = lambda v: f"{v:,}"  # noqa: E731
+        self.assertEqual(end["out"], {"days": [str(d["days"])], "commits": [fmt(d["commits"])],
+                                      "lines": [fmt(d["lines_total"])], "tests": [fmt(d["tests"])]})
+        self.assertEqual(end["dots"], d["commits_no_merges"])
+        self.assertEqual(end["merges"], sum(len(ln["into_main"]) for ln in d["lanes"][1:]))
+        self.assertEqual(end["names"], [ln["name"] for ln in d["lanes"]])
+        self.assertEqual(float(end["vision"]), 0)
+        self.assertEqual(float(early["tiles"]), 0)
+        self.assertEqual(float(early["vision"]), 0)
+
     def test_n10_has_no_problems(self):
         layout = lc.load_layout()
         with tempfile.TemporaryDirectory() as d:
@@ -874,6 +1297,118 @@ class InBrowser(unittest.TestCase):
                 probs = [p for f in res["frames"] for p in f["problems"]]
                 self.assertEqual(probs, [], f"{cut}: {json.dumps(probs, ensure_ascii=False)}")
                 self.assertEqual(res["errors"], [])
+
+    def test_n05_points_land_on_the_vehicle(self):
+        # every point lands on a set cell of the mask, starts on the stage
+        # above the band, and the cloud comes out the same on every load
+        from promo import export
+
+        script = """() => {
+          const pts = [...document.querySelectorAll('svg.pts circle')].map((c) => ({
+            x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), r: +c.getAttribute('r'),
+            px: parseFloat(c.style.getPropertyValue('--px')), py: parseFloat(c.style.getPropertyValue('--py')),
+            pd: parseFloat(c.style.getPropertyValue('--pd')) }));
+          return { pts, html: document.querySelector('svg.pts').innerHTML,
+                   pic: getComputedStyle(document.querySelector('.hero .pic')).opacity };
+        }"""
+        got = []
+        for t in (0.0, 0.5):
+            cap = export.Capture(lc.SCREENS / "n05.html", scale=0.25, layer="fg")
+            try:
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                got.append(cap.page.evaluate(script))
+            finally:
+                cap.close()
+        a, b = got
+        r = lc.load_layout()
+        n = r["n05"]
+        p, k = n["hero_points"], n["hero_points"]["mask"]
+        bits = [bin(int(h, 16))[2:].zfill(4 * len(h)) for h in k["rows_hex"]]
+        self.assertGreater(len(a["pts"]), 200)
+        self.assertEqual(a["html"], b["html"])
+        self.assertEqual(float(a["pic"]), 0.0)          # the picture is not there at 0 s
+        self.assertEqual(float(b["pic"]), 1.0)          # and in by 0.5 s
+        m, band = p["margin_px"], r["subtitle_band"]["y"]
+        for q in a["pts"]:
+            self.assertEqual(bits[int(q["y"] // k["cell_px"])][int(q["x"] // k["cell_px"])], "1", q)
+            sx, sy = n["hero"]["x"] + q["x"] + q["px"], n["hero"]["y"] + q["y"] + q["py"]
+            self.assertTrue(m - 0.01 <= sx <= r["stage"]["w"] - m + 0.01 and m - 0.01 <= sy <= band - m + 0.01, q)
+            self.assertTrue(0 <= q["pd"] <= p["stagger_s"] + 1e-3)
+        self.assertEqual({q["r"] for q in a["pts"]}, {p["dot_px"], p["node_dot_px"]})
+
+    def test_n18_motes_and_credit(self):
+        from promo import export
+
+        script = """() => ({
+          motes: [...document.querySelectorAll('svg.gather circle')].map((c) => ({
+            x: +c.getAttribute('cx'), y: +c.getAttribute('cy'),
+            gx: parseFloat(c.style.getPropertyValue('--gx')), gy: parseFloat(c.style.getPropertyValue('--gy')),
+            o: getComputedStyle(c).opacity })),
+          credit: [document.querySelector('.credit').textContent, getComputedStyle(document.querySelector('.credit')).opacity],
+        })"""
+        got = {}
+        cap = export.Capture(lc.SCREENS / "n18.html", scale=0.25)
+        try:
+            for t in (0.0, 0.5, 7.0):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                got[t] = cap.page.evaluate(script)
+        finally:
+            cap.close()
+        r = lc.load_layout()
+        n = r["n18"]
+        g = n["gather"]
+        self.assertEqual(len(got[0.0]["motes"]), g["count"])
+        for q in got[0.0]["motes"]:
+            self.assertAlmostEqual(q["x"], r["stage"]["w"] / 2, delta=2.01)      # they land on the line
+            self.assertTrue(n["light"]["y"] <= q["y"] <= n["light"]["y"] + n["light"]["h"])
+            sy = q["y"] + q["gy"]
+            self.assertTrue(g["margin_px"] - 0.01 <= sy <= r["subtitle_band"]["y"] - g["margin_px"] + 0.01)
+            self.assertAlmostEqual(float(q["o"]), g["start_alpha"], places=3)    # seen from the first frame
+        self.assertTrue(all(float(q["o"]) == 0 for q in got[0.5]["motes"]))       # all gone into the line
+        self.assertEqual(got[7.0]["credit"][0], "Built with Claude")
+        self.assertAlmostEqual(float(got[7.0]["credit"][1]), n["credit"]["alpha"], places=3)
+        self.assertEqual(float(got[0.5]["credit"][1]), 0.0)
+
+    def test_labels_come_and_go(self):
+        from promo import export
+
+        r = lc.load_layout()
+        lab = r["labels"]
+        t_in = lab["times"]["in_s"]
+        for cut in ("n01", "n02", "n03", "n04"):
+            d = r[cut]["duration_s"]
+            gone = d - lab["times"]["out_before_end_s"]
+            cap = export.Capture(lc.SCREENS / f"labels_{cut}.html", scale=0.25, layer="fg")
+            try:
+                self.assertEqual(cap.duration, d)
+                seen = {}
+                for t in (0.0, t_in + lab["in_dur_s"] + 0.05, gone - lab["out_dur_s"] - 0.05, gone + 0.01, d - 0.01):
+                    cap.page.evaluate("t => window.__export.seek(t)", t)
+                    seen[t] = cap.page.evaluate("""() => [getComputedStyle(document.querySelector('.label')).opacity,
+                        document.querySelector('.label-num').textContent, document.querySelector('.label-text').textContent]""")
+            finally:
+                cap.close()
+            ops = [float(v[0]) for v in seen.values()]
+            self.assertEqual(ops, [0.0, 1.0, 1.0, 0.0, 0.0], cut)
+            first = next(iter(seen.values()))
+            self.assertEqual(first[1:], [lab["cuts"][cut]["num"], lab["cuts"][cut]["text"]])
+
+    def test_labels_page_takes_the_cut_from_the_url(self):
+        from playwright.sync_api import sync_playwright
+
+        r = lc.load_layout()
+        url = (lc.SCREENS / "labels.html").resolve().as_uri() + "?cut=n03&t=1&layer=fg"
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 480, "height": 270})
+                page.goto(url)
+                page.wait_for_function("window.promo !== undefined")
+                got = page.evaluate("""() => [window.promo.duration, document.querySelector('.label-text').textContent,
+                    document.documentElement.classList.contains('layer-fg')]""")
+            finally:
+                browser.close()
+        self.assertEqual(got, [r["n03"]["duration_s"], r["labels"]["cuts"]["n03"]["text"], True])
 
 
 if __name__ == "__main__":

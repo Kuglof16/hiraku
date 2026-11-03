@@ -8,17 +8,69 @@
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n18"></script>
 <style>
-  /* N18: a vertical light opens in the dark, the vehicle is drawn over it,
-     then the name, the line and the repository. Ends on black.
+  /* N18: motes of light gather onto one vertical line in the dark; the line
+     grows and opens into a band, the vehicle is drawn over it, then the name
+     comes up in a bloom of light, the line, the repository and one small
+     line (Built with Claude). Ends on black.
      Placement and times: layout.json n18 (CSS variables from layout.js;
-     --t-line, --t-open, --t-draw, --t-name, --t-tag, --t-url, --t-out from
-     n18.times). */
+     --t-gather, --t-line, --t-open, --t-draw, --t-name, --t-tag, --t-url,
+     --t-credit, --t-out from n18.times; --gather-*, --name-bloom-*,
+     --credit-*, --light-grow-dur from the groups of the same names). The
+     motes are made by the script below from seeded random numbers. */
   :root {
     --page-bg: var(--night);
+    /* set by the script from layout.json (plain numbers) */
+    --gather-start: 0.3;
+    --seed-glow: 0.5;
+    --nb-peak: 0.95;
+    --nb-rest: 0.28;
+    --halo-peak: 0.3;
+    --halo-rest: 0.07;
+    --credit-alpha: 0.62;
   }
 
+  /* --- motes drawn in to the line (n18.gather) --- */
+  svg.gather {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .gather circle {
+    animation: mote-in var(--gather-gather-dur) var(--gather-ease) both;
+    animation-delay: var(--gd);
+  }
+  @keyframes mote-in {
+    0%   { transform: translate(calc(var(--gx) * 1px), calc(var(--gy) * 1px)); opacity: var(--gather-start); }
+    80%  { opacity: 1; }
+    100% { transform: none; opacity: 0; }
+  }
+  /* a faint glow where the line will be, rising as the motes come in */
+  .seed-line {
+    position: absolute;
+    left: var(--light-x);
+    top: var(--light-y);
+    width: var(--light-w);
+    height: var(--light-h);
+    background: linear-gradient(90deg,
+      rgba(246, 234, 208, 0) 30%, rgba(246, 234, 208, 0.5) 47%, var(--glow) 50%,
+      rgba(246, 234, 208, 0.5) 53%, rgba(246, 234, 208, 0) 70%);
+    -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 40%, transparent 100%);
+            mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 40%, transparent 100%);
+    opacity: 0;
+    animation:
+      seed-in calc(var(--t-line) - var(--t-gather)) ease-in both,
+      seed-out var(--light-grow-dur) ease-out forwards;
+    animation-delay: var(--t-gather), var(--t-line);
+  }
+  @keyframes seed-in  { from { opacity: 0; } to { opacity: var(--seed-glow); } }
+  @keyframes seed-out { from { opacity: var(--seed-glow); } to { opacity: 0; } }
+
   .light { left: var(--light-x); top: var(--light-y);
-           width: var(--light-w); height: var(--light-h); }
+           width: var(--light-w); height: var(--light-h);
+           animation-duration: var(--light-grow-dur); }
 
   .vehicle {
     position: absolute;
@@ -27,13 +79,57 @@
     width: var(--vehicle-w);
   }
 
-  .url {
+  /* --- the name comes up in a bloom of light (n18.name_bloom) --- */
+  .name-halo {
+    position: absolute;
+    left: calc((var(--stage-w) - var(--name-bloom-halo-w)) / 2);
+    top: calc(var(--title-name-y) + var(--title-name-size-px) / 2 - var(--name-bloom-halo-h) / 2);
+    width: var(--name-bloom-halo-w);
+    height: var(--name-bloom-halo-h);
+    pointer-events: none;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(255, 248, 232, 1) 0%, rgba(246, 234, 208, 0.4) 40%, rgba(246, 234, 208, 0) 100%);
+    opacity: 0;
+    animation: halo var(--name-bloom-settle-dur) ease-out both;
+    animation-delay: var(--t-name);
+  }
+  @keyframes halo {
+    /* peaks as the last letters are in, so it does not run ahead of them */
+    0%   { opacity: 0; }
+    45%  { opacity: var(--halo-peak); }
+    100% { opacity: var(--halo-rest); }
+  }
+  .name span {
+    animation:
+      letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both,
+      letter-bloom var(--name-bloom-settle-dur) ease-out both;
+    animation-delay:
+      calc(var(--t-name) + var(--i) * 0.07s),
+      calc(var(--t-name) + var(--i) * 0.07s);
+  }
+  /* the peak holds while the letter comes up (letter-in fades it in), then settles */
+  @keyframes letter-bloom {
+    0%, 30% {
+      color: #fffaf0;
+      text-shadow: 0 0 var(--name-bloom-peak-blur-px) rgba(246, 234, 208, var(--nb-peak)),
+                   0 0 calc(var(--name-bloom-peak-blur-px) / 4) rgba(255, 248, 232, var(--nb-peak));
+    }
+    100% {
+      color: var(--on-night);
+      text-shadow: 0 0 var(--name-bloom-rest-blur-px) rgba(246, 234, 208, var(--nb-rest)),
+                   0 0 calc(var(--name-bloom-rest-blur-px) / 4) rgba(255, 248, 232, 0);
+    }
+  }
+
+  .url, .credit {
     position: absolute;
     left: 0;
     right: 0;
-    top: var(--url-y);
     margin: 0;
     text-align: center;
+  }
+  .url {
+    top: var(--url-y);
     font: 400 var(--url-size-px) / 1 var(--font-mono);
     letter-spacing: 0.02em;
     color: var(--on-night-soft);
@@ -42,6 +138,16 @@
   }
   .url .powered { display: none; }
   html.powered .url .powered { display: inline; }
+  /* one small line: unbleached ink, quiet */
+  .credit {
+    top: var(--credit-y);
+    font: 400 var(--credit-size-px) / 1 var(--font-latin);
+    letter-spacing: 0.14em;
+    color: var(--on-night);
+    animation: credit-in var(--credit-fade-dur) ease-out both;
+    animation-delay: var(--t-credit);
+  }
+  @keyframes credit-in { from { opacity: 0; } to { opacity: var(--credit-alpha); } }
 
   .all {
     position: absolute;
@@ -56,23 +162,78 @@
 <div class="stage night">
   <div class="all">
     <div class="safe">
+      <div class="seed-line"></div>
       <div class="light" data-box="n18.light"><div class="light-glow"></div><div class="light-core"></div></div>
       <div class="vehicle draw-on" data-box="n18.vehicle"></div>
+      <div class="name-halo"></div>
       <h1 class="name" aria-label="HIRAKU" data-box="n18.title.name"></h1>
       <p class="tag" data-box="n18.title.tag">CAE を、すべての作り手へ拓く。</p>
       <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku<span class="powered"> · Powered by Claude</span></p>
+      <p class="credit" data-box="n18.credit" data-kind="note">Built with Claude</p>
     </div>
+    <!-- data-kind="effect": the 150 motes move as one swarm (one thing in motion) -->
+    <svg class="gather" data-kind="effect" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
 </div>
 <script src="vehicle.js"></script>
 <script>
+  const { cutRules: R, rules: LAYOUT } = window.promoLayout;
+  const root = document.documentElement.style;
   document.querySelector(".vehicle").innerHTML = drawVehicle({ halo: true });
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
   if (new URLSearchParams(location.search).get("powered") === "1")
     document.documentElement.classList.add("powered");
+
+  // Plain numbers the CSS uses as they are (layout.js turns numbers into lengths).
+  root.setProperty("--gather-start", String(R.gather.start_alpha));
+  root.setProperty("--seed-glow", String(R.gather.seed_glow_alpha));
+  root.setProperty("--nb-peak", String(R.name_bloom.peak_alpha));
+  root.setProperty("--nb-rest", String(R.name_bloom.rest_alpha));
+  root.setProperty("--halo-peak", String(R.name_bloom.halo_peak_alpha));
+  root.setProperty("--halo-rest", String(R.name_bloom.halo_rest_alpha));
+  root.setProperty("--credit-alpha", String(R.credit.alpha));
+
+  // Seeded random numbers (mulberry32): the same seed gives the same picture.
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const f3 = (v) => v.toFixed(3);
+
+  // Motes (n18.gather): from seeded places in an ellipse to seeded points on
+  // the line (the light box's centre line, more towards its middle).
+  (function gather() {
+    const G = R.gather, rnd = seeded(G.seed);
+    const S = LAYOUT.stage, band = LAYOUT.subtitle_band.y, m = G.margin_px;
+    const cx = S.w / 2, ly = R.light.y, lh = R.light.h;
+    let dots = "";
+    for (let i = 0; i < G.count; i++) {
+      const tx = cx + (rnd() - 0.5) * 4;
+      const ty = ly + lh * (0.5 + 0.45 * (rnd() + rnd() - 1));
+      const ang = rnd() * 2 * Math.PI, rr = lerp(0.2, 1, Math.sqrt(rnd()));
+      const sx = Math.min(S.w - m, Math.max(m, cx + Math.cos(ang) * rr * G.w / 2));
+      const sy = Math.min(band - m, Math.max(m, G.cy + Math.sin(ang) * rr * G.h / 2));
+      const r = lerp(G.dot_min_px, G.dot_max_px, rnd() ** 2);
+      const d = R.times.gather_s + rnd() * G.stagger_s;
+      dots += `<circle cx="${f3(tx)}" cy="${f3(ty)}" r="${f3(r)}" fill="url(#mote-g)"
+                 style="--gx:${f3(sx - tx)};--gy:${f3(sy - ty)};--gd:${f3(d)}s"/>`;
+    }
+    document.querySelector("svg.gather").innerHTML =
+      `<defs><radialGradient id="mote-g">
+         <stop offset="0" stop-color="#fffaf0" stop-opacity="1"/>
+         <stop offset="0.45" stop-color="#f6ead0" stop-opacity="0.6"/>
+         <stop offset="1" stop-color="#f6ead0" stop-opacity="0"/></radialGradient></defs>${dots}`;
+  })();
 </script>
 <script src="timeline.js"></script>
 </body>

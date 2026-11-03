@@ -124,6 +124,10 @@
       "latch_s": 0.38,
       "mesh_in_s": 0.2,
       "mesh_out_s": 0.78,
+      "points_s": 0.0,
+      "hero_in_s": 0.3,
+      "points_out_s": 0.36,
+      "_points_note": "added 2026-11-03 (v5). points: the cloud of nodes starts to gather onto the vehicle (hero_points); hero_in: the vehicle's picture fades in over hero_points.hero_in_dur_s once the points have gathered (in by 0.46 s); points_out: the points fade over hero_points.fade_dur_s, handing over to the mesh lines (mesh_in_s). Before v5 the picture was there from 0 s",
       "_note": "burst: flash of light as the door has swung out; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed door starts to part (door.crack_*). burst, tiles, name and tag were 0.3 s earlier until 2026-11-03; they moved to leave the door closed a while first. latch: the bolt slides back and the leaves jolt (door.latch_*), the seam light flickers; mesh_in: the triangle mesh starts to show over the vehicle (hero_mesh.in_dur_s); mesh_out: its first elements come apart (hero_mesh.*)"
     },
     "door": {
@@ -172,6 +176,19 @@
       "size_px": 50, "jitter": 0.28, "seed": 5, "line_px": 1.3, "in_dur_s": 0.4,
       "reach_px": 520, "spread_dur_s": 0.27, "jitter_dur_s": 0.04, "el_dur_s": 0.13, "end_scale": 0.15,
       "_note": "the vehicle comes apart as a finite-element mesh. Triangles of side size_px (rows of nodes, every other row shifted half a side, each node moved by up to jitter x size_px, seeded) cover the hero box; their lines show only where the vehicle's picture is (the PNG's alpha as an SVG mask), line_px wide, fading in over in_dur_s from times.mesh_in_s. From times.mesh_out_s each element flares, shrinks to end_scale about its centre and vanishes over el_dur_s, taking its piece of the picture with it; an element starts spread_dur_s x min(1, distance from fly_from / reach_px) later, plus up to jitter_dur_s (seeded). The last ends by times.mesh_out_s + spread_dur_s + jitter_dur_s + el_dur_s, inside the swing's start + door.hero_fade_dur_s. Only with a picture (hero.src or ?hero=); the line drawing fades as before. size_px was 34 at first (about 2400 triangles, each drawn twice with its own animation): the same t shot twice then differed in 1 to 4 of 6 tries (headless Chromium had not finished painting); at 50 (about 1100) 24 of 24 tries were identical"
+    },
+    "hero_points": {
+      "seed": 13, "outline_keep": 0.8, "jitter": 0.35,
+      "scatter_min_px": 160, "scatter_max_px": 760, "margin_px": 24,
+      "gather_dur_s": 0.22, "stagger_s": 0.08, "ease": [0.12, 0.75, 0.3, 1],
+      "dot_px": 4.6, "node_dot_px": 6.4, "start_alpha": 0.35,
+      "fade_dur_s": 0.22, "hero_in_dur_s": 0.16,
+      "mask": {
+        "cell_px": 10, "cols": 150, "rows": 75, "src": "media/n05_hero_2x.png", "threshold": 128, "cover": 0.5,
+        "rows_hex": ["00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000003000000000000000000000", "00000000000000007800000000000000000000", "0000000000000000fc00000000000000000000", "00000000000000007801e00000000000000000", "00000000000000007803e00000000000000000", "00000000000000003003f00000000000000000", "00000000000000007c03e60000000000000000", "0000000000000000fc01fff000000000000000", "0000000000000000fc01ffffc0000000000000", "0000000000000000fc1ffffffe000000000000", "0000000000000038feffffffff000000000000", "0000000000000040fcffffffff000000000000", "0000000000000044fcffffffff000000000000", "00000000000000007cffffffff000000000000", "00000000000000687fffffffff000000000000", "00000000000000707fffffffff000000000000", "00000000000000007fffffffff800000000000", "0000000000000080ffffffffffe00000000000", "0000000000000007fffffffffff00000000000", "000000000000013ffffffffffff00000000000", "000000000000027ffff7ffffffb00000000000", "00000000003ff8ffffffffffff100000000000", "00000000007fffffffffffff7e500000000000", "0000000001fffffffffffffc7e900000000000", "0000000001fffffffffffff1fd900000000000", "0000000003ffffffffffffe0ff900000000000", "0000000007fffffffffffff0fd300000000000", "0000000007ffffffffffffc0fd200000000000", "0000000007ffffffffffff007d600000000000", "000000000ffffffffffffc007f400000000000", "000000000ffffffffffff0007fc00000000000", "000000000fffffffffff00003f800000000000", "000000000ffffffffffe000006000000000000", "0000000007ffffffffff000000000000000000", "0000000007ffffffffff000000000000000000", "0000000003fffff3ffe7000000000000000000", "0000000003ffdfcfff87000000000000000000", "0000000000fff63fff89800000000000000000", "00000000003c7cfeff51800000000000000000", "0000000000001ff8ff71000000000000000000", "00000000000003e1ffe1000000000000000000", "0000000000000081fef3000000000000000000", "0000000000000001ffeb000000000000000000", "0000000000000001fe43000000000000000000", "0000000000000001fc46000000000000000000", "0000000000000001fc46000000000000000000", "0000000000000000fe0c000000000000000000", "0000000000000000ffb8000000000000000000", "00000000000000007ff0000000000000000000", "00000000000000003fe0000000000000000000", "00000000000000000fc0000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000"],
+        "_note": "where the vehicle's picture is, cell by cell in the hero box (cols x rows cells of cell_px design px; the picture fitted in the box as the page draws it, contain). A cell is set when at least cover of its pixels have alpha above threshold. One hex string per row, the first column in the high bit of the first digit, padded to whole digits. Computed from src by hero_mask() in promo/tests/test_layout.py, which checks it against the PNG (the page cannot read the PNG's pixels: a file:// picture taints the canvas)"
+      },
+      "_note": "the vehicle gathers from a cloud of nodes (v5): the points are the nodes of hero_mesh (same seed and rows, so they land where the mesh lines will run) that fall on a set cell of mask, plus points on the outline (set cells next to an unset one, each kept with outline_keep and moved by up to jitter x cell_px about the cell's centre, seeded). Each starts at a seeded place scatter_*_px from where it lands (margin_px inside the stage and above the subtitle band; a place outside is drawn again, so no points pile up on the edges), at start_alpha, and comes in over gather_dur_s (ease) after a seeded delay of up to stagger_s from times.points_s, growing to full brightness. dot_px / node_dot_px: radius of an outline point / a node. All are in by points_s + stagger_s + gather_dur_s = times.hero_in_s; then the picture fades in (times.hero_in_s, hero_in_dur_s) and the points fade from times.points_out_s over fade_dur_s. Only with a picture; the line drawing has no points"
     },
     "tile_fx": {
       "ghosts": 2, "ghost_lag_s": 0.035, "ghost_alpha": 0.32, "land_dur_s": 0.5, "land_glow_px": 26,
@@ -338,24 +355,88 @@
     "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 runs 3.83-8.52 s)" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
+  "n17b": {
+    "duration_s": 5.8,
+    "_duration_note": "5.8 s is N17b's slot. Voice: 構想は 10 万行。 at 0.30-2.08 s, その道を、Claude Code が拓きました。 at about 2.43-5.54 s. The subtitles are burnt in later; the voice's words are not on the screen",
+    "_note": "how HIRAKU was built: one lane per Claude Code session (the lead and the departments), commits as dots along the time axis, the departments' merges into main as curves up to the lead's lane, then the actual counts. All figures come from promo/screens/n17b.data.js (written by promo/n17b_data.py from git); 100,000 is the first estimate of the plan (構想の見通し), not lines written, and it is gone before the counts come in",
+    "vision": { "x": 340, "y": 150, "w": 1460, "h": 380, "num_size_px": 230, "unit_size_px": 64, "cap_size_px": 32,
+                "peak_alpha": 0.26, "drift_scale": 1.03, "in_dur_s": 0.7, "out_dur_s": 0.45,
+                "_note": "the planned size, faint behind the lanes: 100,000 行 with 構想の見通し above it, centred in this box. Rises to peak_alpha over in_dur_s from times.vision_s while it grows slowly to drift_scale, fades out over out_dur_s from times.vision_out_s" },
+    "lanes": { "x": 96, "y": 96, "w": 1728, "h": 540, "label_w": 220, "label_size_px": 24, "top": 14, "pitch_px": 60,
+               "graph_x": 244, "graph_w": 1460, "dot_r_px": 4, "line_px": 2, "main_line_px": 3, "curve_dx_px": 46,
+               "axis_y": 500, "axis_size_px": 20,
+               "_note": "inside the lanes box (x, y relative to it): lane names right-aligned in the first label_w px, the graph from graph_x, graph_w wide (stage x 340-1800). Lane i's centre is at top + (i + 0.5) x pitch_px (eight lanes, 14-494). A commit's x is its author time on a linear axis from the first commit to the newest; a merge into main is a curve from the department's lane, curve_dx_px before the merge, to the lead's lane at the merge. axis: the dates under the graph" },
+    "counts": { "x": 96, "y": 664, "w": 1728, "h": 226, "head_h": 40, "head_size_px": 22, "stamp_size_px": 20,
+                "label_size_px": 24, "num_size_px": 72, "unit_size_px": 30, "sub_size_px": 20, "gap_px": 22,
+                "cols": { "days": 280, "commits": 330, "lines": 700, "tests": 352 },
+                "_note": "the four actual counts in a row under a heading, with when they were counted at the right of the heading. Bottom 664 + 226 = 890, above the subtitle band. cols: widths of the four, adding up to w with three gaps" },
+    "flow": { "first_frac": 0.12, "a_ease": [0.4, 0, 0.6, 1], "b_ease": [0.5, 0, 0.3, 1], "step_s": 0.05,
+              "dot_dur_s": 0.3, "merge_dur_s": 0.35, "glow_out_dur_s": 0.5,
+              "_note": "the reveal edge (with a soft light on it) sweeps the time axis: to first_frac between times.lanes_s and lanes_to_s (a_ease), still until flow_s, then to the end by flow_to_s (b_ease). The page samples it every step_s into keyframes; a dot pops in over dot_dur_s and a merge curve draws over merge_dur_s when the edge reaches them" },
+    "count": { "dur_s": 1.9, "stagger_s": 0.15, "in_dur_s": 0.4, "ease": [0.12, 0.6, 0.2, 1], "steps": 32,
+               "_note": "each figure counts up over dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. Tiles start stagger_s apart from times.counts_s. Digit wheels were tried first: mid-roll they showed half digits and a wrong day count (8 日目)" },
+    "times": {
+      "vision_s": 0.3,
+      "labels_s": 0.5,
+      "label_step_s": 0.05,
+      "lanes_s": 0.6,
+      "lanes_to_s": 2.1,
+      "vision_out_s": 1.85,
+      "flow_s": 2.4,
+      "flow_to_s": 4.4,
+      "counts_s": 2.9,
+      "calm_s": 4.6,
+      "_note": "vision: 100,000 comes in with 構想は 10 万行 (0.30-2.08 s) and is gone by vision_out_s + vision.out_dur_s = 2.3 s; lanes: the lanes start to grow from the left; flow: with その道を、Claude Code が拓きました (2.43-5.54 s) the commits stream in and the merges join main; counts: the actual counts roll up, the last stopping at counts_s + 3 x count.stagger_s + count.dur_s = 5.25 s; calm: the light on the reveal edge has faded and the lead's lane brightens a little. From 5.5 s to the end the picture holds still"
+    }
+  },
   "n18": {
     "duration_s": 9.0,
-    "light": { "y": 40, "w": 130, "h": 470, "_note": "centred" },
+    "light": { "y": 40, "w": 130, "h": 470, "grow_dur_s": 0.4,
+               "_note": "centred. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s (title.css grows it over 0.6 s; N18 sets its own since v2)" },
     "vehicle": { "y": 130, "w": 420, "_note": "centred" },
     "title": {
       "name": { "y": 545, "size_px": 170 },
       "tag": { "y": 745, "size_px": 48 }
     },
-    "url": { "y": 856, "size_px": 30 },
+    "url": { "y": 826, "size_px": 30, "_note": "was at y 856 until v2; moved up 30 px to leave room for the credit under it" },
+    "credit": { "y": 872, "size_px": 20, "alpha": 0.62, "fade_dur_s": 0.8,
+                "_note": "one small line under the URL: Built with Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed, and do not list Built with Claude either way: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band" },
+    "gather": {
+      "count": 150, "seed": 21, "w": 1640, "h": 760, "cy": 440, "margin_px": 24,
+      "dot_min_px": 2.0, "dot_max_px": 5.0, "gather_dur_s": 0.3, "stagger_s": 0.1,
+      "ease": [0.55, 0, 0.85, 0.45], "start_alpha": 0.55, "seed_glow_alpha": 0.5,
+      "_note": "before the line (v2, after the reference's closing): count motes at seeded places in a w x h ellipse about (stage centre, cy), kept margin_px inside the stage and above the subtitle band, each of a seeded radius dot_*_px, are drawn in to seeded points on the line (x = stage centre, y within the light box, more towards its middle) over gather_dur_s (ease: slow, then fast) after a seeded delay of up to stagger_s from times.gather_s; they brighten from start_alpha and go out as they reach the line. A faint glow on the line's place rises to seed_glow_alpha meanwhile and hands over to the light at times.line_s. All motes are in by gather_s + stagger_s + gather_dur_s = times.line_s"
+    },
+    "name_bloom": {
+      "peak_blur_px": 54, "rest_blur_px": 14, "peak_alpha": 0.95, "rest_alpha": 0.28, "settle_dur_s": 1.6,
+      "halo_w": 1180, "halo_h": 300, "halo_peak_alpha": 0.2, "halo_rest_alpha": 0.06,
+      "_note": "the name comes up in a bloom of light (v2): each letter, as it rises (title.css letter-in), wears a warm glow (text-shadow) of peak_blur_px at peak_alpha, held for the first 30 % of settle_dur_s (while the letter fades in), that settles to rest_blur_px at rest_alpha by the end of settle_dur_s; behind the name a soft halo (halo_w x halo_h, centred on the name) rises to halo_peak_alpha at 45 % of settle_dur_s (as the last letters come in) and settles to halo_rest_alpha. The first stills had it peak at 18 % and 0.3: a bright patch ran ahead of the letters on the right"
+    },
     "times": {
-      "line_s": 0.15,
+      "gather_s": 0.0,
+      "line_s": 0.4,
       "open_s": 0.8,
       "draw_s": 1.1,
       "name_s": 2.3,
       "tag_s": 3.0,
       "url_s": 3.6,
+      "credit_s": 4.2,
       "out_s": 8.2,
-      "_note": "line: thin vertical line grows; open: it opens into a band; draw: vehicle strokes start; out: fade to black"
+      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: it opens into a band; draw: vehicle strokes start; credit: the small line under the URL; out: fade to black. line was 0.15 until v2 (2026-11-03): it moved to 0.4 to leave the motes time to gather first; open_s (read by bgm.py) and the order did not change"
+    }
+  },
+  "labels": {
+    "_note": "small numbered labels over the opening quick looks N01-N04 (labels.html?cut=n01, or the entry pages labels_n01.html ... labels_n04.html), on a transparent ground over the app's cut. The cut's length is n01..n04.duration_s. A label comes in at times.in_s from the start of the cut over in_dur_s and is gone times.out_before_end_s before its end (fading over out_dur_s, ending then). Words follow the voice (narration draft 6)",
+    "box": { "x": 112, "y": 822, "w": 620, "h": 46,
+             "_note": "bottom left, inside the lower-left corner of the cut's view or tile (they end at y 886 and start at x 96 in n01-n04), 16 px in from the left and 18 px above their bottom edge; bottom 868, above the subtitle band. The label is as wide as its words, up to w. At y 842 (first stills) it straddled the boxes' bottom border" },
+    "num_size_px": 20, "text_size_px": 24, "line_px": 1.5, "pad_x_px": 16, "gap_px": 14, "rule_w": 28,
+    "in_dur_s": 0.35, "out_dur_s": 0.25,
+    "times": { "in_s": 0.2, "out_before_end_s": 0.3 },
+    "cuts": {
+      "n01": { "num": "01", "text": "段差を越える", "_voice": "段差を越えられるか。" },
+      "n02": { "num": "02", "text": "倒れない", "_voice": "でこぼこ道でも、傾いても、風を受けても、急にハンドルを切っても、倒れないか。" },
+      "n03": { "num": "03", "text": "長く・速く", "_voice": "長く走っても、オーバーヒートしないか、どこまで速く走れるか。" },
+      "n04": { "num": "04", "text": "衝突・振動・組み立て", "_voice": "衝突も、振動も、組み立ての順番も。" }
     }
   },
   "story": {
@@ -506,11 +587,16 @@
       "n17": [0.5, 6.0, 8.5],
       "n15": [0.5, 2.5, 4.8],
       "n16": [0.5, 3.0, 5.0, 6.2],
-      "n05": [0, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5],
+      "n05": [0, 0.15, 0.3, 0.45, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5],
       "n08": [0.5, 2.0, 2.9, 4.6, 5.0, 5.8, 6.4],
       "n08b": [1.5, 5.2, 5.8, 7.5, 9.8],
       "n10": [0.6, 2.4, 4.6, 5.6, 8.3],
-      "n18": [1.0, 3.2, 5.0, 8.5],
+      "n17b": [0.5, 1.5, 2.5, 3.5, 4.5, 5.8],
+      "n18": [0, 0.3, 0.6, 1.0, 1.2, 2.5, 3.2, 3.8, 5.0, 7.0, 8.5],
+      "labels_n01": [0, 0.25, 2.0, 3.8],
+      "labels_n02": [0.25, 3.5, 6.8],
+      "labels_n03": [0.25, 2.5, 4.8],
+      "labels_n04": [0.25, 2.0, 3.8],
       "app": [2, 8, 15]
     },
     "band_exempt": [
@@ -519,7 +605,7 @@
       { "selector": ".door", "why": "N05's closed door covers the whole stage as the ground behind the vehicle until it opens (by n05.times.burst_s); it holds no text, and the subtitles are drawn over it" }
     ],
     "allow_overflow": [
-      { "cut": "*", "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url", "axis": "y", "max_em": 0.25,
+      { "cut": "*", "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url, .credit, .label-text", "axis": "y", "max_em": 0.25,
         "why": "line-height (1 to 1.3) is shorter than the font's content box (ascent + descent), so scrollHeight runs a few px past the line box. Measured 2-7 px (0.06-0.23 em). The glyphs stay inside and no ancestor clips them; a taller line-height would move the text" }
     ],
     "allow_escape": [
@@ -529,7 +615,8 @@
     "allow_overlap": [
       { "cut": "n18", "a": "n18.light", "b": "n18.vehicle", "why": "the vehicle is drawn over the vertical light on purpose" },
       { "cut": "n05", "a": "n05.door", "b": "n05.hero", "why": "the vehicle stands in front of the closed door on purpose; it fades out as the door swings open" },
-      { "cut": "n08", "a": "n08.*", "b": "n08.*", "why": "N08's dialogs, warnings and the stack of manuals pile up over one another and over the main window on purpose: the pile is the picture (too much to learn)" }
+      { "cut": "n08", "a": "n08.*", "b": "n08.*", "why": "N08's dialogs, warnings and the stack of manuals pile up over one another and over the main window on purpose: the pile is the picture (too much to learn)" },
+      { "cut": "n17b", "a": "n17b.vision*", "b": "n17b.lanes*", "why": "the planned 100,000 is drawn faint behind the lanes on purpose while they start to grow; it is gone (2.3 s) before the commits stream in" }
     ]
   }
 }

@@ -108,12 +108,78 @@ class Table(unittest.TestCase):
         self.assertEqual(joins["N10"], ("dissolve", 0.25))
         looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
         self.assertEqual(looked, ["N05", "N08", "N08b", "N17b", "N18"])  # the dark cuts (N08: the plain CAE tool on night)
+        # the numbered labels lie over N01-N04, each from the start of its own cut
+        for seg in data["segments"]:
+            for ov in seg.get("overlay", []):
+                self.assertTrue(ov["frames"].startswith("${WORK}/"), ov)
+        laid = {ov.cut or s.cuts[0]: Path(ov.frames).name for s in table.segments for ov in s.overlays}
+        self.assertEqual(laid, {"N01": "labels_n01", "N02": "labels_n02", "N03": "labels_n03", "N04": "labels_n04"})
         # tiles a script with these cuts, whatever the slot lengths
         slots, t = [], 0.0
         for c in cuts:
             slots.append((c, t, t + 5.0))
             t += 5.0
         assemble.plan(table, assemble.slot_table(script_text(slots)))
+
+
+class Overlays(unittest.TestCase):
+    """Transparent frames laid over a segment's picture, from the start of one of its cuts."""
+
+    def segments(self, overlay):
+        return [
+            {"cuts": ["A", "B"], "still": "${WORK}/a.png", "overlay": overlay,
+             "join": {"kind": "dissolve", "seconds": 0.4}},
+            {"cuts": ["C"], "video": "${WORK}/c.mp4"},
+        ]
+
+    def test_parse(self):
+        t = assemble.load_table(table_data(self.segments(
+            [{"frames": "${WORK}/la"}, {"frames": "${WORK}/lb", "cut": "B", "at": 0.2}])), {"WORK": "/w"})
+        ovs = t.segments[0].overlays
+        self.assertEqual([(o.frames, o.cut, o.at) for o in ovs], [("/w/la", None, 0.0), ("/w/lb", "B", 0.2)])
+        self.assertTrue(ovs[0].is_folder())
+        self.assertFalse(assemble.Overlay("/w/l.mov").is_folder())
+        one = assemble.load_table(table_data(self.segments({"frames": "${WORK}/la"})), {"WORK": "/w"})
+        self.assertEqual(len(one.segments[0].overlays), 1)
+        self.assertEqual(assemble.load_table(table_data(three_segments()), {"WORK": "/w"}).segments[0].overlays, [])
+
+    def test_rejects_bad_overlays(self):
+        for bad in ({"frames": "${WORK}/la", "cut": "C"}, {"cut": "A"}, {"frames": "${WORK}/la", "at": -1}):
+            with self.assertRaises(ValueError, msg=bad):
+                assemble.load_table(table_data(self.segments(bad)), {"WORK": "/w"})
+
+    def test_start_frame_follows_the_cut_and_the_padding(self):
+        table = planned(self.segments([{"frames": "${WORK}/la"}, {"frames": "${WORK}/lb", "cut": "B", "at": 0.2}]),
+                        THREE)
+        seg, span = table.segments[0], assemble.spans(table)[0]
+        self.assertEqual(seg.cut_starts, {"A": 0.0, "B": 4.0})
+        self.assertEqual(span.pre, 0)
+        self.assertEqual(assemble.overlay_start(seg, span, seg.overlays[0], 30), 0)
+        self.assertEqual(assemble.overlay_start(seg, span, seg.overlays[1], 30), 4 * 30 + 6)
+        # a segment with a join in starts its file half a join before its slot
+        table2 = planned([{"cuts": ["A"], "still": "${WORK}/a.png", "join": {"kind": "dissolve", "seconds": 0.4}},
+                          {"cuts": ["B", "C"], "video": "${WORK}/b.mp4", "overlay": {"frames": "${WORK}/lc", "cut": "C"}}],
+                         THREE)
+        seg2, span2 = table2.segments[1], assemble.spans(table2)[1]
+        self.assertEqual(assemble.overlay_start(seg2, span2, seg2.overlays[0], 30), 6 + round(5.5 * 30))
+
+    def test_graph_and_command(self):
+        table = planned(self.segments([{"frames": "${WORK}/la"}, {"frames": "${WORK}/lb", "cut": "B"}]), THREE)
+        seg, span = table.segments[0], assemble.spans(table)[0]
+        g = assemble.segment_graph(seg, span, 30, 1920, 1080, 910, "1b1a17")
+        self.assertIn("[1:v]scale=1920:1080:flags=lanczos,format=rgba,setpts=PTS-STARTPTS+0.000000/TB[ov0]", g)
+        self.assertIn("[2:v]scale=1920:1080:flags=lanczos,format=rgba,setpts=PTS-STARTPTS+4.000000/TB[ov1]", g)
+        self.assertIn("[p0][ov0]overlay=x=0:y=0:eof_action=pass", g)
+        self.assertIn("[po0][ov1]overlay=", g)
+        cmd = assemble.segment_command(seg, span, 30, 1080, Path("o.mp4"), 910, "1b1a17")
+        inputs = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-i"]
+        self.assertEqual(Path(inputs[0]).as_posix(), "/w/a.png")
+        self.assertEqual([Path(p).as_posix() for p in inputs[1:]], ["/w/la/%05d.png", "/w/lb/%05d.png"])
+        # a card has no picture input: its overlays start at input 0
+        card = assemble.Segment(["A"], "card", card={"lines": []}, overlays=[assemble.Overlay("/w/la")])
+        card.cut_starts = {"A": 0.0}
+        self.assertIn("[0:v]scale=", assemble.segment_graph(card, assemble.Span("A", 0, 30, 0, Join(), Join(), 0),
+                                                            30, 1920, 1080, 910, "1b1a17"))
 
 
 class Timing(unittest.TestCase):
@@ -271,6 +337,47 @@ class Build(unittest.TestCase):
         self.assertEqual(len(a), 90)
         self.assertEqual(a, b)
         self.assertGreater(len(set(a[66:])), 1)   # the grain moves from frame to frame
+
+
+@unittest.skipUnless(FFMPEG and shutil.which("ffprobe"), "needs ffmpeg and ffprobe")
+class OverlayBuild(unittest.TestCase):
+    """A white box (transparent around it) laid over a dark still from 0.2 s into cut B."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = Path(tempfile.mkdtemp(prefix="assemble_overlay_"))
+        d = cls.dir
+        lavfi = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"]
+        subprocess.run(lavfi + ["-i", "color=c=0x303030:s=320x180", "-frames:v", "1", str(d / "a.png")], check=True)
+        (d / "ov").mkdir()
+        # (drawbox would leave the alpha at 0: geq writes it)
+        subprocess.run(lavfi + ["-i", "color=c=white:s=320x180:r=30,format=rgba,"
+                                      "geq=r=255:g=255:b=255:a='255*between(X,120,199)*between(Y,60,119)'",
+                                "-frames:v", "12", "-start_number", "0", str(d / "ov" / "%05d.png")], check=True)
+        (d / "s.tsv").write_text(script_text([("A", 0, 1), ("B", 1, 2)]), encoding="utf-8")
+        data = table_data([{"cuts": ["A", "B"], "still": "${WORK}/a.png",
+                            "overlay": [{"frames": "${WORK}/ov", "cut": "B", "at": 0.2}]}])
+        (d / "t.json").write_text(json.dumps(data), encoding="utf-8")
+        table = assemble.read_table(d / "t.json", str(d), [])
+        cls.out = assemble.build(table, d / "out.mp4", 144, None, None, ffmpeg=FFMPEG, log=lambda *a: None)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def centre(self, n):
+        """Grey level (0-255) of the middle of frame n."""
+        r = subprocess.run([FFMPEG, "-v", "error", "-i", str(self.out),
+                            "-vf", f"select=eq(n\\,{n}),crop=8:8:(iw-8)/2:(ih-8)/2,scale=1:1,format=gray",
+                            "-frames:v", "1", "-f", "rawvideo", "-"], capture_output=True, check=True)
+        return r.stdout[0]
+
+    def test_box_shows_only_while_its_frames_play(self):
+        # the box's 12 frames go at frames 36-47 (B starts at 30, +0.2 s = 6 frames)
+        for n in (0, 30, 35, 48, 59):
+            self.assertLess(self.centre(n), 90, n)
+        for n in (36, 41, 47):
+            self.assertGreater(self.centre(n), 200, n)
 
 
 if __name__ == "__main__":

@@ -87,6 +87,7 @@
     font-variant-numeric: tabular-nums;
   }
   .v.small { font-size: var(--text-value-small-px); }
+  .v.small .unit { font-size: 0.75em; }  /* keeps the unit at the body text size (story) */
   .v .unit { font-size: 0.7em; margin-left: 0.15em; }
   .note {
     font: 500 var(--text-note-px) / 1.35 var(--font-ja);
@@ -94,6 +95,11 @@
     white-space: nowrap;
   }
   .entry + .entry { margin-top: calc(8 * var(--u)); }
+  /* who ran the analysis (team K1/K2) stays in DATA and the README; the cell
+     shows only the value, so each row reads answer -> analysis -> difference */
+  .cae .note { display: none; }
+  /* the difference is the one figure each row is about */
+  .diff .v { font-weight: 700; }
 
   /* one cell's content: its value (comes in) and the "?" it replaces (goes out) */
   .in {
@@ -162,13 +168,13 @@
       <div class="head" data-box="n10.head">
         <div>問い</div>
         <div>ツールなしの Claude</div>
-        <div class="hk"><small>HIRAKU</small>手計算</div>
-        <div class="hk"><small>HIRAKU</small>解析 (CAE ツール)</div>
+        <div class="hk"><small data-kind="note">HIRAKU</small>手計算</div>
+        <div class="hk"><small data-kind="note">HIRAKU</small>解析 (CAE ツール)</div>
         <div>差</div>
         <div></div>
       </div>
     </div>
-    <ul class="src" data-box="n10.src"></ul>
+    <ul class="src" data-box="n10.src" data-kind="note"></ul>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -230,18 +236,18 @@
       v = `約 ${r.claude.map((c) => num(c, 0) + unit(r.unit)).join("・")}`;
       note = `${n} 回の答え`;
     }
-    return `<div class="in"><div class="v">${v}</div><div class="note">${note}</div></div>`;
+    return `<div class="in"><div class="v">${v}</div><div class="note" data-kind="note">${note}</div></div>`;
   }
 
   function handCell(r) {
     const small = r.hand.length > 1 ? " small" : "";
     return `<div class="in">${r.hand.map((h) => `<div class="entry">${val(h.v, h.dp, r.unit, small)}` +
-      (h.note ? `<div class="note">${h.note}</div>` : "") + `</div>`).join("")}</div>`;
+      (h.note ? `<div class="note" data-kind="note">${h.note}</div>` : "") + `</div>`).join("")}</div>`;
   }
 
   function diffCell(r) {
-    const note = distinct(r.claude).length > 1 ? `<div class="note">${r.claude.length} 回で最大</div>` : "";
-    return `<div class="in"><div class="v">${signed(worst(r))}<span class="unit">%</span></div>${note}</div>`;
+    const note = distinct(r.claude).length > 1 ? `<div class="note" data-kind="note">${r.claude.length} 回で最大</div>` : "";
+    return `<div class="in"><div class="v" data-kind="number">${signed(worst(r))}<span class="unit">%</span></div>${note}</div>`;
   }
 
   const wait = `<div class="wait">?</div>`;
@@ -251,9 +257,9 @@
       <div class="cell claude" style="--i:${i}" data-box="n10.row.${r.key}.claude">${claudeCell(r)}</div>
       <div class="cell hand hk" style="--i:${i}" data-box="n10.row.${r.key}.hand">${wait}${handCell(r)}</div>
       <div class="cell cae hk" style="--i:${i}" data-box="n10.row.${r.key}.cae">${wait}
-        <div class="in">${val(r.cae.v, r.cae.dp, r.unit)}<div class="note">${r.cae.by} の解析</div></div></div>
+        <div class="in">${val(r.cae.v, r.cae.dp, r.unit)}<div class="note" data-kind="note">${r.cae.by} の解析</div></div></div>
       <div class="cell diff" style="--i:${i}" data-box="n10.row.${r.key}.diff">${wait}${diffCell(r)}</div>
-      <div class="cell tick" style="--i:${i}" data-box="n10.row.${r.key}.tick">${ok(r) ? `<div class="in">✓</div>` : ""}</div>
+      <div class="cell tick" style="--i:${i}" data-box="n10.row.${r.key}.tick">${ok(r) ? `<div class="in" data-kind="label">✓</div>` : ""}</div>
     </div>`).join(""));
 
   document.querySelector(".src").innerHTML = [

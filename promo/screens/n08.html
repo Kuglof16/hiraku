@@ -495,7 +495,7 @@
 <div class="stage">
   <div class="desk">
     <div class="main" data-box="n08.main">
-      <div class="bar"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 11 L8 4 L12 11 Z" fill="#fff"/></svg><span class="ttl">無題 — 構造解析</span></div>
+      <div class="bar"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 11 L8 4 L12 11 Z" fill="#fff"/></svg><span class="ttl" data-kind="label">無題 — 構造解析</span></div>
       <div class="menu"></div>
       <div class="tools"></div>
       <div class="tree"><div class="pane-h">モデルの構成</div></div>
@@ -713,7 +713,7 @@
     const style = `${L.boxStyle(b)};z-index:${b.z};--at:var(--t-${css(w.key)});` +
       (next ? `--next:var(--t-${css(next.key)})` : "");
     return `<div class="win ${w.cls || ""}${next ? "" : " last"}" style="${style}" data-box="n08.win.${css(w.key)}">` +
-      `<div class="bar"><span class="ttl">${w.title}</span>${Q}${X}</div>${w.html}</div>`;
+      `<div class="bar"><span class="ttl" data-kind="label">${w.title}</span>${Q}${X}</div>${w.html}</div>`;
   }).join(""));
 
   // ---- mouse pointer: eased moves between the points of n08.pointer.path ----
@@ -741,7 +741,7 @@
       const shift = (rand() - 0.5) * 2 * B.shift_px, tilt = (rand() - 0.5) * 2 * B.tilt_deg;
       const left = (B.w - B.book_w - 14) / 2 + shift;
       return `<div class="book" style="--i:${i};left:${px(left)};top:${px(y)};width:${px(B.book_w)};height:${px(hgt)};` +
-        `background:linear-gradient(${COLORS[i]}, ${COLORS[i]}e0);transform:rotate(${tilt.toFixed(2)}deg)"><span>${t}</span></div>`;
+        `background:linear-gradient(${COLORS[i]}, ${COLORS[i]}e0);transform:rotate(${tilt.toFixed(2)}deg)"><span data-kind="label">${t}</span></div>`;
     }).join("");
   })();
 </script>
