@@ -11,7 +11,7 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `first_look.py` | 動画のカットとアプリの画面を、初めて見る人の目で点検する。絵を 8 枚ずつのシートにし、画像の判定器 (Codex CLI) に、何を言っている絵か・3 秒で分かるか・目が行く所・読めない札と重なり・直し方を絵ごとに聞き、直す所の一覧にする (判定器とモデルの名前も書く)。Pillow と ffmpeg が要る |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
-| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる) |
+| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方

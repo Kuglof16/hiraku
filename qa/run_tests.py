@@ -10,6 +10,12 @@ slowest classes of the last run (runs/test_times.json, kept locally) start
 first; without that file, the scripted runs, the K2 vehicle and the shell
 solver start first. The environment is passed on as it is.
 
+A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
+Windows' "paging file too small" WinError 1455: the machine was full, often
+with other work) is run again alone after the pool, one at a time, and printed
+as "rerun alone after a memory error" with its result. Only its alone result
+counts. Any other failure stays a failure.
+
 Prints one summary in unittest's words (Ran, OK or FAILED with the counts), each
 failure and error with its last line, and checks that every test discovery
 found either ran or was skipped with its class. Exit code 1 when a test failed,
@@ -39,6 +45,8 @@ TIMES = ROOT / "runs" / "test_times.json"  # runs/ is local (not committed)
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
 CLASS_SKIP_RE = re.compile(r"^setUpClass \(([\w.]+)\)$")
+# out of memory: MemoryError and numpy's _ArrayMemoryError; WinError 1455 is "the paging file is too small"
+MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]")
 
 
 # --- discovery (in this process) --------------------------------------------------------
@@ -108,8 +116,8 @@ def _order(groups: dict[str, list[str]]) -> list[str]:
     return sorted(groups, key=weight, reverse=True)
 
 
-def _run_one(name: str, tmp: Path, timeout: float) -> dict:
-    out = tmp / f"{name}.json"
+def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
+    out = tmp / f"{name}{tag}.json"
     t0 = time.perf_counter()
     try:
         proc = subprocess.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out), name], cwd=ROOT,
@@ -122,6 +130,30 @@ def _run_one(name: str, tmp: Path, timeout: float) -> dict:
     except (OSError, ValueError):
         tail = (proc.stderr or proc.stdout).strip().splitlines()[-5:]
         return {"name": name, "s": s, "crash": f"exit {proc.returncode}: " + " | ".join(tail)}
+
+
+def _out_of_memory(r: dict) -> bool:
+    """The class failed for lack of memory: in a failure's or error's traceback, or in its worker's crash."""
+    texts = [x.get("traceback", "") for x in r.get("failures", []) + r.get("errors", [])] + [r.get("crash", "")]
+    return any(MEMORY_RE.search(t) for t in texts)
+
+
+def _rerun_alone(results: list[dict], tmp: Path, timeout: float, run=_run_one) -> list[dict]:
+    """Run each class that failed for lack of memory again, one at a time; its alone result
+    replaces the pooled one in results. Returns the alone results."""
+    again = []
+    for k, r in sorted(enumerate(results), key=lambda kr: kr[1]["name"]):
+        if _out_of_memory(r):
+            results[k] = dict(run(r["name"], tmp, timeout, ".alone"), rerun_alone=True)
+            again.append(results[k])
+    return again
+
+
+def _verdict(r: dict) -> str:
+    if "crash" in r:
+        return f"CLASS NOT RUN ({r['crash']})"
+    counts = [f"{what}={len(r[key])}" for what, key in (("failures", "failures"), ("errors", "errors")) if r.get(key)]
+    return f"FAILED ({', '.join(counts)})" if counts else "OK"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -142,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         futures = [pool.submit(_run_one, name, Path(tmp), args.timeout) for name in _order(groups)]
         for f in as_completed(futures):
             results.append(f.result())
+        again = _rerun_alone(results, Path(tmp), args.timeout)
     wall = time.perf_counter() - start
 
     ran = sum(r.get("ran", 0) for r in results)
@@ -162,6 +195,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"CLASS NOT RUN: {r['name']} ({len(groups.get(r['name'], []))} tests): {r['crash']}")
     for i in missing[:20]:
         print(f"NOT RUN: {i}")
+    for r in again:
+        print(f"rerun alone after a memory error: {r['name']}: {_verdict(r)} ({r.get('ran', 0)} tests, {r['s']:.0f} s)")
     print("-" * 70)
     print(f"Ran {ran} tests in {wall:.1f}s ({len(groups)} classes in {args.jobs} processes; "
           f"{sum(r['s'] for r in results):.0f} s of work)")
