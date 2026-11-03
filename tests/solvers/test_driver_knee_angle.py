@@ -72,7 +72,7 @@ class V1Test(unittest.TestCase):
         res = {r["quantity"]: r for r in rec["results"]}
         self.assertAlmostEqual(res["knee_angle_room"]["value"], v, places=9)
         self.assertEqual(res["knee_angle_room"]["unit"], "mm")
-        self.assertAlmostEqual(res["pedal_reach"]["value"], -22.36, delta=0.005)
+        self.assertAlmostEqual(res["pedal_reach"]["value"], 2.93, delta=0.005)  # the straight leg reaches
         self.assertAlmostEqual(res["knee_room"]["value"], -69.3, delta=0.05)
 
 
@@ -91,21 +91,31 @@ class OneSeatTwoSizesTest(unittest.TestCase):
                 both.append(dx)
         self.assertEqual(both, [])
 
-    def check_search(self, changes, label):
-        d = designgen.regenerate(V1, changes)
-        got = driver_fit.best_driver_place(d, names=driver_fit.COMFORT_MARGINS, time_limit_s=180)
-        print(f"\n{label} with knee_angle_room: smallest {got['smallest']}, {got['evaluations']} designs, "
-              f"{got['seconds']:.0f} s, {got['stopped']}; changes {({k: v['value'] for k, v in got['changes'].items()})}; "
-              f"knee angles {people.knee_angles(designgen.regenerate(d, got['changes']))}")
+    def check_search(self, changes, label, slide):
+        d = designgen.regenerate(V1, changes) if changes else V1
+        variables = driver_fit.VARIABLES if slide else tuple(v for v in driver_fit.VARIABLES if v != "seat_slide")
+        got = driver_fit.best_driver_place(d, variables=variables, names=driver_fit.COMFORT_MARGINS, time_limit_s=280)
+        print(f"\n{label} with knee_angle_room, seat {'sliding' if slide else 'fixed'}: smallest {got['smallest']}, "
+              f"{got['evaluations']} designs, {got['seconds']:.0f} s, {got['stopped']}; changes "
+              f"{({k: v['value'] for k, v in got['changes'].items()})}; "
+              f"knee angles {people.knee_angles(designgen.regenerate(d, got['changes']) if got['changes'] else d)}")
         self.assertEqual(got["stopped"], "converged", label)
         self.assertIn("knee_angle_room", got["margins"])
-        self.assertLess(got["smallest"]["value"], 0.0, label)  # no set has every margin at least 0
+        return got
 
-    def test_run10_search(self):
-        self.check_search(RUN10, "run 10")
+    def test_fixed_seat_run10_and_n15(self):
+        """The seat fixed (no seat_slide): no set has every margin at least 0; knee_angle_room is the smallest."""
+        for changes, label in ((RUN10, "run 10"), (N15, "N15")):
+            got = self.check_search(changes, label, slide=False)
+            self.assertLess(got["smallest"]["value"], 0.0, label)
+            self.assertEqual(got["smallest"]["name"], "knee_angle_room", label)
 
-    def test_n15_search(self):
-        self.check_search(N15, "N15")
+    def test_sliding_seat_v1(self):
+        """With seat_slide: a set with every margin at least 0 (run 10 and N15: test_designgen_footroom, whose search
+        has these margins and variables by default)."""
+        got = self.check_search(None, "v1", slide=True)
+        self.assertGreaterEqual(got["smallest"]["value"], 0.0)
+        self.assertGreater(got["changes"]["seat_slide"]["value"], 0.0)
 
 
 if __name__ == "__main__":

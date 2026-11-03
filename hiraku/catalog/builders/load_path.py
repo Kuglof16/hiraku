@@ -25,7 +25,10 @@ from hiraku.catalog.loading import LOADING_JA
 # whole frame. Measured (2026-11-03): the demo's version 1 grip, hand 0.87 mm against the model's 1.05 mm (+20 %:
 # the joints' rotation is 99.9 % of the hand value; the model adds the dash members' own bending); version 1 with
 # both pedals moved onto what is nearest to them (the bulkhead, tower_post_RA2), hand 0.19 mm against 0.16 mm
-# (-16 %: the model shares the load over the parallel contacts). 30 %.
+# (-16 %: the model shares the load over the parallel contacts). 30 %. Since the bulkhead is a 2.3 mm sheet
+# (2026-11-04) the pedal on it bends the plate: with load_path.plate_strip K0 18.4 mm against the tool's 24.0 mm
+# for that v1 case, 45.0 against 49.5 mm with version 2's stands on the bulkhead (tests/solvers/
+# test_load_path_plate_k0).
 R7_TOL = 0.3
 # R8: free_parts is a count; the graph search and rigid_body_check find the same parts (the contacts are the same).
 R8_TOL = 0.05
@@ -231,17 +234,59 @@ def _chain(contacts, start: str):
     return None
 
 
-def chain_inputs(design: Record, part_id: str, point, F: float) -> tuple[Record, list[str]]:
+def plate_strip_inputs(design: Record, chain, start: str, point, force) -> list[tuple[str, Record]]:
+    """load_path.plate_strip's inputs for each plate part the chain of contacts passes through (in at one contact,
+    out at the next): the strip from the plate's mid-plane point under the contact the load comes in by to the plate's
+    centre, as the load_path tool lays a plate's strips (plate_parts, strip_widths: the contact's width, spread at
+    PLATE_SPREAD_DEG each side, at most the plate's width across the strip), loaded by `force` (N, a vector) at
+    `point`. A contact within the plate's thickness of its centre has no strip (the tool joins it to the centre)."""
+    import math
+
+    from hiraku.solvers.shelf.load_path import PLATE_SPREAD_DEG, plate_parts, plate_point
+
+    plates = plate_parts(design)
+    F, p = np.asarray(force, float), np.asarray(point, float)
+    c_grow = 2.0 * math.tan(math.radians(PLATE_SPREAD_DEG))
+    out, body = [], f"part:{start}"
+    for i, c in enumerate(chain):
+        nxt = c.b if c.a == body else c.a
+        pid = nxt.split(":", 1)[1]
+        if nxt.startswith("part:") and pid in plates and i + 1 < len(chain):
+            pl = plates[pid]
+            end = plate_point(pl, c.point)
+            d = pl.center - end
+            L = float(np.linalg.norm(d))
+            if L > pl.t:
+                a = d / L
+                across = np.cross(pl.normal, a)
+                b_plate = 2.0 * float(np.sum(pl.half * np.abs(pl.inplane @ across)))
+                w0 = math.sqrt(c.area)
+                w1 = max(w0, min(b_plate, w0 + c_grow * L))
+                r = p - end
+                out.append((pid, {
+                    "F_n": q(float(F @ pl.normal), "N"), "F_a": q(float(F @ a), "N"), "F_c": q(float(F @ across), "N"),
+                    "r_n": q(float(r @ pl.normal), "mm"), "r_a": q(float(r @ a), "mm"), "r_c": q(float(r @ across), "mm"),
+                    "L": q(L, "mm"), "w_0": q(w0, "mm"), "w_1": q(w1, "mm"), "t": q(pl.t, "mm"), "E": q(pl.E, "MPa"),
+                    "G": q(pl.G, "MPa"), "c": q(c_grow, "1")}))
+        body = nxt
+    return out
+
+
+def chain_inputs(design: Record, part_id: str, point, F: float, directions=None) -> tuple[Record, list[str]]:
     """load_path.control_deflection's inputs for a load F at `point` on part `part_id`, and what was assumed.
     Without a chain of contacts (the part floats), the designer's intent: one bolted contact at the part's
-    carried_by nodes and no cantilever (the hand calculation of a part held where carried_by says)."""
+    carried_by nodes and no cantilever (the hand calculation of a part held where carried_by says).
+    directions: the load's unit directions (the largest plate term of them is taken); without them a plate in the
+    chain is loaded across (along its normal)."""
+    from hiraku.solvers import formula_registry
     from hiraku.solvers.k0_handcalc.vehicle import member_props
-    from hiraku.solvers.shelf.load_path import AREA_PER_BOLT_MM2, contact_stiffness, find_contacts
+    from hiraku.solvers.shelf.load_path import AREA_PER_BOLT_MM2, contact_stiffness, find_contacts, plate_parts
 
     props = member_props(design)
     p = np.asarray(point, float)
     chain = _chain(find_contacts(design), part_id)
     notes = []
+    d_plate = 0.0
     if chain is None:
         part = next(x for x in design["parts"] if x["id"] == part_id)
         nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
@@ -255,15 +300,35 @@ def chain_inputs(design: Record, part_id: str, point, F: float) -> tuple[Record,
         joints = [(c.k_t, c.k_r, c.point) for c in chain]
         last = chain[-1]
         mid = last.b.split(":", 1)[1]
-        L = min(last.t, 1.0 - last.t) * props[mid]["length"]
+        m = props[mid]["member"]
+        near, s = (m["node_a"], last.t) if last.t <= 0.5 else (m["node_b"], 1.0 - last.t)
+        if sum(near in (x["node_a"], x["node_b"]) for x in design["members"]) == 1:
+            s = 1.0 - s  # the nearest end is joined to nothing else (a free end): the cantilever is from the other
+            notes.append(f"{mid} のいちばん近い端 {near} はほかの部材に繋がらないので、もう一方の端からの片持ち")
+        L = s * props[mid]["length"]
         notes.append("鎖: " + ", ".join(f"{c.a} - {c.b}" for c in chain))
+        strips = plate_strip_inputs(design, chain, part_id, p, np.zeros(3))
+        if strips:
+            reg = formula_registry()
+            plates = plate_parts(design)
+            dirs = [np.asarray(x, float) for x in directions] if directions is not None else None
+            best = 0.0
+            for u in (dirs or [None]):
+                total = 0.0
+                for pid, _ in strips:
+                    vec = F * (u if u is not None else plates[pid].normal)
+                    one = dict(plate_strip_inputs(design, chain, part_id, p, vec))[pid]
+                    total += reg.evaluate("load_path.plate_strip", one)["outputs"]["delta"]["value"]
+                best = max(best, total)
+            d_plate = best
+            notes.append("板の帯: " + ", ".join(pid for pid, _ in strips))
     s = props[mid]["section"]
     E = float(props[mid]["material"]["E_MPa"])
     ct = sum(1.0 / k for k, _, _ in joints)
     cr = sum(float(np.dot(p - x, p - x)) / kr for _, kr, x in joints)
     k_r = 1.0 / cr if cr > 0 else 1e12  # every contact on the load's line: its rotation does not move the point
     return {"F": q(F, "N"), "k_t": q(1.0 / ct, "N/mm"), "k_r": q(k_r, "N/mm"), "L": q(L, "mm"), "E": q(E, "MPa"),
-            "I": q(min(s["Iy"], s["Iz"]), "mm^4")}, notes
+            "I": q(min(s["Iy"], s["Iz"]), "mm^4"), "delta_plate": q(d_plate, "mm")}, notes
 
 
 def _force(load_case: Record, name: str, default: float) -> float:
@@ -280,8 +345,8 @@ def grip_inputs(design: Record, load_case: Record) -> Record:
     pid = (load_case.get("params") or {}).get("hand_part") or next((p["id"] for p in hand_controls(design)), None)
     if pid is None:
         raise BuildError("the design has no hand control")
-    point, _ = grip(next(p for p in design["parts"] if p["id"] == pid))
-    return chain_inputs(design, pid, point, _force(load_case, "hand_force", 300.0))[0]
+    point, dirs = grip(next(p for p in design["parts"] if p["id"] == pid))
+    return chain_inputs(design, pid, point, _force(load_case, "hand_force", 300.0), list(dirs.values()))[0]
 
 
 def pedal_inputs(design: Record, load_case: Record) -> Record:
@@ -298,8 +363,8 @@ def pedal_inputs(design: Record, load_case: Record) -> Record:
     F = _force(load_case, "foot_force", 500.0)
     best = None
     for pid in ids:
-        face, _ = pedal_face(next(p for p in design["parts"] if p["id"] == pid))
-        inputs = chain_inputs(design, pid, face, F)[0]
+        face, n = pedal_face(next(p for p in design["parts"] if p["id"] == pid))
+        inputs = chain_inputs(design, pid, face, F, [n])[0]
         d = reg.evaluate("load_path.control_deflection", inputs)["outputs"]["delta"]["value"]
         if best is None or d > best[0]:
             best = (d, inputs)
@@ -316,11 +381,12 @@ def free_inputs(design: Record, load_case: Record) -> Record:
 
 _CHAIN = ["部品は剛体。触れている所 (すき間 2 mm 以下) をボルト留めのばねとみる",
           "握る点 (踏む面) から枠までの、触れている所のいちばん短い鎖 1 本",
-          "着いた部材は、いちばん近い節からの片持ち"]
+          "鎖が板を通るときは、荷重の来る所から板の中心までの板の帯の曲げとねじれ (中心で固定とみる: 仮定)",
+          "着いた部材は、いちばん近い節からの片持ち (その節がほかに繋がらなければ、もう一方の端から)"]
 _FREE = ["触れている所を部材からたどって、届かない部品を数える (carried_by は見ない)"]
 FREE_PREDICTION = {"quantity": "free_parts", "formula_id": "load_path.free_parts", "output": "n", "assumptions": _FREE,
                    "inputs": {"n_parts": "from.n_parts", "n_held": "from.n_held"}, "inputs_from": free_inputs}
-_CONTROL = {k: f"from.{k}" for k in ("F", "k_t", "k_r", "L", "E", "I")}
+_CONTROL = {k: f"from.{k}" for k in ("F", "k_t", "k_r", "L", "E", "I", "delta_plate")}
 
 R7_PLAN = {
     "tool": "load_path",
