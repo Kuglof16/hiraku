@@ -1060,7 +1060,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 13 件、答えが無いまま 3 件",
    "data": {
     "answers": [
      {
@@ -1079,6 +1079,105 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      },
      {
       "key": "Q34",
@@ -9254,6 +9353,42 @@ export const DEMOS = {
       "basis": "assumption (the top speed, Q50)"
      },
      {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
       "key": "Q70",
       "name": "公道を走るか",
       "value": "私有地 (林道) だけ",
@@ -9262,12 +9397,75 @@ export const DEMOS = {
       "basis": "assumption of this fixed file; Q70 is a required question and was not asked"
      },
      {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
       "key": "Q82",
       "name": "出荷の形",
       "value": "完成車",
       "source": "default",
       "trust": 3,
       "basis": "assumption"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      },
      {
       "key": "Q90",
@@ -9973,7 +10171,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 13 件: Q57・Q63・Q66・Q67・Q68・Q69・Q75・Q76・Q77・Q78・Q86・Q87・Q88)",
    "data": {
     "answers": [
      {
@@ -9992,6 +10190,105 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      }
     ]
    }
