@@ -1164,6 +1164,14 @@
         "source": {
           "type": "string",
           "description": "Where the expected value comes from (closed form, textbook, ...)."
+        },
+        "code_hash": {
+          "type": "string",
+          "description": "Hash of the hiraku package's source the check ran on (every .py file). A check may be reused by a later run only while this hash is unchanged."
+        },
+        "cached_from": {
+          "type": "string",
+          "description": "When the check was not run again but reused: the run_id whose check is reused (same code_hash). Absent when the check ran in this run."
         }
       }
     },

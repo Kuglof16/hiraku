@@ -60,6 +60,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 | HK3 | 原因の無い食い違いがある分野では `analyze` と `compare` を止める |
 | HK4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける) |
 
+照合の使い回し (HK2 の補い): 棚の道具の照合は、hiraku のソース (`.py` を全部) のハッシュが同じ間だけ、前の実行の結果を使ってよい。そのときの `tool_check` に `code_hash` と `cached_from` (使い回した実行の run_id) を書く。コードが 1 行でも変われば照合をやり直す。実行の中で Claude が作った道具の照合は使い回さない
+
 ## 解析部と設計部のあいだ (Python)
 
 `hiraku/contract/protocols.py`:
