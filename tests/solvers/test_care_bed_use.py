@@ -90,6 +90,18 @@ class UseFormulasTest(unittest.TestCase):
         self.assertAlmostEqual(got["D_worst"] / max(frame, back, knee), 1.0, places=9)
         self.assertAlmostEqual(got["D"] / (frame + back + knee), 1.0, places=9)
 
+    def test_side_push_caster(self):
+        # push and weight both at mid-base: each far caster W/4 - F h / (4 y_s); a push at the front pair: all of the
+        # roll moment there, the rear far caster keeps W/4 (centre line weight)
+        mid = k0("bed.side_push_caster", W=(1200, "N"), y_cg=(0, "mm"), F=(600, "N"), h_F=(880, "mm"), y_s=(440, "mm"),
+                 x_cg=(-750, "mm"), x_F=(-750, "mm"), x_r=(-1500, "mm"), L_x=(1500, "mm"))
+        self.assertAlmostEqual(mid["R_min"], 1200 / 4 - 600 * 880 / (4 * 440))
+        self.assertAlmostEqual(mid["R_front"], mid["R_rear"])
+        front = k0("bed.side_push_caster", W=(1200, "N"), y_cg=(0, "mm"), F=(600, "N"), h_F=(880, "mm"), y_s=(440, "mm"),
+                   x_cg=(-750, "mm"), x_F=(0, "mm"), x_r=(-1500, "mm"), L_x=(1500, "mm"))
+        self.assertAlmostEqual(front["R_rear"], 300.0)
+        self.assertAlmostEqual(front["R_min"], 300.0 - 600 * 880 / (2 * 440))
+
     def test_side_push_tipping(self):
         got = k0("bed.side_push_tipping", W=(1200, "N"), y_cg=(5, "mm"), F=(675, "N"), h_F=(882, "mm"), y_s=(440, "mm"))
         self.assertAlmostEqual(got["R_far"], (1200 * 435 - 675 * 882) / 880)
@@ -177,15 +189,17 @@ class BedUseEndToEndTest(unittest.TestCase):
 
     def test_side_rail_push_tips_the_bed(self):
         lc = self.cases["S1-side-rail-push"]
-        self.assertEqual(lc["criterion"]["quantity"], "lighter_side_load")
+        # judged on the lighter caster: one caster lifting starts the tipping, though the far side's sum may stay above 0
+        self.assertEqual(lc["criterion"]["quantity"], "min_wheel_load")
         self.assertEqual(lc["criterion"]["op"], ">=")
         step, rec = self.runs["S1-side-rail-push"]
-        got = results(rec)["lighter_side_load"]["value"]
-        want = predict(self.design, lc, step["predictions"][0])
-        print(f"\nS1-side-rail-push v1: tool {got:.2f} N, K0 {want:.2f} N")
-        self.assertLess(got, 0.0)  # red
         W = results(rec)["total_mass"]["value"] * 9.80665
-        self.assertLessEqual(abs(got - want) / W, lc["tolerance_rel"])
+        for p in step["predictions"]:
+            got = results(rec)[p["quantity"]]["value"]
+            want = predict(self.design, lc, p)
+            print(f"\nS1-side-rail-push v1 {p['quantity']}: tool {got:.2f} N, K0 {want:.2f} N")
+            self.assertLess(got, 0.0)  # red
+            self.assertLessEqual(abs(got - want) / W, lc["tolerance_rel"])
         self.assertTrue(any("contact points" in a for a in rec["assumptions"]))
 
     def test_duty_on_the_lever_stroke(self):
@@ -214,10 +228,10 @@ class BedUseEndToEndTest(unittest.TestCase):
         self.assertTrue(any("IIW-1823-07" in a for a in rec["assumptions"]))
 
     def test_predictions_for_the_new_cases(self):
-        for lc_id, formula in (("S1-side-rail-push", "bed.side_push_tipping"), ("T3-6uses", "bed.actuator_duty"),
-                               ("R3-uses", "bed.use_damage")):
+        for lc_id, formulas in (("S1-side-rail-push", {"bed.side_push_tipping", "bed.side_push_caster"}),
+                                ("T3-6uses", {"bed.actuator_duty"}), ("R3-uses", {"bed.use_damage"})):
             preds = bed.predictions_for(self.cases[lc_id])
-            self.assertEqual({p["formula_id"] for p in preds}, {formula})
+            self.assertEqual({p["formula_id"] for p in preds}, formulas)
             vals = bed.inputs_for(self.design, self.cases[lc_id])
             for p in preds:
                 refs = [x.split(".", 1)[1] for x in p["inputs"].values() if x.startswith("from.")]
