@@ -504,6 +504,11 @@ def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinem
     return json.loads(_table_of((tuple(float(x) for x in wc), float(radius), float(travel), bushings)))
 
 
+RIGID_WHEEL_SPIN_NOTE = ("a rigid wheel without wheel parts spins as a solid disc of 5 % of the vehicle mass shared "
+                         "over the supports (at least 1 kg; assumed); that mass only sets the spin inertia: it is not "
+                         "taken out of the body and there is no unsprung mass")
+
+
 def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
     """Give each corner its unsprung mass and spin inertia; return the sprung items.
 
@@ -528,10 +533,11 @@ def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, no
         mw = wheel_mass[i]
         if mw <= 0.0:
             mw = max(1.0, frac * m_all / len(corners))
-            if c.dof or c.kind == "wheel":
-                _note(notes, DEFAULTS["unsprung_fraction"][2])
             if c.dof:
+                _note(notes, DEFAULTS["unsprung_fraction"][2])
                 sprung_items.append((-mw, c.pos, np.zeros((3, 3))))
+            elif c.kind == "wheel" and _given(design, "wheel_inertia") is None:
+                _note(notes, RIGID_WHEEL_SPIN_NOTE)
         if c.dof:
             c.m_u = mw
         c.j_w = 0.5 * mw * c.radius ** 2
