@@ -11,6 +11,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.catalog import REPO_ROOT
+from hiraku.catalog.mixes import Mix, role_key
 from hiraku.tools.context import RunContext
 
 Record = dict[str, Any]
@@ -68,14 +69,25 @@ def possible_roles(ctx: RunContext) -> list[Record]:
     return agents
 
 
-def subagents(ctx: RunContext) -> dict:
+def role_model(agent_id: str, mix: Mix | None) -> tuple[str, str]:
+    """(model, effort) of a role other than the lead: from the mix, else "inherit" (the lead's model)
+    with the role's fixed effort (DESIGNER_EFFORT, CAE_EFFORT), as before mixes existed."""
+    if mix is not None:
+        spec = mix[role_key(agent_id)]
+        return spec["model"], spec["effort"]
+    return "inherit", DESIGNER_EFFORT if agent_id == "designer" else CAE_EFFORT
+
+
+def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
     """AgentDefinition per role of this run (possible_roles) but the lead: CAE roles,
     the packager (the CAE steps on the assembly load cases) and the designer. All run in
-    the foreground (background=False), so the lead waits for their results."""
+    the foreground (background=False), so the lead waits for their results. Each role's
+    model and effort come from the mix (hiraku.catalog.mixes) when one is given."""
     from claude_agent_sdk import AgentDefinition
 
     out = {}
     for a in possible_roles(ctx):
+        model, effort = role_model(a["agent_id"], mix) if a["role"] in ("cae", "packager", "designer") else (None, None)
         if a["role"] in ("cae", "packager"):
             domain = a.get("domain", "assembly")
             out[sdk_name(a["agent_id"])] = AgentDefinition(
@@ -83,8 +95,8 @@ def subagents(ctx: RunContext) -> dict:
                 prompt=prompts.cae_prompt(domain),
                 tools=[contract.mcp_name(t) for t in (PACKAGER_TOOLS if a["role"] == "packager" else CAE_TOOLS)],
                 skills=plugin_skills(),
-                model="inherit",
-                effort=CAE_EFFORT,
+                model=model,
+                effort=effort,
                 background=False,
             )
         elif a["role"] == "designer":
@@ -92,8 +104,8 @@ def subagents(ctx: RunContext) -> dict:
                 description=prompts.DESIGNER_DESCRIPTION,
                 prompt=prompts.DESIGNER_PROMPT,
                 tools=[contract.mcp_name(t) for t in DESIGNER_TOOLS],
-                model="inherit",
-                effort=DESIGNER_EFFORT,
+                model=model,
+                effort=effort,
                 background=False,
             )
     return out

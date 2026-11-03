@@ -180,11 +180,13 @@ class RunStore:
         """The newest design version (0 before the first design)."""
         return max(self._project.get("design_versions") or [0])
 
-    def set_cost(self, cost_usd: float) -> Record:
+    def set_cost(self, cost_usd: float, extra: Record | None = None) -> Record:
+        """project.json cost_usd and a cost.updated event; extra (token counts, turns) goes into the
+        event's data next to cost_usd (the contract requires only cost_usd there)."""
         with self._lock:
             self._project["cost_usd"] = float(cost_usd)
             self._save_project()
-            return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
+            return self.emit("cost.updated", agent="system", data={**(extra or {}), "cost_usd": float(cost_usd)})
 
     def update_project(self, fields: Record, *, agent: str = "system", text: str | None = None) -> Record:
         """Change project fields after the start (the load cases, picks and roles of a run whose

@@ -147,11 +147,15 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
     def test_the_demo_runs_point_at_files_that_load(self):
+        from hiraku.catalog.mixes import mix_names
+
         listed = read_data(CATALOG_DIR / "demo_runs.yaml")["runs"]
         self.assertEqual(len({r["id"] for r in listed}), len(listed))
         for r in listed:
             with self.subTest(run=r["id"]):
                 self.assertTrue(r["title"] and r["shows"] and r["modes"])
+                if "mix" in r:  # the model mix the screen passes as --mix
+                    self.assertIn(r["mix"], mix_names())
                 self.assertEqual(("file" in r) + ("request" in r), 1)
                 if "file" in r:
                     self.assertEqual(contract.errors("requirements_file", load_requirements(REQUIREMENTS.parent / r["file"])), [])
