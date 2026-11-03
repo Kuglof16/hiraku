@@ -55,7 +55,7 @@ function card(c, api, ui) {
     h("header", {},
       h("h3", {}, c.shownName),
       c.renamed ? h("small", { class: "in-was" }, `← ${c.ja}`) : null,
-      lit && c.testCount !== null ? h("span", { class: "in-count", title: "当てはまる試験の数" }, `試験 ${c.testCount}`) : null),
+      lit && c.testCount !== null ? h("span", { class: "in-count", title: "当てはまる試験のうち、荷重条件を作れるものの数" }, `試験 ${c.testCount}`) : null),
     c.reason ? h("p", { class: "in-reason", title: c.reason }, c.reason) : null,
     lit && c.testIds?.length ? h("div", { class: "in-tests" }, c.testIds.map((t) => h("code", {}, t))) : null,
     lit && api.exclude ? h("button", { class: "in-btn small", onclick: () => api.exclude(c.domain) }, "外す") : null,
