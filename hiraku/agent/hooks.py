@@ -12,8 +12,9 @@
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
   (hook.blocked_stop); the lead's stop also while a tile is red and design revisions
   are left (rules.red_left_reason); blocks are counted and capped so a run always
-  ends, and once the design revisions are used up (rules.revisions_used_up) the lead's stop
-  is let through. A role's stop (the packager's: assembly) is blocked only on its own domain's
+  ends. The round limit ends revisions only: the latest version is still judged, so its
+  pending cases hold the stop as well (contract HOOK_RULES HK4); a run whose first version
+  was refused (rules.design_refusal) may stop. A role's stop (the packager's: assembly) is blocked only on its own domain's
   pending cases, counted per design version, and not while a
   message for the lead waits (the role returns so the lead hears it). Load cases no K0
   formula can predict (rules.unpredictable_cases) do not hold a stop. The
@@ -238,8 +239,8 @@ class Hooks:
             return {"decision": "block", "reason": told}
         if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
             return {}
-        if rules.revisions_used_up(self.ctx):  # HK4 holds no stop past the round limit (HOOK_RULES)
-            return self._end()
+        # the round limit ends revisions only: the latest version is still judged (HOOK_RULES HK4), so a
+        # pending case still holds the stop; red_left_reason already lets a red tile go once no revision is left
         if rules.design_refusal(self.ctx) is not None:  # no first version: the designer's last try was refused
             return self._end()
         # HK4: a pending domain, or (red_left) a red tile while design revisions are left

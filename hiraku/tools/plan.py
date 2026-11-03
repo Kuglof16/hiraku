@@ -318,8 +318,9 @@ def _entry(ctx: RunContext, lc: Record, tool: str, spec: Record, when: str | Non
     try:
         given = given_inputs(ctx, spec, lc)
     except ReaderError as e:
+        pick = f"list_formulas(tool=\"{tool}\")" if tool else "list_formulas"
         out["refused"] = (f"{e.reader} はこの設計に当てはまらないので、{e.formula_id} の入力を出せません: {e.reason}。"
-                          f"この式は使えません。list_formulas(tool=\"{tool}\") でこの設計に合う式を選んでください")
+                          f"この式は使えません。{pick} でこの設計に合う式を選んでください")
         return out
     except ScriptError as e:
         out["refused"] = f"入力を読むコードが見つかりません: {e}"
@@ -346,6 +347,24 @@ def _specs(step: Record, when: str | None = None) -> list[tuple[Record, str | No
     if exp.get("retry"):
         out += _specs(exp["retry"], f"{exp.get('quantity')} が食い違って原因を書いたあとの予測")
     return out
+
+
+# Hand calculations the builders keep for a test no shelf tool analyses yet (its tool is made in the run,
+# make_tool), so no plan step carries them: test id -> (module, name of its list of predictions). The
+# predictions read their inputs by code like any plan's (inputs_from), e.g. R4's portal frame and gaps.
+TOOLLESS_PREDICTIONS = {"R4": ("hiraku.catalog.builders.analysis", "R4_PREDICTIONS")}
+TOOLLESS_NOTE = ("この試験を解析する道具は棚にありません (get_tool_template を見て make_tool で作る)。"
+                 "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です")
+
+
+def _toolless_specs(test_id: str) -> list[Record]:
+    where = TOOLLESS_PREDICTIONS.get(test_id)
+    if where is None:
+        return []
+    try:
+        return list(getattr(importlib.import_module(where[0]), where[1]))
+    except (ImportError, AttributeError):
+        return []
 
 
 def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any = None) -> list[Record]:
@@ -382,9 +401,13 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
                 entries.append({"tool": tool, **pair, "role": role, "no_reader": (
                     "この式の入力をコードで読む手順はありません。list_formulas で入力の名前と単位を見て、"
                     "get_context の design_summary と荷重条件から自分で入れ、どこから取ったかを assumptions に書いてください")})
+        toolless = _toolless_specs(lc["test_id"]) if not steps else []
+        entries += [_entry(ctx, lc, None, spec, None) for spec in toolless]
         item: Record = {"load_case_id": lc["load_case_id"], "test_id": lc["test_id"], "domain": lc["domain"],
                         "criterion": lc.get("criterion"), "formulas": entries}
-        if not steps:
+        if toolless:
+            item["note"] = TOOLLESS_NOTE
+        elif not steps:
             item["note"] = ("この荷重条件には、式の入力をコードで読む手順がありません。list_tools と list_formulas で"
                             "道具と式を選び、入力の出どころを assumptions に書いてください")
         out.append(item)

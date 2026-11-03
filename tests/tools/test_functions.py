@@ -41,7 +41,8 @@ class StartTest(RunCase, unittest.TestCase):
     def test_list_tools_is_one_line_per_tool(self):
         lines = list_tools(self.ctx)
         self.assertEqual(lines[0], {"name": "step_climb", "title": "fake step_climb", "domain": "powertrain",
-                                    "base": "K2", "tests": ["P1"], "usable": True, "checks_passed": "1/1"})
+                                    "base": "K2", "tests": ["P1"], "usable": True, "checks_passed": "1/1",
+                                    "stage": 1})  # HK5: STAGE_FALLBACK, the fake spec has no stage
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"test_id": "R1"})], ["frame_static"])
         (full,) = list_tools(self.ctx, {"tool": "frame_static"})
         self.assertEqual(full["checks"][0]["case"], "known answer")
@@ -124,6 +125,45 @@ class PredictionTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.records("prediction"), [])
 
 
+class AppliesToTest(RunCase, unittest.TestCase):
+    """Contract tool_spec.applies_to: a tool for some kinds of design is refused on another kind and on a
+    design of unknown kind; list_tools shows the field."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], applies_to=["space_frame_utv"])
+        load, force = self.predict_p1()
+        self.args = {"tool": "step_climb", "load_case_id": "P1-step100", "prediction_ids": [force["prediction_id"]]}
+
+    def test_a_design_of_unknown_kind_gets_no_such_tool(self):
+        from hiraku.tools.functions import design_kind
+
+        self.assertIsNone(design_kind(self.ctx))  # the stand-in designgen names no kinds
+        with self.assertRaisesRegex(ToolError, "space_frame_utv.*型が分からない"):
+            analyze(self.ctx, self.args)
+        (line,) = [t for t in list_tools(self.ctx) if t["name"] == "step_climb"]
+        self.assertEqual(line["applies_to"], ["space_frame_utv"])
+
+    def test_the_kind_named_runs_and_another_is_refused(self):
+        from unittest import mock
+
+        from hiraku.tools import functions
+
+        with mock.patch.object(functions, "design_kind", return_value="space_frame_utv"):
+            self.assertEqual(analyze(self.ctx, self.args)["status"], "ok")
+        with mock.patch.object(functions, "design_kind", return_value="ladder_4w"):
+            with self.assertRaisesRegex(ToolError, "この版の設計の型は ladder_4w"):
+                analyze(self.ctx, self.args)
+
+    def test_the_kind_of_a_generated_design(self):
+        import hiraku.designgen as designgen
+        from hiraku.tools.functions import design_kind
+
+        self.ctx.designgen = designgen
+        with mock.patch.object(designgen, "generator_of", return_value=designgen.ARCHETYPES["ladder_4w"]):
+            self.assertEqual(design_kind(self.ctx), "ladder_4w")
+
+
 class LoopTest(RunCase, unittest.TestCase):
     def test_hk1_analyze_needs_a_prediction_of_this_load_case(self):
         with self.assertRaises(ToolError) as cm:
@@ -203,6 +243,8 @@ class CompareWhereTest(RunCase, unittest.TestCase):
                                  "where": "rail_L0"})
         self.assertEqual(out["comparison"]["status"], "match")
         self.assertEqual(out["where"], "rail_L0")
+        stored = self.ctx.store.get("comparison", out["comparison"]["comparison_id"])
+        self.assertEqual(stored["where"], "rail_L0")  # contract comparison.where
         self.assertIsNone(out["verdict"])
         self.assertIn("合否", out["note"])
         self.assertEqual(self.ctx.store.records("verdict"), [])
@@ -578,6 +620,29 @@ class MeshTest(RunCase, unittest.TestCase):
         self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
         self.assert_events_fit()
 
+    def test_a_tool_with_make_mesh_gets_its_own_mesh_once_per_version(self):
+        """Contract 3950ac7: make_mesh(design) instead of frame_mesh, mesher = the tool's name, made once per
+        version and mesher, recorded before the analysis; frame_mesh's mesh of the version is another one."""
+        tool = self.tools["step_climb"]
+        tool.needs_mesh = True
+        own = []
+        tool.make_mesh = lambda design: own.append(1) or self.mesh_of(design)
+        with mock.patch.object(self.solvers, "frame_mesh", mock.Mock(side_effect=AssertionError("not frame_mesh")),
+                               create=True):
+            self.analyze_p1()
+            self.analyze_p1()
+        self.assertEqual(own, [1])
+        (mesh,) = self.ctx.store.records("mesh", 1)
+        self.assertEqual((mesh["mesher"], mesh["mesh_id"]), ("step_climb", "mesh-0001"))
+        self.assertEqual([r[3]["mesh"]["mesh_id"] for r in tool.runs], ["mesh-0001"] * 2)
+        kinds = self.kinds()
+        self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
+        del tool.make_mesh  # a frame_mesh tool on the same version gets its own (another mesher)
+        with mock.patch.object(self.solvers, "frame_mesh", self.mesh_of, create=True):
+            self.analyze_p1()
+        self.assertEqual([m["mesher"] for m in self.ctx.store.records("mesh", 1)], ["step_climb", "frame_mesh"])
+        self.assert_events_fit()
+
     def test_a_tool_without_needs_mesh_gets_none(self):
         with mock.patch.object(self.solvers,"frame_mesh", mock.Mock(side_effect=AssertionError), create=True):
             self.analyze_p1()
@@ -792,6 +857,33 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertIn(why, got["refused"])
         self.assertIn("当てはまらない", got["refused"])
         self.assertNotIn("inputs", got)
+
+    def test_a_test_with_no_tool_gets_the_builders_hand_calculation(self):
+        """A test no shelf tool analyses (R4: its tool is made in the run) has no plan step; its
+        predictions kept by the builders (TOOLLESS_PREDICTIONS) are listed with their inputs read by code."""
+        import types
+
+        from hiraku.tools import plan
+
+        def reader(design, load_case):
+            return {"L": {"value": 1800.0, "unit": "mm"}}
+
+        kept = types.SimpleNamespace(PREDICTIONS=[
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L", "F": "pred.front_wheel_force"}, "inputs_from": reader}])
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        with mock.patch.object(plan, "plan_of", return_value=own), \
+                mock.patch.object(plan, "external_builders", return_value=({}, {}, {})), \
+                mock.patch.dict(plan.TOOLLESS_PREDICTIONS, {"R1": ("kept_stand_in", "PREDICTIONS")}), \
+                mock.patch.object(plan.importlib, "import_module", return_value=kept):
+            out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": "R1-step100"})
+        (case,) = out["formula_inputs"]["load_cases"]
+        self.assertEqual(case["note"], plan.TOOLLESS_NOTE)
+        (entry,) = case["formulas"]
+        self.assertIsNone(entry["tool"])
+        self.assertEqual((entry["formula_id"], entry["role"]), ("frame_static.rail_bending", "criterion"))
+        self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
+        self.assertIn("F", entry["missing"])  # a prediction not recorded yet
 
     def test_role_facing_text_points_at_the_section_not_at_python(self):
         from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role

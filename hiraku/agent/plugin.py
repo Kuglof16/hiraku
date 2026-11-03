@@ -54,6 +54,8 @@ LOCK_STALE_S = 30.0  # a lock older than this was left by a process that died
 POLL_S = 1.0  # how often the server reads the outbox, the inbox and stop.request
 # in STATE_FILE, written by the server: rules.unpredictable_cases of the run (the hook command has no registry)
 UNPREDICTABLE_KEY = "unpredictable"
+# in STATE_FILE, written by the server: shelf.stages_of (HK5 stages; the hook command has no tools)
+STAGES_KEY = "stages"
 
 STOPPED_SESSION_CLOSED = "Claude Code のセッションが閉じたので、実行を止めました"
 STOPPED_NEW_RUN = "同じセッションで新しい実行を始めたので、この実行は止めました"
@@ -199,7 +201,7 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
         state = read_state(run_dir)
         # no registry here: the load cases no K0 formula can predict are the server's (UNPREDICTABLE_KEY)
         ctx = RunContext(store=store, formulas=None, tools={}, specs=specs_from_events(store.events()),
-                         unpredictable=state.get(UNPREDICTABLE_KEY))
+                         unpredictable=state.get(UNPREDICTABLE_KEY), stages=state.get(STAGES_KEY))
         notes: list[Record] = []
 
         def emit(kind: str, **kw: Any) -> None:
@@ -207,11 +209,47 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
         hooks.load_state(state)
-        hooks.on_end = lambda: notes.append({"op": "end"})
+        ended: list[bool] = []
+        hooks.on_end = lambda: (notes.append({"op": "end"}), ended.append(True))
         out = hooks.decide(event, input_data)
-        write_state(run_dir, {**state, **hooks.state()})
-        put_notes(run_dir, notes)
+        new_state = {**state, **hooks.state(), **({END_KEY: True} if ended else {})}
+        write_state(run_dir, new_state)
+        if ended and not server_alive(run_dir):
+            # the lead's stop is let through and no server serves the run (Claude Code stopped it first):
+            # the hook command is the only one left to write, so it ends the run itself, under the lock
+            finish_without_server(run_dir, ctx, new_state, notes)
+        else:
+            put_notes(run_dir, notes)
     return out
+
+
+END_KEY = "end_requested"  # in STATE_FILE: the Stop hook let the lead's stop through; the run is to end
+
+
+def server_alive(run_dir: Path) -> bool:
+    """A server serves the run: its layout.PLUGIN_ALIVE_FILE is younger than layout.PLUGIN_ALIVE_S."""
+    try:
+        return time.time() - (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).stat().st_mtime < layout.PLUGIN_ALIVE_S
+    except OSError:
+        return False
+
+
+def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: list[Record]) -> None:
+    """End a run whose server is gone (call with the lock held): the notes no server read, then the
+    roles still running and the lead stop, and run.finished as runner.end_status decides it."""
+    from hiraku.agent.runner import end_status
+
+    store = ctx.store
+    for n in take_notes(run_dir) + [n for n in notes if n.get("op") == "emit"]:
+        if n.get("op") == "emit":
+            store.emit(n["kind"], agent=n.get("agent"), domain=n.get("domain"), text=n.get("text"), data=n.get("data"))
+    for agent in sorted(set((state.get("running") or {}).values())):
+        domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
+        store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+    store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
+    store.finish(status, stop_reason=reason, stop_code=code)
+    (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
 
 
 def hook_main(event: str, runs: Path | None = None, stdin: Any = None, stdout: Any = None) -> int:
@@ -344,10 +382,12 @@ class PluginServer:
         with self._lock:
             if self.ctx is not None and self.ctx.project["status"] == "running":
                 self.close("stopped", STOPPED_NEW_RUN, "user_stop")
+            self.let_go(self.ctx)
             self.ctx = ctx
             self.attribution = Attribution()
             ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
             set_current(self.runs, ctx.store.path)
+            self.touch_alive(ctx)
         self.note_unpredictable(ctx)
         return self._answer(ctx)
 
@@ -371,16 +411,34 @@ class PluginServer:
             if self.ctx is not None and self.ctx is not ctx and self.ctx.project["status"] == "running" \
                     and self.ctx.store.path.resolve() != path.resolve():
                 self.close("stopped", STOPPED_NEW_RUN, "user_stop")
+            if self.ctx is not None and self.ctx.store.path.resolve() != path.resolve():
+                self.let_go(self.ctx)
             self.ctx = ctx
             self.attribution = Attribution()
             set_current(self.runs, path)
+            self.touch_alive(ctx)
         self.note_unpredictable(ctx)
         return self._answer(ctx)
 
+    @staticmethod
+    def touch_alive(ctx: RunContext | None) -> None:
+        """layout.PLUGIN_ALIVE_FILE: this server serves the run (the screen holds a plugin run while the
+        file is younger than layout.PLUGIN_ALIVE_S); touched at start and on every poll."""
+        if ctx is not None and ctx.project["status"] == "running":
+            (ctx.store.path / layout.PLUGIN_ALIVE_FILE).touch()
+
+    @staticmethod
+    def let_go(ctx: RunContext | None) -> None:
+        """The server no longer serves the run: its alive file goes."""
+        if ctx is not None:
+            (ctx.store.path / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
+
     def close(self, status: str, reason: str | None, code: str) -> None:
-        """End the current run: roles still running stop, then the lead, then run.finished."""
+        """End the current run: roles still running stop, then the lead, then run.finished; the
+        server lets go of it (its alive file goes)."""
         with self._lock:
             ctx = self.ctx
+            self.let_go(ctx)
             if ctx is None or ctx.project["status"] != "running":
                 return
             run_dir = ctx.store.path
@@ -409,21 +467,28 @@ class PluginServer:
         self.close(*end_status(ctx, blocks))
 
     def note_unpredictable(self, ctx: RunContext) -> None:
-        """Leave rules.unpredictable_cases in the hooks' state for the hook command (which has no
-        registry), when it changed."""
+        """Leave rules.unpredictable_cases and the HK5 stages (shelf.stages_of) in the hooks' state for
+        the hook command (which has no registry and no tools), when they changed."""
         from hiraku.tools import rules
 
         if ctx.formulas is None or ctx.project["status"] != "running":
             return
+        from hiraku.tools.shelf import stages_of
+
         try:
             cases = rules.unpredictable_cases(ctx)
         except Exception as e:  # the hooks then hold the stop as before (no load case set aside)
             print(f"hiraku mcp: unpredictable_cases: {type(e).__name__}: {e}", file=sys.stderr)
             return
+        try:
+            stages = stages_of(ctx)
+        except Exception as e:  # the hook command then uses the fallback table only
+            print(f"hiraku mcp: stages_of: {type(e).__name__}: {e}", file=sys.stderr)
+            stages = None
         with locked(ctx.store.path):
             state = read_state(ctx.store.path)
-            if state.get(UNPREDICTABLE_KEY) != cases:
-                write_state(ctx.store.path, {**state, UNPREDICTABLE_KEY: cases})
+            if state.get(UNPREDICTABLE_KEY) != cases or state.get(STAGES_KEY) != stages:
+                write_state(ctx.store.path, {**state, UNPREDICTABLE_KEY: cases, STAGES_KEY: stages})
 
     # ------------------------------------------------------------------ notes, inbox, stop button
 
@@ -447,7 +512,8 @@ class PluginServer:
 
     def poll_once(self) -> None:
         """Notes, then the stop button (the run ends; the hooks let everything through after),
-        then the inbox (its events, and what is for the lead to the hooks' state)."""
+        then the inbox (its events, and what is for the lead to the hooks' state); the alive file
+        is touched while the run goes on."""
         from hiraku.agent.session import STOPPED_BY_BUTTON
 
         self.drain()
@@ -455,6 +521,7 @@ class PluginServer:
             ctx = self.ctx
             if ctx is None or ctx.project["status"] != "running":
                 return
+            self.touch_alive(ctx)
             if ctx.store.stop_requested():
                 ctx.store.emit("agent.said", agent="system", text="止めるボタンが押されたので、実行を止めます")
                 self.close("stopped", STOPPED_BY_BUTTON, "user_stop")
@@ -479,10 +546,18 @@ class PluginServer:
         self._poller.start()
 
     def shutdown(self) -> None:
-        """The session closed (stdin ended): read the last notes, then stop a run still running."""
+        """The session closed (stdin ended, or the process exits: atexit): read the last notes; a run whose
+        lead's stop the Stop hook let through (END_KEY in the hooks' state) ends as runner.end_status
+        decides; any other run still running stops as user_stop. Safe to call more than once."""
         self._stop_polling.set()
         try:
             self.drain()
+            ctx = self.ctx
+            if ctx is not None and ctx.project["status"] == "running":
+                with locked(ctx.store.path):
+                    requested = bool(read_state(ctx.store.path).get(END_KEY))
+                if requested:
+                    self.end()
         finally:
             self.close("stopped", STOPPED_SESSION_CLOSED, "user_stop")
 
@@ -506,6 +581,10 @@ def serve(runs: Path | None = None) -> int:
                                     is_error=bool(out.get("is_error")))
 
     server = Server(contract.MCP_SERVER, version="0.1.0", on_list_tools=list_tools, on_call_tool=call_tool)
+
+    import atexit
+
+    atexit.register(plugin.shutdown)  # also when the process is told to exit before stdin ends
 
     async def main() -> None:
         plugin.start_polling()

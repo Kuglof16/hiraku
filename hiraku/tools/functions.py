@@ -21,7 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
+from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
 from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
@@ -216,7 +216,8 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     }
     parts = {
         "requirements": lambda: p["requirements"],
-        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"])) for lc in ctx.load_cases],
+        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"]), stage=load_case_stage(ctx, lc))
+                               for lc in ctx.load_cases],  # stage: HK5, lower stages first
         "judgements": lambda: s.judgements() if ctx.version else [],
         "records": lambda: {
             "predictions": [_compact_prediction(x) for x in s.records("prediction")],
@@ -293,15 +294,41 @@ def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
 
 def _tool_line(spec: Record) -> Record:
     checks = spec.get("checks") or []
-    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable") if k in spec},
+    return {**{k: spec[k] for k in ("name", "title", "domain", "base", "tests", "usable", "applies_to") if k in spec},
             "checks_passed": f"{sum(1 for c in checks if c.get('pass'))}/{len(checks)}"}
+
+
+def design_kind(ctx: RunContext) -> str | None:
+    """The kind of the version's design: the hiraku.designgen ARCHETYPES key of the generator that made it
+    (designgen.generator_of); None for a design no generator made (one written by hand) or without designgen."""
+    gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
+    if not ctx.version or gen_of is None or not kinds:
+        return None
+    try:
+        gen = gen_of(ctx.store.design())
+    except ValueError:  # DesignGenError: its variables match no generator
+        return None
+    return next((k for k, m in kinds.items() if m is gen), None)
+
+
+def _check_applies_to(ctx: RunContext, name: str) -> None:
+    """Contract tool_spec.applies_to: a tool that names kinds of design is used only on a design of one of them."""
+    kinds = (ctx.specs.get(name) or {}).get("applies_to")
+    if not kinds:
+        return
+    kind = design_kind(ctx)
+    if kind in kinds:
+        return
+    what = f"この版の設計の型は {kind} です" if kind else "この版の設計は、型から作った設計ではありません (型が分からない)"
+    raise ToolError(f"道具 {name} は、設計の型 {', '.join(kinds)} のための道具です。{what}。"
+                    f"list_tools で、applies_to の無い道具か、この型を含む道具を選んでください")
 
 
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
     """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
     `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
-    lines = {n: _unchecked_line(n, ctx.tools[n]) for n in unchecked_tools(ctx)}
+    lines = {n: _unchecked_line(n, ctx.tools[n], ctx.version) for n in unchecked_tools(ctx)}
     if args.get("tool"):
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
@@ -312,17 +339,17 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [s if "not_checked" in s else _tool_line(s) for s in out]
+    return [s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"])) for s in out]
 
 
-def _unchecked_line(name: str, tool: Any) -> Record:
+def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
     """list_tools' line for a tool this run did not check (check_shelf): not usable, and why."""
     line: Record = {"name": name}
     for key in ("title", "domain", "base", "tests"):
         value = getattr(tool, key, None)
         if value is not None:
             line[key] = list(value) if key == "tests" else value
-    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED}
+    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED if version else NOT_YET}
 
 
 # ---------------------------------------------------------------------------- prediction
@@ -404,19 +431,29 @@ def trusted_analysis(ctx: RunContext, load_case_id: str) -> Record | None:
 _MESH_LOCK = threading.Lock()  # roles analyse side by side (the MCP calls run in threads)
 
 
-def version_mesh(ctx: RunContext, version: int, agent: str) -> Record:
-    """The shell mesh of a design version: the one already recorded, else made once from the
-    design by hiraku.solvers.frame_mesh and recorded (mesh-NNNN.json, mesh.created)."""
+FRAME_MESHER = "frame_mesh"  # the version's shell mesh of hiraku.solvers.frame_mesh; a mesh without mesher is one
+
+
+def version_mesh(ctx: RunContext, version: int, agent: str, tool: Any = None) -> Record:
+    """The mesh of a design version for a tool (docs/contract.md: one per version and mesher): the one
+    already recorded by that mesher, else made once and recorded (mesh-NNNN.json, mesh.created). The
+    mesher is the tool's own make_mesh(design) when it has one (mesher = the tool's name), else
+    hiraku.solvers.frame_mesh."""
+    own = getattr(tool, "make_mesh", None)
+    mesher = getattr(tool, "name", None) if own is not None else FRAME_MESHER
     with _MESH_LOCK:
-        have = ctx.store.records("mesh", version)
+        have = [m for m in ctx.store.records("mesh", version) if m.get("mesher", FRAME_MESHER) == mesher]
         if have:
             return have[-1]
-        solvers = importlib.import_module("hiraku.solvers")
-
-        if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
-            raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
-        mesh = {**solvers.frame_mesh(ctx.store.design(version)), "mesh_id": ctx.store.next_id("mesh"),
-                "design_version": version}
+        design = ctx.store.design(version)
+        if own is not None:
+            made = own(design)
+        else:
+            solvers = importlib.import_module("hiraku.solvers")
+            if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
+                raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
+            made = solvers.frame_mesh(design)
+        mesh = {**made, "mesher": mesher, "mesh_id": ctx.store.next_id("mesh"), "design_version": version}
         return ctx.store.add_record("mesh", mesh, design_version=version, agent=agent)
 
 
@@ -427,6 +464,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if name not in ctx.tools:
         raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
+    _check_applies_to(ctx, name)
     _gate(ctx, "analyze", args, agent)
 
     upstream = {}
@@ -445,7 +483,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     mesh, mesh_error = None, None
     if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
         try:
-            mesh = version_mesh(ctx, v, agent)
+            mesh = version_mesh(ctx, v, agent, ctx.tools[name])
         except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
             mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     analysis_id = ctx.store.next_id("analysis")
@@ -575,7 +613,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     where = args.get("where")
     if where is not None and not (isinstance(where, str) and where):
         raise ToolError(f"compare の where は部材か部品の ID (文字列) です: {where!r}")
-    # tool_input.compare has no `where` yet (the place goes in the tool's answer, not the record)
+    # tool_input.compare has no `where` (it goes in the comparison record, contract comparison.where)
     _check_input("compare", {k: v for k, v in args.items() if k != "where"})
     pred = ctx.prediction(args["prediction_id"])
     if pred is None:
@@ -635,6 +673,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         "tolerance_rel": tol,
         "status": "match" if abs(diff_rel) <= tol else "mismatch",
         "cause_id": None,
+        **({"where": where} if where else {}),  # contract comparison.where: the place the result was taken
     }
     ctx.store.add_record("comparison", cmp, design_version=v, agent=agent, domain=lc["domain"])
     out: Record = {"comparison": cmp, "verdict": None}
@@ -821,6 +860,8 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
                              text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
     if skipped:
         ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
+    # the tools of version 1's tests that the start did not check (a run whose tests were not fixed then)
+    check_shelf(ctx, list(dict.fromkeys(lc["test_id"] for lc in load_cases)), skip_checked=True)
     init_judgements(ctx)
     return {
         "design_version": 1,

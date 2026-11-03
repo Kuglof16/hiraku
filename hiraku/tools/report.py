@@ -283,7 +283,10 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
 
 SCRIPT_MARK = "台本: "  # every next item the code writes for a scripted run starts with this
 K5_HEAVY_TOOLS = ("frame_shell",)  # re-running these for K5 takes minutes (the shell solve)
-K5_MAX_WALL_S = 30.0  # no K5 when the governing analysis took longer than this (wall_time_s)
+# no K5 for a tool of this stage or heavier (contract tool_spec.stage: 3 shell and solid FE, fatigue on
+# spectra ...). Decided by the tool's kind, never by a measured time (docs/contract.md: clock times only
+# in analysis.wall_time_s / timings_s), so two runs of one plan write the same items
+K5_MAX_STAGE = 3
 K5_MAX_PATHS = 3  # design paths per governing verdict
 _IN_PARENS = re.compile(r"\(([A-Za-z0-9_.:-]+)\)")
 
@@ -316,15 +319,18 @@ def _top_effect(analysis: Record) -> Record | None:
     return max(terms, key=lambda t: abs(t["share"])) if terms else None
 
 
-def candidate_paths(design: Record, analysis: Record, verdict: Record, tool: Any) -> list[str]:
+def candidate_paths(design: Record, analysis: Record, verdict: Record, tool: Any,
+                    revisable: set[str] | None = None) -> list[str]:
     """Design paths (hiraku.solvers.k5_sensitivity) that may move the verdict's quantity, at most
     K5_MAX_PATHS: for a member named in the judged result's `where` or in the largest effects term,
     its section's wall and height and its material's E; for a part, the design variables named
     after it and its mass; else the design variables the tool's load-case parameters read (K2's
-    `var`); else, for a frame tool (K1), the most used section and its material."""
+    `var`); else, for a frame tool (K1), the most used section and its material. revisable: the
+    design variables the designer may change (functions.design_variables); the design's other
+    variables (the air's density, the road's friction: the test's conditions) are never proposed."""
     members = {m["id"]: m for m in design.get("members", [])}
     parts = {p["id"]: p for p in design.get("parts", [])}
-    variables = design.get("variables") or {}
+    variables = {k: v for k, v in (design.get("variables") or {}).items() if revisable is None or k in revisable}
     names = []
     res = _verdict_result(analysis, verdict)
     if res and isinstance(res.get("where"), str):
@@ -382,26 +388,31 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
     and the change that moves its quantity most with the direction that raises the margin, from K5
     over candidate_paths on the verdict's load case; where K5 is not run (a heavy tool, a long
     analysis, no candidate path, or no number that moves) the largest-share effects term and its
-    member, with no direction. Every item starts with SCRIPT_MARK; its numbers are the records'."""
+    member, with no direction; a domain with neither gets no item (there is no change to name). Only
+    design variables the designer may change are proposed (candidate_paths' revisable). Every item
+    starts with SCRIPT_MARK; its numbers are the records'."""
     from hiraku.solvers.k5_sensitivity import strongest
+    from hiraku.tools.functions import design_variables
 
     s = ctx.store
     items: list[Record] = []
     computed: list[Record] = []
+    found = design_variables(ctx)
+    revisable = {v["name"] for v in found} if found is not None else None
     for domain in ctx.picked:
         for ver in governing_verdicts(ctx, domain):
             cmp = s.get("comparison", ver["comparison_id"])
             ana = s.get("analysis", cmp["analysis_id"])
             tool = ctx.tools.get(ana["tool"])
-            wall = float(ana.get("wall_time_s") or 0.0)
-            head = (f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
+            heavy = ana["tool"] in K5_HEAVY_TOOLS or (ctx.specs.get(ana["tool"]) or {}).get("stage", 1) >= K5_MAX_STAGE
+            head =(f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
                     f"{ana['analysis_id']} {ana['tool']})")
             why_not = None
             if tool is None:
                 why_not = f"K5 は回していない: 道具 {ana['tool']} が棚に無い"
-            elif ana["tool"] in K5_HEAVY_TOOLS or wall > K5_MAX_WALL_S:
-                why_not = f"K5 は回していない: {ana['tool']} の解き直しが重い (解析に {wall:.0f} 秒)"
-            paths = [] if why_not else candidate_paths(s.design(), ana, ver, tool)
+            elif heavy:
+                why_not = f"K5 は回していない: {ana['tool']} は重い段の道具で、解き直しに時間がかかる"
+            paths = [] if why_not else candidate_paths(s.design(), ana, ver, tool, revisable)
             if not why_not and not paths:
                 why_not = "K5 は回していない: 動かす設計の数の候補が無い"
             best = None
@@ -428,9 +439,6 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
                 items.append({"domain": domain, "change": f"{SCRIPT_MARK}{where} が効いている (向きは出していない)",
                               "reason": f"{head}。いちばん効いている項は {top['name']} で、割合 "
                                         f"{_num(top['share'] * 100, '%')} ({why_not})"})
-            else:
-                items.append({"domain": domain, "change": f"{SCRIPT_MARK}変える数を選べない",
-                              "reason": f"{head}。{why_not}。解析の効いている項にも割合が無い"})
     allowed = recorded_numbers(ctx, computed)
     for item in items:  # an effects term's own name may carry numbers the checker reads otherwise
         if unknown_numbers(f"{item['change']} {item['reason']}", allowed):

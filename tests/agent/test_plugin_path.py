@@ -8,12 +8,14 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 import yaml
 
 from hiraku import contract
+from hiraku.contract import layout
 from hiraku.agent import plugin, plugin_files
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR
@@ -230,9 +232,22 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         got = asyncio.run(other.call_tool("open_run", {"run_id": run_id}))
         self.assertTrue(got["is_error"])
 
+    def test_the_alive_file_is_touched_while_the_server_serves_the_run(self):
+        """layout.PLUGIN_ALIVE_FILE: touched at start and on every poll; gone once the server lets go."""
+        import os
+
+        alive = self.ctx.store.path / layout.PLUGIN_ALIVE_FILE
+        self.assertTrue(alive.is_file())
+        os.utime(alive, (0, 0))  # as if the last touch were long ago
+        self.server.poll_once()
+        self.assertLess(time.time() - alive.stat().st_mtime, layout.PLUGIN_ALIVE_S)
+        self.server.shutdown()
+        self.assertFalse(alive.exists())
+
     def test_the_stop_button_ends_the_run(self):
         (self.ctx.store.path / "stop.request").write_text("", encoding="utf-8")
         self.server.poll_once()
+        self.assertFalse((self.ctx.store.path / layout.PLUGIN_ALIVE_FILE).exists())  # the server let go
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "user_stop")
         self.assertTrue(self.call_error("get_context"))
@@ -362,6 +377,40 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("agent.stopped")[-1]["agent"], "lead")
         self.assert_events_fit()
+
+    def _stop_to_the_cap(self):
+        self.hook("Stop", {"stop_hook_active": False})
+        for _ in range(2):
+            self.hook("Stop", {"stop_hook_active": True})
+        self.server.drain()  # the server reads the blocks while it is alive
+
+    def test_the_hook_ends_the_run_itself_when_no_server_serves_it(self):
+        """Claude Code may stop the MCP server before it reads the hook's "end" note: with plugin.alive
+        stale, the Stop hook that lets the stop through writes run.finished itself."""
+        self._stop_to_the_cap()
+        alive = self.ctx.store.path / layout.PLUGIN_ALIVE_FILE
+        os.utime(alive, (0, 0))  # the server is gone: no touch for a long time
+        self.assertEqual(self.hook("Stop", {"stop_hook_active": True}), {})
+        from hiraku.store import RunStore
+
+        store = RunStore.open(self.ctx.store.path)  # as the screen reads it, without the server
+        self.assertEqual(store.project["status"], "stopped")
+        (fin,) = [e for e in store.events() if e["kind"] == "run.finished"]
+        self.assertEqual(fin["data"]["stop_code"], "not_judged")
+        self.assertEqual([e["data"]["count"] for e in store.events() if e["kind"] == "hook.blocked_stop"], [1, 2, 3])
+        self.assertEqual([e for e in store.events() if e["kind"] == "agent.stopped"][-1]["agent"], "lead")
+        self.assertFalse(alive.exists())
+        self.assertEqual([e["seq"] for e in store.events()], list(range(len(store.events()))))
+
+    def test_a_server_shutting_down_ends_a_run_whose_stop_was_let_through(self):
+        self._stop_to_the_cap()
+        path = self.ctx.store.path / plugin.OUTBOX_FILE
+        self.assertEqual(self.hook("Stop", {"stop_hook_active": True}), {})  # alive: a note for the server
+        path.unlink(missing_ok=True)  # the note is lost (the server is stopped before it reads it)
+        self.assertTrue(plugin.read_state(self.ctx.store.path)[plugin.END_KEY])
+        self.server.shutdown()
+        (fin,) = self.events("run.finished")
+        self.assertEqual(fin["data"]["stop_code"], "not_judged")  # as end_status decides, not user_stop
 
     def test_a_case_the_server_found_unpredictable_does_not_hold_the_stop(self):
         state = plugin.read_state(self.ctx.store.path)

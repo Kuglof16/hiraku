@@ -192,13 +192,16 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(kinds, [("agent.started", "cae.strength"), ("agent.stopped", "cae.strength")])
         self.assert_events_fit()
 
-    def test_the_lead_may_stop_once_the_revisions_are_used_up_although_cases_are_pending(self):
+    def test_the_latest_version_is_judged_although_the_revisions_are_used_up(self):
+        """Contract HOOK_RULES HK4: the round limit ends revisions only; the latest version's pending cases
+        still hold the stop, up to the cap, and the run then ends not_judged."""
         from hiraku.agent.runner import end_status
 
-        self.ctx.project["round_limit"] = 0  # version 1 - 1 >= 0: no revision left
+        self.ctx.project["round_limit"] = 0  # no revisions: version 1 is the last, and it is still judged
         self.assertIsNotNone(rules.stop_reason(self.ctx))  # R1 and P1 are still pending
-        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
-        self.assertEqual([e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"], [])
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None))["decision"], "block")
+        run(self.hooks.stop({"stop_hook_active": True}, None, None))
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})  # the cap
         self.assertEqual(end_status(self.ctx, self.hooks.stop_blocks)[::2], ("stopped", "not_judged"))
 
     def _stop_role(self, agent_type, agent_id="a1"):

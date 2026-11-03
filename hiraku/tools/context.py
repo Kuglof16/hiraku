@@ -26,6 +26,9 @@ class RunContext:
     # rules.unpredictable_cases as the run's server worked it out, for a context without a registry
     # (formulas None: the plugin's hook command, hiraku.agent.plugin)
     unpredictable: dict[str, str] | None = None
+    # shelf.stages_of as the run's server worked it out (HK5 tool and load case stages), for a
+    # context without the tools (the plugin's hook command)
+    stages: dict[str, Any] | None = None
 
     # ---------------------------------------------------------------- project views
 
