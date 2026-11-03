@@ -8,8 +8,8 @@ data-kind, text sizes); a missing layout key is named on the page.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
 The records are intake_cut_fixture's (shape examples). The layout is the story test's copy
-with n09 and n14 as in the promo department's layout.json in their working tree on
-2026-11-03 (the sections the pages read, without the notes).
+with n09 and n14 as in the promo department's layout.json at their commit 8e295cf (the
+sections the pages read, without the notes).
 """
 
 import copy
@@ -26,8 +26,8 @@ from tests.web.intake_cut_fixture import ASK_PLAIN, BATTERY_KG, BUILTIN, DROPPED
 from tests.web.test_browser import ENABLED, sync_playwright
 from tests.web.test_cut_story_browser import FIT, READ, limits_of, story_layout
 
-# layout.json n09 / n14 as in the promo department's working tree on 2026-11-03 (cce1262 with
-# n14.view.fill and n09's label limit 8; not committed yet), without the notes
+# layout.json n09 / n14 as in the promo department's commit 8e295cf (cce1262 with
+# n14.view.fill and n09's label limit 8), without the notes
 N09_N14 = {
     "n09": {"duration_s": 5.6, "request": {"x": 96, "y": 96, "w": 1728, "h": 120, "title_px": 22, "text_px": 30},
             "view": {"x": 96, "y": 240, "w": 1100, "h": 646}, "chips": {"x": 1220, "y": 240, "w": 604, "h": 646, "text_px": 30, "row_gap": 16},

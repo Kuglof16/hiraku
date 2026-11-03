@@ -14,8 +14,8 @@ The records are made here (shape examples: values chosen, not computed): for N11
 k2_fixture's tilt-table run with a denial, two predictions, two analyses, two comparisons
 and a cause; for N13 the contract sample with a shelf, a tool made in the run (one failed
 attempt, then a usable one with its code in tools/) and an analysis made with it. The
-layout is the story test's copy of the promo department's layout.json (cce1262 for these
-three cuts).
+layout is the story test's copy of the promo department's layout.json (commit 8e295cf;
+n11-n13 are unchanged there since cce1262).
 """
 
 import copy

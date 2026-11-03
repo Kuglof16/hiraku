@@ -8,7 +8,8 @@ the page's own corner note ("上限を越えた: ...") is not shown.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The layout is a copy of the promo department's layout.json (the sections the cut pages
-read, without the notes) as of their commit 52d12e9; the check times are its check.times,
+read, without the notes); every value in it is as in their commit 8e295cf. The check
+times are its check.times,
 and for N01 / N02, which have none there, the lead time, the middle and the end. The
 records are the other cut tests' (shape examples); N01 and N02 need a run made by the
 real tools (HIRAKU_WEB_DEV_RUNS, a folder made by tests.web.dev_k2_run) and are skipped
@@ -44,10 +45,9 @@ BOXED_BODY = {"n03", "n04", "n06", "n07", "n15", "n16", "n17"}
 # The promo department's layout.json (as of their commit 52d12e9: 11e1cc7's values, N03's
 # shorter drive (loop_to_s 2.0), N04's own assembly box, n03.popup.ok_of_reading and
 # n17.page.domain_of_title), the sections the cut pages read, without the notes.
-# n11, n12 and n13 are as of their commit cce1262 (the other sections the cut pages read
-# are the same there); the story's limits and check.times as in their working tree of
-# 2026-11-03 night (not committed yet: n09 label 8, n13 label 4, n17b, the check times of
-# n09 and n11-n14).
+# n11, n12 and n13 are as of their commit cce1262, the story's limits and check.times as of
+# their commit 8e295cf (n09 label 8, n13 label 4, n17b, the check times of n09 and n11-n14);
+# every value here was checked against 8e295cf.
 LAYOUT_JSON = r"""{
   "stage": {"w": 1920, "h": 1080},
   "subtitle_band": {"y": 910, "h": 170},
