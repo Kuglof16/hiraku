@@ -58,7 +58,7 @@ their basis. What it looks at:
 - rule checks: made after their design version, pass exactly when nothing hits,
   hits and parts not evaluable are among the targets (and not both), the rule came
   in with a knowledge.imported before it (when the run has any); warning for a
-  target not in the design
+  target not in the design ("design" stands for the whole design)
 - meshes: one per design version, made after it; element node numbers within the
   nodes, no node twice in an element, one element_member per element and a
   thickness for each; warnings for nodes in no element and members not in the
@@ -117,6 +117,8 @@ TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes
                "negative_volume": "inverted"}
 # inbox/<n>-<kind>.json: one request from the screen to a running run
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
+# a rule_check target (and part_id) standing for the whole design, e.g. a system rule finding a part missing
+WHOLE_DESIGN = "design"
 REL = 1e-9
 
 
@@ -721,7 +723,7 @@ class RunChecker:
             for p in sorted(set(hits) & set(missing)):
                 self.error("rule_check.targets", w, f"{rid}: {p} both hits and could not be evaluated")
             ids = self._design_ids(v)
-            for p in sorted(targets):
+            for p in sorted(targets - {WHOLE_DESIGN}):
                 if not self._names_a_thing(p, ids):
                     self.warn("rule_check.targets", w, f"{rid}: target {p} is not in design v{v}")
             if self.knowledge:
