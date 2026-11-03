@@ -47,7 +47,7 @@ def parts_on_board(design: Record, loading: str | None = None) -> list[Record]:
     parts = design.get("parts", [])
     people = list(dict.fromkeys(person_of(p) for p in parts if p["kind"] == "occupant"))
     if 0 < len(people) < OCCUPANTS[loading]:
-        raise ValueError(f"loading {loading} needs {OCCUPANTS[loading]} occupants, the design has {len(people)}")
+        raise ValueError(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts, the design has {len(people)}")
     seated = set(people[:OCCUPANTS[loading]])
     out = []
     for p in parts:
