@@ -278,6 +278,20 @@ class Roles(unittest.TestCase):
         for name in ("function hop(tau, J)", "function jumpY(q, rise, over)", "function easeBack(u, over)"):
             self.assertIn(name, PET3D)
 
+    def test_walk_sit_and_route_in_the_source(self):
+        # walking and sitting pose terms (zero when not given, so other cuts' pets
+        # move as before), and the route of beats the title cuts use
+        for term in ("ex.legs", "ex.arms", "ex.drop", "ex.sit"):
+            self.assertIn(term, PET3D)
+        self.assertIn("-h.sx * (ex.legs || 0) - legSit", PET3D)
+        self.assertIn("const legSit = run ? 0 : (ex.sit || 0) * LEG.sit_legs;", PET3D)
+        for name in ("function walkLegs(d, D, L, swing)", "function route(t, start, beats, ctx)",
+                     "function routeEnd(beats)", "function travel(u, ramp)"):
+            self.assertIn(name, PET3D)
+        self.assertRegex(PET3D, r"window\.HirakuPets = \{[^}]*\bLEG\b")
+        kinds = re.search(r"const BEAT_KINDS = \[([^\]]*)\]", PET3D).group(1)
+        self.assertEqual(re.findall(r'"(\w+)"', kinds), ["walk", "hop", "hops", "turn", "sit", "act", "fade", "tick"])
+
 
 @unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
 @unittest.skipUnless(HAS_PLAYWRIGHT and has_network(), "needs the network (three.js comes from jsDelivr)")
