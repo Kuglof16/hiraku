@@ -335,6 +335,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if plan["unshelved"]:
         s.emit("agent.said", agent="lead", text="道具が棚に無いので回さない手順: "
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
+    for note in plan.get("notes") or []:  # what the plan leaves out on purpose, said in the record
+        s.emit("agent.said", agent="lead", text=note)
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
     drop, dropped, asked = plan.get("knowledge_drop"), False, False
@@ -440,7 +442,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         nxt, computed = list(rep.get("next") or []), []
         if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
             nxt, computed = scripted_next(ctx)
-        write_report(ctx, {"summary": rep.get("summary") or scripted_summary(ctx), "next": nxt}, "lead",
+        summary = rep.get("summary") or scripted_summary(ctx)
+        if plan.get("notes"):  # the report says it too
+            summary = summary + " " + " ".join(plan["notes"])
+        write_report(ctx, {"summary": summary, "next": nxt}, "lead",
                      computed=computed)
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
