@@ -157,6 +157,106 @@ def _post_node() -> Formula:
     )
 
 
+def _bar_on_posts() -> Formula:
+    """A bar pushed across at a point, its ends on two posts each standing as a cantilever from its foot."""
+    F, a, b, E, I, hA, EA, IA, hB, EB, IB = sp.symbols("F a b E I h_A E_A I_A h_B E_B I_B", real=True)
+    L = a + b
+    bar = F * a ** 3 * b ** 3 / (3 * E * I * L ** 3)
+    post_a = (b / L) ** 2 * F * hA ** 3 / (3 * EA * IA)
+    post_b = (a / L) ** 2 * F * hB ** 3 / (3 * EB * IB)
+    names = {"F": F, "a": a, "b": b, "E": E, "I": I, "h_A": hA, "E_A": EA, "I_A": IA, "h_B": hB, "E_B": EB, "I_B": IB}
+    return Formula(
+        formula_id="load_path.bar_on_posts",
+        title="横の棒を点 R で外へ押したときの動き: 両端を固定した棒の曲げと、棒の両端を受ける柱 (足からの片持ち) の曲げ",
+        domain="strength",
+        expression=("delta = F a^3 b^3 / (3 E I L^3) + (b/L)^2 F h_A^3 / (3 E_A I_A) + (a/L)^2 F h_B^3 / (3 E_B I_B); "
+                    "L = a + b"),
+        inputs={
+            "F": {"unit": "N", "description": "the push across the bar", "min": 0},
+            "a": {"unit": "mm", "description": "from the bar's end A to the pushed point", "min": 0},
+            "b": {"unit": "mm", "description": "from the pushed point to the bar's end B", "min": 0},
+            "E": {"unit": "MPa", "description": "the bar's Young's modulus", "min": 0},
+            "I": {"unit": "mm^4", "description": "the bar's smaller second moment of area", "min": 0},
+            "h_A": {"unit": "mm", "description": "the post under end A: from its foot up to the bar (0: no post, the "
+                                                "end held)", "min": 0},
+            "E_A": {"unit": "MPa", "description": "that post's Young's modulus", "min": 0},
+            "I_A": {"unit": "mm^4", "description": "its smaller second moment of area", "min": 0},
+            "h_B": {"unit": "mm", "description": "the post under end B, as h_A", "min": 0},
+            "E_B": {"unit": "MPa", "description": "that post's Young's modulus", "min": 0},
+            "I_B": {"unit": "mm^4", "description": "its smaller second moment of area", "min": 0},
+        },
+        outputs={"delta": ("mm", "the pushed point's movement along the push", bar + post_a + post_b)},
+        terms={"bar": bar, "post_A": post_a, "post_B": post_b},
+        assumptions=[
+            "棒の両端は柱に固定 (回らない)。棒の曲げは両端固定の梁の 1 点の荷重",
+            "棒の両端の力 (F b/L と F a/L) は、それぞれの柱の足からの片持ちの先に掛かる。柱の足 (出っ張りの腕・レール) は硬い"
+            "とみる。ほかの棒が柱どうしをつなぐ分は入れない (柱は同じ向きに動くので)。そのため柱の足が動く分だけ小さめに出る",
+            "押す点の動きは、柱の先の動きを棒の上で直線に分けた値 (b/L と a/L) を、仕事で力の向きに読む",
+        ],
+        source=("a clamped-clamped beam with a point load, P a^3 b^3 / (3 E I L^3), and a cantilever with an end load, "
+                "P h^3 / (3 E I), by the unit-load method (textbook statics)"),
+        requires=[(sp.And(F > 0, a > 0, b > 0, E > 0, I > 0, hA >= 0, hB >= 0, EA > 0, IA > 0, EB > 0, IB > 0),
+                   "F, a, b and the sections' values must be positive, the heights not negative")],
+        symbols=names,
+    )
+
+
+def _rail_utilisation() -> Formula:
+    """A ladder frame's rail at one point: its bending up and down, the two rails bending sideways together, the
+    axial force and the twist, as one von Mises stress over the material's allowable."""
+    Mv, Mh, T, N, b, h, t, A, Iv, Ih, s, fy, SF = sp.symbols("M_v M_h T N b h t A I_v I_h s f_y SF", real=True)
+    sig_v = Mv * (h / 2) / Iv
+    sig_h = Mh * (s / 2 + b / 2) / (2 * (A * (s / 2) ** 2 + Ih))
+    sig_n = N / A
+    sig = sig_v + sig_h + sig_n
+    tau = T / (2 * (b - t) * (h - t) * t)
+    vm = sp.sqrt(sig ** 2 + 3 * tau ** 2)
+    u = vm * SF / fy
+    names = {"M_v": Mv, "M_h": Mh, "T": T, "N": N, "b": b, "h": h, "t": t, "A": A, "I_v": Iv, "I_h": Ih, "s": s,
+             "f_y": fy, "SF": SF}
+    return Formula(
+        formula_id="load_path.rail_utilisation",
+        title="はしご形の枠のレールの 1 点: 上下の曲げ、2 本で一緒に受ける横の曲げ、軸の力、ねじれを合わせた応力の、許しに対する割合",
+        domain="strength",
+        expression=("sigma = M_v (h/2) / I_v + M_h (s/2 + b/2) / (2 (A (s/2)^2 + I_h)) + N / A; "
+                    "tau = T / (2 (b - t)(h - t) t); u = sqrt(sigma^2 + 3 tau^2) SF / f_y"),
+        inputs={
+            "M_v": {"unit": "N*mm", "description": "the rail's bending moment up and down at the point", "min": 0},
+            "M_h": {"unit": "N*mm", "description": "the two rails' sideways bending moment together at the point",
+                    "min": 0},
+            "T": {"unit": "N*mm", "description": "the rail's twisting moment at the point", "min": 0},
+            "N": {"unit": "N", "description": "the rail's axial force (its share of the fore-and-aft force)", "min": 0},
+            "b": {"unit": "mm", "description": "the rail's width (rect tube)", "min": 0},
+            "h": {"unit": "mm", "description": "its height", "min": 0},
+            "t": {"unit": "mm", "description": "its wall", "min": 0},
+            "A": {"unit": "mm^2", "description": "its section's area", "min": 0},
+            "I_v": {"unit": "mm^4", "description": "its second moment of area for bending up and down", "min": 0},
+            "I_h": {"unit": "mm^4", "description": "for bending sideways", "min": 0},
+            "s": {"unit": "mm", "description": "the rails' spacing (centre to centre)", "min": 0},
+            "f_y": {"unit": "MPa", "description": "the rail's yield", "min": 0},
+            "SF": {"unit": "1", "description": "the safety factor (Q61)", "min": 0},
+        },
+        outputs={"u": ("1", "von Mises stress over yield / SF", u), "sigma": ("MPa", "the normal stress at the corner", sig),
+                 "tau": ("MPa", "the shear stress of the twist (Bredt)", tau), "von_mises": ("MPa", "von Mises", vm)},
+        terms={"bending_vertical": sig_v, "bending_sideways": sig_h, "axial": sig_n},
+        assumptions=[
+            "上下の曲げ・横の曲げ・軸の力の応力は、レールの角で全部同じ向きに重なるとみる (大きめ)",
+            "横の曲げは、横の部材を溶接で付けたはしご形の枠が 1 つの枠として受けるとみて、2 本のレールの断面を 1 つにした形 "
+            "I = 2 (A (s/2)^2 + I_h) で出す。これははしご形の横の硬さの上限 (横の部材が限りなく硬い) で、横の部材が曲がる分 "
+            "(各レールが自分で曲がる分) は入らない。そのため、この項は小さめに出て、不利な側とは限らない",
+            "手計算はレールだけを見る。横の部材・柱・ロールバーの応力は入らない",
+            "ねじれは閉じた薄い管 (Bredt) の τ = T / (2 A_m t)、A_m = (b - t)(h - t)",
+            "曲げ・ねじれの値は、レールを車軸の 2 点で支えた梁と軸として、荷重から静力学で出す (load_path の builder)",
+        ],
+        source=("beam bending sigma = M c / I, a ladder frame's two rails as one section in sideways bending "
+                "(I = 2 (A (s/2)^2 + I_h)), Bredt's formula for a closed thin tube, von Mises sqrt(sigma^2 + 3 tau^2) "
+                "(textbook strength of materials)"),
+        requires=[(sp.And(b > 2 * t, h > 2 * t, t > 0, A > 0, Iv > 0, Ih > 0, s > 0, fy > 0, SF > 0),
+                   "the section's values, s, f_y and SF must be positive, the wall less than half of b and h")],
+        symbols=names,
+    )
+
+
 def _control_deflection() -> Formula:
     F, k_t, k_r, L, E, I, d_p = sp.symbols("F k_t k_r L E I delta_plate", real=True)
     G, J, r_t, d_r = sp.symbols("G J r_t delta_root", real=True)
@@ -229,4 +329,4 @@ def _free_parts() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    return [_control_deflection(), _plate_strip(), _post_node(), _free_parts()]
+    return [_control_deflection(), _plate_strip(), _post_node(), _bar_on_posts(), _rail_utilisation(), _free_parts()]
