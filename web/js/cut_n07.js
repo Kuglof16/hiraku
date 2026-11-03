@@ -26,6 +26,13 @@
 // comes to the largest element (its neighbourhood then takes zoom.fill of the view's
 // height); swap_s..swap_to_s the version after fades in over the one before (same
 // camera, same scale). Before lead_s and after each step the picture holds still.
+// On the way in the camera's direction goes round by its azimuth (about the vertical) and its
+// elevation, each evenly (the camera keeps its up, so the picture turns by the azimuth's
+// change even where the camera looks steeply down), and by no more than the zoom's time allows
+// at 90 deg/s (with the smooth ease the fastest moment is pi/2 times the mean): when the
+// element is seen from farther round than that, the camera ends the zoom that much short of
+// the element's own direction, on the side it comes from. Its end is at most
+// ZOOM_MAX_ELEV_DEG above the ground's plane.
 
 import * as THREE from "three";
 import { BAND_COLORS, BANDS } from "./colormap.js";
@@ -34,6 +41,21 @@ import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField
 import { esc, fmt, unitLabel } from "./labels.js";
 import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
+import { PACE_LIMIT_DEG_S } from "./pace.js";
+
+const ZOOM_MAX_ELEV_DEG = 70;
+
+// A direction (three.js, y up) no steeper than elev degrees, keeping its side; one straight up
+// or down takes the side of `like`.
+function notSteeper(d, elev, like) {
+  const lim = Math.sin(THREE.MathUtils.degToRad(elev));
+  if (Math.abs(d.y) <= lim) return d.clone();
+  let h = new THREE.Vector3(d.x, 0, d.z);
+  if (h.lengthSq() < 1e-8) h = new THREE.Vector3(like.x, 0, like.z);
+  if (h.lengthSq() < 1e-8) h = new THREE.Vector3(1, 0, 0);
+  h.normalize().multiplyScalar(Math.cos(THREE.MathUtils.degToRad(elev)));
+  return new THREE.Vector3(h.x, Math.sign(d.y) * lim, h.z).normalize();
+}
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -260,6 +282,29 @@ export class CutN07 {
     }
   }
 
+  // The camera's direction at share u of the zoom: from a toward b by azimuth and elevation
+  // (the shorter way round), both brought back toward a's so the whole turn takes no more
+  // than the zoom's time allows.
+  zoomDir(a, bIn, u) {
+    const T = this.spec.times;
+    const b = notSteeper(bIn, ZOOM_MAX_ELEV_DEG, a);
+    const most = THREE.MathUtils.degToRad((PACE_LIMIT_DEG_S * (T.zoom_to_s - T.zoom_s) * 2) / Math.PI);
+    const sph = (d) => ({ az: Math.atan2(d.x, d.z), el: Math.asin(Math.max(-1, Math.min(1, d.y))) });
+    const A = sph(a);
+    const B = sph(b);
+    let dAz = B.az - A.az;
+    dAz = Math.atan2(Math.sin(dAz), Math.cos(dAz)); // the shorter way round
+    let dEl = B.el - A.el;
+    const turn = Math.hypot(dAz, dEl);
+    if (turn > most) {
+      dAz *= most / turn;
+      dEl *= most / turn;
+    }
+    const az = A.az + dAz * u;
+    const el = A.el + dEl * u;
+    return new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+  }
+
   // The camera: on the turn, then on the way to the largest element.
   cameraAt(p) {
     const o = this.orbit;
@@ -269,7 +314,7 @@ export class CutN07 {
     const fOff = f.position.clone().sub(f.target);
     const u = p.zoom;
     const target = o.target.clone().lerp(f.target, u);
-    const dir = off.clone().normalize().lerp(fOff.clone().normalize(), u).normalize();
+    const dir = this.zoomDir(off.clone().normalize(), fOff.clone().normalize(), u);
     const dist = Math.exp(Math.log(off.length()) * (1 - u) + Math.log(fOff.length()) * u);
     return { target, position: target.clone().addScaledVector(dir, dist), near: o.near + (f.near - o.near) * u, far: o.far + (f.far - o.far) * u };
   }
