@@ -1,0 +1,135 @@
+"""Linear buckling on the fe core: beams, MITC4 shells and HEX20 bricks against Euler's column and the
+simply supported plate (hiraku.solvers.fe.eigen_checks names the formulas)."""
+
+import os
+import unittest
+
+import numpy as np
+
+from hiraku.solvers.fe import FEModel, StaticSolver, eigen
+from hiraku.solvers.fe import eigen_checks as ec
+from hiraku.solvers.fe.beam import Beam, _integrate, bending_block, hermite, line_mesh
+
+SLOW = unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "a finer mesh: set HIRAKU_SLOW_TESTS=1")
+
+
+class BeamElementTest(unittest.TestCase):
+    def test_euler_bernoulli_block_is_the_integral(self):
+        L = np.array([123.0])
+        k = bending_block(np.array([7.0e9]), L, np.zeros(1))
+        ki = _integrate(L, lambda xi: np.einsum("ea,eb->eab", hermite(xi, L)[2], hermite(xi, L)[2])) * 7.0e9
+        self.assertLess(np.abs(k - ki).max(), 1e-12 * np.abs(k).max())
+
+    def test_rigid_motions_have_no_energy_and_matrices_are_symmetric(self):
+        x = np.array([[0.0, 0.0, 0.0], [30.0, 40.0, 50.0]])
+        model = FEModel(x)
+        g = model.add(Beam([[0, 1]], 2e5, 8e4, 100.0, 800.0, 1200.0, 1500.0, 7.85e-9, ref=(1.0, 0.0, 0.0),
+                           shear_area_y=60.0, shear_area_z=50.0))
+        K = g.stiffness(x)[0]
+        Phi = model.rigid_modes()
+        self.assertLess(np.abs(K @ Phi).max(), 1e-9 * np.abs(K).max())
+        ue = np.zeros((1, 12))
+        ue[0, 6:9] = -0.01 * (x[1] - x[0]) / np.linalg.norm(x[1] - x[0])  # shortened: compression
+        KG = g.geometric_stiffness(x, ue)[0]
+        self.assertLess(np.abs(KG - KG.T).max(), 1e-12 * np.abs(KG).max())
+        self.assertLess(np.abs(KG @ Phi[:, :3]).max(), 1e-9 * np.abs(KG).max())  # translations
+        M = g.mass(x)[0]
+        self.assertAlmostEqual(M[0::6, 0::6].sum(), g.mass_total(x), delta=1e-12)
+
+    def test_tip_force_matches_cantilever_formula(self):
+        L, E, I = 500.0, 2e5, 1.0e4
+        x, c = line_mesh((0, 0, 0), (L, 0, 0), 4)
+        model = FEModel(x)
+        model.add(Beam(c, E, 8e4, 100.0, I, I, 2 * I))
+        model.fix(0, "all")
+        F = np.zeros((5, 6))
+        F[4, 1] = 100.0
+        sol = StaticSolver(model).solve(F)
+        self.assertAlmostEqual(sol.displacements[4, 1], 100.0 * L ** 3 / (3 * E * I), delta=1e-9)
+
+
+class BucklingSolverTest(unittest.TestCase):
+    def setUp(self):
+        x, c = line_mesh((0, 0, 0), (1000.0, 0, 0), 10)
+        self.model = FEModel(x)
+        self.model.add(Beam(c, 2e5, 8e4, 400.0, 13333.0, 13333.0, 22500.0))
+        self.model.fix(0, "xyz")
+        self.model.fix(0, [3])
+        self.model.fix(10, [1, 2])
+        self.F = np.zeros((11, 6))
+        self.F[10, 0] = -1000.0
+
+    def test_shifted_buckling_mode_gives_the_same_factors(self):
+        a = eigen.buckling(self.model, self.F, 3)
+        b = eigen.buckling(self.model, self.F, 3, sigma=0.5 * a.factors[0])
+        self.assertLess(np.abs(a.factors - b.factors).max(), 1e-8 * a.factors[0])
+        self.assertIn("inverted pencil", a.info["method"])
+
+    def test_tension_has_no_positive_factor_of_the_first_kind(self):
+        """Reversed load (tension): no buckling factor near the compression one."""
+        a = eigen.buckling(self.model, self.F, 1)
+        r = eigen.buckling(self.model, -self.F, 1)
+        self.assertTrue(len(r.factors) == 0 or r.factors[0] > 10 * a.factors[0])
+
+    def test_mode_shape_is_a_half_sine(self):
+        a = eigen.buckling(self.model, self.F, 1)
+        u = a.node_shape(0)
+        lat = np.linalg.norm(u[:, 1:3], axis=1)
+        s = np.sin(np.pi * np.linspace(0, 1, 11))
+        self.assertLess(np.abs(lat / lat.max() - s).max(), 1e-3)
+
+
+class EulerColumnTest(unittest.TestCase):
+    """P_cr of a 40 x 2 square tube (round: 40 mm mid diameter) 2000 mm long, and a 20 mm square HEX20 bar
+    1000 mm long, against pi^2 E I / (K L)^2. Tolerances: beam 1e-4 (Euler-Bernoulli), Timoshenko beam
+    within 1e-4 of Engesser; shells and bricks 1.5 % (they include shear deformation, about 0.3 % here, and
+    the tube walls' discretisation)."""
+
+    def check(self, r, tol):
+        self.assertLess(abs(r["P_cr"] / r["P_euler"] - 1.0), tol, (r["P_cr"], r["P_euler"]))
+
+    def test_beam(self):
+        for end in ("pinned", "cantilever"):
+            self.check(ec.beam_column(end), 1e-4)
+            t = ec.beam_column(end, timoshenko=True)
+            self.assertLess(abs(t["P_cr"] / t["P_engesser"] - 1.0), 1e-4)
+
+    def test_shell_tubes(self):
+        for shape in ("square", "round"):
+            for end in ("pinned", "cantilever"):
+                r = ec.shell_column(shape, end, n_c=16, n_l=40)
+                self.check(r, 0.015)
+                self.assertLess(r["P_cr"], 1.0001 * r["P_euler"])
+
+    def test_solid_bar(self):
+        for end in ("pinned", "cantilever"):
+            self.check(ec.solid_column(end, n_len=20), 0.015)
+
+    @SLOW
+    def test_fine_meshes(self):
+        for shape in ("square", "round"):
+            self.check(ec.shell_column(shape, "pinned", n_c=32, n_l=160), 0.01)
+        self.check(ec.solid_column("pinned", n_len=40, n_side=2), 0.01)
+
+
+class PlateBucklingTest(unittest.TestCase):
+    def test_simply_supported_plate(self):
+        """300 x 200 x 2 plate: k = 4.34 at m = 2 half waves; MITC4 30 x 20 within 1 %, the same m."""
+        r = ec.plate_buckling(nx=30, ny=20)
+        self.assertEqual(r["m"], 2)
+        self.assertEqual(r["m_fe"], 2)
+        self.assertLess(abs(r["sigma_cr"] / r["sigma_formula"] - 1.0), 0.01)
+
+    def test_square_plate_k_is_4(self):
+        r = ec.plate_buckling(a=200.0, b=200.0, nx=16, ny=16)
+        self.assertAlmostEqual(r["k"], 4.0, places=12)
+        self.assertLess(abs(r["sigma_cr"] / r["sigma_formula"] - 1.0), 0.015)
+
+    @SLOW
+    def test_fine_plate(self):
+        r = ec.plate_buckling(nx=60, ny=40)
+        self.assertLess(abs(r["sigma_cr"] / r["sigma_formula"] - 1.0), 0.005)
+
+
+if __name__ == "__main__":
+    unittest.main()

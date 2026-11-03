@@ -8,6 +8,8 @@
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
+//                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -16,7 +18,7 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, FIELD_ORDER, contourOf, fieldsOf, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
+import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
@@ -25,6 +27,8 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
+import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -53,8 +57,12 @@ const ui = {
   fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
   zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
   compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
+  meshMode: null, // the mesh's own view in place of a field (quality.js MODE_ORDER), or null
+  qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
+  present: params.get("present") === "1", // the present mode
+  detail: false, // in the present mode: the log, the chain and the hooks opened (詳しく)
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
@@ -140,7 +148,7 @@ if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapma
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
-let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
 let contour = null;
 
 function selectedLc(s) {
@@ -162,7 +170,7 @@ const intakeListeners = new Set();
 let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
 let intake = null;
 const intakeApi = {
-  events: () => player.events.slice(0, player.applied),
+  events: () => (draft ? draftEvents() : player.events.slice(0, player.applied)),
   onEvent(fn) {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
@@ -171,12 +179,140 @@ const intakeApi = {
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
+    if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
     return ownRunGoing() ? answerHearing : undefined;
   },
   get dropFile() {
     return ownRunGoing() ? dropFile : undefined;
   },
+  // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
+  get send() {
+    return draft && !draft.busy ? draftSend : undefined;
+  },
+  get editFlags() {
+    return draft?.state && !draft.busy ? (flags) => draftChange({ flags }) : undefined;
+  },
+  get exclude() {
+    return draft?.state && !draft.busy ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
+  },
+  get setLimits() {
+    return draft?.state && !draft.busy ? (limits) => draftChange({ limits }) : undefined;
+  },
 };
+
+// ---- a new request (?new=1): A1 and A2 before a run --------------------------------------
+// The server keeps nothing between the calls (hiraku.intake.request): each answer carries the
+// draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
+// request as the person's words, and the server's warnings as the lead's). When the hearing is
+// settled the request's files are saved and 始める starts a run on them (--intake-events).
+const draft = params.has("new")
+  ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false }
+  : null;
+
+function draftEvents() {
+  const list = [
+    ...(draft.want ? [{ kind: "user.said", agent: "user", text: draft.want }] : []),
+    ...draft.events,
+    ...draft.warnings.map((w) => ({ kind: "agent.said", agent: "lead", text: w })),
+  ];
+  return list.map((e, i) => ({ seq: i, t: 0, ts: "", run_id: "request", ...e }));
+}
+
+async function postRequest(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+// One call at a time; the bar says what is going on, and an error stays there in its words.
+async function draftCall(busy, fn) {
+  Object.assign(draft, { busy, error: "" });
+  renderDraft();
+  try {
+    await fn();
+  } catch (e) {
+    draft.error = e.message ?? String(e);
+  }
+  draft.busy = "";
+  renderDraft();
+}
+
+function takeDraft(got) {
+  draft.state = got.draft;
+  draft.events = got.events ?? [];
+  draft.warnings = got.warnings ?? [];
+}
+
+function draftSend(text) {
+  return draftCall(draft.useClaude ? "Claude が分野を選んでいます (数十秒かかります)…" : "分野を選んでいます…", async () => {
+    draft.want = text;
+    draft.done = null;
+    draft.excluded = [];
+    takeDraft(await postRequest("/api/request", { want: text, claude: draft.useClaude }));
+  });
+}
+
+function draftChange(change) {
+  return draftCall("選び直しています…", async () => {
+    if (change.exclude) draft.excluded = change.exclude;
+    draft.done = null;
+    takeDraft(await postRequest("/api/request", { draft: draft.state, ...change }));
+  });
+}
+
+function draftAnswer({ answers, note }) {
+  return draftCall("答えを確かめています…", async () => {
+    const got = await postRequest("/api/request/answer", { draft: draft.state, answers: answers ?? {}, note: note ?? "" });
+    draft.state = got.draft ?? draft.state;
+    draft.events = got.events ?? draft.events;
+    draft.done = got;
+  });
+}
+
+async function draftStart(mode) {
+  if (mode === "claude" && !draft.confirm) {
+    draft.confirm = true;
+    renderDraft();
+    return;
+  }
+  draft.confirm = false;
+  await draftCall("走らせています…", async () => {
+    const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
+    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+  });
+}
+
+// The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
+function renderDraft() {
+  const bar = $("draftbar");
+  if (!draft || !bar) return;
+  const d = draft.done;
+  const rf = d?.requirements_file ?? {};
+  const usd = typeof rf.cost_limit_usd === "number" ? fmtUsd(rf.cost_limit_usd) : "—";
+  const keyed = !!draft.claudeReady;
+  let body;
+  if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
+  else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
+  else if (d?.ready) {
+    const scripted =
+      `<button data-start="scripted">台本で始める (Claude は呼ばない)</button>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`);
+    const claude = !keyed
+      ? `<button disabled>Claude で始める</button><span class="why">HIRAKU を起こした窓に ${esc(draft.keyName ?? "ANTHROPIC_API_KEY")} が無い</span>`
+      : draft.confirm
+        ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
+        : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
+    body = `<b>要件がそろいました</b>${scripted}${claude}`;
+  } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
+  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、既定値のまま進めてください</span>`;
+  else
+    body =
+      `<span>依頼のタブで、作りたいものを書いて送ってください</span>` +
+      (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
+  bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
+  intake?.update();
+}
 
 function ownRunGoing() {
   const s = player.state;
@@ -203,7 +339,12 @@ async function dropFile(name, text) {
 }
 
 function renderIntake(tab) {
-  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (!intake) {
+    // in a new request the bar (renderDraft) sits above the screens
+    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab });
+    renderDraft();
+  }
   if (intake.screen !== tab) intake.show(tab);
   // (and when the run turns out to be this screen's own, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
@@ -266,7 +407,19 @@ function rank(id) {
   return 20;
 }
 
-function logItem(e) {
+// A hooks line: what happened and what comes next in short words, 解決済み once the stopped
+// action was done later in the records; the recorded words are folded under it.
+function hookLogItem(e, hook, resolved) {
+  const w = hookWords(hook?.rule);
+  const mark = resolved ? `<span class="resolved">解決済み</span>` : "";
+  return (
+    `<li class="hook${resolved ? " done" : ""}" data-seq="${e.seq}">${mark}<b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>` +
+    `<details><summary>詳しい記録 (${esc(w.id)} ${esc(w.ja)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
+  );
+}
+
+function logItem(e, ctx = null) {
+  if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
@@ -275,20 +428,23 @@ function logItem(e) {
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
-function renderLog(s) {
+function renderLog(s, resolved) {
   const ol = $("log");
   const first = s.log[0]?.seq ?? null;
-  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev) {
+  const resolvedKey = [...resolved].join(",");
+  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev || resolvedKey !== drawn.resolved) {
     ol.innerHTML = "";
     drawn.logLen = 0;
   }
   if (s.log.length > drawn.logLen) {
-    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map(logItem).join(""));
+    const ctx = { resolved, hooks: new Map([...s.hooks.denied, ...s.hooks.blockedStops].map((h) => [h.seq, h])) };
+    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map((e) => logItem(e, ctx)).join(""));
     ol.scrollTop = ol.scrollHeight;
   }
   drawn.logLen = s.log.length;
   drawn.logFirstSeq = first;
   drawn.logRev = s.logRev;
+  drawn.resolved = resolvedKey;
 }
 
 function renderTests(s, lcId) {
@@ -339,7 +495,8 @@ function renderChain(s, chain) {
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
       `<div class="sub">${esc(ana.tool)}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
-      (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`);
+      (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
+      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${esc(running.tool)} で解析中…</div>`;
@@ -357,8 +514,11 @@ function renderChain(s, chain) {
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
       const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const big = verdictSentence(verdict);
+      // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
-        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
+        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
+        `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
         `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
@@ -422,7 +582,29 @@ function previousOf(s, ana, field) {
 // analysis' first of stress, damage, temperature, mode shape, displacement, on a mesh
 // when there is one. With ui.compare, the same field of the previous design version
 // comes along on one shared colour scale (contour.compare).
-function buildContour(s, chain) {
+// In its place, the mesh's own views (ui.meshMode, quality.js): the mesh check of the
+// field's mesh, its wall thicknesses, and the setup of the field's analysis. With no
+// field to show (e.g. a mesh the solver refused), the newest mesh of the version.
+function buildContour(s, chain, withCompare = ui.compare) {
+  const base = fieldContour(s, chain, withCompare);
+  const ana = (base && s.analyses[base.analysisId]) || chain.shown || null;
+  const version = ana?.design_version ?? s.currentVersion;
+  const newest = s.order.meshes.map((id) => s.meshes[id]).filter((m) => m.design_version === version).at(-1) ?? null;
+  const rec = base ? base.mesh?.rec ?? null : setupOf(ana, s.meshes)?.rec ?? newest;
+  const design = s.designs[rec?.design_version ?? version] ?? null;
+  const thick = rec ? thicknessContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, design) : null;
+  const setup = setupContourOf(ana, s.meshes);
+  const modes = MODE_ORDER.filter((m) => (m === "quality" ? !!qualityOf(rec) : m === "thickness" ? !!thick : !!setup));
+  let mode = modes.includes(ui.meshMode) ? ui.meshMode : null;
+  if (!base && !mode && modes.includes("quality")) mode = "quality";
+  if (!mode) return base ? { ...base, meshModes: modes } : null;
+  const metrics = mode === "quality" ? drawableMetrics(rec) : [];
+  const metric = metrics.includes(ui.qualityMetric) ? ui.qualityMetric : metrics[0] ?? null;
+  const ct = mode === "quality" ? qualityContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, metric, design) : mode === "thickness" ? thick : setup;
+  return { ...ct, kinds: base?.kinds ?? [], fieldKind: base?.kind ?? null, variants: [], meshModes: modes, metrics, canCompare: false, compare: null, toolTitle: base?.toolTitle ?? "" };
+}
+
+function fieldContour(s, chain, withCompare = ui.compare) {
   const anas = analysesBeside(s, chain.shown);
   const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
   const kinds = FIELD_ORDER.filter((k) => all.some((x) => x.f.kind === k));
@@ -452,7 +634,7 @@ function buildContour(s, chain) {
   });
   const prev = previousOf(s, pick.a, pick.f);
   let compare = null;
-  if (prev && ui.compare) {
+  if (prev && withCompare) {
     const before = contourOf(prev.ana, prev.field, chain.loadCase?.criterion, s.meshes);
     if (before) {
       const [after, was] = onSharedScale([ct, before]);
@@ -463,7 +645,46 @@ function buildContour(s, chain) {
   return { ...ct, kinds, variants, tool: pick.a.tool, toolTitle: toolTitle(s, pick.a.tool), canCompare: !!prev, compare };
 }
 
-function renderLegend(ct) {
+// A contour with frames (the same field at moments of a time history) at the moment shown: the
+// one nearest to the motion's time while the analysis that gave its loads plays, else the moment
+// with the largest value. The legend says which moment.
+function framedContour() {
+  if (!contour?.frames) return contour;
+  const playing = shownMotion && contour.frames.source && shownMotion.ana?.analysis_id === contour.frames.source;
+  const k = frameIndex(contour, playing ? shownMotion.tau : null);
+  const t = $("legend-t");
+  if (t) t.textContent = `t = ${fmt(contour.frames.t_s[k], 3)} s${playing ? "" : " (いちばん大きい時刻)"}`;
+  return atFrame(contour, k);
+}
+
+// The colour bar's bands, top (max) to bottom (min), every other one with its value.
+function bandRows(ct, relative) {
+  const rows = [];
+  for (let i = BANDS - 1; i >= 0; i -= 1) {
+    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  }
+  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
+  return rows.join("");
+}
+
+// The card beside the legend: the list of the mesh's own view (quality.js), else hidden.
+let meshCard = null;
+function renderMeshCard(ct) {
+  const html = ui.toggles.contour && ct?.mode ? modeCardHtml(ct) : "";
+  if (!meshCard) {
+    if (!html) return;
+    meshCard = document.createElement("div");
+    meshCard.className = "meshcard";
+    meshCard.id = "meshcard";
+    viewport.append(meshCard);
+  }
+  meshCard.hidden = !html;
+  meshCard.innerHTML = html;
+}
+
+// motion / shown: the test's motion and the analysis it plays (the colours may come from another).
+function renderLegend(ct, s = null, shown = null, motion = null) {
   const el = $("legend");
   if (!ct?.key || !ui.toggles.contour) {
     el.hidden = true;
@@ -472,12 +693,25 @@ function renderLegend(ct) {
   el.hidden = false;
   const unit = unitLabel(ct.field.unit);
   const relative = ct.kind === "mode_shape";
-  const rows = [];
-  for (let i = BANDS - 1; i >= 0; i -= 1) {
-    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
-    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  const fieldOn = (k) => !ct.mode && k === ct.kind;
+  // the field kinds, then the mesh's own views (quality.js), in one row
+  const modes = ct.meshModes ?? [];
+  const kindRow =
+    ct.kinds.length + modes.length > 1
+      ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${fieldOn(k) ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}` +
+        `${modes.map((m) => `<button data-mode="${m}" class="${ct.mode === m ? "on" : ""}">${MODE_JA[m]}</button>`).join("")}</div>`
+      : "";
+  const zoomAct = ct.mesh?.maxAt
+    ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : ct.mode === "quality" ? "いちばん悪い要素に寄る" : "最大の所に寄る"}</button>`
+    : "";
+  if (ct.mode) {
+    const p = modeLegendParts(ct);
+    const metricRow = ct.metrics?.length
+      ? `<div class="kinds metrics">${ct.metrics.map((k) => `<button data-metric="${esc(k)}" class="${k === ct.metric ? "on" : ""}">${esc(METRIC_JA[k] ?? k)}</button>`).join("")}</div>`
+      : "";
+    el.innerHTML = kindRow + metricRow + (zoomAct ? `<div class="acts">${zoomAct}</div>` : "") + `<div class="ttl">${p.title}</div>` + (p.bar ?? `<div class="bar">${bandRows(ct, false)}</div>`) + p.under + `<div class="src">${p.src}</div>`;
+    return;
   }
-  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
   const over = ct.limitKnown
     ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
@@ -487,14 +721,14 @@ function renderLegend(ct) {
   // one row of buttons per analysis (its tool's title is on each button when there are several)
   const nButtons = ct.variants.reduce((n, g) => n + g.buttons.length, 0);
   const chips =
-    (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
+    kindRow +
     (nButtons > 1
       ? ct.variants
           .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
           .join("")
       : "");
   const acts =
-    (ct.mesh ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : "最大の所に寄る"}</button>` : "") +
+    zoomAct +
     (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
@@ -506,11 +740,23 @@ function renderLegend(ct) {
       `<div>版 ${ct.compare.version} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
       `<div>版 ${ct.compare.nowVersion} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
     : "";
+  // While a motion plays, colours from another analysis (a static one of the same load case) are that
+  // analysis' one moment, pasted on the moving vehicle: the legend says so, with the model it ran on.
+  const from = s?.analyses?.[ct.analysisId];
+  const still = motion && from && from.analysis_id !== shown?.analysis_id && !from.series?.length && !ct.frames;
+  const when = ct.frames
+    ? `<div class="when">色は <span id="legend-t"></span> の値です。目盛りは全部の時刻で同じです。</div>`
+    : still
+    ? `<div class="when">色は ${esc(ct.toolTitle ?? from.tool)} (${esc(BASE_JA[from.base] ?? from.base ?? "")}) の、1 つの瞬間の値です。動きの再生の間も変わりません。</div>`
+    : "";
+  const conv = from?.mesh_convergence && from.analysis_id !== shown?.analysis_id ? `<div class="conv">${esc(convergenceLine(from.mesh_convergence))}</div>` : "";
   el.innerHTML =
     chips +
     (acts ? `<div class="acts">${acts}</div>` : "") +
     `<div class="ttl">${title}</div>` +
-    `<div class="bar">${rows.join("")}</div>` +
+    when +
+    conv +
+    `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
     `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
@@ -544,14 +790,14 @@ function setCompare(s, chain, ct) {
     b.setScene(chain.loadCase, c.ana);
     b.setContour(c.before);
     b.setToggles(ui.toggles);
-    cmpView.tags.innerHTML = `<span data-version="${c.version}">版 ${c.version}</span><span data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
+    cmpView.tags.innerHTML = `<span data-kind="label" data-version="${c.version}">版 ${c.version}</span><span data-kind="label" data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
   }
   cmpView?.tags && (cmpView.tags.hidden = !c);
   // The right view keeps clear the strip under the legend (from the legend's left edge to
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
   const lg = $("legend");
-  const room = c && !lg.hidden ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0;
+  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0; // (in the present mode the legend is beside the view)
   if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
     if (was !== !!c) resize3d();
     bench.setReserve(room);
@@ -697,18 +943,18 @@ function renderStatus(s) {
   $("activity").innerHTML = act ? `<span class="dot"></span>${esc(agentLongName(act.agent) || "HIRAKU")}: ${esc(act.text)}` : "";
 }
 
-function renderHooks(s, playhead) {
+// A rule whose stops were all done later says 解決済み (resolvedHooks), apart from one still open.
+function renderHooks(s, playhead, resolved) {
   const counts = {};
+  const open = {};
   const recent = {};
-  for (const d of s.hooks.denied) {
+  for (const d of [...s.hooks.denied, ...s.hooks.blockedStops]) {
     counts[d.rule] = (counts[d.rule] ?? 0) + 1;
+    if (!resolved.has(d.seq)) open[d.rule] = true;
     if (playhead - d.t < SHOW_S) recent[d.rule] = true;
   }
-  for (const b of s.hooks.blockedStops) {
-    counts[b.rule] = (counts[b.rule] ?? 0) + 1;
-    if (playhead - b.t < SHOW_S) recent[b.rule] = true;
-  }
-  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
+  const state = (r) => (!counts[r.id] ? " ✓" : ` ×${counts[r.id]}${open[r.id] ? "" : `<span class="resolved">解決済み</span>`}`);
+  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""} ${counts[r.id] && !open[r.id] ? "done" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${state(r)}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
 let hooksHtml = "";
@@ -718,7 +964,7 @@ function fade(dt) {
   return Math.min(1, dt / 0.25, (SHOW_S - dt) / 0.6);
 }
 
-function renderTransient(s, playhead, chain) {
+function renderTransient(s, playhead, chain, resolved) {
   const said = s.said;
   const b = $("bubble");
   const sa = said ? fade(playhead - said.t) : 0;
@@ -730,9 +976,13 @@ function renderTransient(s, playhead, chain) {
   const den = s.denied;
   const h = $("hookflash");
   h.style.opacity = den ? fade(playhead - den.t) : 0;
-  if (den && h.dataset.seq !== String(den.seq)) {
+  // what happened and what comes next, in short words (the recorded words are in the log)
+  const done = den ? resolved.has(den.seq) : false;
+  if (den && (h.dataset.seq !== String(den.seq) || h.dataset.done !== String(done))) {
     h.dataset.seq = String(den.seq);
-    h.innerHTML = `<b>hooks が止めた (${esc(den.rule)} ${esc(den.ruleJa ?? "")})</b>${esc(den.text)}`;
+    h.dataset.done = String(done);
+    const w = hookWords(den.rule);
+    h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
   const run = chain.running ?? Object.values(s.running)[0] ?? null;
   const r = $("running");
@@ -741,7 +991,7 @@ function renderTransient(s, playhead, chain) {
     const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
     r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
   }
-  renderHooks(s, playhead);
+  renderHooks(s, playhead, resolved);
 }
 
 // ---- play bar ----------------------------------------------------------------
@@ -776,6 +1026,34 @@ function seekFromPointer(ev) {
   player.seek(f * player.duration);
 }
 
+// ---- the present mode -----------------------------------------------------------
+// The colour bar and the graph move beside the view (into the rail, under the card), so
+// neither lies over the 3D; the panels the mode hides (css: body.present) come back over
+// the view with 詳しく.
+function applyPresent() {
+  const on = ui.present;
+  document.body.classList.toggle("present", on);
+  document.body.classList.toggle("present-detail", on && ui.detail);
+  $("present-rail").hidden = !on;
+  // (both are placed absolutely in the view, so where they go back among its children does not matter)
+  (on ? $("present-rail") : viewport).append($("legend"), $("graph"));
+  for (const b of document.querySelectorAll("#viewswitch [data-view]")) b.classList.toggle("on", (b.dataset.view === "present") === on);
+  $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
+  $("detail-btn").classList.toggle("on", ui.detail);
+  const url = new URL(location.href);
+  if (on) url.searchParams.set("present", "1");
+  else url.searchParams.delete("present");
+  history.replaceState(null, "", url);
+  drawn.rev = -2;
+  // the view changed size: frame the vehicle again in it
+  requestAnimationFrame(() => {
+    resize3d();
+    if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
+    bench.focusKey = undefined;
+  });
+}
+let resolvedMemo = { rev: -1, s: null, set: new Set() };
+
 // ---- frame ----------------------------------------------------------------
 function draw() {
   const s = player.state;
@@ -784,11 +1062,13 @@ function draw() {
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
-  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
+  if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
+  const resolved = resolvedMemo.set;
+  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present) {
     renderTop(s);
     renderChips(s, lcId);
     renderAgents(s);
-    renderLog(s);
+    renderLog(s, resolved);
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
@@ -810,21 +1090,32 @@ function draw() {
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
     bench.setScene(chain.loadCase, chain.shown);
-    const ct = buildContour(s, chain);
+    let ct = buildContour(s, chain);
+    // the present mode shows a shell's before / after side by side when there is an earlier version
+    if (ui.present && tab === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
-    bench.setContour(ui.toggles.contour ? contour : null);
-    if (!contour?.mesh) ui.zoomMax = false;
-    renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    bench.setContour(ui.toggles.contour ? framedContour() : null);
+    if (!contour?.mesh?.maxAt) ui.zoomMax = false;
+    renderLegend(contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
+    renderMeshCard(contour);
     setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
-    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
+    // what is going on, in one sentence; and the present mode's card for this scene
+    const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
+    $("now").textContent = now;
+    $("now").hidden = !now;
+    const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
+    document.body.dataset.presentScene = scene.key;
+    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
+    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
-  renderTransient(s, player.playhead, chain);
+  if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
+  renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") {
@@ -874,6 +1165,8 @@ async function seekAndDraw(t) {
 let readyResolve;
 const ready = new Promise((r) => (readyResolve = r));
 window.hiraku = {
+  // a new request's steps, for the tests (the screen's own controls call the same)
+  request: draft ? { send: (t) => draftSend(t), answer: (a) => draftAnswer(a), start: (m) => draftStart(m), get state() { return draft; } } : null,
   player,
   ready,
   seek: seekAndDraw,
@@ -930,12 +1223,14 @@ $("tests").addEventListener("click", (ev) => {
   drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act]");
+  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act], button[data-mode], button[data-metric]");
   if (!b) return;
   if (b.dataset.act === "zoom") ui.zoomMax = !ui.zoomMax;
   else if (b.dataset.act === "compare") ui.compare = !ui.compare;
-  else if (b.dataset.field) ui.fieldKind = b.dataset.field;
-  else ui.fieldVariant = b.dataset.variant;
+  else if (b.dataset.mode) ui.meshMode = b.dataset.mode;
+  else if (b.dataset.metric) ui.qualityMetric = b.dataset.metric;
+  else if (b.dataset.field) [ui.fieldKind, ui.meshMode] = [b.dataset.field, null];
+  else [ui.fieldVariant, ui.meshMode] = [b.dataset.variant, null];
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {
@@ -944,6 +1239,25 @@ $("toggles").addEventListener("click", (ev) => {
   const k = b.dataset.toggle;
   if (k === "shape") ui.toggles.contour = false;
   else ui.toggles[k] = !ui.toggles[k];
+});
+$("viewswitch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.view) ui.present = b.dataset.view === "present";
+  else if (b.id === "detail-btn") ui.detail = !ui.detail;
+  if (!ui.present) ui.detail = false;
+  applyPresent();
+});
+// A click (not a drag) near a wheel's arrows picks that wheel: its forces get the words.
+let pressAt = null;
+viewport.addEventListener("pointerdown", (ev) => {
+  pressAt = ev.target === bench.renderer.domElement ? { x: ev.clientX, y: ev.clientY } : null;
+});
+viewport.addEventListener("pointerup", (ev) => {
+  if (!pressAt || Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) > 5) return;
+  const r = bench.renderer.domElement.getBoundingClientRect();
+  if (bench.pickAt((ev.clientX - r.left) / stageScale, (ev.clientY - r.top) / stageScale)) drawn.rev = -2;
+  pressAt = null;
 });
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
@@ -989,7 +1303,7 @@ function resetPlayer() {
   player.minEnd = 0;
   ui.anim = { key: null, local: false, playing: false, tau: 0 };
   player.rebuild();
-  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
   $("runlist").hidden = true;
 }
 
@@ -1129,7 +1443,8 @@ async function renderLaunch(message = "") {
   const keyless = info.claude_ready
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+  const fresh = `<p><a class="new-request" href="?new=1">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
 async function launch(file, mode) {
@@ -1182,6 +1497,31 @@ $("runlist").addEventListener("click", (ev) => {
   }
 });
 
+// A new request: the intake tabs on the draft (whether Claude can be asked comes from the launcher).
+async function startDraft() {
+  ui.pinnedTab = "A1";
+  try {
+    const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });
+  } catch (e) {
+    draft.error = `サーバーに聞けなかった: ${e.message ?? e}`;
+  }
+  drawn.rev = -1;
+  renderDraft();
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-start], [data-start-cancel]");
+  if (!b || !draft) return;
+  if (b.dataset.startCancel) {
+    draft.confirm = false;
+    renderDraft();
+  } else draftStart(b.dataset.start);
+});
+$("view-intake").addEventListener("change", (ev) => {
+  if (draft && ev.target.matches("[data-use-claude]")) draft.useClaude = ev.target.checked;
+});
+
 // No run in the URL: open the server's default run (a saved run), else the run list.
 async function openDefault() {
   let runs;
@@ -1197,6 +1537,8 @@ async function openDefault() {
 }
 
 fitStage();
+if (ui.present) applyPresent();
+else $("viewswitch").querySelector('[data-view="bench"]').classList.add("on");
 requestAnimationFrame(loop);
 if (params.get("run")) openRun(params.get("run"));
 else if (params.get("src")) {
@@ -1205,4 +1547,5 @@ else if (params.get("src")) {
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
 } else if (params.get("list")) showRunList();
+else if (draft) startDraft();
 else openDefault();

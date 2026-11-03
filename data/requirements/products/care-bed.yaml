@@ -52,7 +52,7 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      JIS T 9254 (copy): 利用者の荷重 1350 N (約 138 kg), https://kikakurui.com/t9/T9254-2009-01.html
+      JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), https://kikakurui.com/t9/T9254-2009-01.html
       (not checked in this repository)
   - key: Q34
     name: 弱い人がいるか

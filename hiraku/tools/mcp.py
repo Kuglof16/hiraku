@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS
+from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS, rule_check
 
 Record = dict[str, Any]
 
@@ -137,6 +137,7 @@ for _name, _t in INTAKE_TOOLS.items():
     INPUT_SCHEMAS[_name] = _t["input_schema"]
     DESCRIPTIONS[_name] = _t["description"]
     HANDLERS[_name] = _t["function"]
+HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
 
 
 def _text(obj: Any) -> str:

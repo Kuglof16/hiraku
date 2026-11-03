@@ -118,11 +118,11 @@
 <body data-duration="10">
 <div class="stage">
   <div class="safe">
-    <div class="fig left" data-box="n08b.fig.left"><div class="num" data-box="n08b.fig.left.num"></div><div class="cap" data-box="n08b.fig.left.cap">製造業の企業のうち、中小企業</div></div>
+    <div class="fig left" data-box="n08b.fig.left"><div class="num" data-box="n08b.fig.left.num" data-kind="number"></div><div class="cap" data-box="n08b.fig.left.cap">製造業の企業のうち、中小企業</div></div>
     <div class="divider" data-box="n08b.divider"></div>
-    <div class="fig right" data-box="n08b.fig.right"><div class="num" data-box="n08b.fig.right.num"></div><div class="cap" data-box="n08b.fig.right.cap">小さな会社の CAE の導入率</div></div>
-    <div class="bars" data-box="n08b.bars"></div>
-    <ul class="sources" data-box="n08b.sources"></ul>
+    <div class="fig right" data-box="n08b.fig.right"><div class="num" data-box="n08b.fig.right.num" data-kind="number"></div><div class="cap" data-box="n08b.fig.right.cap">小さな会社の CAE の導入率</div></div>
+    <div class="bars" data-box="n08b.bars" data-kind="graph"></div>
+    <ul class="sources" data-box="n08b.sources" data-kind="note"></ul>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -172,7 +172,7 @@
   const rows = [["small", DATA.cae_adoption.small], ["large", DATA.cae_adoption.large]];
   document.querySelector(".bars").innerHTML = rows.map(([key, r], i) => `
     <div class="bar-row" style="--i:${i}" data-box="n08b.bars.${key}">
-      <span data-box="n08b.bars.${key}.label">${r.label}</span>
+      <span data-box="n08b.bars.${key}.label" data-kind="label">${r.label}</span>
       <div class="bar-track">
         <div class="bar${i === 0 ? " hot" : ""}" data-box="n08b.bars.${key}.bar"
              style="--i:${i};width:${px(r.pct * PX_PER_PCT)}"></div>

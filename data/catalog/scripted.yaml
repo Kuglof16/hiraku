@@ -163,6 +163,20 @@ offroad-4w:
               鉛直の曲げは解析と 1 % で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
               継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
               大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
+    # R1s (files that list it): the same step on the frame as shells (frame_shell), judged on the
+    # hot-spot stress where a cross member's end bends the rail's side wall. Before the driven P1,
+    # for the same reason as R1. Inputs from the analysis builders' joint_wall_calc.
+    - load_case: R1s-step100
+      tool: frame_shell
+      say: 段差を押して登るときの輪の力で、横の部材の端がレールの側の壁を板として曲げる応力 (つなぎ目の壁) を先に見積もります
+      predictions:
+        - quantity: max_hot_spot_stress
+          formula_id: frame_static.joint_wall_bending
+          output: sigma
+          assumptions: [レールのねじりを横の部材が受け、その端のモーメントがレールの側の壁を曲げる, 側の壁は上と下の壁で支えた板とみる]
+          inputs: {M: from.M, b: from.b, h: from.h, t: from.t, b_c: from.b_c, h_c: from.h_c, t_c: from.t_c, E: from.E,
+                   nu: from.nu, leg: from.leg, through: from.through, open_end: from.open_end}
+          inputs_from: analysis.joint_wall_calc
     # The same step driven in K2 (step_climb_dynamic), after R1: R1 reads the step_climb results
     # (the wheel loads), and an upstream load case gives the newest matched analysis.
     - &p1_dynamic
@@ -234,6 +248,32 @@ offroad-4w:
           output: climbable
           assumptions: [車輪はたわまない硬い輪とみる]
           inputs: {r: summary.front_wheel_radius, h: lc.step_height}
+
+# The video run, data/requirements/offroad-4w-video.yaml: the offroad-4w plan, and its revision also
+# reinforces the joints for R1s (the hot spot of version 1 is past the limit). Source of the values: the
+# analysis department's runs of frame_shell and joint_wall_bending on the demo vehicle with this whole
+# revision (the wider track lengthens the cross members): rail_t 4.5 mm alone 186.4 MPa, with gussets of
+# 80 mm and 3.2 mm 154.0 MPa against 163.3 (the hand calculation 140.6, -9 %).
+offroad-4w-video:
+  extends: offroad-4w
+  revise:
+    - say: 組み立て・動力・強度 (つなぎ目) の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くし、レールの肉厚を上げてつなぎ目にガセットを足します
+      changes:
+        track: {value: 1220, unit: mm}
+        steering_x: {value: -200, unit: mm}
+        motor_peak_power: {value: 12, unit: kW}
+        rail_t: {value: 4.5, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
+        gusset_thickness: {value: 3.2, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す。
+        P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる。
+        R1s: 横の部材の端がレールの側の壁を曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm にし、
+        つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足す (トレッドを広げると横の部材が長くなり、肉厚だけでは足りない)
+      source: >-
+        the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change;
+        frame_shell and joint_wall_bending with this revision, rail_t 4.5 mm with and without gussets (the analysis department)
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake

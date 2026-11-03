@@ -23,6 +23,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.test_browser import ENABLED, sync_playwright
+from tests.web.test_cut_grid_browser import feature_rects
 
 BAND_Y = 910
 COLORS = {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}
@@ -234,6 +235,9 @@ READ = """async (t) => {
       past: el.dataset.past ?? null, clash: el.dataset.clash ?? null, marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
       outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
       markColor: el.querySelector(".mark") ? getComputedStyle(el.querySelector(".mark")).color : null })),
+    bigs: [...document.querySelectorAll(".n06-big")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el),
+      tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
+      text: el.textContent, label: (() => { const b = el.querySelector('[data-kind="label"]'); return b ? parseFloat(getComputedStyle(b).fontSize) : null; })() })),
   };
 }"""
 
@@ -349,9 +353,11 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
-        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2
-        self.assertEqual(shots[1.0]["title"], "電池の残量と温度 (P4・T1)")
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P3)")
+        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2;
+        # one graph at a time (the battery's temperature, then the speed)
+        self.assertEqual(shots[1.0]["title"], "長く走ったときの電池の温度 (T1)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ (P3)")
+        self.assertEqual({t: len(g["now"]) for t, g in shots.items() if t >= layout["n03"]["times"]["lead_s"]}, {t: 1 for t in N03_TIMES if t >= layout["n03"]["times"]["lead_s"]})
         # the battery warms: its colour's value is the recorded temperature, rising
         self.assertLess(shots[1.0]["battery"], shots[2.0]["battery"])
         self.assertGreaterEqual(shots[1.0]["battery"], 40.0)
@@ -368,7 +374,7 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P2)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ (P2)")
         page.close()
 
     def check_n06(self, shots, layout, recorded):
@@ -386,9 +392,9 @@ class CutN03N06Test(unittest.TestCase):
                 self.assertAlmostEqual(x["p"], max(0.0, min(1.0, (t - start) / T["tile_in_s"])), places=6, msg=(t, x["box"]))
                 self.assertIsNone(x["outside"], x["box"])
                 if t >= start + T["tile_in_s"]:
-                    col, row = i % g["cols"], i // g["cols"]
-                    left, top = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
-                    self.assertEqual([round(v) for v in x["rect"]], [left, top, left + g["tile_w"], top + g["tile_h"]], x["box"])
+                    # the list: one small slot per tile beside the large box (featureRects)
+                    r = feature_rects(g, len(sp["tests"]) + 1)[1][i]
+                    self.assertEqual([round(v) for v in x["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], x["box"])
                     self.assertLessEqual(x["rect"][3], BAND_Y, x["box"])
                     for b in got["boxes"]:
                         if b["box"].startswith(x["box"] + "."):
@@ -400,6 +406,17 @@ class CutN03N06Test(unittest.TestCase):
                     if x["mark"]:
                         self.assertEqual(x["mark"], "✕")
                         self.assertEqual(x["markColor"], "rgb(200, 64, 42)")
+            # the large box: the tile whose turn it is (the turns share tiles_s .. the end), larger
+            n = len(sp["tests"])
+            turn = (sp["duration_s"] - T["tiles_s"]) / n
+            k = min(n - 1, int((t - T["tiles_s"]) // turn)) if t >= T["tiles_s"] else None
+            shown = [b["box"] for b in got["bigs"] if b["shown"]]
+            self.assertEqual(shown, [] if k is None else [f"n06.big.{sp['tests'][k]}"], t)
+            if k is not None:
+                big = next(b for b in got["bigs"] if b["shown"])
+                small = got["tiles"][k]
+                self.assertGreater((big["rect"][2] - big["rect"][0]) * (big["rect"][3] - big["rect"][1]),
+                                   4 * (small["rect"][2] - small["rect"][0]) * (small["rect"][3] - small["rect"][1]), t)
 
     def test_n06_lays_out_the_cases_past_the_limit(self):
         layout = n03_n06_layout()
@@ -430,18 +447,23 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual((last["tilt_over"]["lift"], last["rollover"]["lift"]), ("1", "1"))
         self.assertEqual(last["parts_clash"]["clash"], "1")
         self.assertEqual(last["parts_clash"]["marks"], 2)  # the battery and the cross member, both in place
-        # the records play from each tile's landing to the end
+        # each record plays in the large box in its turn (from tile_in_s after the turn starts
+        # to its end); in the list a tile holds its first pose until its turn is over, then its last
         T = layout["n06"]["times"]
         dur = layout["n06"]["duration_s"]
-        mid = {x["box"].split(".")[-1]: x for x in shots[6.0]["tiles"]}
-        for k in ("step_break", "tilt_over", "step_stuck", "parts_clash", "rollover"):
-            self.assertLess(mid[k]["tau"], last[k]["tau"], k)
-        land = lambda k: T["tiles_s"] + keys.index(k) * T["tile_stagger_s"] + T["tile_in_s"]  # noqa: E731
-        self.assertAlmostEqual(last["tilt_over"]["tau"], 8.0 * (11.6 - land("tilt_over")) / (dur - land("tilt_over")), places=6)
-        # the assembly: its two steps over the same span; the battery's box once it is in
-        self.assertAlmostEqual(last["parts_clash"]["tau"], 2.0 * (11.6 - land("parts_clash")) / (dur - land("parts_clash")), places=6)
-        early = {x["box"].split(".")[-1]: x for x in shots[3.9]["tiles"]}
-        self.assertLess(early["parts_clash"]["tau"], 2.0)
+        turn = (dur - T["tiles_s"]) / len(keys)
+        self.assertAlmostEqual(last["tilt_over"]["tau"], 8.0, places=6)  # its record: 0 .. 8 s
+        self.assertAlmostEqual(last["parts_clash"]["tau"], 2.0, places=6)  # two steps
+        self.assertEqual(last["parts_clash"]["marks"], 2)
+        at = shots[3.9]  # tilt_over's turn (the second)
+        big = next(b for b in at["bigs"] if b["shown"])
+        self.assertEqual(big["box"], "n06.big.tilt_over")
+        start = T["tiles_s"] + turn + T["tile_in_s"]
+        self.assertAlmostEqual(big["tau"], 8.0 * (3.9 - start) / (T["tiles_s"] + 2 * turn - start), places=6)
+        self.assertGreater(big["label"], 26)  # the large box's tag is larger than the list's
+        early = {x["box"].split(".")[-1]: x for x in at["tiles"]}
+        self.assertEqual(early["tilt_over"]["tau"], 0.0)  # in the list: its first pose during its turn
+        self.assertEqual(early["parts_clash"]["tau"], 0.0)
         self.assertEqual(early["parts_clash"]["marks"], 1)  # the cross member only: the battery is not in yet
         page.close()
 
