@@ -1231,7 +1231,12 @@ class RunChecker:
         if sorted(doms) != sorted(picked):
             self.error("report.domains", w, f"domains {doms} but the picked domains are {picked}")
         for n in rep.get("next", []):
-            if n.get("domain") not in picked:
+            # an item from a knowledge rule's hit (rule_id) may name any domain: rules check the design
+            # apart from the domains picked
+            if n.get("rule_id") and not any(rc.get("rule_id") == n["rule_id"] and rc.get("hits")
+                                            for _, rc in self.recs["rule_check"].values()):
+                self.warn("report.domains", w, f"next answers rule {n['rule_id']}, which has no rule_check hit in the run")
+            if n.get("domain") not in picked and not n.get("rule_id"):
                 self.error("report.domains", w, f"next names {n.get('domain')}, not a picked domain")
         tiles = {j.get("domain"): j for k, j in self.judgements if k < i and j.get("design_version") == v}
         for d in rep.get("domains", []):

@@ -243,6 +243,11 @@ class CheckRun(unittest.TestCase):
         ev = self._report(sample_events())
         by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y"}]
         self.assertFlags(ev, "report.domains")
+        # an item answering a rule's hit may name a domain the run did not pick (warned when no hit)
+        by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y",
+                                                          "rule_id": "SM-01"}]
+        self.assertNotIn("report.domains", self.rules(ev))
+        self.assertIn("report.domains", self.rules(ev, "warn"))  # the sample has no rule_check hit
 
     def test_report_file_is_the_last_report_written(self):
         run = write_run(self.root / "x", self._report(sample_events()))
