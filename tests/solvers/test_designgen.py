@@ -118,7 +118,8 @@ class DesignGenTest(unittest.TestCase):
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
         kinds = designgen.archetypes(req["flags"])
         self.assertEqual([k["name"] for k in kinds], ["ladder_4w", "space_frame_utv"])  # Claude picks one
-        self.assertEqual(kinds[0]["choices"], {"joints": ["butt", "gusset", "through"]})
+        self.assertEqual(kinds[0]["choices"]["joints"], ["butt", "gusset", "through"])
+        self.assertEqual(kinds[0]["choices"]["part_mounts"], ["none", "brackets"])  # test_designgen_options
         self.assertEqual(designgen.archetypes({"self_propelled": False, "ride": True}), [])
         d = designgen.propose("ladder_4w", {}, {}, req)
         self.assertEqual({k: v for k, v in d.items() if k != "change_reason"},
@@ -201,13 +202,13 @@ class JointReinforcementTest(unittest.TestCase):
         self.assertEqual(designgen.regenerate(self.gusset, {"joints": "butt"}), V1)
         self.assertEqual(designgen.regenerate(self.gusset, {"gusset_leg": mm(0)}), V1)
         self.assertEqual(designgen.regenerate(self.through, {"cross_members_through": one(0)}), V1)
-        self.assertEqual(GEN.choices_of(V1), {"joints": "butt"})
+        self.assertEqual(GEN.choices_of(V1)["joints"], "butt")
 
     def test_the_variables_alone_make_the_same_designs(self):
         self.assertEqual(designgen.regenerate(V1, {"cross_members_through": {"value": 1, "unit": "1"}}), self.through)
         self.assertEqual(designgen.regenerate(V1, {"gusset_leg": mm(60)}), self.gusset)
         both = designgen.regenerate(V1, {"gusset_leg": mm(60), "cross_members_through": one(1)})
-        self.assertEqual(GEN.choices_of(both), {"joints": "gusset+through"})
+        self.assertEqual(GEN.choices_of(both)["joints"], "gusset+through")
 
     def test_ranges_and_meanings(self):
         spec = {v["name"]: v for v in designgen.variables(V1)}
@@ -227,7 +228,7 @@ class JointReinforcementTest(unittest.TestCase):
         """A design that still carries gussets = 0 with a gusset_leg is read as no gussets."""
         old = json.loads(json.dumps(V1))
         old["variables"].update(gussets=one(0), gusset_leg=mm(60), gusset_thickness=mm(2.3))
-        self.assertEqual(GEN.choices_of(old), {"joints": "butt"})
+        self.assertEqual(GEN.choices_of(old)["joints"], "butt")
         self.assertEqual(designgen.regenerate(old, {})["parts"], V1["parts"])
         old["variables"]["gussets"] = one(1)
         self.assertEqual(designgen.regenerate(old, {})["parts"], self.gusset["parts"])
@@ -249,7 +250,7 @@ class JointReinforcementTest(unittest.TestCase):
         # corner: front face of cross_A (x = 18.85 mid-surface), inner wall of the left rail (y = 331.15),
         # upper wall of cross_A (z = 398.85); centroid a third of each leg in
         self.assertEqual([round(v, 6) for v in p["box"]["center_mm"]], [18.85 + 20.0, 331.15 - 20.0, 398.85])
-        self.assertEqual(GEN.choices_of(d), {"joints": "gusset"})
+        self.assertEqual(GEN.choices_of(d)["joints"], "gusset")
         big = designgen.regenerate(d, {"gusset_leg": mm(90), "gusset_thickness": mm(3.2)})
         q = next(x for x in big["parts"] if x["id"] == "gusset_RB_rear_lower")
         self.assertEqual(q["box"]["size_mm"], [90.0, 90.0, 3.2])
@@ -262,7 +263,7 @@ class JointReinforcementTest(unittest.TestCase):
         self.assertEqual(d["members"], V1["members"])  # the beam model is unchanged
         self.assertEqual(d["variables"]["cross_members_through"], one(1.0))
         self.assertNotIn("gusset_leg", d["variables"])
-        self.assertEqual(GEN.choices_of(d), {"joints": "through"})
+        self.assertEqual(GEN.choices_of(d)["joints"], "through")
         extra = d["parts"][n:]
         self.assertEqual({p["id"] for p in extra},
                          {f"through_cross_{st}_{s}{st}" for st in ("A", "S1", "S2", "B") for s in "LR"})
@@ -292,7 +293,7 @@ class JointReinforcementTest(unittest.TestCase):
         from hiraku.catalog import load_requirements
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
         d = designgen.propose("ladder_4w", {"joints": "gusset"}, {"gusset_leg": mm(80)}, req)
-        self.assertEqual(GEN.choices_of(d), {"joints": "gusset"})
+        self.assertEqual(GEN.choices_of(d)["joints"], "gusset")
         self.assertEqual(d["variables"]["gusset_leg"]["value"], 80.0)
         with self.assertRaisesRegex(ValueError, "must be one of"):
             designgen.propose("ladder_4w", {"joints": "rivet"}, {}, req)
