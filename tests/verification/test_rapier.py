@@ -188,6 +188,10 @@ class RapierStepReplay(unittest.TestCase):
             da = max(da, math.degrees(2 * math.acos(min(1.0, dot))))
         k2 = self.log["steps"]
         moved = float(np.linalg.norm(np.array(k2[-1]["cg_m"]) - self.log["start"]["cg_m"]))
-        self.assertGreater(moved, 0.05)  # the body did climb
-        self.assertLess(dp, 1e-3, f"centre of gravity off by up to {dp * 1000:.3f} mm over a {moved:.3f} m move")
-        self.assertLess(da, 0.05, f"attitude off by up to {da:.4f} deg")
+        s, e = self.log["start"]["quat"], k2[-1]["quat"]
+        turned = math.degrees(2 * math.acos(min(1.0, abs(sum(a * b for a, b in zip(s, e))))))
+        self.assertGreater(moved, 0.01)  # the body did move (about 20 mm) and pitch (about 0.95 deg)
+        self.assertGreater(turned, 0.5)
+        # single precision; the attitude also carries the two integrators' own ways of turning (0.03 deg seen)
+        self.assertLess(dp, 1e-5, f"centre of gravity off by up to {dp * 1000:.4f} mm over a {moved * 1000:.1f} mm move")
+        self.assertLess(da, 0.05, f"attitude off by up to {da:.4f} deg over a {turned:.3f} deg turn")

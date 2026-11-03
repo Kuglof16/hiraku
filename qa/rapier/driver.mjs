@@ -70,6 +70,16 @@ function run(sc) {
     }
   };
 
+  // A force at a point is applied as the force plus its moment about the body's position (its centre of
+  // mass: the mass properties above put it at the body origin). Rapier's own addForceAtPoint uses the world
+  // centre of mass it last computed in a step, which before the first step is still the world origin.
+  const forceAt = (body, force, point) => {
+    const c = body.translation();
+    const r = [point[0] - c.x, point[1] - c.y, point[2] - c.z];
+    body.addForce(vec(force), true);
+    body.addTorque(vec([r[1] * force[2] - r[2] * force[1], r[2] * force[0] - r[0] * force[2], r[0] * force[1] - r[1] * force[0]]), true);
+  };
+
   record(0);
   for (let step = 0; step < sc.steps; step++) {
     for (const body of Object.values(bodies)) {
@@ -78,11 +88,11 @@ function run(sc) {
     }
     for (const f of sc.forces ?? []) {
       if (step >= (f.from_step ?? 0) && step < (f.to_step ?? sc.steps)) {
-        bodies[f.body].addForceAtPoint(vec(f.force), vec(f.point), true);
+        forceAt(bodies[f.body], f.force, f.point);
       }
     }
     for (const [id, series] of Object.entries(sc.force_series ?? {})) {
-      for (const [force, point] of series[step] ?? []) bodies[id].addForceAtPoint(vec(force), vec(point), true);
+      for (const [force, point] of series[step] ?? []) forceAt(bodies[id], force, point);
     }
     for (const [id, series] of Object.entries(sc.torque_series ?? {})) {
       if (series[step]) bodies[id].addTorque(vec(series[step]), true);
