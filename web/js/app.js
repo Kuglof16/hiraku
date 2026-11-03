@@ -8,6 +8,8 @@
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
+//                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -25,6 +27,7 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -55,6 +58,8 @@ const ui = {
   compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
+  present: params.get("present") === "1", // the present mode
+  detail: false, // in the present mode: the log, the chain and the hooks opened (詳しく)
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
@@ -140,7 +145,7 @@ if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapma
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
-let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
 let contour = null;
 
 function selectedLc(s) {
@@ -399,7 +404,19 @@ function rank(id) {
   return 20;
 }
 
-function logItem(e) {
+// A hooks line: what happened and what comes next in short words, 解決済み once the stopped
+// action was done later in the records; the recorded words are folded under it.
+function hookLogItem(e, hook, resolved) {
+  const w = hookWords(hook?.rule);
+  const mark = resolved ? `<span class="resolved">解決済み</span>` : "";
+  return (
+    `<li class="hook${resolved ? " done" : ""}" data-seq="${e.seq}">${mark}<b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>` +
+    `<details><summary>詳しい記録 (${esc(w.id)} ${esc(w.ja)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
+  );
+}
+
+function logItem(e, ctx = null) {
+  if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
@@ -408,20 +425,23 @@ function logItem(e) {
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
-function renderLog(s) {
+function renderLog(s, resolved) {
   const ol = $("log");
   const first = s.log[0]?.seq ?? null;
-  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev) {
+  const resolvedKey = [...resolved].join(",");
+  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev || resolvedKey !== drawn.resolved) {
     ol.innerHTML = "";
     drawn.logLen = 0;
   }
   if (s.log.length > drawn.logLen) {
-    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map(logItem).join(""));
+    const ctx = { resolved, hooks: new Map([...s.hooks.denied, ...s.hooks.blockedStops].map((h) => [h.seq, h])) };
+    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map((e) => logItem(e, ctx)).join(""));
     ol.scrollTop = ol.scrollHeight;
   }
   drawn.logLen = s.log.length;
   drawn.logFirstSeq = first;
   drawn.logRev = s.logRev;
+  drawn.resolved = resolvedKey;
 }
 
 function renderTests(s, lcId) {
@@ -491,8 +511,11 @@ function renderChain(s, chain) {
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
       const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const big = verdictSentence(verdict);
+      // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
-        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
+        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
+        `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
         `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
@@ -556,7 +579,7 @@ function previousOf(s, ana, field) {
 // analysis' first of stress, damage, temperature, mode shape, displacement, on a mesh
 // when there is one. With ui.compare, the same field of the previous design version
 // comes along on one shared colour scale (contour.compare).
-function buildContour(s, chain) {
+function buildContour(s, chain, withCompare = ui.compare) {
   const anas = analysesBeside(s, chain.shown);
   const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
   const kinds = FIELD_ORDER.filter((k) => all.some((x) => x.f.kind === k));
@@ -586,7 +609,7 @@ function buildContour(s, chain) {
   });
   const prev = previousOf(s, pick.a, pick.f);
   let compare = null;
-  if (prev && ui.compare) {
+  if (prev && withCompare) {
     const before = contourOf(prev.ana, prev.field, chain.loadCase?.criterion, s.meshes);
     if (before) {
       const [after, was] = onSharedScale([ct, before]);
@@ -703,14 +726,14 @@ function setCompare(s, chain, ct) {
     b.setScene(chain.loadCase, c.ana);
     b.setContour(c.before);
     b.setToggles(ui.toggles);
-    cmpView.tags.innerHTML = `<span data-version="${c.version}">版 ${c.version}</span><span data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
+    cmpView.tags.innerHTML = `<span data-kind="label" data-version="${c.version}">版 ${c.version}</span><span data-kind="label" data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
   }
   cmpView?.tags && (cmpView.tags.hidden = !c);
   // The right view keeps clear the strip under the legend (from the legend's left edge to
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
   const lg = $("legend");
-  const room = c && !lg.hidden ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0;
+  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0; // (in the present mode the legend is beside the view)
   if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
     if (was !== !!c) resize3d();
     bench.setReserve(room);
@@ -856,18 +879,18 @@ function renderStatus(s) {
   $("activity").innerHTML = act ? `<span class="dot"></span>${esc(agentLongName(act.agent) || "HIRAKU")}: ${esc(act.text)}` : "";
 }
 
-function renderHooks(s, playhead) {
+// A rule whose stops were all done later says 解決済み (resolvedHooks), apart from one still open.
+function renderHooks(s, playhead, resolved) {
   const counts = {};
+  const open = {};
   const recent = {};
-  for (const d of s.hooks.denied) {
+  for (const d of [...s.hooks.denied, ...s.hooks.blockedStops]) {
     counts[d.rule] = (counts[d.rule] ?? 0) + 1;
+    if (!resolved.has(d.seq)) open[d.rule] = true;
     if (playhead - d.t < SHOW_S) recent[d.rule] = true;
   }
-  for (const b of s.hooks.blockedStops) {
-    counts[b.rule] = (counts[b.rule] ?? 0) + 1;
-    if (playhead - b.t < SHOW_S) recent[b.rule] = true;
-  }
-  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
+  const state = (r) => (!counts[r.id] ? " ✓" : ` ×${counts[r.id]}${open[r.id] ? "" : `<span class="resolved">解決済み</span>`}`);
+  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""} ${counts[r.id] && !open[r.id] ? "done" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${state(r)}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
 let hooksHtml = "";
@@ -877,7 +900,7 @@ function fade(dt) {
   return Math.min(1, dt / 0.25, (SHOW_S - dt) / 0.6);
 }
 
-function renderTransient(s, playhead, chain) {
+function renderTransient(s, playhead, chain, resolved) {
   const said = s.said;
   const b = $("bubble");
   const sa = said ? fade(playhead - said.t) : 0;
@@ -889,9 +912,13 @@ function renderTransient(s, playhead, chain) {
   const den = s.denied;
   const h = $("hookflash");
   h.style.opacity = den ? fade(playhead - den.t) : 0;
-  if (den && h.dataset.seq !== String(den.seq)) {
+  // what happened and what comes next, in short words (the recorded words are in the log)
+  const done = den ? resolved.has(den.seq) : false;
+  if (den && (h.dataset.seq !== String(den.seq) || h.dataset.done !== String(done))) {
     h.dataset.seq = String(den.seq);
-    h.innerHTML = `<b>hooks が止めた (${esc(den.rule)} ${esc(den.ruleJa ?? "")})</b>${esc(den.text)}`;
+    h.dataset.done = String(done);
+    const w = hookWords(den.rule);
+    h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
   const run = chain.running ?? Object.values(s.running)[0] ?? null;
   const r = $("running");
@@ -900,7 +927,7 @@ function renderTransient(s, playhead, chain) {
     const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
     r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
   }
-  renderHooks(s, playhead);
+  renderHooks(s, playhead, resolved);
 }
 
 // ---- play bar ----------------------------------------------------------------
@@ -935,6 +962,34 @@ function seekFromPointer(ev) {
   player.seek(f * player.duration);
 }
 
+// ---- the present mode -----------------------------------------------------------
+// The colour bar and the graph move beside the view (into the rail, under the card), so
+// neither lies over the 3D; the panels the mode hides (css: body.present) come back over
+// the view with 詳しく.
+function applyPresent() {
+  const on = ui.present;
+  document.body.classList.toggle("present", on);
+  document.body.classList.toggle("present-detail", on && ui.detail);
+  $("present-rail").hidden = !on;
+  // (both are placed absolutely in the view, so where they go back among its children does not matter)
+  (on ? $("present-rail") : viewport).append($("legend"), $("graph"));
+  for (const b of document.querySelectorAll("#viewswitch [data-view]")) b.classList.toggle("on", (b.dataset.view === "present") === on);
+  $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
+  $("detail-btn").classList.toggle("on", ui.detail);
+  const url = new URL(location.href);
+  if (on) url.searchParams.set("present", "1");
+  else url.searchParams.delete("present");
+  history.replaceState(null, "", url);
+  drawn.rev = -2;
+  // the view changed size: frame the vehicle again in it
+  requestAnimationFrame(() => {
+    resize3d();
+    if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
+    bench.focusKey = undefined;
+  });
+}
+let resolvedMemo = { rev: -1, s: null, set: new Set() };
+
 // ---- frame ----------------------------------------------------------------
 function draw() {
   const s = player.state;
@@ -943,11 +998,13 @@ function draw() {
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
-  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
+  if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
+  const resolved = resolvedMemo.set;
+  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present) {
     renderTop(s);
     renderChips(s, lcId);
     renderAgents(s);
-    renderLog(s);
+    renderLog(s, resolved);
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
@@ -969,7 +1026,9 @@ function draw() {
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
     bench.setScene(chain.loadCase, chain.shown);
-    const ct = buildContour(s, chain);
+    let ct = buildContour(s, chain);
+    // the present mode shows a shell's before / after side by side when there is an earlier version
+    if (ui.present && tab === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? framedContour() : null);
     if (!contour?.mesh) ui.zoomMax = false;
@@ -980,11 +1039,18 @@ function draw() {
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
-    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
+    // what is going on, in one sentence; and the present mode's card for this scene
+    const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
+    $("now").textContent = now;
+    $("now").hidden = !now;
+    const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
+    document.body.dataset.presentScene = scene.key;
+    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
+    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
   if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
-  renderTransient(s, player.playhead, chain);
+  renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") {
@@ -1107,6 +1173,25 @@ $("toggles").addEventListener("click", (ev) => {
   if (k === "shape") ui.toggles.contour = false;
   else ui.toggles[k] = !ui.toggles[k];
 });
+$("viewswitch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.view) ui.present = b.dataset.view === "present";
+  else if (b.id === "detail-btn") ui.detail = !ui.detail;
+  if (!ui.present) ui.detail = false;
+  applyPresent();
+});
+// A click (not a drag) near a wheel's arrows picks that wheel: its forces get the words.
+let pressAt = null;
+viewport.addEventListener("pointerdown", (ev) => {
+  pressAt = ev.target === bench.renderer.domElement ? { x: ev.clientX, y: ev.clientY } : null;
+});
+viewport.addEventListener("pointerup", (ev) => {
+  if (!pressAt || Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) > 5) return;
+  const r = bench.renderer.domElement.getBoundingClientRect();
+  if (bench.pickAt((ev.clientX - r.left) / stageScale, (ev.clientY - r.top) / stageScale)) drawn.rev = -2;
+  pressAt = null;
+});
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
   if (!b) return;
@@ -1151,7 +1236,7 @@ function resetPlayer() {
   player.minEnd = 0;
   ui.anim = { key: null, local: false, playing: false, tau: 0 };
   player.rebuild();
-  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
   $("runlist").hidden = true;
 }
 
@@ -1385,6 +1470,8 @@ async function openDefault() {
 }
 
 fitStage();
+if (ui.present) applyPresent();
+else $("viewswitch").querySelector('[data-view="bench"]').classList.add("on");
 requestAnimationFrame(loop);
 if (params.get("run")) openRun(params.get("run"));
 else if (params.get("src")) {

@@ -26,6 +26,11 @@
       <span class="pill" id="pill-cost">費用 —</span>
     </div>
     <div class="mode" id="mode"></div>
+    <!-- the present mode (js/present.js): the 3D on the whole screen and one card -->
+    <div class="viewswitch" id="viewswitch">
+      <button data-view="present">見せる</button><button data-view="bench">作業台</button>
+      <button class="detail-btn" id="detail-btn" title="記録・予測と照合・hooks を開く">詳しく</button>
+    </div>
   </header>
 
   <nav class="tabsrow">
@@ -56,12 +61,13 @@
     <section class="col-center" id="view-bench">
       <div class="tests" id="tests"></div>
       <div class="viewport" id="viewport">
+        <div class="now" id="now"></div>
         <div class="toggles" id="toggles"></div>
-        <div class="legend" id="legend"></div>
+        <div class="legend" id="legend" data-kind="legend"></div>
         <div class="bubble" id="bubble"></div>
         <div class="hookflash" id="hookflash"></div>
         <div class="running" id="running"></div>
-        <div class="graph" id="graph" hidden></div>
+        <div class="graph" id="graph" data-kind="graph" hidden></div>
         <div class="limitnote" id="limitnote" hidden></div>
         <div class="animbar" id="animbar" hidden>
           <span class="ab-title" id="ab-title"></span>
@@ -119,6 +125,11 @@
     <div class="hooks" id="hooks"></div>
   </footer>
   <div class="subband" id="subband"></div>
+
+  <!-- the present mode's side: the card, then the colour bar and the graph (moved here while it is on) -->
+  <aside class="present-rail" id="present-rail" hidden>
+    <div class="present-card" id="present-card"></div>
+  </aside>
 
   <div class="runlist" id="runlist" hidden></div>
   <div class="dropzone" id="dropzone" hidden>events.jsonl をここに落とすと再生します</div>
