@@ -44,17 +44,25 @@ def section_area(section: Record) -> float | None:
         return None
 
 
-def frame_masses(design: Record) -> list[tuple[str, float, list[float]]]:
-    """(member id, mass kg, centre mm) of every member whose mass can be summed."""
+def frame_masses(design: Record, skipped: list[Record] | None = None) -> list[tuple[str, float, list[float]]]:
+    """(member id, mass kg, centre mm) of every member whose mass can be summed. A member left out
+    (an end node, section or material not in the design, or a section with no area) is appended
+    to `skipped`, when given, as {"member", "reason"}."""
     nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
     out = []
     for m in design.get("members", []):
         sec = design.get("sections", {}).get(m["section"])
         mat = design.get("materials", {}).get(m["material"])
-        if sec is None or mat is None or m["node_a"] not in nodes or m["node_b"] not in nodes:
-            continue
-        area = section_area(sec)
-        if area is None:
+        why = (f"section {m['section']!r} is not in design.sections" if sec is None else
+               f"material {m['material']!r} is not in design.materials" if mat is None else
+               "an end node is not in design.nodes" if m["node_a"] not in nodes or m["node_b"] not in nodes else
+               None)
+        area = section_area(sec) if why is None else None
+        if why is None and area is None:
+            why = f"section {m['section']!r} gives no area (no A_mm2, and its shape or dims are not known)"
+        if why is not None:
+            if skipped is not None:
+                skipped.append({"member": m["id"], "reason": why})
             continue
         a, b = nodes[m["node_a"]], nodes[m["node_b"]]
         mass = mat["density_kg_m3"] * area * math.dist(a, b) * 1e-9  # mm^3 -> m^3
@@ -108,14 +116,19 @@ def rail_joint(design: Record, loading: str) -> Record | None:
         return None
     try:
         got = rail_joint_inputs(design, loading=loading)
-    except (DesignError, KeyError, ValueError, TypeError):
+    # What a design without the joint's values raises: DesignError (a ValueError: no supports, no
+    # frame_node, no rail ahead and cross member, not rect_tube, a member's node, section or material
+    # missing) and KeyError (a rect_tube's dims_mm without b, h or t). Other errors are bugs and propagate.
+    except (DesignError, ValueError, KeyError):
         return None
     return {**got["inputs"], "support": got["support"]}
 
 
 def design_summary(design: Record) -> Record:
     """Geometry, member lengths and, per loading, the mass and centre of mass of
-    the frame plus the parts on board (and the rail-joint inputs when they apply)."""
+    the frame plus the parts on board (and the rail-joint inputs when they apply).
+    frame_mass_skipped (only when there are any) lists the members whose mass could
+    not be summed, with the reason; frame_mass and the loadings' masses leave them out."""
     out: Record = {}
     front_x = None
     wheels = [s for s in design.get("supports", []) if s["kind"] == "wheel"]
@@ -144,8 +157,11 @@ def design_summary(design: Record) -> Record:
     rail = rail_section(design)
     if rail is not None:
         out["rail_section"] = rail
-    frame = frame_masses(design)
+    skipped: list[Record] = []
+    frame = frame_masses(design, skipped)
     out["frame_mass"] = _q(sum(m for _, m, _ in frame), "kg")
+    if skipped:  # members left out of frame_mass (and the loadings' masses): the sum is low by their mass
+        out["frame_mass_skipped"] = skipped
     frame_items = [(m, c) for _, m, c in frame]
     out["loadings"] = {}
     for name in LOADINGS:

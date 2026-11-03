@@ -7,7 +7,9 @@
   After any tool call of the lead's, it also carries what the person sent through
   the screen (inbox, hiraku.agent.inbox) and the lead has not been told yet.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
-  (hook.blocked_stop); blocks are counted and capped so a run always ends. The
+  (hook.blocked_stop); the lead's stop also while a tile is red and design revisions
+  are left (rules.red_left_reason); blocks are counted and capped so a run always
+  ends. A role's stop is blocked only on its own domain's pending cases. The
   lead's stop while a role is still running is neither blocked nor counted: the
   run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
   with a message from the person not yet told is blocked once with that message
@@ -205,7 +207,8 @@ class Hooks:
             return {"decision": "block", "reason": told}
         if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
             return {}
-        reason = rules.stop_reason(self.ctx)
+        # HK4: a pending domain, or (red_left) a red tile while design revisions are left
+        reason = rules.stop_reason(self.ctx) or rules.red_left_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
             return self._end()
         self.stop_blocks += 1
@@ -241,7 +244,7 @@ class Hooks:
             n = self.subagent_stop_blocks.get(agent, 0)
             if left and n < self.max_subagent_stop_blocks:
                 self.subagent_stop_blocks[agent] = n + 1
-                reason = rules.stop_reason(self.ctx) or ""
+                reason = rules.stop_reason(self.ctx, domain) or ""  # the role's own domain only
                 self.emit("hook.blocked_stop", agent=agent, domain=domain, text=reason, data={
                     "hook": "SubagentStop", "rule": rules.HK4, "count": n + 1, "limit": self.max_subagent_stop_blocks,
                 })

@@ -210,6 +210,55 @@ class CatalogTest(unittest.TestCase):
             build_load_cases(self.catalog, self.req, d, ["P1"])
         self.assertIn("needs 2 occupant parts, the design has 1", str(cm.exception))
 
+    def test_people_split_into_body_segments_carry_the_load(self):
+        d = loaded_design()
+        people = [p for p in d["parts"] if p["kind"] == "occupant"]
+        self.assertEqual([p["mass_kg"] for p in people], [76.6, 76.6])
+
+        def segments(person, torso_kg):
+            return [dict(person, id=f"{person['id']}.torso", mass_kg=torso_kg),
+                    dict(person, id=f"{person['id']}.legs", mass_kg=76.6 - torso_kg)]
+
+        d["parts"] = [s for p in d["parts"] for s in (segments(p, 40.0) if p["kind"] == "occupant" else [p])]
+        self.assertEqual(len([p for p in d["parts"] if p["kind"] == "occupant"]), 4)
+        p1 = build_load_cases(self.catalog, self.req, d, ["P1"])[0]  # 2 people, 76.6 kg each
+        self.assertEqual(p1["params"]["loading"], "two_cargo")
+        next(p for p in d["parts"] if p["id"] == "passenger.legs")["mass_kg"] = 30.0
+        with self.assertRaises(CatalogError) as cm:
+            build_load_cases(self.catalog, self.req, d, ["P1"])
+        self.assertIn("Q33 = 76.6 kg in total: passenger 70 kg", str(cm.exception))
+
+    def test_the_wall_case_gets_its_own_id_when_its_step_rounds_to_the_other_one(self):
+        d = loaded_design()
+        ids = [lc["load_case_id"] for lc in build_load_cases(self.catalog, self.req, d, [], beyond=["P1"])]
+        self.assertEqual(ids, ["P1-step250-beyond", "P1-step330-beyond"])  # r = 300 mm: today's ids
+        for s in d["supports"]:
+            s["radius_mm"] = 227.0  # 1.1 r rounds to 250, the step past the limit
+        ids = [lc["load_case_id"] for lc in build_load_cases(self.catalog, self.req, d, [], beyond=["P1"])]
+        self.assertEqual(ids, ["P1-step250-beyond", "P1-wall250-beyond"])
+
+    def test_two_load_cases_with_one_id_are_refused(self):
+        with self.assertRaisesRegex(CatalogError, "two load cases have the id P1-step100"):
+            build_load_cases(self.catalog, self.req, design(), ["P1", "P1"])
+
+    def test_members_left_out_of_the_frame_mass_are_listed(self):
+        d = loaded_design()
+        self.assertNotIn("frame_mass_skipped", design_summary(d))
+        full = design_summary(d)["frame_mass"]["value"]
+        d["members"][0]["material"] = "unobtainium"
+        summ = design_summary(d)
+        self.assertLess(summ["frame_mass"]["value"], full)
+        self.assertEqual(summ["frame_mass_skipped"],
+                         [{"member": d["members"][0]["id"],
+                           "reason": "material 'unobtainium' is not in design.materials"}])
+
+    def test_rail_joint_lets_a_bug_through(self):
+        from unittest import mock
+
+        with mock.patch("hiraku.solvers.k0_handcalc.frame_inputs.rail_joint_inputs", side_effect=TypeError("bug")):
+            with self.assertRaises(TypeError):
+                design_summary(loaded_design())
+
     def test_rail_joint_in_summary(self):
         d = loaded_design()
         joint = design_summary(d)["loadings"]["two_cargo"]["rail_joint"]

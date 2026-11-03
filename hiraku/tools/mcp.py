@@ -157,11 +157,21 @@ def for_agent(name: str, result: Any) -> Any:
     return result
 
 
+# Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
+# known only from the PreToolUse hook's record (Attribution), so a call without one is refused
+# instead of reaching the function with agent None (which it would take as the allowed role).
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "write_report")
+NO_CALLER = ("{tool} は呼んだ役が分からないので断りました (PreToolUse の hook がこの呼び出しを記録していません)。"
+             "同じ入力でもう一度呼んでください。続けて断られるときは、hooks がつながっているかを確かめてください")
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
     async def handler(args: dict[str, Any]) -> dict[str, Any]:
         agent = attribution.take(full, args)
+        if agent is None and name in ROLE_LIMITED_TOOLS:
+            return {"content": [{"type": "text", "text": NO_CALLER.format(tool=name)}], "is_error": True}
         try:
             result = await asyncio.to_thread(fn, ctx, args, agent)
         except ToolError as e:

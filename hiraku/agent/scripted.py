@@ -192,7 +192,8 @@ def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None =
         if kind == "section":
             return {"value": design["sections"][key]["dims_mm"][field], "unit": "mm"}
     if head == "pred":
-        return [p for p in ctx.store.records("prediction", ctx.version) if p["quantity"] == rest][-1]
+        return [p for p in ctx.store.records("prediction", ctx.version)
+                if p["quantity"] == rest and p["load_case_id"] == load_case["load_case_id"]][-1]
     if head == "ana":
         lc_id, quantity = rest.rsplit(".", 1)
         return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id, load_case))["results"]
