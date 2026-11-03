@@ -74,7 +74,8 @@
     "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"],
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 },
               "mark": { "size_px": 44, "right": 16, "top": 10, "_note": "the tick or cross of the tile" },
-              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "_note": "the corner of the tile where the role's pet stands" },
+              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "feature": { "w": 160, "h": 160 },
+                       "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0,
                "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box" },
@@ -93,7 +94,8 @@
     "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"],
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 },
               "mark": { "size_px": 44, "right": 16, "top": 10, "_note": "the tick or cross of the tile" },
-              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "_note": "the corner of the tile where the role's pet stands" },
+              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "feature": { "w": 160, "h": 160 },
+                       "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0,
                "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice runs 0.54-4.32 s" },
@@ -510,7 +512,7 @@
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only. The tiles' 3D pets are not counted as moving: they hold still and react only for a moment when their tile changes"
         }
       },
       "n05": {
@@ -584,7 +586,7 @@
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the same eight tiles as N04, all turning green"
+          "why": "the same eight tiles as N04, all turning green. The pets react only when their tile changes, as in N04"
         }
       },
       "n16": {

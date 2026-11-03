@@ -254,7 +254,11 @@ window.PROMO_LAYOUT = {
         "h": 96,
         "right": 12,
         "bottom": 12,
-        "_note": "the corner of the tile where the role's pet stands"
+        "feature": {
+          "w": 160,
+          "h": 160
+        },
+        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only"
       },
       "rate": {
         "size_px": 18
@@ -347,7 +351,11 @@ window.PROMO_LAYOUT = {
         "h": 96,
         "right": 12,
         "bottom": 12,
-        "_note": "the corner of the tile where the role's pet stands"
+        "feature": {
+          "w": 160,
+          "h": 160
+        },
+        "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only"
       },
       "rate": {
         "size_px": 18
@@ -1559,7 +1567,7 @@ window.PROMO_LAYOUT = {
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only. The tiles' 3D pets are not counted as moving: they hold still and react only for a moment when their tile changes"
         }
       },
       "n05": {
@@ -1633,7 +1641,7 @@ window.PROMO_LAYOUT = {
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the same eight tiles as N04, all turning green"
+          "why": "the same eight tiles as N04, all turning green. The pets react only when their tile changes, as in N04"
         }
       },
       "n16": {
