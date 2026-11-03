@@ -25,6 +25,12 @@
 // tests (the sentence the code writes lists them). Assembly has no reason in the record, so
 // it keeps its plain words. Ids are out either way.
 //
+// Claude's reason is shown whole, at min_text_px (18 px) on every chip: not shortened, not
+// cut with an ellipsis. One that does not fit the chip's width in one line goes on two,
+// broken where its sentence joins (see breakOf). A chip whose words then do not fit its row
+// is marked (data-over on the chip, its domain in <html data-n09-over>), for the layout's
+// chips box to be made taller; nothing is cut to hide it.
+//
 // The chips light one at a time from times.chips_from_s, every times.chip_step_s, in the
 // order of the record: the picks as listed, then the domains left off (off), then assembly.
 // A pick with tests that apply (test_ids) lights; assembly lights when the record lists
@@ -33,7 +39,7 @@
 //
 // Story (layout.json story.cuts.n09): label 8, the seven domains and assembly. The eight
 // names are the labels; the second lines are notes (data-kind note, text_px x 0.7, at least
-// min_text_px, as the chips box says).
+// min_text_px, as the chips box says; Claude's reasons at min_text_px).
 //
 // Positions, sizes, colours, the length and the times come from layout.json n09; a missing
 // key is named on the page.
@@ -61,11 +67,23 @@ const N09_KEYS = [
 ];
 const TOP_KEYS = ["min_text_px", "stage", "subtitle_band"];
 
-// The joins a reason is cut at when it does not fit (see fitLine), in order; each returns
-// the shorter sentence, or the same one when it has no such join.
+// The join a pale chip's reason is cut at when it does not fit (see fitLine): without its
+// subject, the tests' names before " は".
 const after = (s, sep) => (s.indexOf(sep) > 0 ? s.slice(s.indexOf(sep) + sep.length).trim() : s);
 const PALE_CUTS = [(s) => after(s, " は")];
-const LIT_CUTS = [(s) => s.replace(/かを確かめる$/, "か"), (s) => after(s, "、")];
+
+// Where a sentence may go on to a second line: after "、" (preferred), or after a particle
+// that follows a word and comes before the next one (の・と・が・を・に・で・へ・や・は・も
+// between a kanji, katakana, latin letter, digit or space and a kanji, katakana, latin
+// letter or digit; so not inside a verb's ending such as "しないかを確かめる").
+const WORD = "\\p{Script=Han}\\p{Script=Katakana}ー々A-Za-z0-9";
+const PARTICLE_RE = new RegExp(`(?<=[${WORD}\\s])[のとがをにでへやはも](?=[${WORD}])`, "gu");
+export function breaksOf(s) {
+  const at = [];
+  for (let i = s.indexOf("、"); i >= 0; i = s.indexOf("、", i + 1)) if (i + 1 < s.length) at.push({ i: i + 1, comma: true });
+  for (const m of s.matchAll(PARTICLE_RE)) at.push({ i: m.index + 1, comma: false });
+  return at;
+}
 
 const get = (obj, path) => path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
@@ -201,16 +219,17 @@ export class CutN09 {
     this.lineRoom = C.w - 2 * BORDER_PX - 2 * PAD_PX;
   }
 
-  // The second line (see the top) in one line: a pixel at a time down to min_text_px; a
-  // reason that still does not fit is cut at the joins of its sentence, one at a time (a pale
-  // chip's drops its subject, the tests' names before " は"; a lit chip's first ends at the
-  // question, "…か" without the "を確かめる" after it, then drops its cause, the words up to
-  // the first "、"), and only then is it cut short with an ellipsis. Done at each frame
-  // (measured once the page's font is in), from the record's words each time, so the frame
-  // at t is always the same.
-  fitLine({ chip, line }, on) {
+  // The second line (see the top). Done at each frame (measured once the page's font is in),
+  // from the record's words each time, so the frame at t is always the same.
+  fitLine(r, on) {
+    const { chip, line } = r;
+    line.style.whiteSpace = "";
+    if (on && chip.lit && chip.reason) return this.fitReason(r);
+    // the plain words, or a pale chip's: in one line, a pixel at a time down to min_text_px;
+    // a pale reason that still does not fit drops its subject, and only then is it cut short
+    // with an ellipsis
     const plain = DOMAIN_PLAIN_JA[chip.domain];
-    const text = (reason) => (!on || !reason ? plain : chip.lit ? reason : `${plain}：${reason}`);
+    const text = (reason) => (!on || !reason ? plain : `${plain}：${reason}`);
     const fits = (reason) => {
       line.textContent = text(reason);
       let lp = this.linePx;
@@ -220,13 +239,45 @@ export class CutN09 {
     };
     let reason = chip.reason;
     if (fits(reason) || !on) return;
-    for (const cut of chip.lit ? LIT_CUTS : PALE_CUTS) {
+    for (const cut of PALE_CUTS) {
       const shorter = cut(reason);
       if (shorter && shorter !== reason) {
         reason = shorter;
         if (fits(reason)) return;
       }
     }
+  }
+
+  // Claude's reason, whole, at min_text_px: in one line when it fits the chip's width, else on
+  // two, broken at breakOf's place.
+  fitReason({ chip, line }) {
+    const s = chip.reason;
+    line.style.fontSize = `${this.layout.min_text_px}px`;
+    line.textContent = s;
+    if (line.scrollWidth <= this.lineRoom) return;
+    const k = this.breakOf(line, s);
+    if (k === null) {
+      // no join leaves both parts within the width: the browser wraps it (never cut)
+      line.style.whiteSpace = "normal";
+      return;
+    }
+    line.replaceChildren(s.slice(0, k), document.createElement("br"), s.slice(k));
+  }
+
+  // Of the joins whose two parts each fit the width, one after "、" if there is any, and of
+  // those the one whose longer part is shortest (the two lines as even as they can be); null
+  // when no join fits.
+  breakOf(line, s) {
+    const width = (t) => {
+      line.textContent = t;
+      return line.scrollWidth;
+    };
+    const ok = breaksOf(s)
+      .map((b) => ({ ...b, w: Math.max(width(s.slice(0, b.i)), width(s.slice(b.i))) }))
+      .filter((b) => b.w <= this.lineRoom);
+    const pool = ok.some((b) => b.comma) ? ok.filter((b) => b.comma) : ok;
+    pool.sort((a, b) => a.w - b.w || a.i - b.i);
+    return pool.length ? pool[0].i : null;
   }
 
   async loadDesign() {
@@ -270,6 +321,7 @@ export class CutN09 {
   draw(t) {
     const sp = this.spec;
     let lit = 0;
+    const over = [];
     for (const r of Object.values(this.rows)) {
       const { row, chip } = r;
       const on = t >= chip.at;
@@ -277,8 +329,14 @@ export class CutN09 {
       row.dataset.state = !on ? "wait" : chip.lit ? "lit" : "pale";
       this.fitLine(r, on);
       if (on && chip.lit) lit += 1;
+      // words past the row (see the top): marked, not hidden
+      if (row.scrollHeight > row.clientHeight + 0.5) {
+        row.dataset.over = "1";
+        over.push(chip.domain);
+      } else delete row.dataset.over;
     }
     document.documentElement.dataset.n09Lit = String(lit);
+    document.documentElement.dataset.n09Over = over.join(" ");
     if (!this.view) return;
     // the vehicle turns slowly from lead_s to the end, about the vertical through its middle
     const T = sp.times;

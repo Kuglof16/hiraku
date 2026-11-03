@@ -189,9 +189,9 @@
   .n09-request .who { flex: none; color: #5c5a54; font-weight: 700; white-space: nowrap; }
   .n09-request .want { margin: 0; font-weight: 700; line-height: 1.3; color: #1b1a17; }
   .n09-chips { position: absolute; box-sizing: border-box; }
-  .n09-chip { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 2px solid; border-radius: 10px; padding: 0 16px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; color: #b9b3a5; }
-  .n09-chip .name { font-weight: 700; line-height: 1.1; white-space: nowrap; }
-  .n09-chip .line { line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .n09-chip { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 2px solid; border-radius: 10px; padding: 0 16px; display: flex; flex-direction: column; justify-content: safe center; overflow: hidden; color: #b9b3a5; }
+  .n09-chip .name { flex-shrink: 0; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+  .n09-chip .line { flex-shrink: 0; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .n09-chip[data-state="lit"] { color: #1b1a17; border-color: #d9861c !important; background: #fff3dc !important; box-shadow: 0 0 0 3px rgba(217, 134, 28, 0.25); }
   .n09-chip[data-state="lit"] .line { color: #5c5a54; }
   .n09-chip[data-state="pale"] { color: #a8a49a; }
