@@ -176,6 +176,47 @@ def ladder_twist_rate(pieces: list[tuple[float, float]], x_rear_end: float, x_fr
     return float(np.interp(x_at, X, phi))
 
 
+def ladder_twist_inputs(design: dict, loading: str | None = None) -> dict:
+    """Quantities for modal.ladder_twist_mode: the ladder's rails (members along x) and cross members (members
+    joining the two rail lines), the roll inertia along it (roll_inertia_along: its total, centroid x_I and
+    spread r_x), and the front and rear axles' wheel rates, tracks and distances from x_I."""
+    import math
+
+    if loading is not None:
+        design = on_board(design, loading)
+    nodes = node_table(design)
+    props = member_props(design)
+    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6]
+    cross = [mp for mp in props.values() if abs(mp["a"][1] + mp["b"][1]) < 1e-6 and abs(mp["a"][1]) > 1e-6]
+    if not rails or not cross:
+        raise DesignError("the twist hand calculation needs a ladder frame: rails along x and cross members joining them")
+    sup = design.get("supports", [])
+    x_front = max(float(s["position_mm"][0]) for s in sup)
+    front = sorted((s for s in sup if abs(s["position_mm"][0] - x_front) < 1e-6), key=lambda s: -s["position_mm"][1])
+    rear = sorted((s for s in sup if abs(s["position_mm"][0] - x_front) > 1e-6), key=lambda s: -s["position_mm"][1])
+    if len(front) < 2 or len(rear) < 2:
+        raise DesignError("the twist hand calculation needs a left and a right wheel at the front and at the rear")
+    pieces = roll_inertia_along(design)
+    I0 = sum(I for _, I in pieces)
+    x_I = sum(I * x for x, I in pieces) / I0
+    r_x = math.sqrt(sum(I * (x - x_I) ** 2 for x, I in pieces) / I0)
+    mat = rails[0]["material"]
+    xs = [float(nodes[n][0]) for mp in rails for n in (mp["member"]["node_a"], mp["member"]["node_b"])]
+    rate = lambda s: float(s.get("suspension", {}).get("stiffness_N_per_mm") or 0.0)  # noqa: E731
+    return {"inputs": {
+        "E": quantity(float(mat["E_MPa"]), "MPa"), "nu": quantity(float(mat["nu"]), "1"),
+        "J_r": quantity(rails[0]["section"]["J"], "mm^4"),
+        "J_c": quantity(sum(mp["section"]["J"] for mp in cross) / len(cross), "mm^4"),
+        "n_c": quantity(float(len(cross)), "1"),
+        "w": quantity(sum(mp["length"] for mp in cross) / len(cross), "mm"), "L": quantity(max(xs) - min(xs), "mm"),
+        "I0": quantity(I0 * 1e-6, "kg*m^2"), "r_x": quantity(r_x, "mm"),
+        "k_f": quantity(rate(front[0]), "N/mm"), "k_r": quantity(rate(rear[0]), "N/mm"),
+        "t_f": quantity(float(front[0]["position_mm"][1] - front[-1]["position_mm"][1]), "mm"),
+        "t_r": quantity(float(rear[0]["position_mm"][1] - rear[-1]["position_mm"][1]), "mm"),
+        "d_f": quantity(x_front - x_I, "mm"), "d_r": quantity(float(rear[0]["position_mm"][0]) - x_I, "mm"),
+    }}
+
+
 def _member_between(props: dict, n1: str, n2: str):
     return next((mp for mp in props.values() if {mp["member"]["node_a"], mp["member"]["node_b"]} == {n1, n2}), None)
 

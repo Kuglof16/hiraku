@@ -29,6 +29,34 @@ class ModalTest(unittest.TestCase):
     def test_checks(self):
         self.assertEqual([c for c in TOOL.check() if not c["pass"]], [])
 
+    def test_first_frame_mode_is_the_ladder_twist(self):
+        """Held in plane at the frame nodes, the lowest frame mode is the twist (left and right rails opposite),
+        with little fore-and-aft motion, and the hand twist frequency is within the tolerance of it."""
+        from hiraku.contract.loading import on_board
+        from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_inputs
+
+        d = on_board(DESIGN, "two_cargo")
+        r = modes(d, 6)
+        i = next(k for k, x in enumerate(r["flexibility"]) if x >= 0.3)
+        u = r["shapes"][i]
+        self.assertLess(max(abs(v[0]) for v in u.values()), 0.25 * max(abs(v[2]) for v in u.values()))
+        self.assertLess(u["LE"][2] * u["RE"][2], 0.0)  # the rear corners move opposite ways
+        hand = solvers.formula_registry().evaluate("modal.ladder_twist_mode", ladder_twist_inputs(d)["inputs"])
+        f = hand["outputs"]["f"]["value"]
+        self.assertLessEqual(abs(r["frequencies"][i] - f) / f, 0.15)
+
+    def test_ladder_twist_formula(self):
+        E, nu, Jr, Jc, n, w, L = 205000.0, 0.3, 3.4e5, 1.2e5, 6.0, 700.0, 2500.0
+        I0, rx, k, t, d = 100.0, 640.0, 20.0, 1100.0, 900.0
+        G = E / 2.6
+        K = 2 * G * Jr * L + n * G * Jc * w + 2 * k * (t / 2) ** 2 * d**2 * 2
+        expect = math.sqrt(1e3 * K / (I0 * 1e6 * rx**2)) / (2 * math.pi)
+        ins = {"E": q(E, "MPa"), "nu": q(nu, "1"), "J_r": q(Jr, "mm^4"), "J_c": q(Jc, "mm^4"), "n_c": q(n, "1"),
+               "w": q(w, "mm"), "L": q(L, "mm"), "I0": q(I0, "kg*m^2"), "r_x": q(rx, "mm"), "k_f": q(k, "N/mm"),
+               "k_r": q(k, "N/mm"), "t_f": q(t, "mm"), "t_r": q(t, "mm"), "d_f": q(d, "mm"), "d_r": q(-d, "mm")}
+        got = solvers.formula_registry().evaluate("modal.ladder_twist_mode", ins)["outputs"]["f"]["value"]
+        self.assertAlmostEqual(got, expect, delta=1e-9 * expect)
+
     def test_the_same_modes_every_time(self):
         """A fixed start vector and signed shapes: the scripted runs are compared byte for byte."""
         a, b = modes(DESIGN, n_modes=6), modes(DESIGN, n_modes=6)

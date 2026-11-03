@@ -75,11 +75,19 @@ C1_PLAN = {
 # the lowest mode of the frame model may be pitch or roll, which sit near the
 # bounce when the springs are at the axles: 15 %.
 N1_TOL = 0.15
+# The frame's lowest mode is kept this far above the wheels' turning rate at top speed: HIRAKU's assumption
+# for the video, not checked as a general rule. The criterion is on the frequency, not on the gap: the gap's
+# relative error is the frequency's times f / (f - f_wheel), about 2.3 on the demo vehicle.
+N1_MARGIN = 0.20
 
 
 def n1_modal(spec: Record, req: Record, design: Record) -> Record:
+    import math as _m
+
     load, keys = loading(req, design)
     v = number(req, "Q50", "km/h")
+    r = float(n1_calc(design, {})["driven_wheel_radius"]["value"])
+    f_wheel = (v / 3.6) / (2.0 * _m.pi * r / 1000.0)
     return {
         "load_case_id": f"N1-{v:g}kmh",
         "test_id": "N1",
@@ -87,7 +95,11 @@ def n1_modal(spec: Record, req: Record, design: Record) -> Record:
         "title": f"固有振動数と、{v:g} km/h での車輪とモーターの回る速さ ({LOADING_JA[load]})",
         "params": {"speed": q(v, "km/h"), "loading": load},
         "requirement_keys": ["Q50", *keys],
-        # no criterion: no requirement sets a frequency limit
+        "criterion": {"quantity": "first_frame_mode", "op": ">=", "limit": q((1.0 + N1_MARGIN) * f_wheel, "Hz"),
+                      "basis": (f"フレームのいちばん低い固有振動数を、Q50 {v:g} km/h での車輪の回転 ({f_wheel:.2f} Hz) より "
+                                f"{N1_MARGIN:.0%} 上に離す (幅は HIRAKU の仮定で、一般の目安としては確かめていない。"
+                                f"路面の凹凸の加振は入れていない)"),
+                      "requirement_keys": ["Q50"]},
         "tolerance_rel": tolerance(spec, N1_TOL),
     }
 
@@ -99,10 +111,27 @@ def n1_calc(design: Record, load_case: Record) -> Record:
             "driven_wheel_radius": q(sum(s["radius_mm"] for s in driven) / len(driven), "mm")}
 
 
+def n1_twist(design: Record, load_case: Record) -> Record:
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        return ladder_twist_inputs(design, loading=loading_of(load_case))["inputs"]
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no ladder frame for the twist hand calculation: {e}") from None
+
+
+_TWIST = ("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
 N1_PLAN = {
     "tool": "modal",
-    "say": "車全体が 4 本のばねの上で上下に揺れるとみて最初の揺れの振動数を、車輪とモーターの回る速さも先に出します",
+    "say": ("車全体が 4 本のばねの上で上下に揺れる振動数と、はしご形のフレームが左右のレールを逆に動かしてねじれる "
+            "振動数を、車輪とモーターの回る速さとともに先に出します"),
     "predictions": [
+        {"quantity": "first_frame_mode", "formula_id": "modal.ladder_twist_mode", "output": "f",
+         "assumptions": ["フレームのいちばん低い揺れは、はしご形のねじれ (左右のレールが逆に動く)",
+                         "ねじれの角は前後に直線とみる (レイリー法。高めに出る)", "部品の重さは載せている節に等分"],
+         "inputs": {k: f"from.{k}" for k in _TWIST}, "inputs_from": n1_twist},
         {"quantity": "first_body_mode", "formula_id": "modal.spring_mass", "output": "f",
          "assumptions": ["車全体が 4 本のばねの上で上下に揺れるとみる", "タイヤは硬いとみる (フレームのモデルと同じ)"],
          "inputs": {"k": "from.spring_rate_total", "m": "load.mass"}, "inputs_from": n1_calc},
