@@ -262,10 +262,54 @@ const PLAIN_JA = {
   min_side_load: "軽い側の輪の重さ",
   first_frame_mode: "フレームのいちばん低い揺れの速さ",
   fatigue_damage: "くり返しの力による傷み",
+  // the known-answer checks of the use-count fatigue tool (N13) and its results
+  cycles_at_FAT: "基準の強さで壊れるまでの回数",
+  seat_stress_range: "人が乗る・降りるときの枠の応力の幅",
+  cycles_counted: "くり返しの回数",
 };
 
 export function plainName(q) {
   return PLAIN_JA[q] ?? quantityName(q);
+}
+
+// Counts read with 回 after them (their unit is 1).
+const COUNT_QUANTITIES = new Set(["cycles_counted", "cycles_at_FAT"]);
+
+// A value for viewers: its unit's sign, or 回 for a count.
+export function plainValue(q, value, unit, sig = 3) {
+  // a count is written out in full (2,000,000 回, not 2.00e+6), rounded to a whole number
+  if (COUNT_QUANTITIES.has(q) && (unit === "1" || !unit) && Number.isFinite(value)) return `${Math.round(value).toLocaleString("ja-JP")} 回`;
+  return fmtVU(value, unit, sig);
+}
+
+// The inputs of a K0 formula in the viewers' words (prediction.inputs, by formula_id). An
+// input not listed has no name (null): a page leaves it out rather than show the symbol.
+const FORMULA_INPUT_JA = {
+  "tilt.spring_roll_angle": {
+    t: "左右の輪の間隔",
+    h: "重心の高さ",
+    e: "重心の横のずれ",
+    m: "全体の重さ",
+    m_s: "ばねの上の重さ",
+    h_s: "ばねの上の重心の高さ",
+    k: "ばねの硬さ",
+    n: "ばねの数",
+  },
+  "tilt.rigid_ssf": { t: "左右の輪の間隔", h: "重心の高さ" },
+};
+
+export function formulaInputName(formulaId, symbol) {
+  return FORMULA_INPUT_JA[formulaId]?.[symbol] ?? null;
+}
+
+// A known-answer check's source, short, for viewers (tool.checked checks[].source is a
+// sentence for the makers): the kinds of source it names; null when none is recognised.
+export function checkSourceShort(source) {
+  const s = String(source ?? "");
+  const out = [];
+  if (/range\s*=|I\s*=|simply supported/i.test(s)) out.push("梁の手計算の式");
+  if (/\bIIW\b/.test(s)) out.push("国際溶接学会 (IIW) の疲労の線");
+  return out.length ? out.join("・") : null;
 }
 
 // The design's numbers that the reports' next steps and sensitivities name, in the viewers'
