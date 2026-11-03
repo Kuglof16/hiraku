@@ -193,6 +193,12 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_element": [1.0]}), [])
         self.assertNotEqual(contract.errors("mesh", {**m, "elements": [[0, 1]]}), [])
 
+    def test_project_driver(self):
+        ev = next(e for e in events() if e["kind"] == "run.started")
+        for driver in ("scripted", "agent_sdk", "claude_code_plugin"):
+            self.assertEqual(contract.errors("project", {**ev["data"], "driver": driver}), [])
+        self.assertNotEqual(contract.errors("project", {**ev["data"], "driver": "proxy"}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}

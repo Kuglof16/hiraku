@@ -125,6 +125,8 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`・`mesh-0001`)
 - `runs/` はコミットしない
 
+- 実行を動かしたもの: project の任意の欄 `driver` (`scripted` 台本・`agent_sdk` HIRAKU のエージェントのループを本人の `ANTHROPIC_API_KEY` で・`claude_code_plugin` 本人の Claude Code のセッションに HIRAKU のプラグインをつないで、本人のサインインで。このとき HIRAKU は Claude を呼ばず、`events.jsonl` を書くのは MCP サーバーのプロセス)
+
 ## events.jsonl の 1 行
 
 ```json
