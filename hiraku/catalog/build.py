@@ -54,7 +54,10 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
     from the requirements; a design that disagrees would be judged under a
     load nobody asked for.
     """
-    on = parts_on_board(design, loading)
+    try:
+        on = parts_on_board(design, loading)
+    except ValueError as e:  # occupant parts, but fewer than the loading names
+        raise CatalogError(f"the design does not carry the requirements' load: {e}") from None
     people = [p for p in on if p["kind"] == "occupant"]
     cargo = [p for p in on if p["kind"] == "cargo"]
     problems = []

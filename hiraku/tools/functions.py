@@ -11,6 +11,8 @@ A ToolError message goes back to Claude as is.
 from __future__ import annotations
 
 import copy
+import importlib
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -213,6 +215,25 @@ def trusted_analysis(ctx: RunContext, load_case_id: str) -> Record | None:
     return found[-1] if found else None
 
 
+_MESH_LOCK = threading.Lock()  # roles analyse side by side (the MCP calls run in threads)
+
+
+def version_mesh(ctx: RunContext, version: int, agent: str) -> Record:
+    """The shell mesh of a design version: the one already recorded, else made once from the
+    design by hiraku.solvers.frame_mesh and recorded (mesh-NNNN.json, mesh.created)."""
+    with _MESH_LOCK:
+        have = ctx.store.records("mesh", version)
+        if have:
+            return have[-1]
+        solvers = importlib.import_module("hiraku.solvers")
+
+        if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
+            raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
+        mesh = {**solvers.frame_mesh(ctx.store.design(version)), "mesh_id": ctx.store.next_id("mesh"),
+                "design_version": version}
+        return ctx.store.add_record("mesh", mesh, design_version=version, agent=agent)
+
+
 def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Run one analysis tool from the shelf on the current design and record it."""
     _check_input("analyze", args)
@@ -247,11 +268,20 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if upstream:
         params["upstream_analyses"] = upstream
     spec = ctx.specs.get(name, {})
+    mesh_error = None
+    if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
+        try:
+            params["mesh"] = version_mesh(ctx, v, agent)
+        except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
+            mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     t0 = time.perf_counter()
-    try:
-        result = dict(ctx.tools[name].run(ctx.store.design(v), lc, predictions, params))
-    except Exception as e:  # a tool bug is recorded as a failed analysis, not lost
-        result = {"status": "failed", "error": f"the tool raised {type(e).__name__}: {e}", "results": []}
+    if mesh_error:
+        result = {"status": "failed", "error": mesh_error, "results": []}
+    else:
+        try:
+            result = dict(ctx.tools[name].run(ctx.store.design(v), lc, predictions, params))
+        except Exception as e:  # a tool bug is recorded as a failed analysis, not lost
+            result = {"status": "failed", "error": f"the tool raised {type(e).__name__}: {e}", "results": []}
     wall = time.perf_counter() - t0
 
     rec = {
@@ -673,7 +703,9 @@ FUNCTIONS = {
     "write_report": write_report,
 }
 
+# The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them).
+INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
-# making and the report.
+# making, the report and the intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "propose_design", "make_tool", "check_tool",
-             "write_report")
+             "write_report", *INTAKE_TOOLS)
