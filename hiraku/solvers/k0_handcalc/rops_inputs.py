@@ -36,10 +36,11 @@ How a gap is measured (before any deflection; code, no table values):
   travel ends gives the delta at its end and contact False (the bar passes beside the space that way).
 
 What the gap is not: it is the travel left before contact along that motion, not the shortest distance. Where
-the bar closes on the space straight along the motion and the nearest point travels delta, the two are the same
-(frame_static.rops_occupant_clearance then gives k4_geometry.occupant_clearance's value at the moved nodes); where
-it closes at a slant or passes beside the space, the travel is longer than the distance; both reach 0 at the same
-delta.
+the bar closes on the space straight along the motion and the nearest point travels delta, the two are the same;
+where it closes at a slant or passes beside the space, the travel is longer than the distance; both reach 0 at the
+same delta. The criterion's quantity is the shortest distance: clearances_at measures it with the bar moved by each
+motion at a given deflection (rops_inputs: at the portal formulas' own deflections, portal_deflections), and
+frame_static.rops_occupant_clearance takes the smallest.
 """
 
 from __future__ import annotations
@@ -91,14 +92,19 @@ def _rollbar(design: dict) -> dict:
     return {"corners": corners, "posts": posts, "nodes": nodes, "bar": bar, "boxes": boxes, "spaces": spaces}
 
 
-def motions(corners: dict, rear_fraction: float) -> list[dict]:
+def motions(corners: dict, rear_fraction: float, rear_shares: tuple[float, float] | None = None) -> list[dict]:
     """Every motion tried: {"direction", "name", "kind" ("turn" or "down"), "share": {corner: [ex, ey] times the
-    corner's travel per mm of delta}} (for "down" the share is the drop per mm of delta)."""
+    corner's travel per mm of delta}} (for "down" the share is the drop per mm of delta). rear_shares: the near and
+    far corners' travel per mm of the rear load point's (default: the lever rule of a top beam rigid out of the
+    portal's plane on posts with no fixity at their tops, (1 - f) / s and f / s, s = (1 - f)^2 + f^2)."""
     f = float(rear_fraction)
     if not 0.0 <= f <= 0.5:
         raise DesignError(f"rear_fraction {f} is outside 0..0.5")
-    s = (1.0 - f) ** 2 + f**2
-    near, far = (1.0 - f) / s, f / s
+    if rear_shares is None:
+        s = (1.0 - f) ** 2 + f**2
+        near, far = (1.0 - f) / s, f / s
+    else:
+        near, far = (float(x) for x in rear_shares)
     L, R = corners["L"], corners["R"]
     out = []
     for sign, word in ((1.0, "+y"), (-1.0, "-y")):
@@ -178,16 +184,16 @@ def _gap(geo: dict, motion: dict) -> tuple[float, bool]:
     return end, False
 
 
-def rops_gaps(design: dict, rear_fraction: float = 1.0 / 6.0) -> dict:
+def rops_gaps(design: dict, rear_fraction: float = 1.0 / 6.0, rear_shares: tuple[float, float] | None = None) -> dict:
     """Gaps (mm) for frame_static.rops_occupant_clearance: g_side, g_rear and g_top, each the smallest over its
-    motions (the module's text says how they are measured). The design's parts are taken as they are: pass
-    on_board(design, loading).
+    motions (the module's text says how they are measured; rear_shares as motions()). The design's parts are taken
+    as they are: pass on_board(design, loading).
 
     Returns {"g_side", "g_rear", "g_top": quantity, "motions": [{"direction", "name", "kind", "share", "gap_mm",
     "contact"}], "corners": {"L", "R"}, "posts": {corner: {"foot", "h"}}, "as_built_clearance_mm", "spaces"}."""
     geo = _rollbar(design)
     tried = []
-    for m in motions(geo["corners"], rear_fraction):
+    for m in motions(geo["corners"], rear_fraction, rear_shares):
         gap, contact = _gap(geo, m)
         tried.append({**m, "gap_mm": gap, "contact": contact})
     out = {f"g_{d}": quantity(min(t["gap_mm"] for t in tried if t["direction"] == d), "mm") for d in DIRECTIONS}
@@ -196,17 +202,86 @@ def rops_gaps(design: dict, rear_fraction: float = 1.0 / 6.0) -> dict:
     return out
 
 
-def rops_inputs(design: dict, loading: str | None = None, rear_fraction: float = 1.0 / 6.0) -> dict:
+def _values(portal: dict, direction: str) -> dict:
+    from .units import to_unit
+
+    return {k: to_unit(q, q["unit"], k) for k, q in portal[direction].items()}
+
+
+def rear_shares(portal: dict, rear_fraction: float, rear_energy_J: float | None = None) -> tuple[float, float]:
+    """The near and far corners' travel along the vehicle per mm of the rear load point's, from
+    frame_static.portal_frame_rear on the portal's inputs: at the energy (share_near, share_far) when it is given,
+    else on the mechanism (mech_near, mech_far)."""
+    from .library_portal import rear
+
+    v = _values(portal, "rear")
+    v.update(f=float(rear_fraction), E_in=float(rear_energy_J) if rear_energy_J else 1.0)
+    r = rear(v)
+    return (r["share_near"], r["share_far"]) if rear_energy_J else (r["mech_near"], r["mech_far"])
+
+
+def portal_deflections(portal: dict, side_energy_J: float, rear_energy_J: float, crush_force_N: float,
+                       rear_fraction: float) -> dict:
+    """{"side", "rear", "top": mm}: the deflections the R4 predictions give (frame_static.portal_frame_side delta_E,
+    portal_frame_rear delta_E, portal_frame_top delta) on the portal's inputs, by the same functions."""
+    from .library_portal import rear, side, top
+
+    return {"side": side({**_values(portal, "side"), "E_in": float(side_energy_J)})["delta_E"],
+            "rear": rear({**_values(portal, "rear"), "E_in": float(rear_energy_J), "f": float(rear_fraction)})["delta_E"],
+            "top": top({**_values(portal, "top"), "F": float(crush_force_N)})["delta"]}
+
+
+def clearances_at(design: dict, deflections: dict, rear_fraction: float = 1.0 / 6.0,
+                  rear_shares: tuple[float, float] | None = None) -> dict:
+    """The shortest distance (mm, k4_geometry.occupant_clearance's) between the roll bar and the occupants' space
+    with the bar moved by each loading's motion at its deflection (deflections {"side", "rear", "top": mm}), the
+    smallest over the direction's motions (both senses, either near corner). A deflection past the end of a
+    motion's travel (a post lying flat, the corners down a post's length) is taken at the end. Pass
+    on_board(design, loading).
+
+    Returns {"s_side", "s_rear", "s_top": quantity, "motions": [{"direction", "name", "delta_mm",
+    "clearance_mm"}]}."""
+    geo = _rollbar(design)
+    tried = []
+    for m in motions(geo["corners"], rear_fraction, rear_shares):
+        delta = min(float(deflections[m["direction"]]), _end_of_travel(geo, m))
+        tried.append({"direction": m["direction"], "name": m["name"], "delta_mm": delta,
+                      "clearance_mm": _clearance(geo, displacements(geo, m, delta))})
+    out = {f"s_{d}": quantity(min(t["clearance_mm"] for t in tried if t["direction"] == d), "mm")
+           for d in DIRECTIONS}
+    out["motions"] = tried
+    return out
+
+
+def rops_inputs(design: dict, loading: str | None = None, rear_fraction: float = 1.0 / 6.0,
+                rear_energy_J: float | None = None, side_energy_J: float | None = None,
+                crush_force_N: float | None = None) -> dict:
     """Everything the R4 prediction reads off a design, flat for from.<name> refs: side_<k>, rear_<k> and top_<k>
     for frame_inputs.portal_frame_inputs(design)[side / rear / top][k], and g_side, g_rear and g_top from
-    rops_gaps(on_board(design, loading), rear_fraction).
+    rops_gaps(on_board(design, loading), rear_fraction, shares), the rear motion's corner shares from
+    frame_static.portal_frame_rear (rear_shares: at rear_energy_J when given, else on the mechanism) so that the
+    rear motion is the one the formula's top beam makes (the posts share the load; not the lever rule).
 
-    Returns {"inputs": {name: quantity}, "portal": portal_frame_inputs(design), "gaps": rops_gaps(...)}."""
+    With all three of side_energy_J, rear_energy_J and crush_force_N, also d0_side, d0_rear, d0_top (the
+    deflections the portal formulas give, portal_deflections) and s_side, s_rear, s_top (clearances_at those
+    deflections): frame_static.rops_occupant_clearance's shortest distances.
+
+    Returns {"inputs": {name: quantity}, "portal": portal_frame_inputs(design), "gaps": rops_gaps(...),
+    "rear_shares": (near, far), "clearances": clearances_at(...) or None}."""
     portal = portal_frame_inputs(design)
-    gaps = rops_gaps(on_board(design, loading), rear_fraction)
+    shares = rear_shares(portal, rear_fraction, rear_energy_J)
+    on = on_board(design, loading)
+    gaps = rops_gaps(on, rear_fraction, shares)
     flat = {f"{d}_{k}": v for d in DIRECTIONS for k, v in portal[d].items()}
     flat.update({f"g_{d}": gaps[f"g_{d}"] for d in DIRECTIONS})
-    return {"inputs": flat, "portal": portal, "gaps": gaps}
+    clear = None
+    if None not in (side_energy_J, rear_energy_J, crush_force_N):
+        d0 = portal_deflections(portal, side_energy_J, rear_energy_J, crush_force_N, rear_fraction)
+        clear = clearances_at(on, d0, rear_fraction, shares)
+        flat.update({f"d0_{d}": quantity(d0[d], "mm") for d in DIRECTIONS})
+        flat.update({f"s_{d}": clear[f"s_{d}"] for d in DIRECTIONS})
+    return {"inputs": flat, "portal": portal, "gaps": gaps, "rear_shares": shares, "clearances": clear}
 
 
-__all__ = ["DIRECTIONS", "displacements", "motions", "rops_gaps", "rops_inputs"]
+__all__ = ["DIRECTIONS", "clearances_at", "displacements", "motions", "portal_deflections", "rops_gaps",
+           "rops_inputs"]
