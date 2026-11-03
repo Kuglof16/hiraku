@@ -220,6 +220,13 @@ class IntakeTest(unittest.TestCase):
             with self.subTest(timings_s=bad):
                 self.assertNotEqual(contract.errors("analysis", {**a, "timings_s": bad}), [])
 
+    def test_criterion_stand_in_quantity(self):
+        lc = load("load_case.json")
+        ok = {**lc, "criterion": {**lc["criterion"], "stand_in_quantity": "stress_range"}}
+        self.assertEqual(contract.errors("load_case", ok), [])
+        bad = {**lc, "criterion": {**lc["criterion"], "stand_in_quantity": 3}}
+        self.assertNotEqual(contract.errors("load_case", bad), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}

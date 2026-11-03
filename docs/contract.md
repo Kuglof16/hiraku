@@ -51,6 +51,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 判定に使う量: 荷重条件の基準の量 (`criterion.quantity`) が `max_stress` のとき、板 (シェル) の道具 `frame_shell` で判定に使うのは `max_hot_spot_stress` (溶接の止端の構造応力)。要素の最大 `max_stress` は鋭い角で細かくするほど上がる値なので、記録には出すが判定には使わない。`comparison.quantity` には、実際に比べた結果の量の名前を書く (呼ぶときの `result_quantity` と同じ)。
 
+代わりに比べる量: 基準の任意の欄 `stand_in_quantity` (例: 疲労の損傷 `fatigue_damage` に対する応力の幅 `stress_range`)。判定に使う量の予測と解析の結果が、どちらも基準の限度の 1e-6 倍より小さいとき (損傷がほぼ 0 で、比の差に意味が無いとき) は、上の (b) を `stand_in_quantity` のいちばん新しい照合で見る。合否 (a)・(c) は判定に使う量のまま。照合はどちらの量も記録に残す。欄は荷重条件を作るコードが書く
+
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
 | ID | 中身 |

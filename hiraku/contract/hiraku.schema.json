@@ -860,6 +860,10 @@
           "items": {
             "$ref": "#/$defs/req_key"
           }
+        },
+        "stand_in_quantity": {
+          "type": "string",
+          "description": "A result quantity whose latest comparison stands in for the judged quantity's when both the prediction and the result of the judged quantity are below 1e-6 of the limit (e.g. stress_range for a fatigue_damage near zero). The verdict still uses the judged quantity."
         }
       }
     },
