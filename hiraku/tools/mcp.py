@@ -111,7 +111,8 @@ DESCRIPTIONS = {
     "get_tool_template": (
         "道具を書く (check_tool・make_tool) ときの見本。強度の試験の道具 1 つ分の通して動くコード (code) と、"
         "決まりの説明: 定義するクラスと欄、analyse() の引数 (design・load_case・params) の中身、結果 (results) の欄、"
-        "答えの分かっている例 known_answers() と check_record の引数、使える import"
+        "答えの分かっている例 known_answers() と check_record の引数、使える import。examples.k1_frame は K1 の骨組で解く"
+        "強度の道具の見本。rule は道具が使えるための決まり (formulas に予測の式、出典つきで 0 でない答えの例)"
     ),
     "list_formulas": (
         "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "
@@ -156,12 +157,13 @@ DESCRIPTIONS = {
     ),
     "check_tool": (
         "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
-        "通らない例・使えない import・例外は problems に文で返る。make_tool の前の試しに使う"
+        "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api は道具が import して"
+        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。make_tool の前の試しに使う"
     ),
     "make_tool": (
         "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
         "全部通れば棚に入り (origin claude)、analyze で使える。code は hiraku.solvers.shelf.base の BuiltinTool を継ぐ"
-        "クラス 1 つ (name・title・domain・base・tests・load_case_params、known_answers() は check_record で閉じた式や"
+        "クラス 1 つ (name・title・domain・base・tests・formulas・load_case_params、known_answers() は check_record で閉じた式や"
         "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
         "hiraku.solvers の一部だけ"
     ),

@@ -10,8 +10,12 @@ import unittest
 from hiraku.contract import layout
 from hiraku.tools import ToolError, rules
 from hiraku.tools.functions import check_tool, list_tools, make_tool
-from tests.solvers.k2.test_toolmaker import GOOD, WRONG
+from tests.solvers.k2.test_toolmaker import GOOD as K2_GOOD, WRONG as K2_WRONG
 from tests.tools.helpers import RunCase
+
+# with the K0 formula that predicts its result (make_tool refuses a tool without one: functions.made_refusals)
+GOOD, WRONG = (c.replace('tests = ["R5"]', 'tests = ["R5"]\n    formulas = ["frame_static.rail_bending"]')
+               for c in (K2_GOOD, K2_WRONG))
 
 
 class MadeToolTest(RunCase, unittest.TestCase):

@@ -973,6 +973,58 @@ def _made_answer(made: Any) -> Record:
             "printed": made.printed[-2000:]}
 
 
+# Words by which a known answer's source names a reference outside the tool (lower case; HIRAKU's choice).
+REFERENCE_WORDS = ("closed form", "closed-form", "textbook", "handbook", "standard", "by hand", "statics",
+                   "閉じた式", "教科書", "便覧", "規格", "手計算", "jis ", "iso ", "iso-", "iiw", "roark", "eurocode")
+
+
+def _names_reference(source: str, spec: Record) -> bool:
+    """Whether a known answer's source names a reference, once the tool's own name and formula ids are taken
+    out of it (the tool's own formula is not a source for its own answer)."""
+    text = f" {source.lower()} "
+    for own in [spec.get("name") or "", *(spec.get("formulas") or [])]:
+        if own:
+            text = text.replace(own.lower(), " ")
+    return any(w in text for w in REFERENCE_WORDS)
+
+
+def made_refusals(ctx: RunContext, made: Any) -> list[str]:
+    """This department's rule on a made tool, after the toolmaker's checks (tool_template.RULE): the spec
+    names formulas the run knows, and one known answer has a nonzero expected value whose source names a
+    reference. The sentences say what to add. [] when the code gave no spec (the toolmaker said why)."""
+    spec = made.spec if isinstance(made.spec, dict) else None
+    if spec is None:
+        return []
+    out = []
+    formulas = [f for f in spec.get("formulas") or [] if isinstance(f, str)]
+    if not formulas:
+        out.append("spec の formulas が空です。この道具の結果を予測する K0 の式の formula_id (list_formulas) を "
+                   "formulas = [...] に書いてください。判定には手計算の予測が要ります")
+    else:
+        known = {f["formula_id"] for f in ctx.formulas.list_formulas()}
+        unknown = [f for f in formulas if f not in known]
+        if unknown:
+            out.append(f"formulas の {', '.join(unknown)} は式の一覧にありません。list_formulas にある formula_id を書いてください")
+    good = [c for c in made.checks if isinstance(c.get("expected"), (int, float)) and c["expected"] != 0
+            and _names_reference(str(c.get("source") or ""), spec)]
+    if not good:
+        out.append("答えの分かっている例に、expected が 0 でなく、source が道具の外の出典 (閉じた式・教科書・規格、"
+                   "例: \"closed form sigma = F L / 4 (h / 2) / I, worked out by hand\") を名指しするものがありません。"
+                   "そういう例を known_answers に少なくとも 1 つ足してください (道具自身の式の値は出典になりません)")
+    return out
+
+
+def _apply_refusals(ctx: RunContext, made: Any) -> Any:
+    refused = made_refusals(ctx, made)
+    if refused:
+        made.problems = list(made.problems) + refused
+        made.usable = False
+        made.tool = None
+        if isinstance(made.spec, dict):
+            made.spec = dict(made.spec, usable=False)
+    return made
+
+
 def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """One whole tool in the shape make_tool takes, and what its parts must be (hiraku.tools.tool_template)."""
     from hiraku.tools.tool_template import tool_template
@@ -981,11 +1033,14 @@ def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent
 
 
 def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
-    """Check a tool's code on its own known answers in a separate process, without shelving it."""
+    """Check a tool's code on its own known answers in a separate process, without shelving it; the answer
+    has the API a made tool may use (tool_template.allowed_api, read from the toolmaker's allow list)."""
     from hiraku.solvers import toolmaker
+    from hiraku.tools.tool_template import RULE, allowed_api
 
     code = _check_code_input("check_tool", args)
-    return _made_answer(toolmaker.make_tool(code, taken=tuple(ctx.tools)))
+    out = _made_answer(_apply_refusals(ctx, toolmaker.make_tool(code, taken=tuple(ctx.tools))))
+    return {**out, "rule": RULE, "api": allowed_api()}
 
 
 UNNAMED_TOOL = "unnamed"
@@ -1030,7 +1085,13 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
         raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
-    made = ctx.made_tools.make(code, taken=tuple(ctx.tools), reason=args.get("reason"))
+    shelf = ctx.made_tools
+    if callable(getattr(shelf, "add", None)):  # checked, then this department's rule, then kept (RunShelf.make's order)
+        made = _apply_refusals(ctx, toolmaker.make_tool(code, taken=tuple(ctx.tools)))
+        made.reason = args.get("reason")
+        shelf.add(made)
+    else:
+        made = _apply_refusals(ctx, shelf.make(code, taken=tuple(ctx.tools), reason=args.get("reason")))
     spec = attempt_spec(made, agent, list(ctx.picked))
     usable = bool(made.usable) and spec is made.spec and spec["usable"]
     ok = "使えます" if usable else "使えません (" + ("; ".join(made.problems) or "spec() の形が契約に合いません")[:300] + ")"
