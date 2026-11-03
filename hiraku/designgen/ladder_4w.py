@@ -620,6 +620,8 @@ PEDAL_BEAM_PAST_MM = 0.0  # the pedal beam ends at the inner side of the innermo
 from hiraku.solvers.k4_geometry import people as _people  # noqa: E402
 
 _BIG = _people.SIZES[_people.BIG]
+SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption; side_net_wire_d's default)
+SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption; side_net_pitch's default)
 _OPTION_VARS.update({
     "side_bars": Var("1", 0.0, 0.0, 1.0, "1: a side frame each side, outboard of the seats at rollbar_width / 2: "
                      "posts on outriggers from the rails at the seat cross members' stations S1 and S2, and "
@@ -637,9 +639,16 @@ _OPTION_VARS.update({
                          "the shoulder of point R (AIST male 95th percentile acromiale height sitting I3)"),
     "side_bar_d": Var("mm", 42.7, 25.0, 60.5, "side bar and side post round tube outside diameter"),
     "side_bar_t": Var("mm", 2.3, 1.6, 4.5, "side bar and side post tube wall"),
-    "side_net": Var("1", 0.0, 0.0, 1.0, "1: a net between the lowest and highest bar and the posts each side "
-                    "(welded wire mesh, SS400 galvanized: SIDE_NET_WIRE_MM wires at SIDE_NET_PITCH_MM, an "
-                    "assumption); needs side_bars = 1 and side_bar_count >= 2; 0: none"),
+    "side_net": Var("1", 0.0, 0.0, 1.0, "1: a net each side (welded wire mesh, SS400 galvanized: SIDE_NET_WIRE_MM "
+                    "wires at SIDE_NET_PITCH_MM, an assumption). With side_bars = 1 (side_bar_count >= 2): between the "
+                    "lowest and highest bar and the side posts. With side_bars = 0: in the line of the roll bar's posts, "
+                    "held by quick-release clips (parts) on the roll bar's post and, in front, on the front post "
+                    "(rollbar_front_posts = 1) or on a short outrigger from the rail (a triangle; build_side_net), "
+                    "covering point R; needs rollbar = 1; 0: none"),
+    "side_net_wire_d": Var("mm", SIDE_NET_WIRE_MM, 1.0, 10.0, "the side nets' wire diameter (the default SIDE_NET_WIRE_MM is an "
+                           "assumption: no catalogue or standard value was checked)"),
+    "side_net_pitch": Var("mm", SIDE_NET_PITCH_MM, 10.0, 200.0, "the side nets' mesh pitch, both ways (the default SIDE_NET_PITCH_MM "
+                          "is an assumption: not checked)"),
     # - ROPS shape (FN-01, R4)
     "rollbar_foot_b": Var("mm", 0.0, 0.0, 80.0, "outrigger (the roll bar's feet out from the rails, also the side "
                           "frame's) rect tube width; 0: as the cross members (cross_b), else at least 30 mm"),
@@ -674,7 +683,8 @@ VARIABLES.update(_OPTION_VARS)
 OPTIONAL.update({
     "part_mounts": tuple(MOUNT_GROUPS),
     "pedal_mount": ("pedal_mount",),
-    "side_bars": ("side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t", "side_net"),
+    "side_bars": ("side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t", "side_net",
+                  "side_net_wire_d", "side_net_pitch"),
     "rollbar_foot": ("rollbar_foot_b", "rollbar_foot_h", "rollbar_foot_t"),
     "rollbar_stays": ("rollbar_stays", "rollbar_stay_d", "rollbar_stay_t"),
     "rollbar_front_posts": ("rollbar_front_posts",),
@@ -732,8 +742,12 @@ VARIABLES["battery_split"] = Var(
     "rails or between the seat cross members. Written into design.variables only when it is 2")
 OPTIONAL["battery_split"] = ("battery_split",)
 INTEGERS = INTEGERS + ("battery_split",)
-SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
-SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
+# The net without side bars (build_side_net), assumptions without a source:
+SIDE_NET_CLIP_MM = 20.0  # a quick-release clip's size (a cube), between the net's edge and the post
+SIDE_NET_CLIP_PITCH_MM = 100.0  # clips along a post at most this far apart
+SIDE_NET_CLIP_KG = 0.05  # a clip's mass
+SIDE_NET_COVER_MM = 100.0  # every point R at least this far inside the net's taut outline
+SIDE_NET_FRONT_GAP_MM = 100.0  # the net's front end at least this far behind the front wheels' tyres
 FENDER_T_MM = 3.0  # fender wall (assumption)
 FENDER_PIECES = 4
 HDPE = {"name": "HDPE (high-density polyethylene), molded", "E_MPa": 1000.0, "nu": 0.4, "density_kg_m3": 950.0,
@@ -753,14 +767,14 @@ JOINT_VALUES = {"butt": {"gusset_leg": 0.0, "cross_members_through": 0.0},
                 "through": {"gusset_leg": 0.0, "cross_members_through": 1.0}}
 # The other choices: each option stands for the switches it sets (the variables alone give the same design).
 # part_mounts: none or brackets for every group (MOUNT_GROUPS; a mix of groups reads as "some"); pedal_mount;
-# side_guard: none, bars or bars and a net; rops: the roll bar alone (hoop), with rear stays, or four posts with
+# side_guard: none, bars, bars and a net, or a net on the roll bar's posts without bars; rops: the roll bar alone (hoop), with rear stays, or four posts with
 # stays; fenders.
 OPTION_VALUES: dict[str, dict[str, dict[str, float]]] = {
     "part_mounts": {"none": {k: 0.0 for k in MOUNT_GROUPS}, "brackets": {k: 1.0 for k in MOUNT_GROUPS}},
     "pedal_mount": {"none": {"pedal_mount": 0.0}, "floor": {"pedal_mount": 1.0}, "bulkhead": {"pedal_mount": 2.0},
                     "post": {"pedal_mount": 3.0}},
     "side_guard": {"none": {"side_bars": 0.0, "side_net": 0.0}, "bars": {"side_bars": 1.0, "side_net": 0.0},
-                   "bars_net": {"side_bars": 1.0, "side_net": 1.0}},
+                   "bars_net": {"side_bars": 1.0, "side_net": 1.0}, "net": {"side_bars": 0.0, "side_net": 1.0}},
     "rops": {"hoop": {"rollbar_stays": 0.0, "rollbar_front_posts": 0.0},
              "hoop_stays": {"rollbar_stays": 1.0, "rollbar_front_posts": 0.0},
              "four_post": {"rollbar_stays": 0.0, "rollbar_front_posts": 1.0},
@@ -1047,8 +1061,9 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         raise DesignGenError("rollbar_stays and rollbar_front_posts need the roll bar (rollbar = 1)")
     columns = build_rops_extra(frame, lay, v, foot) if v["rollbar"] == 1 else {}
     guard = build_side_guard(frame, lay, v, foot, columns) if v["side_bars"] == 1 else None
-    if v["side_net"] == 1 and (guard is None or len(guard["heights"]) < 2):
-        raise DesignGenError("side_net needs the side bars (side_bars = 1) and at least two of them (side_bar_count >= 2)")
+    if v["side_net"] == 1 and guard is not None and len(guard["heights"]) < 2:
+        raise DesignGenError("side_net with the side bars needs at least two of them (side_bar_count >= 2)")
+    net = build_side_net(frame, lay, v, foot) if v["side_net"] == 1 and guard is None else None
     if guard is not None:
         materials.setdefault("stkm13a", json.loads(MATERIALS.read_text(encoding="utf-8"))["stkm13a"])
 
@@ -1076,7 +1091,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     for m in design["members"]:
         if m["id"].startswith("rops_"):
             m["part"] = safety.ROLLBAR_PART
-    add_options(design, v, guard, rho)
+    add_options(design, v, guard, rho, net)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
     systems.write(design)  # system and connects_to of every part, when the contract has them
@@ -1501,7 +1516,106 @@ def build_side_guard(frame: Frame, lay: Layout, v: dict[str, float], foot_sectio
     return {"heights": heights, "x": (s2, s1), "y": half, "d": d, "nodes": nodes, "members": members, "z": zs}
 
 
-def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: float) -> None:
+def net_points(lay: Layout, v: dict[str, float]) -> list[tuple[float, float]]:
+    """(x, z) of the occupants' point R (hip and shoulder, load_path.point_r: AIST 95th percentile male), each
+    seated occupant's x spread by +-seat_slide / 2 (the driver may sit anywhere on the slide)."""
+    from hiraku.solvers.shelf.load_path import point_r
+
+    out = []
+    for t in (p for p in lay.parts if p["kind"] == "occupant" and "." not in p["id"]):
+        for _, x, _ in point_r(t):
+            for dx in ((-v["seat_slide"] / 2.0, v["seat_slide"] / 2.0) if v["seat_slide"] > 0 else (0.0,)):
+                out.append((float(x[0]) + dx, float(x[2])))
+    return out
+
+
+def _inside_by(tri: list, p) -> float:
+    """How far p is inside the counter-clockwise polygon tri (the least distance to its sides; negative outside)."""
+    out = math.inf
+    for a, b in zip(tri, tri[1:] + tri[:1]):
+        e = (b[0] - a[0], b[1] - a[1])
+        L = math.hypot(*e)
+        out = min(out, (e[0] * (p[1] - a[1]) - e[1] * (p[0] - a[0])) / L)
+    return out
+
+
+def build_side_net(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str) -> dict:
+    """The net each side without side bars (side_net = 1, side_bars = 0): a net in the plane of the roll bar's
+    posts (y = +-rollbar_width / 2), fastened by quick-release clips (parts, net_clip) to the roll bar's post every
+    at most SIDE_NET_CLIP_PITCH_MM from just over the post's foot to just under the top beam. In front: with the
+    four posts (rollbar_front_posts = 1) clips on the front post the same way (a rectangle between the posts);
+    without them a short outrigger side_net_foot_<side> from the rail out to the post's line (of the roll bar's foot
+    section) with one clip on its end: the net is the triangle between the post and that clip (a taut net cannot
+    reach beyond the hull of its fastenings). Its length is the least that keeps every point R (net_points) at
+    least SIDE_NET_COVER_MM inside the triangle (the clips' size taken off its corners). Returns {side: {"box",
+    "clips": [(pid, lo, hi, carried_by)], "carried_by", "area"}}."""
+    if v["rollbar"] != 1:
+        raise DesignGenError("side_net without side bars is fastened to the roll bar's posts: it needs rollbar = 1")
+    half, rail_y, rail_z = v["rollbar_width"] / 2.0, v["rail_spacing"] / 2.0, v["rail_height"]
+    if half <= rail_y + SIDE_NET_CLIP_MM:
+        raise DesignGenError("side_net without side bars needs rollbar_width wider than rail_spacing (the net stands "
+                             "in the line of the roll bar's posts, outboard of the rails)")
+    r_post = (v["rollbar_b"] if v["rollbar_square"] == 1 else v["rollbar_d"]) / 2.0
+    xh = lay.station_x("S2") - v["rollbar_offset"]
+    fb, fh = (v[f"rollbar_foot_{k}"] or v[f"cross_{k}"] for k in ("b", "h"))
+    c = SIDE_NET_CLIP_MM
+    z_lo = rail_z + fh / 2.0 + c  # the net's bottom edge: a clip's height over the outriggers' top
+    z_hi = _seat_top(lay) + v["rollbar_height"] - r_post  # the top beam's underside
+    x_r = xh + r_post + c  # the net's rear edge: a clip's length in front of the post
+    H = z_hi - z_lo
+    pts = [(x - x_r, z - z_lo) for x, z in net_points(lay, v)]
+    front_posts = v["rollbar_front_posts"] == 1
+    s1 = lay.station_x("S1")
+    if front_posts:
+        x_f = s1 - r_post - c
+        tri = [(c, c), (x_f - x_r - c, c), (x_f - x_r - c, H - c), (c, H - c)]
+    else:
+        x_max = lay.station_x("A") - v["wheel_radius"] - SIDE_NET_FRONT_GAP_MM  # behind the front wheels
+
+        def tri_of(W):
+            return [(c, c), (W - c, c), (c, H - c)]
+
+        lo_, hi_ = 3.0 * c, x_max - x_r
+        if min(_inside_by(tri_of(hi_), p) for p in pts) < SIDE_NET_COVER_MM:
+            raise DesignGenError(f"a net from the roll bar's post to the rail cannot cover point R by {SIDE_NET_COVER_MM:g} "
+                                 f"mm before x = {x_max:.0f} mm; use the side bars or the four posts")
+        for _ in range(60):
+            mid = 0.5 * (lo_ + hi_)
+            lo_, hi_ = (mid, hi_) if min(_inside_by(tri_of(mid), p) for p in pts) < SIDE_NET_COVER_MM else (lo_, mid)
+        x_f = x_r + math.ceil(hi_)
+        tri = tri_of(x_f - x_r)
+    if front_posts and min(_inside_by(tri, p) for p in pts) < SIDE_NET_COVER_MM:
+        raise DesignGenError(f"the net between the posts does not cover point R by {SIDE_NET_COVER_MM:g} mm")
+    out = {}
+    n_clip = max(2, int(math.ceil((H - c) / SIDE_NET_CLIP_PITCH_MM)) + 1)
+    zs = [z_lo + c / 2.0 + (H - c) * k / (n_clip - 1) for k in range(n_clip)]
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        y = sy * half
+        post = (f"{side}{ROLLBAR_STATION}O" if f"{side}{ROLLBAR_STATION}O" in frame.nodes
+                else f"{side}{ROLLBAR_STATION}", f"{side}{ROLLBAR_STATION}T")
+        clips = [(f"side_net_clip_{side}{k + 1}", [xh + r_post, y - c / 2.0, z - c / 2.0], [x_r, y + c / 2.0, z + c / 2.0],
+                  list(post)) for k, z in enumerate(zs)]
+        carried = list(post)
+        if front_posts:
+            col = [m for m in frame.members if m["id"].startswith(f"rops_front_post_{side}")]
+            fnodes = sorted({m[k] for m in col for k in ("node_a", "node_b")})
+            clips += [(f"side_net_clip_{side}{len(zs) + k + 1}", [x_f, y - c / 2.0, z - c / 2.0],
+                       [s1 - r_post, y + c / 2.0, z + c / 2.0], fnodes) for k, z in enumerate(zs)]
+            carried += fnodes
+        else:
+            root = mounts.split_rail(frame, [x_f - c / 2.0, sy * rail_y, rail_z], f"{side}N", set(), "")
+            tip = _outrigger(frame, f"side_net_foot_{side}", root, [x_f - c / 2.0, y, rail_z], foot_section)
+            clips.append((f"side_net_clip_{side}{len(zs) + 1}", [x_f - c, y - c / 2.0, rail_z + fh / 2.0],
+                          [x_f, y + c / 2.0, z_lo], [root, tip]))
+            carried += [tip]
+        area = (x_f - x_r) * H / (1.0 if front_posts else 2.0)  # the net's own outline
+        out[side] = {"box": {"center_mm": [(x_r + x_f) / 2.0, y, (z_lo + z_hi) / 2.0],
+                             "size_mm": [x_f - x_r, v["side_net_wire_d"], H]},
+                     "clips": clips, "carried_by": carried, "area": area, "shape": "rectangle" if front_posts else "triangle"}
+    return out
+
+
+def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: float, net: dict | None = None) -> None:
     """The parts of the options, on the finished design (after the roll bar part): the side nets,
     the fenders, the pedal stands, then the part mounts (kit/attach.py). The materials they name are added."""
     from hiraku.designgen.kit import attach
@@ -1519,8 +1633,8 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
                 x0, x1 = guard["x"][0] + guard["d"] / 2.0, guard["x"][1] - guard["d"] / 2.0
                 z0, z1 = guard["z"][0] + guard["d"] / 2.0, guard["z"][-1] - guard["d"] / 2.0
                 y = guard["y"] if side == "L" else -guard["y"]
-                w = SIDE_NET_WIRE_MM
-                areal = 2.0 * math.pi * w * w / 4.0 / SIDE_NET_PITCH_MM * float(mats["ss400"]["density_kg_m3"]) * 1e-9
+                w = v["side_net_wire_d"]
+                areal = 2.0 * math.pi * w * w / 4.0 / v["side_net_pitch"] * float(mats["ss400"]["density_kg_m3"]) * 1e-9
                 design["parts"].append({
                     "id": f"side_net_{side}", "name": f"{'左' if side == 'L' else '右'}の横の網 (棒と柱のあいだ)",
                     "kind": "side_net", "box": {"center_mm": [(x0 + x1) / 2.0, y, (z0 + z1) / 2.0],
@@ -1528,6 +1642,21 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
                     "mass_kg": float(areal * (x1 - x0) * (z1 - z0)), "carried_by": list(guard["nodes"][side]),
                     "material": "ss400", "finish": "galvanized"})
                 used.add("ss400")
+    for side, n in (net or {}).items():
+        w = v["side_net_wire_d"]
+        areal = 2.0 * math.pi * w * w / 4.0 / v["side_net_pitch"] * float(mats["ss400"]["density_kg_m3"]) * 1e-9
+        name = "左" if side == "L" else "右"
+        shape = "柱のあいだ" if n["shape"] == "rectangle" else "柱とレールのあいだの三角"
+        design["parts"].append({
+            "id": f"side_net_{side}", "name": f"{name}の横の網 (ロールバーの柱に留める、外せる; {shape})",
+            "kind": "side_net", "box": n["box"], "mass_kg": float(areal * n["area"]), "carried_by": n["carried_by"],
+            "material": "ss400", "finish": "galvanized"})
+        for pid, lo, hi, nodes in n["clips"]:
+            design["parts"].append({
+                "id": pid, "name": f"{name}の網の留め具 (外せる)", "kind": "net_clip",
+                "box": {"center_mm": [(a + b) / 2.0 for a, b in zip(lo, hi)], "size_mm": [b - a for a, b in zip(lo, hi)]},
+                "mass_kg": SIDE_NET_CLIP_KG, "carried_by": list(nodes), "material": "ss400", "finish": "galvanized"})
+        used.add("ss400")
     if v["fenders"] == 1:
         if v["fender_width"] < v["wheel_width"]:
             raise DesignGenError(f"fender_width ({v['fender_width']:g} mm) must be at least the tyre's ({v['wheel_width']:g} mm)")
