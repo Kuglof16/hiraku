@@ -1417,6 +1417,10 @@
           "type": "integer",
           "minimum": 1
         },
+        "mesher": {
+          "type": "string",
+          "description": "What made the mesh, e.g. frame_mesh (the version's shell mesh) or frame_tubes (one shell mesh per tube, tied). A version may have more than one mesh; each field names the one it is on by mesh_id."
+        },
         "element_type": {
           "enum": [
             "shell",
