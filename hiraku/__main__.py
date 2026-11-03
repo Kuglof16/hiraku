@@ -76,6 +76,8 @@ def _print_end(ctx, *, scripted: bool) -> None:
     print(f"status: {p['status']}" + (f" ({p['stop_reason']})" if p.get("stop_reason") else ""))
     if scripted:
         print("cost_usd: 0 (scripted: Claude is not called)")
+    elif p.get("cost_usd") is None:
+        print("cost_usd: null (not known to HIRAKU: the person's own Claude Code pays)")
     elif any(e["kind"] == "cost.updated" for e in ctx.store.events()):
         print(f"cost_usd: {p['cost_usd']:.4f}")
     else:

@@ -276,6 +276,11 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
         self.assertIn("まとめ役の最後に終わった番の時点で", str(cm.exception))
 
+    def test_a_null_cost_does_not_stop_a_revision(self):
+        self.ctx.project["cost_usd"] = None  # the plugin path: HIRAKU cannot know the cost
+        out = revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertEqual(out["design_version"], 2)
+
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
     def plan(self, revise=True):

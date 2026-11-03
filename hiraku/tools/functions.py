@@ -636,7 +636,7 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     if v - 1 >= p["round_limit"]:
         raise ToolError(f"設計の直しは round_limit ({p['round_limit']} 回) まで使い切りました (今の版は {v})。"
                         f"直さずに、今の版の判定で終えてください")
-    if p["cost_usd"] >= p["cost_limit_usd"]:
+    if p["cost_usd"] is not None and p["cost_usd"] >= p["cost_limit_usd"]:  # null: the plugin path, not known
         raise ToolError(f"まとめ役の最後に終わった番の時点で、費用 ({p['cost_usd']:.4g} USD) が上限 "
                         f"{p['cost_limit_usd']} USD に達しているので、設計は直せません")
     design = ctx.store.design()
