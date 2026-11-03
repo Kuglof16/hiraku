@@ -98,6 +98,11 @@ class Topology(unittest.TestCase):
 
     def test_one_square_facing_the_other_way(self):
         self.assertEqual(self.topo(elements=[[0, 1, 4, 3], [1, 4, 5, 2]])["orientation_conflicts"], 1)
+        # between two members (each tube faces out of itself) it is a seam, not a conflict
+        t = mq.measure(self.NODES, [[0, 1, 4, 3], [1, 4, 5, 2]], ["rail", "cross"])["topology"]
+        self.assertEqual((t["orientation_conflicts"], t["seam_conflicts"]), (0, 1))
+        t = mq.measure(self.NODES, [[0, 1, 4, 3], [1, 4, 5, 2]], ["rail", "rail"])["topology"]
+        self.assertEqual((t["orientation_conflicts"], t["seam_conflicts"]), (1, 0))
 
     def test_a_crack(self):
         # the second square on its own copies of nodes 1 and 4: two groups, two pairs of coincident nodes

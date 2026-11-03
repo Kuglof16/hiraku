@@ -8,6 +8,13 @@ Tyre and suspension forces fed from the same Python code carry the same
 errors into both, so a replay through Rapier checks only the rigid-body motion
 and the contacts.
 
+Habits of Rapier 0.21 seen here: it computes in single precision (about 7
+digits); numSolverIterations is also its number of sub-steps (1 gives plain
+semi-implicit Euler per step); and its addForceAtPoint takes the moment about
+the world centre of mass it last computed in a step, which before the first
+step is the world origin, so driver.mjs applies a force at a point as the force
+plus its moment about the body's position.
+
 Needs Node and `npm install` in this folder (node_modules is not committed).
 """
 
