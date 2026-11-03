@@ -220,6 +220,15 @@ class K2Tool(ABC):
             self._note(f"{name} = {p.default:g} {p.unit} (assumed; neither the load case nor the design gives {names})")
         return si({"value": p.default, "unit": p.unit}, want)
 
+    def turn_rate(self, lp: dict, name: str) -> float | None:
+        """A rotational speed param (q) in rad/s: rpm and Hz count revolutions (2 pi rad each),
+        rad/s and deg/s are angular rates."""
+        try:
+            rev = self.q(lp, name, "Hz")
+        except ValueError:
+            return self.q(lp, name, "rad/s")
+        return None if rev is None else 2.0 * math.pi * rev
+
     def given(self, lp: dict, name: str) -> bool:
         """The load case or a design variable gives `name` (the default is not used)."""
         return name in lp or any(v in self._vars for v in self._declared(name).var)
@@ -263,7 +272,7 @@ class K2Tool(ABC):
         if torque is None or gear is None:
             raise DesignError("give motor_torque (N*m at the motor), gear_ratio (1) and motor_power (kW) "
                               "in the load case params or design.variables")
-        power, vmax = self.q(lp, "motor_power", "W"), self.q(lp, "motor_max_speed", "rad/s")
+        power, vmax = self.q(lp, "motor_power", "W"), self.turn_rate(lp, "motor_max_speed")
         if power is None:
             self._note("no motor power given: the drive is limited by the torque only")
         if vmax is None:
