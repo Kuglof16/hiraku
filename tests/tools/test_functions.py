@@ -177,6 +177,57 @@ class LoopTest(RunCase, unittest.TestCase):
             compare(self.ctx, {"prediction_id": force["prediction_id"], "analysis_id": ana["analysis_id"]})
 
 
+class CompareWhereTest(RunCase, unittest.TestCase):
+    """compare(where=...) picks the result at one member; a verdict only at the failing end of all places."""
+
+    def _r1_with_cross(self, cross_factor):
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def with_cross(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            rail = out["results"][0]
+            out["results"] = [rail, dict(rail, value=rail["value"] * cross_factor, where="cross_B")]
+            return out
+
+        tool.run = with_cross
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                  "prediction_ids": [r1["prediction_id"]]})
+        return r1, ana2
+
+    def test_a_place_that_is_not_the_failing_end_is_compared_but_not_judged(self):
+        r1, ana = self._r1_with_cross(2.0)
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "where": "rail_L0"})
+        self.assertEqual(out["comparison"]["status"], "match")
+        self.assertEqual(out["where"], "rail_L0")
+        self.assertIsNone(out["verdict"])
+        self.assertIn("合否", out["note"])
+        self.assertEqual(self.ctx.store.records("verdict"), [])
+        self.assert_events_fit()  # the record keeps the contract's shape
+
+    def test_the_failing_end_chosen_by_place_is_judged(self):
+        r1, ana = self._r1_with_cross(0.5)
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "where": "rail_L0"})
+        self.assertTrue(out["verdict"]["pass"])
+        self.assertNotIn("note", out)
+
+    def test_an_unknown_place_says_which_places_there_are(self):
+        r1, ana = self._r1_with_cross(2.0)
+        with self.assertRaises(ToolError) as cm:
+            compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana["analysis_id"], "where": "rail_R9"})
+        self.assertIn("cross_B, rail_L0", str(cm.exception))
+
+    def test_the_mcp_schema_takes_where(self):
+        from hiraku.tools.mcp import INPUT_SCHEMAS
+
+        self.assertIn("where", INPUT_SCHEMAS["compare"]["properties"])
+        self.assertFalse(INPUT_SCHEMAS["compare"]["additionalProperties"])
+
+
 class PickResultTest(unittest.TestCase):
     def test_several_places_give_the_unfavourable_one(self):
         from hiraku.tools.functions import _pick_result

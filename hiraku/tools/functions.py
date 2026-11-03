@@ -22,8 +22,8 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
-from hiraku.tools.judge import (OP_JA, init_judgements, judged_quantity, make_verdict, prediction_is_unfavourable,
-                                unfavourable_side, update_judgement)
+from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
+                                prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -426,11 +426,12 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
 
 
 def _pick_result(analysis: Record, quantity: str, criterion: Record | None = None,
-                 predicted_quantity: str | None = None) -> Record:
+                 predicted_quantity: str | None = None, where: str | None = None) -> Record:
     """The analysis result of a quantity. Given at several places, the unfavourable one: when the
     comparison is for the criterion (the criterion's quantity is this result's name or the
     prediction's quantity, predicted_quantity, as when result_quantity names the result) the
-    largest under <= and <, the smallest under >= and >; otherwise the largest in size."""
+    largest under <= and <, the smallest under >= and >; otherwise the largest in size.
+    With `where`, only the results at that place (a member, node, support or part id)."""
     hits = [r for r in analysis["results"] if r["quantity"] == quantity]
     if not hits:
         have = ", ".join(sorted({r["quantity"] for r in analysis["results"]})) or "なし"
@@ -438,6 +439,13 @@ def _pick_result(analysis: Record, quantity: str, criterion: Record | None = Non
             f"解析 {analysis['analysis_id']} の結果に {quantity!r} がありません (結果: {have})。"
             f"名前が違うだけなら result_quantity で解析の側の名前を指定してください"
         )
+    if where is not None:
+        at = [r for r in hits if r.get("where") == where]
+        if not at:
+            places = ", ".join(sorted({r["where"] for r in hits if r.get("where")})) or "なし (場所の無い結果だけ)"
+            raise ToolError(f"解析 {analysis['analysis_id']} の {quantity} に、場所 {where!r} の結果はありません "
+                            f"(場所: {places})。where を外すと、全部の場所のうち不利な方と照合します")
+        hits = at
     if criterion is not None and criterion["quantity"] in (quantity, predicted_quantity):
         if unfavourable_side(criterion["op"]) == "larger":
             return max(hits, key=lambda r: r["value"])
@@ -466,7 +474,11 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     diff_rel = (analysed - predicted) / |predicted|. A prediction of 0 (zero predictions can be
     legitimate, e.g. an interference of 0 mm) divides by |analysed| instead (0 when both are 0),
     which the contract does not define."""
-    _check_input("compare", args)
+    where = args.get("where")
+    if where is not None and not (isinstance(where, str) and where):
+        raise ToolError(f"compare の where は部材か部品の ID (文字列) です: {where!r}")
+    # tool_input.compare has no `where` yet (the place goes in the tool's answer, not the record)
+    _check_input("compare", {k: v for k, v in args.items() if k != "where"})
     pred = ctx.prediction(args["prediction_id"])
     if pred is None:
         raise ToolError(f"予測 {args['prediction_id']!r} はありません (get_context の records.predictions)")
@@ -484,12 +496,16 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         )
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"])
+    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"], where)
     # the result a verdict may come from (docs/contract.md 判定に使う量: frame_shell judges max_stress on
     # max_hot_spot_stress, never on its element max_stress)
     judged = judged_quantity(ctx, ana["tool"], crit["quantity"]) if crit else None
     for_verdict = bool(crit) and (res["quantity"] == judged
                                   or (judged == crit["quantity"] and pred["quantity"] == crit["quantity"]))
+    if for_verdict and where is not None:  # a verdict only on the failing end over all places, never on one chosen
+        worst = failing_end([r for r in ana["results"] if r["quantity"] == res["quantity"]
+                             and r["unit"] == res["unit"]], crit["op"])
+        for_verdict = worst["value"] == res["value"]
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
@@ -519,6 +535,11 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     }
     ctx.store.add_record("comparison", cmp, design_version=v, agent=agent, domain=lc["domain"])
     out: Record = {"comparison": cmp, "verdict": None}
+    if where is not None:
+        out["where"] = where
+        if not for_verdict and crit and res["quantity"] == judged:
+            out["note"] = (f"{where} の値は、全部の場所のうち不合格に近い方の値ではないので、この照合からは合否を作りません。"
+                           f"合否は where を外した照合 (全部の場所の不利な方) で作ります")
     if cmp["status"] == "match":
         _resolve_causes(ctx, cmp, pred, agent)
         if for_verdict and crit["limit"]["unit"] == res["unit"]:

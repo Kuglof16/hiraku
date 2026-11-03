@@ -47,6 +47,18 @@ def contract_input_schema(name: str) -> Record:
     return schema
 
 
+COMPARE_WHERE = {"type": "string", "description": (
+    "場所 (部材・部品・支持の ID)。解析の結果が場所ごとに出ていて、予測がその場所の式 (レールの式ならレールの部材) の"
+    "ときだけ付ける。その場所の結果と照合する。合否は全部の場所のうち不合格に近い方でしか作らない")}
+
+
+def compare_input_schema() -> Record:
+    """tool_input.compare and `where` (the contract's compare input has no place yet; the tool takes it)."""
+    schema = contract_input_schema("compare")
+    schema["properties"] = {**schema["properties"], "where": COMPARE_WHERE}
+    return schema
+
+
 def _domain_filter(extra: Record | None = None) -> Record:
     props: Record = {"domain": {"enum": list(contract.DOMAINS), "description": "この分野だけ"}}
     props.update(extra or {})
@@ -71,7 +83,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     }),
     "record_prediction": contract_input_schema("record_prediction"),
     "analyze": contract_input_schema("analyze"),
-    "compare": contract_input_schema("compare"),
+    "compare": compare_input_schema(),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
     "propose_design": contract_input_schema("propose_design"),
@@ -114,7 +126,9 @@ DESCRIPTIONS = {
     ),
     "compare": (
         "予測と解析の結果を照合する。許す幅は荷重条件で決まっている。一致して基準があれば合否 (verdict、値は解析) も作る。"
-        "食い違えば record_cause を書くまでその分野は先に進めない"
+        "食い違えば record_cause を書くまでその分野は先に進めない。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の"
+        "式 (レールの式など) のときは where に部材の ID を付け、その場所の結果と比べる (付けないと全部の場所の不利な方、"
+        "別の部材の最大と比べてしまう)。合否は全部の場所のうち不合格に近い方でしか作らない"
     ),
     "record_cause": (
         "食い違った照合の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
