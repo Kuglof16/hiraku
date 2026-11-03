@@ -27,7 +27,9 @@ field.frames per member and a series of the largest hot spot.
 
 from __future__ import annotations
 
+import hashlib
 import math
+from collections import OrderedDict
 
 import numpy as np
 
@@ -68,6 +70,12 @@ HOT_SPOT_ASSUMPTION = (
     "frame_shell (k1_shell.stress.hot_spots) と同じ決まり。出典: A. F. Hobbacher, Recommendations for Fatigue Design of "
     "Welded Joints and Components, 2nd ed., Springer 2016 (このリポジトリでは確かめていない)。疲労のための構造応力を"
     "静的な強さの判定に使う (局所の降伏を許さない、安全側の扱い)")
+FACET_ASSUMPTION = (
+    "丸い管は、要素の大きさにかかわらず {n} 角 (以上) の多角形の管にした。鞍と冠のホットスポットは角の数で決まり、丸い T "
+    "(42.7×2.3 に 34×2.3、要素 14 mm) で測ると、{n} 角の値は 96 角より最大 6.6 % 低い (90° の枝の側。90° の相手の管の側 "
+    "3.2 %、60° は相手の管の側 2.7 %・枝の側 2.4 % 低い。45° は相手の管の側 0.4 % 低く、枝の側 0.9 % 高い)。"
+    "この値のホットスポット応力は、安全側ではない (最大 6.6 % 小さく出ている) ものとして読む。要素の大きさでは収束している"
+    " (細かい 2 つの差 0.5 % 以内)")
 PEAK_ASSUMPTION = ("max_stress は切り口の線の上の要素の値で、鋭い入隅のシェルでは特異 (要素を細かくするほど大きくなる)。参考と"
                    "して残し、判定には使わない")
 MOUNT_ASSUMPTION = ("取付点の力は、取付点の節から相手の管の壁の、管の半径の範囲の節へ RBE3 で分けて入れる (金具の大きさとして"
@@ -157,11 +165,87 @@ class FrameTubes(BuiltinTool):
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
     needs_mesh = True
+    applies_to = ["space_frame_utv"]  # the kinds of design (hiraku.designgen ARCHETYPES keys) the tool is for
+    stage = 3  # contract tool_spec.stage: shell and solid finite elements
 
     def known_answers(self) -> list[Record]:
         return tube_known_answers()
 
+    def describe(self) -> Record:
+        return dict(super().describe(), applies_to=list(self.applies_to), stage=self.stage)
+
+    def spec(self) -> Record:
+        """The tool_spec; applies_to and stage only when the contract's tool_spec has those fields (it allows no
+        others)."""
+        from hiraku import contract
+
+        out = super().spec()
+        fields = contract.schema().get("$defs", {}).get("tool_spec", {}).get("properties", {})
+        if "applies_to" in fields:
+            out["applies_to"] = list(self.applies_to)
+        if "stage" in fields:
+            out["stage"] = self.stage
+        return out
+
+    def applies(self, design: Record) -> str | None:
+        """None for a design this tool is for: every support on a double wishbone (a K&C table with hardpoints)
+        whose six body-side pickups are frame nodes, as space_frame_utv builds them; else why not, saying what
+        the tool is for and what to use instead."""
+        nodes = [np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])]
+        missing = []
+        for s in design.get("supports", []):
+            hp = (s.get("suspension") or {}).get("hardpoints_mm") or {}
+            for k in tubes.MOUNT_KEYS:
+                if k not in hp or not any(float(np.linalg.norm(p - np.asarray(hp[k], float))) < 1e-6 for p in nodes):
+                    missing.append(f"{s.get('id')}.{k}")
+        if not design.get("supports") or missing:
+            where = f" (not at a frame node: {', '.join(missing[:4])}{', ...' if len(missing) > 4 else ''})" if missing else ""
+            return ("frame_tubes は立体フレーム (space_frame_utv) の設計に使います。この設計のサスペンションの取付点はフレームの"
+                    f"節にありません{where}。梯子フレームなら frame_shell を使ってください")
+        return None
+
+    def make_mesh(self, design: Record) -> Record:
+        """The tube-by-tube shell mesh of the design as a contract `mesh` record without mesh_id (mesher
+        frame_tubes), at the default element size. The model behind it (mounts, holds, and the factorisation once
+        solved) is kept in this process, so the version's other load cases reuse it (_PREPARED)."""
+        why = self.applies(design)
+        if why:
+            raise LoadCaseError(why)
+        try:
+            p = tubes.prepare(design, tubes.ELEMENT_SIZE_MM)
+        except (tubes.TubeMeshError, ValueError) as e:
+            raise LoadCaseError(str(e)) from None
+        rec = tubes.mesh_record(p["fs"], design, self.name)
+        _remember(rec, p)
+        return rec
+
+    def _mesh_to_solve_on(self, design: Record, params: dict, size: float):
+        """(the passed mesh to draw on or None, the prepared model to solve on or None, why the mesh is not
+        drawn on or None). The passed mesh is used when it is this tool's (mesher) at this element size: its
+        model from this process's cache, else meshed again from the design and checked to be the same."""
+        mesh, why = mesh_of(design, params)
+        if mesh is None:
+            return None, None, why
+        if mesh.get("mesher") != self.name:
+            return None, None, (f"mesh {mesh.get('mesh_id')} was made by {mesh.get('mesher') or 'frame_mesh'}, not by "
+                                f"{self.name}; the stresses are given per member")
+        if abs(float(mesh.get("element_size_mm", -1.0)) - size) > 1e-9:
+            return None, None, (f"mesh {mesh.get('mesh_id')} has {mesh.get('element_size_mm')} mm elements, the run asks "
+                                f"for {size:g} mm: solved on a mesh of that size, not drawn on {mesh.get('mesh_id')}")
+        p = _PREPARED.get(_digest(mesh))
+        if p is None:
+            p = tubes.prepare(design, size)
+            again = tubes.mesh_record(p["fs"], design, self.name)
+            if _digest(again) != _digest(mesh):
+                return None, p, (f"mesh {mesh.get('mesh_id')} is not the tube-by-tube mesh of this design at {size:g} mm; "
+                                 f"solved on that one, not drawn on {mesh.get('mesh_id')}")
+            _remember(again, p)
+        return mesh, p, None
+
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
+        why = self.applies(design)
+        if why:
+            raise LoadCaseError(why)
         design = on_board(design, load_case)
         g = g_factor(load_case)
         size = run_param(params, ELEMENT_SIZE)
@@ -193,18 +277,18 @@ class FrameTubes(BuiltinTool):
                 src = SOURCES[source].format(step=step or 0.0, sup=",".join(sup or []))
                 assumptions.append(K0_ASSUMPTION)
                 t_s = None
-            r = tubes.analyse_loads(design, {"case": loads}, size)
+            mesh, prepared, why = self._mesh_to_solve_on(design, params, size)
+            r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared)
         except (tubes.TubeMeshError, ValueError) as e:
             raise LoadCaseError(str(e)) from None
         c = r["cases"]["case"]
         if c["status"] != "solved":
             raise LoadCaseError("the shell model was not solved: " + "; ".join(c["reasons"]))
         out = outputs(design, r, loads, src)
-        out["assumptions"] = assumptions + out.get("assumptions", [])
-        mesh, why = mesh_of(design, params)
+        out["assumptions"] = (assumptions + out.get("assumptions", [])
+                              + [FACET_ASSUMPTION.format(n=tubes.HOT_SPOT_MIN_FACETS)])
         if mesh is not None:
-            why = (f"mesh {mesh.get('mesh_id')} is the version's mesh, not the tube-by-tube mesh solved here; the "
-                   f"stresses are given per member")
+            out["fields"] += tube_mesh_fields(r, mesh)
         if why:
             out["effects"].append({"name": why})
         series = upstream_mount_series(params.get("upstream_analyses"), design)
@@ -213,6 +297,44 @@ class FrameTubes(BuiltinTool):
         if t_s is not None:
             out["effects"].append({"name": f"K2 state time t {t_s:.3f} s", "value": t_s, "unit": "s"})
         return out
+
+
+_PREPARED: "OrderedDict[str, dict]" = OrderedDict()  # mesh digest -> tubes.prepare() record, this process
+CACHE_SIZE = 2  # versions kept (a frame's model is some hundreds of MB)
+
+
+def _digest(mesh: Record) -> str:
+    """A digest of a mesh record's geometry and element order (not its id, quality or notes)."""
+    h = hashlib.sha1()
+    h.update(np.asarray(mesh["nodes_mm"], float).round(4).tobytes())
+    h.update(np.asarray(mesh["elements"], np.int64).tobytes())
+    h.update("|".join(mesh["element_member"]).encode())
+    h.update(repr(float(mesh.get("element_size_mm", 0.0))).encode())
+    return h.hexdigest()
+
+
+def _remember(mesh: Record, prepared: dict) -> None:
+    _PREPARED[_digest(mesh)] = prepared
+    _PREPARED.move_to_end(_digest(mesh))
+    while len(_PREPARED) > CACHE_SIZE:
+        _PREPARED.popitem(last=False)
+
+
+LABEL_MESH = {"max": "シェルの von Mises (外と内の面の大きい方、管ごとのシェル)",
+              "top": "シェルの von Mises (外の面、管ごとのシェル)", "bottom": "シェルの von Mises (内の面、管ごとのシェル)"}
+
+
+def tube_mesh_fields(r: dict, mesh: Record) -> list[Record]:
+    """Shell von Mises per element (three surfaces) on the passed frame_tubes mesh, in its element order."""
+    from ..fe.shell import shell_stresses
+
+    fs, sol = r["shells"], r["solutions"]["case"]
+    out = []
+    for surface in ("max", "top", "bottom"):
+        per = {tb.id: shell_stresses(sol, tb.group).von_mises(surface) for tb in fs.tubes.values()}
+        out.append({"kind": "stress", "label": LABEL_MESH[surface], "unit": "MPa", "mesh_id": mesh["mesh_id"],
+                    "surface": surface, "per_element": [round(v, 2) for v in tubes.element_values(fs, per)]})
+    return out
 
 
 def outputs(design: Record, r: dict, loads: list, src: str) -> Record:
@@ -319,7 +441,6 @@ def tube_frames(design: Record, r: dict, series) -> Record:
 
 T_JOINT_P_N = 100.0
 T_SIZE_MM = 10.0
-T_TOL = 0.10  # tie against shared nodes at the same read points (measured: see tube_known_answers)
 
 
 def t_joint_design() -> Record:
@@ -405,14 +526,20 @@ def tube_known_answers() -> list[Record]:
     case = (f"T joint of rect tubes (40x80x2.3 through tube held at both ends, 40x40x2.3 branch square on its side "
             f"wall), {T_JOINT_P_N:g} N down at the branch's end, {T_SIZE_MM:g} mm elements")
     fs, sol, hs = t_joint_tubes()
-    ref = t_joint_k1()
-    for side in ("host", "branch"):
-        a = tubes.hot_spot_max([h for h in hs if h["side"] == side])
-        b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
-        out.append(check_record(case, f"max_hot_spot_stress ({side} side)", abs(b["value"]),
-                                abs(a["value"]) if a else None, "MPa", T_TOL,
-                                "k1_shell.stress.hot_spots on the same joint meshed with shared nodes (frame_shell's rule "
-                                "and mesh); a cross-check of the tie model, not a closed form"))
+    for size, tol, what in ((T_SIZE_MM, 1e-4, "at this size every ring node falls on a host node, so the joint is "
+                                              "shared nodes as k1_shell's: a check of the read-out rule on the same mesh"),
+                            (5.0, 0.03, "at 5 mm 10 of the ring's 48 nodes are tied: a cross-check of the tie, not a "
+                                        "closed form")):
+        c = case if size == T_SIZE_MM else case.replace(f"{T_SIZE_MM:g} mm elements", f"{size:g} mm elements")
+        h_t = hs if size == T_SIZE_MM else t_joint_tubes(size)[2]
+        ref = t_joint_k1(size)
+        for side in ("host", "branch"):
+            a = tubes.hot_spot_max([h for h in h_t if h["side"] == side])
+            b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
+            out.append(check_record(c, f"max_hot_spot_stress ({side} side)", abs(b["value"]),
+                                    abs(a["value"]) if a else None, "MPa", tol,
+                                    "k1_shell.stress.hot_spots on the same joint meshed with shared nodes (frame_shell's "
+                                    "rule and mesh); " + what))
     got, exp, s = branch_bending(fs, sol)
     out.append(check_record(case, f"branch top wall outer axial stress at s = {s:.0f} mm", exp, got, "MPa", 0.03,
                             "beam theory M c / I (I of the shell's mid-line section)"))

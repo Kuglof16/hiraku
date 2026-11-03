@@ -1,7 +1,7 @@
 // A2 - hearing: the missing requirements asked once (left), the requirements and where each came from (right) (N14).
 
 import { fill, h } from "./dom.js";
-import { assumptions, hearingRows, showValue, SOURCE_JA } from "./model.js";
+import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA } from "./model.js";
 
 const STATE_JA = { asking: "質問中", answered: "答えた", defaulted: "既定値のまま", open: "答えなし" };
 
@@ -42,6 +42,36 @@ function question(q, api, ui) {
       : null);
 }
 
+/** A rule that hit: the parts, the sentence, and the two things a person can decide. Hovering a part tells the host. */
+function ruleQuestion(q, api, ui) {
+  const picked = ui.ruleAnswers[q.rule_id];
+  const interactive = q.state === "asking" && !!api.answerHearing;
+  const focus = (ids) => ui.onRuleFocus?.(ids);
+  return h("article", { class: `in-q in-rq ${q.state}`, dataset: { rule: q.rule_id },
+      onmouseenter: () => focus(q.parts), onmouseleave: () => focus([]), onfocusin: () => focus(q.parts), onfocusout: () => focus([]) },
+    h("header", {},
+      h("span", { class: "in-badge" }, "規則"),
+      h("code", {}, q.rule_id),
+      h("span", { class: "in-state" }, STATE_JA[q.state])),
+    h("p", { class: "in-qtext" }, q.text),
+    q.parts?.length ? h("p", { class: "in-parts-hit" }, "当たった部品: ", q.parts.map((p) => h("code", {}, p))) : null,
+    h("div", { class: "in-choices" }, q.choices.map((c) =>
+      h("button", {
+        class: `in-choice${picked && picked.choice === c ? " picked" : ""}${q.answer && q.answer.choice === c ? " chosen" : ""}`,
+        type: "button", disabled: !interactive,
+        onclick: () => { ui.ruleAnswers[q.rule_id] = { rule_id: q.rule_id, choice: c, ...(ui.ruleAnswers[q.rule_id]?.note ? { note: ui.ruleAnswers[q.rule_id].note } : {}) }; ui.rerender(); },
+      }, RULE_CHOICE_JA[c] || c))),
+    interactive && picked?.choice === "drop_rule"
+      ? h("input", { class: "in-other", type: "text", placeholder: "外す理由 (書くと記録に残ります)", value: picked.note || "",
+          oninput: (e) => { const v = e.target.value.trim(); if (v) ui.ruleAnswers[q.rule_id].note = v; else delete ui.ruleAnswers[q.rule_id].note; } })
+      : null,
+    q.answer
+      ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
+          q.answer.note ? h("small", {}, ` (${q.answer.note})`) : null)
+      : null,
+    q.state === "open" ? h("p", { class: "in-default must" }, "答えが無いまま進みました") : null);
+}
+
 function requirementRow(r) {
   const lowTrust = r.trust === 3;
   return h("tr", { class: `${r.fresh ? "fresh" : ""}${lowTrust ? " low" : ""}`, title: r.basis || "" },
@@ -68,24 +98,26 @@ async function submit(api, ui, body) {
 
 export function renderA2(el, m, api, ui) {
   const rows = hearingRows(m);
-  const asking = rows.some((r) => r.state === "asking");
+  const rules = ruleRows(m);
+  const asking = [...rows, ...rules].some((r) => r.state === "asking");
+  const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true });
   const canSend = asking && !!api.answerHearing && !ui.sending;
   const must = rows.filter((r) => r.ask === "must" && !r.answer);
   const bySource = (s) => m.requirements.filter((r) => r.source === s).length;
   fill(el,
     h("section", { class: "in-left" },
-      h("h2", {}, "ヒアリング", h("small", {}, rows.length ? `${rows.length} 件を、まとめて 1 回` : "")),
+      h("h2", {}, "ヒアリング", h("small", {}, rows.length || rules.length ? `${[rows.length ? `要件 ${rows.length} 件` : "", rules.length ? `規則 ${rules.length} 件` : ""].filter(Boolean).join("・")} を、まとめて 1 回` : "")),
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
-        rows.length ? rows.map((q) => question(q, api, ui))
+        rows.length || rules.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]
           : h("p", { class: "in-empty" }, m.requirements.length ? "足りない要件はありません。要件のファイルのまま進みます" : "要件はまだありません")),
-      rows.length
+      rows.length || rules.length
         ? h("div", { class: "in-composer" },
             h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えること", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),
             ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした: ${ui.error}`) : null,
             h("div", { class: "in-actions" },
               h("button", { class: "in-btn", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "既定値のまま進める"),
               h("button", { class: "in-btn primary", disabled: !canSend,
-                onclick: () => submit(api, ui, { answers: ui.answers, note: ui.note || "", useDefaults: true }) }, ui.sending ? "送っています…" : "答えて進める")))
+                onclick: () => submit(api, ui, answersBody()) }, ui.sending ? "送っています…" : "答えて進める")))
         : null,
       !rows.length && m.hearing.answered?.answers?.length
         ? h("p", { class: "in-foot" }, `既定値で足したもの: ${m.hearing.answered.answers.map((a) => `${a.key} ${a.name}`).join("・")}`)

@@ -94,7 +94,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n10", "n15",
+                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n09", "n10", "n11", "n12", "n13", "n14", "n15",
                                 "n16", "n17", "n17b", "n18", "labels", "story", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
@@ -448,7 +448,7 @@ class ReferenceLook(unittest.TestCase):
     def test_n18_closing(self):
         r, n = self.rules, self.rules["n18"]
         t = n["times"]
-        order = ["gather_s", "line_s", "open_s", "draw_s", "name_s", "tag_s", "url_s", "credit_s", "out_s"]
+        order = ["gather_s", "line_s", "open_s", "draw_s", "name_s", "tag_s", "url_s", "credit_s"]
         self.assertEqual([k for k in t if not k.startswith("_")], order)
         self.assertEqual([t[k] for k in order], sorted(t[k] for k in order))
         self.assertEqual(n["duration_s"], 9.0)
@@ -458,28 +458,135 @@ class ReferenceLook(unittest.TestCase):
         self.assertLessEqual(t["gather_s"] + g["stagger_s"] + g["gather_dur_s"], t["line_s"] + 1e-9)
         self.assertGreaterEqual(t["line_s"] - t["gather_s"], 0.3)
         self.assertAlmostEqual(t["line_s"] + n["light"]["grow_dur_s"], t["open_s"])
-        # the credit: under the URL, small but not below the minimum, above the band
+        # the dark is only the short wait before the door opens: it is gone by 1.5 s,
+        # and the seam light with it, before the vehicle is drawn on the paper
+        d = n["door"]
+        swing = t["open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertLessEqual(swing + d["open_dur_s"], 1.5 + 1e-9)
+        self.assertLessEqual(swing + n["light"]["out_dur_s"], t["draw_s"])
+        self.assertLessEqual(swing + d["open_dur_s"], t["draw_s"])
+        self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 120)
+        self.assertEqual(len(d["ease"]), 4)
+        self.assertEqual(len(d["crack_ease"]), 4)
+        # the seam runs inside the safe area, so the motes land above the band
+        self.assertGreaterEqual(n["light"]["y"], r["safe"]["y"])
+        self.assertLessEqual(n["light"]["y"] + n["light"]["h"], r["subtitle_band"]["y"])
+        # with the voice (the maker's recording: sentence 2, HIRAKU は、CAE を、…, from 3.61 s):
+        # the name starts just before it, and everything is in before it ends (7.07 s)
+        self.assertTrue(3.0 <= t["name_s"] <= 3.61, t["name_s"])
+        self.assertLess(t["name_s"], t["tag_s"])
         c, u = n["credit"], n["url"]
+        self.assertLessEqual(t["credit_s"] + c["fade_dur_s"], 7.07)
+        # top to bottom: vehicle, name, rule, tag, url, credit
+        v, name, tag = n["vehicle"], n["title"]["name"], n["title"]["tag"]
+        self.assertLessEqual(v["y"] + v["w"] / 2, name["y"])
+        self.assertLessEqual(name["y"] + name["size_px"], n["rule"]["y"])
+        self.assertLessEqual(n["rule"]["y"] + n["rule"]["h"], tag["y"])
+        self.assertLessEqual(tag["y"] + 1.2 * tag["size_px"], u["y"])
+        # the credit: under the URL, small but not below the minimum, above the band
         self.assertGreaterEqual(c["size_px"], r["min_text_px"])
         self.assertLess(c["size_px"], u["size_px"])
         self.assertLessEqual(u["y"] + u["size_px"], c["y"])
         self.assertLess(c["y"] + 1.25 * c["size_px"], r["subtitle_band"]["y"])
         self.assertTrue(0 < c["alpha"] < 1)
-        self.assertLess(t["credit_s"] + c["fade_dur_s"], t["out_s"])
-        b = n["name_bloom"]
-        self.assertGreater(b["peak_blur_px"], b["rest_blur_px"])
-        self.assertGreater(b["halo_peak_alpha"], b["halo_rest_alpha"])
+        self.assertLess(t["credit_s"] + c["fade_dur_s"], n["duration_s"])
 
     def test_n18_page(self):
         html = (lc.SCREENS / "n18.html").read_text(encoding="utf-8")
         self.assertIn('<p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>', html)
         self.assertNotIn("Built with Claude", html)
         self.assertNotIn("powered", html)                  # the ?powered=1 variant is gone
-        for part in ('svg class="gather"', 'class="seed-line"', 'class="name-halo"', "letter-bloom"):
+        for part in ('svg class="gather"', 'class="seed-line"', 'class="leaf leaf-l"', 'class="leaf leaf-r"'):
             self.assertIn(part, html)
+        # ends on paper, the same ground as N00; the night is the door, dropped in ?layer=fg
+        self.assertIn('<div class="stage paper-grid">', html)
+        self.assertIn('<div class="stage paper-grid">', (lc.SCREENS / "n00.html").read_text(encoding="utf-8"))
+        self.assertIn('<div class="door bg-only" data-kind="effect"', html)
+        self.assertNotIn("--page-bg: var(--night)", html)
+        self.assertNotIn("fade-out", html)                 # no fade to black at the end
         self.assertNotIn("<img", html)                     # no logo
         for banned in BANNED:
             self.assertNotIn(banned, html)
+
+    def test_n18_pets(self):
+        r, n = self.rules, self.rules["n18"]
+        g, t = n["pets"], n["times"]
+        seats = r["n00"]["title_pets"]["seats"]
+        roles = {s["role"]: s for s in seats}
+        # the seats are N00's, read and not copied
+        self.assertNotIn("seats", g)
+        self.assertNotIn("title_pets", n)
+        # report: every pet once, left to right on the name (as the seats lie)
+        rep = g["report"]
+        self.assertEqual(sorted(rep["order"]), sorted(roles))
+        self.assertEqual(rep["order"], [s["role"] for s in sorted(seats, key=lambda s: (s["letter"], s["at"]))])
+        # the tilted letter is K, readable: a small tilt and shift
+        fx, size = g["fix"], n["title"]["name"]["size_px"]
+        self.assertEqual("HIRAKU"[fx["letter"]], "K")
+        self.assertLessEqual(fx["tilt_deg"] + fx["settle_deg"], 10)
+        self.assertLess(fx["dx_px"], 0.1 * size)
+        # it settles when it is in (title.css letter-in: 0.7 s, 0.07 s a letter)
+        self.assertAlmostEqual(fx["settle_s"], t["name_s"] + fx["letter"] * 0.07 + 0.7)
+        # one pet on the next letter pushes, a second hops over to help, then K is back in line
+        tr, hp, pu = g["try"], g["help"], g["push"]
+        self.assertEqual(roles[tr["role"]]["letter"], fx["letter"] + 1)
+        self.assertEqual(pu["roles"][0], tr["role"])
+        self.assertIn(hp["role"], pu["roles"])
+        self.assertNotEqual(hp["role"], tr["role"])
+        self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
+        self.assertTrue(0 < tr["give"] < 1)                                    # the first try fails
+        self.assertGreaterEqual(tr["start_s"], fx["settle_s"] + fx["settle_dur_s"])
+        self.assertLessEqual(hp["start_s"] + hp["hop_dur_s"], pu["start_s"])
+        self.assertLessEqual(tr["start_s"] + tr["dur_s"], pu["start_s"] + 0.5 * pu["dur_s"])
+        self.assertGreaterEqual(hp["back_s"], pu["start_s"] + pu["dur_s"])
+        self.assertLessEqual(hp["back_s"] + hp["hop_dur_s"], rep["start_s"])   # all seated again
+        self.assertLessEqual(max(tr["lean_deg"], pu["lean_deg"]), 25)
+        self.assertLessEqual(max(hp["up_px"], rep["up_px"]), 0.25 * size)
+        # then one report each, and everything still before 8.5 s
+        last = rep["start_s"] + (len(rep["order"]) - 1) * rep["step_s"] + rep["hop_dur_s"]
+        st = g["stop"]
+        self.assertLessEqual(last, st["still_s"])
+        self.assertLess(st["from_s"], st["still_s"])
+        self.assertLess(st["still_s"], 8.5)
+        self.assertGreaterEqual(rep["start_s"], t["tag_s"])
+        # no pet holds still with its eyes shut: the slowing clocks (t + shift) stay
+        # out of pet3d's blink (clock % 4.3 < 0.16)
+        pet3d = (lc.SCREENS.parent / "pets" / "pet3d.js").read_text(encoding="utf-8")
+        self.assertIn("const bp = t % 4.3;", pet3d)
+        self.assertIn("const blink = bp < 0.16 ?", pet3d)
+        ids = re.findall(r'\{ id: "([a-z.]+)", name:', pet3d)
+        shift = r["n00"]["motion"]["idle_shift_s"]
+        lo, hi = st["from_s"], st["from_s"] + (st["still_s"] - st["from_s"]) / 2
+        for i in range(len(ids)):
+            for k in range(0, 40):
+                b0 = 4.3 * k - shift * i               # clock t at which a blink starts
+                self.assertFalse(b0 < hi and b0 + 0.16 > lo, (ids[i], b0))
+        # the vehicle stays clear above the pets
+        self.assertGreaterEqual(n["vehicle"]["y"], r["safe"]["y"])
+
+    def test_n18_pets_page(self):
+        html = (lc.SCREENS / "n18.html").read_text(encoding="utf-8")
+        n00 = (lc.SCREENS / "n00.html").read_text(encoding="utf-8")
+        for part in ('"three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"',
+                     '<script src="../pets/pet3d.js"></script>', "promo.onSeek(draw)", "<b>${c}</b>"):
+            self.assertIn(part, html)
+            self.assertIn(part, n00)
+        # the seats, camera and pet box come from layout.json n00
+        for part in ("LAYOUT.n00.title_pets.seats", "N0.title_pets", "N0.camera", "N0.pets", "N0.motion",
+                     "measureText", "actualBoundingBoxAscent", "R.pets"):
+            self.assertIn(part, html)
+        self.assertNotIn('"at":', html)
+        ids = re.findall(r'\{ id: "([a-z.]+)", tag:', html)
+        pet3d = (lc.SCREENS.parent / "pets" / "pet3d.js").read_text(encoding="utf-8")
+        self.assertEqual(ids, re.findall(r'\{ id: "([a-z.]+)", name:', pet3d))
+        self.assertIn('data-kind="moving"', html)
+        # the pets come in with their letter: title.css's letter-in, its duration and step
+        title = (lc.SCREENS / "title.css").read_text(encoding="utf-8")
+        self.assertIn("animation: letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both;", title)
+        self.assertIn("animation-delay: calc(var(--t-name) + var(--i) * 0.07s);", title)
+        self.assertIn("animation: letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both;", html)
+        self.assertIn("animation-delay: calc(var(--t-name) + var(--i) * 0.07s);", html)
+        self.assertNotIn("setAnimationLoop", html)
 
     def test_n00_rules(self):
         r, n = self.rules, self.rules["n00"]
@@ -488,21 +595,93 @@ class ReferenceLook(unittest.TestCase):
         self.assertGreater(n["tagline"]["y"], n["rule"]["y"] + n["rule"]["h"])
         self.assertLessEqual(n["tagline"]["y"] + 1.3 * n["tagline"]["size_px"], n["pets"]["y"])
         p = n["pets"]
-        span = 9 * p["pitch_px"] + p["group_gap_px"] + p["w"]
+        span = 6 * p["pitch_px"] + p["w"]                               # the seven domain pets
         x0 = (r["stage"]["w"] - span) / 2
         self.assertGreaterEqual(x0, r["safe"]["x"])                    # the row is inside safe
         self.assertLess(p["w"], p["pitch_px"])                          # boxes do not touch
-        for lab in ("chip", "tag"):
-            self.assertLess(p["y"] + p["h"] + n[lab]["gap_above_px"] + n[lab]["h"], r["subtitle_band"]["y"])
-            self.assertGreaterEqual(n[lab]["size_px"], r["story"]["defaults"]["body_text_px"])
+        self.assertNotIn("tag", n)                                      # no name tags: the roles sit on the name
+        self.assertLess(p["y"] + p["h"] + n["chip"]["gap_above_px"] + n["chip"]["h"], r["subtitle_band"]["y"])
+        self.assertGreaterEqual(n["chip"]["size_px"], r["story"]["defaults"]["body_text_px"])
         t = n["times"]
+        self.assertEqual((t["name_s"], t["tagline_s"], t["row_s"], t["light_s"], t["step_s"]),
+                         (0.25, 1.0, 1.4, 2.0, 0.42))                   # the chips light when they did
         self.assertLess(t["name_s"], t["tagline_s"])
         self.assertLess(t["row_s"] + 0.5, t["light_s"] + 1e-9)          # the row is in before the first chip
         self.assertLess(t["light_s"] + 6 * t["step_s"] + n["motion"]["pass_dur_s"], n["duration_s"])
+        self.assertEqual(n["motion"]["pass_dur_s"], n["motion"]["hop_period_s"])  # one hop per jump
+        self.assertGreater(n["motion"]["jump_over_px"], 0)              # the pet comes down onto its letter
         lim = r["story"]["cuts"]["n00"]["limits"]
-        self.assertGreaterEqual(lim["label"], 10)                       # 7 chips + 3 name tags
+        self.assertGreaterEqual(lim["label"], 7)                        # the 7 chips
         self.assertGreaterEqual(lim["moving"], 10)                      # the ten pets
         self.assertTrue(lim["why"])
+
+    def test_n00_title_pets(self):
+        r, n = self.rules, self.rules["n00"]
+        tp = n["title_pets"]
+        seats = tp["seats"]
+        pet3d = (lc.SCREENS.parent / "pets" / "pet3d.js").read_text(encoding="utf-8")
+        roles = re.findall(r'\{ id: "([a-z.]+)", name:', pet3d)
+        self.assertEqual(sorted(s["role"] for s in seats), sorted(roles))  # each of the ten once
+        per_letter = {}
+        for s in seats:
+            self.assertIn(s["letter"], range(6))                        # H I R A K U
+            self.assertGreaterEqual(s["at"], 0)
+            self.assertLessEqual(s["at"], 1)
+            self.assertLessEqual(abs(s["yaw_deg"]), 45)
+            per_letter.setdefault(s["letter"], []).append(s["at"])
+        self.assertEqual(sorted(per_letter), list(range(6)))            # every letter has a pet
+        self.assertTrue(all(1 <= len(v) <= 2 for v in per_letter.values()))
+        # the domains take their seats from left to right in the order their chips light
+        order = [(s["letter"], s["at"]) for s in seats if s["role"].startswith("cae.")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual([s["role"] for s in seats if s["role"].startswith("cae.")],
+                         [x for x in roles if x.startswith("cae.")])
+        # small next to the letters, and the seat box stays inside safe above the name
+        size = n["name"]["size_px"]
+        self.assertLessEqual(tp["h_em"], 0.7)
+        self.assertGreaterEqual(tp["lift_px"], 0)
+        self.assertGreaterEqual(n["name"]["y"] - tp["h_em"] * size + 0.2 * size, r["safe"]["y"])
+
+    def test_n00_play(self):
+        n = self.rules["n00"]
+        pl, t, m = n["play"], n["times"], n["motion"]
+        size = n["name"]["size_px"]
+        roles = {s["role"]: s for s in n["title_pets"]["seats"]}
+        # all six letters are in while the voice says the name (from 0.3 s)
+        nm = n["name"]
+        self.assertLessEqual(t["name_s"] + 5 * nm["in_step_s"] + nm["in_dur_s"], 1.0 + 1e-9)
+        # the play starts after the name has been said, and is still before 7.5 s
+        self.assertGreaterEqual(pl["from_s"], 1.3)
+        self.assertLessEqual(pl["still_s"], 7.5)
+        first_land = t["light_s"] + m["pass_dur_s"]
+        last_land = t["light_s"] + 6 * t["step_s"] + m["pass_dur_s"]
+        self.assertGreaterEqual(first_land, pl["from_s"])
+        self.assertLessEqual(last_land + max(pl["land"]["dur_s"], pl["crash"]["dur_s"]), pl["still_s"])
+        sh, pu, ch = pl["shake"], pl["push"], pl["cheer"]
+        self.assertLessEqual(sh["start_s"] + sh["dur_s"], pu["start_s"])
+        self.assertLessEqual(pu["start_s"] + pu["dur_s"], pl["still_s"])
+        self.assertLessEqual(ch["start_s"] + ch["dur_s"] + ch["land_dur_s"], pl["still_s"])
+        self.assertEqual(ch["dur_s"], m["hop_period_s"])                 # one pass hop
+        # small moves, so the letters stay readable: under a tenth of the letter size
+        for k in ("sink_px", "dx_px"):
+            for part in (pl["land"], pl["crash"], sh, ch):
+                if k in part:
+                    self.assertLess(part[k], 0.1 * size + 1e-9, (k, part[k]))
+        self.assertLessEqual(max(pu["step_px"]), 0.1 * size)
+        # the pets' own hops are small next to the letters
+        self.assertLessEqual(max(ch["up_px"], pl["crash"]["toss"]["up_px"]), 0.25 * size)
+        self.assertLessEqual(sh["tilt_deg"] + sh["rot_deg"], 8)
+        self.assertLessEqual(pu["lean_deg"], 20)
+        self.assertGreater(pl["crash"]["sink_px"], pl["land"]["sink_px"])    # crash lands harder
+        # the shaken letter is the NVH pet's; the pushers sit on the next letter
+        self.assertEqual(roles["cae.nvh"]["letter"], sh["letter"])
+        self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
+        for role in pu["roles"]:
+            self.assertEqual(roles[role]["letter"], sh["letter"] + 1)
+        nvh_land = t["light_s"] + 5 * t["step_s"] + m["pass_dur_s"]
+        self.assertGreaterEqual(sh["start_s"], nvh_land)
+        self.assertEqual(roles[pl["crash"]["toss"]["role"]]["letter"], roles["cae.crash"]["letter"])
+        self.assertIn(ch["role"], roles)
 
     def test_n00_page(self):
         html = (lc.SCREENS / "n00.html").read_text(encoding="utf-8")
@@ -523,6 +702,13 @@ class ReferenceLook(unittest.TestCase):
         self.assertEqual(ids, re.findall(r'\{ id: "([a-z.]+)", name:', pet3d))
         self.assertEqual(len(ids), 10)
         self.assertIn('data-kind="moving"', html)
+        # the seats come from n00.title_pets, measured on the name's letters
+        for part in ("R.title_pets.seats", "measureText", "actualBoundingBoxAscent", "TP.h_em", "M.jump_over_px"):
+            self.assertIn(part, html)
+        self.assertNotIn('class="tag"', html)                           # no name tags any more
+        # the play: every letter is a <b> moved at each t from n00.play
+        for part in ("R.play", "<b>${c}</b>", "letterMove", "onLetter", "var(--name-in-dur)", "var(--name-in-step)"):
+            self.assertIn(part, html)
         for banned in BANNED:
             self.assertNotIn(banned, html)
 
@@ -564,87 +750,6 @@ class ReferenceLook(unittest.TestCase):
             if name != "labels":
                 self.assertIn(f'data-label-cut="{name[7:]}"', html)
                 self.assertIn(name, lc.CUTS)
-
-
-class N17b(unittest.TestCase):
-    """N17b: the Claude Code sessions side by side, then the counts from git."""
-
-    def setUp(self):
-        self.rules = layout_build.load()
-        self.n = self.rules["n17b"]
-        self.html = (lc.SCREENS / "n17b.html").read_text(encoding="utf-8")
-
-    def test_duration_matches_the_page(self):
-        m = re.search(r'data-duration="([0-9.]+)"', self.html)
-        self.assertEqual(float(m.group(1)), self.n["duration_s"])
-        self.assertEqual(self.n["duration_s"], 5.8)
-        self.assertTrue(self.rules["check"]["times"]["n17b"])
-        self.assertIn("n17b", lc.CUTS)
-
-    def test_boxes_stay_above_the_band(self):
-        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
-        n = self.n
-        for name in ("vision", "lanes", "counts"):
-            b = n[name]
-            self.assertLessEqual(b["y"] + b["h"], band, name)
-            self.assertGreaterEqual(b["x"], safe["x"], name)
-            self.assertLessEqual(b["x"] + b["w"], stage["w"] - safe["x"], name)
-        ln = n["lanes"]
-        self.assertLessEqual(ln["top"] + 8 * ln["pitch_px"], ln["axis_y"])           # eight lanes above the dates
-        self.assertLessEqual(ln["axis_y"] + 1.3 * ln["axis_size_px"], ln["h"])
-        self.assertLessEqual(ln["label_w"], ln["graph_x"])
-        self.assertLessEqual(ln["graph_x"] + ln["graph_w"], ln["w"])
-        self.assertLessEqual(n["lanes"]["y"] + n["lanes"]["h"], n["counts"]["y"])      # the counts under the lanes
-        c = n["counts"]
-        cols = {k: v for k, v in c["cols"].items() if not k.startswith("_")}
-        self.assertEqual(list(cols), ["days", "commits", "lines", "tests"])
-        self.assertEqual(sum(cols.values()) + 3 * c["gap_px"], c["w"])
-        sizes = [ln["label_size_px"], ln["axis_size_px"], n["vision"]["cap_size_px"], c["head_size_px"],
-                 c["stamp_size_px"], c["label_size_px"], c["sub_size_px"], c["unit_size_px"]]
-        self.assertGreaterEqual(min(sizes), self.rules["min_text_px"])
-        self.assertGreaterEqual(ln["label_size_px"], self.rules["story"]["defaults"]["body_text_px"])
-
-    def test_times_follow_the_voice(self):
-        t, v, c = self.n["times"], self.n["vision"], self.n["count"]
-        for k in t:
-            if not k.startswith("_"):
-                self.assertTrue(k.endswith("_s"), k)
-        # 100,000 comes with sentence 1 (0.30-2.08 s) and is gone before the counts
-        self.assertGreaterEqual(t["vision_s"], 0.3)
-        gone = t["vision_out_s"] + v["out_dur_s"]
-        self.assertLessEqual(gone, t["flow_s"])
-        self.assertLess(gone, t["counts_s"])
-        # the lanes start growing during sentence 1; the stream runs with sentence 2 (2.43-5.54 s)
-        self.assertLess(t["lanes_s"], 2.08)
-        self.assertLess(t["lanes_s"], t["lanes_to_s"])
-        self.assertLessEqual(t["lanes_to_s"], t["flow_s"])
-        self.assertLess(t["flow_s"], t["flow_to_s"])
-        self.assertLess(t["flow_to_s"], 5.54)
-        # the last count stops before 5.5 s, and the picture holds still to the end
-        last = t["counts_s"] + 3 * c["stagger_s"] + c["dur_s"]
-        self.assertLessEqual(last, 5.5)
-        self.assertLessEqual(t["calm_s"] + 0.8, 5.5)
-        self.assertGreaterEqual(self.n["duration_s"] - 5.5, 0.3 - 1e-9)
-
-    def test_page_names_and_words(self):
-        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
-        for name in re.findall(r'data-box="([^"$]+)"', self.html):
-            self.assertTrue(name.startswith("n17b."), name)
-        self.assertIn('<script src="n17b.data.js"></script>', self.html)
-        self.assertIn("構想の見通し", self.html)
-        self.assertIn("数えた日時", self.html)
-        for banned in ("requestAnimationFrame", "Date.now", "Math.random", "参加者"):
-            self.assertNotIn(banned, self.html)
-        # the voice's words are burnt in as subtitles, not drawn on the screen
-        self.assertNotIn("拓きました", self.html)
-        # no figure from git is typed into the page: they come from N17B_DATA
-        self.assertIsNone(re.search(r"\b(524|71,?001|1,?162)\b", self.html))
-
-    def test_story_limits(self):
-        lim = self.rules["story"]["cuts"]["n17b"]["limits"]
-        self.assertEqual(self.html.count('data-kind="number"'), 2)    # the 100,000 and the counts' template
-        self.assertGreaterEqual(lim["number"], 4)
-        self.assertGreaterEqual(lim["label"], 8)
 
 
 def n10_data() -> dict:
@@ -906,6 +1011,12 @@ class Judging(unittest.TestCase):
     def item(self, name, b, **kw):
         return {"name": name, "label": name or "div", "text": kw.pop("text", ""), "box": b,
                 "inside": kw.pop("inside", []), **kw}
+
+    def test_cut_of_reads_the_cut_parameter(self):
+        # the app's cut.html serves every cut, so its rules are looked up under ?cut=
+        self.assertEqual(lc.cut_of("http://127.0.0.1:8765/cut.html?cut=n07&run=r&before=1"), "n07")
+        self.assertEqual(lc.cut_of("http://127.0.0.1:8765/cut.html?run=r"), "cut")
+        self.assertEqual(lc.cut_of(Path("promo/screens/n18.html")), "n18")
 
     def test_judge_lists_each_kind(self):
         items = [
@@ -1329,48 +1440,6 @@ class InBrowser(unittest.TestCase):
         self.assertEqual(a["mesh"], b["mesh"])
         self.assertEqual(a["books"], b["books"])
 
-    def test_n17b_counts_and_lanes_on_screen(self):
-        # the figures shown at the end are the ones in n17b.data.js; one dot per commit
-        # (not merges), one curve per department merge into main; nothing counted yet at 2.5 s
-        from promo import export
-
-        text = (lc.SCREENS / "n17b.data.js").read_text(encoding="utf-8")
-        d = json.loads(text[text.index("{"):text.rindex("}") + 1])
-        cap = export.Capture(lc.SCREENS / "n17b.html", scale=0.5)
-        try:
-            script = """() => {
-              const shown = (el) => {
-                const rows = el.querySelector('.rows'), box = el.querySelector('.count').getBoundingClientRect();
-                return [...rows.children].filter((s) => {
-                  const r = s.getBoundingClientRect();
-                  return r.top >= box.top - 1 && r.bottom <= box.bottom + 1;
-                }).map((s) => s.textContent);
-              };
-              const out = {};
-              for (const k of ['days', 'commits', 'lines', 'tests'])
-                out[k] = shown(document.querySelector(`[data-box="n17b.counts.${k}.num"]`));
-              return { out, dots: document.querySelectorAll('circle.dot').length,
-                       merges: document.querySelectorAll('path.merge').length,
-                       names: [...document.querySelectorAll('.lane-name')].map((e) => e.textContent),
-                       tiles: getComputedStyle(document.querySelector('.tile')).opacity,
-                       vision: getComputedStyle(document.querySelector('.vision')).opacity };
-            }"""
-            cap.page.evaluate("t => window.__export.seek(t)", 5.8)
-            end = cap.page.evaluate(script)
-            cap.page.evaluate("t => window.__export.seek(t)", 2.5)
-            early = cap.page.evaluate(script)
-        finally:
-            cap.close()
-        fmt = lambda v: f"{v:,}"  # noqa: E731
-        self.assertEqual(end["out"], {"days": [str(d["days"])], "commits": [fmt(d["commits"])],
-                                      "lines": [fmt(d["lines_total"])], "tests": [fmt(d["tests"])]})
-        self.assertEqual(end["dots"], d["commits_no_merges"])
-        self.assertEqual(end["merges"], sum(len(ln["into_main"]) for ln in d["lanes"][1:]))
-        self.assertEqual(end["names"], [ln["name"] for ln in d["lanes"]])
-        self.assertEqual(float(end["vision"]), 0)
-        self.assertEqual(float(early["tiles"]), 0)
-        self.assertEqual(float(early["vision"]), 0)
-
     def test_n10_has_no_problems(self):
         layout = lc.load_layout()
         with tempfile.TemporaryDirectory() as d:
@@ -1435,11 +1504,14 @@ class InBrowser(unittest.TestCase):
             gx: parseFloat(c.style.getPropertyValue('--gx')), gy: parseFloat(c.style.getPropertyValue('--gy')),
             o: getComputedStyle(c).opacity })),
           credit: [document.querySelector('.credit').textContent, getComputedStyle(document.querySelector('.credit')).opacity],
+          door: getComputedStyle(document.querySelector('.door')).visibility,
+          ground: getComputedStyle(document.querySelector('.stage')).backgroundColor,
+          paper: getComputedStyle(document.documentElement).getPropertyValue('--paper').trim(),
         })"""
         got = {}
         cap = export.Capture(lc.SCREENS / "n18.html", scale=0.25)
         try:
-            for t in (0.0, 0.5, 7.0):
+            for t in (0.0, 0.5, 1.5, 7.0, 8.9):
                 cap.page.evaluate("t => window.__export.seek(t)", t)
                 got[t] = cap.page.evaluate(script)
         finally:
@@ -1458,6 +1530,99 @@ class InBrowser(unittest.TestCase):
         self.assertEqual(got[7.0]["credit"][0], "HIRAKU Powered by Claude")
         self.assertAlmostEqual(float(got[7.0]["credit"][1]), n["credit"]["alpha"], places=3)
         self.assertEqual(float(got[0.5]["credit"][1]), 0.0)
+        # dark (the shut door) at the start, gone by 1.5 s; the ground is N00's paper
+        self.assertEqual(got[0.5]["door"], "visible")
+        self.assertEqual(got[1.5]["door"], "hidden")
+        self.assertEqual(got[8.9]["door"], "hidden")
+        self.assertEqual(got[8.9]["paper"].lower(), "#f4f1ea")
+        self.assertEqual(got[8.9]["ground"], "rgb(244, 241, 234)")
+        self.assertAlmostEqual(float(got[8.9]["credit"][1]), n["credit"]["alpha"], places=3)
+
+    def test_n18_pets_sit_as_at_the_end_of_n00(self):
+        from promo import export
+
+        # each pet's feet, relative to the name (x across the ink of HIRAKU, y from
+        # the first letter's ink top, both in units of the name's font size)
+        script = """([seats, list, t, size]) => {
+          const S = window[seats], ink = S.INK;
+          const span = ink[5].x1 - ink[0].x0;
+          return window[list].map((p) => {
+            const b = S.placeAt(p, t);
+            return [p.id, (b.x + S.FOOT.fx * b.w - ink[0].x0) / span,
+                    (b.y + S.FOOT.fy * b.h - ink[0].top) / size, b.h / size];
+          });
+        }"""
+        r = lc.load_layout()
+        got = {}
+        cap = export.Capture(lc.SCREENS / "n00.html", scale=0.5)
+        try:
+            cap.page.evaluate("t => window.__export.seek(t)", 8.0)
+            # N00_PETS.list as a global array for the script
+            cap.page.evaluate("() => { window.__n00List = window.N00_PETS.list; }")
+            got["n00"] = cap.page.evaluate(script, ["N00_SEATS", "__n00List", 8.0, r["n00"]["name"]["size_px"]])
+        finally:
+            cap.close()
+        cap = export.Capture(lc.SCREENS / "n18.html", scale=0.5)
+        try:
+            seen = {}
+            for t in (3.0, 4.0, 5.2, 6.0, 8.2, 8.5, 8.9):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                seen[t] = cap.page.evaluate("""() => ({
+                  letters: [...document.querySelectorAll('.name b')].map((b) => b.style.transform),
+                  kinds: [...document.querySelectorAll('canvas.pet')].map((c) => c.dataset.kind || ''),
+                  pets: [...document.querySelectorAll('canvas.pet')].map((c) => c.style.left + ' ' + c.style.top),
+                  op: getComputedStyle(document.querySelector('canvas.pet')).opacity })""")
+            got["n18"] = cap.page.evaluate(script, ["N18_SEATS", "N18_PETS", 8.9, r["n18"]["title"]["name"]["size_px"]])
+            pix = {}
+            for t in (8.2, 8.9):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                pix[t] = cap.page.evaluate("() => [...document.querySelectorAll('canvas.pet')].map((c) => c.toDataURL())")
+        finally:
+            cap.close()
+        a, b = got["n00"], got["n18"]
+        self.assertEqual([x[0] for x in a], [x[0] for x in b])
+        self.assertEqual([x[0] for x in sorted(a, key=lambda x: x[1])],
+                         [x[0] for x in sorted(b, key=lambda x: x[1])])               # same order on the name
+        # same place on the name, up to 1.5 px of N00's name: measureText gives the
+        # ink in whole px at each size (at 210 px R's ascent is 150, H's 149; at 170 both 121)
+        tol = 1.5 / r["n00"]["name"]["size_px"]
+        for p, q in zip(a, b):
+            self.assertAlmostEqual(p[1], q[1], delta=tol, msg=p[0])
+            self.assertAlmostEqual(p[2], q[2], delta=tol, msg=p[0])
+            self.assertAlmostEqual(p[3], q[3], places=6, msg=p[0])                    # same size (h_em)
+        k = r["n18"]["pets"]["fix"]["letter"]
+        self.assertEqual(float(seen[3.0]["op"]), 0.0)                                 # not before the name
+        self.assertNotEqual(seen[4.0]["letters"][k], "")                              # K tilted
+        self.assertNotEqual(seen[5.2]["letters"][k], "")
+        for t in (8.2, 8.5, 8.9):                                                     # in line and still
+            self.assertEqual(seen[t]["letters"], [""] * 6, t)
+            self.assertEqual(seen[t]["kinds"], [""] * 10, t)
+            self.assertEqual(seen[t]["pets"], seen[8.9]["pets"], t)
+        self.assertEqual(seen[6.0]["kinds"], ["moving"] * 10)
+        self.assertEqual(pix[8.2], pix[8.9])                                          # the pets' pictures too
+
+    def test_n00_letters_play_then_stand_still(self):
+        from promo import export
+
+        n = lc.load_layout()["n00"]
+        sh = n["play"]["shake"]
+        script = """() => [...document.querySelectorAll('.name b')].map((b) => b.style.transform)"""
+        got = {}
+        cap = export.Capture(lc.SCREENS / "n00.html", scale=0.25)
+        try:
+            for t in (0.3, 0.6, 1.2, 4.3, 5.65, 7.5, 8.5):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                got[t] = cap.page.evaluate(script)
+            cap.page.evaluate("t => window.__export.seek(t)", 5.65)
+            k = cap.page.evaluate(f"() => window.N00_SEATS.letterMove({sh['letter']}, 5.65)")
+        finally:
+            cap.close()
+        for t in (0.3, 0.6, 1.2, 7.5, 8.5):                       # in line while the name is said, and at the end
+            self.assertEqual(got[t], [""] * 6, t)
+        self.assertNotEqual(got[4.3][2], "")                      # crash lands on R
+        self.assertNotEqual(got[5.65][sh["letter"]], "")          # K out of line, before the push
+        self.assertAlmostEqual(k["dx"], sh["dx_px"], places=3)
+        self.assertAlmostEqual(k["rot"], sh["tilt_deg"] * 3.141592653589793 / 180, places=4)
 
     def test_labels_come_and_go(self):
         from promo import export

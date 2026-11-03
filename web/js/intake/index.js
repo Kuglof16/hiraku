@@ -1,8 +1,13 @@
 // The intake screens (A1 new design, A2 hearing, A5 knowledge) as one module for the main screen to mount.
 //
 //   import { mountIntake } from "./intake/index.js";
-//   const intake = mountIntake(hostElement, api, { nav: true, screen: "A1" });
-//   intake.show("A5"); intake.update(); intake.destroy();
+//   const intake = mountIntake(hostElement, api, { nav: true, screen: "A1", want: "ギターを作りたい" });
+//   intake.show("A5"); intake.update(); intake.setWant("介護ベッドを作りたい"); intake.destroy();
+//
+// options: onRuleFocus(partIds) is called when a person points at a rule hit in A2 (its part ids; [] when they leave), so
+// the host can light those parts in its 3D view.
+// options: nav (false hides the tab bar), screen (the first one shown), want (a request text put in A1's
+// input box, not sent: the person reads it and presses 送る). setWant(text) does the same later; "" empties the box.
 //
 // api (all optional except events/onEvent):
 //   events()             every event so far (the screens draw only from events)
@@ -35,7 +40,8 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: "", note: "", answers: {}, litSeen: new Set(), error: "", sending: false,
+    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {},
+    onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };
@@ -95,6 +101,12 @@ export function mountIntake(host, api, options = {}) {
     pending = true;
     queueMicrotask(() => { pending = false; update(); });
   });
+  // put a request text in A1's input box without sending it (the box keeps what the person is typing otherwise)
+  function setWant(text) {
+    ui.draft = typeof text === "string" ? text : "";
+    if (ui.screen === "A1") draw();
+  }
+
   draw();
-  return { show, update, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { show, update, setWant, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }

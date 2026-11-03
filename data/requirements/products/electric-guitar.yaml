@@ -2,7 +2,8 @@
 # two domains light up: strength (string tension) and nvh (neck/body modes against the open strings).
 # Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository. Items without a value here are asked in the hearing.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source in a source check on that date. Items without a value here are asked in the hearing.
 # The mass of the guitar itself was not researched.
 
 want: 電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい
@@ -24,6 +25,6 @@ requirements:
     basis: >-
       D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N.
       足したのは調査エージェント (販売店が載せた表の写し),
-      https://www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR
-      (not checked in this repository)
+      https://www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR;
+      read 2026-11-03 in a source check (the sum of the EXL110 chart, computed: 456 N)
     note: 6 本の張りを足した値。弦の太さの組み合わせを変えたら聞き直す

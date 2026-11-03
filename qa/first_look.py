@@ -152,8 +152,19 @@ def codex_model() -> str:
     return f"{model.group(1) if model else '?'} (reasoning {effort.group(1) if effort else '?'})"
 
 
+def codex_exe() -> str | None:
+    """The Codex CLI: on PATH, or where npm puts it on Windows; None when it is not installed."""
+    found = shutil.which("codex.cmd") or shutil.which("codex")
+    if found:
+        return found
+    npm = Path(os.environ.get("APPDATA", "")) / "npm" / "codex.cmd"
+    return str(npm) if os.environ.get("APPDATA") and npm.is_file() else None
+
+
 def ask_codex(sheet: Path, n: int) -> list[dict]:
-    exe = shutil.which("codex.cmd") or shutil.which("codex") or str(Path(os.environ.get("APPDATA", "")) / "npm" / "codex.cmd")
+    exe = codex_exe()
+    if exe is None:
+        raise RuntimeError("the Codex CLI is not installed (not on PATH, not in %APPDATA%/npm)")
     env = dict(os.environ)
     env.pop("OPENAI_API_KEY", None)
     proc = subprocess.run([exe, "exec", "--skip-git-repo-check", "-i", str(sheet)], input=PROMPT.format(n=n),
@@ -218,6 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(items)} pictures on {len(made)} sheets in {args.out / 'sheets'}")
     if args.judge == "none":
         return 0
+    if codex_exe() is None:
+        print("the Codex CLI is not installed (not on PATH, not in %APPDATA%/npm): install it, or use --judge none "
+              "to make the sheets only", file=sys.stderr)
+        return 2
     name = f"Codex CLI, {codex_model()}"
     results = judge(made)
     report(results, name, args.out)

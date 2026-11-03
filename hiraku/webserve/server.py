@@ -9,7 +9,8 @@ Standard library only. Routes:
     GET /api/runs/<run_id>/events?offset=N
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
-    GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
+    GET /api/launch, POST /api/launch   start a run from the screen (launch.py); GET also lists
+                                        the demo runs of data/catalog/demo_runs.yaml
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
     POST /api/launch {request, mode}    start a run from a request settled in A1/A2 (--intake-events)
     POST /api/request, /api/request/answer
@@ -17,6 +18,9 @@ Standard library only. Routes:
                                         hearing, then the request's files under runs/_requests/<id>/
     GET /layout.json                    the video's layout rules (promo/screens/layout.json,
                                         the promo department's), read by the cut pages
+    GET /pets/pet3d.js                  the promo department's 3D pets (promo/pets/pet3d.js,
+                                        read only, passed through as it is); 404 without the
+                                        file, and the cut pages then draw no pets
     GET /api/shelf                      the tool shelf for A4: every builtin tool's spec and
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
@@ -29,7 +33,7 @@ else the newest saved run.
 
 The screen draws only from events, so the server never interprets them beyond
 parsing JSON lines. A line still being written (no trailing newline) is left
-for the next read.
+for the next read. A line longer than MAX_LINE_BYTES is skipped (counted in bad_lines).
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
 from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
-from hiraku.webserve.launch import Launcher, LaunchError
+from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.shelf import Shelf
 
 DEFAULT_HOST = "127.0.0.1"
@@ -55,7 +59,11 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 WEB_DIR = REPO_DIR / "web"
 SAVED_DIR = REPO_DIR / SHOWCASE_DIR  # saved runs kept in the repository
 LAYOUT_FILE = REPO_DIR / "promo" / "screens" / "layout.json"  # the video's layout rules (promo's)
+PETS_FILE = REPO_DIR / "promo" / "pets" / "pet3d.js"  # the 3D pets (promo's), served at PETS_PATH
+PETS_PATH = "/pets/pet3d.js"
 SAMPLE_ID = "sample"
+# project.driver's values (hiraku.schema.json project.driver, from claude/lead-refactor 75f5484)
+DRIVERS = ("scripted", "agent_sdk", "claude_code_plugin")
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
 # Windows can map .js to text/plain through the registry, which breaks ES modules.
@@ -68,6 +76,8 @@ CONTENT_TYPES = {
     ".jsonl": "application/x-ndjson; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".hdr": "application/octet-stream",
     ".ico": "image/x-icon",
     ".txt": "text/plain; charset=utf-8",
 }
@@ -75,6 +85,10 @@ CONTENT_TYPES = {
 _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 _TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
+# One line longer than MAX_READ_BYTES is still read whole up to this size (a mesh.created or an
+# analysis.finished with per-element values of a large mesh); a longer line is skipped as bad.
+MAX_LINE_BYTES = 64 * 1024 * 1024
+_SCAN_BYTES = 1024 * 1024  # block size when looking for the end of a long line
 KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
 REQUEST_MAX_BYTES = 1_000_000  # an A1/A2 request carries its draft back
 
@@ -97,7 +111,11 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
 
     Returns events, next_offset (where the next read starts), size, reset
     (true when the file got shorter than offset, so reading restarted at 0)
-    and bad_lines (lines that were not JSON objects).
+    and bad_lines (lines that were not JSON objects, or longer than MAX_LINE_BYTES).
+
+    At most MAX_READ_BYTES are read, except when the first line is longer: then that
+    one line is read to its newline (up to MAX_LINE_BYTES; a longer one is counted
+    bad and skipped), so next_offset always moves past a finished line.
     """
     reset = False
     size = path.stat().st_size if path.exists() else 0
@@ -107,13 +125,25 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
     bad = 0
     next_offset = offset
     if size > offset:
+        complete = b""
         with path.open("rb") as f:
             f.seek(offset)
             chunk = f.read(min(size - offset, MAX_READ_BYTES))
-        end = chunk.rfind(b"\n")
-        if end >= 0:
-            complete = chunk[: end + 1]
-            next_offset = offset + len(complete)
+            end = chunk.rfind(b"\n")
+            if end >= 0:
+                complete = chunk[: end + 1]
+                next_offset = offset + len(complete)
+            elif offset + len(chunk) < size:
+                # one line longer than a read: find its newline (None while it is still being written)
+                nl = _newline_after(f, offset + len(chunk), size)
+                if nl is not None:
+                    next_offset = nl + 1
+                    if next_offset - offset <= MAX_LINE_BYTES:
+                        f.seek(offset)
+                        complete = f.read(next_offset - offset)
+                    else:
+                        bad += 1
+        if complete:
             for raw in complete.splitlines():
                 raw = raw.strip()
                 if not raw:
@@ -128,6 +158,21 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
                 else:
                     bad += 1
     return {"events": events, "next_offset": next_offset, "size": size, "reset": reset, "bad_lines": bad}
+
+
+def _newline_after(f, start: int, size: int) -> int | None:
+    """Byte position of the first newline at or after `start` (before `size`), read in blocks; None if none."""
+    pos = start
+    f.seek(pos)
+    while pos < size:
+        block = f.read(min(_SCAN_BYTES, size - pos))
+        if not block:
+            break
+        i = block.find(b"\n")
+        if i >= 0:
+            return pos + i
+        pos += len(block)
+    return None
 
 
 def _first_event(path: Path) -> dict[str, Any] | None:
@@ -179,6 +224,8 @@ def _run_summary(run_id: str, events_file: Path, project_file: Path | None) -> d
         "product": project.get("product", ""),
         "status": project.get("status", "unknown"),
         "created_at": project.get("created_at", ""),
+        # what drove the run (contract project.driver); None for records older than the field
+        "driver": project.get("driver") if project.get("driver") in DRIVERS else None,
         "finished": _last_kind(events_file) == "run.finished" if stat else False,
         "events_bytes": stat.st_size if stat else 0,
         "mtime": stat.st_mtime if stat else 0,
@@ -237,6 +284,24 @@ class _NullWriter:
         self._raw.flush()
 
 
+ASSET_DIR = "assets/polyhaven"  # web/js/look.js ASSET_DIR: Poly Haven files the user put there
+ASSET_SUFFIXES = {".hdr", ".exr", ".jpg", ".jpeg", ".png"}
+
+
+def list_assets(web_dir: Path) -> list[str]:
+    """The asset files under web/assets/polyhaven/, as '<id>/<file>' (sorted). They are
+    added by hand (web/assets/polyhaven/NOTES.md); the real look draws its own textures
+    when this is empty."""
+    root = Path(web_dir) / ASSET_DIR
+    if not root.is_dir():
+        return []
+    return sorted(
+        f"{p.parent.name}/{p.name}"
+        for p in root.glob("*/*")
+        if p.is_file() and p.suffix.lower() in ASSET_SUFFIXES
+    )
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "HirakuWebserve/0.1"
     web_dir: Path = WEB_DIR
@@ -245,8 +310,10 @@ class Handler(BaseHTTPRequestHandler):
     default_run: str | None = None
     launcher: Launcher | None = None
     layout_file: Path = LAYOUT_FILE
+    pets_file: Path = PETS_FILE
     shelf: Shelf = Shelf()
     quiet: bool = False
+    assets: bool = True  # /api/assets lists the Poly Haven files (False: none, for the fall-back)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
         if not self.quiet:
@@ -270,8 +337,14 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
                 self._send_json({"error": f"layout file unreadable: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        if path == PETS_PATH:
+            self._send_pets()
+            return
         if path == "/api/shelf":
             self._send_json(self.shelf.get())
+            return
+        if path == "/api/assets":
+            self._send_json({"files": list_assets(self.web_dir) if self.assets else []})
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:
@@ -372,6 +445,20 @@ class Handler(BaseHTTPRequestHandler):
         body["run_id"] = run_id
         self._send_json(body)
 
+    def _send_pets(self) -> None:
+        """The pets' script, read from pets_file as it is (only this one file)."""
+        try:
+            data = Path(self.pets_file).read_bytes()
+        except OSError:
+            self._send_json({"error": f"no pets file ({Path(self.pets_file).name})"}, HTTPStatus.NOT_FOUND)
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", CONTENT_TYPES[".js"])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _send_static(self, path: str) -> None:
         rel = path.lstrip("/") or "index.html"
         root = self.web_dir.resolve()
@@ -456,15 +543,21 @@ def make_server(
     launcher: Launcher | bool | None = None,
     layout_file: Path | str = LAYOUT_FILE,
     shelf: Shelf | None = None,
+    pets_file: Path | str = PETS_FILE,
+    demo_runs_file: Path | str = DEMO_RUNS_FILE,
+    assets: bool = True,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
-    launcher: None starts runs into runs_dir with this process' environment;
-    False turns starting runs off; or a Launcher to use. shelf: what /api/shelf
-    answers (by default the solvers' shelf, computed on the first request).
+    launcher: None starts runs into runs_dir with this process' environment
+    (with the demo runs of demo_runs_file); False turns starting runs off; or a
+    Launcher to use. shelf: what /api/shelf answers (by default the solvers'
+    shelf, computed on the first request).
+    assets: False makes /api/assets answer none (the screen then draws its own textures,
+    as without the files).
     """
     if launcher is None:
-        launcher = Launcher(Path(runs_dir))
+        launcher = Launcher(Path(runs_dir), demo_runs_file=Path(demo_runs_file))
     handler = type(
         "BoundHandler",
         (Handler,),
@@ -475,8 +568,10 @@ def make_server(
             "default_run": default_run,
             "launcher": launcher or None,
             "layout_file": Path(layout_file),
+            "pets_file": Path(pets_file),
             "shelf": shelf or Shelf(),
             "quiet": quiet,
+            "assets": assets,
         },
     )
     return Server((host, port), handler)

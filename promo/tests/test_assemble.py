@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -7,6 +8,8 @@ from pathlib import Path
 
 from promo import assemble
 from promo.assemble import Join
+from promo.export import NVENC_CQ_OFFSET, nvenc_available
+from promo.subs import burn_command
 
 REPO_TABLE = Path(__file__).resolve().parents[1] / "assembly.json"
 
@@ -107,7 +110,7 @@ class Table(unittest.TestCase):
         self.assertEqual(joins["N17b"], ("light", 0.6))
         self.assertEqual(joins["N10"], ("dissolve", 0.25))
         looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
-        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b", "N18"])  # the dark cuts (N08: the plain CAE tool on night)
+        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b"])  # the dark cuts (N08: the plain CAE tool on night; N18 ends on paper)
         # the numbered labels lie over N01-N04, each from the start of its own cut
         for seg in data["segments"]:
             for ov in seg.get("overlay", []):
@@ -277,6 +280,89 @@ class Commands(unittest.TestCase):
         self.assertEqual(assemble.escape_path("C:\\Windows\\Fonts\\a.ttc"), "'C\\:/Windows/Fonts/a.ttc'")
 
 
+class Encoders(unittest.TestCase):
+    """--encoder: libx264 as before, or h264_nvenc at the matching -cq."""
+
+    def setUp(self):
+        self.table = planned(three_segments(j1="light"), THREE)
+        self.sp = assemble.spans(self.table)
+
+    def test_x264_arguments_unchanged(self):
+        cmd = assemble.segment_command(self.table.segments[1], self.sp[1], 30, 1080, Path("o.mp4"), 910, "1b1a17")
+        i = cmd.index("-c:v")
+        self.assertEqual(cmd[i:i + 8], ["-c:v", "libx264", "-preset", "medium", "-crf", str(assemble.SEGMENT_CRF),
+                                        "-pix_fmt", "yuv420p"])
+        j = assemble.join_command([Path("a.mp4")] * 3, self.sp, 30, Path("f.mp4"))
+        self.assertEqual(j[j.index("-c:v") + 1], "libx264")
+
+    def test_nvenc_arguments(self):
+        for cmd in (assemble.segment_command(self.table.segments[1], self.sp[1], 30, 1080, Path("o.mp4"), 910,
+                                             "1b1a17", encoder="nvenc"),
+                    assemble.join_command([Path("a.mp4")] * 3, self.sp, 30, Path("f.mp4"), encoder="nvenc")):
+            self.assertEqual(cmd[cmd.index("-c:v") + 1], "h264_nvenc")
+            self.assertEqual(cmd[cmd.index("-cq") + 1], f"{assemble.SEGMENT_CRF + NVENC_CQ_OFFSET:g}")
+            self.assertEqual(cmd[cmd.index("-pix_fmt") + 1], "yuv420p")
+            self.assertNotIn("libx264", cmd)
+
+    def test_burn_moves_to_nvenc(self):
+        burn = burn_command(Path("film.mp4"), Path("subs.ass"), Path("out.mp4"), Path("mix.wav"))
+        self.assertIs(assemble.swap_encoder(burn, "x264"), burn)
+        cmd = assemble.swap_encoder(burn, "nvenc")
+        self.assertEqual(cmd[cmd.index("-c:v") + 1], "h264_nvenc")
+        self.assertEqual(cmd[cmd.index("-cq") + 1], f"{16 + NVENC_CQ_OFFSET:g}")   # burn's crf 16
+        self.assertNotIn("libx264", cmd)
+        self.assertNotIn("-crf", cmd)
+        # everything around the codec stays: filters, colour tags, audio, output
+        k = burn.index("-c:v")
+        self.assertEqual(cmd[:k], burn[:k])
+        self.assertEqual(cmd[-14:], burn[-14:])
+        self.assertIn("-c:a", cmd)
+
+
+class FastGraph(unittest.TestCase):
+    """The join expressions run only on the join's frames; the grain look uses the built-in overlay."""
+
+    def setUp(self):
+        self.table = planned(three_segments(j1="light"), THREE)
+        self.sp = assemble.spans(self.table)
+
+    def test_ramp_window_covers_the_ramp(self):
+        fps = 30
+        for i, kind in ((0, "light"), (1, "light"), (1, "grain"), (2, "grain")):
+            span = self.sp[i]
+            expr, window = assemble.ramps(span, fps, kind), assemble.ramp_window(span, fps, kind)
+            for n in range(span.total):
+                t = n / fps
+                strength = eval_ramp(expr, t)
+                inside = eval_window(window, t)
+                if strength > 0:
+                    self.assertTrue(inside, (i, kind, n, strength))
+        self.assertIsNone(assemble.ramp_window(self.sp[0], fps, "grain"))
+
+    def test_graph(self):
+        fast = assemble.segment_graph(self.table.segments[1], self.sp[1], 30, 1920, 1080, 910, "1b1a17")
+        self.assertIn("enable='", fast)
+        exact = assemble.segment_graph(self.table.segments[1], self.sp[1], 30, 1920, 1080, 910, "1b1a17",
+                                       fast=False)
+        self.assertNotIn("enable=", exact)
+        c = assemble.segment_graph(self.table.segments[2], self.sp[2], 30, 1920, 1080, 910, "1b1a17")
+        self.assertIn("c0_mode=overlay:c0_opacity=0.300", c)
+        self.assertIn("c0_expr='A+(if(lt(A,128)", assemble.segment_graph(
+            self.table.segments[2], self.sp[2], 30, 1920, 1080, 910, "1b1a17", fast=False))
+
+
+def eval_ramp(expr, t):
+    """Evaluate a ramps() expression (smoothstep of clip, max, 1-) at T=t in Python."""
+    py = expr.replace("T", repr(t))
+    py = re.sub(r"clip\(", "_clip(", py)
+    return eval(py, {"_clip": lambda x, a, b: min(max(x, a), b), "max": max})
+
+
+def eval_window(expr, t):
+    py = expr.replace("lt(", "_LT(").replace("gt(", "_GT(").replace("t", repr(t))
+    return bool(eval(py, {"_LT": lambda a, b: a < b, "_GT": lambda a, b: a > b}))
+
+
 def ffmpeg_or_none():
     try:
         from promo.export import ffmpeg_path
@@ -313,6 +399,8 @@ class Build(unittest.TestCase):
             table = assemble.read_table(d / "t.json", str(d), [])
             cls.outs.append(assemble.build(table, d / f"out{n}.mp4", 144, None, None, ffmpeg=FFMPEG,
                                            log=lambda *a: None))
+        cls.exact = assemble.build(assemble.read_table(d / "t.json", str(d), []), d / "exact.mp4", 144, None,
+                                   None, ffmpeg=FFMPEG, log=lambda *a: None, fast=False)
 
     @classmethod
     def tearDownClass(cls):
@@ -337,6 +425,78 @@ class Build(unittest.TestCase):
         self.assertEqual(len(a), 90)
         self.assertEqual(a, b)
         self.assertGreater(len(set(a[66:])), 1)   # the grain moves from frame to frame
+
+    def test_fast_graph_looks_the_same(self):
+        """Each segment through the fast graph and the earlier one (every expression on every frame),
+        written losslessly (FFV1) so only the filters differ: SSIM frame by frame."""
+        table = assemble.read_table(self.dir / "t.json", str(self.dir), [])
+        for seg, span in zip(table.segments, assemble.spans(table)):
+            files = []
+            for fast in (True, False):
+                f = self.dir / f"seg_{span.name}_{fast}.mkv"
+                cmd = assemble.segment_command(seg, span, 30, 144, f, 910, "1b1a17", ffmpeg=FFMPEG, fast=fast)
+                cmd = cmd[:cmd.index("-c:v")] + ["-c:v", "ffv1", "-pix_fmt", "yuv420p", str(f)]
+                subprocess.run(cmd, check=True, cwd=self.dir)
+                files.append(f)
+            self.assertGreaterEqual(min(ssim_per_frame(*files)), 0.99, span.name)
+
+
+def ssim_per_frame(a, b):
+    r = subprocess.run([FFMPEG, "-hide_banner", "-i", str(a), "-i", str(b), "-lavfi", "ssim=stats_file=-",
+                        "-f", "null", "-"], capture_output=True, text=True, check=True)
+    vals = [float(m) for m in re.findall(r"All:([\d.]+)", r.stdout)]
+    if not vals:
+        raise AssertionError(r.stderr[-500:])
+    return vals
+
+
+@unittest.skipUnless(FFMPEG and shutil.which("ffprobe") and nvenc_available(FFMPEG or "ffmpeg"),
+                     "needs ffmpeg, ffprobe and a usable h264_nvenc")
+class NvencBuild(unittest.TestCase):
+    """The same 3 s film with h264_nvenc: H.264, yuv420p, 90 frames, 3 s, and close to the libx264 one."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = Path(tempfile.mkdtemp(prefix="assemble_nvenc_"))
+        d = cls.dir
+        lavfi = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"]
+        subprocess.run(lavfi + ["-i", "color=c=0xe8e2d0:s=320x180", "-frames:v", "1", str(d / "a.png")], check=True)
+        subprocess.run(lavfi + ["-i", "testsrc2=s=320x180:r=30:d=0.8", "-pix_fmt", "yuv420p",
+                                str(d / "b.mp4")], check=True)
+        subprocess.run(lavfi + ["-i", "color=c=0x151513:s=320x180", "-frames:v", "1", str(d / "c.png")], check=True)
+        (d / "s.tsv").write_text(script_text([("A", 0, 1), ("B", 1, 2), ("C", 2, 3)]), encoding="utf-8")
+        data = table_data([
+            {"cuts": ["A"], "still": "${WORK}/a.png", "join": {"kind": "light", "seconds": 0.2}},
+            {"cuts": ["B"], "video": "${WORK}/b.mp4", "join": {"kind": "grain", "seconds": 0.2}},
+            {"cuts": ["C"], "still": "${WORK}/c.png", "look": {"grain": True, "bloom": 0.3}},
+        ])
+        (d / "t.json").write_text(json.dumps(data), encoding="utf-8")
+        cls.out = {}
+        for enc in ("nvenc", "x264"):
+            table = assemble.read_table(d / "t.json", str(d), [])
+            cls.out[enc] = assemble.build(table, d / f"{enc}.mp4", 144, None, None, ffmpeg=FFMPEG,
+                                          log=lambda *a: None, encoder=enc)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def test_shape(self):
+        r = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
+                            "stream=codec_name,pix_fmt,width,height,nb_read_frames:format=duration",
+                            "-of", "json", str(self.out["nvenc"])], capture_output=True, text=True, check=True)
+        info = json.loads(r.stdout)
+        s = info["streams"][0]
+        self.assertEqual((s["codec_name"], s["pix_fmt"], s["width"], s["height"]), ("h264", "yuv420p", 256, 144))
+        self.assertEqual(s["nb_read_frames"], "90")
+        self.assertAlmostEqual(float(info["format"]["duration"]), 3.0, places=2)
+
+    def test_close_to_x264(self):
+        # frames 0-20: cut A before its light join; the grain frames are random noise, which two
+        # lossy encoders keep differently, so they are not compared here
+        ssim = ssim_per_frame(self.out["nvenc"], self.out["x264"])
+        self.assertEqual(len(ssim), 90)
+        self.assertGreaterEqual(min(ssim[:21]), 0.99)
 
 
 @unittest.skipUnless(FFMPEG and shutil.which("ffprobe"), "needs ffmpeg and ffprobe")

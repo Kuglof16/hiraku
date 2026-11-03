@@ -124,7 +124,7 @@ class AskUserWaitTest(ToolsTestCase):
                     break
                 time.sleep(0.05)
             seen["asked"] = json.loads((Path(ctx.store.path) / hearing.REQUEST_FILE).read_text(encoding="utf-8"))
-            hearing.save_answer(ctx.store.path, {"answers": {"Q30": "利用者 1 人", "Q40": {"value": 1700, "unit": "N"}}, "note": "よろしく"})
+            hearing.save_answer(ctx.store.path, {"answers": {"Q30": "運転者だけ", "Q40": {"value": 1700, "unit": "N"}}, "note": "よろしく"})
 
         t = threading.Thread(target=person)
         t.start()

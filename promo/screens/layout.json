@@ -15,21 +15,48 @@
   "n00": {
     "duration_s": 8.6,
     "_duration_note": "8.6 s is N00's slot in narration draft 6 (0:00-0:08.6): the voice is the longer line that says what HIRAKU is (7.86 s from 0.3 s)",
-    "name": { "y": 172, "size_px": 210 },
+    "name": { "y": 172, "size_px": 210, "in_dur_s": 0.5, "in_step_s": 0.05,
+              "_note": "the letters come in one after another from times.name_s, in_step_s apart, each in in_dur_s (0.7 s and 0.07 s until 2026-11-03), so all six stand by 0.25 + 5 x 0.05 + 0.5 = 1.0 s, while the voice says the name (from 0.3 s)" },
     "rule": { "y": 430, "w": 400, "h": 2, "_note": "centred" },
     "tagline": { "y": 458, "size_px": 36, "text": "作る前に、CAE で確かめる AI エージェント",
                  "_note": "added 2026-11-03: one line under the rule that says what HIRAKU is (the logo and the pets alone did not say it). Centred, ink-soft; bottom about 458 + 1.3 x 36 = 505, above pets.y" },
-    "pets": { "y": 544, "w": 160, "h": 180, "pitch_px": 168, "group_gap_px": 36,
-              "_note": "added 2026-11-03: the ten 3D pets of promo/pets/pet3d.js (v7, packager = six-piece burr) in one row, in pet3d's ROLES order: lead, designer, packager, then the seven CAE domains in the order the chips light. Box i is w x h at y, centred on cx_i = 960 - span / 2 + w / 2 + i x pitch_px (+ group_gap_px from the fourth on), span = 9 x pitch_px + group_gap_px + w = 1708 (x 106 to 1814, inside safe). Each box is a 2D canvas: one WebGL renderer off the page (the size of one box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box" },
+    "pets": { "y": 544, "w": 160, "h": 180, "pitch_px": 210,
+              "_note": "the seven CAE domain pets of promo/pets/pet3d.js (v8) stand in one row over their chips until their chip lights, in the order the chips light. Box k is w x h at y, centred on cx_k = 960 - span / 2 + w / 2 + k x pitch_px, span = 6 x pitch_px + w = 1420 (x 250 to 1670, inside safe). Each pet is a 2D canvas: one WebGL renderer off the page (the size of one row box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box. Until the title pets (2026-11-03) the row held all ten pets (pitch 168, a 36 px gap after the third) and lead, designer and packager wore name tags under them" },
+    "title_pets": {
+      "h_em": 0.6,
+      "_note": "the ten pets sitting on the top edge of the six letters of the name (shared with N18, which uses the same seats on its own name). All lengths are relative to the name: a seat box is h_em x the name's font size high and as wide as pets.w / pets.h of that; letter is the index of the letter in HIRAKU (0 = H ... 5 = U); at is where the pet's feet stand across that letter's ink, 0 = the left edge of the ink, 1 = the right edge (the ink box of each letter is measured with canvas measureText (actualBoundingBoxLeft / Right) in the name's font and size, from the left edge of the letter's own span); the feet stand on the letter's ink top (baseline - actualBoundingBoxAscent of that letter; baseline = the name's top + (font size - (fontBoundingBoxAscent + fontBoundingBoxDescent)) / 2 + fontBoundingBoxAscent, as line-height is 1). The feet point (the pet's origin, projected with the n00 camera) is put on (x of at, ink top) plus lift_px up. yaw_deg turns the pet about its vertical axis (positive: its front turns towards screen right); the camera is n00.camera. At 0.6 em the pet's body is about 0.4 of the letter height, so the letters stay readable under it",
+      "lift_px": 0,
+      "seats": [
+        { "role": "designer",       "letter": 0, "at": 0.12, "yaw_deg": 18 },
+        { "role": "cae.handling",   "letter": 0, "at": 0.88, "yaw_deg": 0 },
+        { "role": "cae.powertrain", "letter": 1, "at": 0.5,  "yaw_deg": 0 },
+        { "role": "cae.aero",       "letter": 2, "at": 0.06, "yaw_deg": 0 },
+        { "role": "cae.crash",      "letter": 2, "at": 0.72, "yaw_deg": 0 },
+        { "role": "lead",           "letter": 3, "at": 0.5,  "yaw_deg": 0 },
+        { "role": "cae.strength",   "letter": 4, "at": 0.12, "yaw_deg": 0 },
+        { "role": "cae.nvh",        "letter": 4, "at": 0.88, "yaw_deg": 0 },
+        { "role": "cae.thermal",    "letter": 5, "at": 0.12, "yaw_deg": 0 },
+        { "role": "packager",       "letter": 5, "at": 0.88, "yaw_deg": -12 }
+      ],
+      "_seats_note": "lead on the apex of the A in the middle; designer and packager on the outer stems of H and U; the seven domains fill the rest from left to right in the order their chips light, so the jumps go from left to right"
+    },
     "camera": { "fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12,
                 "_note": "every pet is seen the same way: a camera fitted to pet3d's FRAME box as promo/pets/viewer.html does (distance = max(FRAME.h / 2, FRAME.w / 2 / aspect) / tan(fov / 2) x 1.04 + 0.6), turned azimuth_deg about the vertical and raised elevation_deg" },
     "chip": { "gap_above_px": 12, "h": 46, "size_px": 24,
               "_note": "the seven domain chips, centred under their pets. 27 px until 2026-11-03; 24 px (story body_text_px) so 強度信頼性 (about 178 px wide) clears its neighbours at pitch 168" },
-    "tag": { "gap_above_px": 12, "h": 40, "size_px": 24,
-             "_note": "name tags of lead, designer and packager (no domain chip, never lit): thin faint border, ink-soft" },
-    "motion": { "pass_dur_s": 0.9, "hop_period_s": 0.9,
-                "_note": "a domain's pet is idle until its chip lights at light_s + k x step_s, then does one pass hop (pass_dur_s) and stays in report (leans to tell). hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager stay idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) with t from timeline.js only",
+    "motion": { "pass_dur_s": 0.9, "hop_period_s": 0.9, "jump_over_px": 36,
+                "_note": "a domain's pet is idle in the row until its chip lights at light_s + k x step_s, then jumps onto its seat on the name (title_pets) in pass_dur_s and stays there in report (leans to tell). The jump: the feet point goes from the row (its box's feet point) to the seat on one parabola in time (linear in x, the box size linear from the row's to the seat's), topping out jump_over_px above the seat, so the pet comes down onto the letter; the pet does its pass hop (pet3d: squash, a small hop, the tick) on the way. hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager sit on the name from the start: each comes in with its letter (the letter's letter-in, the same delay) and stays idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) and the place a function of t, with t from timeline.js only",
                 "idle_shift_s": 1.3 },
+    "play": {
+      "from_s": 1.4, "still_s": 7.5,
+      "land": { "dur_s": 0.45, "sink_px": 8, "squash": 0.05 },
+      "crash": { "dur_s": 0.6, "sink_px": 18, "squash": 0.12,
+                 "toss": { "role": "cae.aero", "delay_s": 0.1, "dur_s": 0.42, "up_px": 30 } },
+      "shake": { "letter": 4, "start_s": 5.05, "dur_s": 0.55, "hz": 8, "rot_deg": 3, "dx_px": 20, "tilt_deg": 5 },
+      "push": { "roles": ["cae.thermal", "packager"], "start_s": 5.75, "dur_s": 0.6, "lean_deg": 16, "step_px": [16, 20] },
+      "cheer": { "role": "lead", "start_s": 6.2, "dur_s": 0.9, "up_px": 44, "land_dur_s": 0.3, "sink_px": 6, "squash": 0.04 },
+      "_note": "the pets play with the letters of the name after the name has been said (the voice says HIRAKU from 0.3 s; the letters stand still and in line until from_s, and everything is back in line and still at still_s). Each letter is a box inside its span, moved by translate / rotate / scale about the bottom centre of the letter's line box; a pet on a letter moves with that point of the letter. land: when a domain pet lands on its letter (lit + motion.pass_dur_s) the letter sinks sink_px and comes back (d(u) = sin(3 pi u) (1 - u)^2 scaled to a peak of 1, u = time since landing / dur_s; the letter squashes by squash x d at the same time). crash: the crash pet lands harder (its own dur, sink and squash), and the pet already on that letter (toss.role) is tossed up_px on a parabola delay_s after the landing. shake: after the NVH pet lands, the letter (index into HIRAKU, 4 = K) shakes (rot_deg at hz, dying out) and slides dx_px right and tilts tilt_deg (eased) in dur_s, the two pets on it riding along; it stays so until push. push: the two pets on the next letter (roles) lean towards it (lean_deg, about their feet) and step left (step_px each) and the letter goes back in line (eased) in dur_s. cheer: lead does the pass hop (pet3d pass, the tick over its head) from start_s with its clock at 0, lifted up_px on a parabola, and its letter gives a small land when it comes down (land_dur_s, sink_px, squash)"
+    },
     "times": {
       "name_s": 0.25,
       "tagline_s": 1.0,
@@ -64,20 +91,22 @@
   },
   "n04": {
     "duration_s": 4.0,
-    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 5 (0:22.5-0:26.5). The same grid of eight tiles as N15",
+    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 6 (0:24.6-0:28.6). The same grid of eight tiles as N15",
     "header": { "x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30, "_note": "one line above the grid: version, rounds" },
     "grid": { "x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24,
               "_note": "seven domains and assembly; bottom 886, above the subtitle band" },
     "feature": { "x": 96, "y": 160, "w": 852, "h": 726, "_note": "the one domain shown large" },
     "list": { "x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24,
               "_note": "the other seven as a small list, row by row: each slot 414 x 163 (the same as the grid gave before)" },
+    "assembly": { "x": 96, "y": 160, "w": 1728, "h": 726, "_note": "the box of the assembly fast-forward from times.assembly_s: the grid's own box, so nothing jumps up or leaves the right side empty (it borrowed n16.view before)" },
     "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"],
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 },
               "mark": { "size_px": 44, "right": 16, "top": 10, "_note": "the tick or cross of the tile" },
-              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "_note": "the corner of the tile where the role's pet stands" },
+              "pet": { "w": 84, "h": 84, "right": 12, "bottom": 12, "feature": { "w": 160, "h": 160 },
+                       "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0,
-               "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). The crash and NVH tiles are red mid iteration; from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box" },
+               "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), set from the synthesized voice's pauses; the maker's recording runs 0.41-3.52 s with 組み立て from about 2.08 s, so the times stand. Each named tile lights up in its own colour from the record (the video run 20261103-153914, version 1: crash and NVH green, assembly red); from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -93,10 +122,11 @@
     "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"],
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 },
               "mark": { "size_px": 44, "right": 16, "top": 10, "_note": "the tick or cross of the tile" },
-              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12, "_note": "the corner of the tile where the role's pet stands" },
+              "pet": { "w": 84, "h": 84, "right": 12, "bottom": 12, "feature": { "w": 160, "h": 160 },
+                       "_note": "the corner of the tile where the role's 3D pet stands (promo/pets/pet3d.js: cae.<domain>, packager for assembly); feature: its size in the large tile. A pet holds still (idle) and moves only for a short reaction when its tile changes: pass when it turns green, mismatch when it turns red, working while its tile is mid iteration. Posed from the cut time t only" },
               "rate": { "size_px": 18 } },
     "times": { "lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0,
-               "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice runs 0.54-4.32 s" },
+               "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice (the maker's recording) runs 0.42-4.11 s" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n16": {
@@ -106,7 +136,7 @@
     "seek": { "x": 120, "y": 814, "w": 1352, "h": 48, "_note": "the seek bar over the lower edge of the view, 24 px inside its sides and bottom" },
     "steps": { "x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12, "_note": "the list of assembly steps in a narrow column on the right" },
     "times": { "lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8,
-               "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice runs 0.6-5.7 s; 組み立て手順を starts at 2.93 s" },
+               "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice (the maker's recording) runs 0.42-5.53 s; 組み立て手順を starts at about 2.72 s" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n05": {
@@ -224,10 +254,11 @@
     "duration_s": 5.0,
     "_note": "drawn by the screens department (web cut.html?cut=n03). 5.0 s is N03's slot in narration draft 6 (0:19.6-0:24.6)",
     "view": { "x": 96, "y": 96, "w": 1200, "h": 790, "_note": "the 3D drive (loop and straight), the same box as n01.view" },
-    "popup": { "x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2,
-               "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width)" },
-    "times": { "lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9,
-               "_note": "0.3-2.8 s the long loop (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)" },
+    "popup": { "x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2, "ok_of_reading": 0.55,
+               "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width); ok_of_reading: the size of the tick line under it (✓ 上限より下), a share of the reading's size" },
+    "loop": { "ease": "in-out", "_note": "the long drive's time runs through the record with this ease (in-out or linear)" },
+    "times": { "lead_s": 0.3, "loop_to_s": 2.6, "ok_s": 2.3, "accel_s": 2.9,
+               "_note": "0.3-2.6 s the long loop (eased in and out), the tick (below the limit) from ok_s 2.3 s as the loop slows, and it stays through the acceleration; the voice says オーバーヒートしないか at 1.44-2.56 s in the maker's recording (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -238,10 +269,11 @@
     "feature": { "x": 96, "y": 96, "w": 1104, "h": 790, "_note": "the one design shown large" },
     "list": { "x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24,
               "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247" },
-    "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
+    "tests": ["tilt_over", "step_stuck", "step_break", "battery_hot", "parts_clash", "wind"],
+    "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 } },
     "times": { "tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55,
-               "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.30-2.79, 3.14-5.93 s)" },
+               "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.41-2.79, 3.35-5.61 s in the maker's recording)" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
@@ -251,8 +283,9 @@
     "view": { "x": 96, "y": 96, "w": 1500, "h": 790, "_note": "the 3D view; bottom 886" },
     "legend": { "x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20, "_note": "the colour bar in a column of its own, not over the view" },
     "label": { "x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08, "_note": "inside the view, top left: 補強の前 / 補強の後. Text size: view.h x of_view_h (63 px), at least size_px" },
-    "times": { "lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0,
-               "_note": "the vehicle turns with the stress colours during sentences 1-2 (0.30-4.22, 4.57-8.89 s); it moves in on the highest element as sentence 2 says 突き止める; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (9.24-15.28 s) and stay while it says それが CAE です" },
+    "ring": { "of_view_h": 0.08, "_note": "the ring around the highest element: its size while the camera is far, as a share of view.h; it grows as the camera moves in and turns green on the reinforced version" },
+    "times": { "lead_s": 0.3, "turn_to_s": 5.5, "zoom_s": 5.5, "zoom_to_s": 7.5, "swap_s": 11.0, "swap_to_s": 13.0,
+               "_note": "the vehicle turns with the stress colours during sentences 1-2 (the maker's recorded voice, from the cut's start: 0.30-3.76, 4.11-8.05 s); it moves in on the highest element during sentence 2 (突き止める) and is in by 7.5 s, before sentence 2 ends; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (8.40-14.42 s) and stay while it says それが CAE です" },
     "turn_deg": 90,
     "zoom": { "fill": 0.45, "_note": "when zoomed in, the area around the highest element fills 45 % of the view's height" },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
@@ -373,84 +406,150 @@
       "_note": "rows: first question appears, then one per row_step; answer_lag: Claude's answer after its question (all three by 2.3 s, inside sentence 1). check: HIRAKU's hand value of row 1 (sentence 2 starts at 3.53 s), one row per check_step; the analysis, the difference and the tick follow by cae_lag, diff_lag, tick_lag (last tick at 5.75 s). src: the source lines. From 6.0 s to 8.3 s the screen holds still"
     }
   },
+  "n09": {
+    "duration_s": 5.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n09) from the intake department's real run (Claude reads the request). 5.6 s is N09's slot in narration draft 6. Only the off-road vehicle, no other products",
+    "request": { "x": 96, "y": 96, "w": 1728, "h": 120, "title_px": 22, "text_px": 30, "_note": "the maker's request in their own words, one or two lines" },
+    "view": { "x": 96, "y": 240, "w": 1100, "h": 646, "_note": "the vehicle in 3D; bottom 886" },
+    "chips": { "x": 1220, "y": 240, "w": 604, "h": 646, "text_px": 30, "row_gap": 16, "_note": "the seven domains and assembly, one chip a row; a chip lights when Claude picks it, with its reason in one short line (text_px x 0.7, at least min_text_px)" },
+    "times": { "lead_s": 0.3, "request_s": 0.3, "chips_from_s": 2.2, "chip_step_s": 0.35,
+               "_note": "the request is there from the start; the chips light one at a time from chips_from_s, in the order of the record, as the voice says 必要な解析を選びます (the maker's recording runs 0.30-5.33 s); with eight chips the last lights at 4.65 s" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n11": {
+    "duration_s": 14.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n11) from a scripted run: how HIRAKU works, not Claude making a mistake. 14.6 s is N11's slot in narration draft 6",
+    "memo": { "x": 96, "y": 96, "w": 560, "h": 790, "title_px": 30, "text_px": 24, "_note": "the hand calculation memo (the prediction), written line by line" },
+    "log": { "x": 680, "y": 96, "w": 1144, "h": 360, "title_px": 30, "text_px": 24, "_note": "the run's log: the analysis called without a prediction is stopped (hooks), then runs once the prediction is written" },
+    "result": { "x": 680, "y": 480, "w": 1144, "h": 406, "title_px": 30, "text_px": 24, "_note": "the analysis result in 3D or a value. In the record (scripted run 20261103-223035) the unit mistake (62 mm meant as 62 cm) went into the hand calculation (the prediction, 40.6 deg); the analysis used the design's load height (31.7 deg) and is right. The screen shows the 62 mm in the settings and never calls the analysis wrong" },
+    "times": { "lead_s": 0.3, "plausible_s": 1.5, "memo_s": 4.9, "stop_s": 9.6, "run_s": 11.6,
+               "_note": "the maker's recording: sentence 1 0.30-4.56 s (the settings card with the mistaken 62 mm shows from plausible_s), sentence 2 4.91-9.20 s (the memo is written from memo_s), sentence 3 9.55-12.81 s (the call without a prediction is stopped at stop_s; after the prediction it runs from run_s)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n12": {
+    "duration_s": 9.2,
+    "_note": "drawn by the screens department (web cut.html?cut=n12) from the same scripted run as N11: the comparison catches the unit mistake in the settings. 9.2 s is N12's slot in narration draft 6. Numbers come from the record",
+    "table": { "x": 96, "y": 96, "w": 1728, "h": 560, "title_px": 30, "text_px": 28, "value_px": 56, "_note": "the comparison: the prediction (hand calculation) and the analysis side by side, their difference; red while they disagree (40.6 / 31.7 deg, -22.0 %), green once fixed (33.6 / 31.7 deg, -5.6 %). Numbers from the record" },
+    "cause": { "x": 96, "y": 680, "w": 1728, "h": 206, "title_px": 30, "text_px": 28, "_note": "the recorded cause in one line: the prediction took the load height 62 mm where 62 cm was meant; fixed, the comparison again" },
+    "times": { "lead_s": 0.3, "mismatch_s": 1.0, "cause_s": 5.2, "fixed_s": 7.6,
+               "_note": "the maker's recording: sentence 1 0.30-4.82 s (the mismatch is red from mismatch_s), sentence 2 5.17-8.62 s (the cause from cause_s, the fixed comparison green from fixed_s)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n13": {
+    "duration_s": 12.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n13) from the experiment department's real Claude run (Claude writes a tool and checks it against known answers). 12.0 s is N13's slot in narration draft 6",
+    "want": { "x": 96, "y": 96, "w": 1728, "h": 96, "text_px": 30, "_note": "what the maker wants, one line" },
+    "shelf": { "x": 96, "y": 216, "w": 1100, "h": 670, "title_px": 26, "text_px": 22, "_note": "the shelf of tool cards, or the analysis that uses the new tool; the missing tool is a dotted card until Claude writes it" },
+    "code": { "x": 1220, "y": 216, "w": 604, "h": 300, "text_px": 18, "_note": "a glimpse of the code Claude writes (small, a few lines; not to be read)" },
+    "check": { "x": 1220, "y": 540, "w": 604, "h": 346, "title_px": 26, "text_px": 24, "_note": "the known-answer checks of the new tool (with their sources), ticked one by one" },
+    "times": { "lead_s": 0.3, "gap_s": 4.0, "write_s": 4.6, "check_s": 7.6, "shelf_s": 10.4,
+               "_note": "the maker's recording: sentence 1 0.30-3.63 s (what the maker wants), sentence 2 3.98-7.18 s (the missing tool from gap_s, Claude writes from write_s), sentence 3 7.53-11.00 s (the checks from check_s, the tool is used from shelf_s)" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n14": {
+    "duration_s": 9.7,
+    "_note": "drawn by the screens department (web cut.html?cut=n14) from the intake department's real run (knowledge imported, a rule check, a hearing question). 9.7 s is N14's slot in narration draft 6",
+    "knowledge": { "x": 96, "y": 96, "w": 700, "h": 790, "title_px": 30, "text_px": 24, "_note": "the list of rules: the basic constraints, then the dropped file's rules added as rows" },
+    "view": { "x": 820, "y": 96, "w": 1004, "h": 560, "fill": 0.8, "_note": "the part the new rule catches, in 3D; fill: the vehicle fills this share of the view along the side it meets first (width or height, whichever fits the box), centred" },
+    "ask": { "x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28, "_note": "HIRAKU's question back to the maker, as a speech bubble" },
+    "times": { "lead_s": 0.3, "drop_s": 2.2, "rule_s": 3.6, "hit_s": 5.0, "ask_s": 6.8,
+               "_note": "the maker's recording: sentence 1 0.30-6.34 s (the file is dropped at drop_s, its rules join the list at rule_s, one catches a part at hit_s), sentence 2 6.69-8.88 s (the question from ask_s)" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
   "n17": {
     "duration_s": 8.8,
     "_note": "drawn by the screens department (web cut.html?cut=n17): the one-page report. 8.8 s is N17's slot in narration draft 6 (2:36.1-2:44.9)",
-    "page": { "x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5,
-              "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page)" },
+    "page": { "x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5, "domain_of_title": 1.4,
+              "_note": "centred; bottom 886. change_of_title: the largest size of the change's sentence, a multiple of title_px (one line across the page); domain_of_title: the size of the domain cards (pass / fail), a multiple of title_px" },
     "dim_opacity": 0.3,
     "_dim_note": "dim_opacity: everything but the next change is drawn at this opacity once it lights (the story: one place to read)",
-    "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 runs 3.83-8.52 s)" },
+    "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 of the maker's recording runs 4.10-8.21 s)" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
   },
   "n17b": {
     "duration_s": 5.8,
-    "_duration_note": "5.8 s is N17b's slot. Voice: 構想は 10 万行。 at 0.30-2.08 s, その道を、Claude Code が拓きました。 at about 2.43-5.54 s. The subtitles are burnt in later; the voice's words are not on the screen",
-    "_note": "how HIRAKU was built: one lane per Claude Code session (the lead and the departments), commits as dots along the time axis, the departments' merges into main as curves up to the lead's lane, then the actual counts. All figures come from promo/screens/n17b.data.js (written by promo/n17b_data.py from git); 100,000 is the first estimate of the plan (構想の見通し), not lines written, and it is gone before the counts come in",
-    "vision": { "x": 340, "y": 150, "w": 1460, "h": 380, "num_size_px": 230, "unit_size_px": 64, "cap_size_px": 32,
-                "peak_alpha": 0.26, "drift_scale": 1.03, "in_dur_s": 0.7, "out_dur_s": 0.45,
-                "_note": "the planned size, faint behind the lanes: 100,000 行 with 構想の見通し above it, centred in this box. Rises to peak_alpha over in_dur_s from times.vision_s while it grows slowly to drift_scale, fades out over out_dur_s from times.vision_out_s" },
-    "lanes": { "x": 96, "y": 96, "w": 1728, "h": 540, "label_w": 220, "label_size_px": 24, "top": 14, "pitch_px": 60,
-               "graph_x": 244, "graph_w": 1460, "dot_r_px": 4, "line_px": 2, "main_line_px": 3, "curve_dx_px": 46,
-               "axis_y": 500, "axis_size_px": 20,
-               "_note": "inside the lanes box (x, y relative to it): lane names right-aligned in the first label_w px, the graph from graph_x, graph_w wide (stage x 340-1800). Lane i's centre is at top + (i + 0.5) x pitch_px (eight lanes, 14-494). A commit's x is its author time on a linear axis from the first commit to the newest; a merge into main is a curve from the department's lane, curve_dx_px before the merge, to the lead's lane at the merge. axis: the dates under the graph" },
-    "counts": { "x": 96, "y": 664, "w": 1728, "h": 226, "head_h": 40, "head_size_px": 22, "stamp_size_px": 20,
-                "label_size_px": 24, "num_size_px": 72, "unit_size_px": 30, "sub_size_px": 20, "gap_px": 22,
-                "cols": { "days": 280, "commits": 330, "lines": 700, "tests": 352 },
-                "_note": "the four actual counts in a row under a heading, with when they were counted at the right of the heading. Bottom 664 + 226 = 890, above the subtitle band. cols: widths of the four, adding up to w with three gaps" },
-    "flow": { "first_frac": 0.12, "a_ease": [0.4, 0, 0.6, 1], "b_ease": [0.5, 0, 0.3, 1], "step_s": 0.05,
-              "dot_dur_s": 0.3, "merge_dur_s": 0.35, "glow_out_dur_s": 0.5,
-              "_note": "the reveal edge (with a soft light on it) sweeps the time axis: to first_frac between times.lanes_s and lanes_to_s (a_ease), still until flow_s, then to the end by flow_to_s (b_ease). The page samples it every step_s into keyframes; a dot pops in over dot_dur_s and a merge curve draws over merge_dur_s when the edge reaches them" },
-    "count": { "dur_s": 1.9, "stagger_s": 0.15, "in_dur_s": 0.4, "ease": [0.12, 0.6, 0.2, 1], "steps": 32,
-               "_note": "each figure counts up over dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. Tiles start stagger_s apart from times.counts_s. Digit wheels were tried first: mid-roll they showed half digits and a wrong day count (8 日目)" },
+    "_duration_note": "5.8 s is N17b's slot. Voice (sixth version, the recorded cues of N17b: at and seconds from the cut's start): 構想は 10 万行。 0.30-1.93 s, その道を、Claude Code が拓きました。 2.28-5.01 s. The subtitles are burnt in later; the voice's words are not on the screen",
+    "_note": "how much and how deep: with sentence 1 the amount of HIRAKU (lines of code written, with the commits, the days and the tests under it, all counted from git main); with sentence 2, under 1 回の運転で, four cards in the order of one run (the areas judged, the analysis tools and the known-answer cases they were checked on, hand calculation set against analysis, fixed and passed). Every figure comes from promo/screens/n17b.data.js (promo/n17b_data.py, from git and one run's events.jsonl); the 100,000 of the voice is the plan and is not drawn",
+    "amount": { "x": 96, "y": 110, "w": 1728, "h": 300, "cap_h": 48, "cap_size_px": 30, "num_h": 196, "num_size_px": 172,
+                "unit_size_px": 56, "sub_h": 52, "sub_size_px": 34, "dim_alpha": 0.6, "dim_dur_s": 0.45,
+                "_note": "centred in this box, top to bottom: the caption (cap_h), lines written (num_h, counting up), the commits, the days and the tests (sub_h). Once the cards come in it dims to dim_alpha over dim_dur_s from times.dim_s, so the cards are the place to read" },
+    "head": { "x": 96, "y": 458, "w": 1728, "h": 46, "size_px": 28,
+              "_note": "the heading over the cards (1 回の運転で), left-aligned" },
+    "depth": { "x": 96, "y": 516, "w": 1728, "h": 300, "card_w": 402, "gap_px": 40, "rule_px": 2, "pad_top": 20,
+               "label_size_px": 30, "num_size_px": 112, "unit_size_px": 36, "sub_size_px": 25, "arrow_px": 12,
+               "_note": "four cards in a row (4 x card_w + 3 x gap_px = w) in the order of a run: the areas, the tools, hand calculation set against analysis, fixed and passed. Each is a rule on top, a label, one figure with its unit and a line or two that says what it means; a small arrow (arrow_px) sits on the rule in each gap. Bottom 516 + 300 = 816" },
+    "stamp": { "x": 96, "y": 858, "w": 1728, "h": 32, "size_px": 19,
+               "_note": "when the figures were counted, the git ref and the run, right-aligned, small; bottom 890, above the subtitle band" },
+    "lanes": { "x": 96, "y": 118, "w": 1728, "h": 690, "top": 1, "pitch_px": 86, "dot_r_px": 4.5, "line_px": 2,
+               "main_line_px": 3, "curve_dx_px": 48, "halo_px": 14, "alpha": 0.3, "dim_alpha": 0.2, "dim_dur_s": 0.45,
+               "_note": "the commit graph from git, faint behind the figures: one lane per Claude Code session (the lead on top, then the departments; graph.lanes of n17b.data.js), lane i's centre at top + (i + 0.5) x pitch_px inside this box (8 lanes, 1-689). A commit is a dot at its author time on a linear axis from the first commit (x 0) to the last (x w); a merge into main is a curve from department lane i, curve_dx_px x sqrt(i) before the merge, up to the lead's lane. No lane names or dates. The text in front has a halo of the night colour (halo_px) so no line runs through a letter. The whole graph is drawn at alpha and dims to dim_alpha over dim_dur_s from times.dim_s, with the amount, so the cards stay the place to read" },
+    "flow": { "ease": [0.3, 0, 0.35, 1], "step_s": 0.05, "dot_dur_s": 0.3, "merge_dur_s": 0.35, "in_dur_s": 0.4,
+              "_note": "the graph grows from the left with the amount's count: a clip over the graph opens from x 0 at times.lanes_s to x w at times.lanes_to_s (ease), sampled every step_s into keyframes; the graph comes in over in_dur_s from times.lanes_s; a dot fades in over dot_dur_s and a merge curve draws over merge_dur_s when the clip reaches them. The page holds no lane motion after times.lanes_to_s + merge_dur_s" },
+    "count": { "amount_dur_s": 1.3, "card_dur_s": 0.9, "in_dur_s": 0.4, "ease": [0.12, 0.6, 0.2, 1], "steps": 32,
+               "_note": "each figure counts up over its dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. in_dur_s: how long a card or caption takes to come in" },
     "times": {
-      "vision_s": 0.3,
-      "labels_s": 0.5,
-      "label_step_s": 0.05,
-      "lanes_s": 0.6,
-      "lanes_to_s": 2.1,
-      "vision_out_s": 1.85,
-      "flow_s": 2.4,
-      "flow_to_s": 4.4,
-      "counts_s": 2.9,
-      "calm_s": 4.6,
-      "_note": "vision: 100,000 comes in with 構想は 10 万行 (0.30-2.08 s) and is gone by vision_out_s + vision.out_dur_s = 2.3 s; lanes: the lanes start to grow from the left; flow: with その道を、Claude Code が拓きました (2.43-5.54 s) the commits stream in and the merges join main; counts: the actual counts roll up, the last stopping at counts_s + 3 x count.stagger_s + count.dur_s = 5.25 s; calm: the light on the reveal edge has faded and the lead's lane brightens a little. From 5.5 s to the end the picture holds still"
+      "amount_s": 0.3,
+      "lanes_s": 0.3,
+      "lanes_to_s": 1.9,
+      "amount_count_s": 0.35,
+      "amount_sub_s": 1.0,
+      "dim_s": 2.2,
+      "cards_s": 2.35,
+      "card_step_s": 0.4,
+      "stamp_s": 4.5,
+      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. lanes: the faint commit graph behind comes in at lanes_s and grows from the left to lanes_to_s, about as the lines count up, and is still by lanes_to_s + flow.merge_dur_s = 2.25 s; from dim_s it dims with the amount. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
     }
   },
   "n18": {
     "duration_s": 9.0,
-    "light": { "y": 40, "w": 130, "h": 470, "grow_dur_s": 0.4,
-               "_note": "centred. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s (title.css grows it over 0.6 s; N18 sets its own since v2)" },
-    "vehicle": { "y": 130, "w": 420, "_note": "centred" },
-    "title": {
-      "name": { "y": 545, "size_px": 170 },
-      "tag": { "y": 745, "size_px": 48 }
+    "_ground_note": "v3 (2026-11-03): ends on paper, the same ground as N00 (common.css --paper #f4f1ea with the faint 40 px grid, class paper-grid; layout.json colors has no paper entry). The night of N17b is the closed door (door.*) in front of the paper; it opens at times.open_s and is gone by open_s + door.crack_dur_s + door.hold_dur_s + door.open_dur_s (1.45 s)",
+    "light": { "y": 60, "w": 130, "h": 850, "grow_dur_s": 0.4, "out_dur_s": 0.35,
+               "_note": "centred, safe.y to the subtitle band. grow_dur_s: the thin line grows from times.line_s to its full height, ending at times.open_s; it is the light in the door's seam, opens with the crack (title.css light-open) and fades over out_dur_s from the swing (v3: was y 40, h 470, a band the vehicle stood on)" },
+    "door": {
+      "crack_dur_s": 0.15, "crack_deg": 14, "crack_ease": [0.25, 0, 0.3, 1], "hold_dur_s": 0.05,
+      "open_dur_s": 0.45, "angle_deg": 100, "perspective_px": 3600, "ease": [0.4, 0, 0.6, 1], "line_px": 2,
+      "thickness_px": 44, "spill_dur_s": 1.4, "shade_alpha": 0.55,
+      "_note": "two night leaves (the N17b ground split down the middle), hinged on their outer edges, as N05's door: from times.open_s they part by crack_deg over crack_dur_s (crack_ease), hold hold_dur_s, then swing out towards the viewer to angle_deg over open_dur_s (ease), darkening to shade_alpha as they turn; each leaf's free edge has a lit thickness (thickness_px) and its other three sides a faint outline (line_px), unseen while the door is shut (it lies on the stage's edges). The first stills (crack 10 deg over 0.2 s, hold 0.1 s, swing 0.5 s with N05's ease) were still mostly dark at 1.4 s; the second (perspective 2400 as N05) threw the leaves out of the frame by about 1.28 s, so the swing was hard to see. Behind them warm light on the paper (the spill) fades over spill_dur_s from the swing, so from about 2.6 s the ground is bare paper. Hidden once open"
     },
-    "url": { "y": 826, "size_px": 30, "_note": "was at y 856 until v2; moved up 30 px to leave room for the credit under it" },
-    "credit": { "y": 872, "size_px": 20, "alpha": 0.62, "fade_dur_s": 0.8,
-                "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band" },
+    "vehicle": { "y": 70, "w": 460, "_note": "centred; ink lines on the paper (no halo). Height w / 2 (viewBox 600 x 300). Was at y 110 (bottom 340) until the pets sat on the name (2026-11-04): their boxes reach up to about 324, 310 while they hop (n18.pets); at 70 the bottom is 300" },
+    "title": {
+      "name": { "y": 400, "size_px": 170 },
+      "tag": { "y": 618, "size_px": 48 }
+    },
+    "url": { "y": 724, "size_px": 30, "_note": "ink-soft. Was at y 826 (night ground) until v3" },
+    "credit": { "y": 776, "size_px": 20, "alpha": 0.62, "fade_dur_s": 0.8,
+                "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Ink at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 801, above the subtitle band" },
     "gather": {
       "count": 150, "seed": 21, "w": 1640, "h": 760, "cy": 440, "margin_px": 24,
       "dot_min_px": 2.0, "dot_max_px": 5.0, "gather_dur_s": 0.3, "stagger_s": 0.1,
       "ease": [0.55, 0, 0.85, 0.45], "start_alpha": 0.55, "seed_glow_alpha": 0.5,
       "_note": "before the line (v2, after the reference's closing): count motes at seeded places in a w x h ellipse about (stage centre, cy), kept margin_px inside the stage and above the subtitle band, each of a seeded radius dot_*_px, are drawn in to seeded points on the line (x = stage centre, y within the light box, more towards its middle) over gather_dur_s (ease: slow, then fast) after a seeded delay of up to stagger_s from times.gather_s; they brighten from start_alpha and go out as they reach the line. A faint glow on the line's place rises to seed_glow_alpha meanwhile and hands over to the light at times.line_s. All motes are in by gather_s + stagger_s + gather_dur_s = times.line_s"
     },
-    "name_bloom": {
-      "peak_blur_px": 54, "rest_blur_px": 14, "peak_alpha": 0.95, "rest_alpha": 0.28, "settle_dur_s": 1.6,
-      "halo_w": 1180, "halo_h": 300, "halo_peak_alpha": 0.2, "halo_rest_alpha": 0.06,
-      "_note": "the name comes up in a bloom of light (v2): each letter, as it rises (title.css letter-in), wears a warm glow (text-shadow) of peak_blur_px at peak_alpha, held for the first 30 % of settle_dur_s (while the letter fades in), that settles to rest_blur_px at rest_alpha by the end of settle_dur_s; behind the name a soft halo (halo_w x halo_h, centred on the name) rises to halo_peak_alpha at 45 % of settle_dur_s (as the last letters come in) and settles to halo_rest_alpha. The first stills had it peak at 18 % and 0.3: a bright patch ran ahead of the letters on the right"
+    "rule": { "y": 596, "w": 400, "h": 2, "_note": "centred, ink, under the name as on N00; grows from the centre with the name (0.6 s from times.name_s + 0.55 s)" },
+    "pets": {
+      "_note": "the ten 3D pets of promo/pets/pet3d.js (v8) on the top edge of the name, in the seats of n00.title_pets (read from there, not copied, so N00 and N18 always have the same order; lengths relative to the name, so they scale with n18.title.name.size_px), seen with n00.camera, in a box of n00.pets' aspect, idle clocks shifted by n00.motion.idle_shift_s x index as on N00. Each pet comes in with its letter (title.css letter-in: 0.7 s, 0.07 s a letter from times.name_s). fix: the letter (index into HIRAKU, 4 = K) stands tilted tilt_deg and moved dx_px right (about the bottom centre of its line box, as n00.play) from the start; when it is in (settle_s = name_s + 4 x 0.07 + 0.7) it wobbles settle_deg at settle_hz, dying out over settle_dur_s. try: the pet on the next letter (role) leans lean_deg towards it and steps step_px left (a hump over dur_s, from start_s); the letter goes back give of the way and springs out again. help: a second pet (role) hops left to_px (up_px high, hop_dur_s) from start_s, to just behind the first; push: from start_s both lean (lean_deg) and step (step_px, in roles order) over dur_s and the letter goes back in line (eased); help.back_s: the helper hops back to its seat. report: from start_s, one pet every step_s in order (left to right on the name), each does a small hop (up_px over hop_dur_s) and stays in report (pet3d: leans to tell). stop: from from_s the pets' clocks slow to a halt at still_s (the clock's speed falls linearly to 0), so from still_s nothing on the screen moves. Every pose is a function of t only",
+      "fix": { "letter": 4, "tilt_deg": 7, "dx_px": 10, "settle_s": 4.38, "settle_dur_s": 0.45, "settle_hz": 3.5, "settle_deg": 2.5 },
+      "try": { "role": "cae.thermal", "start_s": 4.85, "dur_s": 0.75, "lean_deg": 22, "step_px": 16, "give": 0.55 },
+      "help": { "role": "packager", "start_s": 5.3, "hop_dur_s": 0.35, "to_px": 34, "up_px": 18, "back_s": 6.5 },
+      "push": { "roles": ["cae.thermal", "packager"], "start_s": 5.7, "dur_s": 0.7, "lean_deg": 20, "step_px": [14, 14] },
+      "report": { "order": ["designer", "cae.handling", "cae.powertrain", "cae.aero", "cae.crash", "lead",
+                            "cae.strength", "cae.nvh", "cae.thermal", "packager"],
+                  "start_s": 6.9, "step_s": 0.1, "hop_dur_s": 0.35, "up_px": 14 },
+      "stop": { "from_s": 7.92, "still_s": 8.18,
+                "_note": "the clocks are t + idle_shift_s x index (N00's), and pet3d blinks while clock % 4.3 < 0.16: lead's clock + 5.2 (index 4) blinks at about 7.70-7.86 s and index 7's at 8.10-8.26 s; the slowing clock runs from from_s to from_s + (still_s - from_s) / 2 = 8.05, between the two, so no pet holds still with its eyes shut (the first stills, from 7.9 to 8.4, froze index 7 mid-blink)" }
     },
     "times": {
       "gather_s": 0.0,
       "line_s": 0.4,
       "open_s": 0.8,
-      "draw_s": 1.1,
-      "name_s": 2.3,
-      "tag_s": 3.0,
-      "url_s": 3.6,
-      "credit_s": 4.2,
-      "out_s": 8.2,
-      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: it opens into a band; draw: vehicle strokes start; credit: the small line under the URL; out: fade to black. line was 0.15 until v2 (2026-11-03): it moved to 0.4 to leave the motes time to gather first; open_s (read by bgm.py) and the order did not change"
+      "draw_s": 1.7,
+      "name_s": 3.4,
+      "tag_s": 4.4,
+      "url_s": 5.5,
+      "credit_s": 6.0,
+      "_note": "gather: motes gather onto the line's place (gather); line: thin vertical line grows (light.grow_dur_s); open: the door parts at the line (door.*; swings from 1.0 s, gone by 1.45 s); draw: the vehicle's ink strokes start on the paper; name: first letter, just before the voice says HIRAKU (sentence 2 of the maker's recording, 3.61-7.07 s; sentence 1 runs 0.30-3.26 s); tag: about a second into sentence 2, while it says the tag's words; url, credit: after the tag is in, done by 6.8 s; then still to the end on paper. v3 (2026-11-03): name, tag, url, credit were 2.3, 3.0, 3.6, 4.2 and out_s 8.2 faded to black; open_s (read by bgm.py) did not change"
     }
   },
   "labels": {
@@ -482,9 +581,9 @@
       "n00": {
         "message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)",
         "limits": {
-          "label": 10,
+          "label": 7,
           "moving": 12,
-          "why": "the seven domain chips under the pets are the point of the cut; lead, designer and packager carry a small name tag each (7 + 3 = 10). Since 2026-11-03 the ten pets are 3D (data-kind moving): all ten breathe in one row as one family, so they count 10, plus the name or a chip as it lights (12)"
+          "why": "the seven domain chips are the point of the cut (7); lead, designer and packager wear no tag since they sit on the name (2026-11-03; 10 with their tags before). The ten pets are 3D (data-kind moving) and all breathe, so they count 10 wherever they are (the row of seven counts as one while it rises, being one moving thing with its pets inside), plus a chip as it lights or the name and its line while they come in (12)"
         }
       },
       "n01": {
@@ -505,11 +604,11 @@
         "message": "長く走っても熱くならず、どこまで速いかが分かる"
       },
       "n04": {
-        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)",
+        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)",
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only. The tiles' 3D pets are not counted as moving: they hold still and react only for a moment when their tile changes"
         }
       },
       "n05": {
@@ -550,8 +649,8 @@
       "n09": {
         "message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)",
         "limits": {
-          "label": 7,
-          "why": "the seven domains light up"
+          "label": 8,
+          "why": "the seven domains and assembly light up (the same eight as the N04 / N15 grid)"
         }
       },
       "n10": {
@@ -573,7 +672,11 @@
         }
       },
       "n13": {
-        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う"
+        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う",
+        "limits": {
+          "label": 4,
+          "why": "the three known-answer checks and the new tool's name; the shelf's other cards go without names"
+        }
       },
       "n14": {
         "message": "渡したノウハウが、設計のチェックの規則になる"
@@ -583,7 +686,7 @@
         "limits": {
           "label": 8,
           "moving": 8,
-          "why": "the same eight tiles as N04, all turning green"
+          "why": "the same eight tiles as N04, all turning green. The pets react only when their tile changes, as in N04"
         }
       },
       "n16": {
@@ -593,24 +696,33 @@
         "message": "結果だけでなく、次に何を変えればよいかを示す"
       },
       "n17b": {
-        "message": "部署ごとの Claude Code のセッションが、並んで作った",
+        "message": "HIRAKU は量があり、1 回の運転が 7 分野をまたいで予測と解析を照らし合わせて直すほど深い",
         "limits": {
-          "label": 8,
-          "number": 4,
-          "moving": 8,
-          "why": "one lane per session; the four counts at the end"
+          "label": 7,
+          "number": 5,
+          "moving": 4,
+          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once. The commit graph behind (data-kind note: not a counted label, graph or number; its dots and curves are parts of it) is one moving thing; it grows during sentence 1, when only the amount moves, and its dim overlaps only the heading and the first card, so at most four move at once (2.4 s: the amount and the graph dimming, the heading, the first card)"
         }
       },
       "n18": {
-        "message": "解析の前に予測し、理由を説明する — HIRAKU"
+        "message": "解析の前に予測し、理由を説明する — HIRAKU",
+        "limits": {
+          "moving": 12,
+          "why": "the ten 3D pets on the name (n18.pets) are data-kind moving while they breathe and play (they stop by n18.pets.stop.still_s), the same ten as N00's end; with them the name and then the tag come in (11 measured at 3.8 and 4.6 s)"
+        }
       }
     }
   },
   "check": {
     "times": {
-      "n00": [0.6, 1.2, 1.8, 2.5, 3.5, 4.5, 6.5, 8.0],
+      "n00": [0.6, 1.2, 1.8, 2.5, 3.5, 4.3, 4.5, 5.65, 6.05, 6.65, 8.0],
       "n03": [0.5, 2.0, 4.5],
       "n04": [0.5, 1.5, 3.5],
+      "n09": [0.3, 2.2, 3.6, 4.65, 5.5],
+      "n11": [0.3, 1.5, 4.9, 9.6, 11.6, 14.4],
+      "n12": [0.3, 1.0, 5.2, 7.6, 9.0],
+      "n13": [0.3, 4.0, 4.6, 7.6, 10.0, 10.4, 11.8],
+      "n14": [0.3, 2.2, 3.6, 5.0, 6.8, 9.6],
       "n06": [1.0, 4.0, 11.0],
       "n07": [0.5, 7.5, 12.0, 15.0],
       "n17": [0.5, 6.0, 8.5],
@@ -621,7 +733,7 @@
       "n08b": [1.5, 5.2, 5.8, 7.5, 9.8],
       "n10": [0.6, 2.4, 4.6, 5.6, 8.3],
       "n17b": [0.5, 1.5, 2.5, 3.5, 4.5, 5.8],
-      "n18": [0, 0.3, 0.6, 1.0, 1.2, 2.5, 3.2, 3.8, 5.0, 7.0, 8.5],
+      "n18": [0, 0.3, 0.6, 1.0, 1.2, 1.4, 1.8, 2.6, 3.8, 4.6, 5.1, 5.5, 5.8, 6.1, 6.7, 7.0, 7.5, 8.5],
       "labels_n01": [0, 0.25, 2.0, 3.8],
       "labels_n02": [0.25, 3.5, 6.8],
       "labels_n03": [0.25, 2.5, 4.8],
@@ -642,7 +754,12 @@
         "why": "the caption fades up from 14 px below its place (0.6 s), so while it moves it reaches up to 14 px under the figure's box; at rest it is inside" }
     ],
     "allow_overlap": [
+      { "cut": "n00", "a": "n00.pet.*", "b": "n00.*", "why": "a pet's box is a transparent canvas bigger than the pet in it. Seated, the box's lower edge reaches past the letter's ink top into the name's line box, and the two pets on one letter (and on neighbouring letters) have boxes that touch; while a pet jumps from the row onto its letter, its box passes over the line, the tagline and the chips. The pet is drawn on the letter's top edge and never inside the letter (title_pets puts the feet on the ink top)" },
+      { "cut": "n07", "a": "n07.view", "b": "n07.label", "why": "the before / after label sits inside the view's top left on purpose (n07.label)" },
+      { "cut": "n16", "a": "n16.view", "b": "n16.seek", "why": "the seek bar sits over the view's lower edge on purpose (n16.seek)" },
       { "cut": "n18", "a": "n18.light", "b": "n18.vehicle", "why": "the vehicle is drawn over the vertical light on purpose" },
+      { "cut": "n18", "a": "n18.pet.*", "b": "n18.pet.*", "why": "as on N00: a pet's box is a transparent canvas bigger than the pet; the two pets on one letter (and on neighbouring letters) have boxes that touch, and the helper hops to just behind the first pusher (n18.pets.help)" },
+      { "cut": "n18", "a": "n18.pet.*", "b": "n18.title.name", "why": "as on N00: seated, the box's lower edge reaches past the letter's ink top into the name's line box; the pet is drawn on the letter's top edge and never inside the letter (n00.title_pets puts the feet on the ink top)" },
       { "cut": "n05", "a": "n05.door", "b": "n05.hero", "why": "the vehicle stands in front of the closed door on purpose; it fades out as the door swings open" },
       { "cut": "n08", "a": "n08.*", "b": "n08.*", "why": "N08's dialogs, warnings and the stack of manuals pile up over one another and over the main window on purpose: the pile is the picture (too much to learn)" },
       { "cut": "n17b", "a": "n17b.vision*", "b": "n17b.lanes*", "why": "the planned 100,000 is drawn faint behind the lanes on purpose while they start to grow; it is gone (2.3 s) before the commits stream in" }

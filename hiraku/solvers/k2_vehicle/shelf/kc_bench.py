@@ -92,6 +92,7 @@ class KcBenchTool(K2Tool):
     name = "kc_bench"
     title = "K&C の台 (ストロークと力でキャンバー・トー)"
     domain = "handling"
+    stage = 1  # a static bench of one corner, no time simulation
     tests: list[str] = []
     params = (P("support", None, None, "the support id on the bench (default: the first support on a K&C table)"),
               P("lateral_force", "kN", 3.0, "the lateral force sweep goes from - to + this"),

@@ -11,6 +11,7 @@ own values as the defaults of the hearing.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass
@@ -66,6 +67,7 @@ def intake(
     docs: bool = True,
     from_file: bool = False,
     slug: str | None = None,
+    hearing_mode: str = "code",
 ) -> IntakeResult:
     """Pick the domains, settle the hearing, and list the events. `requirements`: what the request already says.
 
@@ -74,9 +76,15 @@ def intake(
     it lacks and has one for. Without it (a request typed in A1) every missing `must` and `confirm` item is asked.
     The merged requirements are `result.requirements_file["requirements"]`: use them as project.requirements.
     slug: what the requirements file calls the product (default: `product`, else a name made of the sentence).
+    hearing_mode: the requirements file's `hearing` (contract). "code" (default): the hearing is settled here, from the
+    file and the defaults. "claude" (with from_file): nothing is settled or asked here; the requirements stay as the file has
+    them and the events are the domains and the knowledge only: the lead asks with ask_user, which asks the `must` and the
+    `confirm` items the run lacks.
     """
+    if hearing_mode not in ("code", "claude"):
+        raise IntakeError(f"hearing は code か claude です ({hearing_mode!r} は使えません)")
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
-                           exclude=exclude)
+                           exclude=exclude, product=product)
     slug = slug or product or slug_for(want)  # slug: the file's name for the product when no file of its own lends values
     own: dict[str, Record] = {}
     if product and product in product_files():
@@ -86,8 +94,11 @@ def intake(
     req: Record = {"want": domains["want"], "product": slug, "flags": domains["flags"], "requirements": list(requirements or [])}
     if speed_class:
         req["speed_class"] = speed_class
-    prepared = hearing.prepare(req, answers, note, product_defaults=own, ask_confirm=not from_file)
     built_in = knowledge.load_builtin() if docs else []
+    if from_file and hearing_mode == "claude":  # left open for ask_user: no hearing events, the file's requirements as they are
+        left = hearing.Prepared(copy.deepcopy(req), {"questions": []}, {"answers": []}, [], [])
+        return IntakeResult(domains, left, built_in, ev.intake_events(domains, None, built_in))
+    prepared = hearing.prepare(req, answers, note, product_defaults=own, ask_confirm=not from_file)
     return IntakeResult(domains, prepared, built_in, ev.intake_events(domains, prepared, built_in))
 
 

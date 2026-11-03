@@ -4,15 +4,20 @@
 // a live AudioContext (to listen while tuning) and in an OfflineAudioContext
 // (to render the export):
 //
-//   input -> highpass -> mud cut (peaking) -> presence (peaking)
+//   input -> highpass -> low cut (2 highpass + mains notches)
+//         -> mud cut (peaking) -> presence (peaking)
 //         -> de-esser (worklet) -> noise gate (worklet)
 //         -> compressor -> makeup gain -> output
 //   input -> (dry) ---------------------------------------> output
 //
 // A stage that is off is made an identity: biquads become a 0 dB peaking
 // filter, the worklets pass the signal through, the compressor gets ratio 1.
+// Web Audio reads Q of a highpass biquad in dB (checked with
+// getFrequencyResponse in Chromium: Q -3.01 gives -3.01 dB at the cutoff),
+// so the Butterworth Q values below are given in dB.
 // exportTake() renders a take through the chain at 44.1 kHz, trims silence at
-// the head and tail, sets the loudness and encodes 16-bit mono WAV.
+// the head and tail, fades the edges (EDGE below), sets the loudness and
+// encodes 16-bit mono WAV.
 
 "use strict";
 
@@ -169,6 +174,7 @@ async function ensureWorklet(ctx) {
 const PRESETS = {
   clear: {
     hp: { on: true, freq: 80 },
+    hum: { on: true, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: true, freq: 300, gain: -4, q: 1.0 },
     presence: { on: true, freq: 3500, gain: 4, q: 0.9 },
     deess: { on: true, freq: 7000, threshold: -32, ratio: 4, maxCut: 10 },
@@ -178,6 +184,7 @@ const PRESETS = {
   },
   soft: {
     hp: { on: true, freq: 70 },
+    hum: { on: true, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: true, freq: 280, gain: -1.5, q: 0.8 },
     presence: { on: true, freq: 3000, gain: 1.5, q: 0.7 },
     deess: { on: true, freq: 6500, threshold: -30, ratio: 3, maxCut: 8 },
@@ -187,6 +194,7 @@ const PRESETS = {
   },
   raw: {
     hp: { on: false, freq: 80 },
+    hum: { on: false, cut: 100, mains: 50, harmonics: 10 },
     mud: { on: false, freq: 300, gain: 0, q: 1.0 },
     presence: { on: false, freq: 3500, gain: 0, q: 0.9 },
     deess: { on: false, freq: 7000, threshold: -32, ratio: 4, maxCut: 10 },
@@ -221,9 +229,19 @@ function mono(node) {
   return node;
 }
 
+// The low cut: a 4th-order Butterworth highpass as two biquads (Q 0.5412 and
+// 1.3066, as dB), then a narrow notch on the mains frequency and each of its
+// harmonics up to MAX_HARMONICS.
+const BUTTER4_Q_DB = [20 * Math.log10(0.5412), 20 * Math.log10(1.3066)];
+const BUTTER2_Q_DB = 20 * Math.log10(Math.SQRT1_2);
+const NOTCH_Q = 30;
+const MAX_HARMONICS = 12;
+
 function buildChain(ctx, settings) {
   const input = mono(ctx.createGain());
   const hp = mono(ctx.createBiquadFilter());
+  const low = BUTTER4_Q_DB.map(() => mono(ctx.createBiquadFilter()));
+  const notches = Array.from({ length: MAX_HARMONICS }, () => mono(ctx.createBiquadFilter()));
   const mud = mono(ctx.createBiquadFilter());
   const pres = mono(ctx.createBiquadFilter());
   const deess = new AudioWorkletNode(ctx, "hiraku-deesser", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
@@ -233,7 +251,9 @@ function buildChain(ctx, settings) {
   const wet = mono(ctx.createGain());
   const dry = mono(ctx.createGain());
   const output = mono(ctx.createGain());
-  input.connect(hp); hp.connect(mud); mud.connect(pres); pres.connect(deess);
+  input.connect(hp);
+  [hp, ...low, ...notches, mud].reduce((a, b) => { a.connect(b); return b; });
+  mud.connect(pres); pres.connect(deess);
   deess.connect(gate); gate.connect(comp); comp.connect(makeup); makeup.connect(wet);
   wet.connect(output);
   input.connect(dry); dry.connect(output);
@@ -252,7 +272,9 @@ function buildChain(ctx, settings) {
   };
 
   function update(s) {
-    setBiquad(hp, "highpass", s.hp.on, s.hp.freq, undefined, 0.707);
+    setBiquad(hp, "highpass", s.hp.on, s.hp.freq, undefined, BUTTER2_Q_DB);
+    low.forEach((n, i) => setBiquad(n, "highpass", s.hum.on, s.hum.cut, undefined, BUTTER4_Q_DB[i]));
+    notches.forEach((n, i) => setBiquad(n, "notch", s.hum.on && i < s.hum.harmonics, s.hum.mains * (i + 1), undefined, NOTCH_Q));
     setBiquad(mud, "peaking", s.mud.on, s.mud.freq, s.mud.gain, s.mud.q);
     setBiquad(pres, "peaking", s.presence.on, s.presence.freq, s.presence.gain, s.presence.q);
     const dp = deess.parameters;
@@ -372,9 +394,48 @@ function trimBounds(x, fs, pad = 0.05) {
   const thr = Math.max(-60, top - 35);
   let first = -1, last = -1;
   for (let k = 0; k < n; k++) if (db[k] > thr) { if (first < 0) first = k; last = k; }
-  if (first < 0) return { start: 0, end: x.length };
+  if (first < 0) return { start: 0, end: x.length, voiceStart: 0, voiceEnd: x.length };
   const p = Math.round(pad * fs);
-  return { start: Math.max(0, first * frame - p), end: Math.min(x.length, (last + 1) * frame + p) };
+  return {
+    start: Math.max(0, first * frame - p), end: Math.min(x.length, (last + 1) * frame + p),
+    voiceStart: first * frame, voiceEnd: (last + 1) * frame,
+  };
+}
+
+// Edges of an exported take. Measured on recorded takes: the room tone
+// (about -60 dBFS, mostly above 2 kHz) started at the first sample and
+// stopped at the last one, and where the take was stopped there was often a
+// click; over the music both edges stood out as hiss starting / stopping at
+// once. So the room tone is faded in at the head and faded out after the last
+// voiced frame (raised cosine), and the export ends before the take's stop.
+const EDGE = {
+  fadeIn: 0.03,     // s, from the first exported sample
+  fadeOut: 0.15,    // s, room tone and breath after the last word
+  hold: 0.02,       // s, after the last voiced frame before the fade-out starts
+  stopGuard: 0.01,  // s, left out before the end of the take (the stop's click)
+};
+
+// Fade x (in place) over [a, b): gain from 0 at a to 1 when rising, from 1
+// to 0 at b - 1 when not.
+function rampInPlace(x, a, b, rising) {
+  const n = Math.max(1, b - a);
+  for (let i = a; i < b; i++) {
+    const c = Math.cos(0.5 * Math.PI * (i - a + (rising ? 0 : 1)) / n);
+    x[i] *= rising ? 1 - c * c : c * c;
+  }
+}
+
+// Where the export of a take ends and its fade-out lies, in samples of the
+// rendered take. srcEnd: where the take's own samples end in the render
+// (after it only the filters' decay of the render's tail is left).
+function edgeSpan(b, srcEnd, fs) {
+  const fo = Math.round(EDGE.fadeOut * fs), hold = Math.round(EDGE.hold * fs);
+  // at least hold + fade-out after the last word (longer when the pad is),
+  // never past the take's stop
+  const limit = Math.max(b.start + 1, srcEnd - Math.round(EDGE.stopGuard * fs));
+  const end = Math.min(Math.max(b.end, b.voiceEnd + hold + fo), limit);
+  const outStart = Math.max(b.start, Math.min(b.voiceEnd + hold, end - fo));
+  return { end, outStart };
 }
 
 // --- render and export -------------------------------------------------------
@@ -403,8 +464,14 @@ async function renderChain(pcm, rate, settings, bypass) {
 async function processTake(pcm, rate, settings, { bypass = false } = {}) {
   const y = await renderChain(pcm, rate, settings, bypass);
   const o = settings.out;
-  const b = o.trim ? trimBounds(y, OUT_RATE, o.pad) : { start: 0, end: y.length };
+  const srcEnd = Math.min(y.length, Math.ceil(pcm.length * OUT_RATE / rate));
+  const b = o.trim ? trimBounds(y.subarray(0, srcEnd), OUT_RATE, o.pad)
+    : { start: 0, end: srcEnd, voiceStart: 0, voiceEnd: srcEnd };
+  const span = edgeSpan(b, srcEnd, OUT_RATE);
+  b.end = span.end;
   const seg = y.slice(b.start, b.end);
+  rampInPlace(seg, 0, Math.min(seg.length, Math.round(EDGE.fadeIn * OUT_RATE)), true);
+  rampInPlace(seg, span.outStart - b.start, seg.length, false);
   const before = integratedLoudness(seg, OUT_RATE);
   let gainDb = 0, limited = false;
   if (o.normalize && isFinite(before)) {
@@ -458,7 +525,7 @@ function wavSeconds(arrayBuffer) {
 }
 
 window.HirakuDSP = {
-  PRESETS, cloneSettings, completeSettings, ensureWorklet, buildChain,
+  PRESETS, cloneSettings, completeSettings, ensureWorklet, buildChain, MAX_HARMONICS,
   integratedLoudness, kWeightCoeffs, trimBounds, peakOf, renderChain, processTake,
-  encodeWav16, wavSeconds, OUT_RATE,
+  encodeWav16, wavSeconds, OUT_RATE, EDGE, edgeSpan,
 };

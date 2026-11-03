@@ -65,11 +65,11 @@ def cmd_pick(a: argparse.Namespace) -> int:
         print("Claude の返事:\n  " + run.reply.replace("\n", "\n  "))
         _print_pick(run.record)
         if file_flags is not None:
-            req_domains = [p["domain"] for p in pick_domains(want, file_flags, speed)["picks"]]
+            req_domains = [p["domain"] for p in pick_domains(want, file_flags, speed, product=a.product)["picks"]]
             print("製品のファイルとの比べ:", json.dumps(agent.compare_with_product(run, file_flags, req_domains), ensure_ascii=False))
         print(f"pick_domains の呼び出し {len(run.calls)} 回、費用 {run.cost_usd} USD")
         return 0
-    record = pick_domains(want, file_flags or {}, speed)
+    record = pick_domains(want, file_flags or {}, speed, product=a.product)
     if a.json:
         print(json.dumps(record, ensure_ascii=False, indent=2))
     else:

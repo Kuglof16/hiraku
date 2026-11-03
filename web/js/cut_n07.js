@@ -1,28 +1,61 @@
 // N07: the contour of a stress analysis on the frame's plate mesh. The vehicle turns
 // slowly in the colours of the version before the reinforcement, the camera comes to
 // that version's largest element, and the colours go over to the version after it, on
-// one colour scale; then it stays there. The words on the page are only "補強の前" /
-// "補強の後" and the stress's name and unit: the difference is shown by the colours and
-// the shape, not by naming the analyses. One tag, one colour bar (its two ends) and one
-// number (the largest value of the state shown), as the story's limits ask; the
-// notes under them are small. The tag is large (N07_STYLE), and with the version after it
-// says in green "✓ 直った" when the records judge that version a pass on the load case (its
-// verdicts, else the domain's judgement of the version); otherwise nothing is added. Positions, sizes, colours, the length and the
-// times come from layout.json n07; a missing key is named on the page.
+// one colour scale; then it stays there. The viewers do not know CAE: the words on the
+// page are only "補強の前" / "補強の後", and a legend of two things, "応力 [MPa]" and
+// "許容 <the load case's criterion limit>" (no names of analyses or of stress measures).
+// The tag is large (label.of_view_h), and with the version after it says in green
+// "✓ 直った" when the records judge that version a pass on the load case (its verdicts,
+// else the domain's judgement of the version); otherwise nothing is added. Positions,
+// sizes, colours, the length and the times come from layout.json n07; a missing key is
+// named on the page.
 // cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
+//
+// The colours: each element's shell stress (the surface "max" field, from the record), on
+// bands whose top is the allowable value. Elements above it keep the colour past the top
+// (also in the version after, e.g. an inside corner), with no words added.
+//
+// The weak spot: a ring round the element with the largest recorded value of the version
+// before (its contour's maxAt), no number or word with it. It is shown from lead_s to the
+// end: small while the vehicle turns, growing with the zoom, held at zoom.fill of the
+// view's height from zoom_to_s through the swap (so the eye can follow the weak spot), and
+// green once the version after is shown and judged a pass. It carries no data-kind (it
+// marks the picture, as the colours do).
 //
 // times: lead_s..turn_to_s the turn (turn_deg in all); zoom_s..zoom_to_s the camera
 // comes to the largest element (its neighbourhood then takes zoom.fill of the view's
 // height); swap_s..swap_to_s the version after fades in over the one before (same
 // camera, same scale). Before lead_s and after each step the picture holds still.
+// On the way in the camera's direction goes round by its azimuth (about the vertical) and its
+// elevation, each evenly (the camera keeps its up, so the picture turns by the azimuth's
+// change even where the camera looks steeply down), and by no more than the zoom's time allows
+// at 90 deg/s (with the smooth ease the fastest moment is pi/2 times the mean): when the
+// element is seen from farther round than that, the camera ends the zoom that much short of
+// the element's own direction, on the side it comes from. Its end is at most
+// ZOOM_MAX_ELEV_DEG above the ground's plane.
 
 import * as THREE from "three";
-import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
+import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { esc, fmt, fmtVU, unitLabel } from "./labels.js";
-import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
+import { esc, fmt, unitLabel } from "./labels.js";
+import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
+import { PACE_LIMIT_DEG_S } from "./pace.js";
+
+const ZOOM_MAX_ELEV_DEG = 70;
+
+// A direction (three.js, y up) no steeper than elev degrees, keeping its side; one straight up
+// or down takes the side of `like`.
+function notSteeper(d, elev, like) {
+  const lim = Math.sin(THREE.MathUtils.degToRad(elev));
+  if (Math.abs(d.y) <= lim) return d.clone();
+  let h = new THREE.Vector3(d.x, 0, d.z);
+  if (h.lengthSq() < 1e-8) h = new THREE.Vector3(like.x, 0, like.z);
+  if (h.lengthSq() < 1e-8) h = new THREE.Vector3(1, 0, 0);
+  h.normalize().multiplyScalar(Math.cos(THREE.MathUtils.degToRad(elev)));
+  return new THREE.Vector3(h.x, Math.sign(d.y) * lim, h.z).normalize();
+}
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -30,15 +63,12 @@ const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
 
-// Not in layout.json (written here until the promo department gives a key for it): the
-// tag's text size as a share of the view's height (at least label.size_px).
-export const N07_STYLE = { label_of_view_h: 0.08 };
-
 const N07_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
   "legend.x", "legend.y", "legend.w", "legend.h", "legend.title_px", "legend.text_px",
-  "label.x", "label.y", "label.size_px",
+  "label.x", "label.y", "label.size_px", "label.of_view_h",
+  "ring.of_view_h",
   "times.lead_s", "times.turn_to_s", "times.zoom_s", "times.zoom_to_s", "times.swap_s", "times.swap_to_s",
   "turn_deg", "zoom.fill",
   "colors.bg", "colors.panel", "colors.rule",
@@ -118,6 +148,7 @@ export class CutN07 {
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
     if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
+    // the element stress (the "max" surface first, preferredField) on the allowable's band
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
       { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
@@ -161,14 +192,15 @@ export class CutN07 {
     // the overlay's opacity only toward the rim
     this.mark = document.createElement("div");
     this.mark.className = "n07-mark";
-    const [r, g, b] = new THREE.Color(sp.overlay.color).toArray().map((x) => Math.round(x * 255));
-    const rim = `rgba(${r}, ${g}, ${b}, ${sp.overlay.opacity})`;
-    Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${rim} 100%)`, opacity: "0" });
+    const rgba = (hex) => `rgba(${new THREE.Color(hex).toArray().map((x) => Math.round(x * 255)).join(", ")}, ${sp.overlay.opacity})`;
+    this.rim = rgba(sp.overlay.color);
+    this.greenRim = rgba(GREEN);
+    Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${this.rim} 100%)`, opacity: "0" });
     for (const c of this.cases) {
       c.el = document.createElement("canvas");
       c.el.dataset.kind = "moving";
       box.append(c.el);
-      const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+      const v = cutView(this, "n07");
       v.setDesign(this.s.designs[c.version] ?? null);
       v.setLoading(this.lc?.params?.loading ?? null);
       v.setScene(this.lc, c.ana);
@@ -190,10 +222,8 @@ export class CutN07 {
     this.buildLabel();
   }
 
-  // A tall legend: the stress's name and unit, the colour bar upright with its two ends (the
-  // top says when it is the allowable value), the largest recorded value of the state shown
-  // (the one emphasised number), and small notes: the colour past the allowable value, one
-  // scale for both states.
+  // A tall legend of two things: the stress's name and unit, and the colour bar upright
+  // with the allowable value at its top (the bands' top).
   buildLegend() {
     const sp = this.spec;
     const L = sp.legend;
@@ -208,19 +238,16 @@ export class CutN07 {
     // what is read is at least the story's body text size
     const tp = Math.max(this.px(L.title_px), this.story.bodyPx);
     const xp = Math.max(this.px(L.text_px), this.story.bodyPx);
-    const ticks = [
-      `<span style="top:0%">${esc(ct.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct.max, 3))}</span>`,
-      `<span style="top:100%">${esc(fmt(ct.min, 3))}</span>`,
-    ];
-    const rows = this.cases
-      .map((c) => `<div class="row" data-version="${c.version}"><b>${esc(c.name)}</b><span>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</span></div>`)
-      .join("");
+    // the allowable value is the load case's criterion limit (in the field's unit)
+    const lim = this.lc?.criterion?.limit;
+    const allowable = lim && lim.unit === f.unit && Number.isFinite(lim.value) ? lim.value : null;
+    // the bands, the allowable at the top (without an allowable: the top value)
+    const bar = `linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})`;
+    const tick = allowable !== null ? `許容 ${fmt(allowable, 4)}` : fmt(ct.max, 3);
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
-      `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
-      `<div class="rows" style="font-size:${xp}px">${rows}</div>` +
-      (ct.limitKnown ? `<p style="font-size:${this.minPx}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
-      (this.cases.length > 1 ? `<p class="src" style="font-size:${this.minPx}px">前と後で同じ目盛り</p>` : "");
+      `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:${bar}"></i>` +
+      `<div class="ticks"><span class="allowable" style="top:0%">${esc(tick)}</span></div></div>`;
     this.stage.append(el);
     this.legend = el;
   }
@@ -231,7 +258,7 @@ export class CutN07 {
     el.className = "n07-label";
     el.dataset.box = "n07.label";
     el.dataset.kind = "label";
-    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * N07_STYLE.label_of_view_h));
+    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * sp.label.of_view_h));
     Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${px}px` });
     this.stage.append(el);
     this.label = el;
@@ -244,14 +271,6 @@ export class CutN07 {
     this.label.textContent = c.name;
     if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
     this.label.dataset.fixed = c.fixed ? "1" : "0";
-    // only the state shown has its largest value on the legend (the one emphasised number)
-    for (const row of this.legend.querySelectorAll(".row")) {
-      const on = Number(row.dataset.version) === c.version;
-      row.classList.toggle("on", on);
-      row.style.display = on ? "" : "none";
-      if (on) row.dataset.kind = "number";
-      else delete row.dataset.kind;
-    }
   }
 
   resize(scale) {
@@ -263,6 +282,29 @@ export class CutN07 {
     }
   }
 
+  // The camera's direction at share u of the zoom: from a toward b by azimuth and elevation
+  // (the shorter way round), both brought back toward a's so the whole turn takes no more
+  // than the zoom's time allows.
+  zoomDir(a, bIn, u) {
+    const T = this.spec.times;
+    const b = notSteeper(bIn, ZOOM_MAX_ELEV_DEG, a);
+    const most = THREE.MathUtils.degToRad((PACE_LIMIT_DEG_S * (T.zoom_to_s - T.zoom_s) * 2) / Math.PI);
+    const sph = (d) => ({ az: Math.atan2(d.x, d.z), el: Math.asin(Math.max(-1, Math.min(1, d.y))) });
+    const A = sph(a);
+    const B = sph(b);
+    let dAz = B.az - A.az;
+    dAz = Math.atan2(Math.sin(dAz), Math.cos(dAz)); // the shorter way round
+    let dEl = B.el - A.el;
+    const turn = Math.hypot(dAz, dEl);
+    if (turn > most) {
+      dAz *= most / turn;
+      dEl *= most / turn;
+    }
+    const az = A.az + dAz * u;
+    const el = A.el + dEl * u;
+    return new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+  }
+
   // The camera: on the turn, then on the way to the largest element.
   cameraAt(p) {
     const o = this.orbit;
@@ -272,7 +314,7 @@ export class CutN07 {
     const fOff = f.position.clone().sub(f.target);
     const u = p.zoom;
     const target = o.target.clone().lerp(f.target, u);
-    const dir = off.clone().normalize().lerp(fOff.clone().normalize(), u).normalize();
+    const dir = this.zoomDir(off.clone().normalize(), fOff.clone().normalize(), u);
     const dist = Math.exp(Math.log(off.length()) * (1 - u) + Math.log(fOff.length()) * u);
     return { target, position: target.clone().addScaledVector(dir, dist), near: o.near + (f.near - o.near) * u, far: o.far + (f.far - o.far) * u };
   }
@@ -282,6 +324,11 @@ export class CutN07 {
     this.now = { t, ...p };
     const [b, a] = this.cases;
     b.view.lookFrom(this.cameraAt(p));
+    // close in, the wheels are left out: the near tyre would stand between the camera and
+    // the joint (it is seen through the spokes otherwise)
+    const close = p.zoom >= 0.5;
+    for (const c of this.cases) c.view.wheels.visible = !close;
+    this.mark.dataset.wheels = close ? "hidden" : "shown";
     const mix = a ? p.mix : 0;
     if (mix < 1) b.view.renderInto(b.el.getContext("2d"), b.el.width, b.el.height, this.scale);
     b.el.style.opacity = mix < 1 ? "1" : "0";
@@ -291,16 +338,25 @@ export class CutN07 {
       if (mix > 0) a.view.renderInto(a.el.getContext("2d"), a.el.width, a.el.height, this.scale);
     }
     this.setLabel(a && mix >= 0.5 ? a : b);
-    // the ring round the largest element (of the version before), as wide as zoom.fill of the view's height
+    // the ring round the largest element (of the version before): from lead_s a small one
+    // (ring.of_view_h of the view's height) shows where the weak spot is while the vehicle
+    // turns, it grows with the zoom to zoom.fill of the view's height, and once the version
+    // after is shown and the record judges it a pass (✓ 直った) it turns green
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
-    const d = this.spec.zoom.fill * this.inner.h;
+    const small = this.spec.ring.of_view_h;
+    const d = (small + (this.spec.zoom.fill - small) * p.zoom) * this.inner.h;
+    const fixed = !!(a && a.fixed && mix >= 0.5);
+    const tone = fixed ? GREEN : this.spec.overlay.color;
     Object.assign(this.mark.style, {
       left: `${BORDER_PX + ((at.x + 1) / 2) * this.inner.w - d / 2}px`,
       top: `${BORDER_PX + ((1 - at.y) / 2) * this.inner.h - d / 2}px`,
       width: `${d}px`,
       height: `${d}px`,
-      opacity: p.zoom >= 1 ? "1" : "0",
+      borderColor: tone,
+      background: `radial-gradient(circle, transparent 60%, ${fixed ? this.greenRim : this.rim} 100%)`,
+      opacity: t >= this.spec.times.lead_s ? "1" : "0",
     });
+    this.mark.dataset.tone = fixed ? "green" : "red";
     document.documentElement.dataset.n07Version = String(this.labelFor.version);
   }
 }

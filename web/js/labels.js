@@ -14,6 +14,45 @@ export const DOMAIN_JA = {
   assembly: "組み立て",
 };
 
+// The domains in the viewers' words (the video's pages; DOMAIN_JA keeps the trade's short names).
+export const DOMAIN_PLAIN_JA = {
+  handling: "倒れない・よけられる",
+  powertrain: "走る力",
+  aero: "風",
+  crash: "ぶつかったとき",
+  strength: "壊れない",
+  nvh: "揺れ・音",
+  thermal: "熱くなりすぎない",
+  assembly: "組める・手が届く",
+};
+
+
+// The trade's words in the record's sentences, and what the video's pages say instead.
+const SENTENCE_PLAIN = [
+  [/荷重条件の作り方/g, "試し方"],
+  [/荷重条件/g, "試す条件"],
+];
+
+// A test id or a rule id in a sentence ("S2 ", "U1-04", "HU-02", "R1s").
+const ID_RE = /(?<![A-Za-z0-9])(?:[A-Z]{1,3}\d*-\d+|[A-Z]\d+[a-z]?)(?![A-Za-z0-9-])/g;
+
+// A sentence of the record for the viewers: ids taken out, the trade's words replaced.
+export function plainSentence(text) {
+  let s = String(text ?? "").replace(ID_RE, "").replace(/\s{2,}/g, " ");
+  for (const [re, w] of SENTENCE_PLAIN) s = s.replace(re, w);
+  return s.replace(/^[\s・、]+/, "").replace(/\s+([、。」])/g, "$1").trim();
+}
+
+// Why a domain is not looked at, from the record's reason (domains.picked): the sentence
+// that says so (the one ending in "見ない"), else the words before a list (":"), with the
+// tests' ids and the bracketed asides taken out.
+export function plainReason(reason) {
+  const s = String(reason ?? "");
+  const said = s.split("。").map((x) => x.trim()).find((x) => x.includes("見ない"));
+  const line = (said ?? s.split(/[:：]/)[0]).replace(/\s*[（(][^)）]*[)）]/g, "");
+  return plainSentence(line);
+}
+
 export const ROLE_JA = {
   lead: "まとめ役",
   designer: "設計役",
@@ -50,9 +89,10 @@ export const STOP_CODE_JA = {
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
-  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみの道具だけ" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみのツールだけ" },
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
+  { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
 ];
 
 export const BASE_JA = {
@@ -190,7 +230,120 @@ const QUANTITY_JA = {
   toe_longitudinal: "前後力によるトー",
   camber_longitudinal: "前後力によるキャンバー",
   toe_aligning: "アライニングトルクによるトー",
+  // judged quantities of the scripted video runs (report lines)
+  temp_battery_max: "電池のいちばん高い温度",
+  temp_controller_max: "制御器のいちばん高い温度",
+  knee_room: "ひざの前のすき間",
+  tip_slope_angle: "山側の輪が浮く斜面の角度",
+  climbable: "段差を登れるか",
 };
+
+// Names for viewers who do not know CAE (the video's pages): the trade's words left out.
+// A quantity not listed here reads as quantityName.
+const PLAIN_JA = {
+  max_hot_spot_stress: "つなぎ目の応力",
+  min_side_load: "軽い側の輪の重さ",
+  first_frame_mode: "フレームのいちばん低い揺れの速さ",
+  fatigue_damage: "くり返しの力による傷み",
+  // the known-answer checks of the use-count fatigue tool (N13) and its results
+  cycles_at_FAT: "基準の強さで壊れるまでの回数",
+  seat_stress_range: "人が乗る・降りるときの枠の応力の幅",
+  cycles_counted: "くり返しの回数",
+  // the known-answer checks of the roll bar tool (N13, rops_pushover): a cantilever's tip
+  // deflection and the side load that collapses a fixed-base portal
+  tip_deflection: "片持ちの管の先のたわみ",
+  collapse_load: "門形の枠が横に崩れる力",
+};
+
+// Names for viewers of tools Claude wrote in a run (tool.checked name; their titles are
+// sentences for the makers). A tool not listed has none (null).
+const PLAIN_TOOL_JA = {
+  // title: "K1 の骨組で、ロールバーに塑性ヒンジを順に入れて押す (…) と、乗員の空間との隙間"
+  // (run 20261103-234711-offroad-4w, test R4: the roll-over protective structure)
+  rops_pushover: "転倒の守りを確かめるツール",
+};
+
+export function plainToolName(name) {
+  return PLAIN_TOOL_JA[name] ?? null;
+}
+
+export function plainName(q) {
+  return PLAIN_JA[q] ?? quantityName(q);
+}
+
+// Counts read with 回 after them (their unit is 1).
+const COUNT_QUANTITIES = new Set(["cycles_counted", "cycles_at_FAT"]);
+
+// A value for viewers: its unit's sign, or 回 for a count.
+export function plainValue(q, value, unit, sig = 3) {
+  // a count is written out in full (2,000,000 回, not 2.00e+6), rounded to a whole number
+  if (COUNT_QUANTITIES.has(q) && (unit === "1" || !unit) && Number.isFinite(value)) return `${Math.round(value).toLocaleString("ja-JP")} 回`;
+  return fmtVU(value, unit, sig);
+}
+
+// The inputs of a K0 formula in the viewers' words (prediction.inputs, by formula_id). An
+// input not listed has no name (null): a page leaves it out rather than show the symbol.
+const FORMULA_INPUT_JA = {
+  "tilt.spring_roll_angle": {
+    t: "左右の輪の間隔",
+    h: "重心の高さ",
+    e: "重心の横のずれ",
+    m: "全体の重さ",
+    m_s: "ばねの上の重さ",
+    h_s: "ばねの上の重心の高さ",
+    k: "ばねの硬さ",
+    n: "ばねの数",
+  },
+  "tilt.rigid_ssf": { t: "左右の輪の間隔", h: "重心の高さ" },
+};
+
+export function formulaInputName(formulaId, symbol) {
+  return FORMULA_INPUT_JA[formulaId]?.[symbol] ?? null;
+}
+
+// A known-answer check's source, short, for viewers (tool.checked checks[].source is a
+// sentence for the makers): the kinds of source it names; null when none is recognised.
+export function checkSourceShort(source) {
+  const s = String(source ?? "");
+  const out = [];
+  if (/range\s*=|I\s*=|simply supported/i.test(s)) out.push("梁の手計算の式");
+  if (/\bIIW\b/.test(s)) out.push("国際溶接学会 (IIW) の疲労の線");
+  if (/\bNeal\b|Plastic Methods/.test(s)) out.push("骨組が崩れる力の教科書 (Neal)");
+  return out.length ? out.join("・") : null;
+}
+
+// The design's numbers that the reports' next steps and sensitivities name, in the viewers'
+// words (K5's paths: variables.<name>, sections.<id>.dims_mm.<dim>, parts.<id>.<field>,
+// materials.<id>.<field>). The record has no names for variables or sections; a number not
+// listed here has no name (null), and a page leaves it out rather than show the path.
+const VARIABLE_JA = {
+  motor_peak_torque: "モーターの最大トルク",
+  motor_peak_power: "モーターの最大出力",
+  gear_ratio: "減速比",
+  battery_capacity: "電池の容量",
+  battery_x: "電池の前後の位置",
+  wheelbase: "ホイールベース",
+  track: "トレッド",
+};
+const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
+const PART_FIELD_JA = { mass_kg: "重さ" };
+const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
+
+// "variables.motor_peak_torque" -> "モーターの最大トルク"; "sections.rt40x80x4.5.dims_mm.t"
+// -> "フレームの管の板厚"; "parts.battery.mass_kg" -> "電池の重さ" (the part's name in the
+// design, before any bracket); null when it has no name here.
+export function designNumberName(path, design = null) {
+  const p = String(path ?? "").split(".");
+  if (p[0] === "variables") return VARIABLE_JA[p[1]] ?? null;
+  if (p[0] === "sections" && p.at(-2) === "dims_mm") return DIM_JA[p.at(-1)] ? `フレームの管の${DIM_JA[p.at(-1)]}` : null;
+  if (p[0] === "parts" && PART_FIELD_JA[p.at(-1)]) {
+    const part = (design?.parts ?? []).find((x) => x.id === p[1]);
+    const name = part?.name ? String(part.name).replace(/\s*[（(].*$/, "") : null;
+    return name ? `${name}の${PART_FIELD_JA[p.at(-1)]}` : null;
+  }
+  if (p[0] === "materials") return MATERIAL_FIELD_JA[p.at(-1)] ?? null;
+  return null;
+}
 
 const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力", joint: "取付点の力" };
 
@@ -199,7 +352,8 @@ export function vectorName(kind) {
 }
 
 // Results that answer yes or no (recorded as 1 or 0).
-const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "reached_target", "moved_uphill"]);
+const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "climbable", "reached_target", "moved_uphill"]);
+export const isYesNo = (q) => YES_NO.has(q);
 
 // A result's value with its unit, or はい / いいえ for a yes-or-no result.
 export function resultText(r, sig = 3) {
@@ -275,6 +429,18 @@ export function fmtQ(q, sig) {
 
 export function fmtVU(value, unit, sig) {
   return fmtQ({ value, unit }, sig);
+}
+
+// project.driver: what drove the run (台本 = scripted, no Claude; API キー = HIRAKU's agent loop with
+// the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
+export const DRIVER_JA = { scripted: "台本", agent_sdk: "API キー", claude_code_plugin: "Claude Code" };
+
+// A verdict's margin: margin_pct (% of the limit), or, when the record gives none (the
+// limit is 0, so margin_pct is null), the margin in its own unit.
+export function fmtMargin(verdict, sig = 3) {
+  const p = verdict?.margin_pct;
+  if (typeof p === "number" && Number.isFinite(p)) return `${fmt(p, sig)} %`;
+  return verdict?.margin ? fmtQ(verdict.margin, sig) : "—";
 }
 
 export function fmtPct(rel, digits = 1) {

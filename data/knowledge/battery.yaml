@@ -1,5 +1,4 @@
 # Built-in rules: battery (電池). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the standard; the standard was not opened for this repository.
 doc_id: KN-BT
 title: 電池の決まり
 category: battery
@@ -10,15 +9,23 @@ rules:
     check: req_Q19 <= 55
     trust: 1
     basis: >-
-      EVE LF50K datasheet: cell temperature up to 55 degC,
-      https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf
-      (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen;
-      the thermal tests (T1) judge the cell temperature itself
+      EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal
+      Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC
+      (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC),
+      https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's
+      copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and
+      discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of
+      the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself
   - id: BT-02
     text: 電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る
     kinds: [battery]
     check: var_battery_voltage <= 60
     trust: 2
     basis: >-
-      UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository),
-      https://www.mlit.go.jp/jidosha/un/UN_R100.pdf
+      UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: "High Voltage"
+      is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working
+      voltage is the highest voltage the maker specifies in open circuit or normal operation (so the
+      full-charge voltage, not the nominal one), https://www.mlit.go.jp/jidosha/un/UN_R100.pdf;
+      read 2026-11-03. This text says "High Voltage", not "voltage class B". R100 Part I itself covers
+      M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage
+      handling on any vehicle

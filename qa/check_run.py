@@ -15,8 +15,8 @@ their basis. What it looks at:
   and their events are layout.RECORD_EVENT)
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
 - project: project.json keeps the run.started data, except the fields that may
-  change and what project.updated re-sends after version 1 (load cases, picks,
-  roles); stop.request, the hearing files and inbox/ requests are gone once the
+  change (requirements re-sent any time) and what project.updated re-sends after
+  version 1 (load cases, picks, roles); stop.request, the hearing files and inbox/ requests are gone once the
   run finished (warnings); knowledge/ holds only files a knowledge.imported names;
   tools/ holds each attempt at a tool made in the run as <name>-<n>.py with its
   .check.json
@@ -33,8 +33,10 @@ their basis. What it looks at:
   once, dependencies go in earlier, blocked_by only when no_interference is false;
   no part interferes with itself; the tool's interference counts and deepest
   overlap agree with its list
-- comparisons: values copied from the prediction and the analysis, signed diffs
-  (analyzed - predicted) and status recomputed, tolerance taken from the load case
+- comparisons: values copied from the prediction and the analysis (the comparison's
+  quantity is the analysis result compared, which may differ from the prediction's),
+  signed diffs (analyzed - predicted) and status recomputed, tolerance taken from
+  the load case
 - verdicts: from a matching comparison with the analysis value, or (basis
   explained_safe_side) from a mismatch whose own earlier cause says safe_side with a
   reason, the prediction on the unfavourable side of the criterion and taken as the
@@ -43,10 +45,19 @@ their basis. What it looks at:
   from the load case criterion
 - judgements: red_count and state follow the listed verdicts: red when one fails
   (even with load cases left without a verdict), else pending while a load case
-  with a criterion has no verdict, else green
-- HK4: a run that finished as done has no picked domain still pending: every load
-  case with a criterion has a verdict in the last version (a red tile alone does
-  not end a domain), and no tile is left pending
+  with a criterion has no verdict or is held back (the latest comparison of the
+  judged quantity is a mismatch whose cause is not written, or neither resolved
+  nor safe-side; earlier mismatches it replaced do not hold; a tool's newest result
+  beyond the criterion, frame_shell judged on max_hot_spot_stress), else green;
+  the last tile of each domain and version is still right at the end of the run
+  (a later result beyond the criterion voids a safe-side verdict)
+- HK5 (light first): an analysis with a tool of stage n starts only when every load
+  case with a criterion already checked in that version with a lower-stage tool
+  has a passing verdict (stage from the tool's tool.checked spec, 1 when missing)
+- HK4: a run that finished as done, or stopped at the round limit (which only ends
+  revisions), has no picked domain still pending: every load case with a
+  criterion has a verdict in the last version (a red tile alone does not end a
+  domain), and no tile is left pending
 - agents: each agent.started has its agent.stopped before run.finished (warning:
   an agent still working when the run ended was cut off)
 - run.finished: stop_code done exactly when the status is done (error with
@@ -58,7 +69,7 @@ their basis. What it looks at:
 - rule checks: made after their design version, pass exactly when nothing hits,
   hits and parts not evaluable are among the targets (and not both), the rule came
   in with a knowledge.imported before it (when the run has any); warning for a
-  target not in the design
+  target not in the design ("design" stands for the whole design)
 - meshes: one per design version, made after it; element node numbers within the
   nodes, no node twice in an element, one element_member per element and a
   thickness for each; warnings for nodes in no element and members not in the
@@ -117,6 +128,11 @@ TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes
                "negative_volume": "inverted"}
 # inbox/<n>-<kind>.json: one request from the screen to a running run
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
+# a rule_check target (and part_id) standing for the whole design, e.g. a system rule finding a part missing
+WHOLE_DESIGN = "design"
+BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
+# the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
+JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
 REL = 1e-9
 
 
@@ -156,6 +172,8 @@ class RunChecker:
         self.load_cases: dict[str, dict] = {}
         # record kind -> id -> (event index, data)
         self.recs: dict[str, dict[str, tuple[int, dict]]] = {k: {} for k, _ in RECORD_EVENTS.values()}
+        # every appearance of a record (a cause re-sent with resolved true), to read its state at an event
+        self.history: dict[str, dict[str, list[tuple[int, dict]]]] = {k: {} for k, _ in RECORD_EVENTS.values()}
         self.designs: dict[int, tuple[int, dict]] = {}
         self.judgements: list[tuple[int, dict]] = []
         self.tool_checks: dict[str, list[tuple[int, dict]]] = {}
@@ -294,6 +312,7 @@ class RunChecker:
                     self.recs[rkind][rid] = (first, data)  # first appearance, latest content
                 else:
                     self.recs[rkind][rid] = (i, data)
+                self.history[rkind].setdefault(rid, []).append((i, data))
             elif kind == "design.created":
                 v = data.get("design_version")
                 if v in self.designs:
@@ -330,7 +349,9 @@ class RunChecker:
                 if not m:
                     self.error("ids.format", self.where_of[i], f"{rid!r} is not {prefix}-NNNN")
                 else:
-                    nums.append((i, int(m.group(1))))
+                    # an analysis takes its id at analysis.started; roles run at once, so they finish out of order
+                    at = self.started.get(rid, i) if rkind == "analysis" else i
+                    nums.append((at, int(m.group(1))))
             got = sorted(n for _, n in nums)
             if got != list(range(1, len(got) + 1)):
                 self.error("ids.numbering", layout.EVENTS_FILE, f"{prefix} ids are {got}, not 1..{len(got)}")
@@ -345,13 +366,18 @@ class RunChecker:
         first = self.designs.get(1)
         for i, data in self.project_updates:
             w = self.where_of[i]
-            if first is None or first[0] > i:
-                self.error("project.updated", w, "project.updated before design version 1 (it re-sends the "
-                                                 "load cases, picks and roles of the first version)")
+            # contract: requirements changed mid-run are re-sent any time; load cases, picks and roles
+            # are re-sent once the designer has made version 1
+            before_v1 = first is None or first[0] > i
             for key in sorted(set(prev) | set(data)):
-                if key not in PROJECT_MUTABLE | PROJECT_UPDATABLE and prev.get(key) != data.get(key):
+                if key in PROJECT_MUTABLE or prev.get(key) == data.get(key):
+                    continue
+                if key not in PROJECT_UPDATABLE:
                     self.error("project.changed", w, f"{key} changed in project.updated (only "
                                                      f"{', '.join(sorted(PROJECT_UPDATABLE))} are re-sent)")
+                elif before_v1:
+                    self.error("project.updated", w, f"{key} re-sent before design version 1 (load cases, picks "
+                                                     f"and roles come again only after the first version)")
             prev, prev_name = data, f"project.updated ({w})"
         for key in sorted(set(prev) | set(self.project)):
             if key in PROJECT_MUTABLE:
@@ -721,7 +747,7 @@ class RunChecker:
             for p in sorted(set(hits) & set(missing)):
                 self.error("rule_check.targets", w, f"{rid}: {p} both hits and could not be evaluated")
             ids = self._design_ids(v)
-            for p in sorted(targets):
+            for p in sorted(targets - {WHOLE_DESIGN}):
                 if not self._names_a_thing(p, ids):
                     self.warn("rule_check.targets", w, f"{rid}: target {p} is not in design v{v}")
             if self.knowledge:
@@ -888,13 +914,22 @@ class RunChecker:
             for f in ("design_version", "load_case_id"):
                 if p.get(f) != a.get(f):
                     self.error("comparison.link", w, f"{cid}: prediction and analysis differ in {f}")
-            if c.get("quantity") != p.get("quantity"):
-                self.error("comparison.values", w, f"{cid} quantity {c.get('quantity')} but prediction {p.get('quantity')}")
+            # contract: comparison.quantity is the result actually compared (the call's result_quantity),
+            # which may differ from the prediction's quantity (f_wheel vs wheel_rotation_frequency); the
+            # prediction side is its value, which check_recompute finds among its formula's outputs
             pq, aq = c.get("predicted", {}), c.get("analyzed", {})
             if pq != {"value": p.get("value"), "unit": p.get("unit")}:
                 self.error("comparison.values", w, f"{cid} predicted {pq} is not the prediction's value and unit")
-            if not any({"value": r.get("value"), "unit": r.get("unit")} == aq for r in a.get("results", [])):
-                self.error("comparison.values", w, f"{cid} analyzed {aq} is not one of the analysis results")
+            # where (a member or part id) picks the result when the tool reports the quantity in more than one place
+            named = [r for r in a.get("results", []) if r.get("quantity") == c.get("quantity")
+                     and (c.get("where") is None or r.get("where") == c["where"])]
+            if not named:
+                at = f" at {c['where']}" if c.get("where") is not None else ""
+                self.error("comparison.values", w, f"{cid} quantity {c.get('quantity')}{at} is not a result of "
+                                                   f"{a.get('analysis_id')}")
+            elif not any({"value": r.get("value"), "unit": r.get("unit")} == aq for r in named):
+                self.error("comparison.values", w, f"{cid} analyzed {aq} is not {a.get('analysis_id')}'s "
+                                                   f"{c.get('quantity')}")
             if pq.get("unit") != aq.get("unit"):
                 self.error("comparison.units", w, f"{cid} compares {pq.get('unit')} with {aq.get('unit')}")
             self._check_comparison_math(cid, c, w)
@@ -1054,9 +1089,82 @@ class RunChecker:
         elif not _close(m.get("value") if isinstance(m.get("value"), (int, float)) else math.nan, room):
             self.error("verdict.math", w, f"{vid} margin {m.get('value')} {unit} but {room} {unit}")
 
+    def _state_at(self, rkind: str, rid: str, i: int) -> dict | None:
+        """The record as last sent before event i (None when not sent yet)."""
+        seen = [d for j, d in self.history[rkind].get(rid, []) if j < i]
+        return seen[-1] if seen else None
+
+    def _held(self, i: int, domain: str, v: int) -> dict[str, list[str]]:
+        """Load cases of the domain (with a criterion, without a failing verdict) that may not count as
+        passed at event i (docs/contract.md, 分野が緑になる条件): the latest comparison of the judged
+        quantity is a mismatch whose cause is not written, or neither resolved nor safe-side (earlier
+        mismatches a later comparison of the same load case and quantity replaced do not hold), or a
+        tool's newest ok analysis has its judged result beyond the criterion, which also voids a
+        safe-side verdict."""
+        out: dict[str, list[str]] = {}
+        for lc_id, lc in self.load_cases.items():
+            crit = lc.get("criterion")
+            if lc.get("domain") != domain or not isinstance(crit, dict):
+                continue
+            verdicts = [r for vid, (j, r) in self.recs["verdict"].items()
+                        if j < i and r.get("load_case_id") == lc_id and self.version_of("verdict", r) == v]
+            if verdicts and not verdicts[-1].get("pass"):
+                continue
+            why = []
+            # the latest comparison of the judged quantity holds the case when it is a mismatch whose cause
+            # is not written, or neither resolved nor safe-side; earlier ones it replaced do not
+            latest: dict[str, tuple[str, dict]] = {}
+            stand_in = crit.get("stand_in_quantity")
+            latest_stand_in = None
+            for cid, (j, c) in self.recs["comparison"].items():
+                p = self.recs["prediction"].get(c.get("prediction_id"))
+                a = self.recs["analysis"].get(c.get("analysis_id"))
+                if j > i or p is None or p[1].get("load_case_id") != lc_id or p[1].get("design_version") != v:
+                    continue
+                judged = JUDGED_AS.get(((a[1] if a else {}).get("tool"), crit.get("quantity")), crit.get("quantity"))
+                if c.get("quantity") == judged:
+                    latest[judged] = (cid, c)
+                elif stand_in and c.get("quantity") == stand_in:
+                    latest_stand_in = (cid, c)
+            # contract (stand_in_quantity): when the judged quantity's prediction and result are both below
+            # 1e-6 of the limit, its latest stand-in comparison decides (b) instead (the verdict stays judged)
+            lim = (crit.get("limit") or {}).get("value")
+            for q, (cid, c) in list(latest.items()):
+                pv, av = (c.get("predicted") or {}).get("value"), (c.get("analyzed") or {}).get("value")
+                if (latest_stand_in and isinstance(lim, (int, float)) and isinstance(pv, (int, float))
+                        and isinstance(av, (int, float)) and abs(pv) < 1e-6 * abs(lim) and abs(av) < 1e-6 * abs(lim)):
+                    latest[q] = latest_stand_in
+            for cid, c in latest.values():
+                if c.get("status") != "mismatch":
+                    continue
+                causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == cid]
+                cause = self._state_at("cause", causes[-1], i) if causes else None
+                if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+                    out_why = "no cause" if cause is None else f"{causes[-1]} not resolved, not safe-side"
+                    why.append(f"latest comparison {cid} of {c.get('quantity')} is a mismatch ({out_why})")
+            newest: dict[str, dict] = {}
+            for aid, (j, a) in self.recs["analysis"].items():
+                if j < i and a.get("load_case_id") == lc_id and a.get("design_version") == v and a.get("status") == "ok":
+                    newest[a.get("tool")] = a
+            limit = crit.get("limit") or {}
+            for tool, a in newest.items():
+                q = JUDGED_AS.get((tool, crit.get("quantity")), crit.get("quantity"))
+                vals = [r.get("value") for r in a.get("results", [])
+                        if r.get("quantity") == q and r.get("unit") == limit.get("unit")
+                        and isinstance(r.get("value"), (int, float))]
+                op = crit.get("op")
+                if vals and op in OPS and isinstance(limit.get("value"), (int, float)):
+                    worst = max(vals) if op in ("<=", "<") else min(vals)
+                    if not OPS[op](worst, limit["value"]):
+                        why.append(f"{a.get('analysis_id')} {q} {worst:.4g} {limit.get('unit')} beyond {op} {limit['value']}")
+            if why:
+                out[lc_id] = why
+        return out
+
     def check_judgements(self) -> None:
-        """A tile is red when a listed verdict fails (even with load cases left without one),
-        else pending while a load case with a criterion has no verdict, else green."""
+        """A tile is red when a listed verdict fails (even with load cases left without one), else
+        pending while a load case with a criterion has no verdict or is held back (_held: an open
+        mismatch, or a result beyond the criterion), else green."""
         for i, j in self.judgements:
             w = self.where_of[i]
             fails = 0
@@ -1082,9 +1190,22 @@ class RunChecker:
                        if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
             if state == "green" and missing:
                 self.error("judgement.state", w, f"green while {', '.join(missing)} have no verdict (pending)")
-            if state == "pending" and not fails and judged and not missing:
+            held = self._held(i, j.get("domain"), j.get("design_version")) if state in ("green", "pending") else {}
+            if state == "green" and held:
+                self.error("judgement.state", w, "green while held back (pending): " +
+                           "; ".join(f"{lc_id}: {', '.join(why)}" for lc_id, why in held.items()))
+            if state == "pending" and not fails and judged and not missing and not held:
                 self.error("judgement.state", w, "pending but every load case with a criterion has a passing "
-                                                 "verdict (green)")
+                                                 "verdict and none is held back (green)")
+        # a later record can hold back a green tile (a result beyond the criterion voids a safe-side
+        # verdict): the last tile of each domain and version must still be right at the end of the run
+        last = {(j.get("domain"), j.get("design_version")): (i, j) for i, j in self.judgements}
+        for (domain, v), (i, j) in last.items():
+            held = self._held(len(self.events), domain, v) if j.get("state") == "green" else {}
+            if held:
+                self.error("judgement.state", self.where_of[i], f"{domain} v{v} stays green to the end of the run, "
+                           "but later records hold it back (pending): " +
+                           "; ".join(f"{lc_id}: {', '.join(why)}" for lc_id, why in held.items()))
 
     def check_report(self) -> None:
         """report.json is the last report.written; what code fills in each report is the records'."""
@@ -1111,7 +1232,12 @@ class RunChecker:
         if sorted(doms) != sorted(picked):
             self.error("report.domains", w, f"domains {doms} but the picked domains are {picked}")
         for n in rep.get("next", []):
-            if n.get("domain") not in picked:
+            # an item from a knowledge rule's hit (rule_id) may name any domain: rules check the design
+            # apart from the domains picked
+            if n.get("rule_id") and not any(rc.get("rule_id") == n["rule_id"] and rc.get("hits")
+                                            for _, rc in self.recs["rule_check"].values()):
+                self.warn("report.domains", w, f"next answers rule {n['rule_id']}, which has no rule_check hit in the run")
+            if n.get("domain") not in picked and not n.get("rule_id"):
                 self.error("report.domains", w, f"next names {n.get('domain')}, not a picked domain")
         tiles = {j.get("domain"): j for k, j in self.judgements if k < i and j.get("design_version") == v}
         for d in rep.get("domains", []):
@@ -1177,6 +1303,47 @@ class RunChecker:
                 for s in open_mismatch.values():
                     s.discard(data.get("comparison_id"))
 
+    def _stage(self, tool: str | None) -> int:
+        """The tool's weight class (tool_spec.stage, 0-3) from its last tool.checked; 1 when missing."""
+        checks = self.tool_checks.get(tool or "")
+        s = checks[-1][1].get("stage") if checks else None
+        return s if isinstance(s, int) and not isinstance(s, bool) else 1
+
+    def check_light_first(self) -> None:
+        """HK5 (light first): in a version, an analysis with a tool of stage n starts only when every load
+        case with a criterion already checked with a lower-stage tool has a passing verdict. (Lower-stage
+        load cases not analysed yet are not seen in the records; the hook knows them from the tests.)
+        As the hook counts them (hiraku.tools.rules.lower_stage_left): cases past the limit (load case id
+        ending BEYOND_SUFFIX) are meant to fail and do not count; the load case being analyzed counts
+        only when its latest verdict is red and came from a tool of a lower stage."""
+        for aid, (fin, a) in self.recs["analysis"].items():
+            at, v, n = self.started.get(aid, fin), a.get("design_version"), self._stage(a.get("tool"))
+            lower: dict[str, tuple[str, str]] = {}
+            for bid, (bfin, b) in self.recs["analysis"].items():
+                if (b.get("design_version") == v and self.started.get(bid, bfin) < at
+                        and self._stage(b.get("tool")) < n):
+                    lower.setdefault(b.get("load_case_id"), (bid, b.get("tool")))
+            for lc_id, (bid, tool) in lower.items():
+                if (not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict)
+                        or str(lc_id).endswith(BEYOND_SUFFIX)):
+                    continue
+                verdicts = [r for j, r in self.recs["verdict"].values()
+                            if j < at and r.get("load_case_id") == lc_id and self.version_of("verdict", r) == v]
+                state = "not judged" if not verdicts else ("red" if not verdicts[-1].get("pass") else None)
+                if lc_id == a.get("load_case_id") and (state != "red" or self._stage(self._verdict_tool(verdicts[-1])) >= n):
+                    continue
+                if state:
+                    self.error("HK5_light_first", self.where_of[at],
+                               f"{aid} ({a.get('tool')}, stage {n}) started while {lc_id}, checked by {bid} "
+                               f"({tool}, stage {self._stage(tool)}), is {state}")
+
+    def _verdict_tool(self, ver: dict) -> str | None:
+        """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""
+        aid = ver.get("analysis_id")
+        if aid is None and ver.get("comparison_id"):
+            aid = (self.recs["comparison"].get(ver["comparison_id"], (None, {}))[1] or {}).get("analysis_id")
+        return (self.recs["analysis"].get(aid, (None, {}))[1] or {}).get("tool") if aid else None
+
     def check_hooks(self) -> None:
         for i, e in enumerate(self.events):
             if e.get("kind") in ("hook.denied", "hook.blocked_stop"):
@@ -1207,6 +1374,12 @@ class RunChecker:
             self.warn("run.agents", self.where_of[fin], f"finished while {', '.join(sorted(running))} "
                                                         f"had no agent.stopped (their work was cut off)")
 
+    @staticmethod
+    def _not_looked_at(pick: dict) -> bool:
+        """A picked domain this run does not judge: its test_ids are empty (none of its tests has a way to
+        build its load cases, and the pick's reason says the run does not look at it)."""
+        return "test_ids" in pick and not pick["test_ids"]
+
     def _unjudged(self) -> dict[str, list[str]] | None:
         """Picked domains still pending as HK4 counts them (hiraku.tools.rules.pending), with
         their load cases that have a criterion and no verdict in the last design version.
@@ -1218,6 +1391,8 @@ class RunChecker:
                   if self.version_of("verdict", v) == last}
         out = {}
         for p in self.project.get("domain_picks", []):
+            if self._not_looked_at(p):
+                continue
             dom = p.get("domain")
             missing = [lc_id for lc_id, lc in self.load_cases.items()
                        if lc.get("domain") == dom and "criterion" in lc and lc_id not in judged]
@@ -1266,23 +1441,42 @@ class RunChecker:
         if self.project and d.get("stop_reason") and self.project.get("stop_reason") not in (None, d["stop_reason"]):
             self.error("run.status", layout.PROJECT_FILE, "stop_reason differs from the one in run.finished")
         self._check_stop_code(d.get("stop_code"), fstatus, w)
-        if fstatus != "done" or not self.project:
+        # HK4: done, or stopped at the round limit (it only ends revisions; the latest version is still judged)
+        ending = "done" if fstatus == "done" else "round_limit" if d.get("stop_code") == "round_limit" else None
+        if ending is None or not self.project:
             return
         if not self.designs:
-            self.error("HK4_no_stop_before_judged", w, "done without any design version")
+            # a run that ends on purpose after the domain picks and the hearing (project.stop_after "picks",
+            # copied from the requirements file) makes no design; any other done without a version is wrong
+            picks_only = self.project.get("stop_after") == "picks"
+            if ending == "done" and not picks_only:
+                self.error("HK4_no_stop_before_judged", w, "done without any design version")
             return
         last = max(self.designs)
         latest = self.latest_judgements(last)
         unjudged = self._unjudged() or {}
+        # HK4 / HK5's dead end (docs/contract.md): revisions used up with a lower stage red, the heavier stages are
+        # not run and the run ends round_limit; the domains waiting behind it may stay unjudged (the stop
+        # reason says so)
+        behind_red = ending == "round_limit" and any(j.get("state") == "red" for j in latest.values())
         for pick in self.project.get("domain_picks", []):
             dom = pick.get("domain")
             j = latest.get(dom)
-            if dom in unjudged:
+            if self._not_looked_at(pick):  # no test of it can be built in this run: not waited for
+                if "見ない" not in str(pick.get("reason") or ""):
+                    self.warn("HK4_no_stop_before_judged", w, f"{dom} is picked with no test_ids, but its reason "
+                                                              f"does not say this run does not look at it")
+                continue
+            if (dom in unjudged or j is None or j.get("state") == "pending") and behind_red:
+                if "低い段の赤" not in str(self.project.get("stop_reason") or ""):
+                    self.warn("HK4_no_stop_before_judged", w, f"round_limit with {dom} not judged behind a red, but the "
+                                                              f"stop reason does not say a lower stage's red is left")
+            elif dom in unjudged:
                 self.error("HK4_no_stop_before_judged", w,
-                           f"done while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
+                           f"{ending} while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
             elif j is None or j.get("state") == "pending":
-                self.error("HK4_no_stop_before_judged", w, f"done while the {dom} tile is not judged for version {last}")
-            elif j.get("state") == "red":
+                self.error("HK4_no_stop_before_judged", w, f"{ending} while the {dom} tile is not judged for version {last}")
+            elif j.get("state") == "red" and ending == "done":
                 self.warn("HK4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
 
     def check_recompute(self) -> None:
@@ -1409,6 +1603,7 @@ class RunChecker:
         self.check_judgements()
         self.check_report()
         self.check_h3()
+        self.check_light_first()
         self.check_hooks()
         self.check_agents()
         self.check_finish()

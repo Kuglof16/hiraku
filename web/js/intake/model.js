@@ -76,6 +76,7 @@ export function apply(m, e) {
       break;
     case "hearing.asked":
       m.hearing.asked = d;
+      m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
       break;
     case "hearing.answered":
       m.hearing.answered = d;
@@ -136,6 +137,18 @@ export function hearingRows(m) {
     return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : "asking" };
   });
 }
+
+/** The rule hits the lead asked about (hearing.asked rule_questions), each with the person's answer once there is one. */
+export function ruleRows(m) {
+  const asked = m.hearing.asked?.rule_questions || [];
+  const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
+  return asked.map((q) => {
+    const a = answers.get(q.rule_id) || null;
+    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : "asking" };
+  });
+}
+
+export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "この規則を外す" };
 
 /** Requirements that rest on an assumption (trust 3): they stay in the report as "not checked". */
 export function assumptions(m) {
@@ -210,6 +223,16 @@ export function ruleTree(m, { mode = "category", filter = "all", query = "", dis
 }
 
 /** A value with its unit: 50 kg. Numbers are shown as they came (the code did the arithmetic). */
+/** The values a rule's check asks for, in the order they appear: [{name, label, inDesigns}].
+ *  `facts` is data.js FACTS; requirement numbers (req_Qnn) and design variables (var_x) come with the design or the run. */
+export function ruleNeeds(rule, facts = {}) {
+  const names = [...new Set(String(rule.check || "").match(/[A-Za-z_][A-Za-z0-9_]*/g) || [])];
+  return names
+    .filter((n) => facts[n] || /^req_Q[0-9]{2}$/.test(n) || n.startsWith("var_"))
+    .map((n) => ({ name: n, inDesigns: facts[n] ? facts[n].inDesigns !== false : true,
+                   label: facts[n]?.label || (n.startsWith("req_") ? `要件 ${n.slice(4)} の数値` : "設計の変数の値") }));
+}
+
 export function showValue(v, unit) {
   if (typeof v === "number") return unit && unit !== "1" ? `${+v.toFixed(4)} ${unit}` : `${+v.toFixed(4)}`;
   return unit && unit !== "1" ? `${v} ${unit}` : String(v);

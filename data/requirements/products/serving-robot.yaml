@@ -2,9 +2,11 @@
 # N09 shows seven domains with two renames: aero becomes "spilling", crash becomes "contact with people".
 # Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository. Public numbers for this kind of product are few: most values
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source at the place named, in a source check on that date; "secondary" = only a summary gave it.
+# Public numbers for this kind of product are few: most values
 # are the makers' published specifications or borrowed from standards for industrial robots.
-# The required answers (Q30, Q40, Q50) are in serving-robot.answers.yaml.
+# The required answers (Q40, Q50) are in serving-robot.answers.yaml.
 
 want: 飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい
 product: serving-robot
@@ -35,8 +37,8 @@ requirements:
     trust: 1
     basis: >-
       JARI のロボット安定性試験設備の走行路の路面,
-      https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf
-      (not checked in this repository)
+      p.1, https://img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf;
+      read 2026-11-03 in a source check
     note: 摩擦係数は調べていない
   - key: Q13
     name: 縦の坂
@@ -45,9 +47,10 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), https://laws.e-gov.go.jp/api/1/lawdata/418CO0000000379.
+      バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), 第19条, https://laws.e-gov.go.jp/api/1/lawdata/418CO0000000379;
+      read 2026-11-03 in a source check.
       製品の定格は 5 度以下 (Pudu BellaBot), https://www.pudurobotics.com/en/products/bellabot
-      (not checked in this repository)
+      (this part not checked in this repository)
   - key: Q15
     name: 段差
     value: 12.7
@@ -55,18 +58,19 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      Bear Robotics Servi Plus の敷居, https://www.bearrobotics.ai/servi-plus
-      (not checked in this repository)
+      Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https://www.bearrobotics.ai/servi-plus;
+      read 2026-11-03 in a source check
     note: 床の凹凸は LG CLOi ServeBot の 5 mm、ISO 7176-2 の試験は 15・25 mm も
   - key: Q16
     name: 通る幅
-    value: 0.8
+    value: 0.7
     unit: m
     source: default
     trust: 1
     basis: >-
-      各社 (Keenon T8・T9・T10 ほか) の最小通路 0.55〜0.80 m の上の端,
-      https://www.keenon.com/en/product/T9 ほか (not checked in this repository)
+      Keenon の製品ページの最小通路 (T8 0.55 m・T10 0.59 m・T9 0.70 m) の上の端,
+      https://www.keenon.com/en/product/T9 (read 2026-11-03 in a source check; it recorded only the T9 page
+      address). The earlier value 0.80 m is on none of the pages
     note: 建物の廊下は 1.2 m 以上 (バリアフリー法施行令)
   - key: Q17
     name: 曲がり
@@ -87,8 +91,9 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https://www.iso.org/standard/69569.html
-      (not checked in this repository)
+      ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https://www.iso.org/standard/69569.html.
+      Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403);
+      the standard itself not checked in this repository
   - key: Q34
     name: 弱い人がいるか
     value: 客の子ども
@@ -108,15 +113,15 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか
-      (not checked in this repository)
+      各社の稼働時間 9〜18 h の下の側, https://www.keenon.com/en/product/T9 ほか;
+      the range 9-18 h read 2026-11-03 in a source check (Keenon)
   - key: Q55
     name: 充電時間
     value: 4.5
     unit: h
     source: default
     trust: 1
-    basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot (not checked in this repository)
+    basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check
   - key: Q60
     name: 静的に倒れない限界
     value: 10
@@ -137,22 +142,24 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      ISO/TS 15066 の体のモデルの表を載せた論文, https://arxiv.org/pdf/2311.13814. 産業用ロボットの値を借りる
-      (配膳ロボの規格の値ではない) (not checked in this repository)
+      ISO/TS 15066 の体のモデルの表を載せた論文, Table 1, https://arxiv.org/pdf/2311.13814;
+      read 2026-11-03 in a source check. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない)
   - key: Q63
     name: 挟み込みの隙間
     value: ISO 13854 (指 25 mm)
     source: default
     trust: 1
     basis: >-
-      ISO 13854:1996 の試し読み, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
-      (not checked in this repository)
+      ISO 13854:1996 の試し読み, Table 1, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf;
+      read 2026-11-03 in a source check
   - key: Q72
     name: なぞる規格
     value: ISO 13482 = JIS B 8445、JIS B 8446-1
     source: default
     trust: 1
-    basis: ISO 13482 の要旨 https://www.iso.org/standard/53820.html (not checked in this repository)
+    basis: >-
+      ISO 13482 の要旨 https://www.iso.org/standard/53820.html. Secondary: seen only in search summaries
+      on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository
   - key: Q73
     name: 電池の規則
     value: 輸送は UN 38.3
@@ -160,7 +167,7 @@ requirements:
     trust: 1
     basis: >-
       UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版),
-      https://certifico.com/component/attachments/download/748 (not checked in this repository)
+      https://certifico.com/component/attachments/download/748; read 2026-11-03 in a source check
   - key: Q80
     name: 材料と接合
     value: 樹脂 + アルミ

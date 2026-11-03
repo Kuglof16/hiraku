@@ -1,22 +1,49 @@
 # Built-in rules: welding (溶接). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the standard; the standard was not opened for this repository.
 doc_id: KN-WD
 title: 溶接の決まり
 category: weld
 rules:
   - id: WD-01
-    text: 溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下
+    text: 溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下
     kinds: [frame]
-    check: section_ratio_max <= 35
-    trust: 2
+    check: section_ratio_rect_max <= 35
+    trust: 1
     basis: >-
-      EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for
-      b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)
+      EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 "Range of
+      validity for welded joints between CHS or RHS brace members and RHS chord members" (printed p. 116):
+      RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and
+      K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2
+      for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure
+      modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for
+      rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the
+      section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at
+      https://www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf
   - id: WD-02
     text: すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上
     kinds: [frame]
     check: weld_length_mm >= max(30, 6 * weld_throat_mm)
-    trust: 2
+    trust: 1
     basis: >-
-      EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness
-      (recalled; not checked in this repository)
+      EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a
+      fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness,
+      whichever is larger, is not to be designed to carry load. The length meant is the effective length
+      l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length
+      minus 2a, no reduction if full size including starts and ends); a = effective throat thickness
+      (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN
+      1993-1-8:2005 (PDF p. 44), hosted at
+      https://www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf
+  - id: WD-03
+    text: 溶接する円形鋼管の外径は肉厚の 50 倍以下
+    kinds: [frame]
+    check: section_ratio_round_max <= 50
+    trust: 1
+    basis: >-
+      EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 "Range of
+      validity for welded joints between CHS members" (printed p. 108): chord 10 <= d0/t0 <= 50 ("generally";
+      the scan prints "but:" and nothing after it), brace in tension di/ti <= 50, members in compression
+      Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a
+      rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110
+      and 118), hosted at https://www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check
+      is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind
+      "but:" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one
+      (WD-01)

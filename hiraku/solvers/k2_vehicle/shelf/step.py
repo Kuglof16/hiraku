@@ -399,9 +399,9 @@ class StepClimbTool(K2Tool):
         ctrl = SpeedController(sim)
         driven = [i for i, c in enumerate(veh.corners) if c.drive]
         peak, peak_id, peak_z, slow_t, t_climb = 0.0, None, 0.0, 0.0, None
-        rear_x = min(float(c.pos[0]) for c in veh.corners)
         reason = None
-        x_done = crawl["x_step"] + (xmax - rear_x) + 0.6
+        # climbed: the hindmost wheel centre (world x) is 0.6 m past the step's corner
+        x_done = crawl["x_step"] + 0.6
         while sim.t < 30.0:
             drive, brake = ctrl.torques(sim, speed)
             if motor is not None:
@@ -415,7 +415,7 @@ class StepClimbTool(K2Tool):
                 if fmag > peak:
                     peak, peak_id = fmag, c.id
                 peak_z = max(peak_z, o["f"][i][2])
-            if t_climb is None and sim.design_origin()[0] > x_done:
+            if t_climb is None and float(sim.wheel_centres()[:, 0].min()) > x_done:
                 t_climb = sim.t
             if t_climb is not None and sim.t > t_climb + 0.8:
                 break

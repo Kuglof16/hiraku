@@ -10,11 +10,22 @@
 // flat, P3, else the launch on the slope, P2): its motion with each wheel's road reaction
 // and grip arrows and the centre of gravity. The popup charts one graph at a time (the
 // story's limit): the battery's temperature (drive), then the speed against time
-// (acceleration), with a cursor at the record time; its title names the tests charted.
+// (acceleration), with a cursor at the record time; its title is in words only (the
+// tests' ids are for the makers, in data-tests). The battery's chart has the load case's
+// limit as a dashed line that says "上限 <value> <unit>", and when every recorded value
+// keeps to it, "✓ 上限より下" by the reading from loop_to_s (the drive has played out).
 // The representative shown large is the recorded sample nearest to the cursor, under the
 // title (the one emphasised number): the message is "長く走っても熱くならず、どこまで
 // 速いか", so the value itself is what is read; the graph under it is the small context.
-// The squeeze is in the view's corner (rateLabel, as the N05 tiles).
+// The squeeze is in the view's corner (rateLabel, as the N05 tiles), as a note
+// (data-kind "note": for the makers, not counted).
+//
+// The drive's record time is played from lead_s to loop_to_s along loop.ease ("in-out":
+// slow at the head and the tail, 0.5 - 0.5 cos(pi p); "linear"), so the battery's colour
+// and the cursor come to rest by loop_to_s; the corner says the mean squeeze. The vehicle
+// stands still in the drive (its records hold no positions), so no course or arc is shown.
+// "✓ 上限より下" shows from times.ok_s; through the acceleration (from accel_s, when the
+// popup charts the speed) the same check stays as "✓ 電池の温度は上限より下" under the speed.
 //
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
 // missing key is named on the page.
@@ -24,7 +35,7 @@ import { clearOfBand, rateLabel, squeeze } from "./compose.js";
 import { contourOf } from "./fields.js";
 import { esc, fmt, unitLabel } from "./labels.js";
 import { channelsOf, extent, motionOf, nearestAt, nearestIndex } from "./series.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -67,43 +78,42 @@ export function storyOf(layout, name) {
   return { message: own.message ?? null, limits, bodyPx: limits.body_text_px };
 }
 
-// One tile large and the rest as a small list, inside the box of a grid {x, y, cols, rows,
-// tile_w, tile_h, gap_x, gap_y} (the story: show one representative large). The large one
-// takes the first ceil(cols / 2) columns over all rows; the n - 1 others fill the columns
-// left, row by row, as many rows as they need. Returns { big, small: [rect, ...] }.
-export function featureRects(g, n) {
-  const W = g.cols * g.tile_w + (g.cols - 1) * g.gap_x;
-  const H = g.rows * g.tile_h + (g.rows - 1) * g.gap_y;
-  const bc = Math.min(g.cols - 1, Math.ceil(g.cols / 2));
-  const big = { x: g.x, y: g.y, w: bc * g.tile_w + (bc - 1) * g.gap_x, h: H };
-  const cols = Math.max(1, g.cols - bc);
-  const rows = Math.max(1, Math.ceil((n - 1) / cols));
-  const left = g.x + big.w + g.gap_x;
-  const w = (W - big.w - g.gap_x - (cols - 1) * g.gap_x) / cols;
-  const h = (H - (rows - 1) * g.gap_y) / rows;
-  const small = [];
-  for (let i = 0; i < n - 1; i += 1) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    small.push({ x: Math.round(left + c * (w + g.gap_x)), y: Math.round(g.y + r * (h + g.gap_y)), w: Math.floor(w), h: Math.floor(h) });
+// The keys of the one tile shown large (feature) and of the small list (list), in a cut's
+// layout section (the story: show one representative large).
+export const FEATURE_KEYS = [
+  "feature.x", "feature.y", "feature.w", "feature.h",
+  "list.x", "list.y", "list.w", "list.h", "list.cols", "list.rows", "list.gap_x", "list.gap_y",
+];
+
+// The slots of a list {x, y, w, h, cols, rows, gap_x, gap_y}, row by row from the left:
+// each (w - (cols - 1) gap_x) / cols wide and (h - (rows - 1) gap_y) / rows high.
+export function listRects(L) {
+  const w = (L.w - (L.cols - 1) * L.gap_x) / L.cols;
+  const h = (L.h - (L.rows - 1) * L.gap_y) / L.rows;
+  const out = [];
+  for (let r = 0; r < L.rows; r += 1) {
+    for (let c = 0; c < L.cols; c += 1) out.push({ x: Math.round(L.x + c * (w + L.gap_x)), y: Math.round(L.y + r * (h + L.gap_y)), w: Math.floor(w), h: Math.floor(h) });
   }
-  return { big, small };
+  return out;
 }
 
 export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
-  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px",
-  "times.lead_s", "times.loop_to_s", "times.accel_s",
+  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title", "popup.ok_of_reading",
+  "times.lead_s", "times.loop_to_s", "times.accel_s", "times.ok_s", "loop.ease",
   "colors.bg", "colors.panel", "colors.rule",
 ];
 
+// The eases loop.ease may name: the share of the drive played at the share p of its time.
+export const LOOP_EASES = { "in-out": (p) => 0.5 - 0.5 * Math.cos(Math.PI * p), linear: (p) => p };
+
 // Not in layout.json (written here until the promo department gives keys for them): the
 // view's and the popup's border and the popup's corner, the padding inside the popup and
-// around the rate (a fraction of popup.text_px), the rate's text size (popup.text_px), and
-// the largest size of the reading (a multiple of popup.title_px; it is also held to the
-// popup's width).
-export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1, reading_of_title: 2 };
+// around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
+// The reading's largest size is layout.json n03.popup.reading_of_title x title_px (it is
+// also held to the popup's width); "✓ 上限より下" is popup.ok_of_reading x the reading's size.
+export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
 
@@ -122,27 +132,58 @@ export function newestOf(s, { test, lcId }, pick) {
 
 const LINE = "#2b59c3";
 const RED = "#c8402a";
+const OK_GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
+
+// Round steps for an axis from lo to hi: about four, of 1, 2 or 5 times a power of ten.
+function niceTicks(lo, hi) {
+  const raw = (hi - lo) / 4;
+  if (!(raw > 0)) return [lo];
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((k) => k * p).find((s) => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(Number(v.toFixed(9)));
+  return out;
+}
 
 // A chart of one channel against time (SVG in its own pixels): its name and unit at the
 // top left, the recorded value nearest to the cursor at the top right, a dashed line at
-// `limit` when given. Returns the SVG text and the functions that move the cursor.
-function chartSvg(s, w, h, textPx, name, limit) {
+// `limit` when given. The axis runs from `floor` (the case's surroundings, e.g. the
+// ambient temperature, else 0) or the lowest value if lower, to the limit or the highest
+// value, with round steps labelled at the left (light lines), so the room left under the
+// limit reads as a number. The cursor is gray (red is the colour of a limit).
+// Returns the SVG text and the functions that move the cursor.
+function chartSvg(s, w, h, textPx, name, limit, floor = 0) {
   const [t0, t1] = extent(s.t_s);
   let [lo, hi] = extent(s.values);
+  if (Number.isFinite(floor)) lo = Math.min(lo, floor);
   if (limit !== null) [lo, hi] = [Math.min(lo, limit), Math.max(hi, limit)];
-  const top = textPx + 8;
+  const top = textPx * 2 + 8; // under the title, and room for the limit's words above its line
   const bottom = h - 4;
-  const X = (t) => ((t - t0) / (t1 - t0 || 1)) * w;
+  const ticks = niceTicks(lo, hi);
+  const tickW = Math.ceil(Math.max(...ticks.map((v) => fmt(v, 3).length)) * textPx * 0.62) + 8;
+  const X = (t) => tickW + ((t - t0) / (t1 - t0 || 1)) * (w - tickW);
   const Y = (v) => bottom - ((v - lo) / (hi - lo || 1)) * (bottom - top);
+  const grid = ticks
+    .map((v) => `<line x1="${tickW}" x2="${w}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e2ddd2" stroke-width="1"/>` +
+      `<text class="tick" x="${tickW - 6}" y="${(Y(v) + textPx * 0.35).toFixed(1)}" text-anchor="end" font-size="${textPx}" fill="#5c5a54">${esc(fmt(v, 3))}</text>`)
+    .join("");
   const step = Math.max(1, Math.ceil(s.t_s.length / 300));
   const pts = [];
   for (let k = 0; k < s.t_s.length; k += step) pts.push(`${X(s.t_s[k]).toFixed(1)},${Y(s.values[k]).toFixed(1)}`);
   const unit = unitLabel(s.unit) || "1";
+  // the limit's line says what it is and its value (the load case's criterion), at its
+  // right end, above the line when there is room under the title, else below it
+  const ly = limit !== null ? Y(limit) : 0;
+  const above = ly - 6 - textPx >= textPx + 4; // clear of the title
   const svg =
     `<text x="0" y="${textPx}" font-size="${textPx}" fill="#5c5a54">${esc(name)} [${esc(unit)}]</text>` +
-    (limit !== null ? `<line x1="0" x2="${w}" y1="${Y(limit).toFixed(1)}" y2="${Y(limit).toFixed(1)}" stroke="${RED}" stroke-width="1.5" stroke-dasharray="6 4"/>` : "") +
+    grid +
+    (limit !== null
+      ? `<line x1="${tickW}" x2="${w}" y1="${ly.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${RED}" stroke-width="1.5" stroke-dasharray="6 4"/>` +
+        `<text class="limit" x="${w}" y="${(above ? ly - 6 : ly + 6 + textPx).toFixed(1)}" text-anchor="end" font-size="${textPx}" fill="${RED}">${esc(`上限 ${fmt(limit, 3)} ${unitLabel(s.unit)}`.trim())}</text>`
+      : "") +
     `<polyline points="${pts.join(" ")}" fill="none" stroke="${LINE}" stroke-width="2.2"/>` +
-    `<line class="cur" x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="${RED}" stroke-width="1.5"/>`;
+    `<line class="cur" x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#8a857a" stroke-width="1.5"/>`;
   return { svg, X };
 }
 
@@ -155,6 +196,8 @@ function upperLimit(criterion, unit) {
 export class CutN03 {
   constructor(layout, s) {
     this.spec = requireKeys(layout, "n03", N03_KEYS);
+    this.ease = LOOP_EASES[this.spec.loop.ease];
+    if (!this.ease) throw new Error(`layout.json の n03 の loop.ease が分からない: ${this.spec.loop.ease} (${Object.keys(LOOP_EASES).join(" か ")})`);
     this.layout = layout;
     this.story = storyOf(layout, "n03");
     this.s = s;
@@ -191,7 +234,8 @@ export class CutN03 {
     Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border });
     box.innerHTML =
       `<canvas data-kind="moving"></canvas>` +
-      `<span class="rate" data-box="n03.view.rate" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
+      // the squeeze of the record's time is a note for the makers, not for the viewers
+      `<span class="rate" data-box="n03.view.rate" data-kind="note" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
     if (!clearOfBand({ x: V.x, y: V.y, w: V.w, h: V.h }, this.layout)) box.dataset.outside = "1";
     this.stage.append(box);
     this.box = box;
@@ -214,7 +258,7 @@ export class CutN03 {
     this.popup = pop;
     const chartW = P.w - 2 * pad - 2 * S.border_px;
     // a page of the popup: its title with the tests whose records it charts, then the charts
-    const page = (key, title, charts) => {
+    const page = (key, title, charts, also = null) => {
       const el = document.createElement("div");
       el.className = "n03-page";
       el.dataset.page = key;
@@ -225,7 +269,8 @@ export class CutN03 {
       h3.dataset.kind = "label";
       h3.dataset.tests = tests.join(" ");
       Object.assign(h3.style, { fontSize: `${titlePx}px`, marginBottom: `${pad}px` });
-      h3.textContent = tests.length ? `${title} (${tests.join("・")})` : title;
+      // the viewers do not know the tests' ids: the title only (the ids stay in data-tests)
+      h3.textContent = title;
       el.append(h3);
       pop.append(el);
       if (!list.length) {
@@ -242,24 +287,64 @@ export class CutN03 {
         const [lo, hi] = extent(c.s.values);
         r.textContent = [lo, hi].map((v) => `${fmt(v, 3)} ${unitOf(c)}`).sort((a, b) => b.length - a.length)[0];
         el.append(r);
-        let px = Math.round(P.title_px * S.reading_of_title);
+        let px = Math.round(P.title_px * P.reading_of_title);
         r.style.fontSize = `${px}px`;
         while (r.scrollWidth > chartW && px > this.story.bodyPx) {
           px -= 1;
           r.style.fontSize = `${px}px`;
         }
         r.style.marginBottom = `${pad}px`;
+        r.dataset.px = String(px);
         return r;
       });
-      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0);
+      // a chart with a limit: whether every recorded value keeps to it (the criterion's op),
+      // said with "✓ 上限より下" on its own line under the reading, about half the
+      // reading's size (it is shown for under a second: loop_to_s .. accel_s), from
+      // loop_to_s (the drive has played out); its room is kept while it is hidden
+      const keeps = (c) => {
+        if (c.limit === null || c.limit === undefined) return null;
+        const test = { "<=": (v) => v <= c.limit, "<": (v) => v < c.limit }[c.op];
+        return test ? c.s.values.every(test) : null;
+      };
+      const oks = list.map((c, i) => {
+        if (!keeps(c)) return null;
+        const ok = document.createElement("div");
+        ok.className = "n03-ok";
+        ok.dataset.box = `n03.popup.${c.key}.ok`;
+        ok.dataset.kind = "label";
+        const px = Math.max(textPx, Math.round(Number(readings[i].dataset.px) * P.ok_of_reading));
+        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px` });
+        ok.textContent = "✓ 上限より下";
+        readings[i].after(ok);
+        return ok;
+      });
+      // a check carried over from another page (the battery's, through the acceleration)
+      if (also && readings[0]) {
+        const ok = document.createElement("div");
+        ok.className = "n03-ok";
+        ok.dataset.box = `n03.popup.${key}.${also.key}`;
+        ok.dataset.kind = "label";
+        let px = Math.max(textPx, Math.round(Number(readings[0].dataset.px) * P.ok_of_reading));
+        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px`, whiteSpace: "nowrap" });
+        ok.textContent = also.text;
+        readings[0].after(ok);
+        while (ok.scrollWidth > chartW && px > textPx) {
+          px -= 1;
+          ok.style.fontSize = `${px}px`;
+        }
+        oks[0] = oks[0] ?? null;
+        oks.push(ok);
+        this.carried = ok;
+      }
+      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0) - oks.reduce((a, o) => a + (o ? o.offsetHeight + pad : 0), 0);
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
         el,
         charts: list.map((c, i) => {
-          const { svg, X } = chartSvg(c.s, chartW, h, textPx, c.name, c.limit ?? null);
+          const { svg, X } = chartSvg(c.s, chartW, h, textPx, c.name, c.limit ?? null, c.floor ?? 0);
           el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" data-kind="graph" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-top:${i ? pad : 0}px">${svg}</svg>`);
           const node = el.lastElementChild;
-          return { ...c, X, cur: node.querySelector(".cur"), now: readings[i], unit: unitOf(c) };
+          return { ...c, X, cur: node.querySelector(".cur"), now: readings[i], unit: unitOf(c), ok: oks[i] };
         }),
       };
     };
@@ -267,17 +352,29 @@ export class CutN03 {
     const launchCh = this.launch ? channelsOf(this.launch.ana) : new Map();
     this.battery = this.batteryChannel(heatCh, design);
     // one graph at a time (story): the battery's temperature on the long drive, then the speed
+    const drive = page("drive", "長く走ったときの電池の温度", [
+      { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null, op: this.heat?.lc.criterion?.op ?? null,
+        floor: this.ambient(this.battery?.s?.unit) },
+    ]);
+    const kept = drive.charts.some((c) => c.ok);
+    this.carried = null;
     this.pages = {
-      drive: page("drive", "長く走ったときの電池の温度", [
-        { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null },
-      ]),
-      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
+      drive,
+      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }],
+        kept ? { key: "battery_ok", text: "✓ 電池の温度は上限より下" } : null),
     };
 
     // the record time spans the two phases play
     const spans = [this.drive, this.heat].filter(Boolean).flatMap((r) => [...channelsOf(r.ana).values()].flatMap((c) => [c.t_s[0], c.t_s.at(-1)]));
     this.driveSpan = spans.length ? [Math.min(...spans), Math.max(...spans)] : null;
     this.launchSpan = this.launch ? [this.launchView.motion.t0, this.launchView.motion.t1] : null;
+  }
+
+  // The surroundings' temperature of the thermal load case (its params.ambient_temperature,
+  // in the channel's unit), else 0: the bottom of the battery chart's axis.
+  ambient(unit) {
+    const a = this.heat?.lc.params?.ambient_temperature;
+    return a && a.unit === unit && Number.isFinite(a.value) ? a.value : 0;
   }
 
   // The thermal record's channel of the battery (temp.<id> of a battery part of the design),
@@ -295,7 +392,7 @@ export class CutN03 {
   }
 
   makeDriveView(design) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(design);
     v.setLoading((this.drive ?? this.heat)?.lc.params?.loading ?? null);
     v.setScene(null, null);
@@ -308,7 +405,7 @@ export class CutN03 {
 
   makeLaunchView() {
     const { lc, ana } = this.launch;
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(this.s.designs[ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);
@@ -352,7 +449,11 @@ export class CutN03 {
     let tau = null;
     let rate = 0;
     if (phase === "drive" && this.driveSpan) {
-      ({ tau, rate } = squeeze(t, T.lead_s, T.loop_to_s, this.driveSpan[0], this.driveSpan[1]));
+      // eased (loop.ease) from lead_s to loop_to_s; the corner says the mean squeeze
+      const [a, b] = this.driveSpan;
+      const share = Math.max(0, Math.min(1, (t - T.lead_s) / Math.max(1e-9, T.loop_to_s - T.lead_s)));
+      tau = a + this.ease(share) * (b - a);
+      rate = (b - a) / Math.max(1e-9, T.loop_to_s - T.lead_s);
     } else if (phase === "launch" && this.launchSpan) {
       ({ tau, rate } = squeeze(t, T.accel_s, this.spec.duration_s, this.launchSpan[0], this.launchSpan[1]));
     }
@@ -361,8 +462,12 @@ export class CutN03 {
     for (const c of this.pages[phase].charts) {
       if (tau === null) continue;
       c.cur.setAttribute("transform", `translate(${c.X(tau).toFixed(1)} 0)`);
-      c.now.textContent = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
+      c.now.firstChild.nodeValue = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
     }
+    // the ✓ from ok_s when the long drive kept to the limit (on the drive's page only)
+    for (const c of this.pages.drive.charts) if (c.ok) c.ok.style.visibility = phase === "drive" && t >= T.ok_s ? "visible" : "hidden";
+    // and through the acceleration, under the speed
+    if (this.carried) this.carried.style.visibility = phase === "launch" && t >= T.ok_s ? "visible" : "hidden";
     let view;
     if (launch) {
       view = this.launchView;

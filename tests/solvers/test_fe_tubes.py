@@ -195,10 +195,14 @@ class HotSpotTest(unittest.TestCase):
     """The IIW hot spot on the tie lines (fe.tubes.hot_spots) by k1_shell's rule."""
 
     def test_rect_t_against_shared_nodes(self):
-        # measured at 10 mm: host 110.6 vs 105.7 MPa (+4.6 %), branch 51.7 vs 56.1 MPa (-7.9 %), at the same
-        # read points (2.5 t from the footprint's corners along the weld line)
+        # at 10 mm every ring node falls on a host node (the host's lines are evenly filled between the strip
+        # and corner lines), so the joint is shared nodes and equals k1_shell's mesh: 105.74 and 56.14 MPa both
+        from tests.solvers.test_k1_hot_spot import t_joint
+
+        fs = tubes.frame_shells(t_joint(), 10.0)
+        self.assertEqual(len(fs.ties), 0)
         hs, ref = t_joint_hot_spots(10.0)
-        for side, tol in (("host", 0.07), ("branch", 0.10)):
+        for side, tol in (("host", 1e-4), ("branch", 1e-4)):  # measured 2.8e-5 (node positions' rounding)
             a = tubes.hot_spot_max([h for h in hs if h["side"] == side])
             b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
             self.assertLess(abs(abs(a["value"]) / abs(b["value"]) - 1.0), tol, side)
@@ -246,19 +250,76 @@ class HotSpotTest(unittest.TestCase):
             top = tubes.hot_spot_max(hs)
             self.assertGreater(abs(top["value"]), 1.0)
 
-    @SLOW
-    def test_rect_t_5_mm(self):
-        # measured: host 108.3 vs 106.3 MPa (+1.9 %), branch 54.4 vs 56.2 MPa (-3.2 %); tubes' host 110.6 at
-        # 10 mm, so 2.1 % between the two meshes
+    def test_rect_t_5_mm_partly_tied(self):
+        # at 5 mm 10 of the ring's 48 nodes are tied: host 107.12 vs 106.33 MPa (+0.7 %), branch 55.58 vs
+        # 56.24 MPa (-1.2 %); tubes' host 105.74 at 10 mm, 1.3 % between the two meshes
         hs10, _ = t_joint_hot_spots(10.0)
         hs, ref = t_joint_hot_spots(5.0)
         for side in ("host", "branch"):
             a = tubes.hot_spot_max([h for h in hs if h["side"] == side])
             b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
-            self.assertLess(abs(abs(a["value"]) / abs(b["value"]) - 1.0), 0.05, side)
+            self.assertLess(abs(abs(a["value"]) / abs(b["value"]) - 1.0), 0.02, side)
         a10 = tubes.hot_spot_max([h for h in hs10 if h["side"] == "host"])
         a5 = tubes.hot_spot_max([h for h in hs if h["side"] == "host"])
-        self.assertLess(abs(abs(a5["value"]) / abs(a10["value"]) - 1.0), 0.03)
+        self.assertLess(abs(abs(a5["value"]) / abs(a10["value"]) - 1.0), 0.02)
+
+
+def round_t_hot_spots(ang: float, size: float) -> tuple[float, float]:
+    """Round T: 42.7 x 2.3 through tube (600 mm, held at both ends), 34 x 2.3 branch at `ang` deg to it (250 mm),
+    200 N down at its end: the largest hot spot on the host side and on the branch side (MPa)."""
+    a = np.radians(ang)
+    dd = np.array([np.cos(a), np.sin(a), 0.0])
+    d = design({"A": (-300, 0, 0), "O": (0, 0, 0), "B": (300, 0, 0), "C": 250 * dd},
+               [("h1", "A", "O", "h"), ("h2", "O", "B", "h"), ("br", "O", "C", "b")],
+               {"h": round_sec(42.7, 2.3), "b": round_sec(34.0, 2.3)})
+    fs = tubes.frame_shells(d, size)
+    m = fs.model
+    host, br = fs.tubes["h1+h2"], fs.tubes["br"]
+    m.fix(np.r_[host.ids[0], host.ids[-1]], "all")
+    tip = m.add_node(250 * dd)
+    m.add(rigid_link(tip, br.ids[-1], m.nodes))
+    F = np.zeros((len(m.nodes), 6))
+    F[tip, 2] = -200.0
+    hs = tubes.hot_spots(fs, StaticSolver(m).solve(F))
+    return (abs(tubes.hot_spot_max([h for h in hs if h["side"] == "host"])["value"]),
+            abs(tubes.hot_spot_max([h for h in hs if h["side"] == "branch"])["value"]))
+
+
+class RoundConvergenceTest(unittest.TestCase):
+    """The round T's hot spots against the element size (the crown and saddle read on strip elements centred
+    on the true points, at least HOT_SPOT_MIN_FACETS facets, rows a facet apart round the joint).
+
+    Measured (MPa, 30 / 20 / 14 / 10 / 7 mm): 90 deg host 227.84 / 228.52 / 228.90 / 229.07 / 229.17, branch
+    180.51 / 180.94 / 181.19 / 181.30 / 181.36; 60 deg host 170.46 / 171.06 / 171.29 / 171.41 / 171.48, branch
+    138.27 / 138.73 / 138.91 / 139.00 / 139.05; 45 deg host 116.21 / 116.59 / 116.75 / 116.83 / 116.88, branch
+    93.94 / 94.14 / 94.23 / 94.26 / 94.29."""
+
+    def test_settles_with_the_element_size(self):
+        for ang in (90.0, 60.0, 45.0):
+            vals = [round_t_hot_spots(ang, s) for s in (30.0, 20.0, 14.0, 10.0)]
+            for side in (0, 1):
+                v = [x[side] for x in vals]
+                steps = [abs(v[i + 1] - v[i]) / v[i + 1] for i in range(len(v) - 1)]
+                self.assertLess(steps[-1], 0.005, (ang, side, v))  # the finest two within 0.5 %
+                self.assertLessEqual(steps[-1], steps[0] + 1e-12, (ang, side, v))  # the steps shrink
+
+    @SLOW
+    def test_facet_count(self):
+        # the facet count, not the element size, sets the read: 40 against 96 facets (14 mm), measured 90 deg
+        # host 228.90 vs 236.43 (-3.2 %), branch 181.19 vs 194.06 (-6.6 %); 60 deg host -2.7 %, branch -2.4 %;
+        # 45 deg host -0.4 %, branch +0.9 %. The chosen count reads up to about 7 % low (not on the safe side)
+        old = tubes.HOT_SPOT_MIN_FACETS
+        try:
+            for ang in (90.0, 60.0):
+                at40 = round_t_hot_spots(ang, 14.0)
+                tubes.HOT_SPOT_MIN_FACETS = 96
+                at96 = round_t_hot_spots(ang, 14.0)
+                tubes.HOT_SPOT_MIN_FACETS = old
+                for side in (0, 1):
+                    self.assertLess(at40[side], at96[side])
+                    self.assertLess(1.0 - at40[side] / at96[side], 0.08, (ang, side))
+        finally:
+            tubes.HOT_SPOT_MIN_FACETS = old
 
 
 class SpaceFrameShellTest(unittest.TestCase):
@@ -307,18 +368,21 @@ class SpaceFrameShellTest(unittest.TestCase):
         self.assertGreater(self.st["lift"]["t"], 0.0)
         self.assertEqual(self.r["n_ties"], sum(1 for _ in self.r["shells"].ties))
 
-    def test_margin_to_yield(self):
+    def test_judged_values(self):
         # judged on the IIW hot spot at the tie lines (fe.tubes.hot_spots). Measured at 40 mm: standing still
-        # 144 MPa at LH2 (the roof rail beside the hoop's top), at the lift-off 192 MPa at RQ3 (the rear
-        # lower link); the dash bar's middle D0 (the weak point with the brace tube) 124 MPa
+        # 132.2 MPa at RQ1 (the front lower link's end; yield / hot spot 1.63), D0 129.4; at the lift-off
+        # 231.2 MPa at RQ3 (the rear lower link's end), above the yield (0.93), D0 97.6. Recorded as found: the
+        # rear lower link is to be reinforced
         yield_mpa = self.d["materials"][sf.MATERIAL]["yield_MPa"]
-        for case in ("static", "lift"):
-            c = self.r["cases"][case]
-            top = c["hot_spot_max"]
+        st, lift = self.r["cases"]["static"], self.r["cases"]["lift"]
+        for c in (st, lift):
             self.assertGreater(len(c["hot_spots"]), 1000)
-            self.assertGreaterEqual(yield_mpa / abs(top["value"]), 1.0, (case, top["joint"], top["value"]))
-            d0 = max(abs(h["value"]) for h in c["hot_spots"] if h["joint"] == "D0")
-            self.assertLess(d0, 0.65 * yield_mpa, case)
+        self.assertGreaterEqual(yield_mpa / abs(st["hot_spot_max"]["value"]), 1.5)
+        self.assertIn(lift["hot_spot_max"]["joint"], ("RQ3", "LQ3"))
+        self.assertTrue(lift["hot_spot_max"]["member"].startswith("rear_lower_link"))
+        self.assertAlmostEqual(abs(lift["hot_spot_max"]["value"]), 231.2, delta=5.0)
+        d0 = max(abs(h["value"]) for h in st["hot_spots"] if h["joint"] == "D0")
+        self.assertLess(d0, 0.65 * yield_mpa)
 
     def test_shell_mass(self):
         from hiraku.solvers.k2_vehicle.mass import member_items
@@ -337,28 +401,47 @@ class SpaceFrameShellTest(unittest.TestCase):
 
 
 @SLOW
+class RearLinkRevisionTest(unittest.TestCase):
+    """RQ3 (the rear lower link's end at the lift-off, above the yield with 34 x 2.3) can be brought under the
+    yield by the revisable variable rear_link_tube_d. Measured at 40 mm, lift-off: Q3 231.2 (34 x 2.3), 156.5
+    (42.7 x 2.3; the frame's largest then 182.7 MPa at LP3), 175.5 (48.6 x 3.2), 204.3 MPa (60.5 x 3.2): a
+    stiffer link draws more load, so the hot spot rises again past 42.7. At the default 20 mm, lift-off (step 100
+    mm): RQ3 233.2 (34 x 2.3); with 42.7 x 2.3 LQ3 158.1, RQ3 147.2 and the frame's largest 182.7 MPa at LP3."""
+
+    def test_42_7_brings_every_hot_spot_under_the_yield(self):
+        d = sf.build({"rear_link_tube_d": 42.7})
+        yield_mpa = d["materials"][sf.MATERIAL]["yield_MPa"]
+        r = tubes.analyse(d, 40.0)
+        lift = r["cases"]["lift"]
+        q3 = max(abs(h["value"]) for h in lift["hot_spots"] if h["joint"] in ("RQ3", "LQ3"))
+        self.assertAlmostEqual(q3, 156.5, delta=5.0)
+        for case in ("static", "lift"):
+            self.assertLess(abs(r["cases"][case]["hot_spot_max"]["value"]), yield_mpa, case)
+
+
+@SLOW
 class SpaceFrameConvergenceTest(unittest.TestCase):
     """Match 4: the hot spot at D0 (the dash bar's middle, where the front upper links land) and the largest
     on finer meshes."""
 
     def test_hot_spot_settles(self):
+        # 40 / 30 / 20 / 14 mm (10 mm, about 250,000 elements, is beyond the development PC's memory). Measured:
+        # standing still D0 129.40 / 129.80 / 130.18 / 130.34, largest (RQ1) 132.17 / 132.46 / 132.64 / 132.74;
+        # lift-off D0 97.62 / 97.87 / 98.08 / 98.11, largest (RQ3) 231.24 / 232.27 / 233.17 / 233.65 MPa
         d = sf.build()
         st = tubes.k2_states(d)
-        d0, top, peak = [], [], []
-        for size in (30.0, 20.0, 14.0, 10.0):
+        series = {k: [] for k in ("D0 static", "max static", "D0 lift", "max lift")}
+        for size in (40.0, 30.0, 20.0, 14.0):
             r = tubes.analyse(d, size, states=st)
-            c = r["cases"]["static"]
-            d0.append(max(abs(h["value"]) for h in c["hot_spots"] if h["joint"] == "D0"))
-            top.append(abs(c["hot_spot_max"]["value"]))
-            peak.append(tubes.joint_stress(r["shells"], r["solutions"]["static"], "D0")["MPa"])
-        print(f"  D0 hot spot {[round(v, 1) for v in d0]}, largest {[round(v, 1) for v in top]}, D0 element peak "
-              f"{[round(v, 1) for v in peak]} MPa at 30 / 20 / 14 / 10 mm")
-        # measured: D0 123.3 / 121.6 / 109.2 / 118.7, largest 143.9 / 144.5 / 146.4 / 135.9 MPa. On round tubes
-        # the crown and saddle are read at the branch's facet corners, which move with the facet count, so the
-        # value wanders (here up to 12 % of the mean) instead of settling as on the rect T (2 %, HotSpotTest);
-        # this bounds that spread, it does not show convergence
-        for vals in (d0, top):
-            self.assertLess((max(vals) - min(vals)) / np.mean(vals), 0.15)
+            for case in ("static", "lift"):
+                c = r["cases"][case]
+                series[f"D0 {case}"].append(max(abs(h["value"]) for h in c["hot_spots"] if h["joint"] == "D0"))
+                series[f"max {case}"].append(abs(c["hot_spot_max"]["value"]))
+        print("  " + "; ".join(f"{k} {[round(v, 2) for v in vals]}" for k, vals in series.items()))
+        for k, v in series.items():
+            steps = [abs(v[i + 1] - v[i]) / v[i + 1] for i in range(len(v) - 1)]
+            self.assertLess(steps[-1], 0.005, (k, v))  # the finest two within 0.5 %
+            self.assertLessEqual(steps[-1], steps[0] + 1e-12, (k, v))  # the steps shrink
 
 
 if __name__ == "__main__":

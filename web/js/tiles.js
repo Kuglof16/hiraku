@@ -7,7 +7,7 @@
 
 import { DOMAINS, DOMAIN_JA, esc, fmt, fmtVU, unitLabel } from "./labels.js";
 import { OVER_COLOR, colorOf } from "./colormap.js";
-import { FIELD_JA, contourOf, fieldsOf, overOf } from "./fields.js";
+import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 
@@ -171,7 +171,10 @@ function sparkline(ana) {
 function tileSvg(s, domain, design, info) {
   const { ana, loadCase } = info;
   const field = fieldsOf(ana, { mesh: false })[0];
-  const ct = field ? contourOf(ana, field, loadCase?.criterion) : null;
+  // a field with frames (a time history): the moment with the largest value, as the workbench
+  // shows it when not playing (the caption names the moment)
+  const whole = field ? contourOf(ana, field, loadCase?.criterion) : null;
+  const ct = whole?.frames ? atFrame(whole, frameIndex(whole, null)) : whole;
   const interfering = new Set((ana?.interferences ?? []).flatMap((x) => [x.a, x.b]));
   const view = sideView(design);
   const ground = `<line x1="4" y1="${view.Y(0).toFixed(1)}" x2="${W - 4}" y2="${view.Y(0).toFixed(1)}" stroke="#c9c3b6" stroke-width="1.5"/>`;
@@ -223,7 +226,7 @@ export class TileBoard {
       if (design && (j.state !== "off" || info.ana)) {
         const { body, ct } = tileSvg(s, d, design, info);
         drawing = body;
-        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}`;
+        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
         }

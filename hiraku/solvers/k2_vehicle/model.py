@@ -48,12 +48,23 @@ DEFAULTS = {
     "unsprung_fraction": (0.05, "1", "unsprung mass 5 % of the vehicle mass per sprung corner when no wheel parts are listed (assumed)"),
     "max_steer_angle": (math.radians(35.0), "rad", "maximum steer angle 35 deg (assumed; the design has no "
                                                    "max_steer_angle)"),
-    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed; the "
+    # The three joint stiffnesses below are assumed: no value for a UTV, an ATV or a vehicle of
+    # this size was found. Passenger-car values (read in the papers by the QA department):
+    # - lower-arm rubber bushings of a double wishbone, FEA, radial 1743.4 / 3959 / 5014 N/mm and
+    #   axial 234.1 / 376.9 / 460.5 N/mm (Table 4, "FEA static stiffness of the rubber bushings",
+    #   https://pdfs.semanticscholar.org/2463/dfafb027cf5652d17176bed9df7e1b8e8415.pdf, p. 354);
+    # - a polyurethane arm bushing, radial 2922.6 N/mm by FEA and 3327.53 N/mm by test (Table 2,
+    #   doi 10.17770/etr2024vol1.7996, p. 366).
+    # The radial 3 kN/mm lies among them; the axial 0.5 kN/mm is a little above them. No opened
+    # source gives a tie rod with its rack: the 10 kN/mm has no source.
+    "bushing_radial_stiffness": (3e6, "N/m", "suspension arm bushings 3 kN/mm across the pivot axis (assumed: "
+                                             "within passenger-car arm bushings, 1.7 to 5.0 kN/mm, no UTV value; the "
                                              "design has no bushing_radial_stiffness)"),
-    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed; the "
-                                              "design has no bushing_axial_stiffness)"),
-    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed; the design has no "
-                                       "tie_rod_stiffness)"),
+    "bushing_axial_stiffness": (0.5e6, "N/m", "suspension arm bushings 0.5 kN/mm along the pivot axis (assumed: a "
+                                              "little above passenger-car arm bushings, 0.23 to 0.46 kN/mm, no UTV "
+                                              "value; the design has no bushing_axial_stiffness)"),
+    "tie_rod_stiffness": (10e6, "N/m", "tie rod 10 kN/mm along its length, rack held (assumed, no source; the "
+                                       "design has no tie_rod_stiffness)"),
 }
 
 
@@ -97,6 +108,21 @@ class Corner:
     @property
     def dof(self) -> bool:
         return self.susp != "rigid"
+
+    @property
+    def rolling_radius(self) -> float:
+        """K2's effective rolling radius (m) at the static load: radius - static_load / k_z.
+
+        K2's tyre is a disc on a radial spring (Sim._normal): the contact point lies on the road
+        under the disc, |rh| = radius - deflection from the wheel centre, and Sim._slip takes the
+        slip velocity there, so the wheel rolls without slip at v = omega |rh| and the drive
+        torque meets the road force on the same arm |rh| (Sim._spin). K2 has no separate
+        effective rolling radius: it is this loaded radius (in the run it moves with the load).
+        A real tyre's effective rolling radius lies between the loaded and the free radius
+        (H. B. Pacejka, Tire and Vehicle Dynamics, 3rd ed. (2012), the effective rolling radius
+        of the tyre models; not checked against the book). The Magic Formula's r0 (MF61) is the
+        free radius and only scales the aligning moment terms; it plays no part here."""
+        return self.radius - self.static_load / self.k_z
 
 
 @dataclass(eq=False)
@@ -504,6 +530,11 @@ def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinem
     return json.loads(_table_of((tuple(float(x) for x in wc), float(radius), float(travel), bushings)))
 
 
+RIGID_WHEEL_SPIN_NOTE = ("a rigid wheel without wheel parts spins as a solid disc of 5 % of the vehicle mass shared "
+                         "over the supports (at least 1 kg; assumed); that mass only sets the spin inertia: it is not "
+                         "taken out of the body and there is no unsprung mass")
+
+
 def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, notes: list[str]) -> list:
     """Give each corner its unsprung mass and spin inertia; return the sprung items.
 
@@ -528,10 +559,11 @@ def _unsprung(items: list, corners: list[Corner], m_all: float, design: dict, no
         mw = wheel_mass[i]
         if mw <= 0.0:
             mw = max(1.0, frac * m_all / len(corners))
-            if c.dof or c.kind == "wheel":
-                _note(notes, DEFAULTS["unsprung_fraction"][2])
             if c.dof:
+                _note(notes, DEFAULTS["unsprung_fraction"][2])
                 sprung_items.append((-mw, c.pos, np.zeros((3, 3))))
+            elif c.kind == "wheel" and _given(design, "wheel_inertia") is None:
+                _note(notes, RIGID_WHEEL_SPIN_NOTE)
         if c.dof:
             c.m_u = mw
         c.j_w = 0.5 * mw * c.radius ** 2
@@ -658,10 +690,12 @@ def _tyres(corners: list[Corner], notes: list[str], name: str = DEFAULT_TYRE):
         c.mf = MF61(coeffs, fz0=fz0, r0=c.radius, lmux=c.mu / base.mu_x(fz), lmuy=c.mu / base.mu_y(fz),
                     lkx=c.c_long / base.kxk(fz), lky=c.c_lat / abs(base.kya(fz)))
     notes.append(f"tyre forces: Magic Formula 6.1 with the coefficients of the {coeffs['tyre']} tyre "
-                 f"({coeffs['source']['title']}; not checked against the book), scaled to this vehicle: nominal "
+                 f"({coeffs['source']['title']}; not checked against the book). Not a measured UTV tyre: only "
+                 "the shapes of the passenger car tyre's curves are used, scaled to this vehicle: nominal "
                  f"load {fz0:.0f} N (the mean static wheel load), R0 = the wheel radius, and at each wheel's static "
                  "load the peak friction = mu and the slopes at zero slip = the stiffnesses K2 took (design or "
-                 "defaults above)")
+                 "defaults above); held at the coefficients' nominal inflation pressure (no pressure terms, so "
+                 "nothing is extrapolated to a low-pressure tyre)")
 
 
 def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):

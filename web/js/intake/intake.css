@@ -32,6 +32,7 @@
 .in-root-host button:disabled { cursor: default; }
 .in-empty { color: var(--i-muted); margin: 8px 0; }
 .in-foot { color: var(--i-muted); font-size: 14px; margin: 10px 0 0; }
+.in-miss { color: var(--i-muted); font-size: 13px; }
 .in-warn { color: var(--i-red); font-size: 15px; margin: 8px 0 0; }
 
 .in-nav { display: flex; gap: 8px; padding: 10px 24px; border-bottom: 1px solid var(--i-rule); }
@@ -100,6 +101,9 @@
 .in-q.answered { border-color: var(--i-green); }
 .in-q.defaulted { border-color: var(--i-yellow); }
 .in-q.open { border-color: var(--i-red); }
+.in-rq { border-style: dashed; }
+.in-parts-hit { color: var(--i-muted); font-size: 14px; margin: 4px 0; }
+.in-parts-hit code { background: var(--i-paper); border: 1px solid var(--i-rule); border-radius: 4px; padding: 0 5px; margin: 0 2px; }
 .in-q header { display: flex; align-items: baseline; gap: 10px; }
 .in-state { margin-left: auto; font-size: 13px; color: var(--i-muted); }
 .in-badge { font-size: 12px; border-radius: 4px; padding: 0 8px; border: 1.5px solid var(--i-ink); }

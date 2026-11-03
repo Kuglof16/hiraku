@@ -81,7 +81,7 @@ def demo_events(slug: str, *, from_file: bool = False, label: str | None = None)
     s = _Stream(project["run_id"])
     s.add(0.0, "run.started", agent="system", data=project)
 
-    picked = pick_domains(req["want"], req["flags"], req.get("speed_class"))
+    picked = pick_domains(req["want"], req["flags"], req.get("speed_class"), product=req.get("product"))
     s.add(2.0, **_unpack(ev.picked_event(picked)))
 
     docs = knowledge.load_builtin()  # the contract's order: picked, knowledge, then the hearing
