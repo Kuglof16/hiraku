@@ -136,6 +136,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `runs/` はコミットしない
 
 - 実行を動かしたもの: project の任意の欄 `driver` (`scripted` 台本・`agent_sdk` HIRAKU のエージェントのループを本人の `ANTHROPIC_API_KEY` で・`claude_code_plugin` 本人の Claude Code のセッションに HIRAKU のプラグインをつないで、本人のサインインで。このとき HIRAKU は Claude を呼ばず、`events.jsonl` を書くのは MCP サーバーのプロセス)
+  - プラグインの実行のフォルダの印: `plugin.lock` (`layout.PLUGIN_LOCK_FILE`) は、状態と outbox を読み書きする間だけ取る短い排他で、セッションが実行を持っている印ではない。持っている印は `plugin.alive` (`layout.PLUGIN_ALIVE_FILE`): MCP サーバーが実行を受け持つ間、見回りのたびに触る。画面は、`plugin.alive` の更新が `layout.PLUGIN_ALIVE_S` 秒より新しければ、その実行に Claude Code のセッションが付いていると見る (ヒアリングの答え・ナレッジ・止めるボタンを受ける)
 
 - 困った所: report の任意の欄 `issues` (`write_report` の入力にも同じ欄)。設計の結果ではなく、HIRAKU そのものが邪魔をした所を書く: `kind` (`missing_tool`・`missing_formula`・`assumed_value`・`unexplained_mismatch`・`tool_error`・`unclear_instruction`・`other`)、`what`、任意で `where`・`record_ids`・`workaround`。実験部が集めて、統括部が部署に振る
 
