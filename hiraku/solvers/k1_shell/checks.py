@@ -13,6 +13,7 @@ import math
 import numpy as np
 
 from ..k0_handcalc import sections
+from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..shelf import fixtures
 from ..shelf.base import Record, check_record
 from . import element
@@ -250,10 +251,11 @@ def tube_cantilever_records(res: dict) -> list[Record]:
     # torsion (free warping at both ends)
     mt, Ut = res["torsion_model"], res["U_torsion"]
     x0, x1 = 0.3 * L, 0.7 * L
-    rate = (_ring_twist(mt, Ut, x1) - _ring_twist(mt, Ut, x0)) / (x1 - x0)
+    twist = _ring_twist(mt, Ut, x1) - _ring_twist(mt, Ut, x0)
     src_t = SRC_BREDT + "; torque applied as the uniform shear flow on the tip ring, both ends free to warp"
-    out.append(check_record(case + f", {T / 1e6:g} kN*m torque at the tip", f"twist rate between {x0:g} and {x1:g} mm",
-                            T / (G_ST * sec["J"]), rate, "rad/mm", 0.03, src_t + "; J from sections.rect_tube"))
+    out.append(check_record(case + f", {T / 1e6:g} kN*m torque at the tip", f"twist between {x0:g} and {x1:g} mm",
+                            T * (x1 - x0) / (G_ST * sec["J"]), twist, "rad", 0.03,
+                            src_t + "; twist = rate * length; J from sections.rect_tube"))
     st = element_stresses(mt, Ut)
     Am = (b - t) * (h - t)
     for label, e in (("h wall", _wall_element(ms, L / 2, y=None, z=(b - t) / 2)),
@@ -374,11 +376,74 @@ def holed_plate_kt(W: float = 100.0, d: float = 25.0, length: float = 300.0, n_q
             "n_elements": len(quads), "r_centres": r}
 
 
+# ------------------------------------------------------------------ the ladder frame (frame_shell)
+
+
+def _top_wall_element(ms, member: str, s_target: float, h: float, t: float) -> int:
+    """Element of `member` at the middle of its upper wall (local y = (h - t)/2) nearest station s."""
+    sel = np.array([m == member for m in ms.element_member])
+    yz, s = ms.station_yz_mm, ms.station_s_mm
+    cand = np.nonzero(sel & (np.abs(yz[:, 0] - (h - t) / 2.0) < 1e-6))[0]
+    return int(cand[np.argmin(np.abs(s[cand] - s_target) + np.abs(yz[cand, 1]))])
+
+
+def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
+    """fixtures.ladder_design() on the shell frame solver (k1_shell.frame): at rest, and braking at 0.5 g."""
+    from .frame import ShellFrame, analyze_shell
+
+    lad = fixtures.ladder_design()
+    fr = ShellFrame.build(lad, element_size_mm)
+    res = analyze_shell(lad, frame=fr)
+    case = f"symmetric ladder at rest on four rigid wheels, shell mesh {element_size_mm:g} mm"
+    out = []
+    W = res["mass"]["mass_kg"] * STANDARD_GRAVITY
+    total = float(sum(g["force_N"][2] for g in res["ground"].values()))
+    out.append(check_record(case, "total_wheel_load", W, total, "N", 1e-9,
+                            "sum of the ground forces (K0 rigid-body statics) equals the weight"))
+    out.append(check_record(case, "hold_reaction", 0.0, res["residual_ratio"], "1", 1e-6,
+                            "loads balanced by inertia relief: the six holding restraints carry nothing "
+                            "(reaction / weight)"))
+    # rail L ahead of the middle cross member, 500 mm behind the front joint: beam bending M c / I
+    sec = lad["sections"]["rt"]["dims_mm"]
+    b, h, t = sec["b"], sec["h"], sec["t"]
+    tube = sections.rect_tube(b, h, t)
+    ms = res["mesh"]
+    e = _top_wall_element(ms, "railLa", 500.0, h, t)
+    s = float(ms.station_s_mm[e])
+    rho_g = STEEL["density_kg_m3"] * 1e-9 * STANDARD_GRAVITY  # N/mm^3
+    W_FL = float(res["ground"]["FL"]["force_N"][2])
+    half_cross = rho_g * tube["A"] * 800.0 / 2.0
+    M = (W_FL - half_cross) * s - rho_g * tube["A"] * s * s / 2.0
+    got = float(res["stress"].in_plane((1.0, 0.0, 0.0), "top")[e, 0])
+    out.append(check_record(case, f"rail top wall outer axial stress at {s:.0f} mm behind the front joint",
+                            -M * (h / 2.0) / tube["Iz"], got, "MPa", 0.03,
+                            "beam bending -M c / I, M = (W_FL - half the front cross member's weight) s - w s^2 / 2 "
+                            "(free body of the rail ahead of the cut; symmetric, so the cross member puts no "
+                            "vertical moment into the rail), c = h/2, I from sections.rect_tube; W_FL from the "
+                            "K0 ground forces; element next to the middle of the upper wall (normal stress from the "
+                            "restrained twist of the rail, which the formula leaves out, is not zero there)"))
+    # braking: each wheel's grip 0.5 x its load backwards; the pitch is left to the angular acceleration
+    m = res["mass"]["mass_kg"]
+    gf = {sid: [("reaction", g["point_mm"], g["force_N"]),
+                ("grip", g["point_mm"], np.array([-0.5 * g["force_N"][2], 0.0, 0.0]))]
+          for sid, g in res["ground"].items()}
+    brk = analyze_shell(lad, ground_forces=gf, inertia_N=np.array([0.5 * m * STANDARD_GRAVITY, 0.0, 0.0]), frame=fr)
+    case = f"symmetric ladder braking, grip 0.5 x each wheel load, shell mesh {element_size_mm:g} mm"
+    out.append(check_record(case, "inertia_acceleration", 0.5 * STANDARD_GRAVITY,
+                            float(np.linalg.norm(brk["inertia_accel"])), "m/s^2", 0.01,
+                            "d'Alembert: a = (ground forces + weight) / m = 0.5 g; within 1 % because the shell's "
+                            "tube mass (rho t area) differs slightly from the beam bookkeeping the forces were made with"))
+    out.append(check_record(case, "hold_reaction", 0.0, brk["residual_ratio"], "1", 1e-6,
+                            "inertia relief with an angular acceleration (the grip at the ground pitches the "
+                            "vehicle): the six holding restraints carry nothing"))
+    return out
+
+
 # ------------------------------------------------------------------ the routine set
 
 
 def shell_known_answers() -> list[Record]:
-    """Checks a shell tool runs every time (about 3 s)."""
+    """Checks a shell tool runs every time (about 4 s)."""
     out, _ = patch_tests()
     got, exp = inplane_cantilever(8, 2)
     out.append(check_record("in-plane cantilever strip 100 x 10 x 1, 8 x 2 elements, end moment", "tip_deflection",
@@ -398,4 +463,5 @@ def shell_known_answers() -> list[Record]:
                             kt["kt_heywood_gross"], kt["kt"], "1", 0.03,
                             SRC_HEYWOOD + "; FE value: element-centre sigma_yy of the two rings next to the hole "
                                           "on the x axis, extrapolated linearly in r to the edge"))
+    out += ladder_frame_checks()
     return out

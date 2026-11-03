@@ -6,6 +6,7 @@
     U = solver.solve(F)                                    # (n_dof,) or (n_dof, n_cases)
     st = element_stresses(model, U[:, 0])                  # stress.py; st.von_mises("top" | "mid" | "bottom" | "max")
     shell_known_answers()                                  # checks.py, tool_check records
+    res = frame.analyze_shell(design, step_mm=100.0, ...)  # frame.py: the frame under K1's loads (frame_shell)
 """
 
 from .checks import shell_known_answers
