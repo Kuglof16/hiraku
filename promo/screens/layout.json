@@ -254,6 +254,7 @@
     "view": { "x": 96, "y": 96, "w": 1500, "h": 790, "_note": "the 3D view; bottom 886" },
     "legend": { "x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20, "_note": "the colour bar in a column of its own, not over the view" },
     "label": { "x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08, "_note": "inside the view, top left: 補強の前 / 補強の後. Text size: view.h x of_view_h (63 px), at least size_px" },
+    "ring": { "of_view_h": 0.08, "_note": "the ring around the highest element: its size while the camera is far, as a share of view.h; it grows as the camera moves in and turns green on the reinforced version" },
     "times": { "lead_s": 0.3, "turn_to_s": 5.5, "zoom_s": 5.5, "zoom_to_s": 7.5, "swap_s": 11.0, "swap_to_s": 13.0,
                "_note": "the vehicle turns with the stress colours during sentences 1-2 (the maker's recorded voice, from the cut's start: 0.30-3.76, 4.11-8.05 s); it moves in on the highest element during sentence 2 (突き止める) and is in by 7.5 s, before sentence 2 ends; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (8.40-14.42 s) and stay while it says それが CAE です" },
     "turn_deg": 90,

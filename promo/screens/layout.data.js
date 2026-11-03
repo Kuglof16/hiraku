@@ -880,6 +880,10 @@ window.PROMO_LAYOUT = {
       "of_view_h": 0.08,
       "_note": "inside the view, top left: 補強の前 / 補強の後. Text size: view.h x of_view_h (63 px), at least size_px"
     },
+    "ring": {
+      "of_view_h": 0.08,
+      "_note": "the ring around the highest element: its size while the camera is far, as a share of view.h; it grows as the camera moves in and turns green on the reinforced version"
+    },
     "times": {
       "lead_s": 0.3,
       "turn_to_s": 5.5,

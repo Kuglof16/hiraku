@@ -826,6 +826,12 @@ class Judging(unittest.TestCase):
         return {"name": name, "label": name or "div", "text": kw.pop("text", ""), "box": b,
                 "inside": kw.pop("inside", []), **kw}
 
+    def test_cut_of_reads_the_cut_parameter(self):
+        # the app's cut.html serves every cut, so its rules are looked up under ?cut=
+        self.assertEqual(lc.cut_of("http://127.0.0.1:8765/cut.html?cut=n07&run=r&before=1"), "n07")
+        self.assertEqual(lc.cut_of("http://127.0.0.1:8765/cut.html?run=r"), "cut")
+        self.assertEqual(lc.cut_of(Path("promo/screens/n18.html")), "n18")
+
     def test_judge_lists_each_kind(self):
         items = [
             self.item("a", box(100, 100, 200, 100)),
