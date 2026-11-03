@@ -84,11 +84,22 @@ def required_case(tool, test_id):
     """A load case with the required params of a tool, at values that run on the demo vehicle."""
     values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
               "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
-              "speed": q(20, "km/h")}
+              "speed": q(20, "km/h"), "actuator": "back"}
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
+    if tool.name == "actuator_linkage":
+        params.update(loading="driver")  # a care bed has one occupant; the default loading names two
     return load_case(f"{test_id}-x", test_id, tool.domain, **params)
+
+
+def design_for(tool):
+    """The demo vehicle, or a default care bed for the tools that read a care bed's names."""
+    if tool.name == "actuator_linkage":
+        from hiraku.designgen import care_bed
+
+        return care_bed.build()
+    return DESIGN
 
 
 class DeclarationsTest(unittest.TestCase):
@@ -114,7 +125,7 @@ class DeclarationsTest(unittest.TestCase):
         for t in TOOLS.values():
             if not t.predicts:
                 continue
-            rec = t.run(DESIGN, required_case(t, t.tests[0]), PRED, {})
+            rec = t.run(design_for(t), required_case(t, t.tests[0]), PRED, {})
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
             for p in t.predicts:
@@ -128,7 +139,7 @@ class DeclarationsTest(unittest.TestCase):
                 if p.required:
                     rec = t.run(DESIGN, load_case("x", t.tests[0], t.domain), PRED, {})
                     self.assertEqual(rec["status"], "failed", t.name)
-                    self.assertIn(f"{p.name} [{p.unit}]", rec["error"])
+                    self.assertIn(f"{p.name} [{p.unit or 'string'}]", rec["error"])
 
     def test_bad_values_fail(self):
         tool = TOOLS["frame_static"]
