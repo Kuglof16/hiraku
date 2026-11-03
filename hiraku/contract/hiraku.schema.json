@@ -2970,8 +2970,12 @@
           "minimum": 0
         },
         "cost_usd": {
-          "type": "number",
-          "minimum": 0
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "API cost of the run so far; null where HIRAKU cannot know it (driver claude_code_plugin: the user's own Claude Code pays)."
         },
         "requirements": {
           "type": "array",
@@ -4135,6 +4139,10 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
@@ -4214,6 +4222,10 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }

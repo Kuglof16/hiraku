@@ -21,6 +21,9 @@ runs/<run_id>/
     hearing.answer.json               (later) the answer put by the screen; the run reads and removes both
     inbox/<n>-<kind>.json             a request from the screen (a message for Claude, a dropped file); the run
                                       reads it, emits the event itself and removes the file
+    plugin.hooks.json                 claude_code_plugin runs only: how the plugin's hooks are wired for this run
+    plugin.outbox.jsonl               claude_code_plugin runs only: hook notes waiting for the MCP server to emit
+    plugin.lock                       claude_code_plugin runs only: present while the plugin's MCP server owns the run
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Only the run process appends to events.jsonl (seq has no gaps and one writer);
@@ -54,6 +57,9 @@ KNOWLEDGE_DIR = "knowledge"  # knowledge files the person dropped, kept as given
 HEARING_REQUEST_FILE = "hearing.request.json"  # later: hearing during the run
 HEARING_ANSWER_FILE = "hearing.answer.json"
 INBOX_DIR = "inbox"  # requests the screen puts for a running run (the run turns them into events)
+PLUGIN_HOOKS_FILE = "plugin.hooks.json"  # claude_code_plugin runs: hook wiring for this run
+PLUGIN_OUTBOX_FILE = "plugin.outbox.jsonl"  # claude_code_plugin runs: hook notes for the MCP server to emit
+PLUGIN_LOCK_FILE = "plugin.lock"  # claude_code_plugin runs: the MCP server owns the run
 
 RECORD_DIRS = {
     "prediction": "predictions",
