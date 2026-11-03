@@ -75,18 +75,18 @@ def demo_events(slug: str) -> list[Record]:
     picked = pick_domains(req["want"], req["flags"], req.get("speed_class"))
     s.add(2.0, **_unpack(ev.picked_event(picked)))
 
+    docs = knowledge.load_builtin()  # the contract's order: picked, knowledge, then the hearing
+    for k, rec in enumerate(docs):
+        s.add(3.0 + 0.2 * k, **_unpack(ev.knowledge_event(rec)))
+    rules = knowledge.all_rules(docs)
+
     base = copy.deepcopy(req)
     base["requirements"] = start_reqs
     path = answers_file(slug)
     answers, note = hearing.load_answers(path) if path else ({}, None)
     prepared = hearing.prepare(base, answers, note, product_defaults=own)
     for k, event in enumerate(ev.hearing_events(prepared)):
-        s.add(4.0 + 2 * k, **_unpack(event))
-
-    docs = knowledge.load_builtin()
-    for k, rec in enumerate(docs):
-        s.add(8.0 + 0.2 * k, **_unpack(ev.knowledge_event(rec)))
-    rules = knowledge.all_rules(docs)
+        s.add(6.0 + 2 * k, **_unpack(event))
 
     if slug in DESIGNS:
         dropped = knowledge.import_text("ノウハウメモ (見本).md", SAMPLE_NOTES, doc_id="U1")
