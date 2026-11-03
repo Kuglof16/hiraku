@@ -21,7 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, unchecked_tools
+from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
 from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
@@ -216,7 +216,8 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     }
     parts = {
         "requirements": lambda: p["requirements"],
-        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"])) for lc in ctx.load_cases],
+        "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"]), stage=load_case_stage(ctx, lc))
+                               for lc in ctx.load_cases],  # stage: HK5, lower stages first
         "judgements": lambda: s.judgements() if ctx.version else [],
         "records": lambda: {
             "predictions": [_compact_prediction(x) for x in s.records("prediction")],
@@ -338,7 +339,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [s if "not_checked" in s else _tool_line(s) for s in out]
+    return [s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"])) for s in out]
 
 
 def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
@@ -430,19 +431,29 @@ def trusted_analysis(ctx: RunContext, load_case_id: str) -> Record | None:
 _MESH_LOCK = threading.Lock()  # roles analyse side by side (the MCP calls run in threads)
 
 
-def version_mesh(ctx: RunContext, version: int, agent: str) -> Record:
-    """The shell mesh of a design version: the one already recorded, else made once from the
-    design by hiraku.solvers.frame_mesh and recorded (mesh-NNNN.json, mesh.created)."""
+FRAME_MESHER = "frame_mesh"  # the version's shell mesh of hiraku.solvers.frame_mesh; a mesh without mesher is one
+
+
+def version_mesh(ctx: RunContext, version: int, agent: str, tool: Any = None) -> Record:
+    """The mesh of a design version for a tool (docs/contract.md: one per version and mesher): the one
+    already recorded by that mesher, else made once and recorded (mesh-NNNN.json, mesh.created). The
+    mesher is the tool's own make_mesh(design) when it has one (mesher = the tool's name), else
+    hiraku.solvers.frame_mesh."""
+    own = getattr(tool, "make_mesh", None)
+    mesher = getattr(tool, "name", None) if own is not None else FRAME_MESHER
     with _MESH_LOCK:
-        have = ctx.store.records("mesh", version)
+        have = [m for m in ctx.store.records("mesh", version) if m.get("mesher", FRAME_MESHER) == mesher]
         if have:
             return have[-1]
-        solvers = importlib.import_module("hiraku.solvers")
-
-        if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
-            raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
-        mesh = {**solvers.frame_mesh(ctx.store.design(version)), "mesh_id": ctx.store.next_id("mesh"),
-                "design_version": version}
+        design = ctx.store.design(version)
+        if own is not None:
+            made = own(design)
+        else:
+            solvers = importlib.import_module("hiraku.solvers")
+            if not hasattr(solvers, "frame_mesh"):  # an optional entry point (protocols.OPTIONAL_SOLVER_ENTRY_POINTS)
+                raise ToolError("hiraku.solvers has no frame_mesh yet, so the shell mesh cannot be made")
+            made = solvers.frame_mesh(design)
+        mesh = {**made, "mesher": mesher, "mesh_id": ctx.store.next_id("mesh"), "design_version": version}
         return ctx.store.add_record("mesh", mesh, design_version=version, agent=agent)
 
 
@@ -472,7 +483,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     mesh, mesh_error = None, None
     if getattr(ctx.tools[name], "needs_mesh", False):  # once per version, before the tool's first run on it
         try:
-            mesh = version_mesh(ctx, v, agent)
+            mesh = version_mesh(ctx, v, agent, ctx.tools[name])
         except Exception as e:  # a design the mesher cannot take is a failed analysis, as a tool's own error is
             mesh_error = f"the version's shell mesh could not be made ({type(e).__name__}: {e})"
     analysis_id = ctx.store.next_id("analysis")
