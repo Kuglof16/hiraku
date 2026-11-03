@@ -84,6 +84,40 @@ class ReportTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             build_report(self.ctx, {"summary": "x", "next": [{"domain": "crash", "change": "x", "reason": "y"}]}, "lead")
 
+    def test_design_coordinates_are_not_citable(self):
+        coords = {abs(x) for n in self.ctx.store.design()["nodes"] for x in n["xyz_mm"]}
+        self.assertIn(400.0, coords)  # a node coordinate of the example design, and no scalar of the records
+        with self.assertRaises(ToolError) as cm:
+            build_report(self.ctx, {"summary": "レールの節は 400 mm にある", "next": []}, "lead")
+        self.assertIn("400 mm", str(cm.exception))
+
+    def test_sensitivity_uses_the_verdicts_analysis_and_the_trusted_upstream(self):
+        from unittest import mock
+
+        from hiraku.tools.functions import trusted_analysis
+
+        s, v = self.ctx.store, self.ctx.version
+        ver = [x for x in s.records("verdict", v) if x["load_case_id"] == "R1-step100"][-1]
+        behind = s.get("analysis", s.get("comparison", ver["comparison_id"])["analysis_id"])
+        trusted_p1 = trusted_analysis(self.ctx, "P1-step100")
+        # newer ok analyses that are not behind the verdict / not matched
+        for lc_id, tool in (("R1-step100", "step_climb"), ("P1-step100", "step_climb")):
+            last = [a for a in s.records("analysis", v) if a["load_case_id"] == lc_id][-1]
+            s.add_record("analysis", dict(last, analysis_id=s.next_id("analysis"), tool=tool), design_version=v,
+                         agent="cae.strength", domain="strength")
+        seen = {}
+
+        def fake(tool, design, lc, quantity, paths, params):
+            seen.update(tool=tool, upstream=params["upstream_analyses"])
+            return []
+
+        with mock.patch("hiraku.solvers.k5_sensitivity.sensitivity", fake):
+            build_report(self.ctx, {"summary": "x", "next": [], "sensitivity": [
+                {"load_case_id": "R1-step100", "paths": ["sections.rt40x80x2.dims_mm.t"]}]}, "lead")
+        self.assertIs(seen["tool"], self.ctx.tools[behind["tool"]])
+        self.assertEqual({k: a["analysis_id"] for k, a in seen["upstream"].items()},
+                         {"P1-step100": trusted_p1["analysis_id"]})
+
     def test_sensitivity_on_request(self):
         r = build_report(self.ctx, {"summary": "感度を見た", "next": [], "sensitivity": [
             {"load_case_id": "R1-step100", "paths": ["sections.rt40x80x2.dims_mm.t"]}]}, "lead")

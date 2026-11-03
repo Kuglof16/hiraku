@@ -19,7 +19,7 @@
 #   design.support.<id>.<field>    e.g. design.support.FL.radius_mm (unit from the suffix)
 #   design.section.<key>.<dim>     section dimension in mm (dims_mm)
 #   design.var.<name>              design variable
-#   pred.<quantity>                newest prediction of that quantity in this run and version
+#   pred.<quantity>                newest prediction of that quantity for this load case in this version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
 #                                  (the load case may be named by its test id: ana.P1.front_wheel_force,
 #                                  the case of that test that feeds this one, past the limit or not)

@@ -220,6 +220,19 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                 with self.assertRaises(ScriptError):
                     resolve(self.ctx, bad, lc)
 
+    def test_pred_ref_reads_the_load_case_being_run(self):
+        p1 = self.ctx.load_case("P1-step100")
+        load, _ = self.predict_p1()
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        # a newer prediction of the same quantity for another load case does not count for P1
+        self.ctx.load_cases.append(dict(p1, load_case_id="P1-step250-beyond"))
+        other = self.ctx.store.add_record("prediction", dict(load, prediction_id=self.ctx.store.next_id("prediction"),
+                                                             load_case_id="P1-step250-beyond", value=load["value"] * 2),
+                                          design_version=self.ctx.version, agent="cae.strength", domain="strength")
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", self.ctx.load_case("P1-step250-beyond"))["value"],
+                         other["value"])
+
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")
         self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],

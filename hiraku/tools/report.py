@@ -7,8 +7,11 @@ asked, the sensitivity of the verdict's quantity to design numbers (K5, which
 runs the tool again). Then the values the run used without having checked them
 (requirements and materials whose basis says so). The author (Claude) writes
 only the summary and what to change next, and chooses which sensitivities to
-compute; every number with a unit in those sentences must be one the records
-hold, or the report is refused.
+compute; every number with a unit in those sentences must be one of the numbers
+recorded_numbers allows (the requirements, the load cases, the current design
+version's scalar numbers, the predictions, analyses, comparisons, verdicts,
+judgements and the sensitivities computed), at the precision written, or the
+report is refused.
 """
 
 from __future__ import annotations
@@ -38,9 +41,11 @@ _PERCENT_OF = {"diff_rel": 100.0, "tolerance_rel": 100.0, "share": 100.0, "margi
 _KEY_UNITS = (("_kg_m3", "kg/m^3"), ("_N_per_mm", "N/mm"), ("_MPa", "MPa"), ("_mm", "mm"), ("_kg", "kg"))
 
 
-def _quantities(node: Any) -> list[tuple[float, str]]:
-    """Every number of a record with its unit: quantities {value, unit}, fractions as %, design
-    numbers whose key names their unit. Numbers whose unit is not known are left out."""
+def _quantities(node: Any, lists: bool = True) -> list[tuple[float, str]]:
+    """Every number of a record with its unit: quantities {value, unit}, fractions as %, numbers
+    whose key names their unit (position_mm, mass_kg ...). With lists false, a list of numbers
+    under such a key (a coordinate such as position_mm [x, y, z]) is left out. Numbers whose unit
+    is not known are left out."""
     out: list[tuple[float, str]] = []
     if isinstance(node, dict):
         if _is_num(node.get("value")) and isinstance(node.get("unit"), str):
@@ -54,21 +59,24 @@ def _quantities(node: Any) -> list[tuple[float, str]]:
                     out.append((float(v), unit))
             elif isinstance(v, list) and v and all(_is_num(x) for x in v):
                 unit = next((u for suffix, u in _KEY_UNITS if k.endswith(suffix)), None)
-                out += [(float(x), unit) for x in v] if unit else []
+                out += [(float(x), unit) for x in v] if unit and lists else []
             else:
-                out += _quantities(v)
+                out += _quantities(v, lists)
     elif isinstance(node, list):
         for v in node:
-            out += _quantities(v)
+            out += _quantities(v, lists)
     return out
 
 
 def recorded_numbers(ctx: RunContext, extra: list[Record] = ()) -> list[tuple[float, str]]:
-    """Numbers a report's sentences may cite: requirements, the design, every record so far."""
+    """Numbers a report's sentences may cite: the requirements, the load cases, the design of the
+    current version (scalars only: a list such as position_mm [x, y, z] gives no number), every
+    prediction, analysis, comparison and verdict so far, the judgements, and `extra` (the
+    sensitivities computed for the report). Designs of earlier versions give none."""
     s = ctx.store
     found = _quantities(ctx.project["requirements"]) + _quantities(ctx.load_cases)
-    for v in s.project.get("design_versions") or []:
-        found += _quantities(s.design(v))
+    if ctx.version:
+        found += _quantities(s.design(ctx.version), lists=False)
     for kind in ("prediction", "analysis", "comparison", "verdict"):
         found += _quantities(s.records(kind))
     for j in s.judgements():
@@ -77,8 +85,9 @@ def recorded_numbers(ctx: RunContext, extra: list[Record] = ()) -> list[tuple[fl
 
 
 def unknown_numbers(text: str, allowed: list[tuple[float, str]]) -> list[str]:
-    """Numbers with a unit in `text` that match no recorded value of that unit at the
-    precision written (a sign may be left out: 20.7 % for a diff_rel of -0.207)."""
+    """Numbers with a unit in `text` that match no allowed value (recorded_numbers) of that unit
+    at the precision written: within half a unit of the last digit written or 0.5 % of the
+    number, whichever is larger (a sign may be left out: 20.7 % for a diff_rel of -0.207)."""
     bad = []
     for m in _NUMBER_WITH_UNIT.finditer(text):
         written, unit = m.group(1), m.group(2)
@@ -147,22 +156,31 @@ def domain_parts(ctx: RunContext) -> list[Record]:
 
 
 def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
-    """K5 for the (load case, design paths) pairs asked: the elasticity of the verdict's quantity."""
+    """K5 for the (load case, design paths) pairs asked: the elasticity of the verdict's quantity.
+    The tool is the one of the analysis behind the load case's verdict (current version); the
+    upstream results are the trusted analyses analyze itself passes (functions.trusted_analysis)."""
     from hiraku.solvers.k5_sensitivity import sensitivity  # runs the tool again, so only on request
+    from hiraku.tools.functions import trusted_analysis
+    from hiraku.tools.judge import latest_verdicts
 
     out = []
+    verdicts = latest_verdicts(ctx, ctx.version)
     for a in asked:
         lc = ctx.load_case(a["load_case_id"])
         crit = lc.get("criterion")
         if crit is None:
             raise ToolError(f"{lc['load_case_id']} には合否の基準が無いので、感度を出す量がありません")
-        ana = next((x for x in reversed(ctx.store.records("analysis", ctx.version))
-                    if x["load_case_id"] == lc["load_case_id"] and x["status"] == "ok"), None)
+        ver = verdicts.get(lc["load_case_id"])
+        cmp = ctx.store.get("comparison", ver["comparison_id"]) if ver else None
+        ana = ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None
         if ana is None or ana["tool"] not in ctx.tools:
-            raise ToolError(f"{lc['load_case_id']} の解析がまだ無いので、感度は出せません")
-        upstream = {u["load_case_id"]: x for u in ctx.upstream_of(lc["load_case_id"])
-                    for x in ctx.store.records("analysis", ctx.version)
-                    if x["load_case_id"] == u["load_case_id"] and x["status"] == "ok"}
+            raise ToolError(f"{lc['load_case_id']} には版 {ctx.version} の合否がまだ無いので、感度は出せません "
+                            f"(感度は合否の元になった解析の道具で出します)")
+        upstream = {}
+        for u in ctx.upstream_of(lc["load_case_id"]):
+            got = trusted_analysis(ctx, u["load_case_id"])
+            if got is not None:
+                upstream[u["load_case_id"]] = got
         try:
             terms = sensitivity(ctx.tools[ana["tool"]], ctx.store.design(), lc, crit["quantity"], list(a["paths"]),
                                 params={"upstream_analyses": upstream})
