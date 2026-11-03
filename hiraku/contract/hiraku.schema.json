@@ -51,6 +51,7 @@
         "Ah",
         "J/K",
         "rad/s",
+        "rad/s^2",
         "deg/s"
       ]
     },
@@ -230,6 +231,15 @@
         "flags": {
           "$ref": "#/$defs/flags"
         },
+        "default_loading": {
+          "enum": [
+            "empty",
+            "driver",
+            "two",
+            "two_cargo"
+          ],
+          "description": "Who and what is on board when a load case does not say (params.loading). Omitted: two_cargo, the vehicle default. A one-person product (a care bed) says driver: one occupant, no cargo."
+        },
         "speed_class": {
           "$ref": "#/$defs/speed_class"
         },
@@ -356,6 +366,113 @@
         "verified": {
           "type": "boolean",
           "description": "false until the value is checked against the cited source."
+        },
+        "tensile_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Minimum tensile strength."
+        },
+        "elongation_pct": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum elongation after fracture."
+        },
+        "stress_strain": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Engineering stress-strain points [strain, stress MPa] from 0 to the tensile strength; at least yield and tensile."
+        },
+        "thermal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expansion_per_K": {
+              "type": "number"
+            },
+            "conductivity_W_per_mK": {
+              "type": "number"
+            },
+            "specific_heat_J_per_kgK": {
+              "type": "number"
+            }
+          }
+        },
+        "fatigue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parent": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "FAT_MPa",
+                "m"
+              ],
+              "properties": {
+                "FAT_MPa": {
+                  "type": "number"
+                },
+                "m": {
+                  "type": "number"
+                },
+                "iiw_detail": {
+                  "type": "string"
+                },
+                "meaning": {
+                  "type": "string"
+                }
+              }
+            },
+            "welds": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "FAT_MPa",
+                  "m"
+                ],
+                "properties": {
+                  "FAT_MPa": {
+                    "type": "number"
+                  },
+                  "m": {
+                    "type": "number"
+                  },
+                  "iiw_detail": {
+                    "type": "string"
+                  },
+                  "meaning": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "N_ref": {
+              "type": "number"
+            },
+            "N_knee": {
+              "type": "number"
+            },
+            "m2": {
+              "type": "number"
+            }
+          },
+          "description": "S-N data: the parent material and named weld details (IIW FAT classes)."
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Per field name: the source (title, table, URL) and whether it was checked."
         }
       }
     },
@@ -548,6 +665,36 @@
             "type": "string"
           },
           "description": "Frame nodes that carry this part's weight (split equally unless the solver says otherwise)."
+        },
+        "system": {
+          "type": "string",
+          "description": "The functional system the part belongs to, e.g. drive, steering, brake, suspension, seat, restraint, rops, lighting, battery, control, body, cargo. Written by the code that builds the design."
+        },
+        "connects_to": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "to",
+              "via"
+            ],
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "A part id, member id, frame node id (an id in nodes, where a part is fixed at a joint of the frame), support id or '<support>.<hardpoint>'."
+              },
+              "via": {
+                "type": "string",
+                "description": "How it is joined or what passes: bolt, weld, spline, ball_joint, pin, bushing, rest, wire, hose, ..."
+              },
+              "carries": {
+                "type": "string",
+                "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              }
+            }
+          },
+          "description": "What this part is joined to, so code can follow a chain end to end (motor to driven wheels, steering wheel to knuckles)."
         }
       }
     },
@@ -1006,6 +1153,11 @@
           "type": "number",
           "minimum": 0
         },
+        "tolerance_abs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute tolerance, used where the expected value is 0 (or so small that tolerance_rel means nothing): |value - expected| <= tolerance_abs."
+        },
         "pass": {
           "type": "boolean"
         },
@@ -1112,8 +1264,10 @@
             "displacement",
             "temperature",
             "mode_shape",
-            "damage"
-          ]
+            "damage",
+            "error_estimate"
+          ],
+          "description": "error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
         },
         "label": {
           "type": "string"
@@ -1243,7 +1397,7 @@
       }
     },
     "mesh": {
-      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a shell mesh of the frame (mid-surfaces of the tube walls and plates), made by code from one design version. Analyses of that version name it by mesh_id in their fields.",
+      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a finite-element mesh made by code from one design version: shells on the mid-surfaces of tube walls and plates, solids for thick parts, or both with connections. Analyses of that version name it by mesh_id in their fields.",
       "type": "object",
       "required": [
         "mesh_id",
@@ -1251,8 +1405,7 @@
         "element_type",
         "nodes_mm",
         "elements",
-        "element_member",
-        "member_thickness_mm"
+        "element_member"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1266,9 +1419,11 @@
         },
         "element_type": {
           "enum": [
-            "shell"
+            "shell",
+            "solid",
+            "mixed"
           ],
-          "description": "Shell elements with 3 or 4 nodes on the mid-surface."
+          "description": "shell: 3 or 4 nodes on the mid-surface; solid: hexahedra (8 or 20 nodes); mixed: both, with element_kind per element and the links in connections."
         },
         "formulation": {
           "type": "string",
@@ -1290,13 +1445,25 @@
           "items": {
             "type": "array",
             "minItems": 3,
-            "maxItems": 4,
+            "maxItems": 20,
             "items": {
               "type": "integer",
               "minimum": 0
             }
           },
-          "description": "Node indices (into nodes_mm), counter-clockwise seen from the outer side."
+          "description": "Node indices (into nodes_mm). quad4 and tri3: counter-clockwise seen from the outer side. hex8: nodes 0-3 counter-clockwise seen from +zeta (the bottom face), 4-7 above them in the same order. hex20: the 8 corner nodes, then the mid-edge nodes of edges 0-1, 1-2, 2-3, 3-0, 4-5, 5-6, 6-7, 7-4, 0-4, 1-5, 2-6, 3-7."
+        },
+        "element_kind": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "quad4",
+              "tri3",
+              "hex8",
+              "hex20"
+            ]
+          },
+          "description": "For each element, its kind. Required when element_type is mixed."
         },
         "element_member": {
           "type": "array",
@@ -1311,7 +1478,7 @@
             "type": "number",
             "exclusiveMinimum": 0
           },
-          "description": "Wall thickness of each member (or part) in the mesh."
+          "description": "Wall thickness of each shell member (or part) in the mesh. Required when element_type is shell."
         },
         "notes": {
           "type": "string",
@@ -1405,8 +1572,145 @@
               "type": "string"
             }
           }
+        },
+        "connections": {
+          "type": "array",
+          "description": "Links between nodes that are not elements: rigid and interpolating ties, springs and bushes, shell-to-solid joints and tied faces.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "rbe2",
+                  "rbe3",
+                  "spring",
+                  "shell_solid",
+                  "tie"
+                ],
+                "description": "rbe2: rigid link from master to nodes; rbe3: master moves as the weighted average of nodes (adds no stiffness); spring: 6-dof spring or bush between two nodes; shell_solid: shell edge nodes tied to solid_nodes over thickness_mm; tie: faces glued to a surface that does not share nodes."
+              },
+              "master": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "rbe2: the independent node; rbe3: the reference (dependent) node."
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "weights": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "rbe3: one per node."
+              },
+              "components": {
+                "type": "string",
+                "pattern": "^[1-6]{1,6}$",
+                "description": "rbe2: tied dofs, e.g. 123456."
+              },
+              "stiffness": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 6,
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "spring: kx, ky, kz in N/mm and krx, kry, krz in N*mm/rad, along frame."
+              },
+              "frame": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "description": "spring: its three axes (unit vectors)."
+              },
+              "point_mm": {
+                "$ref": "#/$defs/vec3"
+              },
+              "solid_nodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "thickness_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "faces": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 8,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "description": "tie: the faces (4 to 8 nodes) glued to the other surface."
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "element_type": {
+                "const": "shell"
+              }
+            },
+            "required": [
+              "element_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "member_thickness_mm"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "element_type": {
+                "const": "mixed"
+              }
+            },
+            "required": [
+              "element_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "element_kind"
+            ]
+          }
+        }
+      ]
     },
     "vector": {
       "description": "An arrow to draw: a reaction, grip force, applied load, wind, inertia, or the force the body receives at a suspension pickup (joint: at is '<support id>.<hardpoint key>').",
@@ -1434,7 +1738,7 @@
         },
         "origin_mm": {
           "$ref": "#/$defs/vec3",
-          "description": "Point where the force acts (application point), in design coordinates."
+          "description": "Point where the force acts (application point), in the analysis's scene frame: design coordinates for a static analysis, the run's road frame (world axes, as scene and series) for a driving analysis."
         },
         "vector_N": {
           "$ref": "#/$defs/vec3"
@@ -1721,6 +2025,91 @@
                 "$ref": "#/$defs/quantity"
               },
               "description": "Pre-processing checks: e.g. equilibrium_residual, model_mass, design_mass."
+            }
+          }
+        },
+        "mesh_convergence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "quantity",
+            "unit",
+            "levels",
+            "verdict"
+          ],
+          "description": "The judged value solved again on finer meshes of the same design (h-refinement), made by code. The meshes beyond the analysis's mesh_id are not recorded; levels gives their size and count.",
+          "properties": {
+            "quantity": {
+              "type": "string",
+              "description": "Name of the result checked (as in results), e.g. hot-spot stress at a weld line."
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "levels": {
+              "type": "array",
+              "minItems": 2,
+              "description": "Coarse to fine.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "element_size_mm",
+                  "value"
+                ],
+                "properties": {
+                  "element_size_mm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "elements": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "mesh_id": {
+                    "type": "string",
+                    "pattern": "^mesh-[0-9]{4,}$",
+                    "description": "When this level is the analysis's recorded mesh."
+                  }
+                }
+              }
+            },
+            "change_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "|v_fine - v_next| / |v_fine| x 100 between the two finest levels."
+            },
+            "limit_pct": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Largest change_pct accepted as converged."
+            },
+            "observed_order": {
+              "type": "number",
+              "description": "Order p from three levels (Richardson)."
+            },
+            "extrapolated": {
+              "type": "number",
+              "description": "Value at zero element size from three levels (Richardson extrapolation)."
+            },
+            "error_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Estimated error of the finest value against extrapolated, in %."
+            },
+            "verdict": {
+              "enum": [
+                "converged",
+                "not_converged",
+                "singular"
+              ],
+              "description": "singular: the value keeps rising as the elements shrink (sharp corner, point load); it cannot be judged as it stands."
+            },
+            "notes": {
+              "type": "string"
             }
           }
         }
@@ -2216,7 +2605,7 @@
       }
     },
     "rule_category": {
-      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造.",
+      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造., system 系 (a product's needed systems are there and connected end to end)",
       "enum": [
         "sheet_metal",
         "fastener",
@@ -2226,7 +2615,8 @@
         "battery",
         "assembly",
         "suspension",
-        "manufacturing"
+        "manufacturing",
+        "system"
       ]
     },
     "rule_id": {
@@ -2394,7 +2784,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Ids of the parts the rule applied to."
+          "description": "Ids of the parts the rule applied to. \"design\" stands for the whole design (e.g. a system rule that finds a part missing). Every part_id in hits and not_evaluable is among targets."
         },
         "hits": {
           "type": "array",
@@ -2569,6 +2959,14 @@
             "failed"
           ]
         },
+        "driver": {
+          "enum": [
+            "scripted",
+            "agent_sdk",
+            "claude_code_plugin"
+          ],
+          "description": "What drove the run: scripted (no Claude), agent_sdk (HIRAKU's own agent loop with the user's ANTHROPIC_API_KEY), claude_code_plugin (the user's own Claude Code session with the HIRAKU plugin, under the user's own sign-in; HIRAKU does not call Claude)."
+        },
         "stop_reason": {
           "type": "string"
         },
@@ -2581,8 +2979,12 @@
           "minimum": 0
         },
         "cost_usd": {
-          "type": "number",
-          "minimum": 0
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "API cost of the run so far; null where HIRAKU cannot know it (driver claude_code_plugin: the user's own Claude Code pays)."
         },
         "requirements": {
           "type": "array",
@@ -2964,6 +3366,7 @@
                       "done",
                       "not_judged",
                       "round_limit",
+                      "red_left",
                       "cost_limit",
                       "turn_limit",
                       "user_stop",
@@ -3021,6 +3424,7 @@
                           "enum": [
                             "not_judged",
                             "round_limit",
+                            "red_left",
                             "cost_limit",
                             "turn_limit",
                             "user_stop"
@@ -3744,12 +4148,22 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
         },
         "summary": {
           "type": "string"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
         }
       }
     },
@@ -3817,9 +4231,20 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/rule_id",
+                "description": "A rule_check hit this change answers; then domain may be one the run did not pick (e.g. assembly for a seat-depth rule)."
               }
             }
           }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          },
+          "description": "Optional: where HIRAKU itself was in the way during this run."
         }
       }
     },
@@ -4135,6 +4560,47 @@
           },
           "uniqueItems": true,
           "description": "使わない規則の番号"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "what"
+      ],
+      "description": "Where the run got stuck or had to work around HIRAKU itself (not a design result): input for improving HIRAKU.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "missing_tool",
+            "missing_formula",
+            "assumed_value",
+            "unexplained_mismatch",
+            "tool_error",
+            "unclear_instruction",
+            "other"
+          ]
+        },
+        "what": {
+          "type": "string",
+          "description": "What was missing or went wrong, in one or two sentences."
+        },
+        "where": {
+          "type": "string",
+          "description": "Load case, tool or step."
+        },
+        "record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Records that show it (ana-, pred-, cmp-, cause-, tool ids)."
+        },
+        "workaround": {
+          "type": "string",
+          "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
         }
       }
     }
