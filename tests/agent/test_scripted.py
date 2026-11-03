@@ -80,7 +80,9 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertGreater(r1[0]["diff_rel"], 0.15)
         self.assertLess(r1[1]["diff_rel"], -0.15)
         causes = [cause_of(self.ctx, c) for c in r1]
-        self.assertEqual([c["resolved"] for c in causes], [False, False])
+        # the safe-side verdict settles the earlier cause of the same quantity; the safe-side cause itself stays open
+        self.assertEqual([c["resolved"] for c in causes], [True, False])
+        self.assertEqual(causes[0]["resolved_by"], r1[1]["comparison_id"])
         self.assertIn("張り出し", causes[0]["cause"])
         self.assertIn("rail_joint_stress", causes[0]["fix"])
         self.assertNotIn("safe_side", causes[0])

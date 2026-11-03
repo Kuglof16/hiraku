@@ -5,6 +5,8 @@ from unittest import mock
 from hiraku.tools import ToolError, check_shelf, rules
 from hiraku.tools.functions import analyze, compare, get_context, list_formulas, list_tools, record_cause, record_prediction
 from hiraku.tools.judge import compute_judgement
+from hiraku.tools.summary import design_summary
+from tests.tools import fakes
 from tests.tools.helpers import RunCase
 
 
@@ -308,6 +310,142 @@ class SafeSideTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError) as cm:
             record_cause(self.ctx, self.args(cmp, safe_side=True, safe_side_reason="larger is safer"))
         self.assertIn("基準は なし", str(cm.exception))
+
+
+class FakeShell(fakes.FakeTool):
+    """A stand-in frame_shell for R1: the hot spot is `factor` x the beam formula, the element
+    max_stress (a sharp corner's, not judged) `corner` x it."""
+
+    def __init__(self, factor, corner=4.0):
+        super().__init__("frame_shell", "strength", ["R1"], factor=factor)
+        self.corner = corner
+
+    def run(self, design, load_case, predictions, params):
+        self.runs.append((design, load_case, predictions, params))
+        up = params["upstream_analyses"]["P1-step100"]
+        f = next(r["value"] for r in up["results"] if r["quantity"] == "front_wheel_force")
+        summ = design_summary(design)
+        rail = summ["rail_section"]
+        sigma = f * summ["wheelbase"]["value"] / 4.0 / fakes._rect_tube_Z(rail["b"]["value"], rail["h"]["value"],
+                                                                           rail["t"]["value"])
+        return {"status": "ok", "base": "K1", "results": [
+            {"quantity": "max_hot_spot_stress", "value": sigma * self.current_factor(), "unit": "MPa", "where": "rail_L_BE"},
+            {"quantity": "max_stress", "value": sigma * self.corner, "unit": "MPa", "where": "cross_E"}],
+            "inputs_from": [up["analysis_id"]]}
+
+
+class GreenConditionsTest(RunCase, unittest.TestCase):
+    """docs/contract.md 分野が緑になる条件: no unresolved mismatch, no result beyond the criterion in the
+    judged quantity (frame_shell: max_hot_spot_stress for max_stress); HK4 holds such a domain."""
+
+    def add_shell(self, factor, corner=4.0):
+        tool = FakeShell(factor, corner)
+        self.ctx.tools["frame_shell"] = tool
+        self.ctx.specs["frame_shell"] = {**tool.spec(), "usable": True, "checks": tool.check()}
+        return tool
+
+    def beam_green(self, frame_factor=1.03):
+        """P1 matched, R1 by frame_static: a match (or, frame_factor 0.7, a safe-side mismatch) and green."""
+        ana, _, _ = self.run_p1()
+        self.F = {"value": ana["results"][1]["value"], "unit": "N"}
+        self.tools["frame_static"].factor = frame_factor
+        r1 = self.predict_r1(self.F)
+        ana2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana2["analysis_id"]})
+        if out["comparison"]["status"] == "mismatch":
+            out = record_cause(self.ctx, {"comparison_id": out["comparison"]["comparison_id"], "cause": "fixed joints",
+                                          "fix": "judge from the hand calculation", "safe_side": True,
+                                          "safe_side_reason": "fixed joints overestimate the bending"})
+        self.assertTrue(out["verdict"]["pass"])
+        self.assertEqual(self.tile()["state"], "green")
+
+    def tile(self):
+        return self.ctx.store.judgements()[0]
+
+    def shell(self, F):
+        pred = self.predict_r1(F)
+        ana = analyze(self.ctx, {"tool": "frame_shell", "load_case_id": "R1-step100", "prediction_ids": [pred["prediction_id"]]})
+        return pred, ana
+
+    def test_a_shell_result_beyond_the_limit_holds_green_back_until_judged(self):
+        self.beam_green()
+        self.add_shell(6.0)  # about 186 MPa, beyond 156.7
+        pred, ana = self.shell(self.F)
+        tile = self.tile()
+        self.assertEqual(tile["state"], "pending")
+        self.assertIn(f"解析 {ana['analysis_id']} (frame_shell) の max_hot_spot_stress", tile["summary"])
+        self.assertEqual(rules.pending(self.ctx), [("strength", ["R1-step100"])])
+        reason = rules.stop_reason(self.ctx)
+        self.assertIn("R1-step100", reason)
+        self.assertIn("基準 ≤ 156.7 MPa を超えている", reason)
+        self.assertIsNone(rules.red_left_reason(self.ctx))
+        # compared on the hot spot: the comparison names it, mismatches, and its cause is not resolved yet
+        cmp = compare(self.ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "result_quantity": "max_hot_spot_stress"})["comparison"]
+        self.assertEqual((cmp["quantity"], cmp["status"]), ("max_hot_spot_stress", "mismatch"))
+        cause = record_cause(self.ctx, {"comparison_id": cmp["comparison_id"], "cause": "the joint wall bends as a plate",
+                                        "fix": "predict the joint wall"})["cause"]
+        self.assertIn(f"原因 {cause['cause_id']} がまだ解けていない", self.tile()["summary"])
+        self.assertEqual(self.tile()["state"], "pending")
+        # a prediction that matches the shell: the cause is resolved and the verdict (a fail) turns the tile red
+        again = self.predict_r1({"value": self.F["value"] * 6.0, "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_shell", "load_case_id": "R1-step100", "prediction_ids": [again["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": again["prediction_id"], "analysis_id": ana2["analysis_id"],
+                                 "result_quantity": "max_hot_spot_stress"})
+        self.assertEqual(out["comparison"]["status"], "match")
+        self.assertFalse(out["verdict"]["pass"])
+        self.assertTrue(self.ctx.store.get("cause", cause["cause_id"])["resolved"])
+        self.assertEqual(self.tile()["state"], "red")
+        self.assertEqual(rules.pending(self.ctx), [])
+        self.assert_events_fit()
+
+    def test_a_later_result_beyond_the_limit_voids_a_safe_side_verdict(self):
+        self.beam_green(frame_factor=0.7)
+        self.assertEqual(self.ctx.store.records("verdict")[-1]["basis"], "explained_safe_side")
+        self.add_shell(6.0)
+        self.shell(self.F)
+        self.assertEqual(self.tile()["state"], "pending")
+        self.assertEqual(rules.pending(self.ctx), [("strength", ["R1-step100"])])
+
+    def test_an_unresolved_mismatch_holds_green_back(self):
+        self.beam_green()
+        self.add_shell(1.3)  # within the limit, but 30 % off the prediction
+        pred, ana = self.shell(self.F)
+        self.assertEqual(self.tile()["state"], "green")  # nothing beyond the limit
+        cmp = compare(self.ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "result_quantity": "max_hot_spot_stress"})["comparison"]
+        self.assertEqual(cmp["status"], "mismatch")
+        self.assertEqual(self.tile()["state"], "pending")
+        self.assertIn("原因がまだ書かれていない", self.tile()["summary"])
+        record_cause(self.ctx, {"comparison_id": cmp["comparison_id"], "cause": "the joint", "fix": "predict the joint"})
+        self.assertEqual(self.tile()["state"], "pending")
+        again = self.predict_r1({"value": self.F["value"] * 1.3, "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_shell", "load_case_id": "R1-step100", "prediction_ids": [again["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": again["prediction_id"], "analysis_id": ana2["analysis_id"],
+                                 "result_quantity": "max_hot_spot_stress"})
+        self.assertTrue(out["verdict"]["pass"])
+        self.assertEqual(self.tile()["state"], "green")
+        self.assertIsNone(rules.stop_reason(self.ctx))
+
+    def test_the_judged_quantity_comes_from_the_tools_spec(self):
+        from hiraku.tools.judge import judged_quantity
+
+        self.ctx.specs["plate_tool"] = {"judged_as": {"max_stress": "toe_stress"}}
+        self.assertEqual(judged_quantity(self.ctx, "plate_tool", "max_stress"), "toe_stress")
+        self.assertEqual(judged_quantity(self.ctx, "frame_shell", "max_stress"), "max_hot_spot_stress")  # no spec: the table
+        self.assertEqual(judged_quantity(self.ctx, "frame_static", "max_stress"), "max_stress")
+
+    def test_the_shells_element_max_stress_gives_no_verdict(self):
+        self.beam_green()
+        self.add_shell(1.0, corner=1.0)  # the element maximum equals the prediction, and is still not judged
+        pred, ana = self.shell(self.F)
+        out = compare(self.ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"]})
+        self.assertEqual((out["comparison"]["quantity"], out["comparison"]["status"]), ("max_stress", "match"))
+        self.assertIsNone(out["verdict"])
+        out = compare(self.ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"],
+                                 "result_quantity": "max_hot_spot_stress"})
+        self.assertEqual(out["verdict"]["quantity"], "max_stress")  # the criterion's, judged on the hot spot
+        self.assertEqual(out["verdict"]["value"], out["comparison"]["analyzed"])
 
 
 class MeshTest(RunCase, unittest.TestCase):

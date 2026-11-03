@@ -21,8 +21,8 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.judge import (OP_JA, init_judgements, make_verdict, prediction_is_unfavourable, unfavourable_side,
-                                update_judgement)
+from hiraku.tools.judge import (OP_JA, init_judgements, judged_quantity, make_verdict, prediction_is_unfavourable,
+                                unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
@@ -315,7 +315,10 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         rec = {k: rec[k] for k in ("analysis_id", "tool", "base", "design_version", "load_case_id", "prediction_ids")}
         rec.update(status="failed", results=[], error="the tool returned a record that does not fit the contract: "
                    + "; ".join(errs)[:2000])
-    return ctx.store.add_record("analysis", rec, design_version=v, agent=agent, domain=lc["domain"])
+    out = ctx.store.add_record("analysis", rec, design_version=v, agent=agent, domain=lc["domain"])
+    if out["status"] == "ok" and lc["domain"] in ctx.picked:  # a result beyond the criterion holds the tile back
+        update_judgement(ctx, lc["domain"], v)
+    return out
 
 
 # ---------------------------------------------------------------------------- comparison
@@ -341,10 +344,11 @@ def _pick_result(analysis: Record, quantity: str, criterion: Record | None = Non
     return max(hits, key=lambda r: abs(r["value"]))
 
 
-def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> None:
-    """A later match for the same load case and quantity resolves earlier causes."""
+def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str, keep: str | None = None) -> None:
+    """A later match, or an accepted safe-side verdict, for the same load case and quantity resolves
+    earlier causes (keep: a cause not to touch, the safe-side cause itself)."""
     for cause in ctx.store.records("cause"):
-        if cause["resolved"]:
+        if cause["resolved"] or cause["cause_id"] == keep:
             continue
         old = ctx.store.get("comparison", cause["comparison_id"])
         old_pred = ctx.prediction(old["prediction_id"]) if old else None
@@ -380,6 +384,11 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")
     res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"])
+    # the result a verdict may come from (docs/contract.md 判定に使う量: frame_shell judges max_stress on
+    # max_hot_spot_stress, never on its element max_stress)
+    judged = judged_quantity(ctx, ana["tool"], crit["quantity"]) if crit else None
+    for_verdict = bool(crit) and (res["quantity"] == judged
+                                  or (judged == crit["quantity"] and pred["quantity"] == crit["quantity"]))
     if res["unit"] != pred["unit"]:
         raise ToolError(
             f"単位が違うので照合できません (予測 {pred['unit']}、解析 {res['unit']})。"
@@ -398,7 +407,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         "comparison_id": ctx.store.next_id("comparison"),
         "prediction_id": pred["prediction_id"],
         "analysis_id": ana["analysis_id"],
-        "quantity": pred["quantity"],
+        "quantity": res["quantity"],  # the result actually compared (result_quantity when given)
         "predicted": {"value": predicted, "unit": pred["unit"]},
         "analyzed": {"value": analyzed, "unit": res["unit"]},
         "diff_abs": diff_abs,
@@ -411,20 +420,27 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     out: Record = {"comparison": cmp, "verdict": None}
     if cmp["status"] == "match":
         _resolve_causes(ctx, cmp, pred, agent)
-        if crit and crit["quantity"] in (pred["quantity"], res["quantity"]) and crit["limit"]["unit"] == res["unit"]:
+        if for_verdict and crit["limit"]["unit"] == res["unit"]:
             ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc)
             ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
             out["verdict"] = ver
-            if lc["domain"] in ctx.picked:
-                update_judgement(ctx, lc["domain"], v)
+    if lc["domain"] in ctx.picked:  # a mismatch holds the domain back from green too
+        update_judgement(ctx, lc["domain"], v)
     return out
 
 
-def _check_safe_side(cmp: Record, lc: Record | None) -> None:
+def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
+                     pred_quantity: str | None = None) -> None:
     """Refuse safe_side unless the load case has a criterion on this quantity and the
-    prediction is the unfavourable value (larger for <=, smaller for >=)."""
+    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
+    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
+    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
+    criterion's quantity."""
     crit = (lc or {}).get("criterion")
-    if not crit or crit["quantity"] != cmp["quantity"] or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
+    judged = judged_quantity(ctx, tool, crit["quantity"]) if crit else None
+    on_criterion = bool(crit) and (cmp["quantity"] == judged
+                                   or (judged == crit["quantity"] and pred_quantity == crit["quantity"]))
+    if not crit or not on_criterion or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
         what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
         raise ToolError(
             f"safe_side は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
@@ -468,7 +484,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
-        _check_safe_side(cmp, lc)
+        ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+        _check_safe_side(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None)
     domain = pred["domain"] if pred else None
     agent = agent or (ctx.owner(pred["load_case_id"]) if pred else "lead")
     cause = {
@@ -488,8 +505,10 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
         out["verdict"] = ver
-        if domain in ctx.picked:
-            update_judgement(ctx, domain, v)
+        # the chain of re-predictions ends in an accepted verdict: earlier causes of this quantity are settled
+        _resolve_causes(ctx, cmp, pred, agent, keep=cause["cause_id"])
+    if domain in ctx.picked:
+        update_judgement(ctx, domain, v)
     return out
 
 
