@@ -252,9 +252,26 @@ def _usable_tools(ctx: RunContext, test_id: str) -> list[str]:
     return [n for n, s in ctx.specs.items() if s.get("usable") and test_id in (s.get("tests") or [])]
 
 
+PICKS_ONLY_REASON = "分野選びまでの運転 (要件のファイルの stop_after: picks)。設計は作っていません"
+
+
+def stop_after(ctx: RunContext) -> str | None:
+    """The requirements file's stop_after (docs/contract.md 早めに終わる運転): from project.json when it
+    carries it, else from the requirements file this process started the run with."""
+    return ctx.project.get("stop_after") or (getattr(ctx, "requirements_file", None) or {}).get("stop_after")
+
+
+def picks_done(ctx: RunContext) -> bool:
+    """A picks-only run (stop_after picks) whose domains are picked: it may end there, HK4 waits for nothing."""
+    return stop_after(ctx) == "picks" and any(e["kind"] == "domains.picked" for e in ctx.store.events())
+
+
 def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     """(status, stop_reason, stop_code) of a run that ended with every picked domain judged:
-    stopped at round_limit when a tile is red and no design revision is left, else done."""
+    stopped at round_limit when a tile is red and no design revision is left, else done.
+    A picks-only run that has its picks ends done with PICKS_ONLY_REASON."""
+    if picks_done(ctx):
+        return "done", PICKS_ONLY_REASON, "done"
     reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
     if reds and ctx.version - 1 >= ctx.project["round_limit"]:
         names = "、".join(_ja(j["domain"]) for j in reds)
@@ -312,6 +329,8 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
     is only load cases this run cannot judge: unjudged_reason names them). With domain, only that
     domain's pending load cases and open mismatches (a role's own stop). A load case whose test has
     no usable tool on the shelf names make_tool (and get_tool_template)."""
+    if picks_done(ctx):
+        return None
     if not ctx.version:
         return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
                 "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
@@ -468,6 +487,8 @@ def unjudged_reason(ctx: RunContext) -> str | None:
     """Why a run that ends now ends not judged: stop_reason (or, when every held load case's reason is
     written, excused_pending), and the load cases it cannot judge (cannot_judge_text); before the first
     version, the refusal of propose_design if that is why. None when every picked domain is judged."""
+    if picks_done(ctx):
+        return None
     refused = design_refusal(ctx)
     if refused is not None:
         return f"最初の版を作れませんでした。設計役の propose_design が断られました: {refused}"

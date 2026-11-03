@@ -112,6 +112,15 @@ def lead_task(ctx) -> str:
     p = ctx.project
     picks = "、".join(f"{d['shown_name']} ({d['domain']})" for d in p["domain_picks"])
     cases = "、".join(lc["load_case_id"] for lc in p["load_cases"])
+    from hiraku.tools.rules import stop_after
+
+    if stop_after(ctx) == "picks":  # docs/contract.md 早めに終わる運転
+        return (
+            f"作りたいもの: {p['want']}\n"
+            f"今の分野: {picks}\n"
+            "この運転は分野選びまでです (要件のファイルの stop_after: picks)。分野を選び、ヒアリングを終えたら止まってください。"
+            "設計は作りません"
+        )
     return (
         f"作りたいもの: {p['want']}\n"
         f"選んだ分野: {picks}\n"

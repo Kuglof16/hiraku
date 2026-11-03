@@ -119,4 +119,6 @@ def project_fields(catalog: Catalog, req: Record, load_cases: list[Record]) -> R
         fields["speed_class"] = req["speed_class"]
     if req.get("beyond"):
         fields["beyond"] = list(req["beyond"])
+    if req.get("stop_after"):  # docs/contract.md 早めに終わる運転: processes that reopen the run read it here
+        fields["stop_after"] = req["stop_after"]
     return fields

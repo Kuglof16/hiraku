@@ -7,6 +7,7 @@ The design is the real one hiraku.designgen builds; the solvers are the test sta
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from hiraku import contract
@@ -47,6 +48,48 @@ class FirstDesignCase:
 
     def kinds(self):
         return [e["kind"] for e in self.ctx.store.events()]
+
+
+class PicksOnlyTest(unittest.TestCase):
+    """docs/contract.md 早めに終わる運転: stop_after picks ends the run after the domain picks, HK4 waits for nothing."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        path = requirements_without_design(root, ["P1", "R1"])
+        req = json.loads(path.read_text(encoding="utf-8"))
+        req["stop_after"] = "picks"
+        path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
+        self.ctx = start_run(path, root=root / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf(), intake=True)
+
+    def test_hk4_lets_the_stop_through_after_the_picks(self):
+        from hiraku.agent.prompts import lead_task
+        from hiraku.agent.runner import end_status
+
+        self.assertEqual(self.ctx.project["stop_after"], "picks")
+        self.assertEqual(contract.errors("project", self.ctx.project), [])
+        self.assertIn("domains.picked", [e["kind"] for e in self.ctx.store.events()])
+        self.assertIsNone(rules.stop_reason(self.ctx))
+        self.assertIsNone(rules.unjudged_reason(self.ctx))
+        self.assertEqual(end_status(self.ctx), ("done", rules.PICKS_ONLY_REASON, "done"))
+        self.assertIn("分野選びまで", lead_task(self.ctx))
+
+    def test_the_scripted_run_ends_after_the_picks(self):
+        self.assertEqual(run_scripted(self.ctx), "done")
+        kinds = [e["kind"] for e in self.ctx.store.events()]
+        self.assertNotIn("design.created", kinds)
+        fin = [e for e in self.ctx.store.events() if e["kind"] == "run.finished"][-1]
+        self.assertEqual((fin["data"]["status"], fin["data"]["stop_code"]), ("done", "done"))
+        self.assertIn("分野選びまで", fin["data"]["stop_reason"])
+
+    def test_without_stop_after_hk4_still_waits(self):
+        with mock.patch.object(rules, "stop_after", return_value=None):
+            self.assertIn("propose_design", rules.stop_reason(self.ctx))
+
+    def test_before_the_picks_hk4_still_waits(self):
+        with mock.patch.object(self.ctx.store, "events", return_value=[]):
+            self.assertFalse(rules.picks_done(self.ctx))
 
 
 class FirstDesignTest(FirstDesignCase, unittest.TestCase):
