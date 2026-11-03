@@ -466,8 +466,8 @@ _DRIVER_VARS = {
                                  "pinion on the rack (kit/steering.column_length), and the intermediate shaft from there "
                                  "to the pinion. Range: from 20 deg (assumption, no source: flatter, the wheel stands "
                                  "within 20 deg of upright before the chest) to 50 deg (at the default steering_x a column "
-                                 "steeper than 50.5 deg passes the dash below the tops of the front towers' rear posts, "
-                                 "which the dash posts stand on, and the layout does not close)"),
+                                 "steeper than about 50.6 deg puts the dash at or below the tops of the front towers' "
+                                 "rear posts, which the dash posts stand on, and the layout does not close)"),
     "steering_wheel_height": Var("mm", _DRIVER_V1["steering_wheel_height"],
                                  float(math.ceil(_DRIVER_V1["knee_top_above_seat"])),
                                  _DRIVER_V1["big_shoulder_above_seat"],
