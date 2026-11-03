@@ -14,6 +14,30 @@ class StageTest(RunCase, unittest.TestCase):
         self.ctx.specs["step_climb"] = dict(self.ctx.specs["step_climb"], stage=2)
         self.assertEqual(tool_stage(self.ctx, "step_climb"), 2)
 
+    def test_the_table_agrees_with_what_the_departments_declared(self):
+        # the analysis department (commit 51a639a) and the K2 team (commit 4c009c5)
+        declared = {"assembly": 0, "frame_static": 1, "step_climb": 1, "modal": 1, "drive_energy": 1, "thermal": 1,
+                    "crash": 1, "bed_static": 1, "actuator_linkage": 1, "frame_shell": 3, "frame_tubes": 3,
+                    "fatigue": 3, "kc_bench": 1, "tilt": 2, "crosswind": 2, "braking": 2, "launch": 2,
+                    "lane_change": 2, "offroad_roll": 2, "step_climb_dynamic": 2}
+        self.assertEqual(STAGE_FALLBACK, declared)
+        from hiraku import solvers
+
+        for t in solvers.builtin_tools():  # a tool's own stage (class attribute, no checks run) agrees too
+            own = getattr(t, "stage", None)
+            if own is not None and t.name in STAGE_FALLBACK:
+                self.assertEqual(own, STAGE_FALLBACK[t.name], t.name)
+
+    def test_a_specs_stage_wins_over_the_table(self):
+        name = "frame_static"
+        self.assertEqual(tool_stage(self.ctx, name), STAGE_FALLBACK[name])
+        self.ctx.specs[name] = dict(self.ctx.specs[name], stage=3)  # the checked spec
+        self.assertEqual(tool_stage(self.ctx, name), 3)
+        del self.ctx.specs[name]["stage"]
+        own = self.tools[name].spec
+        self.tools[name].spec = lambda: dict(own(), stage=0)  # the tool's own spec()
+        self.assertEqual(tool_stage(self.ctx, name), 0)
+
     def test_a_load_case_takes_the_lowest_stage_of_the_tools_that_give_its_quantity(self):
         lc = self.ctx.load_case("R1-step100")
         self.assertEqual(load_case_stage(self.ctx, lc), 1)
