@@ -259,6 +259,17 @@ class HooksTest(RunCase, unittest.TestCase):
     def hooks_reason(self):
         return [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"][-1]["text"]
 
+    def test_a_case_no_formula_predicts_does_not_hold_a_stop_even_past_its_limit(self):
+        """Run N13: R8-stress (no K0 formula) had a result past the limit; HK4 held the strength role's stop on it twice,
+        though no comparison could settle it. It is left to end not judged."""
+        from unittest import mock
+
+        held = {"R1-step100": ["解析 ana-0010 の max_stress が基準を超えている"]}
+        with mock.patch.object(rules, "unpredictable_cases", return_value={"R1-step100": "max_stress"}),                 mock.patch.object(rules, "held_cases", return_value=held):
+            self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        with mock.patch.object(rules, "held_cases", return_value=held):  # a case a formula predicts is still held
+            self.assertIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+
     def test_with_the_revisions_used_up_a_mismatch_with_its_cause_lets_the_lead_stop(self):
         """HK4 once round_limit is used up: a pending case held only by mismatches whose cause is written (no
         formula fits) lets the lead's stop through, and stop_reason carries the cause; without the cause it blocks."""

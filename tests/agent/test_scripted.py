@@ -141,6 +141,27 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
                                       "seat_height": {"value": spec["seat_height"]["value"], "unit": "mm"}})
         self.assertEqual(got, [f"steering_column_angle {lo:g} deg (下限)"])
 
+    def test_a_prediction_whose_inputs_cannot_be_read_is_skipped_and_said(self):
+        """R8-push's K0 (load_path.bar_on_posts) has no inputs on a design with nothing outside point R: the scripted
+        run skips that prediction, says why (agent.said of system), and goes on with the others."""
+        from hiraku.agent import scripted
+
+        def no_point_r(design, load_case):
+            raise ValueError("nothing outside point R")
+
+        lc = self.ctx.load_case("R1-step100")
+        bad = {"quantity": "occupant_push_deflection", "formula_id": "frame_static.rail_bending", "output": "sigma",
+               "inputs": {}, "inputs_from": no_point_r}
+        self.assertEqual(scripted._predict(self.ctx, lc, "cae.strength", [bad]), [])
+        said = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and (e.get("data") or {}).get("skipped_prediction")]
+        self.assertEqual(said[-1]["data"]["quantity"], "occupant_push_deflection")
+        self.assertIn("nothing outside point R", said[-1]["text"])
+        self.assert_events_fit()
+        # a step left with no prediction is not analysed (HK1 would refuse it); the run goes on
+        before = len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"])
+        scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
+        self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
+
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["notes"] = ["R4 は回していません"]

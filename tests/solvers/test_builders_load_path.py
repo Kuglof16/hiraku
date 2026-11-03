@@ -68,7 +68,11 @@ def predict(plan, design, lc) -> dict:
     """The plan's predictions as the scripted run makes them (inputs_from, then the K0 formula)."""
     out = {}
     for p in plan["predictions"]:
-        given = p["inputs_from"](design, lc)
+        try:
+            given = p["inputs_from"](design, lc)
+        except ValueError:  # the reader does not apply to this design (tools.plan: ReaderError, the formula refused)
+            out.setdefault("refused", []).append(p["quantity"])
+            continue
         inputs = {k: given[ref.split(".", 1)[1]] for k, ref in p["inputs"].items()}
         out[p["quantity"]] = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]["value"]
     return out
@@ -146,16 +150,22 @@ class DemoV1Test(unittest.TestCase):
         foot = results(self.runs["R7-foot-500N"])
         self.assertIn("pedal_brake", foot["free_parts"]["where"])
         self.assertEqual(results(self.runs["R8-push-725N"])["occupant_push_open"]["value"], 4.0)
+        # nothing outboard of point R on version 1: the push's hand calculation does not apply (its reader refuses)
+        self.assertEqual(predict(PLANS["R8"], V1, self.cases["R8-push-725N"]).get("refused"), ["occupant_push_deflection"])
 
     def test_plans_predict(self):
         for k, lc in self.cases.items():
-            plan = PLANS[lc["test_id"]]
+            plan = PLANS.get(k) or PLANS[lc["test_id"]]  # a load case's own plan first (R8-stress)
             self.assertEqual(plan["tool"], "load_path")
             pred = predict(plan, V1, lc)
             got = results(self.runs[k])
             self.assertEqual(pred["free_parts"], got["free_parts"]["value"], k)  # the same parts float
             q = lc["criterion"]["quantity"]
-            if q in pred and q in got:
+            exp = plan.get("expected_mismatch") or {}
+            if q in pred and q in got and exp.get("quantity") == q and exp.get("safe_side"):
+                # the plan names this mismatch as safe side: the prediction must be the unfavourable value
+                self.assertGreaterEqual(pred[q], got[q]["value"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
+            elif q in pred and q in got:
                 rel = abs(got[q]["value"] - pred[q]) / abs(pred[q])
                 self.assertLessEqual(rel, lc["tolerance_rel"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
 

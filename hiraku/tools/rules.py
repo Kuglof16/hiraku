@@ -334,7 +334,9 @@ def holding(ctx: RunContext, version: int | None = None) -> list[tuple[str, list
     out = []
     for d, lcs in pending(ctx, version):
         held = held_cases(ctx, d, version or ctx.version) if (version or ctx.version) else {}
-        left = [lc for lc in lcs if lc in held or lc not in cannot]
+        # a case no K0 formula can predict is not held even with a result beyond the criterion (run N13: R8-stress
+        # held the strength role's stop twice): no prediction, so no comparison can settle it; it ends not judged
+        left = [lc for lc in lcs if lc not in cannot]
         if left:
             out.append((d, left))
     return out
