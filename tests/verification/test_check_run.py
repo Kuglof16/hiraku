@@ -17,8 +17,7 @@ from hiraku.contract import layout
 from qa import check_run as cr
 
 RUN_ID = "20261102-203000-offroad-4w"
-FILE_KINDS = {"prediction.recorded": "prediction", "analysis.finished": "analysis",
-              "comparison.recorded": "comparison", "cause.recorded": "cause", "verdict.recorded": "verdict"}
+FILE_KINDS = layout.RECORD_OF_EVENT
 
 
 def sample_events():
@@ -779,6 +778,84 @@ class CheckRun(unittest.TestCase):
             if "prediction_ids" in d:
                 d["prediction_ids"] = ["pred-0002"]
         self.assertFlags(ev, "ids.numbering")
+
+    # --- series, knowledge rules and shell meshes ---------------------------------------
+    @staticmethod
+    def _insert(ev, after_kind, kind, data, **fields):
+        """ev with an event of kind put right after the first after_kind (same time)."""
+        at = next(n for n, e in enumerate(ev) if e["kind"] == after_kind) + 1
+        prev = ev[at - 1]
+        ev.insert(at, {"seq": 0, "ts": prev["ts"], "t": prev["t"], "run_id": RUN_ID, "kind": kind,
+                       "agent": "system", **fields, "data": data})
+        return renumber(ev)
+
+    @staticmethod
+    def _example(name):
+        return json.loads((contract.EXAMPLES_DIR / f"{name}.json").read_text(encoding="utf-8"))
+
+    def _rule_check(self, after="design.created", knowledge=False, **change):
+        rc = self._example("rule_check")
+        rc.update(targets=["battery", "seat"],
+                  hits=[dict(rc["hits"][0], part_id="battery")],
+                  not_evaluable=[dict(rc["not_evaluable"][0], part_id="seat")])
+        rc.update(change)
+        ev = self._insert(sample_events(), after, "rule_check.recorded", rc, design_version=1)
+        if knowledge:
+            ev = self._insert(ev, "design.created", "knowledge.imported", self._example("knowledge_imported"))
+        return ev
+
+    def test_rule_check(self):
+        self.assertEqual(self.rules(self._rule_check(knowledge=True)), set())
+        self.assertFlags(self._rule_check(**{"pass": True}), "rule_check.pass")
+        self.assertFlags(self._rule_check(targets=["seat"]), "rule_check.targets")  # the hit is not a target
+        both = self._rule_check()
+        by_kind(both, "rule_check.recorded")["data"]["not_evaluable"][0]["part_id"] = "battery"
+        self.assertFlags(both, "rule_check.targets")
+        self.assertFlags(self._rule_check(after="run.started"), "rule_check.design")
+        self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
+        self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
+
+    def _mesh(self, field=None, after="design.created", **change):
+        m = self._example("mesh")
+        m.update(element_member=["rail_L0", "rail_L0"], member_thickness_mm={"rail_L0": 2.3})
+        m.update(change)
+        ev = self._insert(sample_events(), after, "mesh.created", m, design_version=1)
+        if field is not None:
+            by_kind(ev, "analysis.finished")["data"]["fields"].append(
+                dict({"kind": "stress", "unit": "MPa", "surface": "max", "mesh_id": "mesh-0001"}, **field))
+        return ev
+
+    def test_mesh(self):
+        self.assertEqual(self.rules(self._mesh(field={"per_element": [80.0, 95.5]})), set())
+        self.assertEqual(self.rules(self._mesh(field={"kind": "displacement", "unit": "mm",
+                                                      "per_mesh_node": [[0.0, 0.0, 0.1]] * 6})), set())
+        self.assertFlags(self._mesh(elements=[[0, 1, 4, 3], [1, 2, 6, 4]]), "mesh.elements")  # 6 nodes: 0..5
+        self.assertFlags(self._mesh(elements=[[0, 1, 4, 4], [1, 2, 5, 4]]), "mesh.elements")
+        self.assertFlags(self._mesh(element_member=["rail_L0"]), "mesh.members")
+        self.assertFlags(self._mesh(element_member=["rail_L0", "rail_R0"]), "mesh.thickness")
+        self.assertFlags(self._mesh(after="run.started"), "mesh.design")
+        self.assertIn("mesh.nodes", self.rules(self._mesh(nodes_mm=self._example("mesh")["nodes_mm"] + [[0, 0, 0]]), "warn"))
+        ev = self._mesh()
+        self._insert(ev, "mesh.created", "mesh.created", dict(by_kind(ev, "mesh.created")["data"], mesh_id="mesh-0002"),
+                     design_version=1)
+        self.assertFlags(ev, "mesh.version")
+
+    def test_fields_on_a_mesh(self):
+        self.assertFlags(self._mesh(field={"per_element": [80.0]}), "field.mesh")  # 2 elements
+        self.assertFlags(self._mesh(field={"kind": "displacement", "unit": "mm", "per_mesh_node": [0.1] * 5}), "field.mesh")
+        self.assertFlags(self._mesh(field={"per_element": [80.0, 95.5], "mesh_id": "mesh-0002"}), "field.mesh")
+        self.assertFlags(self._mesh(field={"per_element": [80.0, 95.5]}, after="analysis.finished"), "field.mesh")
+
+    def test_series_axis_and_values(self):
+        def with_series(series):
+            ev = sample_events()
+            by_kind(ev, "analysis.finished")["data"]["series"] = [series]
+            return ev
+        self.assertEqual(self.rules(with_series({"channel": "z", "unit": "mm", "t_s": [0.0, 0.1], "values": [0.0, 1.0]})), set())
+        self.assertFlags(with_series({"channel": "z", "unit": "mm", "t_s": [0.0, 0.1, 0.2], "values": [0.0, 1.0]}),
+                         "analysis.series")
+        self.assertFlags(with_series({"channel": "camber", "unit": "deg", "values": [0.0, 1.0],
+                                      "x": {"quantity": "wheel_travel", "unit": "mm", "values": [0.0]}}), "analysis.series")
 
 
 if __name__ == "__main__":

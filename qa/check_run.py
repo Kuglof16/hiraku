@@ -11,7 +11,8 @@ their basis. What it looks at:
 - shape: project.json, every line of events.jsonl and every record file fit
   hiraku.schema.json; seq runs 0, 1, 2, ... without gaps; t and ts never go back
 - files and events: each record file has exactly one event whose data is the
-  same object, and each record event has its file (layout.py)
+  same object, and each record event has its file (layout.py; the record kinds
+  and their events are layout.RECORD_EVENT)
 - ids: unique, numbered 1..n within the run, file name = id, right v### folder
 - project: project.json keeps the run.started data, except the fields that may
   change and what project.updated re-sends after version 1 (load cases, picks,
@@ -50,7 +51,18 @@ their basis. What it looks at:
   failed); not_judged only with a picked domain still pending (as for HK4); round_limit only
   when the design revisions reached round_limit; stop_reason as in project.json
 - scene in an analysis: a road profile has one height per x along an increasing
-  x, sizes are not negative, angle_channel names a series of that analysis
+  x, sizes are not negative, angle_channel names a series of that analysis; a
+  series has as many points on its axis (t_s or x) as values
+- rule checks: made after their design version, pass exactly when nothing hits,
+  hits and parts not evaluable are among the targets (and not both), the rule came
+  in with a knowledge.imported before it (when the run has any); warning for a
+  target not in the design
+- meshes: one per design version, made after it; element node numbers within the
+  nodes, no node twice in an element, one element_member per element and a
+  thickness for each; warnings for nodes in no element and members not in the
+  design. A field that names a mesh: the mesh was created before the analysis
+  started, is of the analysis' version, and per_element / per_mesh_node have one
+  value per element / node
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
 """
@@ -72,14 +84,8 @@ from hiraku import contract
 from hiraku.contract import layout
 from hiraku.contract.protocols import HOOK_RULES
 
-# event kind -> (record kind in the schema, id field). None id = keyed differently.
-RECORD_EVENTS = {
-    "prediction.recorded": ("prediction", "prediction_id"),
-    "analysis.finished": ("analysis", "analysis_id"),
-    "comparison.recorded": ("comparison", "comparison_id"),
-    "cause.recorded": ("cause", "cause_id"),
-    "verdict.recorded": ("verdict", "verdict_id"),
-}
+# event kind -> (record kind in the schema, id field), from the contract's one map
+RECORD_EVENTS = {event: (kind, f"{kind}_id") for event, kind in layout.RECORD_OF_EVENT.items()}
 # A record is updated by emitting its event again with the same id and the whole
 # new record; the last event wins and the file equals it (layout.py). Only these
 # fields may change in an update; any other change rewrites a recorded result.
@@ -143,6 +149,7 @@ class RunChecker:
         self.started: dict[str, int] = {}
         self.project_updates: list[tuple[int, dict]] = []
         self.reports: list[tuple[int, dict]] = []
+        self.knowledge: list[tuple[int, dict]] = []
 
     # --- reporting ---------------------------------------------------------------
     def error(self, rule: str, where: str, message: str) -> None:
@@ -289,6 +296,8 @@ class RunChecker:
                 self.project_updates.append((i, data))
             elif kind == "report.written":
                 self.reports.append((i, data))
+            elif kind == "knowledge.imported":
+                self.knowledge.append((i, data))
             self._event_fields_agree(i, e, data)
 
     def _event_fields_agree(self, i: int, e: dict, data: dict) -> None:
@@ -455,7 +464,7 @@ class RunChecker:
 
     # --- links -------------------------------------------------------------------
     def version_of(self, rkind: str, rec: dict) -> int | None:
-        if rkind in ("prediction", "analysis"):
+        if rkind in ("prediction", "analysis", "rule_check", "mesh"):
             return rec.get("design_version")
         if rkind == "comparison":
             p = self.recs["prediction"].get(rec.get("prediction_id"))
@@ -647,6 +656,111 @@ class RunChecker:
                 if ch is not None and ch not in channels:
                     self.error("analysis.scene", w, f"{tag}: angle_channel {ch!r} is not a series of {aid} "
                                                     f"({', '.join(sorted(map(str, channels))) or 'none'})")
+
+    def check_series(self) -> None:
+        """A series has as many points on its axis (t_s, or x.values) as values."""
+        for aid, (i, a) in self.recs["analysis"].items():
+            for k, s in enumerate(a.get("series") or []):
+                if not isinstance(s, dict) or not isinstance(s.get("values"), list):
+                    continue
+                axis = s.get("t_s") if "t_s" in s else (s.get("x") or {}).get("values")
+                if isinstance(axis, list) and len(axis) != len(s["values"]):
+                    self.error("analysis.series", self.where_of[i], f"{aid} series[{k}] {s.get('channel')}: "
+                                                                   f"{len(s['values'])} values on {len(axis)} axis points")
+
+    def check_rule_checks(self) -> None:
+        """A knowledge rule checked on one version's parts: the version was made before it,
+        pass exactly when nothing hits, hits and parts it could not evaluate are among its
+        targets, and the rule came in with a knowledge.imported before it."""
+        for rid, (i, rc) in self.recs["rule_check"].items():
+            w = self.where_of[i]
+            v = rc.get("design_version")
+            if v not in self.designs or self.designs[v][0] > i:
+                self.error("rule_check.design", w, f"{rid} is for design version {v}, not created before it")
+            hits = [h.get("part_id") for h in rc.get("hits") or [] if isinstance(h, dict)]
+            if bool(rc.get("pass")) == bool(hits):
+                self.error("rule_check.pass", w, f"{rid} pass={rc.get('pass')} with {len(hits)} hit(s) "
+                                                 f"(pass exactly when nothing hits)")
+            targets = set(rc.get("targets") or [])
+            missing = [m.get("part_id") for m in rc.get("not_evaluable") or [] if isinstance(m, dict)]
+            for what, ids in (("hit", hits), ("not evaluable", missing)):
+                for p in ids:
+                    if p not in targets:
+                        self.error("rule_check.targets", w, f"{rid}: {what} part {p} is not among its targets")
+            for p in sorted(set(hits) & set(missing)):
+                self.error("rule_check.targets", w, f"{rid}: {p} both hits and could not be evaluated")
+            ids = self._design_ids(v)
+            for p in sorted(targets):
+                if not self._names_a_thing(p, ids):
+                    self.warn("rule_check.targets", w, f"{rid}: target {p} is not in design v{v}")
+            if self.knowledge:
+                bundles: dict[str, set] = {}
+                for j, k in self.knowledge:
+                    if j < i:  # per doc_id the last bundle so far
+                        bundles[str((k.get("doc") or {}).get("doc_id"))] = {r.get("rule_id") for r in k.get("rules") or []
+                                                                           if isinstance(r, dict)}
+                if rc.get("rule_id") not in set().union(*bundles.values()):
+                    self.error("rule_check.rule", w, f"{rid} checks rule {rc.get('rule_id')}, which no "
+                                                     f"knowledge.imported before it brought in")
+
+    def check_meshes(self) -> None:
+        """A version's shell mesh (one per version): elements name nodes it has, each element
+        has its member, each member its thickness; and the fields that name a mesh give one
+        value per element or node of a mesh of their version, created before the analysis ran."""
+        per_version: dict[int, str] = {}
+        for mid, (i, m) in self.recs["mesh"].items():
+            w = self.where_of[i]
+            v = m.get("design_version")
+            if v not in self.designs or self.designs[v][0] > i:
+                self.error("mesh.design", w, f"{mid} is for design version {v}, not created before it")
+            if v in per_version:
+                self.error("mesh.version", w, f"{mid} is a second mesh of version {v} (after {per_version[v]}; "
+                                              f"analyze makes one per version)")
+            per_version.setdefault(v, mid)
+            nodes, elements = m.get("nodes_mm") or [], m.get("elements") or []
+            used = set()
+            for k, el in enumerate(elements):
+                if not isinstance(el, list):
+                    continue
+                bad = [n for n in el if not isinstance(n, int) or not 0 <= n < len(nodes)]
+                if bad:
+                    self.error("mesh.elements", w, f"{mid} element {k} names nodes {bad} of {len(nodes)} (0..{len(nodes) - 1})")
+                elif len(set(el)) != len(el):
+                    self.error("mesh.elements", w, f"{mid} element {k} uses a node twice: {el}")
+                used.update(n for n in el if isinstance(n, int))
+            unused = len(nodes) - len(used & set(range(len(nodes))))
+            if unused:
+                self.warn("mesh.nodes", w, f"{mid}: {unused} of {len(nodes)} nodes belong to no element")
+            members = m.get("element_member") or []
+            if len(members) != len(elements):
+                self.error("mesh.members", w, f"{mid}: {len(members)} element_member for {len(elements)} elements")
+            thick = m.get("member_thickness_mm") or {}
+            no_t = sorted({str(x) for x in members if x not in thick})
+            if no_t:
+                self.error("mesh.thickness", w, f"{mid}: no member_thickness_mm for {', '.join(no_t[:5])}")
+            ids = self._design_ids(v)
+            strangers = sorted({str(x) for x in members if not self._names_a_thing(x, ids)})
+            if strangers:
+                self.warn("mesh.members", w, f"{mid}: {', '.join(strangers[:5])} not in design v{v}")
+        for aid, (i, a) in self.recs["analysis"].items():
+            w, ran = self.where_of[i], self.started.get(aid, i)
+            for k, f in enumerate(a.get("fields") or []):
+                if not isinstance(f, dict) or "mesh_id" not in f:
+                    continue
+                tag, mid = f"{aid} fields[{k}] {f.get('kind')}", f.get("mesh_id")
+                rec = self.recs["mesh"].get(mid)
+                if rec is None:
+                    self.error("field.mesh", w, f"{tag} names {mid}, which was never created")
+                    continue
+                if rec[0] > ran:
+                    self.error("field.mesh", w, f"{tag} names {mid}, created after the analysis started ({self.where_of[rec[0]]})")
+                m = rec[1]
+                if m.get("design_version") != a.get("design_version"):
+                    self.error("field.mesh", w, f"{tag} names {mid} of version {m.get('design_version')} "
+                                                f"in an analysis of version {a.get('design_version')}")
+                for key, n in (("per_element", len(m.get("elements") or [])), ("per_mesh_node", len(m.get("nodes_mm") or []))):
+                    if isinstance(f.get(key), list) and len(f[key]) != n:
+                        self.error("field.mesh", w, f"{tag}: {len(f[key])} {key} values for {n} in {mid}")
 
     def check_tool_specs(self) -> None:
         for name, specs in self.tool_checks.items():
@@ -1193,6 +1307,9 @@ class RunChecker:
         self.check_tool_specs()
         self.check_assembly()
         self.check_scene()
+        self.check_series()
+        self.check_rule_checks()
+        self.check_meshes()
         self.check_comparisons()
         self.check_causes()
         self.check_verdicts()
