@@ -115,9 +115,27 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v5(self):
+    def test_version_mark_is_v6(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v5</div>', viewer)
+        self.assertIn('<div id="ver">v6</div>', viewer)
+        self.assertIn("版は v6", (PETS / "README.md").read_text(encoding="utf-8"))
+
+    def test_states_and_buttons(self):
+        states = re.search(r"const STATES = \[([^\]]+)\]", PET3D).group(1)
+        self.assertEqual(re.findall(r'"(\w+)"', states), ["idle", "report", "pass", "mismatch", "working", "run"])
+        viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
+        # the working state is called 作業中 (the internal name stays "working")
+        self.assertIn('<button data-v="working">作業中</button>', viewer)
+        self.assertIn('<button data-v="run">走る</button>', viewer)
+        self.assertNotIn("解析中", viewer)
+        self.assertNotIn("解析中", PET3D)
+        readme = (PETS / "README.md").read_text(encoding="utf-8")
+        self.assertNotIn("解析中", readme)
+        self.assertIn("作業中", readme)
+        self.assertIn("`run`", readme)
+        # run across: an option of create and a URL argument of the viewer
+        self.assertIn('opts.run === "across"', PET3D)
+        self.assertIn('p.set("run", "across")', viewer)
 
     def test_viewer_turns_freely(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
@@ -139,7 +157,7 @@ class Roles(unittest.TestCase):
         for rid, kind, _, _ in bodies:
             self.assertRegex(block, r'"%s": body\w+,' % re.escape(kind), rid)
         quantity = {b[0]: b[2] for b in bodies}
-        self.assertEqual(quantity["cae.aero"], "速さ (相対)")
+        self.assertEqual(quantity["cae.aero"], "圧力 (相対)")
         self.assertEqual(quantity["cae.crash"], "衝撃の応力 (相対)")
         self.assertIsNone(quantity["packager"])
         self.assertIsNone(quantity["designer"])
@@ -160,7 +178,7 @@ class Roles(unittest.TestCase):
         for rid, kind, q, _ in bodies:
             self.assertRegex(readme, r"`%s`[^\n]*`%s`[^\n]*%s" % (re.escape(rid), re.escape(kind), re.escape(q or "なし")), rid)
 
-    def test_v5_fixes_in_the_source(self):
+    def test_v6_fixes_in_the_source(self):
         def fn(name):
             body = PET3D[PET3D.index("function %s(ctx" % name):]
             return body[: body.index("\n  }\n")]
@@ -177,17 +195,30 @@ class Roles(unittest.TestCase):
         self.assertIn("cadMaterial(", des)
         for word in ("addFe(", "contourMaterial(", "addDots(", "ConeGeometry", "dimension"):
             self.assertNotIn(word, des)
-        # packager: no contour, no flow lines, no node dots; seams, not an exploded gap
+        # packager: no contour, no flow lines, no node dots; seams, not an exploded gap;
+        # v6: puzzle pieces with tabs, no screws
         pkg = fn("bodyPackager")
-        for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots("):
+        for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots(", "screw"):
             self.assertNotIn(word, pkg)
         self.assertRegex(pkg, r"SEAM = 0\.00\d")
+        self.assertIn("tabPts(", pkg)
+        self.assertIn("ExtrudeGeometry", pkg)
+        # aero: the pressure coefficient (Bernoulli), not the speed
+        aero = fn("bodyAero")
+        self.assertIn("1 - (1.5 * s) ** 2", aero)
+        # nvh: slower, the undeformed lines without a depth test (no blinking)
+        nvh = fn("bodyNvh")
+        self.assertIn("depthTest: false", nvh)
+        self.assertNotIn("opacity: 0.86", nvh)
+        freqs = [float(x) for x in re.findall(r"f: ([0-9.]+)", nvh)]
+        self.assertTrue(freqs and max(freqs) <= 0.6, freqs)
+        self.assertNotIn("ramp(t)", nvh)
         # handling: a multibody model (joints, springs); not the v3 blobs and
         # not the v4 friction circles / lane change track
         han = fn("bodyHandling")
         for word in ("SphereGeometry(0.11", "TorusGeometry(1, 0.06", "pathOk", "cones", "flowMaterial("):
             self.assertNotIn(word, han)
-        for word in ("lowArm", "upArm", "knuckle", "spring", "damper", "SphereGeometry(", "triad"):
+        for word in ("lowArm", "upArm", "knuckle", "spring", "damper", "SphereGeometry(", "triad", "MeshPhysicalMaterial", "metalness"):
             self.assertIn(word, han)
         # strength: the hole and the Kirsch field; not the v2 limb loads
         st = fn("bodyStrength")
@@ -278,7 +309,7 @@ class Viewer(unittest.TestCase):
                 self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none")
 
                 # the legend title is the quantity of the role
-                for role, title in (("cae.aero", "速さ (相対)"), ("cae.crash", "衝撃の応力 (相対)"), ("cae.thermal", "温度 (相対)"),
+                for role, title in (("cae.aero", "圧力 (相対)"), ("cae.crash", "衝撃の応力 (相対)"), ("cae.thermal", "温度 (相対)"),
                                     ("cae.powertrain", "燃焼の温度 (相対)"), ("lead", "相対の応力 (自重と手足)"),
                                     ("cae.handling", "ばねの力 (相対)")):
                     page.goto(url.replace("cae.strength", role))
@@ -382,7 +413,7 @@ class Viewer(unittest.TestCase):
             const h = height(a);
             const states = {};
             let same = true;
-            for (const [t, s] of [[1.37, 'working'], [2.9, 'working'], [1.2, 'mismatch'], [0.45, 'pass']]) {
+            for (const [t, s] of [[1.37, 'working'], [2.9, 'working'], [1.2, 'mismatch'], [0.45, 'pass'], [0.2, 'run'], [0.47, 'run']]) {
               a.update(t, s); b.update(0.1, 'idle'); b.update(t, s);
               same = same && JSON.stringify(snap(a)) === JSON.stringify(snap(b));
               const c = a.contour(t, s);
@@ -430,9 +461,10 @@ class Viewer(unittest.TestCase):
                 self.assertGreater(c["info"], 0, (rid, k))
 
 
-    def test_v5_bodies(self):
-        # designer without contour, packager as one unit, handling as a
-        # mechanism, strength concentrated at the hole edge, arrows outside
+    def test_v6_bodies(self):
+        # designer without contour, packager as a puzzle, aero pressure at the
+        # nose, handling as a metal mechanism, strength concentrated at the
+        # hole edge, arrows outside
         from playwright.sync_api import sync_playwright
 
         page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
@@ -452,17 +484,44 @@ class Viewer(unittest.TestCase):
           const dc = de.contour(1.0, 'working');
           out.designer = { hk: contourMats(de), cad, quantity: dc.quantity, hasMax: 'max' in dc, info: dc.info.length };
           de.dispose();
-          // packager: no contour, parts stacked with thin seams
+          // packager: no contour; a puzzle of 4 pieces that lock into each other
           const pk = HP.create(THREE, { role: 'packager' });
           pk.update(1.2, 'idle');
           pk.group.updateMatrixWorld(true);
-          const boxes = [];
-          pk.group.traverse((o) => { if (o.userData.body) boxes.push(new THREE.Box3().setFromObject(o)); });
-          boxes.sort((a, b) => a.min.y - b.min.y);
-          const gaps = boxes.slice(1).map((b, i) => b.min.y - boxes[i].max.y);
+          const boxes = {};
+          // in body coordinates (the body group, centre of the body at the origin)
+          pk.group.traverse((o) => {
+            if (!o.userData.body) return;
+            o.geometry.computeBoundingBox();
+            boxes[o.userData.piece] = o.geometry.boundingBox.clone().translate(o.parent.position);
+          });
+          const all = new THREE.Box3();
+          Object.values(boxes).forEach((b) => all.union(b));
           const c = pk.contour(1.0, 'working');
-          out.packager = { hk: contourMats(pk), body: boxes.length, gaps, quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts };
+          // working: the lower left piece slides in along z only
+          const ll = () => { let p = null; pk.group.traverse((o) => { if (o.userData.piece === 'lower-left') p = o.parent.position.clone(); }); return p; };
+          pk.update(0.0, 'working'); const out0 = ll();
+          pk.update(3.0, 'working'); const in3 = ll();
+          out.packager = { hk: contourMats(pk), boxes: Object.fromEntries(Object.entries(boxes).map(([k, b]) => [k, [b.min.x, b.min.y, b.max.x, b.max.y, b.min.z, b.max.z]])),
+                           size: [all.max.x - all.min.x, all.max.y - all.min.y], quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts,
+                           out0: out0.toArray(), in3: in3.toArray() };
           pk.dispose();
+          // aero: the largest pressure is at the stagnation point on the nose
+          const ae = HP.create(THREE, { role: 'cae.aero' });
+          const af = ae.field;
+          const aArg = af.settled.indexOf(Math.max(...af.settled));
+          const xs = af.nodes.map((q) => q[0]);
+          const ac = ae.contour(1.0, 'idle');
+          // shoulder: the widest section (flow coordinate x = 0)
+          const shoulder = Math.max(...af.settled.filter((v, i) => Math.abs(xs[i]) < 0.08));
+          out.aero = { arg: aArg, nose: af.nose, noseX: af.nodes[af.nose][0], maxX: Math.max(...xs), max: ac.max, min: ac.min, quantity: ac.quantity, shoulder };
+          ae.dispose();
+          // handling: the chassis is metal
+          const hm = HP.create(THREE, { role: 'cae.handling' });
+          let metal = null;
+          hm.group.traverse((o) => { if (o.userData.metal) metal = { metalness: o.material.metalness, roughness: o.material.roughness, body: !!o.userData.body }; });
+          out.metal = metal;
+          hm.dispose();
           // handling: ball joints, tyres on the ground, inner wheel lifts on mismatch
           const hd = HP.create(THREE, { role: 'cae.handling' });
           const res = {};
@@ -529,11 +588,35 @@ class Viewer(unittest.TestCase):
         self.assertEqual(pk["hk"], 0, "no contour or flow material on the packager")
         self.assertIsNone(pk["quantity"])
         self.assertFalse(pk["hasMax"])
-        self.assertEqual(pk["body"], 3)
-        for g in pk["gaps"]:
-            # the parts sit on each other: a seam, no exploded gap
-            self.assertLess(abs(g), 0.012, pk["gaps"])
+        b = pk["boxes"]
+        self.assertEqual(sorted(b), ["lower-left", "lower-right", "upper-left", "upper-right"])
+        # one unit about as big as the other bodies
+        self.assertAlmostEqual(pk["size"][0], 1.92, delta=0.03)
+        self.assertAlmostEqual(pk["size"][1], 1.79, delta=0.03)
+        # the tabs reach into the neighbours (interlocked): the box of a piece
+        # with a head crosses the cut by more than 0.2
+        self.assertGreater(b["upper-left"][2], 0.2)      # head into upper-right
+        self.assertLess(b["lower-right"][0], -0.2)       # head into lower-left
+        self.assertLess(b["upper-left"][1], -0.2 - 0.2)  # head into lower-left
+        self.assertLess(b["upper-right"][1], -0.2 - 0.2) # head into lower-right
         self.assertIn(len({p["color"] for p in pk["parts"]}), (2, 3))
+        # working: the piece slides along z only, and is seated at t = 3
+        self.assertAlmostEqual(pk["out0"][0], 0, places=6)
+        self.assertAlmostEqual(pk["out0"][1], 0, places=6)
+        self.assertGreater(pk["out0"][2], 0.4)
+        self.assertEqual(pk["in3"], [0, 0, 0])
+        ae = res["aero"]
+        self.assertEqual(ae["quantity"], "圧力 (相対)")
+        self.assertEqual(ae["arg"], ae["nose"], "largest pressure at the stagnation point")
+        self.assertAlmostEqual(ae["noseX"], ae["maxX"], places=6, msg="the nose is the front tip")
+        self.assertAlmostEqual(ae["max"], 1.0, places=6)
+        self.assertLess(ae["shoulder"], 0.15, "low pressure at the shoulder")
+        self.assertLess(ae["min"], 0.05)
+        m = res["metal"]
+        self.assertIsNotNone(m)
+        self.assertTrue(m["body"])
+        self.assertGreaterEqual(m["metalness"], 0.8)
+        self.assertLessEqual(m["roughness"], 0.35)
         hd = res["handling"]
         for s, v in hd.items():
             self.assertEqual(v["balls"], 8, s)
@@ -555,6 +638,90 @@ class Viewer(unittest.TestCase):
             # every point of an arrow is outside the body: the side wall lies between it and the middle
             self.assertGreaterEqual(r["hits"], 1, r)
             self.assertGreater(r["first"], 0.02, r)
+
+    def test_run(self):
+        # every pet runs: the feet swing in turn, the body bounces and leans
+        # forward; across moves it to the right; handling turns its wheels
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          const T = 0.6;
+          const feet = (p) => {
+            const z = [];
+            p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => {
+              const g = o.geometry;
+              if (o.isMesh && g && g.type === 'SphereGeometry' && g.parameters.radius === 1 && g.parameters.widthSegments === 8)
+                z.push(o.getWorldPosition(new THREE.Vector3()).toArray());
+            });
+            return z;
+          };
+          const tip = (p) => {
+            // the antenna tip: the icosahedron of radius 0.15
+            let v = null;
+            p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => { if (o.isMesh && o.geometry.type === 'IcosahedronGeometry' && o.geometry.parameters.radius === 0.15) v = o.getWorldPosition(new THREE.Vector3()).toArray(); });
+            return v;
+          };
+          const out = {};
+          for (const r of HP.ROLES) {
+            const p = HP.create(THREE, { role: r.id });
+            p.update(0, 'idle'); const idleTip = tip(p);
+            p.update(0, 'run'); const f0 = feet(p), tip0 = tip(p);
+            p.update(T / 4, 'run'); const f1 = feet(p), tip1 = tip(p);
+            p.update(3 * T / 4, 'run'); const f3 = feet(p);
+            p.update(T / 4 + 0.3, 'run', null, { across: true }); const a1 = feet(p);
+            p.update(T / 4 + 1.5, 'run', null, { across: true }); const a2 = feet(p);
+            out[r.id] = { f0, f1, f3, idleTip, tip0, tip1, a1, a2 };
+            p.dispose();
+          }
+          const q = HP.create(THREE, { role: 'packager', run: 'across' });
+          q.update(0.3, 'run'); const b1 = feet(q);
+          q.update(1.5, 'run'); const b2 = feet(q);
+          q.dispose();
+          // handling: the wheels turn
+          const h = HP.create(THREE, { role: 'cae.handling' });
+          const rot = () => { const a = []; h.group.updateMatrixWorld(true); h.group.traverse((o) => { if (o.isMesh && o.geometry.type === 'CylinderGeometry' && Math.abs(o.geometry.parameters.radiusTop - 0.39) < 1e-9) a.push(o.getWorldQuaternion(new THREE.Quaternion()).toArray()); }); return a; };
+          h.update(0.1, 'idle'); const w0 = rot();
+          h.update(0.1, 'run'); const w1 = rot();
+          h.dispose();
+          return { out, opt: [b1, b2], wheels: [w0, w1], states: HP.STATES };
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                res = page.evaluate(js)
+            finally:
+                browser.close()
+        self.assertIn("run", res["states"])
+        for rid, v in res["out"].items():
+            self.assertEqual(len(v["f0"]), 2, rid)
+            # t = 0: legs straight down, feet level with each other
+            self.assertAlmostEqual(v["f0"][0][2], v["f0"][1][2], places=5, msg=rid)
+            # a quarter stride: one foot forward, one back; half a stride later the other way
+            d1 = v["f1"][0][2] - v["f1"][1][2]
+            d3 = v["f3"][0][2] - v["f3"][1][2]
+            self.assertGreater(abs(d1), 0.4, rid)
+            self.assertLess(d1 * d3, 0, rid)
+            # the body is up in the air with the legs spread
+            self.assertGreater(v["tip1"][1] - v["tip0"][1], 0.05, rid)
+            # leaning forward (+z) compared with standing
+            self.assertGreater(v["tip0"][2] - v["idleTip"][2], 0.15, rid)
+            # in place: no sideways move; across: moves right 2.4 per second
+            # (compared two strides apart, 1.2 s)
+            self.assertAlmostEqual(v["tip0"][0], v["idleTip"][0], delta=0.05, msg=rid)
+            mid = lambda f: (f[0][0] + f[1][0]) / 2
+            self.assertAlmostEqual(mid(v["a2"]) - mid(v["a1"]), 2.88, delta=0.01, msg=rid)
+        b1, b2 = res["opt"]
+        self.assertAlmostEqual((b2[0][0] + b2[1][0]) / 2 - (b1[0][0] + b1[1][0]) / 2, 2.88, delta=0.01, msg="opts.run = across")
+        w0, w1 = res["wheels"]
+        self.assertEqual(len(w0), 2)
+        self.assertNotEqual(w0, w1, "the wheels turn when running")
 
     def test_free_rotation_and_url(self):
         # drag in the one-pet view up to a view from straight above, then from

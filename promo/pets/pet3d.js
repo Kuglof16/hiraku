@@ -22,6 +22,10 @@
 // handling is a multibody model (chassis, wishbones, knuckles, wheels,
 // joints, spring-dampers); strength is a plate with a hole pulled from both
 // sides (stress concentration at the hole edge).
+// v6: nvh moves slower and smoother and its undeformed lines no longer blink;
+// aero shows the pressure (stagnation at the nose = high); packager is a 3D
+// puzzle of interlocking pieces; the handling chassis is metal; a new state
+// "run" (in place, or across with opts.run = "across").
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -67,17 +71,20 @@
   const BODIES = {
     "lead": { kind: "fe-sphere", quantity: "相対の応力 (自重と手足)", analysis: "三角の要素の丸い体 (v2 の体)。節点の荷重から計算した応力" },
     "designer": { kind: "cad-model", quantity: null, analysis: "CAD のモデル。落ち着いた単色の面、フィレットの面の境の稜線、平らな面の薄いパラメータの線" },
-    "packager": { kind: "assembly", quantity: null, analysis: "ひとまとまりの組み立て品。台・ケース・ふたがぴったり合わさり、色は 2 色、ふたのねじ 4 本" },
-    "cae.handling": { kind: "multibody", quantity: "ばねの力 (相対)", analysis: "マルチボディの機構。車体の剛体に上下のアーム・ナックル・車輪がジョイントでつながり、ばねとダンパー。重心の座標の軸と横加速度の矢印" },
+    "packager": { kind: "assembly", quantity: null, analysis: "ひとまとまりの 3D のパズル。凹凸で噛み合うピース 4 つがぴったりはまり、色は 2 色" },
+    "cae.handling": { kind: "multibody", quantity: "ばねの力 (相対)", analysis: "マルチボディの機構。金属の車体の剛体に上下のアーム・ナックル・車輪がジョイントでつながり、ばねとダンパー。重心の座標の軸と横加速度の矢印" },
     "cae.powertrain": { kind: "combustion", quantity: "燃焼の温度 (相対)", analysis: "エンジンの燃焼室。点火プラグから広がる火炎面の温度、下はピストン、脇に電池のセル" },
-    "cae.aero": { kind: "flow", quantity: "速さ (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の速度)" },
+    "cae.aero": { kind: "flow", quantity: "圧力 (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の圧力。先端のよどみ点が高く、肩が低い)" },
     "cae.crash": { kind: "impact-wave", quantity: "衝撃の応力 (相対)", analysis: "前の面に当たった所から広がる応力の波、小さなへこみ、衝撃の輪、減速度の線" },
     "cae.strength": { kind: "stress-concentration", quantity: "応力集中 (公称からの上がり分)", analysis: "穴のある板の体を両側から引っぱる。穴の上下のふちに応力が集中する" },
     "cae.nvh": { kind: "mode-shape", quantity: "変位 (相対)", analysis: "固有モードで揺れる網目と、変形前の形の薄い線" },
     "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
   };
 
-  const STATES = ["idle", "report", "pass", "mismatch", "working"];
+  const STATES = ["idle", "report", "pass", "mismatch", "working", "run"];
+  // run: one stride (each leg forward and back once) in RUN.period seconds;
+  // "across" crosses RUN.span pet units to the right in RUN.cross seconds
+  const RUN = { period: 0.6, swing: 0.8, bob: 0.09, lean: 0.17, span: 7.2, cross: 3.0, yaw: 0.75 };
 
   // icosphere subdivision per mesh level for the stress body (three.js
   // IcosahedronGeometry detail)
@@ -1041,7 +1048,17 @@
   // Speed on the surface: U sin(theta) (theta = angle between the surface
   // normal and the flow) times a blockage factor 1 + 0.5 (r / r_max)^2, so it
   // is 1.5 U at the widest section as on a sphere and recovers toward U on
-  // the tail. Normalised by 1.5 U (the free stream is 0.67).
+  // the tail.
+  // v6 colours the pressure, not the speed: Cp = 1 - (V / U)^2 (Bernoulli),
+  // 1 at the stagnation point on the nose, -1.25 at the shoulder (1.5 U).
+  // Behind the widest section the pressure recovers only partly (a real
+  // flow loses energy in the boundary layer), so Cp is capped at CP_REAR
+  // there (no second red spot on the tail). Shown relative:
+  // v = (Cp - CP_MIN) / (1 - CP_MIN), 1.0 at the nose, 0 at the shoulder,
+  // 0.56 in the free stream (the capped tail, 0.59, sits near it). Mismatch: separated wake behind the shoulder,
+  // Cp = -0.45 + 0.08 sin(...) (a low, flat base pressure).
+  const CP_MIN = -1.25, CP_REAR = 0.08;
+  const cpRel = (cp) => (cp - CP_MIN) / (1 - CP_MIN);
   function bodyAero(ctx) {
     const { THREE } = ctx;
     // built in flow coordinates (flow axis z, nose at +z); toBody turns the
@@ -1069,10 +1086,16 @@
     core.frustumCulled = false;
     group.add(core);
 
+    // pressure from the normalised speed s = V / 1.5 U at flow coordinate z
+    const press = (s, z) => {
+      const cp = 1 - (1.5 * s) ** 2;
+      return cpRel(z < 0 ? Math.min(cp, CP_REAR) : cp);
+    };
     // flow axis coordinate of a body point = body x
-    const baseVals = R.pts.map((p) => speed(p.x));
-    // separated wake behind the shoulder (mismatch): low, uneven speed
-    const sepVals = (t) => R.pts.map((p, i) => (p.x < -0.05 ? 0.12 + 0.07 * (0.5 + 0.5 * Math.sin(3 * Math.atan2(p.y, -p.z) + 2.4 * t + 4 * p.x)) : baseVals[i]));
+    const baseVals = R.pts.map((p) => press(speed(p.x), p.x));
+    const noseIdx = R.pts.reduce((b, p, i) => (p.x > R.pts[b].x ? i : b), 0);
+    // separated wake behind the shoulder (mismatch): low, flat base pressure
+    const sepVals = (t) => R.pts.map((p, i) => (p.x < -0.05 ? cpRel(-0.45 + 0.08 * Math.sin(3 * Math.atan2(p.y, -p.z) + 2.4 * t + 4 * p.x)) : baseVals[i]));
 
     // surface streamlines (meridians, half a step off the element edges)
     const paths = [];
@@ -1085,7 +1108,7 @@
         const p = mapF(z, phi);
         const c = new THREE.Vector3(0, 0, z >= 0 ? 0 : z);
         pts.push(toBody(p.clone().add(p.clone().sub(c).normalize().multiplyScalar(0.025))));
-        vals.push(speed(z));
+        vals.push(press(speed(z), z));
       }
       paths.push({ pts, vals, wake: (x) => (x < -0.05 ? 1 : 0), s0: k * 0.37 });
     }
@@ -1115,7 +1138,7 @@
       for (let z = 1.55; z >= -1.85; z -= 0.1) {
         const rho = rhoAt(rinf, z);
         pts.push(toBody(new THREE.Vector3(rho * Math.cos(phi), rho * Math.sin(phi) * RY, z)));
-        vals.push(flowSpeed(rho, z));
+        vals.push(press(flowSpeed(rho, z), z));
       }
       paths.push({ pts, vals, wake: (x) => (x < -0.4 ? 1 : 0), s0: k * 0.53 });
     });
@@ -1126,19 +1149,20 @@
     group.add(lines);
 
     const top = R.pts.reduce((b, p) => (p.y > b.y ? p : b), R.pts[0]);
-    const spd = { idle: 0.7, report: 0.7, pass: 0.9, mismatch: 0.6, working: 2.0 };
+    const spd = { idle: 0.7, report: 0.7, pass: 0.9, mismatch: 0.6, working: 2.0, run: 1.4 };
     const vals = (t, s) => (s === "mismatch" ? sepVals(t) : baseVals);
     return {
       group, surface: (d) => fe.surface(d), top: top.clone(),
       counts: { nodes: fe.nodeCount, elements: fe.elemCount },
-      caption: `流線 ${paths.length} 本 · 面の節点 ${fe.nodeCount}`,
+      caption: `流線 ${paths.length} 本 · 面の節点 ${fe.nodeCount} · 色 = 圧力`,
+      field: { nodes: R.pts.map((p) => [p.x, p.y, p.z]), settled: baseVals, nose: noseIdx, cpMin: CP_MIN, cpRear: CP_REAR },
       update(t, s) {
         fe.setValues(vals(t, s));
-        flowMat.userData.flow.uSpeed.value = spd[s];
+        flowMat.userData.flow.uSpeed.value = spd[s] ?? 0.7;
         flowMat.userData.flow.uSep.value = s === "mismatch" ? 1 : 0;
       },
       contour(t, s) {
-        const info = s === "mismatch" ? ["流れ: 肩の後ろではく離 (食い違い)", "後ろでは流れが逆に回る"] : ["流れ: 前から一様 (ポテンシャル流れ)", s === "working" ? "流れの線が速い (解析中)" : "鼻先は止まり、肩でいちばん速い"];
+        const info = s === "mismatch" ? ["流れ: 肩の後ろではく離 (食い違い)", "後ろは低い圧力のまま (流れが逆に回る)"] : ["先端のよどみ点がいちばん高い (Cp = 1)", s === "working" ? "肩は流れが速く低い · 流れの線が速い (作業中)" : "肩は流れが速く低い (Cp = −1.25)"];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
@@ -1260,6 +1284,13 @@
   // nvh: an eigenmode. The mesh moves with an exaggerated mode shape
   // w = A Y(n) cos(omega t) along the normal; the undeformed mesh stays as
   // faint lines. Displacement = |w| / A_max.
+  // v6 (no flicker): slower vibration (0.4 cycles per second at rest, 0.55
+  // when working); the working amplitude swells and fades smoothly
+  // (A = 0.06 + 0.09 (1 - cos(2 pi t / 8.8)) / 2, no jump at the cycle end);
+  // the body is opaque and the undeformed lines are drawn on top without a
+  // depth test, faded on the far side by their own normal, so they no longer
+  // blink in and out as the surface passes through them. Lines in front of
+  // the eyes are left out.
   function bodyNvh(ctx) {
     const { THREE } = ctx;
     const ico = new THREE.IcosahedronGeometry(1, ctx.fine ? 3 : 2);
@@ -1282,9 +1313,9 @@
     }
     const AMAX = 0.17;
     const motion = (t, s) => {
-      if (s === "working") return { mode: "a", amp: 0.05 + 0.12 * ramp(t), f: 1.25 };
-      if (s === "mismatch") return { mode: "b", amp: 0.11, f: 0.8 };
-      return { mode: "a", amp: s === "pass" ? 0.11 : 0.1, f: 0.62 };
+      if (s === "working") return { mode: "a", amp: 0.06 + 0.09 * (1 - Math.cos((TAU * t) / 8.8)) / 2, f: 0.55 };
+      if (s === "mismatch") return { mode: "b", amp: 0.1, f: 0.45 };
+      return { mode: "a", amp: 0.09, f: 0.4 };
     };
     const solve = (t, s) => {
       const mo = motion(t, s);
@@ -1299,16 +1330,35 @@
     };
     const fe = feMesh(THREE, P0, w.tris.map((t) => ({ n: t })));
     const group = new THREE.Group();
-    addFe(ctx, group, fe, { line: 0.6, self: 0.5, opacity: 0.86 });
-    // undeformed shape: faint lines
-    const lp = [];
-    for (const [i, j] of fe.edges) lp.push(P0[i].x, P0[i].y, P0[i].z, P0[j].x, P0[j].y, P0[j].z);
+    addFe(ctx, group, fe, { line: 0.45, self: 0.5 });
+    // undeformed shape: faint lines, always on top, faded on the far side
+    const eyeDirs = [-1, 1].map((sx) => new THREE.Vector3(sx * 0.28, 0.17, 0.95).normalize());
+    const lp = [], ln = [];
+    for (const [i, j] of fe.edges) {
+      const mid = dirs[i].clone().add(dirs[j]).normalize();
+      if (eyeDirs.some((e) => mid.angleTo(e) < 0.27)) continue;
+      lp.push(P0[i].x, P0[i].y, P0[i].z, P0[j].x, P0[j].y, P0[j].z);
+      ln.push(dirs[i].x, dirs[i].y, dirs[i].z, dirs[j].x, dirs[j].y, dirs[j].z);
+    }
     const lg = new THREE.BufferGeometry();
     lg.setAttribute("position", new THREE.Float32BufferAttribute(lp, 3));
-    const ghostMat = new THREE.LineBasicMaterial({ color: C.ink, transparent: true, opacity: 0.55, depthWrite: false });
+    lg.setAttribute("aNrm", new THREE.Float32BufferAttribute(ln, 3));
+    const ghostMat = new THREE.LineBasicMaterial({ color: C.ink, transparent: true, opacity: 0.4, depthWrite: false, depthTest: false });
+    ghostMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = "attribute vec3 aNrm;\nvarying float vFace;\n" + sh.vertexShader.replace(
+        "#include <project_vertex>",
+        "#include <project_vertex>\n  vFace = dot(normalize(normalMatrix * aNrm), normalize(-mvPosition.xyz));"
+      );
+      sh.fragmentShader = "varying float vFace;\n" + sh.fragmentShader.replace(
+        "#include <color_fragment>",
+        "#include <color_fragment>\n  diffuseColor.a *= smoothstep(0.08, 0.4, vFace);"
+      );
+    };
+    ghostMat.customProgramCacheKey = () => "hk-ghost";
     ctx.inkMats.push({ mat: ghostMat, paper: C.ink, night: C.onNightSoft });
     const ghost = new THREE.LineSegments(lg, ghostMat);
-    ghost.scale.setScalar(1.004);
+    ghost.renderOrder = 2;
+    ghost.frustumCulled = false;
     group.add(ghost);
     const topIdx = P0.reduce((b, p, i) => (p.y > P0[b].y ? i : b), 0);
     const body = {
@@ -1600,97 +1650,153 @@
     };
   }
 
-  // packager: one assembled unit, no contour. Three parts with one rounded
-  // outline stacked so that they fit (seams 0.006): a base plate and a lid
-  // in one colour (--s4 mixed half with --paper) and the case between them
-  // in the role colour mixed half with --paper (two colours, plus the metal
-  // of the screws). Four cap screws in a square on the lid.
-  // Working: the screws are driven (two turns) and the lid seats, its gap
-  // closing from 0.05 to the seam. Mismatch: the lid sits shifted and tilted
-  // and one screw is red and tilted.
+  // packager: a 3D puzzle, one unit, no contour. The body is four pieces in
+  // two rows and two columns whose cuts carry jigsaw tabs (a round head on a
+  // neck: neck half width 0.075, head radius 0.13, head centre 0.17 off the
+  // cut), extruded front to back, so each piece locks into its neighbours
+  // and can only slide in along z. The outline of the unit has rounded
+  // corners (radius 0.3); each piece is inset by its bevel + SEAM / 2 so the
+  // cuts read as thin grooves (seam 0.006). Two colours in a checker
+  // (--s4 and the role colour, each mixed half with --paper).
+  // Working: the lower left piece slides in from the front (0.5 -> 0) and
+  // stays seated, then comes out again, every 4.4 s (smooth, no jump).
+  // Mismatch: that piece does not seat; it sits forward, turned, tinted red.
   function bodyPackager(ctx) {
     const { THREE, role } = ctx;
-    const SEAM = 0.006;
+    const SEAM = 0.006, BEVEL = 0.035, RC = 0.3;
+    const XW = 0.96, Y0 = -0.93, Y1 = 0.86, YC = -0.2, D = 0.82;
+    const TAB = { w: 0.075, r: 0.13, h: 0.17 };
     const sand = mixHex(C.s[3], C.paper, 0.5);
     const lilac = mixHex(hexNum(role.color), C.paper, 0.5);
-    // extruded rounded rectangle, half sizes hx / hz, corner radius rc,
-    // height h, rounded (bevelled) edges; centred at the origin, axis y
-    const slab = (hx, hz, rc, h, bevel) => {
-      const s = new THREE.Shape();
-      const x = hx - bevel, z = hz - bevel, r = rc - bevel;
-      s.moveTo(-x + r, -z);
-      s.lineTo(x - r, -z);
-      s.absarc(x - r, -z + r, r, -Math.PI / 2, 0, false);
-      s.lineTo(x, z - r);
-      s.absarc(x - r, z - r, r, 0, Math.PI / 2, false);
-      s.lineTo(-x + r, z);
-      s.absarc(-x + r, z - r, r, Math.PI / 2, Math.PI, false);
-      s.lineTo(-x, -z + r);
-      s.absarc(-x + r, -z + r, r, Math.PI, 1.5 * Math.PI, false);
-      const g = new THREE.ExtrudeGeometry(s, { depth: h - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 });
-      g.rotateX(-Math.PI / 2);
-      g.translate(0, bevel - h / 2, 0);
+    const V2 = (x, y) => new THREE.Vector2(x, y);
+    // tabs on the cuts: at = position along the cut, dir = where the head
+    // points (it belongs to the piece on the other side)
+    const TABS = {
+      vUp: { at: 0.55, dir: V2(1, 0) },     // x = 0, upper row
+      vLow: { at: -0.62, dir: V2(-1, 0) },  // x = 0, lower row
+      hLeft: { at: -0.5, dir: V2(0, -1) },  // y = YC, left column
+      hRight: { at: 0.5, dir: V2(0, -1) },  // y = YC, right column
+    };
+    // points of a tab on the edge a -> b of a piece; outward = the piece's
+    // outward normal of that edge
+    const tabPts = (a, b, tab, outward) => {
+      const d = b.clone().sub(a);
+      const L = d.length();
+      d.normalize();
+      const along = Math.abs(d.x) > 0.5 ? ((tab.at - a.x) / (b.x - a.x)) * L : ((tab.at - a.y) / (b.y - a.y)) * L;
+      const sgn = tab.dir.dot(outward) > 0 ? 1 : -1;
+      const n = outward.clone().multiplyScalar(sgn);
+      const at = (s, k) => a.clone().addScaledVector(d, s).addScaledVector(n, k);
+      const { w, r, h } = TAB;
+      const n0 = h - Math.sqrt(r * r - w * w);
+      const out = [at(along - w, 0), at(along - w, n0)];
+      const th0 = Math.atan2(n0 - h, -w), th1 = Math.atan2(n0 - h, w);
+      const sweep = TAU - (th1 - th0);
+      const N = 20;
+      for (let i = 1; i < N; i++) {
+        const th = th0 - (sweep * i) / N;
+        out.push(at(along + r * Math.cos(th), h + r * Math.sin(th)));
+      }
+      out.push(at(along + w, n0), at(along + w, 0));
+      return out;
+    };
+    // outline of the cell [x0, x1] x [y0, y1]: edges CCW (bottom, right,
+    // top, left), each a tab on a cut or null on the border; round[i] = the
+    // corner at the start of edge i is an outer corner
+    const outline = (x0, x1, y0, y1, edges, round) => {
+      const P = [V2(x0, y0), V2(x1, y0), V2(x1, y1), V2(x0, y1)];
+      const pts = [];
+      for (let i = 0; i < 4; i++) {
+        const a = P[i], b = P[(i + 1) % 4];
+        const d = b.clone().sub(a).normalize();
+        const outward = V2(d.y, -d.x);
+        const s = round[i] ? a.clone().addScaledVector(d, RC) : a.clone();
+        const e = round[(i + 1) % 4] ? b.clone().addScaledVector(d, -RC) : b.clone();
+        pts.push(s);
+        if (edges[i]) pts.push(...tabPts(a, b, edges[i], outward));
+        pts.push(e);
+        if (round[(i + 1) % 4]) {
+          const dn = P[(i + 2) % 4].clone().sub(b).normalize();
+          const c = b.clone().addScaledVector(d, -RC).addScaledVector(dn, RC);
+          const u = e.clone().sub(c), v = b.clone().addScaledVector(dn, RC).sub(c);
+          for (let k = 1; k < 8; k++) {
+            const f = (k / 8) * (Math.PI / 2);
+            pts.push(c.clone().addScaledVector(u, Math.cos(f)).addScaledVector(v, Math.sin(f)));
+          }
+        }
+      }
+      // drop repeated points, then inset by BEVEL + SEAM / 2 (CCW: inward = left)
+      const q = pts.filter((p, i) => p.distanceTo(pts[(i + 1) % pts.length]) > 1e-6);
+      const ins = BEVEL + SEAM / 2;
+      return q.map((p, i) => {
+        const pa = q[(i - 1 + q.length) % q.length], pb = q[(i + 1) % q.length];
+        const d1 = p.clone().sub(pa).normalize(), d2 = pb.clone().sub(p).normalize();
+        const n1 = V2(-d1.y, d1.x), n2 = V2(-d2.y, d2.x);
+        const m = n1.clone().add(n2);
+        if (m.lengthSq() < 1e-9) return p.clone().addScaledVector(n1, ins);
+        m.normalize();
+        return p.clone().addScaledVector(m, ins / Math.max(0.35, m.dot(n1)));
+      });
+    };
+    const piece = (pts) => {
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), {
+        depth: 2 * D - 2 * BEVEL, bevelEnabled: true, bevelThickness: BEVEL, bevelSize: BEVEL, bevelSegments: 3, curveSegments: 8,
+      });
+      g.translate(0, 0, -(D - BEVEL));
       g.computeVertexNormals();
       return g;
     };
-    const Y0 = -0.93, Y1 = -0.77, Y2 = 0.5, Y3 = 0.86;
-    const parts = [
-      { name: "base", g: slab(1.0, 0.9, 0.36, Y1 - Y0, 0.03), y: (Y0 + Y1) / 2, color: sand },
-      { name: "case", g: slab(0.92, 0.82, 0.3, Y2 - Y1 - SEAM, 0.035), y: (Y1 + SEAM + Y2) / 2, color: lilac },
-      { name: "lid", g: slab(0.92, 0.82, 0.3, Y3 - Y2 - SEAM, 0.05), y: (Y2 + SEAM + Y3) / 2, color: sand },
+    const T = TABS;
+    const defs = [
+      { name: "lower-left", cell: [-XW, 0, Y0, YC], edges: [null, T.vLow, T.hLeft, null], round: [true, false, false, false], color: lilac },
+      { name: "lower-right", cell: [0, XW, Y0, YC], edges: [null, null, T.hRight, T.vLow], round: [false, true, false, false], color: sand },
+      { name: "upper-right", cell: [0, XW, YC, Y1], edges: [T.hRight, null, null, T.vUp], round: [false, false, true, false], color: lilac },
+      { name: "upper-left", cell: [-XW, 0, YC, Y1], edges: [T.hLeft, T.vUp, null, null], round: [false, false, false, true], color: sand },
     ];
     const group = new THREE.Group();
-    for (const p of parts) {
-      p.obj = new THREE.Group();
-      p.obj.position.y = p.y;
-      group.add(p.obj);
-      const mesh = new THREE.Mesh(p.g, std(THREE, p.color, 0.5, 0.04));
+    const pieces = defs.map((p) => {
+      const g = piece(outline(...p.cell, p.edges, p.round));
+      const obj = new THREE.Group();
+      group.add(obj);
+      const mat = std(THREE, p.color, 0.48, 0.04);
+      const mesh = new THREE.Mesh(g, mat);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.body = true;
-      p.obj.add(mesh);
-      addHull(THREE, mesh, 0.03, ctx.hulls);
-    }
-    const [, kase, lid] = parts;
-    const lidH = Y3 - Y2 - SEAM;
-    // cap screws: head on the lid, hex socket on top
-    const metal = ctx.M.metal;
-    const red = std(THREE, C.miss, 0.45);
-    const screws = [[-0.6, 0.5], [0.6, 0.5], [-0.6, -0.5], [0.6, -0.5]].map(([x, z]) => {
-      const g = new THREE.Group();
-      g.position.set(x, lidH / 2, z);
-      lid.obj.add(g);
-      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 24), metal);
-      head.position.y = 0.025;
-      head.castShadow = true;
-      g.add(head);
-      addHull(THREE, head, 0.012, ctx.hulls);
-      const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.012, 6), ctx.M.ink);
-      socket.position.y = 0.051;
-      g.add(socket);
-      return { g, head };
+      mesh.userData.piece = p.name;
+      obj.add(mesh);
+      addHull(THREE, mesh, 0.028, ctx.hulls);
+      return { name: p.name, color: p.color, g, obj, mat };
     });
-    const gapOf = (t, s) => (s === "working" ? 0.05 * (1 - ramp(t)) : 0);
+    const moving = pieces[0];
+    const sm = (x) => {
+      const u = clamp(x, 0, 1);
+      return u * u * (3 - 2 * u);
+    };
+    // how far the lower left piece is out of its place (working)
+    const slideOf = (t) => {
+      const u = ((t % 4.4) + 4.4) % 4.4;
+      return u < 2.0 ? 0.5 * (1 - sm(u / 2.0)) : u < 3.6 ? 0 : 0.5 * sm((u - 3.6) / 0.8);
+    };
     const place = (t, s) => {
       const mis = s === "mismatch";
-      lid.obj.position.set(mis ? 0.07 : 0, lid.y + gapOf(t, s) + (mis ? 0.035 : 0), 0);
-      lid.obj.rotation.set(0, 0, mis ? -0.07 : 0);
-      screws.forEach((k, i) => {
-        k.g.rotation.set(0, s === "working" ? -TAU * 2 * ramp(t) + i : i, mis && i === 1 ? -0.35 : 0);
-        k.head.material = mis && i === 1 ? red : metal;
-      });
+      moving.obj.position.set(mis ? -0.03 : 0, mis ? 0.02 : 0, s === "working" ? slideOf(t) : mis ? 0.2 : 0);
+      moving.obj.rotation.set(mis ? -0.06 : 0, mis ? 0.12 : 0, mis ? 0.09 : 0);
+      moving.mat.emissive.setHex(mis ? C.miss : 0x000000);
+      moving.mat.emissiveIntensity = mis ? 0.35 : 0;
     };
     place(0, "idle");
-    const caseAt = new THREE.Vector3(0, kase.y, 0);
+    // the face sits on the upper pieces, which never move
+    const surfs = pieces.slice(2).map((p) => geomSurface(THREE, p.g));
+    const surface = (d, o) => surfs.map((f) => f(d, o)).filter(Boolean).reduce((b, h) => (!b || h.d > b.d ? h : b), null);
     return {
-      group, antennaAnchor: lid.obj, top: new THREE.Vector3(0, lidH / 2, 0),
-      surface: geomSurface(THREE, kase.g, caseAt),
-      parts: parts.map((p) => ({ name: p.name, color: "#" + p.color.toString(16).padStart(6, "0") })),
-      counts: { parts: 3, screws: 4 },
-      caption: "部品 3 (台・ケース・ふた) · ねじ 4 · ぴったり組んだ組み立て品 (色 = 部品)",
+      group, top: new THREE.Vector3(0, Y1, 0), surface,
+      parts: pieces.map((p) => ({ name: p.name, color: "#" + p.color.toString(16).padStart(6, "0") })),
+      counts: { pieces: 4, tabs: 4 },
+      caption: "ピース 4 · 凹凸 4 · 前後にだけ抜ける 3D のパズル (色 = ピース)",
       update(t, s) { place(t, s); },
       contour(t, s) {
-        const info = [s === "working" ? `ねじを締めている · ふたの隙間 ${gapOf(t, s).toFixed(2)}` : s === "mismatch" ? "ふたがずれて入らない (食い違い)" : "部品がぴったり合わさっている", "色は部品ごと (コンターではない)"];
+        const info = [s === "working" ? `左下のピースをはめている · 残り ${slideOf(t).toFixed(2)}` : s === "mismatch" ? "左下のピースが向きちがいで入らない (食い違い)" : "ピースがぴったり噛み合っている", "色はピースごと (コンターではない)"];
         return { info };
       },
     };
@@ -1720,17 +1826,48 @@
     const first = RB.place(HALF, 0.3);
     const fe = feMesh(THREE, first.P, RB.elems, { smooth: true, normals: first.N });
     const group = new THREE.Group();
-    const chassis = new THREE.Mesh(fe.geom, std(THREE, mixHex(C.s[2], C.paper, 0.5), 0.5, 0.04));
+    // v6: the chassis is a machined metal part: high metalness, low
+    // roughness and a clear coat, so it mirrors the environment light
+    // (white mixed with 12 % --s1 for a cool, bright steel)
+    const steel = new THREE.MeshPhysicalMaterial({
+      color: mixHex(0xffffff, C.s[0], 0.12),
+      metalness: 0.9, roughness: 0.26, clearcoat: 0.7, clearcoatRoughness: 0.1,
+    });
+    const chassis = new THREE.Mesh(fe.geom, steel);
     chassis.castShadow = true;
     chassis.receiveShadow = true;
     chassis.frustumCulled = false;
     chassis.userData.body = true;
+    chassis.userData.metal = true;
     group.add(chassis);
     const hull = new THREE.Mesh(fe.hullGeom, null);
     hull.userData.hullWidth = 0.035;
     hull.frustumCulled = false;
     group.add(hull);
     ctx.hulls.push(hull);
+    // machined details: a parting line around the housing (a thin dark
+    // groove on the rounded section at y = 0.5) and four hex bolt heads on
+    // the flat top
+    {
+      const rr = 0.3 + 0.004, hx = HALF.x - 0.3, hz = HALF.z - 0.3, yP = 0.5;
+      const loop = [];
+      for (let k = 0; k < 4; k++) {
+        const cx = (k === 0 || k === 3 ? 1 : -1) * hx, cz = (k < 2 ? 1 : -1) * hz;
+        for (let i = 0; i <= 8; i++) {
+          const a = (k * Math.PI) / 2 + (i / 8) * (Math.PI / 2);
+          loop.push(new THREE.Vector3(cx + rr * Math.cos(a), yP, cz + rr * Math.sin(a)));
+        }
+      }
+      const groove = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(loop, true), 120, 0.009, 5, true), ctx.M.ink);
+      group.add(groove);
+      for (const [x, z] of [[-0.22, 0.32], [0.22, 0.32], [-0.22, -0.32], [0.22, -0.32]]) {
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 6), steel);
+        bolt.position.set(x, HALF.y + 0.015, z);
+        bolt.castShadow = true;
+        group.add(bolt);
+        addHull(THREE, bolt, 0.01, ctx.hulls);
+      }
+    }
 
     const bump = (u, a, b) => {
       const v = (u - a) / (b - a);
@@ -1835,19 +1972,30 @@
       S.spindle = unitRod(0.03, knuckleMat, 10);
       S.tyre = new THREE.Group();
       susp.add(S.tyre);
+      // the wheel spins about its axle (x) when running; five spokes on the
+      // rim make the turn visible
+      S.spin = new THREE.Group();
+      S.tyre.add(S.spin);
       const tyre = new THREE.Mesh(new THREE.CylinderGeometry(0.39, 0.39, 0.19, 40), tyreMat);
       tyre.rotation.z = Math.PI / 2;
       tyre.castShadow = true;
-      S.tyre.add(tyre);
+      S.spin.add(tyre);
       addHull(THREE, tyre, 0.02, ctx.hulls);
       const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 32), metal);
       rim.rotation.z = Math.PI / 2;
       rim.position.x = sx * 0.098;
-      S.tyre.add(rim);
+      S.spin.add(rim);
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16), jointMat);
       hub.rotation.z = Math.PI / 2;
       hub.position.x = sx * 0.11;
-      S.tyre.add(hub);
+      S.spin.add(hub);
+      for (let k = 0; k < 5; k++) {
+        const a = (k * TAU) / 5;
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.17, 0.035), jointMat);
+        spoke.position.set(sx * 0.112, 0.13 * Math.cos(a), 0.13 * Math.sin(a));
+        spoke.rotation.x = a;
+        S.spin.add(spoke);
+      }
       S.springMat = std(THREE, BAND_COLORS[5], 0.4, 0.1);
       S.spring = new THREE.Mesh(coilGeom, S.springMat);
       S.spring.castShadow = true;
@@ -1879,6 +2027,8 @@
           const F = force(a, S.sx);
           const k = Math.min(BANDS - 1, Math.floor(clamp(F, 0, 0.99999) * BANDS));
           S.springMat.color.set(BAND_COLORS[k]);
+          // run: the wheels roll forward (+z), 1.6 turns per second
+          S.spin.rotation.x = s === "run" ? TAU * 1.6 * t : 0;
         }
       },
       // after the torso has moved: links between the chassis joints (toFeet
@@ -1912,7 +2062,7 @@
       contour(t, s) {
         const a = accel(t, s);
         const v = [force(a, -1), force(a, 1)];
-        const info = [s === "working" ? "ダブルレーンチェンジ (解析中)" : s === "mismatch" ? "曲がりすぎて内側の車輪が浮いた (食い違い)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} · ロール ${(ROLL * a).toFixed(3)} rad · 0.5 = 静止の荷重`];
+        const info = [s === "working" ? "ダブルレーンチェンジ (作業中)" : s === "mismatch" ? "曲がりすぎて内側の車輪が浮いた (食い違い)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} · ロール ${(ROLL * a).toFixed(3)} rad · 0.5 = 静止の荷重`];
         return Object.assign(stats(v), { info });
       },
     };
@@ -2212,8 +2362,12 @@
 
     const root = new THREE.Group();
     root.name = "pet:" + role.id;
+    // mover carries the whole pet with its shadow and marks across the
+    // ground when it runs across (root itself is left to the caller)
+    const mover = new THREE.Group();
+    root.add(mover);
     const hop = new THREE.Group();
-    root.add(hop);
+    mover.add(hop);
 
     // torso pivots at the bottom of the body so leaning and tilting look planted
     const PIVOT_Y = BODY_Y - SHAPE.sy * 0.92;
@@ -2250,7 +2404,7 @@
     };
     const B = BUILDERS[spec.kind](ctx);
     core.add(B.group);
-    if (B.ground) root.add(B.ground);
+    if (B.ground) mover.add(B.ground);
     // parts that stand on the feet and do not roll or lean with the torso
     if (B.hopGroup) hop.add(B.hopGroup);
     for (const d of ctx.dots) d.visible = !!opts.nodes;
@@ -2261,20 +2415,26 @@
       shoulderL = B.shoulders.L;
     }
 
-    // legs and feet (stay on the ground)
+    // legs and feet (stay on the ground); each leg turns about its hip
+    // (the top of the leg) when running
     const legs = new THREE.Group();
     hop.add(legs);
+    const hips = [];
     for (const sx of [-1, 1]) {
       const top = legTop(sx);
-      const bot = new THREE.Vector3(sx * 0.36, 0.08, 0.06);
-      const leg = capsuleBetween(THREE, bot, top, 0.075, M.limb, 2, 6);
+      const hip = new THREE.Group();
+      hip.position.copy(top);
+      legs.add(hip);
+      hips.push({ hip, sx });
+      const bot = new THREE.Vector3(sx * 0.36, 0.08, 0.06).sub(top);
+      const leg = capsuleBetween(THREE, bot, new THREE.Vector3(), 0.075, M.limb, 2, 6);
       leg.castShadow = true;
-      legs.add(leg);
+      hip.add(leg);
       const foot = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), M.limb);
       foot.scale.set(0.14, 0.075, 0.19);
-      foot.position.set(sx * 0.37, 0.075, 0.1);
+      foot.position.set(sx * 0.37, 0.075, 0.1).sub(top);
       foot.castShadow = true;
-      legs.add(foot);
+      hip.add(foot);
     }
 
     // eyes, sitting on the body surface (re-placed each frame on bodies that
@@ -2334,22 +2494,25 @@
     addHull(THREE, tip, 0.03, hulls);
     placeFace();
 
-    // arm on +x (the prop hand) holding the prop low, and a short arm on -x
-    const armR = capsuleBetween(THREE, shoulderR, handR, 0.06, M.limb, 2, 6);
-    armR.castShadow = true;
-    core.add(armR);
-    const armL = capsuleBetween(THREE, shoulderL, handL, 0.06, M.limb, 2, 6);
-    armL.castShadow = true;
-    core.add(armL);
-    for (const p of [handR, handL]) {
-      const hand = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, 1), M.limb);
-      hand.position.copy(p);
-      core.add(hand);
+    // arm on +x (the prop hand) holding the prop low, and a short arm on -x;
+    // each arm hangs from a shoulder pivot so it can swing when running
+    const shoulders = {};
+    for (const [k, sh, hand] of [["R", shoulderR, handR], ["L", shoulderL, handL]]) {
+      const pivot = new THREE.Group();
+      pivot.position.copy(sh);
+      core.add(pivot);
+      const arm = capsuleBetween(THREE, new THREE.Vector3(), hand.clone().sub(sh), 0.06, M.limb, 2, 6);
+      arm.castShadow = true;
+      pivot.add(arm);
+      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, 1), M.limb);
+      h.position.copy(hand).sub(sh);
+      pivot.add(h);
+      shoulders[k] = pivot;
     }
     const prop = buildProp(THREE, role, M, hulls, live);
-    prop.position.copy(handR).add(new THREE.Vector3(0.04, -0.02, 0.06));
+    prop.position.copy(handR).add(new THREE.Vector3(0.04, -0.02, 0.06)).sub(shoulderR);
     prop.scale.multiplyScalar(1.25);
-    core.add(prop);
+    shoulders.R.add(prop);
 
     // marks above the head, clear of the antenna tip (top of the tip is at
     // about BODY_Y + 1.73; the badge radius is 0.24 after scaling)
@@ -2357,7 +2520,7 @@
     const MARK_Y = BODY_Y + 2.1;
     const marks = new THREE.Group();
     marks.position.set(0.3, MARK_Y, 0.1);
-    root.add(marks);
+    mover.add(marks);
     const check = buildCheck(THREE, M, hulls);
     const question = buildQuestion(THREE, M, hulls);
     check.scale.setScalar(0.9);
@@ -2372,7 +2535,7 @@
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.004;
     blob.renderOrder = -1;
-    root.add(blob);
+    mover.add(blob);
 
     function applyTheme(theme) {
       const night = theme === "night";
@@ -2396,8 +2559,27 @@
 
     const qTmp = new THREE.Quaternion();
 
-    function update(t, state, camera) {
+    // run: the legs swing in turn, sin(2 pi t / period) (one stride per
+    // period), the body bounces twice per stride (lowest when a leg is
+    // straight down, highest with the legs spread), leans forward, and the
+    // arms swing against the legs. Across: the pet turns toward +x and
+    // crosses RUN.span units in RUN.cross seconds, then starts again on the
+    // left. Everything depends on t only.
+    function runPose(t, across) {
+      const ph = (TAU * t) / RUN.period;
+      return {
+        swing: RUN.swing * Math.sin(ph),
+        hopY: (RUN.bob * (1 - Math.cos(2 * ph))) / 2,
+        lean: RUN.lean + 0.03 * Math.sin(2 * ph),
+        x: across ? -RUN.span / 2 + RUN.span * ((((t / RUN.cross) % 1) + 1) % 1) : 0,
+        yaw: across ? RUN.yaw : 0,
+      };
+    }
+
+    // o.across (or opts.run = "across" at create): run across instead of in place
+    function update(t, state, camera, o) {
       state = STATES.includes(state) ? state : "idle";
+      const across = o && o.across !== undefined ? !!o.across : opts.run === "across";
       U.uT.value = t;
       B.update(t, state);
       if (B.deforms || B.anchor) placeFace();
@@ -2406,7 +2588,16 @@
       const bob = 0.025 * Math.sin((TAU * t) / 2.6);
       const breathe = Math.sin((TAU * t) / 2.6 + 0.6);
       let hopY = 0, lean = 0, tilt = 0, squash = 0;
-      if (state === "pass") {
+      const run = state === "run" ? runPose(t, across) : null;
+      mover.position.x = run ? run.x : 0;
+      hop.rotation.y = run ? run.yaw : 0;
+      for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : 0;
+      shoulders.L.rotation.x = run ? 0.75 * run.swing : 0;
+      shoulders.R.rotation.x = run ? -0.3 * run.swing : 0;
+      if (run) {
+        hopY = run.hopY;
+        lean = run.lean;
+      } else if (state === "pass") {
         const ph = (t / 0.9) % 1;
         hopY = 0.24 * Math.sin(Math.PI * ph);
         squash = Math.max(0, 1 - Math.min(ph, 1 - ph) / 0.12) * 0.07;
@@ -2416,7 +2607,7 @@
         tilt = 0.24 + 0.03 * Math.sin((TAU * t) / 2.2);
       }
       hop.position.y = hopY;
-      torso.position.y = PIVOT_Y + (state === "pass" ? 0 : bob);
+      torso.position.y = PIVOT_Y + (state === "pass" || run ? 0 : bob);
       // bodies that lean by themselves (handling rolls in the corner)
       torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
       const sy = 1 + 0.018 * breathe - squash;
@@ -2424,7 +2615,7 @@
       torso.scale.set(sxz, sy, sxz);
 
       antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0);
-      antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) - lean * 0.4;
+      antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) - lean * 0.4 - (run ? 0.5 * run.hopY : 0);
 
       const bp = t % 4.3;
       const blink = bp < 0.16 ? 1 - 0.9 * Math.sin((Math.PI * bp) / 0.16) : 1;
@@ -2442,7 +2633,7 @@
       marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * t) / 1.4) + hopY;
       marks.rotation.z = state === "mismatch" ? 0.12 * Math.sin((TAU * t) / 2.2) : 0;
       if (camera) {
-        root.updateWorldMatrix(true, false);
+        root.updateWorldMatrix(true, true);
         marks.parent.getWorldQuaternion(qTmp).invert();
         marks.quaternion.copy(qTmp.multiply(camera.quaternion));
         if (state === "mismatch") marks.rotateZ(0.12 * Math.sin((TAU * t) / 2.2));
