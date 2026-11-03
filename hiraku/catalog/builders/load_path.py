@@ -25,7 +25,10 @@ from hiraku.catalog.loading import LOADING_JA
 # whole frame. Measured (2026-11-03): the demo's version 1 grip, hand 0.87 mm against the model's 1.05 mm (+20 %:
 # the joints' rotation is 99.9 % of the hand value; the model adds the dash members' own bending); version 1 with
 # both pedals moved onto what is nearest to them (the bulkhead, tower_post_RA2), hand 0.19 mm against 0.16 mm
-# (-16 %: the model shares the load over the parallel contacts). 30 %.
+# (-16 %: the model shares the load over the parallel contacts). 30 %. Since the bulkhead is a 2.3 mm sheet
+# (2026-11-04) the pedal on it bends the plate: with load_path.plate_strip K0 18.4 mm against the tool's 24.0 mm
+# for that v1 case, 45.0 against 49.5 mm with version 2's stands on the bulkhead (tests/solvers/
+# test_load_path_plate_k0).
 R7_TOL = 0.3
 # R8: free_parts is a count; the graph search and rigid_body_check find the same parts (the contacts are the same).
 R8_TOL = 0.05
