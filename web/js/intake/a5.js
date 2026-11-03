@@ -2,29 +2,28 @@
 
 import { CATEGORIES, FACTS } from "./data.js";
 import { fill, h } from "./dom.js";
-import { allRules, ruleNeeds, ruleState, ruleTree } from "./model.js";
+import { allRules, ruleNeeds, ruleState, ruleTree, TRUST_JA } from "./model.js";
 
-const MODES = [["category", "分類から"], ["source", "出どころから"]];
-const FILTERS = [["all", "すべて"], ["builtin", "基本"], ["dropped", "取り込んだ"], ["hit", "当たった"]];
-const ORIGIN_JA = { builtin: "基本の制約", dropped: "取り込んだ" };
+const MODES = [["category", "種類で分ける"], ["source", "出どころで分ける"]];
+const FILTERS = [["all", "すべて"], ["builtin", "最初から入っているもの"], ["dropped", "あなたが読み込んだもの"], ["hit", "引っかかったもの"]];
+const ORIGIN_JA = { builtin: "最初から入っているルール", dropped: "あなたが読み込んだもの" };
 const BY_JA = { code: "文の型からコード", claude: "Claude" }; // no check_by: the formula came with the data
-const TRUST_JA = ["", "一次の資料", "二次の資料", "仮定 (確かめていない)"];
 
 function status(state, off) {
   if (off) return h("span", { class: "in-st off" }, "使わない");
-  if (!state.checked) return h("span", { class: "in-st none" }, "未チェック");
-  if (state.hits.length) return h("span", { class: "in-st hit" }, `当たり ${state.hits.length}`);
-  if (!state.targets) return h("span", { class: "in-st none" }, "対象なし");
-  if (state.notEvaluable.length === state.targets) return h("span", { class: "in-st unk" }, "評価できない");
-  if (state.notEvaluable.length) return h("span", { class: "in-st ok" }, `合格 (${state.notEvaluable.length} 部品は評価できない)`);
-  return h("span", { class: "in-st ok" }, "合格");
+  if (!state.checked) return h("span", { class: "in-st none" }, "まだ調べていません");
+  if (state.hits.length) return h("span", { class: "in-st hit" }, `引っかかった ${state.hits.length}`);
+  if (!state.targets) return h("span", { class: "in-st none" }, "当てはまる部品なし");
+  if (state.notEvaluable.length === state.targets) return h("span", { class: "in-st unk" }, "判定できません");
+  if (state.notEvaluable.length) return h("span", { class: "in-st ok" }, `問題なし (${state.notEvaluable.length} 部品は判定できません)`);
+  return h("span", { class: "in-st ok" }, "問題なし");
 }
 
 function leaf(n, ui, api) {
   const r = n.rule;
   return h("li", { class: `in-rule${ui.selected === r.rule_id ? " sel" : ""}${n.off ? " is-off" : ""}`, dataset: { rule: r.rule_id },
       onclick: () => { ui.selected = r.rule_id; ui.rerender(); } },
-    h("input", { type: "checkbox", checked: !n.off, title: "この規則を使う",
+    h("input", { type: "checkbox", checked: !n.off, title: "このルールを使う",
       onclick: (e) => e.stopPropagation(),
       onchange: (e) => { if (e.target.checked) ui.disabled.delete(r.rule_id); else ui.disabled.add(r.rule_id); api.toggleRule?.(r.rule_id, e.target.checked); ui.rerender(); } }),
     h("code", { class: "in-id" }, r.rule_id),
@@ -39,7 +38,7 @@ function branch(n, ui, api, depth = 0) {
   return h("li", { class: `in-node d${depth}` },
     h("button", { class: "in-nodehead", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); ui.rerender(); } },
       h("span", { class: "in-caret" }, closed ? "▸" : "▾"), h("b", {}, n.label),
-      h("span", { class: "in-n" }, `${n.count}`), n.hitCount ? h("span", { class: "in-st hit" }, `当たり ${n.hitCount}`) : null),
+      h("span", { class: "in-n" }, `${n.count}`), n.hitCount ? h("span", { class: "in-st hit" }, `引っかかった ${n.hitCount}`) : null),
     closed ? null : h("ul", {}, n.children.map((c) => branch(c, ui, api, depth + 1))));
 }
 
@@ -48,7 +47,7 @@ function partChip(kind, id, text) {
 }
 
 function detail(m, rule, ui) {
-  if (!rule) return h("p", { class: "in-empty" }, "左の規則を選ぶと、出どころと当たった部品が出ます");
+  if (!rule) return h("p", { class: "in-empty" }, "左のルールを選ぶと、どこから来たかと、引っかかった部品が出ます");
   const st = ruleState(m, rule);
   const cat = CATEGORIES.find((c) => c.name === rule.category)?.ja || rule.category;
   const hitIds = new Set(st.hits.map((x) => x.part_id));
@@ -58,25 +57,25 @@ function detail(m, rule, ui) {
   return h("div", { class: "in-detail" },
     h("header", {}, h("code", {}, rule.rule_id), h("h3", {}, rule.text), status(st, ui.disabled.has(rule.rule_id))),
     h("dl", {},
-      h("dt", {}, "分類"), h("dd", {}, cat),
-      h("dt", {}, "出どころ"), h("dd", {}, rule.origin === "builtin" ? "基本の制約" : `取り込んだファイル ${rule.docName}`),
-      h("dt", {}, "式"), h("dd", {}, h("code", { class: "in-formula" }, rule.check), h("small", {}, ` 式の出どころ: ${BY_JA[rule.check_by] || "データに書いてあった式"}`)),
-      needs.length ? [h("dt", {}, "要る値"), h("dd", {}, needs.map((n) => [h("code", { title: n.name }, `${n.label} (${n.name})`),
-        n.inDesigns ? null : h("small", { class: "in-miss" }, " 今の設計は持っていない値"), " "]))] : null,
-      h("dt", {}, "対象"), h("dd", {}, rule.applies_to?.kinds?.join("・") || "すべての部品"),
+      h("dt", {}, "種類"), h("dd", {}, cat),
+      h("dt", {}, "どこから来たか"), h("dd", {}, rule.origin === "builtin" ? "最初から入っているルール" : `あなたが読み込んだファイル (${rule.docName})`),
+      h("dt", {}, "判定の式"), h("dd", {}, h("code", { class: "in-formula" }, rule.check), h("small", {}, ` 式を作った人: ${BY_JA[rule.check_by] || "ファイルに書いてあった式"}`)),
+      needs.length ? [h("dt", {}, "判定に必要なデータ"), h("dd", {}, needs.map((n) => [h("code", { title: n.name }, `${n.label} (${n.name})`),
+        n.inDesigns ? null : h("small", { class: "in-miss" }, " 今の設計には無いデータ"), " "]))] : null,
+      h("dt", {}, "当てはまる部品"), h("dd", {}, rule.applies_to?.kinds?.join("・") || "すべての部品"),
       h("dt", {}, "根拠"), h("dd", {}, h("span", { class: `in-dot t${rule.trust}`, title: TRUST_JA[rule.trust] }, rule.trust), " ", rule.basis)),
-    h("h4", {}, "設計に当てた結果", st.checked ? h("small", {}, ` 版 ${st.designVersion}`) : null),
+    h("h4", {}, "今の設計での結果", st.checked ? h("small", {}, ` (設計の ${st.designVersion} 回目)`) : null),
     !st.checked
-      ? h("p", { class: "in-empty" }, m.designVersion ? "まだ当てていません" : "設計がまだ無いので当てていません")
+      ? h("p", { class: "in-empty" }, m.designVersion ? "まだ調べていません" : "設計がまだ無いので調べていません")
       : h("div", {},
           h("div", { class: "in-parts" },
             (c.targets || []).map((id) => hitIds.has(id) ? partChip("hit", id, st.hits.find((x) => x.part_id === id).message)
-              : neIds.has(id) ? partChip("unk", id, `評価できない: ${neIds.get(id).map((n) => FACTS[n]?.label || n).join("・")} が設計に無い`)
-              : partChip("ok", id, "合格")),
-            !c.targets?.length ? h("span", { class: "in-empty" }, "この設計に対象の部品がありません") : null),
+              : neIds.has(id) ? partChip("unk", id, `判定できません。設計に「${neIds.get(id).map((n) => FACTS[n]?.label || n).join("・")}」の情報がありません`)
+              : partChip("ok", id, "問題なし")),
+            !c.targets?.length ? h("span", { class: "in-empty" }, "この設計に、当てはまる部品がありません") : null),
           st.hits.length ? h("ul", { class: "in-hits" }, st.hits.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message))) : null,
           st.notEvaluable.length
-            ? h("p", { class: "in-foot" }, "式に要る値が設計に無いので判定していません: ",
+            ? h("p", { class: "in-foot" }, "判定に必要なデータが設計に無いので、判定していません: ",
                 [...new Set(st.notEvaluable.flatMap((x) => x.missing))].map((n) => h("code", {}, FACTS[n]?.label ? `${FACTS[n].label} (${n})` : n)))
             : null));
 }
@@ -89,9 +88,9 @@ function dropzone(api, ui) {
       ui.rerender();
       if (!api.dropFile) continue;
       try {
-        entry.state = (await api.dropFile(f.name, await f.text())) || "渡しました";
+        entry.state = (await api.dropFile(f.name, await f.text())) || "受け取りました";
       } catch (e) {
-        entry.state = `失敗: ${e.message || e}`;
+        entry.state = `読めませんでした: ${e.message || e}`;
       }
       ui.rerender();
     }
@@ -100,7 +99,7 @@ function dropzone(api, ui) {
   const input = h("input", { type: "file", multiple: true, accept: ".md,.markdown,.txt,.csv,.tsv", hidden: true, onchange: (e) => onFiles([...e.target.files]) });
   return h("div", { class: "in-drop", onclick: () => input.click() },
     input,
-    h("b", {}, "ファイルをここに落とす"), h("span", {}, "Markdown・表 (CSV/TSV)・テキスト。1 行が 1 つの規則になります"),
+    h("b", {}, "ファイルをここに置く"), h("span", {}, "文章や表 (Markdown・CSV・テキスト) のファイル。1 行が 1 つのルールになります"),
     ui.dropped.length ? h("ul", {}, ui.dropped.slice(0, 4).map((d) => h("li", {}, h("code", {}, d.name), ` ${(d.size / 1024).toFixed(1)} KB  ${d.state}`))) : null);
 }
 
@@ -112,15 +111,15 @@ export function renderA5(el, m, api, ui) {
   const checked = rules.some((r) => m.checks.has(r.rule_id));
   fill(el,
     h("div", { class: "in-bar" },
-      h("input", { class: "in-search", type: "search", placeholder: "規則・番号・式を探す", value: ui.query, oninput: (e) => { ui.query = e.target.value; ui.rerender({ keepFocus: ".in-search" }); } }),
+      h("input", { class: "in-search", type: "search", placeholder: "ルールを探す (言葉で探せます)", value: ui.query, oninput: (e) => { ui.query = e.target.value; ui.rerender({ keepFocus: ".in-search" }); } }),
       h("div", { class: "in-seg" }, MODES.map(([k, t]) => h("button", { class: ui.mode === k ? "on" : "", onclick: () => { ui.mode = k; ui.rerender(); } }, t))),
       h("div", { class: "in-seg" }, FILTERS.map(([k, t]) => h("button", { class: ui.filter === k ? "on" : "", onclick: () => { ui.filter = k; ui.rerender(); } }, t))),
-      h("span", { class: "in-sum" }, `${rules.length} 規則${checked ? `・当たり ${hitRules}` : ""}`),
-      api.recheck ? h("button", { class: "in-btn primary", onclick: () => api.recheck() }, "チェックのやり直し") : null),
+      h("span", { class: "in-sum" }, `ルール ${rules.length} 件${checked ? `・引っかかった ${hitRules}` : ""}`),
+      api.recheck ? h("button", { class: "in-btn primary", onclick: () => api.recheck() }, "もう一度チェックする") : null),
     h("div", { class: "in-body" },
       h("section", { class: "in-tree" },
         dropzone(api, ui),
         h("ul", { class: "in-root", dataset: { keepScroll: "a5-tree" } },
-          tree.length ? tree.map((n) => branch(n, ui, api)) : h("li", { class: "in-empty" }, rules.length ? "条件に合う規則がありません" : "規則がまだありません"))),
+          tree.length ? tree.map((n) => branch(n, ui, api)) : h("li", { class: "in-empty" }, rules.length ? "条件に合うルールがありません" : "ルールはまだありません。ファイルを置くと、ここに並びます"))),
       h("section", { class: "in-right" }, detail(m, selected, ui))));
 }
