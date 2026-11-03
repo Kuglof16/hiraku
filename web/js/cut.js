@@ -18,6 +18,7 @@ import { esc, fmt, quantityName, resultText, unitLabel } from "./labels.js";
 import { abscissa, channelsOf, extent, lerpAt, motionOf, nearestAt, xSeriesOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { CutN16 } from "./cut_n16.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -687,7 +688,7 @@ class CutN02 {
   }
 }
 
-const CUTS = { n05: Cut, n01: CutN01, n02: CutN02 };
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n16: CutN16 };
 
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;

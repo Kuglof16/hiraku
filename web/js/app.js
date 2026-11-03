@@ -23,6 +23,7 @@ import { lookFromParams } from "./look.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { Workbench3D } from "./workbench3d.js";
+import { AssemblyPanel } from "./assembly.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -35,7 +36,8 @@ const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", 
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
-const TABS = ["bench", "grid", ...INTAKE_TABS];
+const TABS = ["bench", "grid", ...INTAKE_TABS, "A7"]; // A7: the assembly order (js/assembly.js)
+let asmPanel = null; // mounted on first show
 
 const ui = {
   pinnedLc: null,
@@ -142,7 +144,7 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
-  if (INTAKE_TABS.includes(s.focus.screen)) return s.focus.screen;
+  if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
 }
 
@@ -654,7 +656,8 @@ function draw() {
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
     $("view-intake").hidden = !intakeTab;
-    $("main").classList.toggle("wide", tab === "grid" || intakeTab); // A6 and the intake screens use the whole width
+    $("view-asm").hidden = tab !== "A7";
+    $("main").classList.toggle("wide", tab === "grid" || intakeTab || tab === "A7"); // A6, A7 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
     if (intakeTab) renderIntake(tab);
@@ -679,6 +682,7 @@ function draw() {
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") bench.render();
   else if (tab === "grid") board.tick(player.playhead);
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
 }
 
 let lastTs = null;
