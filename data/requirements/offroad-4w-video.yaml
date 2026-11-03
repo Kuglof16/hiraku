@@ -9,7 +9,7 @@
 # (1 primary, 2 secondary, 3 assumption); "not checked" says whether the value
 # has been read again against that source.
 
-want: 林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)
+want: 林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)
 product: offroad-4w
 speed_class: vehicle
 flags:
