@@ -15,7 +15,8 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
   - `tolerance_rel`: 予測と解析の差をどこまで許すか。決まっているので変えられない
   - `feeds`: この荷重条件の結果を入力に使う、下流の荷重条件
 - 上流 (自分を `feeds` で指している荷重条件) があれば、そちらを先に照合で一致させる。一致していない上流があると `analyze` は止まる
-- `design_summary` (と、そこに無い値が要るときだけ `sections=["design"]` で設計の全体): 入力はここから写す
+- `design_summary` (と、そこに無い値が要るときだけ `sections=["design"]`。返るのは設計の要約 (数・ID・変数の値・断面・材料) で、部品・部材・節・支持の中身は `design_part`・`offset`・`limit` で少しずつ読む): 入力はここから写す
+- 設計を直した版 (版 2 から) では、get_context の最初に `design_changes` (前の版から変わった変数の前と後、理由) が付く。前の版の値を使い回さない
   - `design_summary.loadings.<loading>`: 車全体の質量 (`mass`、フレームの部材の重さと、その組で載っている部品の和) と重心 (`cg_x`・`cg_y`・`cg_z`)。荷重条件の `loading` と同じ組を使う。`frame_mass` はこの中に入っているので、足さない
   - `design_summary.loadings.<loading>.rail_joint`: 式 `frame_static.rail_joint_stress` の入力のうち F と W 以外 (設計から読んだもの)。`support` は W にどの車輪の荷重を使うか (上流の解析の `wheel_load_<support>`)
   - ホイールベース・前輪の数・トレッド・部材の長さ (`member_length`)。断面の寸法は `design.sections`

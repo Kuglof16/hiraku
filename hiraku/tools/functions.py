@@ -99,6 +99,16 @@ def joint_wall_inputs(ctx: RunContext, load_case_id: str | None) -> Record:
     }
 
 
+def _design_section(ctx: RunContext, args: Record) -> Record | None:
+    if not ctx.version:
+        return None
+    design = ctx.store.design()
+    if args.get("design_part"):
+        return design_page(design, args["design_part"], int(args.get("offset") or 0),
+                           int(args["limit"]) if args.get("limit") is not None else None)
+    return design_overview(design)
+
+
 FORMULA_INPUTS_HOW = (
     "荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、台本の運転と同じコードが"
     "この版の設計と荷重条件と記録から出した値・単位・出どころ (from) で並べたもの。record_prediction の inputs には"
@@ -117,11 +127,73 @@ def formula_inputs_section(ctx: RunContext, load_case_id: str | None = None) -> 
             "load_cases": formula_inputs(ctx, load_case_id, pairs=lambda tool: tool_predicts(ctx, tool))}
 
 
+DESIGN_PARTS = ("nodes", "members", "parts", "supports", "variables", "sections", "materials")
+DESIGN_PAGE = 20  # items per page of design_part when no limit is given
+
+
+def _value_of(v: Any) -> Any:
+    """A design variable as {value, unit} (its other fields are design_variables')."""
+    return {k: v[k] for k in ("value", "unit") if k in v} if isinstance(v, dict) else v
+
+
+def design_overview(design: Record) -> Record:
+    """get_context's design without design_part: the version, the counts and ids of each part of the
+    record, the variables' values, the sections and materials (what the formulas take), and how to page
+    the rest. The whole record can pass Claude Code's limit on a tool's output."""
+    lists = {k: design[k] for k in ("nodes", "members", "parts", "supports") if isinstance(design.get(k), list)}
+    out: Record = {k: design[k] for k in ("design_version", "parent_version", "name", "change_reason") if k in design}
+    out["counts"] = {k: len(v) for k, v in lists.items()}
+    out["ids"] = {k: [x.get("id") for x in v if isinstance(x, dict)] for k, v in lists.items()}
+    out["variables"] = {k: _value_of(v) for k, v in (design.get("variables") or {}).items()}
+    for k in ("sections", "materials"):
+        if k in design:
+            out[k] = design[k]
+    out["pages"] = (f"部品・部材・節・支持の中身は get_context(sections=[\"design\"], design_part=<{'|'.join(DESIGN_PARTS)}>, "
+                    f"offset=0, limit={DESIGN_PAGE}) で少しずつ読む。手計算の入力は design_summary と formula_inputs にある")
+    return out
+
+
+def design_page(design: Record, part: str, offset: int = 0, limit: int | None = None) -> Record:
+    """One page of a part of the design record (a list, or a dict's items in order)."""
+    if part not in DESIGN_PARTS:
+        raise ToolError(f"design_part は {', '.join(DESIGN_PARTS)} のどれかです: {part!r}")
+    whole = design.get(part)
+    if whole is None:
+        raise ToolError(f"この設計には {part} がありません")
+    items = list(whole.items()) if isinstance(whole, dict) else list(whole)
+    limit = DESIGN_PAGE if limit is None else limit
+    if offset < 0 or limit < 1:
+        raise ToolError(f"offset は 0 以上、limit は 1 以上です (offset {offset}, limit {limit})")
+    page = items[offset:offset + limit]
+    out: Record = {"design_version": design.get("design_version"), "design_part": part, "total": len(items),
+                   "offset": offset, "items": dict(page) if isinstance(whole, dict) else page}
+    if offset + limit < len(items):
+        out["next_offset"] = offset + limit
+    return out
+
+
+def design_changes(ctx: RunContext) -> Record | None:
+    """What changed from the previous version (the version this one was revised from): the variables
+    whose value or unit changed, old and new, and the designer's reason. None on version 0 and 1."""
+    if ctx.version < 2:
+        return None
+    new = ctx.store.design()
+    parent = new.get("parent_version") or ctx.version - 1
+    old = ctx.store.design(parent)
+    was, now = old.get("variables") or {}, new.get("variables") or {}
+    changed = [{"variable": k, "old": _value_of(was.get(k)), "new": _value_of(now.get(k))}
+               for k in [*now, *[k for k in was if k not in now]] if _value_of(was.get(k)) != _value_of(now.get(k))]
+    return {"from_version": parent, "to_version": ctx.version, "changed": changed,
+            "reason": new.get("change_reason"),
+            "note": (f"版 {ctx.version} の値は前の版 {parent} から変わっている。前の版で読んだ値・予測を使い回さず、"
+                     f"design_summary・formula_inputs をこの版でもう一度読む")}
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """The run so far: always the run, design version, picked domains and open mismatches;
     `sections` adds parts (default: requirements, load_cases with the role that owns each,
-    judgements, records). design_summary (inputs for hand calculations), design (the whole
-    record), design_variables (what the designer may change), joint_wall_inputs (the joint wall
+    judgements, records). design_summary (inputs for hand calculations), design (an overview of the
+    record; with design_part, offset and limit one page of a part of it), design_variables (what the designer may change), joint_wall_inputs (the joint wall
     formula's inputs for `load_case_id`) and formula_inputs (every planned formula's inputs worked out
     by code, for `load_case_id` or all load cases) come only when asked."""
     p = ctx.project
@@ -132,6 +204,11 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "want": p["want"],
         "product": p["product"],
         "design_version": ctx.version,
+    }
+    changes = design_changes(ctx)
+    if changes is not None:  # first, so a role of a revised version sees what changed before anything else
+        out["design_changes"] = changes
+    out |= {
         "round_limit": p["round_limit"],
         "domain_picks": p["domain_picks"],
         "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
@@ -149,7 +226,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
             "verdicts": s.records("verdict"),
         },
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
-        "design": lambda: s.design() if ctx.version else None,
+        "design": lambda: _design_section(ctx, args or {}),
         "design_variables": lambda: design_variables(ctx),
         "archetypes": lambda: archetypes(ctx),
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),

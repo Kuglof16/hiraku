@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS, rule_check
+from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RUN_TOOLS, rule_check
 
 Record = dict[str, Any]
 
@@ -69,11 +69,15 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "get_context": {"type": "object", "additionalProperties": False, "properties": {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
-                                    "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables。"
+                                    "手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design (中身は design_part で少しずつ)、設計役の変数は design_variables。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
                          "description": "formula_inputs (無ければ全部の荷重条件) と joint_wall_inputs の荷重条件"},
+        "design_part": {"enum": list(DESIGN_PARTS),
+                        "description": "design の一部だけを、offset と limit で少しずつ (無ければ design は全体の要約)"},
+        "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
+        "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
     "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
@@ -95,8 +99,9 @@ INPUT_SCHEMAS: dict[str, Record] = {
 DESCRIPTIONS = {
     "get_context": (
         "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
-        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
-        "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む。"
+        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。設計を直した版では、最初に "
+        "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
+        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
         "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
         "入力を、台本の運転と同じコードがこの版の設計から出した値・単位・出どころ (from) で返す。"
         "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "

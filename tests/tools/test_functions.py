@@ -805,6 +805,39 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
                 get_context(self.ctx, {"sections": ["formula_inputs"]})
 
 
+class DesignContextTest(RunCase, unittest.TestCase):
+    """get_context's design: an overview, pages of its parts, and what changed after revise_design."""
+
+    def test_the_design_section_is_an_overview_and_the_parts_come_in_pages(self):
+        design = self.ctx.store.design()
+        got = get_context(self.ctx, {"sections": ["design"]})["design"]
+        self.assertEqual(got["counts"]["members"], len(design["members"]))
+        self.assertEqual(got["ids"]["parts"], [p["id"] for p in design["parts"]])
+        self.assertEqual(got["variables"]["track"], {k: design["variables"]["track"][k] for k in ("value", "unit")})
+        self.assertNotIn("nodes", got)
+        page = get_context(self.ctx, {"sections": ["design"], "design_part": "members", "offset": 1, "limit": 2})["design"]
+        self.assertEqual(page["items"], design["members"][1:3])
+        self.assertEqual((page["total"], page.get("next_offset")), (len(design["members"]), 3 if len(design["members"]) > 3 else None))
+        last = get_context(self.ctx, {"sections": ["design"], "design_part": "members",
+                                      "offset": len(design["members"]) - 1})["design"]
+        self.assertNotIn("next_offset", last)
+        with self.assertRaisesRegex(ToolError, "design_part"):
+            get_context(self.ctx, {"sections": ["design"], "design_part": "wheels"})
+
+    def test_after_revise_design_the_changes_come_first(self):
+        from hiraku.tools.functions import revise_design
+
+        self.assertNotIn("design_changes", get_context(self.ctx))
+        old = dict(self.ctx.store.design()["variables"]["track"])
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "wider"}, "designer")
+        out = get_context(self.ctx)
+        self.assertEqual(list(out)[:5], ["run_id", "want", "product", "design_version", "design_changes"])
+        ch = out["design_changes"]
+        self.assertEqual((ch["from_version"], ch["to_version"]), (1, 2))
+        self.assertEqual(ch["changed"], [{"variable": "track", "old": {"value": old["value"], "unit": old["unit"]},
+                                          "new": {"value": 1400.0, "unit": "mm"}}])
+
+
 class UnpredictableCaseTest(RunCase, unittest.TestCase):
     """HK4's stop text for a load case with no usable tool, and one no K0 formula can predict."""
 
