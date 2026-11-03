@@ -2,6 +2,7 @@
 
 from .assembly import Assembly
 from .bed_tools import ActuatorLinkage, BedStatic
+from .bed_use import ActuatorDuty, UseFatigue
 from .crash import Crash
 from .fatigue import Fatigue
 from .frame_shell import FrameShell
@@ -12,7 +13,7 @@ from .modal import Modal
 from .step_climb import StepClimb
 
 BUILTIN_TOOLS = (FrameStatic, FrameShell, FrameTubes, StepClimb, DriveEnergy, Thermal, Crash, Modal, Fatigue, Assembly,
-                 BedStatic, ActuatorLinkage)
+                 BedStatic, ActuatorLinkage, UseFatigue, ActuatorDuty)
 
-__all__ = ["BUILTIN_TOOLS", "ActuatorLinkage", "Assembly", "BedStatic", "Crash", "DriveEnergy", "Fatigue", "FrameShell", "FrameStatic", "FrameTubes", "Modal",
-           "StepClimb", "Thermal"]
+__all__ = ["BUILTIN_TOOLS", "ActuatorDuty", "ActuatorLinkage", "Assembly", "BedStatic", "Crash", "DriveEnergy", "Fatigue",
+           "FrameShell", "FrameStatic", "FrameTubes", "Modal", "StepClimb", "Thermal", "UseFatigue"]

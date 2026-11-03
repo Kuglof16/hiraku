@@ -61,7 +61,8 @@ class BedEndToEndTest(unittest.TestCase):
         print(f"\ncare bed end to end: {len(cls.runs)} load cases through the tools in {time.perf_counter() - t0:.1f} s")
 
     def test_every_step_runs_and_fits_the_contract(self):
-        self.assertEqual(set(self.runs), {"S1-edge1350N", "R5-deck", "R5-side-rail", "P5-back", "P5-knee"})
+        self.assertEqual(set(self.runs), {"S1-edge1350N", "S1-side-rail-push", "R5-deck", "R5-side-rail", "P5-back",
+                                          "P5-knee", "T3-6uses", "R3-uses"})
         for lc_id, (step, rec) in self.runs.items():
             self.assertEqual(rec["status"], "ok", f"{lc_id}: {rec.get('error')}")
             contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
