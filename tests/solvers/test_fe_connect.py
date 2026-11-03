@@ -159,7 +159,13 @@ class TieTest(unittest.TestCase):
         b = checks.rect_t_joint(5.0, tied=True)
         da, db = np.linalg.norm(a["tip"]), np.linalg.norm(b["tip"])
         self.assertAlmostEqual(db, da, delta=0.06 * da)
-        self.assertAlmostEqual(b["vm_max_near_joint"], a["vm_max_near_joint"], delta=0.10 * a["vm_max_near_joint"])
+        # the peak is at the footprint's singular corner on both meshes (within one 5 mm element of it); its
+        # value depends on the corner elements' size (the shared mesh has t x t weld strips there), so the
+        # two are compared at least 10 mm (two elements, about 4 t) from the footprint
+        for r in (a, b):
+            self.assertLess(r["d_foot_of_max"], 5.0)
+            self.assertGreater(r["vm_max_near_joint"], r["vm_max_off_corner"])
+        self.assertAlmostEqual(b["vm_max_off_corner"], a["vm_max_off_corner"], delta=0.10 * a["vm_max_off_corner"])
         self.assertLess(b["equilibrium"], 1e-8)
         r = precheck.rigid_body_energy(b["model"])
         self.assertLess(r["energy_ratio"], 1e-12)
