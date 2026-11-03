@@ -275,6 +275,39 @@ offroad-4w-video:
         the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change;
         frame_shell and joint_wall_bending with this revision, rail_t 4.5 mm with and without gussets (the analysis department)
 
+# Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
+# (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
+# round by round until every tile is green (tests/agent/test_scene_n15.py). Each revision fixes the
+# reds of the version before it; the values were read off the scripted runs' records (`source`).
+offroad-4w-n15:
+  extends: offroad-4w
+  revise:
+    - say: 組み立て・動力・強度 (つなぎ目) の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くし、レールの肉厚を上げてつなぎ目にガセットを足します
+      changes:
+        track: {value: 1220, unit: mm}
+        steering_x: {value: -200, unit: mm}
+        motor_peak_power: {value: 13, unit: kW}
+        rail_t: {value: 4.5, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
+        gusset_thickness: {value: 3.2, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを 50 mm 前へ出す。
+        P3: 40 km/h までが 6.48 s で 6 s を超えるので、モーターの最大出力を 10 kW から 13 kW に上げる (12 kW では 5.97 s で余裕が 0.5 % しかない)。
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが 472 MPa で限界 163 MPa を超えるので、
+        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足す
+        (トレッドを広げると横の部材が長くなり、肉厚 4.5 mm だけでは手計算で 164 MPa。横の部材を 60 mm に高くすると、
+        ホットスポットが横の部材の 2.3 mm の壁へ移り、つなぎ目の壁の式では見積もれない)
+      source: >-
+        the N15 scripted run 20261103-163520-offroad-4w-scripted, version 1: H1 ver-0015 (free_steer_angle 16.48 deg),
+        H3 ver-0016 (knee_room -69.25 mm at steering_column), P3 ver-0009 (time_to_speed 6.477 s), R1s ver-0002
+        (frame_shell ana-0005 472.0 MPa at rail_L_BE; joint_wall_bending pred-0007 461.8 MPa). The values: the same
+        tools on the design with this revision and its variants. assembly: steering_x -200 knee_room 226.6 mm,
+        free_steer_angle 30 deg; launch: 12 kW 5.967 s, 13 kW 5.724 s; joint_wall_bending (joint_wall_calc): rail_t 4.5
+        alone 163.8 MPa, with these gussets 142.0; frame_shell after step_climb: with these gussets 151.1 MPa at
+        rail_L_BE (the rail's wall), with cross_h 60 instead 141.0 MPa at cross_B (the cross member's own wall, where
+        the hand calculation gives 75.5) - the run 20261103-171304-offroad-4w-scripted stopped there on cmp-0043
+
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake
 # (62 mm written for 62 cm). The hand calculation places the load at Q41 (k2_tests.tilt_inputs),
