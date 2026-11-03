@@ -213,6 +213,100 @@ requirements:
     source: user
     trust: 1
     basis: request (横転しても、乗っている人を守りたい)
+  # functional requirements of the off-road vehicle (the intake department's list FN-01..FN-19, 2026-11-03):
+  # what the vehicle must do, with its load and range; the tests R7, R8, C3 and H6 judge them
+  - key: Q66
+    name: 手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)
+    value: 300
+    unit: N
+    source: default
+    trust: 3
+    basis: >-
+      assumption: UN Regulation No. 79 (1988 text), table "Steering control effort requirements" (M1, with a
+      failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is
+      the assumption)
+  - key: Q67
+    name: 手の操作部の握る点の動きの上限 (Q66 の力で)
+    value: 5
+    unit: mm
+    source: default
+    trust: 3
+    basis: assumption (the range where the feel and position of the control do not change; no source)
+  - key: Q68
+    name: 足の操作部に掛かる力 (踏む面、踏む向き)
+    value: 500
+    unit: N
+    source: default
+    trust: 1
+    basis: >-
+      UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)
+  - key: Q69
+    name: 足の操作部の踏む面の支えの動きの上限 (Q68 の力で)
+    value: 5
+    unit: mm
+    source: default
+    trust: 3
+    basis: assumption (small against the control's travel; no source)
+  - key: Q75
+    name: 乗員と部品に掛かる横の加速度
+    value: 0.70
+    unit: g
+    source: default
+    trust: 1
+    basis: >-
+      CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own
+      peak from its dynamics tests counts instead when it is larger
+  - key: Q76
+    name: 乗員と部品に掛かる前後の加速度
+    value: 0.90
+    unit: g
+    source: default
+    trust: 1
+    basis: >-
+      CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on
+      2026-11-03). The vehicle's own peak counts instead when it is larger
+  - key: Q77
+    name: 乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)
+    value: 725
+    unit: N
+    source: default
+    trust: 1
+    basis: CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)
+  - key: Q78
+    name: Q77 の力を除いたあとの点 R の永久の横の変形の上限
+    value: 25
+    unit: mm
+    source: default
+    trust: 1
+    basis: CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)
+  - key: Q86
+    name: 乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)
+    value: 500
+    unit: kg
+    source: default
+    trust: 3
+    basis: >-
+      assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026),
+      3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract
+      having no unit J/kg or N/kg for them
+  - key: Q87
+    name: 泥や石を放す踏面の範囲 (車軸の真上から前へ)
+    value: 30
+    unit: deg
+    source: default
+    trust: 3
+    basis: >-
+      道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for
+      other traffic, borrowed: applying it to the occupants is an assumption
+  - key: Q88
+    name: 泥や石を放す踏面の範囲 (車軸の真上から後ろへ)
+    value: 50
+    unit: deg
+    source: default
+    trust: 3
+    basis: >-
+      the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this
+      arc counts too (assumption)
 tests: [R4]
 design_file: data/designs/offroad-4w-rollbar.json
 round_limit: 1
