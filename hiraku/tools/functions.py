@@ -575,7 +575,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     where = args.get("where")
     if where is not None and not (isinstance(where, str) and where):
         raise ToolError(f"compare の where は部材か部品の ID (文字列) です: {where!r}")
-    # tool_input.compare has no `where` yet (the place goes in the tool's answer, not the record)
+    # tool_input.compare has no `where` (it goes in the comparison record, contract comparison.where)
     _check_input("compare", {k: v for k, v in args.items() if k != "where"})
     pred = ctx.prediction(args["prediction_id"])
     if pred is None:
@@ -635,6 +635,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         "tolerance_rel": tol,
         "status": "match" if abs(diff_rel) <= tol else "mismatch",
         "cause_id": None,
+        **({"where": where} if where else {}),  # contract comparison.where: the place the result was taken
     }
     ctx.store.add_record("comparison", cmp, design_version=v, agent=agent, domain=lc["domain"])
     out: Record = {"comparison": cmp, "verdict": None}

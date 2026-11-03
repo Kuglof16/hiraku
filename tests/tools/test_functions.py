@@ -203,6 +203,8 @@ class CompareWhereTest(RunCase, unittest.TestCase):
                                  "where": "rail_L0"})
         self.assertEqual(out["comparison"]["status"], "match")
         self.assertEqual(out["where"], "rail_L0")
+        stored = self.ctx.store.get("comparison", out["comparison"]["comparison_id"])
+        self.assertEqual(stored["where"], "rail_L0")  # contract comparison.where
         self.assertIsNone(out["verdict"])
         self.assertIn("合否", out["note"])
         self.assertEqual(self.ctx.store.records("verdict"), [])
