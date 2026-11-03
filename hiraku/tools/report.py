@@ -175,7 +175,7 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
         ana = ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None
         if ana is None or ana["tool"] not in ctx.tools:
             raise ToolError(f"{lc['load_case_id']} には版 {ctx.version} の合否がまだ無いので、感度は出せません "
-                            f"(感度は合否の元になった解析の道具で出します)")
+                            f"(感度は合否の元になった解析のツールで出します)")
         upstream = {}
         for u in ctx.upstream_of(lc["load_case_id"]):
             got = trusted_analysis(ctx, u["load_case_id"])
@@ -409,9 +409,9 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
                     f"{ana['analysis_id']} {ana['tool']})")
             why_not = None
             if tool is None:
-                why_not = f"K5 は回していない: 道具 {ana['tool']} が棚に無い"
+                why_not = f"K5 は回していない: ツール {ana['tool']} が棚に無い"
             elif heavy:
-                why_not = f"K5 は回していない: {ana['tool']} は重い段の道具で、解き直しに時間がかかる"
+                why_not = f"K5 は回していない: {ana['tool']} は重い段のツールで、解き直しに時間がかかる"
             paths = [] if why_not else candidate_paths(s.design(), ana, ver, tool, revisable)
             if not why_not and not paths:
                 why_not = "K5 は回していない: 動かす設計の数の候補が無い"

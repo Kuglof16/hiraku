@@ -5,7 +5,7 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 
 # 予測してから解析する (荷重条件 1 つ分)
 
-数値は全部、道具が出す。ここで選ぶのは式・入力・道具だけ。自分で計算した数を入力や文に書かない。
+数値は全部、ツールが出す。ここで選ぶのは式・入力・ツールだけ。自分で計算した数を入力や文に書かない。
 
 ## 1. 見る
 
@@ -31,21 +31,21 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 照合 �
 - 入力はここから写す。別の荷重条件・別の製品 (介護ベッドなど) の式や値を借りない
 - 設計を直した版では、値は新しい版のもの。前の版で読んだ値を使い回さない
 
-## 2. 道具と式を選ぶ
+## 2. ツールと式を選ぶ
 
-- `list_tools(test_id=...)`: その試験を解析できる道具が 1 行ずつ返る。`usable` が true の道具を選ぶ (`tool=...` でその道具の全体)
-- 道具の `stage` と荷重条件の `stage` (get_context の load_cases) は重さの段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い計算)。軽い段から回す。その版で軽い段の荷重条件に赤か未判定が残る間は、重い段の道具の analyze は止められる (HK5)。止められたら、理由に出た荷重条件を先に済ませるか、赤ならまとめ役に返して設計役に直してもらう。同じ段の荷重条件は並べて回してよい
-- 梁のモデル (frame_static など) で通っても、同じ試験を解けるシェルの道具 (frame_shell など、管の壁を板で解くもの) が棚にあれば、それも回す
+- `list_tools(test_id=...)`: その試験を解析できるツールが 1 行ずつ返る。`usable` が true のツールを選ぶ (`tool=...` でそのツールの全体)
+- ツールの `stage` と荷重条件の `stage` (get_context の load_cases) は重さの段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い計算)。軽い段から回す。その版で軽い段の荷重条件に赤か未判定が残る間は、重い段のツールの analyze は止められる (HK5)。止められたら、理由に出た荷重条件を先に済ませるか、赤ならまとめ役に返して設計役に直してもらう。同じ段の荷重条件は並べて回してよい
+- 梁のモデル (frame_static など) で通っても、同じ試験を解けるシェルのツール (frame_shell など、管の壁を板で解くもの) が棚にあれば、それも回す
   - 梁は、管と管のつなぎ目の壁の曲げ (応力の集中) を見ない
   - 合否は、荷重条件ごとに新しい方の判定で決まる。シェルは梁のあとに回す
-- `list_formulas(tool=...)`: その道具の量を予測する K0 の式 (`formulas`) と、道具の対 (`predicts`)。式の入力の名前と単位、出力、前提を読む
-  - `predicts` は、道具のどの結果 (`quantity`) を、どの式 (`formula_id`) のどの出力 (`output`) で予測するかの対。判定の量 (`criterion.quantity`) を予測するときは、その量と対になった式を選ぶ
-  - 対の `note` を読む。ばねのある道具 (傾斜台の tilt など) の横に並ぶ剛体の式 (`tilt.rigid_angle` など) は初めの見積もりで、解析とは食い違う。ばねを入れた式 (`tilt.spring_roll_angle` など) があれば、そちらを判定の量の予測に使う
-- 試験に合う道具が棚に無いときは、道具を書く: `get_tool_template` で見本 (通して動くコードと、クラス・analyse の引数・結果の欄・答えの分かっている例 known_answers と check_record の決まり) を見て、`check_tool(code)` で試し、通ったら `make_tool(code, reason)`
+- `list_formulas(tool=...)`: そのツールの量を予測する K0 の式 (`formulas`) と、ツールの対 (`predicts`)。式の入力の名前と単位、出力、前提を読む
+  - `predicts` は、ツールのどの結果 (`quantity`) を、どの式 (`formula_id`) のどの出力 (`output`) で予測するかの対。判定の量 (`criterion.quantity`) を予測するときは、その量と対になった式を選ぶ
+  - 対の `note` を読む。ばねのあるツール (傾斜台の tilt など) の横に並ぶ剛体の式 (`tilt.rigid_angle` など) は初めの見積もりで、解析とは食い違う。ばねを入れた式 (`tilt.spring_roll_angle` など) があれば、そちらを判定の量の予測に使う
+- 試験に合うツールが棚に無いときは、ツールを書く: `get_tool_template` で見本 (通して動くコードと、クラス・analyse の引数・結果の欄・答えの分かっている例 known_answers と check_record の決まり) を見て、`check_tool(code)` で試し、通ったら `make_tool(code, reason)`
 
 ## 2b. シェルのつなぎ目のホットスポット
 
-シェルの道具 (`frame_shell`) の `max_hot_spot_stress` が、梁の式 (`frame_static.rail_joint_stress` など) の予測を大きく超え、結果の `where` がつなぎ目のときは、梁の式では予測できない。横の部材の端がレールの側の壁を板として曲げている。
+シェルのツール (`frame_shell`) の `max_hot_spot_stress` が、梁の式 (`frame_static.rail_joint_stress` など) の予測を大きく超え、結果の `where` がつなぎ目のときは、梁の式では予測できない。横の部材の端がレールの側の壁を板として曲げている。
 
 - `get_context(sections=["joint_wall_inputs"], load_case_id=...)`: 式 `frame_static.joint_wall_bending` の入力 (横の部材の端のモーメント `M`、断面、板の寸法など) を、コードが設計と荷重条件から出して返す
 - `record_prediction(quantity="max_hot_spot_stress", formula_id="frame_static.joint_wall_bending", output="sigma", inputs=返った inputs)` で予測し、その ID でシェルを `analyze` → `compare`

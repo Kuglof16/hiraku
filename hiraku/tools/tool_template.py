@@ -152,7 +152,7 @@ class FrameAtRest(BuiltinTool):
 '''
 
 DEFINE = (
-    "クラスを 1 つ (hiraku.solvers.shelf.base の BuiltinTool を継ぐ) か、TOOL = 道具のインスタンス を書く。"
+    "クラスを 1 つ (hiraku.solvers.shelf.base の BuiltinTool を継ぐ) か、TOOL = ツールのインスタンス を書く。"
     "BuiltinTool が spec()・check()・run() を持つので、書くのは欄 (name・title・domain・base・tests・load_case_params、"
     "任意で formulas・predicts・run_params) と known_answers()・analyse() の 2 つ。check() は known_answers() を呼ぶ"
 )
@@ -250,7 +250,7 @@ def api_doc(names: Any) -> Record:
     out: Record = {}
     for name in names[:API_OF_LIMIT]:
         if not _allowed(name):
-            out[name] = {"error": "道具が import できる HIRAKU のモジュールの下にありません (api.hiraku の一覧)"}
+            out[name] = {"error": "ツールが import できる HIRAKU のモジュールの下にありません (api.hiraku の一覧)"}
             continue
         mod, attr = None, None
         try:
@@ -292,9 +292,9 @@ def api_doc(names: Any) -> Record:
 
 
 # The rule this department's make_tool and check_tool add to the toolmaker's checks (functions.made_refusals).
-RULE = ("道具は 2 つのことを満たさないと使えない: (1) spec の formulas に、結果を予測する K0 の式 (list_formulas の "
+RULE = ("ツールは 2 つのことを満たさないと使えない: (1) spec の formulas に、結果を予測する K0 の式 (list_formulas の "
         "formula_id) が少なくとも 1 つある (判定には予測が要る); (2) known_answers に、expected が 0 でなく、source が"
-        "閉じた式・教科書・規格など道具の外の出典を名指しする例が少なくとも 1 つある (道具が使う式そのものの値は出典にならない)")
+        "閉じた式・教科書・規格などツールの外の出典を名指しする例が少なくとも 1 つある (ツールが使う式そのものの値は出典にならない)")
 
 
 def tool_template() -> Record:
@@ -305,7 +305,7 @@ def tool_template() -> Record:
     return {
         "code": TEMPLATE_CODE,
         "examples": {"k1_frame": K1_TEMPLATE_CODE},
-        "examples_note": ("examples.k1_frame は K1 の骨組で解く強度の道具: 設計に荷重条件の組を載せ "
+        "examples_note": ("examples.k1_frame は K1 の骨組で解く強度のツール: 設計に荷重条件の組を載せ "
                           "(hiraku.contract.loading.on_board)、hiraku.solvers.k1_frame の analyze で支えの上に立たせ、"
                           "build で作った骨組を known_answers で閉じた式と比べる"),
         "rule": RULE,
@@ -321,7 +321,7 @@ def tool_template() -> Record:
                           "そのうち 1 件は expected が 0 でなく、source が閉じた式・教科書・規格を名指しすること"),
         "imports": guard.allowed_text() + " (呼べる関数とクラスは check_tool の答えの api)",
         "not_allowed": ("open・exec・eval・getattr などと、ファイルの読み書き、__ で囲んだ属性 (__init__ のほか) は使えない。"
-                        "道具は別のプロセスで、時間の上限つきで走る"),
+                        "ツールは別のプロセスで、時間の上限つきで走る"),
         "next": ("code を自分の試験に合わせて書き換え (name は棚に無いもの、tests は自分の試験の ID、結果の quantity は "
                  "荷重条件の criterion.quantity)、check_tool(code) で試し、problems に従って直してから make_tool(code, reason)。"
                  "判定には、その量を予測する K0 の式 (list_formulas) が要る"),

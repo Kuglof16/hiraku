@@ -826,7 +826,7 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
         check_shelf(self.ctx)
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("道具 step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
+        self.assertIn("ツール step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
         self.assertFalse(any("frame_static の照合" in t for t in said))
 
 
@@ -850,8 +850,8 @@ class RunToolsOnlyTest(RunCase, unittest.TestCase):
         checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
         self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
-        (ev,) = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and "確かめない道具" in e["text"]]
+        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめないツール: tilt", said)
+        (ev,) = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and "確かめないツール" in e["text"]]
         self.assertEqual(ev["data"], {"tests": ["P1", "R1"], "checked": ["step_climb", "frame_static", "frame_shell"],
                                       "not_checked": ["tilt"]})
         self.assert_events_fit()
@@ -1137,7 +1137,7 @@ class UnpredictableCaseTest(RunCase, unittest.TestCase):
         self.assertEqual(rules.unpredictable_cases(self.ctx), {})
         reason = rules.stop_reason(self.ctx)
         part = reason[reason.index("R4-x"):]
-        self.assertIn("棚に R4 を解析できる使える道具がありません", part)
+        self.assertIn("棚に R4 を解析できる使えるツールがありません", part)
         self.assertIn("get_tool_template", part)
         self.assertIn("make_tool", part)
         self.assertNotIn("棚に R1", reason)  # frame_static is on the shelf for R1

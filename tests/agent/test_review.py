@@ -226,7 +226,7 @@ class N12Test(unittest.TestCase):
             self.assertIn("N12 unit mistake", all_)
 
     def test_a_cause_that_misses_the_unit(self):
-        f, _, _ = self.check(cause="解析の道具の許す幅が狭すぎる")
+        f, _, _ = self.check(cause="解析のツールの許す幅が狭すぎる")
         self.assertFalse(f.ok)
         self.assertIn("does not name the unit mistake", f.detail)
 

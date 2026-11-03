@@ -287,7 +287,7 @@ OPEN_RUN_SCHEMA: Record = {
 OWN_TOOLS: dict[str, tuple[str, Record]] = {
     "start_run": (
         "HIRAKU の実行を始める。要件のファイルから実行のフォルダを作り (分野選び・ヒアリング・ナレッジは CLI と同じ)、"
-        "道具の棚を確かめ、この会話の実行にする。ほかの道具はこの実行に働く。返る task がまとめ役の最初の仕事",
+        "ツールの棚を確かめ、この会話の実行にする。ほかのツールはこの実行に働く。返る task がまとめ役の最初の仕事",
         START_RUN_SCHEMA,
     ),
     "open_run": (
@@ -340,7 +340,7 @@ class PluginServer:
                 return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
             return {"content": [{"type": "text", "text": json.dumps(got, ensure_ascii=False)}]}
         if name not in HANDLERS:
-            return {"content": [{"type": "text", "text": f"道具 {name!r} はありません"}], "is_error": True}
+            return {"content": [{"type": "text", "text": f"ツール {name!r} はありません"}], "is_error": True}
         ctx = self.ctx
         if ctx is None or ctx.project["status"] != "running":
             return {"content": [{"type": "text", "text": NO_RUN}], "is_error": True}

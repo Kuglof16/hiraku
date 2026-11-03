@@ -373,10 +373,10 @@ def _specs_for_roles(step: Record) -> list[tuple[Record, str | None]]:
 # make_tool), so no plan step carries them: test id -> (module, name of its list of predictions). The
 # predictions read their inputs by code like any plan's (inputs_from), e.g. R4's portal frame and gaps.
 TOOLLESS_PREDICTIONS = {"R4": ("hiraku.catalog.builders.analysis", "R4_PREDICTIONS")}
-TOOLLESS_NOTE = ("この試験を解析する道具は棚にありません (get_tool_template を見て make_tool で作る)。"
+TOOLLESS_NOTE = ("この試験を解析するツールは棚にありません (get_tool_template を見て make_tool で作る)。"
                  "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です")
-MADE_TOOL_NOTE = ("この試験を解析する道具 {tools} は、この運転で作られて棚に入っています (make_tool)。"
-                  "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です。道具の結果と式の対は list_formulas(tool=...) の predicts")
+MADE_TOOL_NOTE = ("この試験を解析するツール {tools} は、この運転で作られて棚に入っています (make_tool)。"
+                  "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です。ツールの結果と式の対は list_formulas(tool=...) の predicts")
 
 
 def made_tools_for(ctx: RunContext, test_id: str) -> list[str]:
@@ -480,6 +480,6 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
             item["note"] = TOOLLESS_NOTE
         elif not steps:
             item["note"] = ("この荷重条件には、式の入力をコードで読む手順がありません。list_tools と list_formulas で"
-                            "道具と式を選び、入力の出どころを assumptions に書いてください")
+                            "ツールと式を選び、入力の出どころを assumptions に書いてください")
         out.append(item)
     return out

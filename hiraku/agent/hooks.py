@@ -50,7 +50,7 @@ PREFIX = f"mcp__{contract.MCP_SERVER}__"
 PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
-STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。道具を呼ばずに、ここまでのことを 1 文で言って番を終えてください"
+STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
 ROLE_RETURN_FOR_MESSAGE = ("まとめ役に、画面の人から伝言が届いています。今の荷重条件を区切りのよい所 (照合まで。食い違ったなら "
                            "record_cause を書いた所) まで進めたら、新しい荷重条件は始めずに、ここまでの結果をまとめ役に返して"

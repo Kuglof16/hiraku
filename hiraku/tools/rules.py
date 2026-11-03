@@ -127,9 +127,9 @@ def _h5(ctx: RunContext, lc_id: str, tool: str, domain: str | None) -> Denial | 
         red_hint = (f"赤のもの ({ids}) は、重い計算に進む前に、設計役 (designer) に通らなかった試験と合否の ID を渡して "
                     f"revise_design で次の版 (版 {ctx.version + 1}) を作らせてください (新しい版は段 0 からやり直す)。")
     return Denial(HK5, (
-        f"{tool} は{_stage_ja(n)}の道具なので、{lc_id} の解析は止めました。版 {ctx.version} で、それより軽い段の荷重条件に"
+        f"{tool} は{_stage_ja(n)}のツールなので、{lc_id} の解析は止めました。版 {ctx.version} で、それより軽い段の荷重条件に"
         f"赤か未判定が残っています: {named}。軽い段から確かめてください: 未判定のものは予測 → analyze → compare で"
-        f"判定を付けます。{red_hint}同じ段の道具は並べて回してかまいません"
+        f"判定を付けます。{red_hint}同じ段のツールは並べて回してかまいません"
     ), domain)
 
 
@@ -146,15 +146,15 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     usable = ", ".join(n for n, s in ctx.specs.items() if s["usable"]) or "なし"
     if name in ctx.tools and spec is None:
         return Denial(HK2, (
-            f"道具 {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
-            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+            f"ツール {name} は、{NOT_CHECKED}ので使えません (答えの分かっている例をこの実行では回していない)。"
+            f"list_tools で usable が true のツール ({usable}) を選んでください"
         ), domain)
     if (name in ctx.tools or spec is not None) and not (spec and spec["usable"]):
         checks = spec["checks"] if spec else []
         failed = [c["case"] for c in checks if not c["pass"]] or ["(答えの分かっている例が無い、またはまだ確かめていない)"]
         return Denial(HK2, (
-            f"道具 {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
-            f"list_tools で usable が true の道具 ({usable}) を選んでください"
+            f"ツール {name} は答えの分かっている例に通っていないので使えません (通らなかった例: {'; '.join(failed)})。"
+            f"list_tools で usable が true のツール ({usable}) を選んでください"
         ), domain)
 
     if lc_id is None or not ctx.has_load_case(lc_id):
@@ -372,7 +372,7 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
-                first = (f"棚に {lc['test_id']} を解析できる使える道具がありません。get_tool_template で道具の形を見て書き、"
+                first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
             steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")
