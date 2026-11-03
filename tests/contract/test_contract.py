@@ -244,6 +244,11 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("verdict", {**ok, "pass": True}), [])
         self.assertNotEqual(contract.errors("verdict", {k: v for k, v in ver.items() if k != "comparison_id"}), [])
 
+    def test_requirements_stop_after(self):
+        req = load("requirements_file.json")
+        self.assertEqual(contract.errors("requirements_file", {**req, "stop_after": "picks"}), [])
+        self.assertNotEqual(contract.errors("requirements_file", {**req, "stop_after": "design"}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
