@@ -21,7 +21,7 @@ import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
-import { lookFromParams } from "./look.js";
+import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
@@ -86,7 +86,8 @@ function fitStage() {
 const viewport = $("viewport");
 const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
 document.body.classList.add(`look-${look}`);
-const bench = new Workbench3D(viewport, look);
+const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+const bench = new Workbench3D(viewport, look, { quality });
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -795,7 +796,7 @@ function setCompare(s, chain, ct) {
       tags.className = "cmp-tags";
       viewport.prepend(el);
       viewport.append(tags);
-      cmpView = { el, tags, bench: new Workbench3D(el, look) };
+      cmpView = { el, tags, bench: new Workbench3D(el, look, { quality }) };
       window.hiraku.cmpBench = cmpView.bench;
     }
     const b = cmpView.bench;

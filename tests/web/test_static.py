@@ -52,7 +52,22 @@ class ContractCoverageTest(unittest.TestCase):
 
 class FilesTest(unittest.TestCase):
     def web_files(self):
-        return [p for p in WEB.rglob("*") if p.is_file()]
+        # the screen's own files; the Poly Haven assets (images, an HDRI and their NOTES.md
+        # with the assets' pages) are added by hand under web/assets/polyhaven/
+        assets = WEB / "assets" / "polyhaven"
+        return [p for p in WEB.rglob("*") if p.is_file() and not p.is_relative_to(assets)]
+
+    def test_asset_notes_name_each_asset_file(self):
+        """When the Poly Haven files are there, NOTES.md names each one and says CC0."""
+        assets = WEB / "assets" / "polyhaven"
+        files = [p for p in assets.glob("*/*") if p.is_file()] if assets.is_dir() else []
+        if not files:
+            self.skipTest("no Poly Haven file in web/assets/polyhaven/")
+        notes = read(assets / "NOTES.md")
+        self.assertIn("CC0", notes)
+        for p in files:
+            self.assertIn(p.name, notes)
+            self.assertIn(f"https://polyhaven.com/a/{p.parent.name}", notes)
 
     def test_external_urls_are_pinned(self):
         for p in self.web_files():
