@@ -9,7 +9,8 @@ data-kind, text sizes); a missing layout key is named on the page.
 Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
 The records are intake_cut_fixture's (shape examples). The layout is the story test's copy
 with n09 and n14 as in the promo department's layout.json at their commit cce1262 (the
-sections the pages read, without the notes).
+sections the pages read, without the notes), and n14.view.fill and N09's label limit 8 as
+in their working tree of 2026-11-03 night (not committed yet).
 """
 
 import copy
@@ -33,11 +34,11 @@ N09_N14 = {
             "times": {"lead_s": 0.3, "request_s": 0.3, "chips_from_s": 2.2, "chip_step_s": 0.35},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
     "n14": {"duration_s": 9.7, "knowledge": {"x": 96, "y": 96, "w": 700, "h": 790, "title_px": 30, "text_px": 24},
-            "view": {"x": 820, "y": 96, "w": 1004, "h": 560}, "ask": {"x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28},
+            "view": {"x": 820, "y": 96, "w": 1004, "h": 560, "fill": 0.8}, "ask": {"x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28},
             "times": {"lead_s": 0.3, "drop_s": 2.2, "rule_s": 3.6, "hit_s": 5.0, "ask_s": 6.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
 }
-STORY = {"n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 7}},
+STORY = {"n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 8}},
          "n14": {"message": "渡したノウハウが、設計のチェックの規則になる"}}
 
 

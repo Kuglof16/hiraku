@@ -10,8 +10,11 @@
 // - want: from times.lead_s the maker's want in one line (domains.picked want).
 // - shelf: from times.gap_s the shelf: a plain card for each tool already on it and a dotted
 //   card for the missing one, with one line naming what is missing (the tool's title before
-//   any bracket). From write_s the dotted card fills as the code is written, and it is solid
-//   once every check has passed. From times.shelf_s the box shows the analysis made with
+//   any bracket). The dotted card carries the new tool's name as its tag (a label, under it
+//   and flush with its right edge: cardName, the title without the product's name before
+//   it); the other cards have no names (the story's label limit 4: the three ticks and this
+//   name). From write_s the dotted card fills as the code is written, and it is solid (its
+//   tag green) once every check has passed. From times.shelf_s the box shows the analysis made with
 //   the tool instead: one figure (its count of uses, cycles_counted, when it has one) and
 //   what the run judged of it ("壊れる目安より小さい" when its verdicts pass).
 // - code: from times.write_s a few lines of the tool's code (from its analyse / run
@@ -20,7 +23,7 @@
 // - check: from times.check_s the known-answer checks (tool.checked checks): the check's
 //   quantity in words, the known answer and the tool's, and a short source; each is ticked
 //   (✓, or ✕ when it failed) one after another up to times.shelf_s.
-// The ticks are labels (data-kind), the analysis's figure a number. No record id, test id
+// The ticks and the new card's name are labels (data-kind), the analysis's figure a number. No record id, test id
 // or tool name is shown (the code is the tool's own text).
 // Positions, sizes, colours, the length and the times come from layout.json n13; a missing
 // key is named on the page.
@@ -59,6 +62,14 @@ export function n13Records(s, events) {
   const before = [...new Set(checked.filter((e) => e.seq < ev.seq && e.data.usable && e.data.name !== tool.name).map((e) => e.data.name))];
   const ana = usedBy(tool.name).at(-1) ?? null;
   return { tool, attempt, before, ana };
+}
+
+// The new card's name: the tool's title before any bracket, and when it says "<a>の<b>の<c>"
+// the first part (the product's name, "介護ベッドの") left out: "使う回数の疲労".
+export function cardName(tool) {
+  const t = toolTitle(tool) ?? "";
+  const parts = t.split("の");
+  return parts.length >= 3 ? parts.slice(1).join("の") : t;
 }
 
 // A few lines of a tool's code: from its analyse (or run) method, else from the top.
@@ -101,7 +112,9 @@ export class CutN13 {
     const n = this.before.length + 1;
     const cw = Math.min(140, Math.floor((S.w - 2 * 2 - 2 * 22 - (n - 1) * gap) / n));
     const card = (cls) => `<i class="n13-card${cls}" style="width:${cw}px;height:${Math.round(cw * 1.36)}px"><b></b></i>`;
-    const cards = this.before.map(() => card("")).join("") + card(" new");
+    const tag = `<span class="n13-tag" data-kind="label" style="font-size:${sx}px">${esc(cardName(this.tool))}</span>`;
+    // the name may be wider than the card: its column keeps the card's width, the name reaches left
+    const cards = this.before.map(() => card("")).join("") + `<span class="n13-newwrap" style="width:${cw}px">${card(" new")}${tag}</span>`;
     this.shelf.insertAdjacentHTML(
       "beforeend",
       `<div class="n13-shelf"><div class="n13-cards">${cards}</div>` +
@@ -111,6 +124,7 @@ export class CutN13 {
     this.shelfBody = this.shelf.querySelector(".n13-shelf");
     this.newCard = this.shelf.querySelector(".n13-card.new");
     this.fill = this.newCard.querySelector("b");
+    this.tag = this.shelf.querySelector(".n13-tag");
     this.gapEl = this.shelf.querySelector(".n13-gap");
     this.madeEl = this.shelf.querySelector(".n13-made");
     this.useEl = this.buildUse(name, sx);
@@ -202,6 +216,8 @@ export class CutN13 {
     this.fill.style.height = `${(solid ? 1 : typed * 0.85) * 100}%`;
     this.newCard.dataset.state = solid ? "solid" : typed > 0 ? "writing" : "missing";
     this.newCard.style.borderStyle = solid ? "solid" : "dashed";
+    this.tag.style.color = solid ? GREEN : RED;
+    this.tag.style.borderColor = solid ? GREEN : RED;
     this.gapEl.style.display = solid ? "none" : "";
     this.madeEl.style.display = solid ? "" : "none";
     // code: typed line by line from write_s to check_s; the caret moves while it types
