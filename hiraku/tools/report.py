@@ -283,7 +283,10 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
 
 SCRIPT_MARK = "台本: "  # every next item the code writes for a scripted run starts with this
 K5_HEAVY_TOOLS = ("frame_shell",)  # re-running these for K5 takes minutes (the shell solve)
-K5_MAX_WALL_S = 30.0  # no K5 when the governing analysis took longer than this (wall_time_s)
+# no K5 for a tool of this stage or heavier (contract tool_spec.stage: 3 shell and solid FE, fatigue on
+# spectra ...). Decided by the tool's kind, never by a measured time (docs/contract.md: clock times only
+# in analysis.wall_time_s / timings_s), so two runs of one plan write the same items
+K5_MAX_STAGE = 3
 K5_MAX_PATHS = 3  # design paths per governing verdict
 _IN_PARENS = re.compile(r"\(([A-Za-z0-9_.:-]+)\)")
 
@@ -401,14 +404,14 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
             cmp = s.get("comparison", ver["comparison_id"])
             ana = s.get("analysis", cmp["analysis_id"])
             tool = ctx.tools.get(ana["tool"])
-            wall = float(ana.get("wall_time_s") or 0.0)
-            head = (f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
+            heavy = ana["tool"] in K5_HEAVY_TOOLS or (ctx.specs.get(ana["tool"]) or {}).get("stage", 1) >= K5_MAX_STAGE
+            head =(f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
                     f"{ana['analysis_id']} {ana['tool']})")
             why_not = None
             if tool is None:
                 why_not = f"K5 は回していない: 道具 {ana['tool']} が棚に無い"
-            elif ana["tool"] in K5_HEAVY_TOOLS or wall > K5_MAX_WALL_S:
-                why_not = f"K5 は回していない: {ana['tool']} の解き直しが重い (解析に {wall:.0f} 秒)"
+            elif heavy:
+                why_not = f"K5 は回していない: {ana['tool']} は重い段の道具で、解き直しに時間がかかる"
             paths = [] if why_not else candidate_paths(s.design(), ana, ver, tool, revisable)
             if not why_not and not paths:
                 why_not = "K5 は回していない: 動かす設計の数の候補が無い"

@@ -147,12 +147,13 @@ class ReportTest(RunCase, unittest.TestCase):
         self.assertEqual(report.governing_verdicts(self.ctx, "handling"), [])
         ver = self.ctx.store.records("verdict")[-1]
         ana = self.ctx.store.get("analysis", self.ctx.store.get("comparison", ver["comparison_id"])["analysis_id"])
-        heavy = dict(ana, wall_time_s=report.K5_MAX_WALL_S + 1,
+        heavy = dict(ana, wall_time_s=999.0,  # a measured time decides nothing
                      effects=[{"name": "bending (rail_L0)", "value": 10.0, "unit": "MPa", "share": 0.75}])
+        self.ctx.specs[ana["tool"]] = dict(self.ctx.specs[ana["tool"]], stage=report.K5_MAX_STAGE)  # a heavy tool
         real_get = self.ctx.store.get
         with mock.patch.object(self.ctx.store, "get",
                                lambda kind, i: heavy if kind == "analysis" and i == ana["analysis_id"] else real_get(kind, i)), \
-                mock.patch.object(report, "sensitivities", side_effect=AssertionError("no K5 for a long analysis")):
+                mock.patch.object(report, "sensitivities", side_effect=AssertionError("no K5 for a heavy tool")):
             (item,), computed = report.scripted_next(self.ctx)
         self.assertEqual(computed, [])
         self.assertEqual(item["change"], "台本: rail_L0 が効いている (向きは出していない)")
