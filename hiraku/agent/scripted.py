@@ -28,7 +28,7 @@ from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, rule_check, write_report)
 from hiraku.tools.judge import verdict_line
-from hiraku.tools.plan import (READERS, ScriptError, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
 
