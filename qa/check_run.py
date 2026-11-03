@@ -54,9 +54,10 @@ their basis. What it looks at:
 - HK5 (light first): an analysis with a tool of stage n starts only when every load
   case with a criterion already checked in that version with a lower-stage tool
   has a passing verdict (stage from the tool's tool.checked spec, 1 when missing)
-- HK4: a run that finished as done has no picked domain still pending: every load
-  case with a criterion has a verdict in the last version (a red tile alone does
-  not end a domain), and no tile is left pending
+- HK4: a run that finished as done, or stopped at the round limit (which only ends
+  revisions), has no picked domain still pending: every load case with a
+  criterion has a verdict in the last version (a red tile alone does not end a
+  domain), and no tile is left pending
 - agents: each agent.started has its agent.stopped before run.finished (warning:
   an agent still working when the run ended was cut off)
 - run.finished: stop_code done exactly when the status is done (error with
@@ -918,9 +919,12 @@ class RunChecker:
             pq, aq = c.get("predicted", {}), c.get("analyzed", {})
             if pq != {"value": p.get("value"), "unit": p.get("unit")}:
                 self.error("comparison.values", w, f"{cid} predicted {pq} is not the prediction's value and unit")
-            named = [r for r in a.get("results", []) if r.get("quantity") == c.get("quantity")]
+            # where (a member or part id) picks the result when the tool reports the quantity in more than one place
+            named = [r for r in a.get("results", []) if r.get("quantity") == c.get("quantity")
+                     and (c.get("where") is None or r.get("where") == c["where"])]
             if not named:
-                self.error("comparison.values", w, f"{cid} quantity {c.get('quantity')} is not a result of "
+                at = f" at {c['where']}" if c.get("where") is not None else ""
+                self.error("comparison.values", w, f"{cid} quantity {c.get('quantity')}{at} is not a result of "
                                                    f"{a.get('analysis_id')}")
             elif not any({"value": r.get("value"), "unit": r.get("unit")} == aq for r in named):
                 self.error("comparison.values", w, f"{cid} analyzed {aq} is not {a.get('analysis_id')}'s "
@@ -1398,10 +1402,13 @@ class RunChecker:
         if self.project and d.get("stop_reason") and self.project.get("stop_reason") not in (None, d["stop_reason"]):
             self.error("run.status", layout.PROJECT_FILE, "stop_reason differs from the one in run.finished")
         self._check_stop_code(d.get("stop_code"), fstatus, w)
-        if fstatus != "done" or not self.project:
+        # HK4: done, or stopped at the round limit (it only ends revisions; the latest version is still judged)
+        ending = "done" if fstatus == "done" else "round_limit" if d.get("stop_code") == "round_limit" else None
+        if ending is None or not self.project:
             return
         if not self.designs:
-            self.error("HK4_no_stop_before_judged", w, "done without any design version")
+            if ending == "done":
+                self.error("HK4_no_stop_before_judged", w, "done without any design version")
             return
         last = max(self.designs)
         latest = self.latest_judgements(last)
@@ -1411,10 +1418,10 @@ class RunChecker:
             j = latest.get(dom)
             if dom in unjudged:
                 self.error("HK4_no_stop_before_judged", w,
-                           f"done while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
+                           f"{ending} while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
             elif j is None or j.get("state") == "pending":
-                self.error("HK4_no_stop_before_judged", w, f"done while the {dom} tile is not judged for version {last}")
-            elif j.get("state") == "red":
+                self.error("HK4_no_stop_before_judged", w, f"{ending} while the {dom} tile is not judged for version {last}")
+            elif j.get("state") == "red" and ending == "done":
                 self.warn("HK4_no_stop_before_judged", w, f"done with {dom} red for version {last} (stopped expected)")
 
     def check_recompute(self) -> None:

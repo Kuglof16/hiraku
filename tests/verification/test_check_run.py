@@ -392,6 +392,25 @@ class CheckRun(unittest.TestCase):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
 
+    def test_round_limit_still_judges_the_latest_version(self):
+        # HK4: the round limit only ends revisions; the latest version is still judged (red is judged)
+        def stopped(state):
+            ev = self._finish(sample_events(), "stopped", "round_limit", state)
+            ev[0]["data"]["round_limit"] = 0  # reached with the one version
+            if state == "red":
+                ev = self._finish(self._red(ev), "stopped", "round_limit", "red")
+            return ev
+        self.assertIn("HK4_no_stop_before_judged", self.rules(stopped("pending")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red"), "warn"))
+
+    def test_comparison_where_picks_the_result(self):
+        ev = sample_events()
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_L0"  # the sample's result is at rail_L0
+        self.assertNotIn("comparison.values", self.rules(ev))
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_R1"
+        self.assertFlags(ev, "comparison.values")
+
     def test_stopped_without_stop_code_is_a_warning(self):
         ev = self._finish(sample_events(), "stopped", state="pending")
         self.assertIn("run.stop_code", self.rules(ev, "warn"))
