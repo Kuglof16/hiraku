@@ -53,6 +53,7 @@ export const RULES = [
   { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみの道具だけ" },
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
+  { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
 ];
 
 export const BASE_JA = {
