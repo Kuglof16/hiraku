@@ -99,7 +99,8 @@ def demo_events(slug: str, *, from_file: bool = False, label: str | None = None)
         design = read_data(DESIGNS[slug])
         s.add(12.0, "design.created", agent="designer", design_version=design["design_version"], data=design)
         ids = iter(f"rchk-{i:04d}" for i in range(1, 1000))
-        for k, c in enumerate(rulecheck.check_all(rules, design, prepared.requirements_file["requirements"], id_factory=lambda: next(ids))):
+        for k, c in enumerate(rulecheck.check_all(rules, design, prepared.requirements_file["requirements"], id_factory=lambda: next(ids),
+                                                flags=req["flags"])):
             s.add(14.0 + 0.1 * k, "rule_check.recorded", agent="packager", design_version=c["design_version"],
                   text=None, data=c)
     return s.events

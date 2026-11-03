@@ -94,15 +94,48 @@ def verdict_line(v: Record) -> str:
             f"{OP_JA[v['op']]} {_amount(limit, v['limit']['unit'])} (余裕 {room}{safe})")
 
 
+SYSTEM_CATEGORY = "system"  # knowledge rules that a product's systems are there and connected end to end
+SYSTEM_DOMAIN = "assembly"  # their misses turn this domain's tile red
+
+
+def knowledge_rules(ctx: RunContext) -> dict[str, Record]:
+    """rule_id -> rule of the run's knowledge (the last knowledge.imported per document)."""
+    docs: dict[str, list[Record]] = {}
+    for e in ctx.store.events():
+        if e["kind"] == "knowledge.imported":
+            docs[e["data"]["doc"]["doc_id"]] = e["data"].get("rules", [])
+    return {r["rule_id"]: r for rules in docs.values() for r in rules}
+
+
+def system_misses(ctx: RunContext, version: int) -> list[tuple[Record, Record]]:
+    """(rule, its latest rule_check of the version) for each system rule that hits a part."""
+    rules = {rid: r for rid, r in knowledge_rules(ctx).items() if r.get("category") == SYSTEM_CATEGORY}
+    latest: dict[str, Record] = {}
+    for c in ctx.store.records("rule_check", version):
+        if c["rule_id"] in rules:
+            latest[c["rule_id"]] = c
+    return [(rules[rid], c) for rid, c in latest.items() if c["hits"]]
+
+
+def miss_line(rule: Record, check: Record) -> str:
+    where = "、".join(f"{h['part_id']}: {h['message']}" for h in check["hits"])
+    return f"{rule['rule_id']}「{rule['text']}」({where})"
+
+
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
+    """The tile of a domain: red when a verdict fails, or (assembly) when a system rule hits a part;
+    green when every load case with a criterion passed; else pending."""
     v = version or ctx.version
     verdicts = latest_verdicts(ctx, v)
     cases = [lc for lc in ctx.load_cases if lc["domain"] == domain and "criterion" in lc]
     got = [verdicts[lc["load_case_id"]] for lc in cases if lc["load_case_id"] in verdicts]
     missing = [lc["load_case_id"] for lc in cases if lc["load_case_id"] not in verdicts]
     reds = [x for x in got if not x["pass"]]
-    if reds:  # red even with tests left without a verdict; they are counted in the line
-        state, summary = "red", f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)
+    misses = system_misses(ctx, v) if domain == SYSTEM_DOMAIN and v else []
+    if reds or misses:  # red even with tests left without a verdict; they are counted in the line
+        lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
+                ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
+        state, summary = "red", "。".join(lines)
         if missing:
             summary += f"。判定の無い試験 {len(missing)}: " + "、".join(missing)
     elif got and not missing:
@@ -113,7 +146,7 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
         "design_version": v,
         "domain": domain,
         "state": state,
-        "red_count": len(reds),
+        "red_count": len(reds) + len(misses),
         "verdict_ids": [x["verdict_id"] for x in got],
         "summary": summary,
     }

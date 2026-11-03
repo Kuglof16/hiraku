@@ -84,11 +84,35 @@ def required_case(tool, test_id):
     """A load case with the required params of a tool, at values that run on the demo vehicle."""
     values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
               "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
-              "speed": q(20, "km/h")}
+              "speed": q(20, "km/h"), "actuator": "back", "n_seat": q(10000, "1"), "n_raise": q(1000, "1"),
+              "uses_per_hour": q(6, "1")}
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
+    if tool.name in BED_TOOLS:
+        params.update(loading="driver")  # a care bed has one occupant; the default loading names two
     return load_case(f"{test_id}-x", test_id, tool.domain, **params)
+
+
+BED_TOOLS = ("actuator_linkage", "use_fatigue", "actuator_duty")  # tools that read a care bed's names
+
+
+def design_for(tool):
+    """The demo vehicle, a default care bed for the tools that read a care bed's names, or the default space frame
+    for frame_tubes (it needs the suspension's pickup points on frame nodes)."""
+    if tool.name in BED_TOOLS:
+        from hiraku.designgen import care_bed
+
+        return care_bed.build()
+    if tool.name == "frame_tubes":
+        from hiraku.designgen import space_frame_utv
+
+        return space_frame_utv.build()
+    return DESIGN
+
+
+COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"},
+          "frame_tubes": {"element_size": {"value": 40.0, "unit": "mm"}}}
 
 
 class DeclarationsTest(unittest.TestCase):
@@ -114,7 +138,10 @@ class DeclarationsTest(unittest.TestCase):
         for t in TOOLS.values():
             if not t.predicts:
                 continue
-            rec = t.run(DESIGN, required_case(t, t.tests[0]), PRED, {})
+            # the coarsest meshes: a 10 mm shell of the demo vehicle commits about 8 GB in SuperLU. Mesh convergence
+            # solves more meshes; it is tested in test_mesh_convergence
+            params = COARSE.get(t.name, {})
+            rec = t.run(design_for(t), required_case(t, t.tests[0]), PRED, params)
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
             for p in t.predicts:
@@ -128,7 +155,7 @@ class DeclarationsTest(unittest.TestCase):
                 if p.required:
                     rec = t.run(DESIGN, load_case("x", t.tests[0], t.domain), PRED, {})
                     self.assertEqual(rec["status"], "failed", t.name)
-                    self.assertIn(f"{p.name} [{p.unit}]", rec["error"])
+                    self.assertIn(f"{p.name} [{p.unit or 'string'}]", rec["error"])
 
     def test_bad_values_fail(self):
         tool = TOOLS["frame_static"]
@@ -199,14 +226,16 @@ class StepClimbTest(unittest.TestCase):
         """The static lever rule misses the push couple; step_climb.pushed_wheel_load includes it."""
         from hiraku.solvers.k0_handcalc.vehicle import mass_summary
         s = mass_summary(DESIGN)
-        ins = {"m": q(s["mass_kg"], "kg"), "a": q(-s["cg_mm"][0], "mm"), "L": q(1700, "mm"), "n": q(2, "1")}
+        wb = DESIGN["variables"]["wheelbase"]["value"]
+        ins = {"m": q(s["mass_kg"], "kg"), "a": q(-s["cg_mm"][0], "mm"), "L": q(wb, "mm"), "n": q(2, "1")}
         F = solvers.formula_registry()
         static = F.evaluate("mass_props.front_wheel_load", ins)["outputs"]["W"]["value"]
         pushed = F.evaluate("step_climb.pushed_wheel_load", dict(ins, r=q(300, "mm"), h=q(100, "mm")))["outputs"]
         got = results(self.run_case(step_height=q(100, "mm")))
         for name, pred in (("front_wheel_load", pushed["W"]["value"]), ("front_wheel_force", pushed["F"]["value"])):
             self.assertLess(abs(got[name]["value"] - pred) / pred, 0.03, name)
-        self.assertGreater(abs(got["front_wheel_load"]["value"] - static) / static, 0.15)
+        # the static rule misses by 13 % on the demo (wheelbase 2020 mm; more on the first v1's 1700 mm)
+        self.assertGreater(abs(got["front_wheel_load"]["value"] - static) / static, 0.10)
 
     def test_rear_wheels_on_the_step_are_named_step(self):
         d = copy.deepcopy(DESIGN)

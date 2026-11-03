@@ -13,10 +13,18 @@ Road classes: G_d(0.1 cycle/m) = 16e-6 m^3 for class A, times 4 per class
 (C = 256e-6), waviness 2: the road classes of ISO 8608:2016, Mechanical
 vibration - Road surface profiles - Reporting of measured data; not checked
 in this repository (the standard text has not been read here). The S-N curve
-and Miner's rule are those of formula fatigue.constant_amplitude_damage.
+(FAT at 2e6 cycles, slope m, knee) is that of formula
+fatigue.constant_amplitude_damage, but the rainflow cycles of the road are a
+stress spectrum: below the knee the curve goes on with slope 2 m - 1, as
+IIW-1823-07 (2008) sec. 4.3.1, PDF p.110 gives for Miner summation of a
+spectrum (read in that document by the quality department; the k0 function
+library_fatigue.spectrum_slope). The design variable
+fatigue_slope_after_knee_constant_amplitude is the constant-amplitude slope (IIW-1823-07 sec. 3.2, p.44) and is not used
+for the damage.
 
 Design variables: fatigue_fat_class (MPa at 2e6 cycles), fatigue_slope,
-fatigue_knee_cycles, fatigue_slope_after_knee, tyre_stiffness (N/mm).
+fatigue_knee_cycles, tyre_stiffness (N/mm); fatigue_slope_after_knee_constant_amplitude
+only for the constant-amplitude prediction.
 """
 
 from __future__ import annotations
@@ -27,6 +35,7 @@ import numpy as np
 from scipy import signal
 
 from ..k0_handcalc import units
+from ..k0_handcalc.library_fatigue import spectrum_slope
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, support_loads
 from ..k1_frame.fatigue import equivalent_range, influence, miner, rainflow, sn_cycles
@@ -39,7 +48,8 @@ WAVINESS = 2.0
 # Band of the road model (wavelengths 0.35 m to 91 m): a modelling choice, not
 # checked against the bands ISO 8608 reports.
 N_BAND = (0.011, 2.83)  # cycle/m
-SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1", "fatigue_slope_after_knee": "1"}
+SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1"}
+CONSTANT_AMPLITUDE_SLOPE = "fatigue_slope_after_knee_constant_amplitude"  # not used for the road spectrum (see above)
 SERIES_POINTS = 600
 
 
@@ -80,11 +90,22 @@ def _var(design: Record, name: str, unit: str) -> float | None:
 
 
 def _sn(design: Record) -> tuple[float, float, float, float]:
+    """(FAT, m, knee cycles, slope below the knee for the road spectrum = 2 m - 1)."""
     vals = {k: _var(design, k, u) for k, u in SN_VARS.items()}
     missing = [f"{k} [{SN_VARS[k]}]" for k, v in vals.items() if v is None]
     if missing:
         raise DesignError("the design has no S-N data for: " + ", ".join(missing) + "; add them to design.variables")
-    return tuple(vals[k] for k in SN_VARS)
+    fat, m, n_knee = (vals[k] for k in SN_VARS)
+    return fat, m, n_knee, spectrum_slope(m)
+
+
+def slope_assumption(m: float, m2: float, m2_design: float | None) -> str:
+    text = (f"S-N の曲がり点より下は、傾き {m2:g} (= 2 × {m:g} − 1) で延ばした。道のゆれは振幅の変わる繰り返し (スペクトル) で、"
+            "IIW-1823-07 (2008) 4.3.1 節 (p.110) は、その Miner の和に 2m − 1 を使う (品質保証部がその文書で確かめた)")
+    if m2_design is not None:
+        text += (f"。設計の変数 {CONSTANT_AMPLITUDE_SLOPE} = {m2_design:g} は一定の振幅のときの傾き "
+                 "(同じ文書 3.2 節、p.44、とても多い回数) なので、ここでは使わない")
+    return text
 
 
 def road_wheel_forces(design: Record, speed: float, length: float, gd0: float, seed: int) -> tuple[np.ndarray, dict]:
@@ -177,6 +198,7 @@ def upstream_series(upstream: dict | None, design: Record) -> tuple[str, np.ndar
 
 class Fatigue(BuiltinTool):
     name = "fatigue"
+    stage = 3  # fatigue on road spectra
     title = "悪路の疲労 (輪の力 → フレームの応力 → レインフロー → S-N とマイナー則)"
     domain = "strength"
     base = "K1"
@@ -203,7 +225,8 @@ class Fatigue(BuiltinTool):
                  "sigma_w from frame_static.rail_joint_stress at rest (F = 0, W = the joint's wheel load); one quarter "
                  "car on the road class of the load case"),
         Predicts("fatigue_damage", "fatigue.constant_amplitude_damage", "D",
-                 "dS = equivalent_stress_range, n = cycles_counted, S-N data from the design variables"),
+                 "dS = equivalent_stress_range, n = cycles_counted, S-N data from the design variables (m2: the "
+                 "constant-amplitude slope fatigue_slope_after_knee_constant_amplitude, where the tool sums the spectrum with 2 m - 1)"),
         Predicts("cycles_counted", "fatigue.cycles_over_distance", "n",
                  "rough: f = the body bounce frequency (modal.quarter_car f)"),
     )
@@ -226,6 +249,11 @@ class Fatigue(BuiltinTool):
         D = miner([(100.0, 0.0, 1000.0)], 71.0, 3.0, 1e7, 22.0)
         out.append(check_record("1000 cycles of 100 MPa, FAT 71, m 3", "damage", 1000.0 / (2e6 * (71.0 / 100.0) ** 3), D,
                                 "1", 1e-12, "Miner: D = n / N, N = 2e6 (FAT / range)^m"))
+        knee = 71.0 * (2e6 / 1e7) ** (1.0 / 3.0)
+        out.append(check_record("S-N curve below the knee for a spectrum, FAT 71, m 3", "cycles_at_half_the_knee_range",
+                                1e7 * 2.0**5, sn_cycles(knee / 2.0, 71.0, 3.0, 1e7, spectrum_slope(3.0)), "1", 1e-9,
+                                "slope 2 m - 1 = 5 below the knee for Miner summation of a spectrum (IIW-1823-07 (2008) "
+                                "sec. 4.3.1, p.110): half the knee range lasts 2^5 times the knee cycles"))
         rng = np.random.default_rng(0)
         series = rng.normal(size=4000)
         out.append(check_record("rainflow of a random series", "sum_of_half_ranges",
@@ -248,7 +276,7 @@ class Fatigue(BuiltinTool):
         target = param_value(load_case, "distance", "m")
         if target is None or target <= 0:
             raise LoadCaseError("fatigue needs the load case parameter distance (the life to check, e.g. 5000 km)")
-        fat, m, n_knee, m2 = _sn(design)
+        fat, m, n_knee, m2 = _sn(design)  # m2: the spectrum's slope below the knee, 2 m - 1
         up = upstream_series(params.get("upstream_analyses"), design)
         if up is not None:
             src, t, F, sample = up
@@ -316,7 +344,8 @@ class Fatigue(BuiltinTool):
         series += sn_series(fat, m, n_knee, m2, scaled, member)
         fields = [{"kind": "damage", "label": f"Miner damage over {target / 1000:g} km (largest weld point)", "unit": "1",
                    "per_member": per_member}]
-        out = {"results": results, "fields": fields, "series": series, "effects": effects}
+        out = {"results": results, "fields": fields, "series": series, "effects": effects,
+               "assumptions": [slope_assumption(m, m2, _var(design, CONSTANT_AMPLITUDE_SLOPE, "1"))]}
         if road is not None:
             out["scene"] = [road]
         return out
@@ -328,7 +357,9 @@ SPECTRUM_POINTS = 200
 
 def sn_series(fat: float, m: float, n_knee: float, m2: float, cycles: list, member: str) -> list[Record]:
     """The S-N curve (stress range against cycles to failure) and the stress ranges counted at the worst
-    point over the distance, largest first, against the cycles that reach at least that range."""
+    point over the distance, largest first, against the cycles that reach at least that range. m2 is the
+    slope below the knee that the damage used (2 m - 1 for the road spectrum), so the curve drawn is the
+    one the counted ranges are summed against."""
     s_knee = fat * (2e6 / n_knee) ** (1.0 / m)
     N = np.logspace(4.0, 10.0, SN_POINTS)
     S = np.where(N < n_knee, fat * (2e6 / N) ** (1.0 / m), s_knee * (n_knee / N) ** (1.0 / m2))

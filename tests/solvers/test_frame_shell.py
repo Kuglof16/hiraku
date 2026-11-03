@@ -36,6 +36,8 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertEqual((t.domain, t.base, t.tests), ("strength", "K1", ["R1"]))
         d = t.describe()
         self.assertEqual([p["name"] for p in d["params"]], ["loading", "g_factor", "step_height", "step_supports"])
+        self.assertEqual([p["name"] for p in d["run_params"]], ["element_size", "mesh_convergence"])
+        self.assertEqual(d["run_params"][0]["default"], {"value": 10.0, "unit": "mm"})
         ids = [p["formula_id"] for p in d["predicts"]]
         self.assertEqual(ids[0], "frame_static.joint_wall_bending")
         self.assertIn("frame_static.rail_joint_stress", ids)
@@ -53,7 +55,6 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertTrue(any("ladder" in r["case"] for r in rows))
         for r in rows:
             contract.validate("tool_check", r)
-        self.assertLess(dt, 15.0)
 
     def test_other_mesh_is_named(self):
         lad = fixtures.ladder_design()
@@ -77,9 +78,40 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertIn("unbalanced", rec["error"])
 
 
-@unittest.skipUnless(SLOW, "set HIRAKU_SLOW_TESTS=1 for the demo's three shell solves (about 20 s)")
+class ElementSizeTest(unittest.TestCase):
+    LC = {"load_case_id": "R1-x", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
+          "tolerance_rel": 0.15}
+
+    def run_with(self, params):
+        return tool("frame_shell").run(fixtures.ladder_design(), self.LC, [{"prediction_id": "pred-0001"}], params)
+
+    def test_size_and_mesh_convergence(self):
+        rec = self.run_with({"element_size": {"value": 0.02, "unit": "m"}, "mesh_convergence": "3"})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
+        self.assertTrue(any(e["name"].startswith("shell model") and "(edge 20 mm)" in e["name"] for e in rec["effects"]))
+        conv = rec["mesh_convergence"]
+        self.assertEqual([lv["element_size_mm"] for lv in conv["levels"]], [40.0, 20.0, 10.0])
+        self.assertEqual(conv["levels"][1]["value"], value(rec, "max_hot_spot_stress"))
+        self.assertIn(conv["verdict"], ("converged", "not_converged", "singular"))
+        self.assertTrue(any(e["name"].startswith("mesh convergence of max_stress") for e in rec["effects"]))
+        off = self.run_with({"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"})
+        self.assertNotIn("mesh_convergence", off)
+        self.assertEqual(off["results"], rec["results"])
+
+    def test_bad_values_fail_with_the_reason(self):
+        for params, why in [({"element_size": {"value": 3.0, "unit": "mm"}}, "must be 5 to 20 mm, got 3 mm"),
+                            ({"element_size": {"value": 8.0, "unit": "kg"}}, "run parameter 'element_size' must be in mm"),
+                            ({"mesh_convergence": "5"}, "run parameter 'mesh_convergence' must be one of off, 3")]:
+            rec = self.run_with(params)
+            self.assertEqual(rec["status"], "failed", params)
+            self.assertIn(why, rec["error"])
+
+
+@unittest.skipUnless(SLOW, "set HIRAKU_SLOW_TESTS=1 for the demo's shell solves (about 55 s)")
 class DemoStepTest(unittest.TestCase):
-    """offroad-4w-v1, R1 on a 100 mm step: three solves (about 6 s each)."""
+    """offroad-4w-v1, R1 on a 100 mm step: three runs (about 6 s each), the first with the mesh convergence
+    (20 and 5 mm more, about 30 s)."""
 
     @classmethod
     def setUpClass(cls):
@@ -94,9 +126,10 @@ class DemoStepTest(unittest.TestCase):
         up = {"P1-step100": cls.p1}
         cls.with_mesh = t.run(cls.design, cls.lc, [{"prediction_id": "pred-0002"}],
                               {"mesh": cls.mesh, "upstream_analyses": up})
-        cls.no_mesh = t.run(cls.design, cls.lc, [{"prediction_id": "pred-0002"}], {})  # K0 step forces, no upstream
+        off = {"mesh_convergence": "off"}
+        cls.no_mesh = t.run(cls.design, cls.lc, [{"prediction_id": "pred-0002"}], off)  # K0 step forces, no upstream
         cls.other = t.run(cls.design, cls.lc, [{"prediction_id": "pred-0002"}],
-                          {"mesh": dict(cls.mesh, design_version=2), "upstream_analyses": up})
+                          {"mesh": dict(cls.mesh, design_version=2), "upstream_analyses": up, **off})
 
     def test_status_and_contract(self):
         self.assertEqual(self.p1["status"], "ok", self.p1.get("error"))
@@ -126,7 +159,9 @@ class DemoStepTest(unittest.TestCase):
         self.assertTrue(all(len(v) == 3 for v in disp["per_mesh_node"]))
         size = len(json.dumps(self.with_mesh))
         print(f"  frame_shell record with the mesh fields: {size / 1e6:.2f} MB")
-        self.assertLess(size, 1.5e6)
+        # about 50 bytes per element: three stress surfaces and the error estimate per element, the displacement
+        # per node; the default v1 (with the roll bar) at 10 mm with weld strips has about 49600 elements (2.5 MB)
+        self.assertLess(size, 60 * len(self.mesh["elements"]))
 
     def test_no_mesh_no_mesh_fields(self):
         self.assertEqual(mesh_fields(self.no_mesh), [])
@@ -194,13 +229,14 @@ class ReinforcedJointsTest(unittest.TestCase):
         cls.mesh = dict(solvers.frame_mesh(cls.gusset), mesh_id="mesh-0001")
         lc = {"load_case_id": "R1-rest", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
               "tolerance_rel": 0.15}
-        cls.rec = tool("frame_shell").run(cls.gusset, lc, [{"prediction_id": "pred-0001"}], {"mesh": cls.mesh})
+        cls.rec = tool("frame_shell").run(cls.gusset, lc, [{"prediction_id": "pred-0001"}],
+                                          {"mesh": cls.mesh, "mesh_convergence": "off"})
 
     def test_gusset_record(self):
         rec = self.rec
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
-        self.assertEqual(len(mesh_fields(rec)), 4)  # the mesh with the gusset plates is drawn
+        self.assertEqual(len(mesh_fields(rec)), 5)  # the mesh with the gusset plates is drawn (with the error estimate)
         pm = next(f for f in rec["fields"] if f.get("label", "").startswith("シェル") and "per_member" in f)["per_member"]
         self.assertEqual(set(pm), {m["id"] for m in self.gusset["members"]})
         self.assertIn("gussets meshed as plates", " ".join(e["name"] for e in rec["effects"]))

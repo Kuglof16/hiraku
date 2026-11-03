@@ -19,12 +19,21 @@ ending -beyond); PLANS_BEYOND[test_id] is its step where it differs from PLANS.
 The analysis department's tests are in analysis.py; the K2 team's in k2_*.py,
 which this package collects by name. Each module exports BUILDERS and may
 export PLANS, PLANS_BEYOND and FEEDS; a test id belongs to one module only.
+
+A module product_<name>.py holds the builders of one product (its PRODUCT, a
+requirements file's `product`): for that product they take the place of the
+general builders of the same tests (BUILDERS[test_id] looks at req["product"]);
+for other products those tests keep their general builder, or have none. Its
+PLANS go into PLANS only for tests that have no general plan; its FEEDS join
+FEEDS (meant for tests only that product builds); PRODUCT_STEPS
+[product](load_case) gives the scripted step of each of its load cases.
 """
 
 from __future__ import annotations
 
 import importlib
 import pkgutil
+from typing import Callable
 
 from hiraku.catalog.builders.common import BuildError, Record
 
@@ -32,6 +41,25 @@ BUILDERS: dict = {}
 PLANS: dict[str, Record] = {}
 PLANS_BEYOND: dict[str, Record] = {}  # steps of the cases past the limit that differ from PLANS
 FEEDS: dict[str, list[str]] = {}
+PRODUCT_BUILDERS: dict[str, dict] = {}  # product -> test id -> builder
+PRODUCT_STEPS: dict[str, Callable[[Record], Record | None]] = {}  # product -> load case -> its scripted step
+
+
+def _by_product(test_id: str, general):
+    def build(spec: Record, req: Record, design: Record):
+        own = PRODUCT_BUILDERS.get(req.get("product"), {}).get(test_id)
+        if own is not None:
+            return own(spec, req, design)
+        if general is None:
+            from hiraku.catalog.build import NO_BUILDER
+
+            makers = sorted(p for p, b in PRODUCT_BUILDERS.items() if test_id in b)
+            raise BuildError(f"test {test_id} is built only for {', '.join(makers)} here: {NO_BUILDER}")
+        return general(spec, req, design)
+
+    build.__name__ = f"{test_id.lower()}_by_product"
+    build.general = general
+    return build
 
 
 def _collect() -> None:
@@ -48,8 +76,23 @@ def _collect() -> None:
         PLANS_BEYOND.update(getattr(mod, "PLANS_BEYOND", {}))
         for test_id, down in getattr(mod, "FEEDS", {}).items():
             FEEDS.setdefault(test_id, []).extend(t for t in down if t not in FEEDS.get(test_id, []))
+    for m in sorted(m.name for m in pkgutil.iter_modules(__path__) if m.name.startswith("product_")):
+        mod = importlib.import_module(f"{__name__}.{m}")
+        product = mod.PRODUCT
+        if product in PRODUCT_BUILDERS:
+            raise RuntimeError(f"product {product} has builders in two modules")
+        PRODUCT_BUILDERS[product] = dict(mod.BUILDERS)
+        if hasattr(mod, "step_for"):
+            PRODUCT_STEPS[product] = mod.step_for
+        for test_id, plan in getattr(mod, "PLANS", {}).items():
+            PLANS.setdefault(test_id, plan)
+        for test_id, down in getattr(mod, "FEEDS", {}).items():  # tests only this product builds (care-bed: P5 -> T3)
+            FEEDS.setdefault(test_id, []).extend(t for t in down if t not in FEEDS.get(test_id, []))
+        for test_id in mod.BUILDERS:
+            general = BUILDERS.get(test_id)
+            BUILDERS[test_id] = _by_product(test_id, getattr(general, "general", general))
 
 
 _collect()
 
-__all__ = ["BUILDERS", "FEEDS", "PLANS", "PLANS_BEYOND", "BuildError"]
+__all__ = ["BUILDERS", "FEEDS", "PLANS", "PLANS_BEYOND", "PRODUCT_BUILDERS", "PRODUCT_STEPS", "BuildError"]

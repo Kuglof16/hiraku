@@ -421,6 +421,7 @@ UNIT_TO_SI: dict[str, tuple[str, float, float]] = {
     # dimension would convert 1 Hz to 1 rad/s
     "rad/s": ("angular_rate", 1.0, 0.0),
     "deg/s": ("angular_rate", sc.degree, 0.0),
+    "rad/s^2": ("angular_acceleration", 1.0, 0.0),
 }
 
 

@@ -113,7 +113,8 @@ def cmd_rules(a: argparse.Namespace) -> int:
         print(f"{p.name}: 規則 {len(got.record['rules'])} 件" + (f"、式が要る文 {len(got.needs_formula)} 件 (Claude に書かせる)" if got.needs_formula else ""))
         for nf in got.needs_formula:
             print(f"    {nf['cand_id']}: {nf['text']}" + (f"  [{nf['problem']}]" if "problem" in nf else ""))
-    checks = rulecheck.check_all(rules, design, requirements)
+    flags = _product(a.product)["flags"] if a.product else None
+    checks = rulecheck.check_all(rules, design, requirements, flags=flags)
     text = {r["rule_id"]: r["text"] for r in rules}
     print(rulecheck.summary_line(checks, rules))
     for c in checks:

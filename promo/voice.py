@@ -13,9 +13,15 @@ words the engine misreads; subtitles keep the text as written.
     py promo/voice.py reading SCRIPT --speaker ID [--readings FILE]
     py promo/voice.py synth   SCRIPT OUT_DIR --speaker ID [--readings FILE] [--only N07_2.wav ...]
 
+    py promo/voice.py adopt   SCRIPT WAV_DIR       # recorded WAVs (N00_1.wav ...) -> voice.json
+
 ``synth`` writes one WAV per sentence and ``voice.json`` (file, seconds,
 text), then prints how each cut's voice fits its slot. ``--only`` remakes
 just the named sentences and keeps the others as they were.
+``adopt`` measures WAVs made elsewhere (the recorder in promo/recorder/),
+writes the same ``voice.json`` for the sentences it finds, and names the
+sentences with no file and the files that are not in the script. It exits
+with status 1 when a sentence is missing (voice.json is still written).
 The engine address is http://127.0.0.1:10101 unless AIVIS_URL is set.
 """
 
@@ -214,6 +220,60 @@ def cmd_synth(script: Path, out_dir: Path, speaker: int, readings_file: Path | N
     print(f"voice total {total:.1f} s")
 
 
+def wav_format(path: Path) -> tuple[int, int, int]:
+    """(rate, channels, bytes per sample)"""
+    with wave.open(str(path), "rb") as w:
+        return w.getframerate(), w.getnchannels(), w.getsampwidth()
+
+
+def adopt(script: Path, wav_dir: Path) -> dict:
+    """voice.json for recorded WAVs named like the synthesized ones.
+
+    Returns {"meta": what was written, "missing": [...], "extra": [...],
+    "odd_format": [(file, rate, channels, width)]}.
+    """
+    lines = parse_script(script.read_text(encoding="utf-8"))
+    names = sentence_files(lines)
+    records, present, missing, odd = [], [], [], []
+    for ln, name in zip(lines, names):
+        path = wav_dir / name
+        if not path.is_file():
+            missing.append(name)
+            continue
+        fmt = wav_format(path)
+        if fmt != (44100, 1, 2):
+            odd.append((name, *fmt))
+        sec = wav_seconds(path)
+        present.append(ln)
+        records.append({**asdict(ln), "spoken": ln.ja, "file": name, "seconds": round(sec, 3)})
+    known = set(names)
+    extra = sorted(p.name for p in wav_dir.glob("*.wav") if p.name not in known)
+    report = fit_report(present, [r["seconds"] for r in records]) if records else []
+    meta = {"source": "recorded", "sentence_gap_s": SENTENCE_GAP_S,
+            "lines": records, "fit": report, "missing": missing}
+    (wav_dir / "voice.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"meta": meta, "missing": missing, "extra": extra, "odd_format": odd}
+
+
+def cmd_adopt(script: Path, wav_dir: Path) -> int:
+    res = adopt(script, wav_dir)
+    for r in res["meta"]["lines"]:
+        print(f"{r['file']:12s} {r['seconds']:5.2f} s  {r['ja']}")
+    if res["meta"]["fit"]:
+        print("\ncut    voice  slot  spare")
+        for r in res["meta"]["fit"]:
+            flag = "  OVER" if r["spare_s"] < 0 else ""
+            print(f"{r['cut']:5s} {r['voice_s']:6.2f} {r['slot_s']:5.1f} {r['spare_s']:6.2f}{flag}")
+    for name, rate, ch, width in res["odd_format"]:
+        print(f"  {name}: {rate} Hz, {ch} ch, {8 * width} bit (expected 44100 Hz, 1 ch, 16 bit)")
+    if res["extra"]:
+        print("not in the script: " + ", ".join(res["extra"]))
+    if res["missing"]:
+        print("missing: " + ", ".join(res["missing"]))
+    print(f"wrote {wav_dir / 'voice.json'} ({len(res['meta']['lines'])} sentences)")
+    return 1 if res["missing"] else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Japanese text on a cp932 console
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -232,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--speed", type=float, default=1.0)
     p.add_argument("--only", nargs="+", metavar="FILE",
                    help="synthesize only these (e.g. N07_2.wav); keep the others from voice.json")
+    p = sub.add_parser("adopt", help="measure recorded WAVs and write voice.json")
+    p.add_argument("script", type=Path)
+    p.add_argument("wav_dir", type=Path)
     a = ap.parse_args(argv)
 
     if a.cmd == "speakers":
@@ -248,6 +311,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{ln.cut:5s} {reading(apply_readings(ln.ja, readings), a.speaker)}")
     elif a.cmd == "synth":
         cmd_synth(a.script, a.out_dir, a.speaker, a.readings, a.speed, a.only)
+    elif a.cmd == "adopt":
+        return cmd_adopt(a.script, a.wav_dir)
     return 0
 
 

@@ -15,6 +15,15 @@ mesh of the tube walls:
   assumption, not checked). A frame node that no tube passes through (a
   corner or an open end) uses its joint nodes (mesh.joints[frame_node]).
   Unsprung parts (carrier "support") load the same nodes.
+- or mount loads: the forces the body receives at the suspension mounts
+  (K2's mount series, in the body's axes), each at its hard point, carried
+  in where the design takes it (k1_frame.analyze.mount_carriers): on the
+  joint nodes of the frame node at the point (a tower's top), shared over
+  the joints of a bracket's carried_by nodes, else spread over the
+  support's wheel mount as the ground forces are; a moment per support (a
+  drive or brake reacting on the body) on the wheel mount. The unsprung parts are inside those forces, so they are left out
+  as K2 splits them (k1_frame.analyze.sprung_items: wheel kinds out,
+  suspension kinds half), and gravity may come tilted (the body's attitude).
 - the elements inside a wheel mount (mesh.mount_elements: all their nodes
   in the mount) are left out of the peak stress, the safety factors and
   everything read at the peak: there the bracket is welded over the wall
@@ -35,6 +44,10 @@ mesh of the tube walls:
   on every mass, so the loads are self-balanced. Six restraints (3-2-1 on
   single nodes of three support joints) only stop rigid-body motion; their
   reactions over the weight are reported as residual_ratio.
+- the mesh has weld strips (mesh.build_mesh, weld_strips=True by default) and
+  the result carries the structural hot-spot stresses along the joints' weld
+  lines (stress.hot_spots; the elements inside the wheel mounts are not
+  read): hot_spots, and hot_spot_max the one of largest size.
 """
 
 from __future__ import annotations
@@ -47,10 +60,11 @@ import numpy as np
 
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, mass_summary, node_table, resultant, support_loads
-from ..k1_frame.analyze import BALANCE_TOL, _split, rigid_fit
+from ..k1_frame.analyze import BALANCE_TOL, _split, mount_carriers, mount_share, rigid_fit, sprung_items
+from . import cache
 from .mesh import ELEMENT_SIZE_MM, ShellMesh, build_mesh
-from .solve import ShellModel, StaticSolver, dofs_of, spread_load
-from .stress import ShellStress, element_stresses
+from .solve import ShellModel, StaticSolver, dofs_of, solver_choice, spread_load
+from .stress import ShellStress, element_stresses, hot_spots
 
 WALLS = {(0, 0, 1): "upper", (0, 0, -1): "lower", (0, 1, 0): "left (+y)", (0, -1, 0): "right (-y)",
          (1, 0, 0): "front (+x)", (-1, 0, 0): "rear (-x)"}
@@ -83,12 +97,12 @@ class ShellFrame:
     _solver: StaticSolver | None = None
 
     @classmethod
-    def build(cls, design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> "ShellFrame":
+    def build(cls, design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> "ShellFrame":
         t0 = time.perf_counter()
         nodes = node_table(design)
         sup = design.get("supports", [])
         support_node = {}
-        mesh = build_mesh(design, element_size_mm)
+        mesh = build_mesh(design, element_size_mm, weld_strips)
         for s in sup:
             fn = s.get("frame_node")
             if not fn:
@@ -102,9 +116,7 @@ class ShellFrame:
         held = _hold_supports(sup)
         hold_nodes = []
         for sid in held:
-            j = mesh.joints[support_node[sid]]
-            x0 = nodes[support_node[sid]]
-            hold_nodes.append(int(j[np.argmin(np.linalg.norm(mesh.nodes[j] - x0, axis=1))]))
+            hold_nodes.append(hold_node(mesh, support_node[sid], nodes[support_node[sid]]))
         a, b, c = hold_nodes
         fixed = np.concatenate([dofs_of(a, "xyz"), dofs_of(b, "yz"), dofs_of(c, "z")])
         excluded = np.zeros(mesh.n_elements, bool)
@@ -123,6 +135,28 @@ class ShellFrame:
         return self._solver
 
 
+_FRAMES = cache.LRU(cache.FRAMES)
+
+
+def shared_frame(design: dict, element_size_mm: float = ELEMENT_SIZE_MM,
+                 weld_strips: bool = True) -> tuple[ShellFrame, bool]:
+    """The built and factorised ShellFrame of the design's frame, made once per process for the same
+    frame (cache.design_key: the parts other than gussets do not change it), element size and
+    weld_strips, factorised by the same linear solver (solve.solver_choice); (frame, whether it came
+    from the cache). Only frames small enough for cache.keep_frame are kept. HIRAKU_SHELL_CACHE=0:
+    built every time."""
+    def make():
+        fr = ShellFrame.build(design, element_size_mm, weld_strips)
+        fr.solver()
+        return fr
+
+    if not cache.enabled():
+        return make(), False
+    solver_class = f"{StaticSolver.__module__}.{StaticSolver.__qualname__}"  # a solver patched in (tests) is another key
+    key = cache.design_key(design, "frame", float(element_size_mm), bool(weld_strips), solver_choice(), solver_class)
+    return _FRAMES.get_or_make(key, make, keep=lambda fr: cache.keep_frame(fr.mesh.n_elements))
+
+
 def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
     """Parts whose mass the shell elements carry, so they are not added again as parts: the gussets
     meshed as plates (ms.part_material), and the through parts (kind frame, id through_<member>_<node>,
@@ -136,6 +170,18 @@ def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
                 and p["id"].startswith("through_") and p["id"].endswith(f"_{cb[0]}")):
             out.add(p["id"])
     return out
+
+
+def hold_node(mesh: ShellMesh, node: str, x0) -> int:
+    """The mesh node of design node `node`'s joint nearest x0 that can be held: not the slave of a rigid
+    link (at a tied joint the branch's ring nodes are slaves, and a fixed DOF cannot be on one)."""
+    j = np.asarray(mesh.joints[node], int)
+    slaves = [s for s, _ in mesh.links]
+    cand = j[~np.isin(j, slaves)] if slaves else j
+    if len(cand) == 0:
+        raise DesignError(f"every mesh node of the joint at {node} is tied to another tube, so the support there "
+                          f"cannot hold the shell; carry the support on another node")
+    return int(cand[np.argmin(np.linalg.norm(mesh.nodes[cand] - np.asarray(x0, float), axis=1))])
 
 
 def _hold_supports(sup: list[dict]) -> list[str]:
@@ -172,11 +218,18 @@ def _ground(design: dict, summ: dict, g_factor: float, step_mm, step_supports, g
     return ground, statics, ("K0 step" if step_mm is not None else "K0 rest")
 
 
-def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inertia_N) -> float:
-    """k1_frame.analyze's balance test (same masses, same tolerance); raises DesignError when it fails."""
-    weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
-    pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
-    pairs += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in summ["items"]]
+def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inertia_N, gvec=None) -> float:
+    """k1_frame.analyze's balance test (same masses, same tolerance); raises DesignError when it fails.
+    gvec: gravity in the body's axes (m/s^2) when it is not straight down x g_factor."""
+    if gvec is None:
+        weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        pairs += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in summ["items"]]
+    else:
+        gvec = np.asarray(gvec, float)
+        weight = summ["mass_kg"] * float(np.linalg.norm(gvec))
+        pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
+        pairs += [(it.cg_mm, it.mass_kg * gvec) for it in summ["items"]]
     F, M = resultant(pairs)
     M_cg = M - np.cross(summ["cg_mm"], F)
     span = max(float(np.ptp([s["position_mm"][0] for s in design["supports"]])), 1.0)
@@ -199,22 +252,65 @@ def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inert
     return off
 
 
+def _mounts(design: dict, mount_loads: dict) -> dict:
+    """mount_loads as _ground's entries (one per support; vectors at the hard points, and the moment)."""
+    missing = [s["id"] for s in design["supports"] if s["id"] not in mount_loads]
+    if missing:
+        raise DesignError(f"the given mount loads have no entry for support(s) {', '.join(missing)}")
+    out = {}
+    for sid, ml in mount_loads.items():
+        vs = [(k, np.asarray(p, float), np.asarray(f, float)) for k, p, f in ml["vectors"]]
+        out[sid] = {"point_mm": vs[0][1] if vs else np.zeros(3), "force_N": sum((f for _, _, f in vs), np.zeros(3)),
+                    "vectors": vs, "moment_Nmm": np.asarray(ml.get("moment_Nmm", np.zeros(3)), float)}
+    return out
+
+
+def mount_balance(F: np.ndarray, m_tot: float, gvec: np.ndarray, inertia_N) -> float:
+    """How far the mount forces and the weight (F, N) are from balancing the inertia force passed with them,
+    over the weight; raises DesignError past BALANCE_TOL (no inertia force: nothing to check, 0)."""
+    if inertia_N is None:
+        return 0.0
+    weight = m_tot * float(np.linalg.norm(gvec))
+    rest = F + np.asarray(inertia_N, float)
+    off = float(np.linalg.norm(rest)) / weight
+    if off > BALANCE_TOL:
+        raise DesignError(
+            f"the mount forces, the weight of the sprung masses and the inertia force passed with them leave "
+            f"{np.round(rest, 1).tolist()} N over ({off:.1%} of that weight, more than {BALANCE_TOL:.0%}); they were "
+            f"probably computed for another loading or design version, so analyse them with the same loading")
+    return off
+
+
 def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
                   step_supports: list[str] | None = None, ground_forces: dict | None = None,
                   inertia_N: np.ndarray | None = None, frame: ShellFrame | None = None,
-                  element_size_mm: float = ELEMENT_SIZE_MM) -> dict:
+                  element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True,
+                  mount_loads: dict | None = None, gravity_mps2=None) -> dict:
     """Solve the shell frame (see the module notes). Arguments as k1_frame.analyze; `frame`
-    reuses a built and factorised ShellFrame of the same design."""
+    reuses a built and factorised ShellFrame of the same design; weld_strips as mesh.build_mesh.
+
+    mount_loads {support: {"vectors": [(mount, point mm, force N)], "moment_Nmm": (3,)}}: the forces
+    the body receives at its suspension mounts (named as in hardpoints_mm, carried in by mount_carriers),
+    in place of the ground forces (the unsprung parts are then left out, sprung_items); inertia_N, if given, is the d'Alembert force they come with. gravity_mps2: gravity
+    in the body's axes (default straight down, times g_factor). Both in the design's axes."""
     t0 = time.perf_counter()
     summ = mass_summary(design)
     items = summ["items"]
-    fr = frame or ShellFrame.build(design, element_size_mm)
+    reused = frame is None
+    if frame is None:
+        frame, reused = shared_frame(design, element_size_mm, weld_strips)
+    fr = frame
     ms, model = fr.mesh, fr.model
-    ground, statics, source = _ground(design, summ, g_factor, step_mm, step_supports, ground_forces)
-    off = check_balance(design, summ, ground, g_factor, inertia_N)
+    if mount_loads is not None:
+        ground, statics, source = _mounts(design, mount_loads), None, "mounts"
+    else:
+        ground, statics, source = _ground(design, summ, g_factor, step_mm, step_supports, ground_forces)
+        off = check_balance(design, summ, ground, g_factor, inertia_N, gravity_mps2)
 
     # ---- masses: shell nodes (point masses) and parts (gussets and through parts are shell elements already)
     in_shell = shell_parts(design, ms)
+    if mount_loads is not None:
+        items = sprung_items(design, items)
     parts = [it for it in items if it.carrier != "member" and it.id.removeprefix("part:") not in in_shell]
     m_shell = float(fr.masses_kg.sum())
     m_tot = m_shell + sum(it.mass_kg for it in parts)
@@ -229,12 +325,16 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
             J += it.inertia_kg_mm2
 
     # ---- imbalance of ground forces and weight -> rigid-body acceleration
-    gvec = np.array([0.0, 0.0, -STANDARD_GRAVITY * g_factor])
+    gvec = (np.array([0.0, 0.0, -STANDARD_GRAVITY * g_factor]) if gravity_mps2 is None
+            else np.asarray(gravity_mps2, float))
     pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]]
     pairs += [(it.cg_mm, it.mass_kg * gvec) for it in parts]
     F, M = resultant(pairs)
     F = F + m_shell * gvec
-    M = M + np.cross(fr.masses_kg @ ms.nodes, gvec)
+    M = M + np.cross(fr.masses_kg @ ms.nodes, gvec) + sum((g.get("moment_Nmm", 0.0) for g in ground.values()),
+                                                          np.zeros(3))
+    if mount_loads is not None:
+        off = mount_balance(F, m_tot, gvec, inertia_N)
     M_cg = M - np.cross(cg, F)
     accel = F / m_tot  # m/s^2
     alpha = np.linalg.solve(J, M_cg) * 1e3  # (N*mm)/(kg*mm^2) -> rad/s^2
@@ -258,10 +358,23 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         acc[0] += force
         acc[1] += np.asarray(moment, float) + np.cross(np.asarray(about, float) - fr.node_xyz[node], force)
 
+    carriers = mount_carriers(design) if mount_loads is not None else {}
     for sid, g in ground.items():
         fn = fr.support_node[sid]
-        for _, p, f in g["vectors"]:
-            put(fn, f, np.zeros(3), p, fr.mount_nodes(fn))
+        for kind, p, f in g["vectors"]:
+            at = carriers.get(sid, {}).get(kind) or []
+            for n in at:
+                if n not in ms.joints:
+                    raise DesignError(f"the {kind} mount of {sid} is carried by node {n!r}, which no member uses")
+            if len(at) == 1:
+                put(at[0], f, np.zeros(3), p)
+            elif at:
+                for n, (fn_, mn) in zip(at, mount_share(f, p, [fr.node_xyz[n] for n in at])):
+                    put(n, fn_, mn, fr.node_xyz[n])
+            else:
+                put(fn, f, np.zeros(3), p, fr.mount_nodes(fn))
+        if np.any(g.get("moment_Nmm", 0.0)):
+            put(fn, np.zeros(3), g["moment_Nmm"], fr.node_xyz[fn], fr.mount_nodes(fn))
     for it in parts:
         f = it.mass_kg * body(it.cg_mm)
         m_own = -(it.inertia_kg_mm2 @ alpha) * 1e-3 if it.inertia_kg_mm2 is not None else np.zeros(3)  # N*mm
@@ -281,9 +394,12 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
 
     # ---- solve
     solver = fr.solver()
-    U = solver.solve(Fv)
+    try:
+        U = solver.solve(Fv)
+    except ValueError as e:
+        raise DesignError(str(e)) from None
     react = solver.reactions(U, Fv)
-    weight = m_tot * STANDARD_GRAVITY * g_factor
+    weight = m_tot * STANDARD_GRAVITY * g_factor if gravity_mps2 is None else m_tot * float(np.linalg.norm(gvec))
     residual = max(float(np.linalg.norm(react[dofs_of(n, "xyz")])) for n in fr.hold_nodes) / weight
     st = element_stresses(model, U)
     vm = {s: st.von_mises(s) for s in ("top", "bottom", "max")}
@@ -305,6 +421,8 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     safety = {m: (float(mat_of[m]["yield_MPa"]) / v if v > 0 else math.inf) for m, (v, _) in member_max.items()}
     ex_idx = np.nonzero(fr.excluded)[0]
     excluded_max = (float(vm["max"][ex_idx].max()), int(ex_idx[np.argmax(vm["max"][ex_idx])])) if len(ex_idx) else None
+    hs = hot_spots(ms, st, fr.excluded)
+    hs_max = max(hs, key=lambda h: abs(h["value"])) if hs else None
 
     u = U.reshape(-1, 6)[:, :3]
     pts, disps = [], []
@@ -322,6 +440,8 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
 
     timings = dict(fr.timings, **{k: v for k, v in model.timings.items() if k.endswith("_s")})
     timings["total_s"] = time.perf_counter() - t0
+    if reused:  # mesh_s and factor_s are those of the solve that built the frame
+        timings["frame_reused"] = 1.0
     return {
         "frame": fr,
         "mesh": ms,
@@ -349,10 +469,13 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "safety": safety,
         "excluded": fr.excluded,
         "excluded_max": excluded_max,
+        "hot_spots": hs,
+        "hot_spot_max": hs_max,
         "displacements": disp,
         "worst_node": worst_node,
         "worst_node_member": node_member.get(worst_node, worst),
         "timings": timings,
+        "linear_solver": getattr(fr.solver(), "solver_name", type(fr.solver()).__name__),
     }
 
 

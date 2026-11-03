@@ -1,4 +1,16 @@
-"""frame_static: stresses, deflection and wheel loads of the frame (K1 static)."""
+"""frame_static: stresses, deflection and wheel loads of the frame (K1 static).
+
+When an upstream analysis carries K2's mount force series (step_climb_dynamic:
+mount_x/y/z.<support>.<mount> at tens of instants), the frame is also solved
+at each instant with those forces at the design's hard points (in the body's
+axes, gravity tilted with it) and the stresses go into field.frames, with the
+largest at each instant as a series. The judged results stay those of the
+upstream's vectors (the instant it picked).
+
+Beside the overall max_stress (where = its member), each member's largest
+von Mises is a result max_stress.<member id> (the stress field's per_member
+values). Those are reported, not judged: the criterion names max_stress.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +19,9 @@ import math
 import numpy as np
 
 from ..k0_handcalc import units
+from ..k0_handcalc.rigid import rpy_matrix
 from ..k0_handcalc.units import STANDARD_GRAVITY
+from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
 from ..k1_frame.surface import surface_field
@@ -22,6 +36,11 @@ STEP_SUPPORTS = Param("step_supports", None, "comma-separated support ids on the
 JOINT_INPUTS = ("inputs other than F and W from hiraku.solvers.k0_handcalc.frame_inputs.rail_joint_inputs(design, "
                 "loading=...); F = the push on the stepping wheel, W = its vertical load")
 STEP_BENDING = "the rail between the axles only: misses the overhang behind the rear axle and the outboard wheel force"
+FRAMES_ASSUMPTION = (
+    "時刻ごとの応力 (field.frames): 上流の解析 {lc} の取付点ごとの力の時系列 (K2、車体が受ける力、世界の軸) を、その時刻の"
+    "車体の姿勢 (sprung_roll・pitch・yaw) で車体の軸に回し、設計の hardpoints_mm の点に入れて解き直した。ばね下の部品の重さと"
+    "慣性はその力に入っているので、ばね上の質量だけに重力 (車体の軸に回したもの) と慣性の釣り合いをかけた。駆動や制動が車体に"
+    "返すトルク (body_torque) は、その支持の節にかけた。判定はこれまでどおり上流の vectors の瞬間の値で、時刻ごとの最大は参考")
 
 
 def frame_outputs(res: dict) -> Record:
@@ -54,7 +73,24 @@ def frame_outputs(res: dict) -> Record:
         vectors.append({"kind": "inertia", "at": "cg", "origin_mm": cg,
                         "vector_N": [float(v) for v in -res["mass"]["mass_kg"] * a]})
         results.append(result("inertia_acceleration", float(np.linalg.norm(a)), "m/s^2", "cg"))
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": stress_terms(res)}
+    terms = stress_terms(res)
+    for t in terms:  # the worst member's stress split into axial, the bendings and torsion (MPa each)
+        part = t["name"].split(" (", 1)[0]
+        results.append(result(f"max_stress_{part}", t["value"], "MPa", worst))
+    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms}
+
+
+def member_results(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> list[Record]:
+    """One result per member, `<quantity>.<member id>` with where = the member, in the dict's order.
+    Reported only: the criterion is judged on the overall `quantity` (exact name match)."""
+    return [result(f"{quantity}.{m}", float(v), unit, m) for m, v in per_member.items()]
+
+
+def member_effect(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> Record:
+    """An effect naming where the overall largest of a per-member quantity is."""
+    top = max(per_member, key=per_member.get)
+    return {"name": (f"{quantity} per member: {len(per_member)} results {quantity}.<member id>; the largest "
+                     f"({quantity}) is in {top}"), "value": float(per_member[top]), "unit": unit}
 
 
 def _beam(length, section, material=fixtures.STEEL):
@@ -195,6 +231,12 @@ class FrameStatic(BuiltinTool):
         res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
                       ground_forces=up[1] if up else None, inertia_N=up[2] if up else None)
         out = frame_outputs(res)
+        per_member = {m: s["max"] for m, s in res["stresses"].items()}  # the same values as the stress field
+        out["results"] += member_results("max_stress", per_member)
+        out["effects"].append(member_effect("max_stress", per_member))
+        series = upstream_mount_series(params.get("upstream_analyses"), design)
+        if series:
+            add_frames(out, beam_frames(design, series))
         mesh, why = mesh_of(design, params)
         if mesh is not None:
             plates = frozenset(p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset")
@@ -207,6 +249,95 @@ class FrameStatic(BuiltinTool):
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
+
+
+def upstream_mount_series(upstream: dict | None, design: Record):
+    """(load case id, analysis id, instants) from the first upstream analysis whose series carry K2's mount
+    forces (mount_x/y/z.<support>.<mount>, N, world axes) for every support and the sprung body's attitude
+    (sprung_roll/pitch/yaw, deg); None when none does. Each instant: {"t_s", "mount_loads" (k1_frame.analyze's,
+    (mount, point, force) at the design's suspension hardpoints_mm and each support's body_torque_x/y/z, in
+    the body's axes), "gravity_mps2" (body axes), "inertia_N" (inertia_force_x/y/z in the body's axes, or None)}."""
+    ids = [s["id"] for s in design.get("supports", [])]
+    hp = {s["id"]: (s.get("suspension") or {}).get("hardpoints_mm") or {} for s in design.get("supports", [])}
+    for lc_id, ana in (upstream or {}).items():
+        if not isinstance(ana, dict) or ana.get("status") != "ok":
+            continue
+        ch = {c["channel"]: c for c in ana.get("series", []) if c.get("t_s")}
+        mounts: dict[str, list[str]] = {}
+        for name in ch:
+            if name.startswith("mount_x."):
+                _, sid, mount = name.split(".", 2)
+                mounts.setdefault(sid, []).append(mount)
+        attitude = [ch.get(f"sprung_{a}") for a in ("roll", "pitch", "yaw")]
+        if set(mounts) != set(ids) or not all(attitude):
+            continue
+        missing = [f"{sid}.{m}" for sid in ids for m in mounts[sid] if m not in hp[sid]]
+        if missing:
+            raise DesignError(f"the upstream analysis {lc_id} gives forces at mounts the design has no "
+                              f"suspension.hardpoints_mm for: {', '.join(missing)}")
+        t = attitude[0]["t_s"]
+
+        def values(name: str, unit: str) -> list[float] | None:
+            c = ch.get(name)
+            if c is None:
+                return None
+            if c["t_s"] != t:
+                raise DesignError(f"the upstream analysis {lc_id}: series {name} is not on the attitude's times")
+            return [units.to_unit({"value": v, "unit": c["unit"]}, unit, name) for v in c["values"]]
+
+        att = [values(f"sprung_{a}", "deg") for a in ("roll", "pitch", "yaw")]
+        force = {(sid, m): [values(f"mount_{a}.{sid}.{m}", "N") for a in "xyz"] for sid in ids for m in mounts[sid]}
+        torque = {sid: [values(f"body_torque_{a}.{sid}", "N*mm") for a in "xyz"] for sid in ids}
+        inertia = [values(f"inertia_force_{a}", "N") for a in "xyz"]
+        instants = []
+        for k, tk in enumerate(t):
+            Rt = rpy_matrix([att[0][k], att[1][k], att[2][k]]).T  # world -> body
+            loads = {}
+            for sid in ids:
+                vs = [(m, np.asarray(hp[sid][m], float), Rt @ np.array([f[k] for f in force[(sid, m)]]))
+                      for m in mounts[sid]]
+                tq = np.array([c[k] if c else 0.0 for c in torque[sid]])
+                loads[sid] = {"vectors": vs, "moment_Nmm": Rt @ tq}
+            instants.append({"t_s": float(tk), "mount_loads": loads,
+                             "gravity_mps2": Rt @ np.array([0.0, 0.0, -STANDARD_GRAVITY]),
+                             "inertia_N": Rt @ np.array([c[k] for c in inertia]) if all(inertia) else None})
+        return lc_id, ana.get("analysis_id"), instants
+    return None
+
+
+def beam_frames(design: Record, series) -> Record:
+    """frame_static's outputs over the instants of upstream_mount_series: field.frames (von Mises max along
+    each member), the series of the largest, its largest instant as a result and an effect."""
+    lc_id, ana_id, instants = series
+    per_member, peak, where = [], [], []
+    for inst in instants:
+        r = analyze(design, mount_loads=inst["mount_loads"], gravity_mps2=inst["gravity_mps2"],
+                    inertia_N=inst["inertia_N"])
+        per_member.append({m: round(st["max"], 2) for m, st in r["stresses"].items()})
+        peak.append(r["stresses"][r["worst_member"]]["max"])
+        where.append(r["worst_member"])
+    t = [inst["t_s"] for inst in instants]
+    k = int(np.argmax(peak))
+    frames = {"t_s": t, "per_member": per_member, "max": [round(v, 2) for v in peak]}
+    if ana_id:
+        frames["source_analysis_id"] = ana_id
+    return {
+        "fields": [{"kind": "stress", "label": "von Mises (max along each member) at each instant of the upstream "
+                                               "mount forces", "unit": "MPa", "frames": frames}],
+        "series": [{"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]}],
+        "results": [result("max_stress_over_time", peak[k], "MPa", f"{where[k]} at t {t[k]:.3f} s")],
+        "effects": [{"name": (f"frame solved at {len(t)} instants of {lc_id}'s mount forces (t {t[0]:.3f} to "
+                              f"{t[-1]:.3f} s): largest {peak[k]:.1f} MPa in {where[k]} at t {t[k]:.3f} s"),
+                     "value": peak[k], "unit": "MPa"}],
+        "assumptions": [FRAMES_ASSUMPTION.format(lc=lc_id)],
+    }
+
+
+def add_frames(out: Record, more: Record) -> None:
+    """Append beam_frames' (or the shell's) outputs to a tool's out."""
+    for key in ("fields", "series", "results", "effects", "assumptions"):
+        if more.get(key):
+            out[key] = list(out.get(key, [])) + more[key]
 
 
 def upstream_ground_forces(upstream: dict | None, design: Record):

@@ -37,8 +37,11 @@ class ModalTest(unittest.TestCase):
 
         d = on_board(DESIGN, "two_cargo")
         r = modes(d, 6)
-        i = next(k for k, x in enumerate(r["flexibility"]) if x >= 0.3)
-        u = r["shapes"][i]
+        # the ladder's own bending (the roll bar's sway, on by default, bends the hoop and leaves the ladder as it is)
+        i = next(k for k, x in enumerate(r["ladder_flexibility"]) if x >= 0.3)
+        from hiraku.solvers.k1_frame.modal import ladder_nodes
+
+        u = {n: r["shapes"][i][n] for n in ladder_nodes(d, list(r["shapes"][i]))}  # the ladder's nodes
         self.assertLess(max(abs(v[0]) for v in u.values()), 0.25 * max(abs(v[2]) for v in u.values()))
         self.assertLess(u["LE"][2] * u["RE"][2], 0.0)  # the rear corners move opposite ways
         hand = solvers.formula_registry().evaluate("modal.ladder_twist_mode", ladder_twist_inputs(d)["inputs"])
@@ -51,8 +54,13 @@ class ModalTest(unittest.TestCase):
         self.assertEqual((s["x"]["quantity"], s["x"]["unit"], len(s["x"]["values"])), ("frequency", "Hz", len(s["values"])))
         self.assertAlmostEqual(s["values"][0], 1.0, places=4)  # over its value at 0 Hz
         peak = s["x"]["values"][max(range(len(s["values"])), key=s["values"].__getitem__)]
-        body = results(rec)["first_body_mode"]["value"]
-        self.assertLess(abs(peak - body) / body, 0.15)  # the body bouncing on its springs dominates the seat
+        # the peak is at one of the modes: on the demo (wheelbase 2020 mm, suspension towers) the frame's first
+        # mode near 9 Hz now moves the seat more than the body bouncing on its springs (1.7 Hz); the first
+        # v1 (wheelbase 1700 mm) peaked at the bounce
+        r = results(rec)
+        modes_hz = [r[k]["value"] for k in r if k.startswith("mode_")]
+        self.assertLess(min(abs(peak - f) / f for f in modes_hz), 0.15)
+        self.assertLess(abs(peak - r["first_frame_mode"]["value"]) / r["first_frame_mode"]["value"], 0.15)
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
 
     def test_ladder_twist_formula(self):

@@ -20,17 +20,20 @@ class BuiltinTest(unittest.TestCase):
         self.docs = load_builtin()
         self.rules = knowledge.all_rules(self.docs)
 
-    def test_nine_categories_one_document_each(self):
+    def test_ten_categories_one_document_each(self):
         self.assertEqual([r["rules"][0]["category"] for r in self.docs], list(CATEGORIES))
-        self.assertEqual(len(self.rules), 18)
-        self.assertEqual(len({r["rule_id"] for r in self.rules}), 18)
+        self.assertEqual(len(self.rules), 27)  # 18 formulas and 9 system checks
+        self.assertEqual(len({r["rule_id"] for r in self.rules}), 27)
         for rec in self.docs:
             self.assertEqual(rec["doc"]["origin"], "builtin")
 
     def test_every_check_is_valid_and_uses_known_names(self):
         for r in self.rules:
             with self.subTest(rule=r["rule_id"]):
-                self.assertEqual(facts.unknown_names(expression.names(r["check"])), [])
+                if r["category"] == "system":  # a function of hiraku.intake.systems (tests/intake/test_systems.py)
+                    self.assertTrue(knowledge.systems.is_system_check(r["check"]))
+                else:
+                    self.assertEqual(facts.unknown_names(expression.names(r["check"])), [])
                 self.assertEqual(r["origin"], "builtin")
                 self.assertNotIn("check_by", r)  # the formula came with the data: nobody turned a sentence into it
 
@@ -218,8 +221,8 @@ class SampleNotesTest(unittest.TestCase):
         design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
         checks = {c["rule_id"]: c for c in rulecheck.check_all(got.record["rules"], design, load_product("offroad-4w")["requirements"])}
         self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"]}, {"U1-04": ["battery"]})
-        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same four plates as SM-01 and judge none of them
-            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body"])
+        for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same plates as SM-01 and judge none of them
+            self.assertEqual(checks[rid]["targets"], ["floor_front", "floor", "deck", "front_body", "bulkhead"])
             self.assertEqual([n["part_id"] for n in checks[rid]["not_evaluable"]], checks[rid]["targets"])
 
 

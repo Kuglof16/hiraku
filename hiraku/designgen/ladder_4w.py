@@ -11,7 +11,25 @@ Frame stations along x (x forward, origin under the front axle): F front end,
 A front axle, S1 and S2 the cross members at the front and back of the seats
 (seat_x +- 275 mm), B rear axle, E rear end. Dimensions, masses and the other
 variables' defaults are design choices (assumptions) unless a comment gives a
-source; the defaults build data/designs/offroad-4w-v1.json.
+source; the defaults build data/designs/offroad-4w-v1.json. With rollbar = 1 (the
+default) a roll bar stands behind the seats (build_rollbar): the rails are split at a
+node H between S2 and B, outriggers carry the posts' feet out to the
+rollbar_width, and a top beam joins the posts.
+The suspension meets the frame as it would on a real ladder frame (kit/mounts.py): the
+hard points are moved until the upper arms and the dampers clear the rails through the
+wheel travel, each damper's top is the end node of a tower on the rail, each lower arm's
+pivots are nodes at the ends of legs down from the rail (joined left to right by lower
+cross members, lower_cross), and brackets (parts of kind bracket) hold the upper arms'
+pivots and the tie rods' and toe links' inner ends. The footwell starts behind the front
+wheels' steering sweep, at a front bulkhead (a panel) with the dash posts and the dash
+cross member that holds the steering column (build_dash).
+The parts of the drive, steering, brakes, restraints and the battery's switch come from
+the kits (kit/drivetrain.py, steering.py, body.py, safety.py), and every part carries its
+system and links (kit/systems.py) when the contract has those fields. The occupants are
+their bodies as parts (kit/body.py): the trunk keeps the occupant's id, each limb is
+<occupant id>.<segment>_<L|R> (one person per id before the first ".", as
+hiraku.contract.loading.person_of reads them); the segments' mass shares are D. A. Winter's
+(kit/body.SEGMENT_SHARE, not checked in this repository).
 
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
@@ -21,15 +39,18 @@ https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03).
 
 from __future__ import annotations
 
+import functools
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from hiraku.designgen.kit import body, drivetrain, mounts, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
-from hiraku.designgen.kit.sections import rect_tube
+from hiraku.designgen.kit.sections import rect_tube, round_tube
 
 Record = dict[str, Any]
 
@@ -58,8 +79,9 @@ class Var:
 
 # Variables the design may change (with their ranges) and fixed values carried along.
 VARIABLES: dict[str, Var] = {
-    # layout
-    "wheelbase": Var("mm", 1700.0, 1400.0, 2200.0, "front axle to rear axle"),
+    # layout (wheelbase, seat_x, steering_x and battery_x: 320 mm longer, back and behind than the first v1, so
+    # that the large driver's feet are behind the front wheels' steering sweep, assumption, see FOOT_SHIFT_MM)
+    "wheelbase": Var("mm", 2020.0, 1400.0, 2400.0, "front axle to rear axle"),
     "track": Var("mm", 1100.0, 900.0, 1400.0, "wheel centre to wheel centre across"),
     "wheel_radius": Var("mm", 300.0, 200.0, 380.0, "tyre radius"),
     "wheel_width": Var("mm", 200.0, 120.0, 280.0, "tyre width"),
@@ -73,11 +95,25 @@ VARIABLES: dict[str, Var] = {
     "cross_b": Var("mm", 40.0, 30.0, 80.0, "cross member tube width"),
     "cross_h": Var("mm", 40.0, 30.0, 120.0, "cross member tube height"),
     "cross_t": Var("mm", 2.3, 1.6, 4.5, "cross member tube wall"),
+    # the suspension's mounts on the frame (kit/mounts.py) and the dash: square tubes of STKR400; the sizes
+    # are design choices (assumptions, no source)
+    "tower_b": Var("mm", 30.0, 25.0, 60.0, "square tube width of the suspension towers (posts, top beam, the arm "
+                   "out to the damper's top), the dash posts and the dash cross member (narrower than the rail, "
+                   "so that a post's foot sits inside the rail's top wall)"),
+    "tower_t": Var("mm", 2.3, 1.6, 4.5, "wall of the tower and dash tubes"),
+    "lower_b": Var("mm", 40.0, 30.0, 60.0, "square tube width of the legs down to the lower arms' pivots and the "
+                   "lower cross members joining them (at the default 40 x 2.3 the front legs are R3's worst welds, "
+                   "damage 0.29; 50 x 3.2 gives 0.13)"),
+    "lower_t": Var("mm", 2.3, 1.6, 4.5, "wall of the leg and lower cross member tubes"),
+    "lower_cross": Var("1", 1.0, 0.0, 1.0, "1: lower cross members join the left and right lower arms' pivots (at "
+                       "each axle where the motor and the reducer are not in the way); 0: none, each pivot on its leg "
+                       "alone"),
     # people and parts
-    "seat_x": Var("mm", -725.0, -1100.0, -500.0, "seat centre (x); the seat cross members are 275 mm ahead and behind"),
+    "seat_x": Var("mm", -1045.0, -1500.0, -500.0, "seat centre (x); the seat cross members are 275 mm ahead and behind"),
     "seat_y": Var("mm", 300.0, 220.0, 400.0, "seat centre off the centre line, each side"),
-    "steering_x": Var("mm", -250.0, -400.0, 0.0, "centre of the steering column and pedal box (x)"),
-    "battery_x": Var("mm", -725.0, -1300.0, -300.0, "battery centre (x); it hangs from the cross members either side "
+    "steering_x": Var("mm", -570.0, -900.0, 0.0, "steering position (x): the steering wheel's centre is "
+                      "150 mm behind it (where the back of the earlier steering box was)"),
+    "battery_x": Var("mm", -1045.0, -1700.0, -300.0, "battery centre (x); it hangs from the cross members either side "
                      "and must fit between them (seat_x moves the seat cross members)"),
     # chassis
     "front_spring_rate": Var("N/mm", 20.0, 5.0, 60.0, "front suspension spring rate per wheel"),
@@ -147,13 +183,22 @@ VARIABLES: dict[str, Var] = {
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see above)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
-    "fatigue_slope_after_knee": Var("1", 22.0, meaning="assumption"),
+    "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption"),
     "tyre_stiffness": Var("N/mm", 150.0, meaning="assumption"),
     # tyre and suspension details of the 3D vehicle model (K2), assumptions with no source
     "tyre_damping_ratio": Var("1", 0.05, meaning="assumption: vertical damping ratio of the tyre"),
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
                                      "as a multiple of the wheel's static load"),
     "bump_stop_factor": Var("1", 10.0, meaning="assumption: bump and rebound stop stiffness, as a multiple of the spring"),
+    # driveshafts: steel tubes from the reducer to the driven wheels (kit/drivetrain.py), assumptions
+    "driveshaft_diameter": Var("mm", 30.0, meaning="assumption: driveshaft tube outer diameter"),
+    "driveshaft_wall": Var("mm", 5.0, meaning="assumption: driveshaft tube wall"),
+    "driveshafts": Var("1", 1.0, 0.0, 1.0, "1: a driveshaft from the reducer to each driven wheel; 0: none, the drive "
+                       "ends at the reducer and no torque reaches the wheels (the shafts' mass stays in the reducer, so "
+                       "the mass does not change)"),
+    # lamps (kit/safety.py): needed on public roads only
+    "lamps": Var("1", 0.0, 0.0, 1.0, "1: headlamps, tail lamps, stop lamps and turn signals on the front body and "
+                 "behind the frame's rear end (needed on public roads); 0: none (off public roads)"),
     # joint reinforcement at the T joints (where a cross member ends on the side of a rail): the shape
     # follows from these variables alone (CHOICES["joints"] is a short way to set them). Written into
     # design.variables only when changed from their defaults, so a design without reinforcement is
@@ -168,15 +213,44 @@ VARIABLES: dict[str, Var] = {
                                  "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
                                  "model's members are unchanged; 0: they end on the rail's side"),
+    # roll bar (ROPS): a portal hoop behind the seats, two posts and a top beam (build_rollbar places it from
+    # the frame and the seats). On by default (the demo vehicle has the systems it needs: kit/safety.py); a
+    # design that has no rollbar variable and no roll bar members (built before it was on by default) is read
+    # as rollbar = 0 (values_of). The sizes and defaults are design choices (assumptions, no source).
+    "rollbar": Var("1", 1.0, 0.0, 1.0, "1: a roll bar (portal hoop) behind the seats, standing on the rails at a node "
+                   "rollbar_offset behind the seat's rear cross member S2, on outriggers out to rollbar_width; 0: none"),
+    "rollbar_height": Var("mm", 1100.0, 900.0, 1400.0, "top beam centre line above the seat cushion top (the seats' "
+                          "box top); assumption: the default puts the tube above the seated head of a young male 95th "
+                          "percentile (AIST I1 sitting height; the gap is k4_geometry.rollbar.occupant_clearance's)"),
+    "rollbar_width": Var("mm", 1200.0, 700.0, 1400.0, "post centre to centre across (at least rail_spacing; wider than "
+                         "the rails, outriggers of the cross member section carry the posts' feet out from the rails); "
+                         "assumption: the default puts the posts outside the shoulders (AIST D2) of both occupants"),
+    "rollbar_offset": Var("mm", 80.0, 40.0, 400.0, "the posts' centre line this far behind the seat's rear cross member "
+                          "S2 (the rails are split at a node there; it must stay 100 mm ahead of the rear axle station)"),
+    "rollbar_square": Var("1", 0.0, 0.0, 1.0, "0: round tube rollbar_d x rollbar_t of STKM13A; 1: square tube rollbar_b "
+                          "x rollbar_b x rollbar_t of STKR400 (the materials are assumptions)"),
+    "rollbar_d": Var("mm", 42.7, 25.0, 76.3, "round tube outside diameter (rollbar_square = 0)"),
+    "rollbar_b": Var("mm", 40.0, 25.0, 80.0, "square tube width (rollbar_square = 1)"),
+    "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
-SWITCHES = ("cross_members_through",)  # 0 or 1
-# Reinforcement variables, written into design.variables only when one of their group differs from its default.
+SWITCHES = ("cross_members_through", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
+ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
+                "rollbar_t")
+ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
+# Optional variables, written into design.variables only when one of their group differs from its default.
 OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
     "tyre_relaxation_length": ("mm", "assumption: the tyre's relaxation length, taken as the wheel radius"),
     "wheel_inertia": ("kg*m^2", "rotary inertia of one wheel part, as a solid disc: m r^2 / 2"),
+    "motor_rotor_inertia": ("kg*m^2", "rotary inertia of the motor's rotor (kit/drivetrain.py: a solid cylinder, "
+                            "assumption)"),
+    "reducer_output_inertia": ("kg*m^2", "rotary inertia of the reducer's output gear, turning with the wheels "
+                               "(kit/drivetrain.py: a disc, assumption)"),
+    "driveshaft_inner_drop": ("mm", "the driveshafts' inner joints (and the reducer's outputs) this far below the "
+                              "wheel centres, the least that keeps each shaft DRIVESHAFT_GAP_MM under the rail at full "
+                              "bump (kit/drivetrain.drop_to_clear)"),
 }
 WHEEL_MASS_KG = 14.0  # tyre, rim, hub and brake of one wheel (assumption)
 # Order of design.variables as in the first v1 file (the variables added later come after them).
@@ -189,7 +263,7 @@ _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing"
              "controller_thermal_resistance", "drag_coefficient", "frontal_area", "side_force_coefficient", "side_area",
              "centre_of_pressure_height", "air_density", "front_cornering_stiffness", "rear_cornering_stiffness",
              "max_steer_angle", "bumper_stiffness", "bumper_stroke", "crush_stiffness", "fatigue_fat_class", "fatigue_slope",
-             "fatigue_knee_cycles", "fatigue_slope_after_knee", "tyre_stiffness"]
+             "fatigue_knee_cycles", "fatigue_slope_after_knee_constant_amplitude", "tyre_stiffness"]
 # A design built here carries these from the first version on; variables added since
 # take their defaults (which build v1) when an older design lacks them.
 SIGNATURE = ("wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing", "rail_height", "front_overhang",
@@ -286,6 +360,8 @@ def values_of(design: Record) -> dict[str, Record]:
     if "gussets" in now and float(now["gussets"]["value"]) == 0.0:
         out.pop("gusset_leg", None)
         out.pop("gusset_thickness", None)
+    if "rollbar" not in now and not any(m["id"].startswith("rollbar_") for m in design.get("members", [])):
+        out["rollbar"] = _q(0.0, "1")  # built when the roll bar was off by default
     return out
 
 
@@ -296,13 +372,40 @@ def _q(v: float, unit: str) -> Record:
 # Layout clearances and offsets (design choices, assumptions), used against the frame and the parts:
 ON_RAILS_MM = 10.0  # floors, deck, front body and suspension tops sit this far above the rail top (brackets)
 DECK_GAP_MM = 150.0  # the deck starts this far behind the rear seat cross member
-MOTOR_GAP_MM = 25.0  # the motor's back face this far ahead of the rear axle station
 CONTROLLER_LEAD_MM = 15.0  # the controller's front face this far ahead of the rear seat cross member
 AUX_DROP_MM = 10.0  # the wiring box's top this far above the rail bottom
-STEERING_LIFT_MM = 50.0  # the steering and pedal box starts this far above the footwell floor
-STEERING_INBOARD_MM = 100.0  # its centre this far inboard of the driver's seat centre
+STEERING_INBOARD_MM = 130.0  # the pinion this far inboard of the driver's seat centre (100 in the first v1; 130
+# keeps the intermediate shaft clear of the rack's clamp at the tie rod's inner end)
 OCCUPANT_BACK_MM = 55.0  # the occupant's mass box centre this far behind the seat centre
 CARGO_SHORT_MM = 50.0  # the cargo box is this much shorter than the deck
+STEERING_WHEEL_BEHIND_MM = 150.0  # the steering wheel's centre this far behind steering_x
+TYRE_GAP_MM = 10.0  # the bulkhead and the footwell floor this far behind the front wheels' steering sweep
+# The front towers' posts (the rear one is in the bulkhead) at least this far from the axle along x, so that the
+# leg from the rear post's foot to the lower arm's rear pivot passes behind the rack's clamp (assumption: v1's
+# value, where the steering sweep puts the bulkhead)
+TOWER_MIN_DX_MM = 285.0
+FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driver's feet, each side
+PANEL_T_MM = 20.0  # floor and bulkhead panels' thickness (as the first floors)
+PANEL_KG_M2 = 6.0 / (0.45 * 0.6)  # the first v1's footwell floor (6 kg, 450 x 600 mm) per area: footwell and bulkhead
+DECK_V1 = {"length": 950.0, "width": 880.0, "mass": 18.0}  # the first v1's deck; a narrower deck weighs less per area
+DECK_TOWER_GAP_MM = 10.0  # the deck and the load this far inside the rear towers' posts
+DRIVESHAFT_GAP_MM = 10.0  # the driveshafts this far under the rails at full bump
+SUSP_PIVOT_GAP_MM = 25.0  # the arms' box (around the lower arm) this far off its pivots' legs and cross members
+SUSP_HALF_HEIGHT_MM = 30.0  # the arms' box this far above and below the lower arm
+DASH_GAP_MM = 10.0  # the dash cross member this far below the steering column
+# The rails either side of the rear axle stay one member each (the hand calculations read the rail pieces at
+# the rear axle joint as they are: frame_inputs.rail_joint_inputs, end_cross_member_inputs, and the roll bar's
+# portal_frame_inputs at the node it splits them at): each rear tower is one post on the axle's rail node, and
+# the brackets there are carried by that node.
+REAR_OVERHANG_RAILS = ("rail_L_S2B", "rail_R_S2B", "rail_L_BE", "rail_R_BE")
+# The first v1 put the large driver's toes 5 mm behind the front axle, beside the front wheels (the right
+# shank 5 mm into the wheel, the feet 146 mm off the footwell floor). The defaults of wheelbase, seat_x,
+# steering_x and battery_x move everything behind the footwell back by this much, so that the toes are
+# behind the bulkhead (FOOT_SHIFT_MM: 320 mm puts them 15 mm behind it; K4 people.fit foot_room checks it).
+FOOT_SHIFT_MM = 320.0
+# The occupants' bodies as parts (kit/body.py, hiraku.contract.loading.person_of: the parts of a person
+# share the id before the first "."): the trunk keeps the occupant's id, the limbs are <id>.<segment>_<L|R>.
+BODY_PARTS = True
 TITLE = "2 人乗り 4 輪のはしご形フレームの電動車 (前輪で操舵、後輪で駆動、右ハンドル)"
 DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive"
 # How the T joints (a cross member ending on the side of a rail) are made: butt (the cross member
@@ -322,12 +425,32 @@ def applies(flags: dict) -> bool:
 
 
 # Part list order of v1 (the rest after them as placed: each wheel, then its suspension)
-PART_ORDER = ["battery", "motor", "controller", "aux", "floor_front", "floor", "deck", "front_body", "steering", "seat_R",
-              "seat_L", "occupant_R", "occupant_L", "cargo"]
+PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux",
+              "floor_front", "pedal_accel", "pedal_brake", "brake_master", "floor", "deck", "front_body", "bulkhead",
+              "steering_wheel",
+              "steering_column", "steering_shaft", "steering_rack", "tie_rod_FL", "tie_rod_FR", "seat_R", "seat_belt_R",
+              "seat_L", "seat_belt_L", "occupant_R", "occupant_L", "cargo"]
+
+
+def _kit(fn, *args, **kw):
+    """Call a kit's placing function; a part it cannot place is a DesignGenError (it says why)."""
+    try:
+        return fn(*args, **kw)
+    except DesignGenError:
+        raise
+    except ValueError as e:
+        raise DesignGenError(str(e)) from None
+
+
+@functools.lru_cache(maxsize=1)
+def _reference_shafts_kg() -> float:
+    """The driveshafts' mass of the default design (v1): MOTOR_V1's mass was the motor, the reducer and these."""
+    d = build(_reference=True)
+    return float(sum(p["mass_kg"] for p in d["parts"] if p["kind"] == "driveshaft"))
 
 
 def build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
-          name: str | None = None) -> Record:
+          name: str | None = None, _reference: bool | None = None) -> Record:
     """A design record from variables ({name: quantity or number}; the others take their defaults).
 
     Raises DesignGenError when a value is out of its range or the layout does not close
@@ -357,21 +480,51 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         return Suspension("kc_table", rate, 1.2, v["suspension_travel"], "builtin:double_wishbone")
 
     supports = four_wheels(wb, track, r, ww, spring(v["front_spring_rate"]), spring(v["rear_spring_rate"]))
+    rail = {"y": rail_y, "z": rail_z, "b": v["rail_b"], "h": v["rail_h"]}
+    write_hardpoints({"supports": supports}, rail, v["tower_b"] / 2.0)  # before the parts: the kits place from them
 
     # parts, each against the frame or a part already placed
     lay = Layout({**frame.part(), "supports": supports, "parts": []})
     on_rails = lay.rail_top() + ON_RAILS_MM
     S1, S2, E = (lay.station_x(k) for k in ("S1", "S2", "E"))
     seat_x, seat_y = v["seat_x"], v["seat_y"]
-    lay.put(Item("floor_front", "足元の床", "body", (lay.station_x("A") - S1, 600.0, 20.0), 6.0),
-            x=lay.between("A", "S1"), y=0.0, z=bottom_at(on_rails))
+    # the footwell: the front bulkhead's front face TYRE_GAP_MM behind the front wheels' steering sweep at
+    # the rails' outer face, the dash posts in it, the footwell floor from the posts' back face (and clear
+    # of the sweep at its own width) to S1, wide enough for the large driver's feet (assumption: the feet
+    # rest at the seat's y +- the legs' spacing, k4_geometry.people)
+    from hiraku.solvers.k4_geometry import people
+
+    sweep_r = math.hypot(r, ww / 2.0)
+    x_a = lay.station_x("A")
+    bulkhead_front = min(x_a - _behind(sweep_r, track / 2.0 - rail_y - v["rail_b"] / 2.0) - TYRE_GAP_MM,
+                         x_a - TOWER_MIN_DX_MM + v["tower_b"] / 2.0)
+    post_x = bulkhead_front - v["tower_b"] / 2.0
+    feet_half = seat_y + people.leg_spacing(people.BIG) + people.SIZES[people.BIG]["foot_breadth"] / 2.0
+    floor_half = feet_half + FOOT_FLOOR_MARGIN_MM
+    floor_front_x = min(post_x - v["tower_b"] / 2.0, x_a - _behind(sweep_r, track / 2.0 - floor_half) - TYRE_GAP_MM)
+    if floor_front_x - S1 < MIN_STATION_GAP_MM:
+        raise DesignGenError(f"the footwell floor from x = {floor_front_x:.0f} mm (behind the front wheels' steering "
+                             f"sweep) to the seat cross member S1 ({S1:g} mm) is shorter than {MIN_STATION_GAP_MM:g} "
+                             f"mm; move seat_x back or make the wheelbase longer")
+    ff_size = (floor_front_x - S1, 2.0 * floor_half, PANEL_T_MM)
+    lay.put(Item("floor_front", "足元の床", "body", ff_size, PANEL_KG_M2 * ff_size[0] * ff_size[1] * 1e-6),
+            x=rear_at(S1), y=0.0, z=bottom_at(on_rails))
     lay.put(Item("floor", "座席の下の床", "body", (S1 - S2, track, 20.0), 8.0), x=lay.between("S1", "S2"), y=0.0,
             z=bottom_at(on_rails))
     deck_len = S2 - DECK_GAP_MM - E
-    lay.put(Item("deck", "荷台の床", "body", (deck_len, 880.0, 20.0), 18.0), x=rear_at(E), y=0.0, z=bottom_at(on_rails),
-            carried_by=lay.at("S2", "B", "E"))
-    lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, 600.0, 280.0), 15.0), x=front_at(lay.station_x("F")),
-            y=0.0, z=bottom_at(on_rails))
+    # the deck and the load between the rear suspension towers and the upper arms' pivot brackets (both stand
+    # on the rails); the front body between the front ones
+    def inside_mounts(front: bool) -> float:
+        ss = [s for s in supports if s["actuation"]["steer"] == front]
+        uca = min(abs(s["suspension"]["hardpoints_mm"][k][1]) for s in ss for k in ("uca_front", "uca_rear"))
+        return min(rail_y - v["tower_b"] / 2.0, uca - mounts.BRACKET_PAD_MM) - DECK_TOWER_GAP_MM
+
+    deck_w = min(DECK_V1["width"], 2.0 * inside_mounts(False))
+    lay.put(Item("deck", "荷台の床", "body", (deck_len, deck_w, 20.0),
+                 DECK_V1["mass"] * deck_len * deck_w / (DECK_V1["length"] * DECK_V1["width"])),
+            x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
+    lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0), 15.0),
+            x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
     # the battery fits between the rails under the floor; its volume and mass go with the capacity
     scale = v["battery_capacity"] / BATTERY_V1["capacity"]
     b_w = min(BATTERY_V1["width"], lay.rail_inner_gap() - 20.0)
@@ -380,33 +533,109 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                  (b_l, b_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale),
             x=v["battery_x"], y=0.0, z=top_at(lay.bottom_of("floor")))
     motor_mass = MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"])
-    lay.put(Item("motor", "モーターと減速機", "motor", (250.0, 300.0, 220.0), motor_mass),
-            x=rear_at(lay.station_x("B") + MOTOR_GAP_MM), y=0.0, z=top_at(lay.rail_top()), carried_by=lay.at("B"))
+    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
+    rho = float(material["density_kg_m3"])
+    shaft = (v["driveshaft_diameter"], v["driveshaft_wall"])
+    # the reducer's outputs low enough that the driveshafts pass under the rails at full bump
+    drop = drivetrain.drop_to_clear(lay.design, rail_y, rail_z - v["rail_h"] / 2.0, v["driveshaft_diameter"] / 2.0,
+                                    DRIVESHAFT_GAP_MM)
+    drop = float(math.ceil(drop))
+    lay.design["variables"] = {drivetrain.DROP_VARIABLE: _q(drop, "mm")}
+    ref = None if _reference is not None else _reference_shafts_kg()  # the earlier motor's mass held v1's shafts
+    drive = _kit(drivetrain.place, lay, motor_mass, "B", shaft, rho, shafts=v["driveshafts"] == 1, reference_shafts=ref)
     lay.put(Item("controller", "モーターの制御器", "controller", (250.0, 200.0, 80.0), 4.0),
             x=front_at(S2 + CONTROLLER_LEAD_MM), y=0.0, z=top_at(lay.rail_bottom()), carried_by=lay.at("S2"))
     lay.put(Item("aux", "配線と 12 V の補機", "electrical", (300.0, 300.0, 100.0), 6.0),
             x=rear_at(S1), y=0.0, z=top_at(lay.rail_bottom() + AUX_DROP_MM))
-    lay.put(Item("steering", "ハンドルとペダル", "steering", (300.0, 200.0, 500.0), 12.0),
-            x=v["steering_x"], y=-seat_y + STEERING_INBOARD_MM, z=bottom_at(lay.top_of("floor_front") + STEERING_LIFT_MM))
+    _kit(safety.place_main_switch, lay, "aux")
+    if v["lamps"] == 1:
+        _kit(safety.place_lamps, lay, "front_body", E - v["cross_b"] / 2.0, rail_z, "deck")
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
         lay.put(Item(pid, label, "seat", (500.0, 500.0, 260.0), 12.0), x=seat_x, y=y, z=bottom_at(lay.top_of("floor")))
+    _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
                 x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
-    lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, 880.0, v["cargo_height"]), v["cargo_mass"]),
+    # pedals from the driver's foot, then the steering from the driver's knee (kit/body.py, kit/steering.py)
+    feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0)
+    knee = feet["pose"].legs["R"].knee
+    _kit(steering.place, lay, 12.0, v["steering_x"] - STEERING_WHEEL_BEHIND_MM, -seat_y, -seat_y + STEERING_INBOARD_MM,
+         float(knee[2]) + feet["pose"].radii["thigh"], rho, avoid=("pedal_accel", "pedal_brake"))
+    if BODY_PARTS:
+        from hiraku.solvers.k4_geometry.people import grip_points
+
+        for occ, seat in (("occupant_R", "seat_R"), ("occupant_L", "seat_L")):
+            pose = feet["pose"] if occ == "occupant_R" else body.driver_pose(lay, seat, "floor_front")
+            grips = grip_points(lay.part("steering_wheel")) if occ == "occupant_R" else None
+            body.occupant_parts(lay, occ, pose, grips)
+    lay.put(Item("cargo", "荷", "cargo", (deck_len - CARGO_SHORT_MM, deck_w, v["cargo_height"]), v["cargo_mass"]),
             x=lay.part("deck")["box"]["center_mm"][0], y=0.0, z=bottom_at(lay.top_of("deck")), carried_by=lay.at("S2", "B", "E"))
-    for s in supports:  # each wheel (unsprung) and its arms, their tops level with the floors, inner face on the rail
+    for s in supports:  # each wheel (unsprung) and its arms: the arms' box around the lower arm
         x, y, z = s["position_mm"]
         corner = corner_name(s, supports)
-        lay.put(Item(f"wheel_{s['id']}", f"{corner}の車輪 (タイヤ・ホイール・ハブ・ブレーキ)", "wheel", (2 * r, ww, 2 * r),
+        lay.put(Item(f"wheel_{s['id']}", f"{corner}の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)", "wheel", (2 * r, ww, 2 * r),
                      WHEEL_MASS_KG), x=x, y=y, z=z, carried_by=None)
-        lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
-                     (250.0, 120.0, 200.0), 8.0),
-                x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
+        hp = s["suspension"]["hardpoints_mm"]
+        lo_x, hi_x = sorted((hp["lca_rear"][0], hp["lca_front"][0]))
+        ys = sorted((hp["lca_front"][1] + math.copysign(SUSP_PIVOT_GAP_MM, y), hp["lca_outer"][1]))
+        lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アームとダンパー。箱は下の腕のまわり)", "suspension",
+                     (hi_x - lo_x - 2 * SUSP_PIVOT_GAP_MM, ys[1] - ys[0], 2 * SUSP_HALF_HEIGHT_MM), 8.0),
+                x=(lo_x + hi_x) / 2.0, y=(ys[0] + ys[1]) / 2.0, z=hp["lca_outer"][2], carried_by=None)
+    _kit(steering.place_corners, lay, rho)  # knuckles and the rear toe links, out of the suspension parts
+    # the front bulkhead (a panel between the rails' outer faces, from the rails up to the dash cross member
+    # under the steering column) and the brakes' master cylinder on its back face
+    dash_z = _dash_height(lay, post_x, v["tower_b"])
+    bh_h = dash_z - v["tower_b"] / 2.0 - on_rails
+    if bh_h <= 0:
+        raise DesignGenError("the dash cross member under the steering column would be below the rails; "
+                             "move steering_x or seat_x")
+    bh_size = (PANEL_T_MM, 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
+    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size,
+                 PANEL_KG_M2 * bh_size[1] * bh_size[2] * 1e-6),
+            x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
+    _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
     lay.reorder(PART_ORDER)
-    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
-    rho = float(material["density_kg_m3"])
+    materials = {"stkr400": material}
+    # the suspension's mounts on the frame (kit/mounts.py): towers, the lower arms' legs and cross members,
+    # brackets; then the dash posts and cross member on the front towers' rear posts, holding the column
+    tower = frame.section(*rect_tube(v["tower_b"], v["tower_b"], v["tower_t"]))
+    lower = frame.section(*rect_tube(v["lower_b"], v["lower_b"], v["lower_t"]))
+    for key, (b_, t_) in (("tower", (v["tower_b"], v["tower_t"])), ("lower", (v["lower_b"], v["lower_t"]))):
+        if 2.0 * t_ >= b_:
+            raise DesignGenError(f"{key}_t ({t_:g} mm) must be less than half of {key}_b ({b_:g} mm)")
+    if v["tower_b"] >= v["rail_b"]:
+        raise DesignGenError(f"tower_b ({v['tower_b']:g} mm) must be less than rail_b ({v['rail_b']:g} mm): the towers' "
+                             f"posts stand on the rails' top walls")
+    try:
+        placed = mounts.place(frame, lay, supports, {"tower": tower, "leg": lower, "lower": lower,
+                                                     "dims": {"lower": {"b": v["lower_b"], "h": v["lower_b"]}}},
+                              rho, x_a - post_x, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
+                              whole=REAR_OVERHANG_RAILS)
+    except (mounts.MountError, ValueError) as e:
+        raise DesignGenError(str(e)) from None
+    dash = build_dash(frame, lay, post_x, dash_z, rail_y, tower, rho)
+    lay.part("bulkhead")["carried_by"] = dash["bulkhead_nodes"]
+    rack_nodes = [lay.part(f"bracket_tie_{s['id']}")["carried_by"][0] for s in supports if s["actuation"]["steer"]]
+    lay.part("steering_rack")["carried_by"] = rack_nodes  # the rack hangs on its clamps
+    for pid in ("steering_column", "steering_wheel", "steering_shaft"):
+        lay.part(pid)["carried_by"] = list(dash["column_nodes"])
+    # the parts that were fixed at the front axle's rail nodes (between the front tower's posts now) are
+    # fixed where they are: the footwell parts at the bulkhead's posts and S1, the wiring box and the
+    # main switch at S1, the front body at the front towers' front posts
+    feet_nodes = {"L": "LAp2", "R": "RAp2"}
+    front_nodes = {"L": "LAp1", "R": "RAp1"}
+    for p in lay.parts:
+        cb = p.get("carried_by") or []
+        if not any(n in ("LA", "RA") for n in cb) or p["kind"] in ("bracket", "gusset", "frame"):
+            continue
+        if p["id"] == "front_body":
+            p["carried_by"] = [front_nodes[n[0]] if n in ("LA", "RA") else n for n in cb]
+        elif p["id"] in ("aux", "main_switch"):
+            p["carried_by"] = [n for n in cb if n not in ("LA", "RA")] or cb
+        else:
+            p["carried_by"] = [feet_nodes[n[0]] if n in ("LA", "RA") else n for n in cb]
+    # joint reinforcement last, so that a design's other parts come first as in the design without it
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
         for st in tee:
@@ -419,14 +648,20 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         for st in tee:
             for side in "LR":
                 lay.parts.append(frame.through_part(f"{side}{st}", f"cross_{st}", rho))
+    if v["rollbar"] == 1:
+        key = build_rollbar(frame, lay, v, cross)
+        materials.setdefault(key, json.loads(MATERIALS.read_text(encoding="utf-8"))[key])
 
-    written = {k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
+    written ={k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
     variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items()
                       if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
     variables["tyre_relaxation_length"] = _q(r, "mm")
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
-    return {
+    variables["motor_rotor_inertia"] = _q(drive["rotor_inertia"], "kg*m^2")
+    variables["reducer_output_inertia"] = _q(drive["gear_inertia"], "kg*m^2")
+    variables[drivetrain.DROP_VARIABLE] = _q(drop, "mm")
+    design = {
         "design_version": version,
         "parent_version": parent,
         "name": name or f"offroad-4w v{version}: {DESCRIPTION}",
@@ -435,5 +670,143 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "supports": supports,
         "parts": lay.parts,
         **frame.part(),
-        "materials": {"stkr400": material},
+        "materials": materials,
     }
+    safety.add_rollbar_part(design)
+    systems.write(design)  # system and connects_to of every part, when the contract has them
+    return design
+
+
+def _behind(radius: float, across: float) -> float:
+    """How far (mm) behind a wheel's centre its steering sweep reaches at `across` mm inboard of the centre:
+    the disc of the tyre box's corner radius (any steer angle; the safe side)."""
+    return math.sqrt(radius * radius - across * across) if across < radius else 0.0
+
+
+def _dash_height(lay: Layout, x: float, b: float) -> float:
+    """The dash cross member's centre height at x: DASH_GAP_MM below the steering column (its radius and the
+    member's half size kept off), the column's axis taken from its box."""
+    from hiraku.designgen.kit.steering import COLUMN_RADIUS_MM, _axis
+
+    top, low = _axis(lay.part("steering_column"))
+    if not min(low[0], top[0]) <= x <= max(low[0], top[0]):
+        raise DesignGenError(f"the steering column ({top[0]:.0f} to {low[0]:.0f} mm along x) does not pass over the "
+                             f"dash at x = {x:.0f} mm; move steering_x")
+    z_col = float(top[2] + (low[2] - top[2]) * (x - top[0]) / (low[0] - top[0]))
+    slope = math.atan2(abs(top[2] - low[2]), abs(top[0] - low[0]))
+    return z_col - (COLUMN_RADIUS_MM + b / 2.0 + DASH_GAP_MM) / math.cos(slope)
+
+
+def build_dash(frame: Frame, lay: Layout, post_x: float, dash_z: float, rail_y: float, section: str,
+               rho: float) -> Record:
+    """The dash posts (on from the front towers' rear posts up to dash_z), the dash cross member between their
+    tops (members dash_post_L, dash_post_R, dash_cross) and the column's bracket (kind bracket) from the
+    cross member up around the column. Returns {"column_nodes", "bulkhead_nodes"}."""
+    from hiraku.designgen.kit.steering import COLUMN_RADIUS_MM, _axis
+
+    tops = {}
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        below = next((k for k, q in frame.nodes.items() if abs(q[0] - post_x) < 1e-6 and abs(q[1] - sy * rail_y) < 1e-6
+                      and q[2] < dash_z and any(m["id"].startswith("tower_post_") and k == m["node_b"]
+                                                for m in frame.members)), None)
+        if below is None:
+            raise DesignGenError(f"no front tower post at x = {post_x:.0f} mm on the {side} rail for the dash post")
+        tops[side] = frame.node(f"{side}DT", [post_x, sy * rail_y, dash_z])
+        frame.member(f"dash_post_{side}", below, tops[side], section)
+    frame.member("dash_cross", tops["L"], tops["R"], section)
+    col = lay.part("steering_column")
+    top, low = _axis(col)
+    z_col = float(top[2] + (low[2] - top[2]) * (post_x - top[0]) / (low[0] - top[0]))
+    slope = math.atan2(abs(top[2] - low[2]), abs(top[0] - low[0]))
+    y_col = float(col["box"]["center_mm"][1])
+    # the clamp's seat: from the cross member's centre up to just under the column along its length
+    # (the clamp's band round the column is not drawn)
+    lo = [post_x - mounts.BRACKET_HALF_X_MM, y_col - COLUMN_RADIUS_MM - mounts.BRACKET_PAD_MM, dash_z]
+    hi = [post_x + mounts.BRACKET_HALF_X_MM, y_col + COLUMN_RADIUS_MM + mounts.BRACKET_PAD_MM,
+          z_col - COLUMN_RADIUS_MM / math.cos(slope) - mounts.BRACKET_HALF_X_MM * math.tan(slope) - 1.0]
+    nodes = [tops["L"], tops["R"]]
+    lay.parts.append(mounts._bracket("bracket_column", "ステアリングのコラムの金具 (ダッシュの横の部材の上)", lo, hi, nodes,
+                                     rho))
+    posts_low = [m["node_a"] for m in frame.members if m["id"].startswith("dash_post_")]
+    return {"column_nodes": nodes, "bulkhead_nodes": sorted(set(posts_low) | set(nodes)) +
+            sorted({m["node_a"] for m in frame.members if m["node_b"] in posts_low and m["id"].startswith("tower_post_")})}
+
+
+def write_hardpoints(design: dict, rail: dict | None = None, top_half: float = 0.0) -> dict:
+    """Each support on the builtin K&C table carries its double-wishbone hard points (suspension.hardpoints_mm),
+    so that K2, the frame and the screens read the same points: K2's builtin layout, its upper arm raised and
+    the damper's top moved out until both clear the rail through the travel and the damper's top raised over
+    the upper ball joint at full bump (kit/mounts.fit_hardpoints; rail = {"y", "z", "b", "h"} of the left
+    rail, top_half: half the tower tube's size), or K2's builtin points as they are without a rail.
+    Returns {support id: the clearances (mounts.rail_clearances and the moved values)}."""
+    from hiraku.solvers.k2_vehicle.model import hardpoints_of
+
+    out = {}
+    for s in design["supports"]:
+        sus = s.get("suspension", {})
+        if sus.get("type") == "kc_table" and str(sus.get("kc_table", "")).startswith("builtin:"):
+            try:
+                if rail is None:
+                    points = hardpoints_of(design, s["id"])
+                else:
+                    points, out[s["id"]] = mounts.fit_hardpoints(s, rail, float(sus.get("travel_mm") or 0.0), top_half)
+            except (ValueError, mounts.MountError) as e:  # K2's arms do not close for these sizes
+                raise DesignGenError(f"the suspension of {s['id']} cannot be laid out ({e}); change the wheel radius, "
+                                     f"the track or the travel") from None
+            sus["hardpoints_mm"] = {k: [float(x) for x in p] for k, p in points.items() if k not in ("axle", "radius_mm")}
+    return out
+
+
+ROLLBAR_STATION = "H"  # the rail nodes LH, RH under the roll bar; LHO, RHO the outriggers' ends; LHT, RHT the top corners
+
+
+def frame_end(frame: Frame, member_id: str, i: int) -> str:
+    """Node a (i = 0) or b (i = 1) of a frame member."""
+    m = next(x for x in frame.members if x["id"] == member_id)
+    return m["node_a"] if i == 0 else m["node_b"]
+
+
+def build_rollbar(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str) -> str:
+    """Add the roll bar to the frame from the variables, and return its material key.
+
+    Placed from what is there: x = the seat's rear cross member S2 minus rollbar_offset (the two rails
+    are split at a node there); feet at the rail centre height, out to y = +-rollbar_width/2 on outriggers
+    of foot_section (none when the width is the rail spacing); posts straight up to the top beam, its centre
+    line rollbar_height above the seats' box top. Members rollbar_foot_<L|R>, rollbar_post_<L|R>, rollbar_top.
+    The parts are placed before this, so their carried_by nodes do not change."""
+    s2, b = lay.station_x("S2"), lay.station_x("B")
+    x = s2 - v["rollbar_offset"]
+    if x - b < MIN_STATION_GAP_MM:
+        raise DesignGenError(f"the roll bar at x = {x:g} mm is closer than {MIN_STATION_GAP_MM:g} mm to the rear axle "
+                             f"station B ({b:g} mm); make rollbar_offset smaller")
+    half = v["rollbar_width"] / 2.0
+    rail_y, rail_z = v["rail_spacing"] / 2.0, v["rail_height"]
+    if half < rail_y - 1e-9:
+        raise DesignGenError(f"rollbar_width ({v['rollbar_width']:g} mm) must be at least rail_spacing "
+                             f"({v['rail_spacing']:g} mm): the posts stand on the rails or outboard of them")
+    seat_top = max(lay.top_of(p["id"]) for p in lay.parts if p["kind"] == "seat")
+    z_top = seat_top + v["rollbar_height"]
+    if v["rollbar_square"] == 1:
+        sec = frame.section(*rect_tube(v["rollbar_b"], v["rollbar_b"], v["rollbar_t"]))
+        size = v["rollbar_b"]
+    else:
+        sec = frame.section(*round_tube(v["rollbar_d"], v["rollbar_t"]))
+        size = v["rollbar_d"]
+    if 2.0 * v["rollbar_t"] >= size:
+        raise DesignGenError(f"rollbar_t ({v['rollbar_t']:g} mm) must be less than half of the tube size ({size:g} mm)")
+    mat = ROLLBAR_MATERIALS[v["rollbar_square"]]
+    h = ROLLBAR_STATION
+    corners = {}
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        rail = mounts.member_through(frame, [x, sy * rail_y, rail_z]) or f"rail_{side}_S2B"
+        ids = ((f"rail_{side}_S2{h}", f"rail_{side}_{h}B") if rail == f"rail_{side}_S2B" else
+               (f"rail_{side}_{frame_end(frame, rail, 0)}_{side}{h}", f"rail_{side}_{side}{h}_{frame_end(frame, rail, 1)}"))
+        foot = frame.split(rail, f"{side}{h}", [x, sy * rail_y, rail_z], ids)
+        if half > rail_y + 1e-9:
+            tip = frame.node(f"{side}{h}O", [x, sy * half, rail_z])
+            frame.member(f"rollbar_foot_{side}", foot, tip, foot_section)
+            foot = tip
+        corners[side] = frame.node(f"{side}{h}T", [x, sy * half, z_top])
+        frame.member(f"rollbar_post_{side}", foot, corners[side], sec, mat)
+    frame.member("rollbar_top", corners["L"], corners["R"], sec, mat)
+    return mat

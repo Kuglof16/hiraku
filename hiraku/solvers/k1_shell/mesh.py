@@ -66,10 +66,42 @@ tube, `mounts[frame node]` are that tube's wall nodes (all four walls)
 within +- the tube's height h of the node along the tube (an assumed
 bracket size), and `mount_elements` the elements whose nodes are all in
 that set (the bracket's footprint).
+
+Weld strips (weld_strips=True, the default; for the IIW structural hot-spot
+stress, stress.hot_spots): at every shared joint (T, L, through; not tied)
+the weld lines are where the branch's walls meet the wall of the tube they
+end on (the footprint's four edges; for a through joint at the near wall's
+hole and at the far wall). Grid lines are added at t and 2t from each weld
+line, t the wall thickness of the tube the strip lies on:
+- on the host wall outside the footprint: s lines at t and 2t before and
+  after the footprint, c lines (along the wall) at t and 2t beyond its two
+  edges; for a through joint the same c lines on the far wall around the
+  far footprint. Lines that would fall outside the tube (the footprint edge
+  at an L joint's extended end, a footprint at the edge of a wall) or cross
+  another joint's footprint are not added; that edge then has no strip.
+- on the branch's walls: s lines at t and 2t from the weld line along the
+  branch axis, into the branch. For a through joint: outside the near wall,
+  inside it (towards the far wall) and inside the far wall (towards the near
+  wall), the inside ones only where the tube is at least 4t wide inside.
+- along the weld lines: the branch's walls get c lines at t, 2t and 3t
+  (CORNER_LINES; t the larger of the two walls' thicknesses) from each of
+  their corners, so the branch's ring and the host's footprint are cut there
+  too: the strips are cut into t x t elements next to the footprint's
+  corners, and the first strip element read past the corner squares
+  (stress.CORNER_SKIP_T) lies at the same place whatever the element size.
+  These lines run the length of the branch and of the host's wall (the grid
+  is structured), which roughly doubles the element count of the demo.
+- gusset plates at a joint are graded so that their legs have nodes at t and
+  2t from the corner (the strips' lines), the rest of each half leg even.
+The rest of the grid is as without strips (target element size between fixed
+lines). With an element size below t the strips are cut again and no hot
+spot is read. `weld_lines` lists every weld line segment with room for a
+strip beside it.
 """
 
 from __future__ import annotations
 
+import copy
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -78,11 +110,13 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from ..k0_handcalc.vehicle import DesignError, member_props
+from . import cache
 
 ELEMENT_SIZE_MM = 10.0
 FORMULATION = ("MITC4 (Dvorkin & Bathe 1984) on flat 4-node facets; membrane with incompatible modes; "
                "6 DOF per node with a small drilling stiffness")
 TOL = 1e-6  # mm, for coincident lines and nodes
+CORNER_LINES = (1, 2, 3)  # weld strips: grid lines along the weld lines at these multiples of t from each corner
 ANGLE_TOL = 1e-6  # |cos| for parallel / perpendicular tests
 SHAPES = ("rect_tube", "round_tube")
 UP = np.array([0.0, 0.0, 1.0])
@@ -212,7 +246,37 @@ class _Gusset:
     g_s: float
     g_in: float
     t: float
-    n: int  # each of the three quads is cut n x n
+    n: int  # the outer halves of the legs are cut into n
+    div_s: np.ndarray | None = None  # 0..1 over the half leg along u_s next to the corner (None: n even parts)
+    div_in: np.ndarray | None = None  # the same along u_in
+
+    def divisions(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """(P, Q, W): parameter cuts of the corner quad along u_s and u_in, and of the outer halves."""
+        w = np.arange(self.n + 1) / self.n
+        return (w if self.div_s is None else self.div_s), (w if self.div_in is None else self.div_in), w
+
+
+@dataclass
+class WeldLine:
+    """One straight weld line segment with a strip of t x t elements beside it (mesh notes, weld strips).
+
+    p0, p1 the line's ends (mm, on the mid-surfaces); away the unit vector in
+    the strip's wall, square to the line, pointing into the strip; normal the
+    wall's outward normal; t the strip's wall thickness; members the members
+    of the tube the strip lies on. side "host" (the wall the branch ends on)
+    or "branch"; place says which wall or which side of it.
+    """
+
+    joint: str
+    kind: str  # "T", "L" or "through"
+    side: str
+    place: str
+    members: tuple
+    p0: np.ndarray
+    p1: np.ndarray
+    away: np.ndarray
+    normal: np.ndarray
+    t: float
 
 
 @dataclass
@@ -253,6 +317,8 @@ class ShellMesh:
     mount_half_mm: dict[str, float] = field(default_factory=dict)  # frame node -> half length of the mount
     part_material: dict[str, str] = field(default_factory=dict)  # gusset part -> member whose material it takes
     through_joints: list[str] = field(default_factory=list)  # design nodes of the through joints
+    weld_strips: bool = False  # grid lines at t and 2t from the weld lines (module notes)
+    weld_lines: list[WeldLine] = field(default_factory=list)
 
     @property
     def n_nodes(self) -> int:
@@ -265,6 +331,11 @@ class ShellMesh:
     def edge_lengths(self) -> np.ndarray:
         x = self.nodes[self.elements]
         return np.linalg.norm(x - np.roll(x, -1, axis=1), axis=2)
+
+    def aspect_ratios(self) -> np.ndarray:
+        """Longest over shortest edge of each element."""
+        e = self.edge_lengths()
+        return e.max(axis=1) / e.min(axis=1)
 
     def record(self, mesh_id: str, design_version: int) -> dict:
         """The contract `mesh` record (node coordinates rounded to 0.0001 mm to keep the record small)."""
@@ -522,8 +593,78 @@ def _near_s(run: _Run, j: _Joint) -> float:
     return j.dist if j.branch_end == 0 else run.length - j.dist
 
 
-def _set_forced(runs: list[_Run], joints: list[_Joint], size: float) -> None:
-    """Grid lines on the host tubes through the ring nodes of shared joints (iterated to a fixed point)."""
+def _branch_welds(br: _Run, j: _Joint) -> list[tuple[float, int, str]]:
+    """(station s of the weld line on the branch, direction along ex into the strip, place) of a shared joint."""
+    into = 1 if j.branch_end == 0 else -1  # from the joint into the branch's free length
+    end = _end_s(br, j.branch_end)
+    if not j.through:
+        return [(end, into, "end on the wall")]
+    near = _near_s(br, j)
+    out = [(near, into, "outside the near wall")]
+    if abs(near - end) >= 4.0 * br.t - TOL:  # room for both inside strips
+        out += [(near, -into, "inside, at the near wall"), (end, into, "inside, at the far wall")]
+    return out
+
+
+def _edges(j: _Joint) -> tuple[float, float, float, float]:
+    """The footprint (s0, s1, c0, c1) as its grid lines (rounded as j.s_set and j.c_set)."""
+    return min(j.s_set), max(j.s_set), min(j.c_set), max(j.c_set)
+
+
+def _strip_lines(runs: list[_Run], joints: list[_Joint]) -> tuple[dict, dict]:
+    """Grid lines at t and 2t from the weld lines of the shared joints (module notes, weld strips):
+    ({run: s lines}, {run: [c lines of walls 0..3]}). A line that would cross a shared footprint on
+    its tube, or fall outside the tube or its wall, is left out."""
+    shared = [j for j in joints if j.kind != "tied" and j.s_set]
+    s_add = {r.id: set() for r in runs}
+    c_add = {r.id: [set(), set(), set(), set()] for r in runs}
+    foot_s = defaultdict(list)  # run -> s ranges of the footprints on it (an s line is a ring: all walls)
+    foot_c = defaultdict(list)  # (run, wall) -> c ranges of the footprints on that wall
+    for j in shared:
+        s0, s1, c0, c1 = _edges(j)
+        foot_s[j.host].append((s0, s1))
+        foot_c[(j.host, j.wall)].append((c0, c1))
+        if j.through:
+            foot_c[(j.host, j.far_wall)].append((min(j.far_c_set), max(j.far_c_set)))
+
+    def free(v, ranges):
+        return not any(a + TOL < v < b - TOL for a, b in ranges)
+
+    for j in shared:
+        host, br = runs[j.host], runs[j.branch]
+        t = host.t
+        s0, s1, c0, c1 = _edges(j)
+        lo, hi = host.s_range()
+        for v in (s0 - t, s0 - 2 * t, s1 + t, s1 + 2 * t):
+            if lo + TOL < v < hi - TOL and free(v, foot_s[host.id]):
+                s_add[host.id].add(round(v, 9))
+        walls = [(j.wall, c0, c1)] + ([(j.far_wall, min(j.far_c_set), max(j.far_c_set))] if j.through else [])
+        for w, a, b in walls:
+            Lw = host.wall_lengths()[w]
+            for v in (a - t, a - 2 * t, b + t, b + 2 * t):
+                if TOL < v < Lw - TOL and free(v, foot_c[(host.id, w)]):
+                    c_add[host.id][w].add(round(v, 9))
+        blo, bhi = br.s_range()
+        for s_w, d, _ in _branch_welds(br, j):
+            for v in (s_w + d * br.t, s_w + 2 * d * br.t):
+                if blo + TOL < v < bhi - TOL and free(v, foot_s[br.id]):
+                    s_add[br.id].add(round(v, 9))
+        # along the weld lines: the branch's walls (so its ring, so the footprint) cut at k t from every corner,
+        # t the larger of the two walls (one set of lines, so that two thicknesses make no slivers)
+        tc = max(host.t, br.t)
+        for w, Lw in enumerate(br.wall_lengths()):
+            if 2 * CORNER_LINES[-1] * tc >= Lw - TOL:
+                continue
+            for k in CORNER_LINES:
+                for v in (k * tc, Lw - k * tc):
+                    if free(v, foot_c[(br.id, w)]):
+                        c_add[br.id][w].add(round(v, 9))
+    return s_add, c_add
+
+
+def _set_forced(runs: list[_Run], joints: list[_Joint], size: float, strips: bool = False) -> None:
+    """Grid lines on the host tubes through the ring nodes of shared joints, and the weld strips' lines
+    (iterated to a fixed point)."""
     for _ in range(10):
         new_s = {r.id: set() for r in runs}
         new_c = {r.id: [set(), set(), set(), set()] for r in runs}
@@ -547,6 +688,12 @@ def _set_forced(runs: list[_Run], joints: list[_Joint], size: float) -> None:
                 j.far_c_set = _key(cs)
                 j.far_footprint = (min(ss), max(ss), min(cs), max(cs))
                 new_c[host.id][j.far_wall].update(j.far_c_set)
+        if strips:
+            s_add, c_add = _strip_lines(runs, joints)
+            for r in runs:
+                new_s[r.id] |= s_add[r.id]
+                for w in range(4):
+                    new_c[r.id][w] |= c_add[r.id][w]
         changed = any(new_s[r.id] != r.forced_s or new_c[r.id] != r.forced_c for r in runs)
         for r in runs:
             r.forced_s, r.forced_c = new_s[r.id], new_c[r.id]
@@ -611,8 +758,22 @@ def _gusset_parts(design: dict) -> list[dict]:
     return [p for p in design.get("parts", []) if p.get("kind") == "gusset"]
 
 
-def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], size: float) -> list[_Gusset]:
-    """Gusset geometry from the parts, and the grid lines they need (run.extra_s, with the through joints' lines)."""
+def _graded(leg: float, t: float, longest: float, size: float) -> np.ndarray | None:
+    """Cuts 0..1 of the half of a gusset leg next to its corner with points at t and 2t from the corner and
+    the rest even, so that no edge of the quads it cuts (the longest of them `longest` mm) exceeds size;
+    None when the half leg is not longer than 2t."""
+    half = leg / 2.0
+    if 2.0 * t >= half - TOL:
+        return None
+    p2 = 2.0 * t / half
+    m = max(1, math.ceil((1.0 - p2) * longest / size - 1e-9))
+    return np.concatenate([[0.0, t / half, p2], p2 + (1.0 - p2) * np.arange(1, m + 1) / m])
+
+
+def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], size: float,
+                   strips: bool = False) -> list[_Gusset]:
+    """Gusset geometry from the parts, and the grid lines they need (run.extra_s, with the through joints' lines).
+    With strips the legs are graded to have nodes at t and 2t from the corner (the weld strips' lines)."""
     for r in runs:
         r.extra_s = set()
     for j in joints:
@@ -653,16 +814,23 @@ def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], si
         if np.linalg.norm(want - c) > 1.0:
             raise DesignError(f"gusset {p['id']!r}: its centre {np.round(c, 2).tolist()} is not the centroid of a "
                               f"plate at the corner of joint {node!r} ({np.round(want, 2).tolist()} for these legs)")
-        n = max(1, math.ceil(math.hypot(g_s, g_in) / 2.0 / size - 1e-9))  # half the hypotenuse is the longest side
-        k = np.arange(1, 2 * n + 1) / (2 * n)
-        hs = host.local(O)[0] + (u_s @ host.ex) * g_s * k
-        bs = br.local(O)[0] + (u_in @ br.ex) * g_in * k
+        longest = math.hypot(g_s, g_in) / 2.0  # half the hypotenuse is the longest side
+        n = max(1, math.ceil(longest / size - 1e-9))
+        g = _Gusset(p["id"], j, O, u_s, u_in, u_n, g_s, g_in, t, n)
+        if strips:
+            g.div_s = _graded(g_s, host.t, longest, size)
+            g.div_in = _graded(g_in, br.t, longest, size)
+        P, Q, W = g.divisions()
+        k_s = np.concatenate([P[1:], 1.0 + W[1:]]) / 2.0  # leg nodes from the corner, as fractions of the leg
+        k_in = np.concatenate([Q[1:], 1.0 + W[1:]]) / 2.0
+        hs = host.local(O)[0] + (u_s @ host.ex) * g_s * k_s
+        bs = br.local(O)[0] + (u_in @ br.ex) * g_in * k_in
         for run, ss, leg in ((host, hs, "along the tube it sits on"), (br, bs, "along the branch")):
             lo, hi = run.s_range()
             if ss.min() < lo - TOL or ss.max() > hi + TOL:
                 raise DesignError(f"gusset {p['id']!r}: its leg {leg} runs past the end of the tube; make it shorter")
             run.extra_s.update(round(float(s), 9) for s in ss)
-        out.append(_Gusset(p["id"], j, O, u_s, u_in, u_n, g_s, g_in, t, n))
+        out.append(g)
     return out
 
 
@@ -673,19 +841,22 @@ _TRI_QUADS = [[(0.0, 0.0), (0.5, 0.0), (1 / 3, 1 / 3), (0.0, 0.5)],
 
 
 def _gusset_grid(g: _Gusset) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Points (P, 3), quads (Q, 4) into them (counter-clockwise seen from the top side) and which points lie on a leg."""
+    """Points (P, 3), quads (Q, 4) into them (counter-clockwise seen from the top side) and which points lie on a leg.
+
+    The cuts of the shared quad edges match: the corner quad is cut P x Q, the one along u_s W x Q, the one
+    along u_in P x W (g.divisions())."""
     pts, quads, on_leg = [], [], []
-    n = g.n
+    P, Q, W = g.divisions()
     flip = np.cross(g.u_s, g.u_in) @ g.normal < 0
-    for corners in _TRI_QUADS:
+    for corners, (du, dv) in zip(_TRI_QUADS, ((P, Q), (W, Q), (P, W))):
         cab = np.array(corners)
-        u = np.arange(n + 1) / n
-        uu, vv = np.meshgrid(u, u, indexing="ij")  # uu along corner 0 -> 1, vv along corner 0 -> 3
+        nu, nv = len(du) - 1, len(dv) - 1
+        uu, vv = np.meshgrid(du, dv, indexing="ij")  # uu along corner 0 -> 1, vv along corner 0 -> 3
         ab = ((1 - uu)[..., None] * (1 - vv)[..., None] * cab[0] + uu[..., None] * (1 - vv)[..., None] * cab[1]
               + uu[..., None] * vv[..., None] * cab[2] + (1 - uu)[..., None] * vv[..., None] * cab[3])
         base = sum(len(p) for p in pts)
-        idx = base + np.arange((n + 1) ** 2).reshape(n + 1, n + 1)
-        i, k = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
+        idx = base + np.arange((nu + 1) * (nv + 1)).reshape(nu + 1, nv + 1)
+        i, k = np.meshgrid(np.arange(nu), np.arange(nv), indexing="ij")
         q = np.stack([idx[i, k], idx[i + 1, k], idx[i + 1, k + 1], idx[i, k + 1]], axis=-1).reshape(-1, 4)
         if flip:
             q = q[:, ::-1]
@@ -696,8 +867,66 @@ def _gusset_grid(g: _Gusset) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return np.vstack(pts), np.vstack(quads), np.concatenate(on_leg)
 
 
-def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellMesh:
-    """Mesh the mid-surfaces of the design's tube members (see the module notes)."""
+def _wall_axes(run: _Run, wall: int) -> tuple[np.ndarray, np.ndarray]:
+    """(outward normal, unit vector of increasing c) of wall 0..3 of a rect run."""
+    (y0, z0), (y1, z1) = run.wall_point(wall, 0.0), run.wall_point(wall, 1.0)
+    return (run.ey, run.ez, -run.ey, -run.ez)[wall], (y1 - y0) * run.ey + (z1 - z0) * run.ez
+
+
+def _wall_at(run: _Run, s: float, wall: int, c: float) -> np.ndarray:
+    y, z = run.wall_point(wall, c)
+    return run.origin + s * run.ex + y * run.ey + z * run.ez
+
+
+def _weld_lines(runs: list[_Run], joints: list[_Joint]) -> list[WeldLine]:
+    """The weld line segments of the shared joints that have a strip beside them (module notes)."""
+    out = []
+    for j in joints:
+        if j.kind == "tied" or not j.s_set:
+            continue
+        host, br = runs[j.host], runs[j.branch]
+        kind = "through" if j.through else j.kind
+        t = host.t
+        s0, s1, c0, c1 = _edges(j)
+        lo, hi = host.s_range()
+        walls = [(j.wall, c0, c1, "near wall" if j.through else "beside the footprint")]
+        if j.through:
+            walls.append((j.far_wall, min(j.far_c_set), max(j.far_c_set), "far wall"))
+        for w, a, b, place in walls:
+            nrm, dc = _wall_axes(host, w)
+            Lw = host.wall_lengths()[w]
+            for (sa, ca), (sb, cb), away, room in (((s0, a), (s0, b), -host.ex, s0 - 2 * t > lo + TOL),
+                                                   ((s1, a), (s1, b), host.ex, s1 + 2 * t < hi - TOL),
+                                                   ((s0, a), (s1, a), -dc, a - 2 * t > TOL),
+                                                   ((s0, b), (s1, b), dc, b + 2 * t < Lw - TOL)):
+                if room:
+                    out.append(WeldLine(j.node, kind, "host", place, tuple(host.members), _wall_at(host, sa, w, ca),
+                                        _wall_at(host, sb, w, cb), away.copy(), nrm.copy(), t))
+        for s_w, d, place in _branch_welds(br, j):
+            for w, Lw in enumerate(br.wall_lengths()):
+                nrm, _ = _wall_axes(br, w)
+                out.append(WeldLine(j.node, kind, "branch", place, tuple(br.members), _wall_at(br, s_w, w, 0.0),
+                                    _wall_at(br, s_w, w, Lw), d * br.ex, nrm.copy(), br.t))
+    return out
+
+
+_MESHES = cache.LRU(cache.MESHES)
+
+
+def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
+    """Mesh the mid-surfaces of the design's tube members (see the module notes); weld_strips: grid lines at
+    t and 2t from the joints' weld lines (False: the grid without them).
+
+    The same design frame (cache.design_key), element size and weld_strips give the mesh built before
+    in this process (a copy of it), unless HIRAKU_SHELL_CACHE=0."""
+    if not cache.enabled():
+        return _build_mesh(design, element_size_mm, weld_strips)
+    key = cache.design_key(design, "mesh", float(element_size_mm), bool(weld_strips))
+    mesh, _ = _MESHES.get_or_make(key, lambda: _build_mesh(design, element_size_mm, weld_strips))
+    return copy.deepcopy(mesh)
+
+
+def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
     size = float(element_size_mm)
     if not size > 0:
         raise ValueError("element_size_mm must be positive")
@@ -709,10 +938,10 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
     mount_nodes = [s.get("frame_node") for s in design.get("supports", []) if s.get("frame_node") in run_through]
     gussets: list[_Gusset] = []
     for _ in range(2 * len(joints) + 2):
-        _set_forced(runs, joints, size)
+        _set_forced(runs, joints, size, weld_strips)
         if _fit_through(runs, joints):
             continue
-        gussets = _place_gussets(runs, joints, gparts, size)
+        gussets = _place_gussets(runs, joints, gparts, size, weld_strips)
         _mount_lines(run_through, mount_nodes, joints)
         bad = _clashes(runs, joints)
         if not bad:
@@ -952,6 +1181,11 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
     if mounts:
         notes.append("Wheel mounts: " + "; ".join(f"{fn} (walls of {run_through[fn].members[0]}..{run_through[fn].members[-1]} "
                                                     f"within +- {mount_half[fn]:g} mm, its height)" for fn in mounts) + ".")
+    weld_lines = _weld_lines(runs, joints) if weld_strips else []
+    if weld_lines:
+        notes.append(f"Weld strips: grid lines at t and 2t (t the wall the strip lies on) from the {len(weld_lines)} weld "
+                     f"line segments of the shared joints, on the wall the branch meets and on the branch's walls, for "
+                     f"the structural hot-spot stress; gusset legs graded to match.")
 
     return ShellMesh(
         nodes=nodes, elements=elements, element_member=element_member,
@@ -964,6 +1198,7 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
                      **{g.id: np.stack([g.u_s, g.u_in, g.normal]) for g in gussets}},
         mounts=mounts, mount_elements=mount_elements, mount_half_mm=mount_half, part_material=part_material,
         through_joints=sorted({j.node for j in joints if j.through and j.kind != "tied"}),
+        weld_strips=bool(weld_strips), weld_lines=weld_lines,
     )
 
 

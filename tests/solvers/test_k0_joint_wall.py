@@ -88,19 +88,25 @@ class JointWallInputsTest(unittest.TestCase):
         cls.butt = frame_inputs.joint_wall_inputs(V1, loading="two_cargo")
         cls.through = frame_inputs.joint_wall_inputs(designgen.regenerate(V1, {"joints": "through"}), loading="two_cargo")
 
-    def test_cross_members_take_all_the_twisting_moment(self):
+    def test_cross_members_and_mounts_take_all_the_twisting_moment(self):
         for ji in (self.butt, self.through):
             total = sum(ji["twisting_moments_Nmm"].values())
-            self.assertAlmostEqual(sum(j["M_Nmm"] for j in ji["joints"]), abs(total), delta=1e-6 * abs(total))
+            taken = sum(j["M_Nmm"] for j in ji["joints"]) * np.sign(total) + sum(ji["mount_moments_Nmm"].values())
+            self.assertAlmostEqual(taken, total, delta=1e-6 * abs(total))
 
     def test_picks_a_joint_off_the_wheel_mounts(self):
-        for ji in (self.butt, self.through):
+        """With wheel_mounts False (the mounts' joints in the chain, not compared)."""
+        off = [frame_inputs.joint_wall_inputs(d, loading="two_cargo", wheel_mounts=False)
+               for d in (V1, designgen.regenerate(V1, {"joints": "through"}))]
+        self.assertEqual([ji["joints"] for ji in off], [self.butt["joints"], self.through["joints"]])
+        for ji in off:
             self.assertNotIn(ji["joint"], ("LA", "LB"))
+            self.assertFalse(ji["at_wheel_mount"])
             free = [j for j in ji["joints"] if not j["at_wheel_mount"]]
             self.assertEqual(max(free, key=lambda j: j["sigma_MPa"])["node"], ji["joint"])
             out = self.reg.evaluate("frame_static.joint_wall_bending", ji["inputs"])["outputs"]
             self.assertAlmostEqual(out["sigma"]["value"], max(j["sigma_MPa"] for j in free), places=6)
-        self.assertEqual(self.butt["joint"], "LE")
+        self.assertEqual(off[0]["joint"], "LE")
         self.assertEqual({j["node"] for j in self.butt["joints"] if j["at_wheel_mount"]}, {"LA", "LB"})
 
     def test_through_joints_take_more_and_spare_the_end(self):

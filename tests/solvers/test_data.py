@@ -36,7 +36,8 @@ class DemoDesignTest(unittest.TestCase):
     def test_brief(self):
         """2 seats, 4 wheels, curb mass within 500 kg, origin at the front axle, x forward."""
         parts = {p["id"]: p for p in self.design["parts"]}
-        self.assertEqual(sum(1 for p in parts.values() if p["kind"] == "occupant"), 2)
+        # 2 people; each is its body's parts (the id before the first "." is the person: contract.loading.person_of)
+        self.assertEqual(len({pid.split(".", 1)[0] for pid, p in parts.items() if p["kind"] == "occupant"}), 2)
         self.assertEqual(len(self.design["supports"]), 4)
         curb = mass_summary(self.design)["mass_kg"] - sum(p["mass_kg"] for p in parts.values() if p["kind"] in ("occupant", "cargo"))
         self.assertLessEqual(curb, 500.0)
@@ -45,7 +46,8 @@ class DemoDesignTest(unittest.TestCase):
         self.assertTrue(all(s["position_mm"][0] == 0.0 for s in front))
         rear = [s for s in self.design["supports"] if not s["actuation"]["steer"]]
         self.assertTrue(all(s["position_mm"][0] < 0.0 for s in rear))
-        self.assertFalse(any(p["kind"] == "rollbar" for p in parts.values()))
+        # the roll bar is on by default: its part weighs 0 kg (the members carry the mass)
+        self.assertEqual([p["mass_kg"] for p in parts.values() if p["kind"] == "rollbar"], [0.0])
 
 
 class MaterialsTest(unittest.TestCase):
