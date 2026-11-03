@@ -172,6 +172,31 @@ class DeferredChecksTest(FirstDesignCase, unittest.TestCase):
             self.assertEqual(contract.errors("event", e), [], e["kind"])
 
 
+class ClaudesPicksTest(FirstDesignCase, unittest.TestCase):
+    """No tests in the file and Claude picked with pick_domains: version 1 keeps Claude's picks, names and
+    reasons in the project and builds Claude's tests; only the tests without a builder (N3, R2 here) are
+    dropped, said in one line."""
+    tests = None
+
+    def test_the_first_version_keeps_claudes_picks(self):
+        picks = [{"domain": "strength", "shown_name": "フレームの強さ", "reason": "段差で人と荷を支える",
+                  "test_ids": ["R1", "R2"]},
+                 {"domain": "nvh", "shown_name": "振動", "reason": "林道の揺れ", "test_ids": ["N3"]}]
+        data = {"want": self.ctx.project["want"], "flags": self.ctx.project["flags"], "picks": picks, "off": []}
+        self.ctx.store.emit("domains.picked", agent="lead", text="分野を選びました", data=data)
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+        self.assertEqual(self.ctx.project["domain_picks"], picks)
+        self.assertEqual(out["domain_picks"], ["strength", "nvh"])
+        self.assertEqual({lc["test_id"] for lc in self.ctx.load_cases}, {"R1"})
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and "builder" in (e.get("text") or "")]
+        self.assertEqual(len(said), 1)
+        for t in ("R2", "N3"):
+            self.assertIn(t, said[0])
+        self.assertNotIn("R1 ", said[0])
+        for e in self.ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+
+
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
     tests = ["P1"]  # no criterion: the scripted run ends done once P1 is matched
 

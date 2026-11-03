@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RUN_TOOLS, rule_check
+from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RECORD_KINDS, RUN_TOOLS, rule_check
 
 Record = dict[str, Any]
 
@@ -68,12 +68,19 @@ def _domain_filter(extra: Record | None = None) -> Record:
 INPUT_SCHEMAS: dict[str, Record] = {
     "get_context": {"type": "object", "additionalProperties": False, "properties": {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
-                     "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
-                                    "手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design (中身は design_part で少しずつ)、設計役の変数は design_variables。"
+                     "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
+                                    "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
-                         "description": "formula_inputs (無ければ全部の荷重条件) と joint_wall_inputs の荷重条件"},
+                         "description": "load_cases・records・formula_inputs をこの荷重条件だけに絞る。joint_wall_inputs の荷重条件"},
+        "domain": {"enum": list(contract.DOMAINS), "description": "load_cases と formula_inputs をこの分野だけに絞る"},
+        "record_kinds": {"type": "array", "items": {"enum": list(RECORD_KINDS)}, "uniqueItems": True,
+                         "description": "records をこの種類だけに (prediction・analysis・comparison・cause・verdict)"},
+        "requirement_keys": {"type": "array", "items": {"type": "string"}, "uniqueItems": True,
+                             "description": "requirements をこの要件の key (Q15 など) だけに"},
+        "archetype": {"type": "string", "description": "archetypes をこの型だけに"},
         "design_part": {"enum": list(DESIGN_PARTS),
                         "description": "design の一部だけを、offset と limit で少しずつ (無ければ design は全体の要約)"},
         "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
@@ -98,8 +105,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
 
 DESCRIPTIONS = {
     "get_context": (
-        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
-        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。設計を直した版では、最初に "
+        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections を付けなければ小さな一覧 (overview: "
+        "荷重条件の ID・分野・担当・段・feeds、分野ごとの判定の札、記録の種類ごとの数、部分の名前と中身) だけが返る。"
+        "sections で要る部分を名前で頼み、大きな部分は絞る (load_cases と formula_inputs は domain か load_case_id、records は "
+        "record_kinds と load_case_id、requirements は requirement_keys、archetypes は archetype)。設計を直した版では、最初に "
         "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
         "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
         "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
@@ -111,7 +120,8 @@ DESCRIPTIONS = {
     "get_tool_template": (
         "道具を書く (check_tool・make_tool) ときの見本。強度の試験の道具 1 つ分の通して動くコード (code) と、"
         "決まりの説明: 定義するクラスと欄、analyse() の引数 (design・load_case・params) の中身、結果 (results) の欄、"
-        "答えの分かっている例 known_answers() と check_record の引数、使える import"
+        "答えの分かっている例 known_answers() と check_record の引数、使える import。examples.k1_frame は K1 の骨組で解く"
+        "強度の道具の見本。rule は道具が使えるための決まり (formulas に予測の式、出典つきで 0 でない答えの例)"
     ),
     "list_formulas": (
         "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "
@@ -119,7 +129,8 @@ DESCRIPTIONS = {
     ),
     "list_tools": (
         "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
-        "tool を付けるとその道具の全体 (答えの分かっている例・式)"
+        "各行の params は荷重条件で道具が読む名前の短い一覧 (単位 [..]・選べる値 (..)、run は analyze の params)。"
+        "tool を付けるとその道具の全体 (答えの分かっている例・式・params の名前・単位・意味・既定・選べる値)"
     ),
     "record_prediction": (
         "解析の前に、手計算の予測を記録する。式 (formula_id) と入力 (inputs、値と単位) と前提を選ぶだけで、"
@@ -156,12 +167,13 @@ DESCRIPTIONS = {
     ),
     "check_tool": (
         "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
-        "通らない例・使えない import・例外は problems に文で返る。make_tool の前の試しに使う"
+        "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api は道具が import して"
+        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。make_tool の前の試しに使う"
     ),
     "make_tool": (
         "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
         "全部通れば棚に入り (origin claude)、analyze で使える。code は hiraku.solvers.shelf.base の BuiltinTool を継ぐ"
-        "クラス 1 つ (name・title・domain・base・tests・load_case_params、known_answers() は check_record で閉じた式や"
+        "クラス 1 つ (name・title・domain・base・tests・formulas・load_case_params、known_answers() は check_record で閉じた式や"
         "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
         "hiraku.solvers の一部だけ"
     ),

@@ -109,9 +109,9 @@ def tools_for_tests(tools: dict[str, AnalysisTool], test_ids: list[str] | None) 
 # HK5 (docs/contract.md, HOOK_RULES HK5_light_first): every tool has a stage, 0 layout and rules,
 # 1 light (hand-calc sized models, beams, lumped thermal), 2 vehicle dynamics (time simulations),
 # 3 heavy (shell and solid FE, convergence, fatigue on spectra, time-varying fields). The tool's own
-# spec should say it (tool_spec.stage); this table is used only where the spec does not. Filled from
-# the contract's stage descriptions and the tools' own docstrings (hiraku/solvers/shelf/*.py and
-# hiraku/solvers/k2_vehicle/shelf/*.py).
+# spec should say it (tool_spec.stage); this table is used only where the spec does not. It agrees
+# with what the departments declared: the analysis department's shelf tools (their tool_spec.stage,
+# commit 51a639a) and the K2 team's (commit 4c009c5: kc_bench 1; the time simulations 2; frame_tubes 3).
 STAGE_FALLBACK: dict[str, int] = {
     "assembly": 0,            # K4 geometry: steering clearance, knee room, assembly order and interference
     "frame_static": 1,        # K1 beams
@@ -129,7 +129,7 @@ STAGE_FALLBACK: dict[str, int] = {
     "lane_change": 2,
     "offroad_roll": 2,
     "step_climb_dynamic": 2,
-    "kc_bench": 2,
+    "kc_bench": 1,            # K2: the suspension K&C bench, quasi-static
     "frame_shell": 3,         # shell FE (MITC4), hot spots
     "frame_tubes": 3,         # shell FE tube by tube with ties
     "fatigue": 3,             # rainflow on a road spectrum, Miner

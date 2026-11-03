@@ -186,6 +186,9 @@ def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
     let the stop through at its cap); else rules.judged_end. Shared with the plugin
     (hiraku.agent.plugin); the scripted driver keeps rules.judged_end."""
     after = f" (止めるのを {blocks} 回断ったあと、上限で終了)" if blocks else ""
+    dead_end = rules.stage_blocked_end(ctx)  # no revision left and the rest waits behind a lower stage's red
+    if dead_end:
+        return "stopped", dead_end, "round_limit"
     left = rules.unjudged_reason(ctx)
     if left:
         return "stopped", f"まとめ役が、判定の付いていない分野を残して止まりました{after}。" + left, "not_judged"

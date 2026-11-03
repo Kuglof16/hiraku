@@ -8,6 +8,7 @@ is missing and what to call next, because Claude reads it and acts on it.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -373,12 +374,102 @@ def design_refusal(ctx: RunContext) -> str | None:
     return None
 
 
+def current_report(ctx: RunContext) -> Record | None:
+    """The last report written (report.written), when it is of the current design version; else None."""
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "report.written":
+            rep = e.get("data") or {}
+            return rep if ctx.version and rep.get("design_version") == ctx.version else None
+    return None
+
+
+def _names(text: str, word: str) -> bool:
+    """Whether `word` (a load case id, test id or domain) stands in `text` as a whole id (R1 not in R10)."""
+    return bool(word) and re.search(rf"(?<![A-Za-z0-9_]){re.escape(word)}(?![A-Za-z0-9_])", text) is not None
+
+
+def stage_blocked(ctx: RunContext) -> dict[str, str]:
+    """HK4 / HK5's dead end (docs/contract.md): once the design revisions are used up, the held load cases
+    (holding) that wait only behind a red of a lower stage (lower_stage_left) are not analysed: load case id ->
+    the text naming those reds. Empty when revisions are left or nothing waits behind a red."""
+    if not revisions_used_up(ctx):
+        return {}
+    out = {}
+    for _, lcs in holding(ctx):
+        for lc_id in lcs:
+            n = load_case_stage(ctx, ctx.load_case(lc_id))
+            if n is None:
+                continue
+            reds = [(m, lc) for m, lc, what in lower_stage_left(ctx, n, skip=lc_id) if what.startswith("赤")]
+            if reds:
+                out[lc_id] = ("低い段の赤が残るので判定していない ("
+                              + "、".join(f"{_stage_ja(m)} の {lc['load_case_id']}" for m, lc in reds) + ")")
+    return out
+
+
+def stage_blocked_end(ctx: RunContext) -> str | None:
+    """When every held load case waits behind a lower stage's red with no revision left: the round_limit
+    stop_reason (the red domains and the not judged load cases); None otherwise."""
+    left = [lc_id for _, lcs in holding(ctx) for lc_id in lcs]
+    blocked = stage_blocked(ctx)
+    if not left or any(lc_id not in blocked for lc_id in left):
+        return None
+    reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
+    names = "、".join(_ja(j["domain"]) for j in reds) or "低い段"
+    return (f"{names}が赤のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました "
+            f"(版 {ctx.version})。" + " / ".join(f"{lc_id}: {blocked[lc_id]}" for lc_id in left))
+
+
+def excused_pending(ctx: RunContext) -> str | None:
+    """HK4's way out when what keeps a domain pending is written down: every load case HK4 holds the stop
+    for (holding) is either named by an issue of the current version's report (write_report: its load case
+    id, test id or domain in the issue's where, what or record_ids), or, once the design revisions are used
+    up (revisions_used_up), held only by mismatches whose cause is written (no formula fits; the cause is
+    right). Returns those reasons in one text (the lead's stop goes through, and the run ends not_judged
+    with them in stop_reason); None when something held is not explained, or nothing is held."""
+    if not ctx.version:
+        return None
+    left = holding(ctx)
+    if not left:
+        return None
+    report = current_report(ctx)
+    issues = [(i, " ".join([str(i.get("where") or ""), str(i.get("what") or ""), *map(str, i.get("record_ids") or [])]))
+              for i in (report or {}).get("issues") or []]
+    used_up = revisions_used_up(ctx)
+    blocked = stage_blocked(ctx)
+    reasons = []
+    for d, lcs in left:
+        for lc_id in lcs:
+            lc = ctx.load_case(lc_id)
+            if lc_id in blocked:  # HK5's dead end: no revision left and a lower stage is red
+                reasons.append(f"{lc_id}: {blocked[lc_id]}")
+                continue
+            named = [i for i, text in issues if any(_names(text, w) for w in (lc_id, lc["test_id"], d))
+                     or _ja(d) in text]
+            if named:
+                said = "; ".join(f"{i['kind']}: {i['what']}" for i in named)
+                reasons.append(f"{lc_id}: 報告の issue ({said})")
+                continue
+            if used_up:
+                from hiraku.tools.judge import beyond_results, unresolved_mismatches
+
+                held = unresolved_mismatches(ctx, lc, ctx.version)
+                if held and all(cause is not None for _, cause in held) and not beyond_results(ctx, lc, ctx.version):
+                    written = "; ".join(f"照合 {c['comparison_id']} の食い違いの原因 {cause['cause_id']}: "
+                                        f"{cause.get('cause', '')}" for c, cause in held)
+                    reasons.append(f"{lc_id}: {written}")
+                    continue
+            return None
+    head = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切り、" if used_up else "")
+    return f"{head}判定の付かない荷重条件の理由が書かれています: " + " / ".join(reasons)
+
+
 def unjudged_reason(ctx: RunContext) -> str | None:
-    """Why a run that ends now ends not judged: stop_reason, and the load cases it cannot judge
-    (cannot_judge_text); before the first version, the refusal of propose_design if that is why.
-    None when every picked domain is judged."""
+    """Why a run that ends now ends not judged: stop_reason (or, when every held load case's reason is
+    written, excused_pending), and the load cases it cannot judge (cannot_judge_text); before the first
+    version, the refusal of propose_design if that is why. None when every picked domain is judged."""
     refused = design_refusal(ctx)
     if refused is not None:
         return f"最初の版を作れませんでした。設計役の propose_design が断られました: {refused}"
-    parts = [x for x in (stop_reason(ctx), cannot_judge_text(ctx)) if x]
+    parts = [x for x in (excused_pending(ctx) or stop_reason(ctx), cannot_judge_text(ctx)) if x]
     return " ".join(parts) or None
