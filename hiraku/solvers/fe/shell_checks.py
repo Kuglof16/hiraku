@@ -255,8 +255,8 @@ def strip_lateral_buckling(L: float = 1000.0, h: float = 50.0, t: float = 2.0, n
     (here the node at z = 0); ux = 0 at one node; the drilling rotation (global ry, the walls' normal) held
     held by drill_springs. The end moment is the linear axial traction sigma = M (z - h/2) / I
     over the end edge, consistent nodal forces. Against M_cr = (pi / L) sqrt(E I_z G J) with I_z = h t^3 / 12
-    (Timoshenko & Gere 1961, chapter 6, for a beam without warping stiffness; a thin rectangle's warping
-    is negligible) - with E and with E / (1 - nu^2) (a plate's lateral bending; the strip lies between)."""
+    (Timoshenko & Gere 1961, chapter 6, for a beam without warping stiffness, not checked here; a thin
+    rectangle's warping is negligible) - with E and with E / (1 - nu^2) (a plate's lateral bending; the strip lies between)."""
     from . import eigen
 
     xs, zs = np.linspace(0, L, nx + 1), np.linspace(0, h, nz + 1)

@@ -328,7 +328,7 @@ def thermal_plate(kind: str = "quad", a: float = 200.0, b: float = 200.0, t: flo
     """[Thermal plate] a simply supported plate (the hard support of plate_buckling) held in plane on all four
     edges and heated uniformly by dT: sigma_x = sigma_y = -E alpha dT / (1 - nu) everywhere, and equal biaxial
     compression N buckles at N = pi^2 D (1 / a^2 + 1 / b^2) (m = n = 1; Timoshenko & Gere 1961, chapter 9, the
-    biaxial case - derived here from w = sin sin), so dT_cr = (1 - nu) pi^2 D (1/a^2 + 1/b^2) / (E alpha t).
+    biaxial case, not checked here - derived here from w = sin sin), so dT_cr = (1 - nu) pi^2 D (1/a^2 + 1/b^2) / (E alpha t).
     kind 'quad' (MITC4, soft drilling springs), 'tri' (DKT triangles) or 'mixed'."""
     from . import loads
     from .shell_checks import drill_springs, mixed_groups
