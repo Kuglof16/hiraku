@@ -88,7 +88,8 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(crit["R7-hand-300N"]["limit"], {"value": 5.0, "unit": "mm"})
         self.assertEqual(crit["R7-foot-500N"]["quantity"], "pedal_deflection")
         self.assertEqual(crit["R8-free"]["quantity"], "free_parts")
-        self.assertEqual(crit["R8-stress"]["quantity"], "max_stress")
+        self.assertEqual(crit["R8-stress"]["quantity"], "max_utilisation")
+        self.assertEqual(crit["R8-stress"]["limit"], {"value": 1.0, "unit": "1"})
         self.assertEqual(crit["R8-push-725N"]["limit"], {"value": 25.0, "unit": "mm"})
         self.assertEqual(r7[0]["tolerance_rel"], R7_TOL)
 

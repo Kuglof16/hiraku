@@ -6,7 +6,7 @@ import unittest
 from claude_agent_sdk import ResultMessage
 
 from hiraku.agent import inbox
-from hiraku.agent.hooks import ROLE_RETURN_FOR_MESSAGE, Hooks
+from hiraku.agent.hooks import Hooks
 from hiraku.agent.scripted import run_scripted
 from hiraku.contract import layout
 from hiraku.tools import Attribution, rules
@@ -100,10 +100,7 @@ class HooksTellTheLeadTest(RunCase, unittest.TestCase):
         return asyncio.run(self.hooks.post_tool_use({"tool_name": "Agent", "tool_input": {}, **who}, "tu", None))
 
     def test_after_a_tool_call_of_the_leads(self):
-        # a role's call: the role is told to return (once), the message itself stays for the lead
-        role = self.post(agent_type="cae-strength", agent_id="a1")
-        self.assertEqual(role["hookSpecificOutput"]["additionalContext"], ROLE_RETURN_FOR_MESSAGE)
-        self.assertNotIn("急いで", role["hookSpecificOutput"]["additionalContext"])
+        # a role's call: the role is not told; the message stays for the lead
         self.assertEqual(self.post(agent_type="cae-strength", agent_id="a1"), {})
         self.assertEqual(self.hooks.for_lead, ["人からの伝言です: 急いで"])
         out = self.post()
@@ -111,20 +108,13 @@ class HooksTellTheLeadTest(RunCase, unittest.TestCase):
         self.assertEqual(self.post(), {})  # told once
         self.assertEqual(self.post(agent_type="cae-strength", agent_id="a1"), {})  # nothing waits any more
 
-    def test_a_role_told_to_return_is_not_held_by_hk4(self):
+    def test_a_waiting_message_does_not_let_a_role_stop_early(self):
         import asyncio
 
         self.hooks.running["a1"] = "cae.strength"
-        self.assertTrue(rules.holding(self.ctx))  # R1 has no verdict: the role's stop would be held
+        self.assertTrue(rules.holding(self.ctx))  # R1 has no verdict
         out = asyncio.run(self.hooks.subagent_stop({"agent_id": "a1", "agent_type": "cae-strength"}, None, None))
-        self.assertEqual(out, {})
-        self.assertEqual(self.hooks.running, {})
-        self.assertEqual([e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"], [])
-        # with no message waiting, the same stop is held (HK4)
-        self.hooks.for_lead.clear()
-        self.hooks.running["a2"] = "cae.strength"
-        out = asyncio.run(self.hooks.subagent_stop({"agent_id": "a2", "agent_type": "cae-strength"}, None, None))
-        self.assertEqual(out.get("decision"), "block")
+        self.assertEqual(out.get("decision"), "block")  # HK4 as without a message: the message is the lead's
 
     def test_the_leads_stop_is_held_once_for_it(self):
         import asyncio

@@ -52,10 +52,6 @@ MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
-ROLE_RETURN_FOR_MESSAGE = ("まとめ役に、画面の人から伝言が届いています。今の荷重条件を区切りのよい所 (照合まで。食い違ったなら "
-                           "record_cause を書いた所) まで進めたら、新しい荷重条件は始めずに、ここまでの結果をまとめ役に返して"
-                           "番を終えてください。まとめ役が伝言を読んでから、続きを頼みます")
-
 
 def role_domain(agent: str) -> str | None:
     """The domain whose load cases hold a role's stop (HK4): cae.<domain>'s, and the packager's assembly."""
@@ -194,17 +190,6 @@ class Hooks:
         texts, self.for_lead, self.told_roles = self.for_lead, [], []
         return "\n".join(texts)
 
-    def role_return(self, input_data: dict[str, Any]) -> str | None:
-        """ROLE_RETURN_FOR_MESSAGE for a role at work while a message waits for the lead, once per
-        role until the lead takes the messages."""
-        if not self.for_lead:
-            return None
-        key = input_data.get("agent_id") or self.caller(input_data)
-        if key in self.told_roles:
-            return None
-        self.told_roles.append(key)
-        return ROLE_RETURN_FOR_MESSAGE
-
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         return self.decide_post_tool_use(input_data)
 
@@ -216,8 +201,9 @@ class Hooks:
                 hint = self.next_step(short, input_data.get("tool_input") or {})
             except Exception:
                 hint = None
-        # after any tool of the lead's, what the person sent; after a role's, that the lead has a message
-        told = self.take_for_lead() if self.caller(input_data) == "lead" else self.role_return(input_data)
+        # after any tool of the lead's, what the person sent; a role is not told (the person's words are for the
+        # lead, who reads them at its next tool call or stop, and asks the roles for what follows from them)
+        told = self.take_for_lead() if self.caller(input_data) == "lead" else None
         text = "\n\n".join(x for x in (hint, told) if x)
         if not text:
             return {}
@@ -281,7 +267,7 @@ class Hooks:
         if agent is None:
             return {}
         domain = role_domain(agent)
-        if domain is not None and not self.stopping() and not self.for_lead:  # a waiting message: let it return
+        if domain is not None and not self.stopping():
             left = [lc for d, lcs in rules.holding(self.ctx) if d == domain for lc in lcs]
             key = f"{agent}@v{self.ctx.version}"  # counted per design version: each version is judged again
             n = self.subagent_stop_blocks.get(key, 0)

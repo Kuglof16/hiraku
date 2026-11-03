@@ -3,7 +3,8 @@
 R7: the hand control's grip pushed with Q66 in three directions in turn (deflection <= Q67), and each pedal's face
 with Q68 (deflection <= Q69): one load case each, one criterion each.
 R8: every part's m a (sideways Q75, fore-and-aft Q76, down 1 g) and the occupants' inertia (Q33 times those)
-on what they rest on, judged on free_parts = 0 and on max_stress <= yield / Q61; and Q77 outward at point R
+on what they rest on, judged on free_parts = 0 and on max_utilisation <= 1 (each member's stress over its own
+material's yield / Q61, load case param safety_factor = Q61); and Q77 outward at point R
 (hip and shoulder), judged on occupant_push_deflection <= Q78. One load case per criterion.
 
 A product whose requirements lack a key a case needs gets no such case; with none left the test is not
@@ -127,8 +128,22 @@ def r8_params(req: Record, load: str) -> tuple[Record, list[str]]:
     return params, keys
 
 
+def member_yields(design: Record) -> list[str]:
+    """The yields of the materials the members use, for the basis: "<name> <yield> MPa (n members[, not checked])"."""
+    mats = design.get("materials", {})
+    used: dict[str, int] = {}
+    for m in design.get("members", []):
+        used[m["material"]] = used.get(m["material"], 0) + 1
+    if not used:
+        raise BuildError("the design has no members, so there is no member stress to judge")
+    missing = sorted(k for k in used if k not in mats or mats[k].get("yield_MPa") is None)
+    if missing:
+        raise BuildError(f"members use materials with no yield_MPa in design.materials: {missing}")
+    return [f"{mats[k].get('name', k)} {float(mats[k]['yield_MPa']):g} MPa ({n} members"
+            f"{'' if mats[k].get('verified') else ', not checked'})" for k, n in sorted(used.items())]
+
+
 def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
-    from hiraku.catalog.build import min_frame_yield
     from hiraku.catalog.loading import OCCUPANTS
     from hiraku.solvers.shelf.load_path import occupant_trunks
 
@@ -157,15 +172,16 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
         sf = number(req, "Q61", "1")
         if sf <= 0:
             raise BuildError(f"Q61 safety factor must be positive, got {sf:g}")
-        y, names, verified = min_frame_yield(design)
+        yields = member_yields(design)
         cases.append({
             **base,
             "load_case_id": "R8-stress",
-            "title": f"部品と乗員の重さと加速度 ({a}) で、フレームの応力 ({LOADING_JA[load]})",
-            "params": dict(inertia),
+            "title": f"部品と乗員の重さと加速度 ({a}) で、各部材の応力をその材料の許しと比べる ({LOADING_JA[load]})",
+            "params": {**inertia, "safety_factor": q(sf, "1")},
             "requirement_keys": [*pkeys, "Q61", *keys],
-            "criterion": {"quantity": "max_stress", "op": "<=", "limit": q(y / sf, "MPa"),
-                          "basis": f"yield {y:g} MPa ({', '.join(names)}{'' if verified else ', not checked'}) / Q61 {sf:g}",
+            "criterion": {"quantity": "max_utilisation", "op": "<=", "limit": q(1.0, "1"),
+                          "basis": ("each member's von Mises stress over its own material's yield / Q61 "
+                                    f"{sf:g} (largest of these ratios): " + "; ".join(yields)),
                           "requirement_keys": ["Q61"]},
         })
     push_miss = _missing(req, ("Q77", "Q78"))
