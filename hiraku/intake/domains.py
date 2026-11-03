@@ -15,7 +15,7 @@ from typing import Any
 import yaml
 
 from hiraku import contract
-from hiraku.catalog import Catalog, applies, load_catalog
+from hiraku.catalog import Catalog, applies, builder_for, load_catalog
 from hiraku.intake.flags import FLAGS, describe_condition, flags_in, symbol
 
 Record = dict[str, Any]
@@ -74,11 +74,35 @@ def _lit_flags(catalog: Catalog, test_ids: list[str], flags: dict[str, bool]) ->
     return seen
 
 
-def code_reason(catalog: Catalog, domain: str, test_ids: list[str], flags: dict[str, bool]) -> str:
-    """The reason the code writes when Claude gave none: which flags make which tests apply."""
-    lit = "・".join(symbol(f) for f in _lit_flags(catalog, test_ids, flags))
+def buildable(catalog: Catalog, test_ids: list[str]) -> list[str]:
+    """The tests that have a load-case builder: the ones a run can build a case for (the others would stay pending)."""
+    out = []
+    for tid in test_ids:
+        try:
+            if builder_for(catalog, tid) is not None:
+                out.append(tid)
+        except KeyError:  # a `build:` name nobody has
+            pass
+    return out
+
+
+def unbuilt_note(catalog: Catalog, test_ids: list[str]) -> str:
+    """What the card says about applicable tests that cannot be run yet ("" when there are none)."""
+    if not test_ids:
+        return ""
+    names = "・".join(f"{tid} {catalog.test(tid)['title']}" for tid in test_ids)
+    return f"{names} は荷重条件の作り方がまだ無いので、この実行では見ない"
+
+
+def code_reason(catalog: Catalog, domain: str, test_ids: list[str], flags: dict[str, bool],
+                unbuilt: list[str] | None = None) -> str:
+    """The reason the code writes when Claude gave none: which flags make which tests apply.
+    `unbuilt` are applicable tests with no builder: they light the domain but are not run."""
+    lit = "・".join(symbol(f) for f in _lit_flags(catalog, [*test_ids, *(unbuilt or [])], flags))
     tests = "・".join(f"{tid} {catalog.test(tid)['title']}" for tid in test_ids)
-    return f"{lit} に当てはまるので、{tests} を当てる" if lit else f"{tests} を当てる"
+    base = (f"{lit} に当てはまるので、{tests} を当てる" if lit else f"{tests} を当てる") if tests else f"{lit} に当てはまる"
+    note = unbuilt_note(catalog, unbuilt or [])
+    return f"{base}。{note}" if note else base
 
 
 def code_reason_off(catalog: Catalog, domain: str) -> str:
@@ -137,8 +161,12 @@ def pick_domains(
             off.append({"domain": d, "reason": "人が外した"})
         else:
             name = (shown_names.get(d) or "").strip() or default_name(d, flags, speed_class, ids)
-            reason = (reasons.get(d) or "").strip() or code_reason(catalog, d, ids, flags)
-            picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": ids})
+            runnable = buildable(catalog, ids)  # test_ids are the ones a run can build a case for
+            unbuilt = [t for t in ids if t not in runnable]
+            given = (reasons.get(d) or "").strip()
+            note = unbuilt_note(catalog, unbuilt)
+            reason = (f"{given}。{note}" if given and note else given) or code_reason(catalog, d, runnable, flags, unbuilt)
+            picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": runnable})
     record: Record = {"want": want.strip(), "flags": flags}
     if speed_class is not None:
         record["speed_class"] = speed_class
@@ -146,7 +174,7 @@ def pick_domains(
         record["flag_reasons"] = {f: flag_reasons[f] for f in FLAGS if f in flag_reasons}
     record["picks"] = picks
     record["off"] = off
-    record["assembly_test_ids"] = by_domain["assembly"]
+    record["assembly_test_ids"] = buildable(catalog, by_domain["assembly"])
     return record
 
 

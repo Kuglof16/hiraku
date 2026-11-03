@@ -66,7 +66,7 @@ class BeginTest(unittest.TestCase):
         first = request.begin("何かを運ぶ", picker=claude_like("strength"))
         self.assertEqual((first["mode"], first["flags_from"], first["cost_usd"]), ("claude", "claude", 0.12))
         picks = {p["domain"]: p for p in first["domains"]["picks"]}
-        self.assertEqual(picks["strength"]["reason"], "Claude の理由")
+        self.assertTrue(picks["strength"]["reason"].startswith("Claude の理由"))  # the code may add what cannot be run yet
         self.assertEqual(first["domains"]["flag_reasons"]["liquid"], "飲み物を運ぶので")
 
     def test_a_picker_that_fails_falls_back_to_the_words(self):
@@ -103,7 +103,7 @@ class ReviseTest(unittest.TestCase):
             self.fail("no chip changes the domains")
         self.assertEqual(second["flags_from"], "given")
         picks = {p["domain"]: p for p in second["domains"]["picks"]}
-        self.assertEqual(picks["strength"]["reason"], "Claude の理由")  # strength stays lit with Claude's reason
+        self.assertTrue(picks["strength"]["reason"].startswith("Claude の理由"))  # strength stays lit with Claude's reason
 
     def test_taking_a_card_off_moves_it_to_off(self):
         first = request.begin(ROBOT["want"], product="serving-robot")

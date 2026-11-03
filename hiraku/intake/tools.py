@@ -12,6 +12,7 @@ and says `recorded: false` with the reason (hiraku.intake.events).
 
 from __future__ import annotations
 
+import json
 import weakref
 from pathlib import Path
 from typing import Any, Callable
@@ -49,6 +50,29 @@ def _emit(ctx: Any, event: Record, *, design_version: int | None = None) -> str 
     return ev.emit_if_known(_store(ctx), event, design_version=design_version)
 
 
+def _same_as_last(ctx: Any, event: Record) -> bool:
+    """Is this event's data what the run's newest event of the same kind already says?
+
+    A tool may be called again for the same thing (the agent asks the same questions twice, picks the same
+    domains twice); the run records a change once, not each call."""
+    store = _store(ctx)
+    events = getattr(store, "events", None)
+    if events is None:
+        return False
+    mine = json.loads(json.dumps(event["data"], ensure_ascii=False))
+    for e in reversed(events()):
+        if e.get("kind") == event["kind"]:
+            return e.get("data") == mine
+    return False
+
+
+def _emit_changed(ctx: Any, event: Record) -> tuple[str | None, bool]:
+    """(problem, repeated): emit unless the run's newest event of this kind already says the same."""
+    if _same_as_last(ctx, event):
+        return None, True
+    return _emit(ctx, event), False
+
+
 # ------------------------------------------------------------------------------------------ pick_domains
 
 
@@ -59,8 +83,10 @@ def pick_domains_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         flag_reasons=args.get("flag_reasons"), reasons=args.get("reasons"), shown_names=args.get("shown_names"),
         exclude=args.get("exclude"),
     )
-    problem = _emit(ctx, ev.picked_event(record))
+    problem, repeated = _emit_changed(ctx, ev.picked_event(record))
     out: Record = {**record, "recorded": problem is None}
+    if repeated:
+        out["unchanged"] = "前に記録した分野の選びと同じなので、記録は増やしていません"
     if problem:
         out["not_recorded"] = problem
     missing = reasons_missing(record, args.get("reasons"))
@@ -140,7 +166,13 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
                 note = note or got.get("note")
     prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
     to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
-    problems += [p for e in to_emit if (p := _emit(ctx, e))]
+    unchanged = []
+    for e in to_emit:  # the same questions, or the same (empty) answers, are not recorded again
+        problem, repeated = _emit_changed(ctx, e)
+        if repeated:
+            unchanged.append(e["kind"])
+        elif problem:
+            problems.append(problem)
     new = prepared.answered["answers"]
     recorded_req = False
     update = getattr(_store(ctx), "update_project", None)
@@ -159,6 +191,8 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "requirements_recorded": recorded_req,
         "recorded": not problems,
     }
+    if unchanged:
+        out["unchanged"] = f"{' と '.join(unchanged)} は前に記録した内容と同じなので、記録は増やしていません"
     if not recorded_req and new:
         out["requirements_to_add"] = new  # the run store has no update_project: the caller adds them
     if problems:

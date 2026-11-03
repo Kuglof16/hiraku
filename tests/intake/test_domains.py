@@ -1,5 +1,6 @@
 import re
 import unittest
+from unittest import mock
 
 from hiraku import contract
 from hiraku.intake import (IntakeError, describe_condition, flags_text, load_product, pick_domains, product_files,
@@ -36,6 +37,50 @@ class ProductFilesTest(unittest.TestCase):
         self.assertIsNone(answers_file("electric-guitar"))
 
 
+class NoBuilderTest(unittest.TestCase):
+    """A test no builder can make a load case for would stay pending in the run: it is not in test_ids."""
+
+    @staticmethod
+    def without_builders(*ids):
+        return mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: None if tid in ids else object())
+
+    def test_a_test_without_a_builder_is_not_picked_but_still_lights_its_domain_and_the_card_says_why(self):
+        with self.without_builders("F3", "C2"):
+            rec = pick("serving-robot")
+        by = {p["domain"]: p for p in rec["picks"]}
+        self.assertEqual((by["aero"]["test_ids"], by["crash"]["test_ids"]), ([], []))  # lit by F3 and C2, which cannot be run yet
+        self.assertEqual(by["powertrain"]["test_ids"], ["P1", "P2", "P3", "P4"])
+        for d, tid in (("aero", "F3"), ("crash", "C2")):
+            self.assertIn(tid, by[d]["reason"])
+            self.assertIn("荷重条件の作り方がまだ無い", by[d]["reason"])
+        self.assertNotIn("荷重条件の作り方がまだ無い", by["powertrain"]["reason"])
+        self.assertEqual(contract.errors("domains_picked", rec), [])
+
+    def test_a_reason_given_by_claude_is_kept_and_gets_the_note(self):
+        with self.without_builders("F3"):
+            rec = pick("serving-robot", reasons={"aero": "こぼれるかを見る"})
+        reason = {p["domain"]: p for p in rec["picks"]}["aero"]["reason"]
+        self.assertTrue(reason.startswith("こぼれるかを見る。"))
+        self.assertIn("F3", reason)
+
+    def test_assembly_tests_without_a_builder_are_left_out_too(self):
+        with self.without_builders("H4"):
+            self.assertNotIn("H4", pick("serving-robot")["assembly_test_ids"])
+        with self.without_builders():
+            self.assertIn("H4", pick("serving-robot")["assembly_test_ids"])
+
+    def test_the_real_catalog_picks_only_tests_that_have_a_builder(self):
+        from hiraku.catalog import builder_for, load_catalog
+
+        catalog = load_catalog()
+        for slug in product_files():
+            rec = pick(slug)
+            for p in rec["picks"]:
+                for tid in p["test_ids"]:
+                    with self.subTest(slug=slug, test=tid):
+                        self.assertIsNotNone(builder_for(catalog, tid))
+
+
 class PickDomainsTest(unittest.TestCase):
     """The catalog's expected numbers: guitar 2, care bed 5, serving robot 7, off-road vehicle 7."""
 
@@ -59,7 +104,8 @@ class PickDomainsTest(unittest.TestCase):
             self.assertEqual(sorted(got), sorted(contract.DOMAINS[:7]), slug)
 
     def test_test_ids_come_from_the_catalog(self):
-        rec = pick("serving-robot")
+        with mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: object()):  # every test has a builder
+            rec = pick("serving-robot")
         by = {p["domain"]: p["test_ids"] for p in rec["picks"]}
         self.assertEqual(by["aero"], ["F3"])
         self.assertEqual(by["crash"], ["C2"])
