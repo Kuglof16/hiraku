@@ -68,7 +68,7 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "archetypes", "joint_wall_inputs")
+                    "design_variables", "archetypes", "joint_wall_inputs", "formula_inputs")
 DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
@@ -99,12 +99,31 @@ def joint_wall_inputs(ctx: RunContext, load_case_id: str | None) -> Record:
     }
 
 
+FORMULA_INPUTS_HOW = (
+    "荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、台本の運転と同じコードが"
+    "この版の設計と荷重条件と記録から出した値・単位・出どころ (from) で並べたもの。record_prediction の inputs には"
+    "この値をそのまま入れ、式の出力は output で選ぶ。refused はこの設計に当てはまらない式 (理由つき)、missing は"
+    "上流の記録が揃ってから値が出る入力、no_reader は入力を読むコードの無い式。自分で別の値を使うときは、"
+    "その値と出どころを assumptions に書く")
+
+
+def formula_inputs_section(ctx: RunContext, load_case_id: str | None = None) -> Record:
+    """get_context's formula_inputs: hiraku.tools.plan.formula_inputs for one load case or all."""
+    from hiraku.tools.plan import formula_inputs
+
+    if not ctx.version:
+        raise ToolError("まだ設計の版がありません。式の入力は設計の版ができてから出せます")
+    return {"design_version": ctx.version, "how": FORMULA_INPUTS_HOW,
+            "load_cases": formula_inputs(ctx, load_case_id, pairs=lambda tool: tool_predicts(ctx, tool))}
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """The run so far: always the run, design version, picked domains and open mismatches;
     `sections` adds parts (default: requirements, load_cases with the role that owns each,
     judgements, records). design_summary (inputs for hand calculations), design (the whole
-    record), design_variables (what the designer may change) and joint_wall_inputs (the joint wall
-    formula's inputs for `load_case_id`) come only when asked."""
+    record), design_variables (what the designer may change), joint_wall_inputs (the joint wall
+    formula's inputs for `load_case_id`) and formula_inputs (every planned formula's inputs worked out
+    by code, for `load_case_id` or all load cases) come only when asked."""
     p = ctx.project
     s = ctx.store
     wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
@@ -134,6 +153,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "design_variables": lambda: design_variables(ctx),
         "archetypes": lambda: archetypes(ctx),
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),
+        "formula_inputs": lambda: formula_inputs_section(ctx, (args or {}).get("load_case_id")),
     }
     for name in wanted:
         out[name] = parts[name]()
@@ -163,6 +183,24 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
     return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
 
 
+# A tool's notes may name the Python function that reads a formula's inputs off the design; a role
+# cannot call it, so what the roles read points at get_context's formula_inputs instead.
+_CODE_CALL = re.compile(r"hiraku\.[a-z0-9_.]+\((?:[^()]|\([^()]*\))*\)")
+CODE_CALL_FOR_ROLE = "get_context(sections=[\"formula_inputs\"], load_case_id=...) (the values code worked out from the design)"
+
+
+def for_role(obj: Any) -> Any:
+    """`obj` with every call of a hiraku Python function in its strings replaced by the
+    get_context section that gives the same values (CODE_CALL_FOR_ROLE)."""
+    if isinstance(obj, str):
+        return _CODE_CALL.sub(CODE_CALL_FOR_ROLE, obj)
+    if isinstance(obj, list):
+        return [for_role(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: for_role(v) for k, v in obj.items()}
+    return obj
+
+
 def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
     """The tool's describe()["predicts"]: {quantity, formula_id, output, note?} per pairing."""
     describe = getattr(ctx.tools.get(name), "describe", None)
@@ -173,7 +211,7 @@ def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
     except Exception:  # a tool made in the run may describe itself badly; the formulas still list
         return []
     keys = ("quantity", "formula_id", "output", "note")
-    return [{k: p[k] for k in keys if k in p} for p in got if isinstance(p, dict)]
+    return [for_role({k: p[k] for k in keys if k in p}) for p in got if isinstance(p, dict)]
 
 
 def _tool_line(spec: Record) -> Record:
@@ -191,7 +229,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
             raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
-        return [spec]
+        return [for_role(spec)]
     out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
         out = [s for s in out if s.get("domain") == args["domain"]]

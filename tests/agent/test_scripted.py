@@ -309,7 +309,7 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
                                                          {"load_case": "R1-step100", "tool": "frame_static", "say": "b"}]}
 
     def plans(self, data):
-        return mock.patch("hiraku.agent.scripted.read_data", return_value=data)
+        return mock.patch("hiraku.tools.plan.read_data", return_value=data)
 
     def test_a_file_entry_extends_the_products_plan(self):
         own = {"extends": "offroad-4w", "rule_check": True,

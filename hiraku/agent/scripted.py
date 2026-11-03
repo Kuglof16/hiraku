@@ -15,10 +15,7 @@ the designer's revise_design, and every step runs again on the new version.
 
 from __future__ import annotations
 
-import copy
-import importlib
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -26,13 +23,14 @@ from hiraku import contract
 from hiraku.agent import inbox
 from hiraku.contract import layout
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
-from hiraku.catalog import CATALOG_DIR, REPO_ROOT, beyond_plans, external_builders, is_beyond, loading_of, read_data
+from hiraku.catalog import REPO_ROOT
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, rule_check, trusted_analysis, write_report)
+                                    revise_design, rule_check, write_report)
 from hiraku.tools.judge import verdict_line
+from hiraku.tools.plan import (READERS, ScriptError, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+                               load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
-from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
 
@@ -40,189 +38,6 @@ SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
 REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
 
-
-class ScriptError(RuntimeError):
-    pass
-
-
-def load_plan(product: str, requirements: str | None = None) -> Record:
-    """The plan in data/catalog/scripted.yaml: the requirements file's own entry (its file name
-    without .yaml) when there is one, else the product's (no steps when neither has one).
-
-    A file's entry with `extends: <entry>` is that entry's plan with the file's keys over it;
-    a step of the file replaces the step of the same load case and tool in place, and its
-    other steps follow."""
-    data = read_data(CATALOG_DIR / "scripted.yaml")
-    own = data.get(requirements) if requirements else None
-    if own is None:
-        return data.get(product) or {"steps": []}
-    base = copy.deepcopy(data.get(own["extends"]) or {"steps": []}) if own.get("extends") else {"steps": []}
-    mine = {k: v for k, v in own.items() if k != "extends"}
-    theirs = list(mine.get("steps") or [])
-    key = {(s["load_case"], s["tool"]): s for s in theirs}
-    steps = [key.pop((s["load_case"], s["tool"]), s) for s in base.get("steps") or []]
-    steps += [s for s in theirs if (s["load_case"], s["tool"]) in key]
-    return {**base, **mine, "steps": steps}
-
-
-def has_plan(product: str, requirements: str | None = None) -> bool:
-    """Whether data/catalog/scripted.yaml has steps for this requirements file (its name without
-    .yaml) or product. Without them a scripted run has only the builders' default steps."""
-    return bool(load_plan(product, requirements).get("steps"))
-
-
-def plan_of(ctx: RunContext) -> Record:
-    """This run's plan: its requirements file's entry, else its product's (load_plan)."""
-    path = getattr(ctx, "requirements_path", None)
-    return load_plan(ctx.project["product"], path.stem if path else None)
-
-
-def _joint_wall_inputs(design: Record, load_case: Record) -> Record:
-    """frame_static.joint_wall_bending's inputs off the design for this load case's loading and step
-    (hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs, at the joint where it is largest)."""
-    from hiraku.solvers.k0_handcalc.frame_inputs import joint_wall_inputs
-    from hiraku.solvers.shelf.frame_static import front_supports
-
-    params = load_case.get("params") or {}
-    step = params.get("step_height")
-    if step is not None and step.get("unit") != "mm":
-        raise ScriptError(f"{load_case['load_case_id']}: step_height must be in mm, got {step.get('unit')!r}")
-    # the supports on the step as frame_shell takes them: the load case's step_supports, else the front-most
-    on = params.get("step_supports")
-    on = [s.strip() for s in on.split(",")] if isinstance(on, str) else on or front_supports(design)
-    return joint_wall_inputs(design, loading=loading_of(load_case), step_mm=step["value"] if step else None,
-                             step_supports=on if step else None)["inputs"]
-
-
-# Readers a plan may name in inputs_from that are not in hiraku.catalog.builders.
-READERS = {"joint_wall_inputs": _joint_wall_inputs}
-
-
-def _reader(name: str) -> Any:
-    """A plan's inputs_from written by name in scripted.yaml: one of READERS, or "<module>.<function>"
-    of hiraku.catalog.builders (the builders' readers of formula inputs off a design)."""
-    if name in READERS:
-        return READERS[name]
-    module, _, func = name.rpartition(".")
-    if not module or not re.fullmatch(r"[a-z0-9_]+", module):
-        raise ScriptError(f"inputs_from {name!r}: write <module>.<function> of hiraku.catalog.builders")
-    try:
-        return getattr(importlib.import_module(f"hiraku.catalog.builders.{module}"), func)
-    except (ImportError, AttributeError) as e:
-        raise ScriptError(f"inputs_from {name!r} is not in hiraku.catalog.builders: {e}") from None
-
-
-def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
-    """The product's plan plus a step from the builders' PLANS for each load case it lacks
-    (PLANS_BEYOND first for a case past the limit), ordered upstream first. `missing` lists
-    the load cases nobody gave a step for. A product step whose load case this run did not
-    build (another step height, say) is left out: its causes were written for that load case.
-    So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
-    out = copy.deepcopy(plan if plan is not None else plan_of(ctx))
-    # each step its own copy: steps may share parts through YAML aliases
-    built = [copy.deepcopy(s) for s in out["steps"] if ctx.has_load_case(s["load_case"])]
-    out["steps"] = [s for s in built if s["tool"] in ctx.tools]
-    out["unshelved"] = [(s["load_case"], s["tool"]) for s in built if s["tool"] not in ctx.tools]
-    have = {s["load_case"] for s in out["steps"]}
-    recipes, past = external_builders()[2], beyond_plans()
-    out["missing"] = []
-    for lc in ctx.load_cases:
-        if lc["load_case_id"] in have:
-            continue
-        recipe = (is_beyond(lc) and past.get(lc["test_id"])) or recipes.get(lc["test_id"])
-        if recipe is None:
-            out["missing"].append(lc["load_case_id"])
-        else:
-            out["steps"].append({**recipe, "load_case": lc["load_case_id"]})
-    ordered: list[Record] = []
-    left = list(out["steps"])
-    in_plan = {s["load_case"] for s in left}
-    while left:  # a step goes once the load cases feeding it (and in the plan) have gone
-        done = {s["load_case"] for s in ordered}
-        ready = next((s for s in left if all(u["load_case_id"] in done or u["load_case_id"] not in in_plan
-                                             for u in ctx.upstream_of(s["load_case"]))), left[0])
-        ordered.append(ready)
-        left.remove(ready)
-    out["steps"] = ordered
-    return out
-
-
-_SUFFIX_UNITS = {"mm": "mm", "kg": "kg", "MPa": "MPa", "N": "N", "deg": "deg"}
-
-_NAME_REF = re.compile(r"\{([^{}]+)\}")
-
-
-def _load_case_of(ctx: RunContext, ref: str, load_case: Record) -> str:
-    """A load case id, or for a test id (ana.P1.x) the run's load case of that test that feeds
-    this one (a case past the limit is fed by the upstream case past the limit), else the first."""
-    if ctx.has_load_case(ref):
-        return ref
-    of_test = [lc for lc in ctx.load_cases if lc["test_id"] == ref]
-    feeding = [lc for lc in of_test if load_case["load_case_id"] in lc.get("feeds", [])]
-    return (feeding or of_test)[0]["load_case_id"]
-
-
-def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None = None) -> Any:
-    """What one plan ref points at: a quantity record, or a name (e.g. load.rail_joint.support).
-    `given` is what the prediction's inputs_from read off the design (from.<name>)."""
-    head, _, rest = ref.partition(".")
-    design = ctx.store.design()
-    if head == "from":
-        if given is None:
-            raise ScriptError(f"{ref!r}: the prediction has no inputs_from")
-        return given[rest]
-    if head == "lc":
-        return load_case["params"][rest]
-    if head == "req":
-        return next(x for x in ctx.project["requirements"] if x["key"] == rest)
-    if head in ("load", "summary"):
-        node: Any = design_summary(design)
-        if head == "load":
-            node = node["loadings"][loading_of(load_case)]
-        for part in rest.split("."):
-            node = node[part]
-        return node
-    if head == "design":
-        kind, _, rest = rest.partition(".")
-        if kind == "var":
-            return design["variables"][rest]
-        key, field = rest.split(".", 1)
-        if kind == "support":
-            s = next(x for x in design["supports"] if x["id"] == key)
-            return {"value": s[field], "unit": _SUFFIX_UNITS[field.rsplit("_", 1)[1]]}
-        if kind == "section":
-            return {"value": design["sections"][key]["dims_mm"][field], "unit": "mm"}
-    if head == "pred":
-        return [p for p in ctx.store.records("prediction", ctx.version)
-                if p["quantity"] == rest and p["load_case_id"] == load_case["load_case_id"]][-1]
-    if head == "ana":
-        lc_id, quantity = rest.rsplit(".", 1)
-        return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id, load_case))["results"]
-                    if r["quantity"] == quantity)
-    raise ScriptError(f"unknown input ref {ref!r}")
-
-
-def _name(ctx: RunContext, ref: str, load_case: Record, given: Record | None) -> str:
-    got = _lookup(ctx, ref, load_case, given)
-    if not isinstance(got, str):
-        raise ScriptError(f"{{{ref}}} must point at a name, not {got!r}")
-    return got
-
-
-def resolve(ctx: RunContext, ref: Any, load_case: Record, given: Record | None = None) -> Record:
-    """Turn one input ref of the plan into a quantity {value, unit}.
-
-    `{ref}` inside a ref is replaced by the name it points at first, e.g.
-    ana.P1-step100.wheel_load_{load.rail_joint.support}.
-    """
-    if isinstance(ref, dict):
-        return {"value": float(ref["value"]), "unit": ref["unit"]}
-    try:
-        text = _NAME_REF.sub(lambda m: _name(ctx, m.group(1), load_case, given), str(ref))
-        q = _lookup(ctx, text, load_case, given)
-        return {"value": float(q["value"]), "unit": q["unit"]}
-    except (KeyError, StopIteration, IndexError, ValueError, TypeError) as e:
-        raise ScriptError(f"cannot resolve input ref {ref!r}: {type(e).__name__} {e}") from None
 
 
 def _deny(ctx: RunContext, agent: str, tool: str, args: Record) -> bool:
@@ -256,13 +71,7 @@ def _check_stop(ctx: RunContext) -> None:
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
-        given = None
-        if p.get("inputs_from"):  # the builder's reader of this formula's inputs off the design
-            reader = _reader(p["inputs_from"]) if isinstance(p["inputs_from"], str) else p["inputs_from"]
-            try:
-                given = reader(ctx.store.design(), lc)
-            except (KeyError, ValueError, TypeError) as e:
-                raise ScriptError(f"inputs_from of {p['formula_id']} cannot read this design: {e}") from None
+        given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
         args = {
             "load_case_id": lc["load_case_id"],
             "quantity": p["quantity"],

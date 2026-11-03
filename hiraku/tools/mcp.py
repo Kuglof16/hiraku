@@ -58,9 +58,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
                                     "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables。"
+                                    "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
-                         "description": "joint_wall_inputs の荷重条件 (段差の R1・R1s など)"},
+                         "description": "formula_inputs (無ければ全部の荷重条件) と joint_wall_inputs の荷重条件"},
     }},
     "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
@@ -84,6 +85,8 @@ DESCRIPTIONS = {
         "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
         "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
         "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む。"
+        "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
+        "入力を、台本の運転と同じコードがこの版の設計から出した値・単位・出どころ (from) で返す。"
         "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "
         "sections=[\"joint_wall_inputs\"] と load_case_id で、その入力 (横の部材の端のモーメント M など、コードが設計と"
         "荷重条件から出したもの) が返る"

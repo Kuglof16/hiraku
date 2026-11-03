@@ -676,6 +676,68 @@ class JointWallInputsTest(RunCase, unittest.TestCase):
         self.assertIn(why, str(cm.exception))
 
 
+class FormulaInputsTest(RunCase, unittest.TestCase):
+    """get_context's formula_inputs: the plan's formulas per load case with the inputs the scripted
+    run's own readers and refs work out (hiraku.tools.plan)."""
+
+    def _entries(self, load_case_id):
+        out = get_context(self.ctx, {"sections": ["formula_inputs"], "load_case_id": load_case_id})
+        cases = out["formula_inputs"]["load_cases"]
+        self.assertEqual([c["load_case_id"] for c in cases], [load_case_id])
+        return cases[0]["formulas"]
+
+    def test_upstream_inputs_are_missing_until_the_upstream_case_matches_then_come_from_its_analysis(self):
+        from hiraku.tools import plan
+
+        first = next(e for e in self._entries("R1-step100") if e["formula_id"] == "frame_static.rail_step_bending")
+        self.assertEqual(first["role"], "criterion")
+        self.assertIn("P1-step100", first["missing"]["F"])
+        self.assertEqual(first["inputs"]["L"]["from"], "design_summary の wheelbase")
+        ana, _, _ = self.run_p1()
+        got = next(e for e in self._entries("R1-step100") if e["formula_id"] == "frame_static.rail_step_bending")
+        self.assertNotIn("missing", got)
+        force = next(r for r in ana["results"] if r["quantity"] == "front_wheel_force")
+        self.assertEqual(got["inputs"]["F"]["value"], force["value"])
+        self.assertIn(ana["analysis_id"], got["inputs"]["F"]["from"])
+        # the same values the scripted run resolves
+        step = next(s for s in plan.compose_plan(self.ctx)["steps"] if s["load_case"] == "R1-step100")
+        spec = step["predictions"][0]
+        lc = self.ctx.load_case("R1-step100")
+        for name, ref in spec["inputs"].items():
+            want = plan.resolve(self.ctx, ref, lc, plan.given_inputs(self.ctx, spec, lc))
+            self.assertEqual({k: got["inputs"][name][k] for k in ("value", "unit")}, want, name)
+        self.assertNotIn("formula_inputs", get_context(self.ctx))  # only on request
+
+    def test_a_reader_that_does_not_apply_refuses_with_its_reason(self):
+        from hiraku.catalog.builders.common import BuildError
+        from hiraku.tools import plan
+
+        why = "not a ladder frame: no cross members"
+
+        def reader(design, load_case):
+            raise BuildError(why)
+
+        own = {"steps": [{"load_case": "R1-step100", "tool": "frame_static", "predictions": [
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma",
+             "inputs": {"L": "from.L"}, "inputs_from": reader}]}]}
+        with mock.patch.object(plan, "plan_of", return_value=own):
+            got = self._entries("R1-step100")[0]
+        self.assertIn(why, got["refused"])
+        self.assertIn("当てはまらない", got["refused"])
+        self.assertNotIn("inputs", got)
+
+    def test_role_facing_text_points_at_the_section_not_at_python(self):
+        from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role
+
+        note = "inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., step_mm=<a (b)>): x"
+        self.assertEqual(for_role({"note": [note]}), {"note": [f"inputs from {CODE_CALL_FOR_ROLE}: x"]})
+
+    def test_refused_before_a_design(self):
+        with mock.patch.object(type(self.ctx), "version", new_callable=mock.PropertyMock, return_value=0):
+            with self.assertRaisesRegex(ToolError, "設計の版"):
+                get_context(self.ctx, {"sections": ["formula_inputs"]})
+
+
 class UnpredictableCaseTest(RunCase, unittest.TestCase):
     """HK4's stop text for a load case with no usable tool, and one no K0 formula can predict."""
 
