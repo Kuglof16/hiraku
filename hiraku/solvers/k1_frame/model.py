@@ -233,6 +233,14 @@ class FrameModel:
                 "Mz": float(Mz[i]), "T": float(T[i])}
 
 
+def stress_dims(section: dict, member_id: str, keys=("cy", "cz", "tau_per_T")) -> None:
+    """Raise DesignError when a member's section (a custom one) lacks the dims its stresses need."""
+    missing = [k for k in keys if section.get(k) is None]
+    if missing:
+        raise DesignError(f"member {member_id}'s section gives no {', '.join(missing)} (a custom section needs them in "
+                          f"dims_mm for its stresses); add them")
+
+
 def build(design: dict, n_sub: int = N_SUB) -> FrameModel:
     """Build the PyNite model of the frame (members subdivided, wheel links added)."""
     if n_sub < 4:
