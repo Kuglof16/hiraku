@@ -17,7 +17,7 @@ from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, P
                                               PREDICTION_ONLY_PARAMS)
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
-from hiraku.tools.summary import design_summary
+from hiraku.catalog.summary import design_summary
 
 import json
 

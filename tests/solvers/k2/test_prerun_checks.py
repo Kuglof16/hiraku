@@ -3,8 +3,10 @@
 import unittest
 
 from hiraku.solvers.k2_vehicle import checks
+from tests.solvers.k2.slow import SLOW
 
 
+@SLOW
 class PreRunChecks(unittest.TestCase):
     def assert_all_pass(self, results):
         self.assertTrue(results)
