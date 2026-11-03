@@ -114,7 +114,9 @@ class DeclarationsTest(unittest.TestCase):
         for t in TOOLS.values():
             if not t.predicts:
                 continue
-            rec = t.run(DESIGN, required_case(t, t.tests[0]), PRED, {})
+            # frame_shell's mesh convergence solves more meshes; it is tested in test_mesh_convergence
+            params = {"mesh_convergence": "off"} if t.name == "frame_shell" else {}
+            rec = t.run(DESIGN, required_case(t, t.tests[0]), PRED, params)
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
             for p in t.predicts:
