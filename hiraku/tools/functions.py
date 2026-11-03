@@ -378,11 +378,11 @@ def _pick_result(analysis: Record, quantity: str, criterion: Record | None = Non
     return max(hits, key=lambda r: abs(r["value"]))
 
 
-def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str, keep: str | None = None) -> None:
-    """A later match, or an accepted safe-side verdict, for the same load case and quantity resolves
-    earlier causes (keep: a cause not to touch, the safe-side cause itself)."""
+def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> None:
+    """A later match for the same load case and quantity resolves earlier causes (resolved_by is
+    always a match; a safe-side verdict settles them for the tile instead, judge.unresolved_mismatches)."""
     for cause in ctx.store.records("cause"):
-        if cause["resolved"] or cause["cause_id"] == keep:
+        if cause["resolved"]:
             continue
         old = ctx.store.get("comparison", cause["comparison_id"])
         old_pred = ctx.prediction(old["prediction_id"]) if old else None
@@ -539,8 +539,6 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
         out["verdict"] = ver
-        # the chain of re-predictions ends in an accepted verdict: earlier causes of this quantity are settled
-        _resolve_causes(ctx, cmp, pred, agent, keep=cause["cause_id"])
     if domain in ctx.picked:
         update_judgement(ctx, domain, v)
     return out
