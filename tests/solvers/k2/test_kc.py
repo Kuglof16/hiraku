@@ -1,5 +1,6 @@
 """The K&C compliance (bushings and tie rod) and the K&C bench tool."""
 
+import copy
 import math
 import unittest
 
@@ -68,6 +69,104 @@ class KcBench(unittest.TestCase):
         lat = [s for s in rec["series"] if s["channel"] == "toe_lateral"][0]
         self.assertAlmostEqual(lat["values"][-1], res["toe_at_1kN_lateral"] * lat["x"]["values"][-1])
         self.assertGreater(res["roll_center_height"], 0.0)
+
+    def test_k0_predicts_the_bench(self):
+        from hiraku import solvers
+        from hiraku.solvers.k2_vehicle.shelf.kc_bench import k0_inputs
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        rec = TOOLS["kc_bench"].run(d, {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})
+        res = {r["quantity"]: r["value"] for r in rec["results"]}
+        ins = k0_inputs(build_vehicle(d).corners[0].table)
+        reg = solvers.formula_registry()
+        h = reg.evaluate("kc.roll_center_height", ins["kc.roll_center_height"])["outputs"]["h_rc"]
+        self.assertEqual(h["unit"], "mm")
+        self.assertAlmostEqual(h["value"] / res["roll_center_height"], 1.0, delta=2e-3)
+        toe = reg.evaluate("kc.aligning_steer", dict(ins["kc.aligning_steer"], M={"value": 100.0, "unit": "N*m"}))
+        toe = toe["outputs"]["toe"]["value"]
+        # K0 gives way only at the tie rod: the same sign, less than K2's bench with the bushings
+        self.assertLess(res["toe_at_aligning_moment"], toe)
+        self.assertLess(toe, 0.0)
+
+    def test_hardpoints_of_a_support_are_the_bench_points(self):
+        from hiraku.solvers.k2_vehicle.model import hardpoints_of
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        veh = build_vehicle(d)
+        fl, fr = hardpoints_of(d, "FL"), hardpoints_of(d, "FR")
+        self.assertEqual(fl, veh.corners[0].table["hardpoints_mm"])
+        self.assertEqual(fr["tie_inner"], [fl["tie_inner"][0], -fl["tie_inner"][1], fl["tie_inner"][2]])
+        # the tie rod is placed for the least bump steer: under 0.1 deg over the table
+        toe = [r["toe_deg"] for r in veh.corners[0].table["rows"]]
+        self.assertLess(max(toe) - min(toe), 0.1)
+
+    def test_mount_forces_match_their_closed_forms(self):
+        from hiraku.solvers.k2_vehicle.shelf.kc_bench import _mount_checks
+        for c in _mount_checks():
+            self.assertTrue(c["pass"], c)
+
+    def test_the_step_record_shows_the_mount_loads(self):
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"}}}
+        rec = TOOLS["step_climb_dynamic"].run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        loads = [v for v in rec["vectors"] if v["kind"] == "joint"]
+        self.assertEqual({v["at"].split(".")[1] for v in loads}, set(kinematics.MOUNTS))
+        # per corner the loads on the body add up to that wheel's road force (reaction + grip)
+        for cid in ("FL", "RR"):
+            got = np.sum([v["vector_N"] for v in loads if v["at"].startswith(cid + ".")], axis=0)
+            road = np.sum([v["vector_N"] for v in rec["vectors"] if v.get("at") == cid and v["kind"] in ("reaction", "grip")],
+                          axis=0)
+            np.testing.assert_allclose(got, road, atol=1e-6 * max(1.0, float(np.linalg.norm(road))))
+
+    def test_the_mount_points_come_from_the_design(self):
+        # the design's suspension.hardpoints_mm: K2 builds its tables from them, and hardpoints_of
+        # returns them; the builtin points given back run as the builtin table does
+        from hiraku.solvers.k2_vehicle.model import hardpoints_of
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        given = copy.deepcopy(d)
+        for s in given["supports"]:
+            hp = hardpoints_of(d, s["id"])
+            s["suspension"]["hardpoints_mm"] = {k: v for k, v in hp.items() if k not in ("axle", "radius_mm")}
+        for s in given["supports"]:
+            hp = hardpoints_of(given, s["id"])
+            self.assertEqual(hp["tie_inner"], s["suspension"]["hardpoints_mm"]["tie_inner"])
+            self.assertEqual(hp["axle"][1], 1.0 if s["position_mm"][1] > 0 else -1.0)
+        a, b = build_vehicle(d), build_vehicle(given)
+        self.assertTrue(any("hardpoints_mm" in n for n in b.assumptions))
+        for ca, cb in zip(a.corners, b.corners):
+            for ra, rb in zip(ca.table["rows"], cb.table["rows"]):
+                for k, v in ra.items():
+                    np.testing.assert_allclose(rb[k], v, rtol=1e-9, atol=1e-9, err_msg=k)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"}}}
+        ra, rb = (TOOLS["step_climb_dynamic"].run(x, lc, [{"prediction_id": "pred-0001"}], {}) for x in (d, given))
+        for x, y in zip(ra["results"], rb["results"]):
+            self.assertAlmostEqual(y["value"], x["value"], delta=1e-6 * max(1.0, abs(x["value"])), msg=x["quantity"])
+
+    def test_moved_design_points_change_the_run(self):
+        from hiraku.solvers.k2_vehicle.model import DesignError, hardpoints_of
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        for s in d["supports"]:
+            hp = hardpoints_of(d, s["id"])
+            hp = {k: v for k, v in hp.items() if k not in ("axle", "radius_mm")}
+            hp["tie_inner"] = [hp["tie_inner"][0], hp["tie_inner"][1], hp["tie_inner"][2] + 20.0]
+            s["suspension"]["hardpoints_mm"] = hp
+            s["suspension"]["bushings"] = {"radial_N_per_mm": 6000.0}
+        c = build_vehicle(d).corners[0]
+        toe = [r["toe_deg"] for r in c.table["rows"]]
+        self.assertGreater(max(toe) - min(toe), 0.1)  # a raised tie rod inner point steers with the travel
+        self.assertEqual(c.table["bushings"], {"radial_N_per_mm": 6000.0, "axial_N_per_mm": 500.0,
+                                               "tie_rod_N_per_mm": 10000.0})
+        # the left and right tables mirror each other
+        right = next(x for x in build_vehicle(d).corners if x.id == "FR")
+        self.assertEqual(right.table["rows"], c.table["rows"])
+        bad = copy.deepcopy(d)
+        del bad["supports"][0]["suspension"]["hardpoints_mm"]["uca_outer"]
+        with self.assertRaisesRegex(DesignError, "uca_outer"):
+            build_vehicle(bad)
+        bad = copy.deepcopy(d)
+        bad["supports"][0]["suspension"]["hardpoints_mm"]["wheel_center"][2] += 5.0
+        with self.assertRaisesRegex(DesignError, "wheel_center"):
+            build_vehicle(bad)
 
     def test_a_design_without_a_kc_table_is_told_so(self):
         rec = TOOLS["kc_bench"].run(box_design(), {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})

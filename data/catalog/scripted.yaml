@@ -221,3 +221,74 @@ offroad-4w:
         end_say: >-
           後輪が空回りして、静かな押し上げではこの段差を越えられませんでした。原因を記録して、この手順はここで終えます
           (R1 には静的な釣り合いの結果を使っています)
+    # Past the limit: a step higher than the front wheel radius (hiraku/catalog/build.py
+    # WALL_STEP_RATIO). Only the moving tool: the static push of step_climb needs h < r.
+    # The hand calculation is the rigid wheel's limit (climbable 0 from h = r up); K2's climbable
+    # is 1 when the push or the run at speed gets the wheel onto the step.
+    - load_case: P1-step330-beyond
+      tool: step_climb_dynamic
+      say: 段差が車輪の半径より高いので、角の押す力が水平になり、硬い輪では越えられないとみて先に見積もります
+      predictions:
+        - quantity: climbable
+          formula_id: step_climb.climb_limit
+          output: climbable
+          assumptions: [車輪はたわまない硬い輪とみる]
+          inputs: {r: summary.front_wheel_radius, h: lc.step_height}
+
+# Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
+# load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake
+# (62 mm written for 62 cm). The hand calculation places the load at Q41 (k2_tests.tilt_inputs),
+# the tilt tool solves it where the design has it; the cause is recorded and the step predicts
+# again with the load as built (k2_tests.tilt_inputs_as_built).
+offroad-4w-n12:
+  extends: offroad-4w
+  steps:
+    - load_case: S1-tilt-two_cargo
+      tool: tilt
+      say: 傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります。荷の高さは要件 Q41 から取ります
+      predictions:
+        - &s1_tilt
+          quantity: tilt_angle
+          formula_id: tilt.spring_roll_angle
+          output: theta
+          assumptions: [車体はばねの上でロールし、ロールの軸は地面にある, タイヤはたわまない, 荷の重心は荷台の上 Q41 の高さ]
+          inputs: {t: summary.track_front, h: from.h, e: from.e, m: load.mass, m_s: from.m_s, h_s: from.h_s, k: from.k, n: from.n}
+          inputs_from: k2_tests.tilt_inputs
+      expected_mismatch:
+        quantity: tilt_angle
+        source: >-
+          tilt against tilt.spring_roll_angle on data/designs/offroad-4w-tallcargo.json, the hand calculation with
+          the load at Q41 (62 mm above the deck) and the tool with the load as built (its CG 620 mm above the deck)
+        cause: >-
+          要件 Q41 (荷の重心の高さ) の単位の取り違え。62 cm のつもりが 62 mm と書かれていて、手計算は荷を荷台の上 62 mm に置いた。
+          設計の荷は高さ 1240 mm で、重心は荷台の上 620 mm にある。手計算は車全体の重心を低く見て、倒れる角度を大きく出した
+        fix: >-
+          荷の高さを設計のとおり (重心は荷台の上 620 mm) にして予測し直す。要件の Q41 は 620 mm (62 cm) に直すよう、人に伝える
+        retry:
+          say: 荷の高さを設計のとおりにして、倒れる角度を予測し直します
+          predictions:
+            - <<: *s1_tilt
+              assumptions: [車体はばねの上でロールし、ロールの軸は地面にある, タイヤはたわまない, 荷は設計のとおりの高さ]
+              inputs_from: k2_tests.tilt_inputs_as_built
+
+# Video scene N14 (A5, knowledge to rules), data/requirements/offroad-4w-n14.yaml: the
+# offroad-4w plan, and after P1 the person drops a file of rules on A5. The run does what the
+# screen's server does (knowledge/<name>, inbox/<n>-knowledge.json); the inbox turns the file
+# into rules. The two sentences that need a formula are answered here in Claude's place (skip
+# with a reason; the reasons are facts about the design's values, which have no orientation or
+# part-to-part distance). Then the rules are checked on the parts, and the lead asks about the
+# hit. Source of the expected hit: hiraku/intake's SampleNotesTest on the demo design
+# (battery 50 kg against the sample's "電池の質量は 30 kg 以下").
+offroad-4w-n14:
+  extends: offroad-4w
+  knowledge_drop:
+    after: P1-step100
+    file: data/knowledge/samples/bending-notes.md
+    text: 板金と電池のメモです。規則にしてください
+    answer:
+      say: 式にできない 2 文は、理由を書いて規則にしません
+      skip:
+        c3: 向きは式にできない
+        c5: 部品どうしの距離を測る値が設計に無い
+  rule_check: true
+  ask_on_hits: true

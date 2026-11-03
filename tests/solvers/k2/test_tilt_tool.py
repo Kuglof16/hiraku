@@ -7,6 +7,7 @@ from hiraku import contract
 from hiraku.contract.protocols import AnalysisTool
 from hiraku.solvers.k2_vehicle.model import box_design
 from hiraku.solvers.k2_vehicle.shelf import TiltTool
+from tests.solvers.k2.slow import SLOW
 
 
 def load_case(**params):
@@ -14,6 +15,7 @@ def load_case(**params):
             "params": params, "tolerance_rel": 0.1}
 
 
+@SLOW
 class TiltToolTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -226,7 +226,8 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                          [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
                           ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
                           ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
-                          ("P1-step250-beyond", "step_climb_dynamic")])
+                          ("P1-step250-beyond", "step_climb_dynamic"),
+                          ("P1-step330-beyond", "step_climb_dynamic")])  # higher than the wheel: moving only
         refs, chain = [], []
         for step in plan["steps"]:
             node = step
@@ -337,11 +338,17 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
         checked = self.ctx.store.records("rule_check")
         self.assertTrue(any(r["rule_id"].startswith(dropped[0]["data"]["doc"]["doc_id"]) for r in checked))
         # a part hit by a rule: the lead asks the person, once, naming the rule and the part from the record
-        hit = next(r for r in checked if r["hits"])
+        doc = dropped[0]["data"]["doc"]["doc_id"]
+        hits = [r for r in checked if r["hits"]]
+        mine = [r for r in hits if r["rule_id"].startswith(doc + "-")]
         asks = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and "規則に当たる部品" in e["text"]]
         self.assertEqual(len(asks), 1)
-        self.assertIn(hit["rule_id"], asks[0])
-        self.assertIn(hit["hits"][0]["part_id"], asks[0])
+        # the dropped file's rules are the ones asked about when they hit; else every hit
+        for r in mine or hits:
+            self.assertIn(r["rule_id"], asks[0])
+            self.assertIn(r["hits"][0]["part_id"], asks[0])
+        if mine:
+            self.assertFalse([r["rule_id"] for r in hits if r not in mine and r["rule_id"] in asks[0]])
         self.assert_events_fit()
 
 

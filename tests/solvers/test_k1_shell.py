@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import time
 import unittest
 from pathlib import Path
@@ -20,6 +21,7 @@ from hiraku.solvers.k1_shell.solve import ShellModel, StaticSolver, dofs_of, red
 from hiraku.solvers.shelf import fixtures
 
 DEMO = Path(__file__).resolve().parents[2] / "data" / "designs" / "offroad-4w-v1.json"
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # the long demo runs (as HIRAKU_WEB_BROWSER in tests/web)
 
 
 def demo_design() -> dict:
@@ -288,6 +290,7 @@ class DemoMeshTest(unittest.TestCase):
         contract.validate("mesh", dict(rec, mesh_id="mesh-0001"))
         self.assertEqual((len(rec["nodes_mm"]), len(rec["elements"])), (self.mesh.n_nodes, self.mesh.n_elements))
 
+    @unittest.skipUnless(SLOW, "set HIRAKU_SLOW_TESTS=1 to time the demo's assembly and solve")
     def test_assemble_factor_solve_time(self):
         model = ShellModel.from_mesh(self.mesh, self.design)
         t0 = time.perf_counter()
@@ -319,6 +322,172 @@ class DemoRigidModesTest(unittest.TestCase):
         print(f"  demo at 20 mm, free-free lowest eigenvalues (1/s^2): {np.array2string(vals, precision=3)}")
         self.assertTrue(np.all(np.abs(vals[:6]) < 1e-3))
         self.assertGreater(vals[6], 1e3)
+
+
+def n_components(ms) -> int:
+    rows = np.repeat(np.arange(ms.n_elements), ms.elements.shape[1])
+    A = sp.coo_matrix((np.ones(rows.size), (rows, ms.elements.ravel())), shape=(ms.n_elements, ms.n_nodes)).tocsr()
+    return connected_components(A.T @ A, directed=False)[0]
+
+
+def nodes_of(ms, prefix: str) -> set[int]:
+    return {int(i) for e, m in zip(ms.elements, ms.element_member) if m.startswith(prefix) for i in e}
+
+
+T_NODES = {"LA", "LS1", "LS2", "LB", "RA", "RS1", "RS2", "RB"}
+
+
+class MountTest(unittest.TestCase):
+    """Wheel mounts: the rail's walls within +- h (80 mm) of each support's frame node."""
+
+    def test_demo_mounts(self):
+        d = demo_design()
+        ms = build_mesh(d, 10.0)
+        xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in d["nodes"]}
+        self.assertEqual(set(ms.mounts), {"LA", "RA", "LB", "RB"})
+        for fn, nset in ms.mounts.items():
+            self.assertEqual(ms.mount_half_mm[fn], 80.0)
+            rail = nodes_of(ms, f"rail_{fn[0]}_")
+            dx = np.abs(ms.nodes[:, 0] - xyz[fn][0])
+            want = {i for i in rail if dx[i] <= 80.0 + 1e-9}
+            self.assertEqual(set(nset.tolist()), want)
+            p = ms.nodes[nset]
+            self.assertAlmostEqual(np.ptp(p[:, 0]), 160.0, places=9)  # grid lines at +- h
+            self.assertAlmostEqual(np.ptp(p[:, 1]), 40.0 - 2.3, places=9)  # all four walls
+            self.assertAlmostEqual(np.ptp(p[:, 2]), 80.0 - 2.3, places=9)
+            el = ms.elements[ms.mount_elements[fn]]
+            self.assertTrue(np.all(np.isin(el, nset)))
+            self.assertTrue(all(ms.element_member[e].startswith("rail_") for e in ms.mount_elements[fn]))
+            area = element.element_area(element.local_frames(ms.nodes[el])[1]).sum()
+            self.assertAlmostEqual(area, 160.0 * 2 * (40.0 - 2.3 + 80.0 - 2.3), places=6)
+        self.assertEqual(build_mesh(fixtures.ladder_design(), 20.0).mounts, {})  # supports at corners: joint nodes
+
+
+class ThroughMeshTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.butt = build_mesh(demo_design(), 10.0)
+        cls.design = demo_design()
+        cls.design["variables"]["cross_members_through"] = {"value": 1, "unit": "1"}
+        cls.mesh = build_mesh(cls.design, 10.0)
+
+    def test_joints_and_record(self):
+        ms = self.mesh
+        self.assertEqual(set(ms.through_joints), T_NODES)
+        self.assertEqual({k for k, v in ms.joint_kinds.items() if v == "L"}, {"LF", "LE", "RF", "RE"})
+        self.assertIn("Through joints", " ".join(ms.notes))
+        self.assertIn("beam model (K1) is unchanged", " ".join(ms.notes))
+        self.assertLessEqual(ms.edge_lengths().max(), 10.0 + 1e-9)
+        self.assertEqual(ms.links, [])
+        self.assertEqual(n_components(ms), 1)
+        used = np.zeros(ms.n_nodes, bool)
+        used[ms.elements.ravel()] = True
+        self.assertTrue(used.all())  # the nodes inside the holes are gone
+        contract.validate("mesh", ms.record("mesh-0001", 1))
+
+    def test_cross_member_reaches_the_far_wall(self):
+        ms = self.mesh
+        for node in ms.through_joints:
+            rings = ms.shared_rings[node]
+            rail = nodes_of(ms, f"rail_{node[0]}_")
+            self.assertEqual(len(rings), 2, node)  # near wall (the hole's edge) and far wall
+            ys = []
+            for member, ring, patch in rings:
+                self.assertTrue(set(ring.tolist()) <= rail, f"{node} {member}")
+                self.assertTrue(set(ring.tolist()) <= set(patch.tolist()))
+                ys.append(float(np.mean(ms.nodes[ring, 1])))
+            self.assertAlmostEqual(abs(ys[0] - ys[1]), 40.0 - 2.3, places=9)  # inner and outer rail wall
+        # the near wall inside the footprint is open: no rail element is centred there
+        R, _, c, warp = element.local_frames(ms.nodes[ms.elements])
+        self.assertLess(warp.max(), 1e-9)
+        rail = np.array([m.startswith("rail_L_") for m in ms.element_member])
+        inner = rail & np.isclose(c[:, 1], 350.0 - 18.85)
+        for x in (0.0, -450.0, -1000.0, -1700.0):
+            hole = inner & (np.abs(c[:, 0] - x) < 18.85) & (np.abs(c[:, 2] - 380.0) < 18.85)
+            self.assertFalse(hole.any(), x)
+
+    def test_mass_change_is_the_extension_less_the_holes(self):
+        d = self.design
+        rho = d["materials"]["stkr400"]["density_kg_m3"] * 1e-9
+        m = lambda ms: ShellModel.from_mesh(ms, d).total_mass() * 1000.0  # noqa: E731
+        Bc, t = 40.0 - 2.3, 2.3
+        per_joint = rho * (4 * Bc * t * (40.0 - 2.3) - Bc * Bc * t)  # walls through the rail, less the hole
+        self.assertAlmostEqual(m(self.mesh) - m(self.butt), 8 * per_joint, places=9)
+
+    def test_through_parts_are_the_mass_change(self):
+        """designgen's through parts weigh what the shell gains by running the cross members through."""
+        from hiraku import designgen
+        d = designgen.regenerate(demo_design(), {"cross_members_through": {"value": 1, "unit": "1"}})
+        parts = sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("through_"))
+        m = lambda ms: ShellModel.from_mesh(ms, d).total_mass() * 1000.0  # noqa: E731
+        self.assertAlmostEqual(m(build_mesh(d, 10.0)) - m(self.butt), parts, places=9)
+
+    def test_too_wide_a_branch_stays_a_t_joint(self):
+        lad = fixtures.ladder_design()
+        lad["variables"] = {"cross_members_through": {"value": 1, "unit": "1"}}
+        ms = build_mesh(lad, 20.0)
+        self.assertEqual(ms.through_joints, [])
+        self.assertIn("not through", " ".join(ms.notes))
+        with self.assertRaisesRegex(DesignError, "0 or 1"):
+            build_mesh(dict(lad, variables={"cross_members_through": {"value": 2, "unit": "1"}}), 20.0)
+
+
+class GussetMeshTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from hiraku import designgen
+        cls.design = designgen.regenerate(demo_design(), {"joints": "gusset"})
+        cls.gussets = {p["id"]: p for p in cls.design["parts"] if p["kind"] == "gusset"}
+        cls.mesh = build_mesh(cls.design, 10.0)
+
+    def test_plates_are_meshed_and_welded(self):
+        ms = self.mesh
+        self.assertEqual(set(ms.element_member) - {m["id"] for m in self.design["members"]}, set(self.gussets))
+        self.assertEqual(set(ms.part_material), set(self.gussets))
+        self.assertEqual(ms.part_material["gusset_LS1_rear_lower"], "cross_S1")
+        self.assertLessEqual(ms.edge_lengths().max(), 10.0 + 1e-9)
+        self.assertEqual(n_components(ms), 1)
+        tubes = {int(i) for e, m in zip(ms.elements, ms.element_member) if m not in self.gussets for i in e}
+        R, xl, c, warp = element.local_frames(ms.nodes[ms.elements])
+        self.assertLess(warp.max(), 1e-9)
+        area = element.element_area(xl)
+        member = np.array(ms.element_member)
+        for gid, p in self.gussets.items():
+            sel = member == gid
+            g, _, t = p["box"]["size_mm"]
+            self.assertAlmostEqual(area[sel].sum(), g * g / 2, places=9)
+            self.assertEqual(ms.member_thickness_mm[gid], t)
+            np.testing.assert_allclose((area[sel][:, None] * c[sel]).sum(axis=0) / area[sel].sum(),
+                                       p["box"]["center_mm"], atol=1e-9)  # the plate's centroid is the box centre
+            up = 1.0 if gid.endswith("upper") else -1.0
+            np.testing.assert_allclose(R[sel, 2] @ np.array([0, 0, 1.0]), up)  # top side away from the cross member
+            nodes = set(ms.elements[sel].ravel().tolist())
+            shared = nodes & tubes
+            # both legs: 2 * (2n) + 1 nodes with n = ceil(half the hypotenuse / 10) = ceil(42.4 / 10) = 5
+            self.assertEqual(len(shared), 21, gid)
+            on_leg = ms.nodes[sorted(shared)]
+            self.assertTrue(np.all(np.isclose(on_leg[:, 2], p["box"]["center_mm"][2])))
+
+    def test_record_and_model(self):
+        ms = self.mesh
+        rec = ms.record("mesh-0001", 1)
+        contract.validate("mesh", rec)
+        self.assertEqual(rec["member_thickness_mm"]["gusset_LA_front_upper"], 2.3)
+        model = ShellModel.from_mesh(ms, self.design)
+        butt = ShellModel.from_mesh(build_mesh(demo_design(), 10.0), demo_design())
+        self.assertAlmostEqual((model.total_mass() - butt.total_mass()) * 1000.0,
+                               sum(p["mass_kg"] for p in self.gussets.values()), places=9)
+
+    def test_misplaced_gusset_is_refused(self):
+        d = copy.deepcopy(self.design)
+        p = next(x for x in d["parts"] if x["id"] == "gusset_LA_front_upper")
+        p["box"]["center_mm"][0] += 5.0
+        with self.assertRaisesRegex(DesignError, "not the centroid"):
+            build_mesh(d, 10.0)
+        p["box"]["center_mm"][0] -= 5.0
+        p["carried_by"] = ["LF"]  # an L joint
+        with self.assertRaisesRegex(DesignError, "no T joint"):
+            build_mesh(d, 10.0)
 
 
 class OtherJointsTest(unittest.TestCase):

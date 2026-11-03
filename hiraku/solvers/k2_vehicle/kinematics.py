@@ -18,13 +18,15 @@ the left), the aligning moment Mz about the body z axis.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize
 
 POLY_DEGREE = 5
 
@@ -83,6 +85,8 @@ class Hardpoints:
     wheel_center: np.ndarray
     axle: np.ndarray  # unit vector of the spin axis at design, pointing +y
     radius: float
+    damper_lower: np.ndarray | None = None  # on the lower arm
+    damper_upper: np.ndarray | None = None  # on the body
 
     def to_json(self) -> dict:
         out = {k: [float(x) * 1000.0 for x in getattr(self, k)] for k in (
@@ -90,6 +94,9 @@ class Hardpoints:
             "tie_inner", "tie_outer", "wheel_center")}
         out["axle"] = [float(x) for x in self.axle]
         out["radius_mm"] = self.radius * 1000.0
+        for k in ("damper_lower", "damper_upper"):
+            if getattr(self, k) is not None:
+                out[k] = [float(x) * 1000.0 for x in getattr(self, k)]
         return out
 
     @classmethod
@@ -97,6 +104,9 @@ class Hardpoints:
         kw = {k: np.asarray(d[k], dtype=float) / 1000.0 for k in (
             "lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_outer",
             "tie_inner", "tie_outer", "wheel_center")}
+        for k in ("damper_lower", "damper_upper"):
+            if k in d:
+                kw[k] = np.asarray(d[k], dtype=float) / 1000.0
         return cls(axle=_unit(np.asarray(d["axle"], dtype=float)), radius=float(d["radius_mm"]) / 1000.0, **kw)
 
 
@@ -105,7 +115,8 @@ def generic_sla(wheel_center: np.ndarray, radius: float) -> Hardpoints:
 
     Not taken from any real vehicle: lower arm 0.6 and upper arm 0.42 of the
     lateral distance from the centreline to the ball joints, upper arm inner
-    pivots 15 mm lower than the outer joint, tie rod behind the axle.
+    pivots 15 mm lower than the outer joint, tie rod behind the axle, the damper
+    from the lower arm up to the body.
     """
     wc = np.asarray(wheel_center, dtype=float)
     x, yw, zw = wc
@@ -120,7 +131,11 @@ def generic_sla(wheel_center: np.ndarray, radius: float) -> Hardpoints:
     ur = np.array([x - 0.10, y_in_u, ubj[2] - 0.015])
     tro = np.array([x - 0.4 * r, yw - 0.25 * r, zw - 0.05 * r])
     tri = np.array([tro[0], tro[1] - 0.55 * tro[1], tro[2]])
-    return Hardpoints(lf, lr, lbj, uf, ur, ubj, tri, tro, wc.copy(), np.array([0.0, 1.0, 0.0]), r)
+    # damper: on the lower arm at 0.7 of the way from its inner axis to the ball joint, up to the
+    # body 0.9 r above the wheel centre and 0.1 r further in
+    dl = 0.5 * (lf + lr) + 0.7 * (lbj - 0.5 * (lf + lr))
+    du = np.array([dl[0], dl[1] - 0.1 * r, zw + 0.9 * r])
+    return Hardpoints(lf, lr, lbj, uf, ur, ubj, tri, tro, wc.copy(), np.array([0.0, 1.0, 0.0]), r, dl, du)
 
 
 class DoubleWishboneBench:
@@ -265,6 +280,114 @@ def compliance(hp: Hardpoints, sol: dict, bushings: Bushings) -> dict:
     return out
 
 
+MOUNTS = ("lca_front", "lca_rear", "uca_front", "uca_rear", "damper_upper", "tie_inner")
+
+
+def solve_at_travel(hp: Hardpoints, travel: float) -> dict:
+    """The bench solution at a wheel travel (m): march the lower arm from design, then refine."""
+    bench = DoubleWishboneBench(hp)
+    z0 = float(hp.wheel_center[2])
+    arm = float(np.linalg.norm(hp.lca_outer - 0.5 * (hp.lca_front + hp.lca_rear)))
+    if travel == 0.0:
+        return bench.solve(0.0)
+    step = 0.002 / arm
+    if (float(bench.solve(step)["wheel_center"][2]) - z0) * travel < 0.0:
+        step = -step  # the arm turns the other way for this travel
+    bench._phi, bench._psi = 0.0, 0.0
+    theta, prev = 0.0, 0.0
+    while True:
+        prev, theta = theta, theta + step
+        dz = float(bench.solve(theta)["wheel_center"][2]) - z0
+        if abs(dz) >= abs(travel):
+            break
+        if abs(theta) > 1.5:
+            raise ValueError("the bench does not reach this travel")
+    f = lambda t: float(bench.solve(t)["wheel_center"][2]) - z0 - travel
+    return bench.solve(brentq(f, min(prev, theta), max(prev, theta), xtol=1e-14, rtol=1e-14))
+
+
+def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarray | None = None) -> dict:
+    """Forces (N, body axes) that a LEFT double wishbone puts on the body at its mounts when the
+    road pushes the tyre with `force` (N, body axes) at the contact point (default: the bench's,
+    under the wheel), at the bench solution `sol` (one travel). Returns {mount: force} for MOUNTS,
+    the knuckle's ball joints and the damper and tie rod forces (+ tension).
+
+    Rigid links and frictionless joints. The knuckle is in balance under the tyre force, the two
+    ball joints and the tie rod (a two-force member, along it); each arm turns freely about its
+    inner axis, so the moments about that axis are zero, and the damper (a two-force member from
+    the lower arm to the body) holds the lower arm: 6 + 1 + 1 linear equations for the 3 + 3
+    ball-joint forces, the tie-rod and the damper force. An arm's two inner joints take the arm's
+    remaining force and moment; the share of the force along the axis is not fixed by the balance
+    and is split half and half (assumed).
+    """
+    if hp.damper_lower is None or hp.damper_upper is None:
+        raise ValueError("the layout has no damper mounts")
+    f = np.asarray(force, dtype=float)
+    rk = sol["rotation"]
+    lbj, ubj = sol["lbj"], sol["ubj"]
+    cp = sol["contact"] if contact is None else np.asarray(contact, dtype=float)
+    tro = lbj + rk @ (hp.tie_outer - hp.lca_outer)
+    # the lower arm turns with the knuckle's lower ball joint about the lower axis: the damper's
+    # lower mount turns with it
+    ea, eu = _unit(hp.lca_rear - hp.lca_front), _unit(hp.uca_rear - hp.uca_front)
+    rot_l = rotation_between(hp.lca_outer - hp.lca_front - ea * float((hp.lca_outer - hp.lca_front) @ ea),
+                             lbj - hp.lca_front - ea * float((lbj - hp.lca_front) @ ea))
+    dl = hp.lca_front + rot_l @ (hp.damper_lower - hp.lca_front)
+    nt = _unit(hp.tie_inner - tro)       # tie rod force on the knuckle = t nt (t > 0: tension)
+    nd = _unit(hp.damper_upper - dl)     # damper force on the lower arm = d nd (d > 0: tension)
+    a = np.zeros((8, 8))
+    b = np.zeros(8)
+    # knuckle forces: F_lbj + F_ubj + t nt + f = 0
+    a[0:3, 0:3] = np.eye(3)
+    a[0:3, 3:6] = np.eye(3)
+    a[0:3, 6] = nt
+    b[0:3] = -f
+    # knuckle moments about the lower ball joint
+    a[3:6, 3:6] = _skew(ubj - lbj)
+    a[3:6, 6] = np.cross(tro - lbj, nt)
+    b[3:6] = -np.cross(cp - lbj, f)
+    # lower arm about its axis: the knuckle pushes it with -F_lbj at lbj, the damper with d nd at dl
+    a[6, 0:3] = -(ea @ _skew(lbj - hp.lca_front))
+    a[6, 7] = float(ea @ np.cross(dl - hp.lca_front, nd))
+    # upper arm about its axis: -F_ubj at ubj
+    a[7, 3:6] = -(eu @ _skew(ubj - hp.uca_front))
+    x = np.linalg.solve(a, b)
+    f_l, f_u, t, d = x[0:3], x[3:6], float(x[6]), float(x[7])
+
+    def inner(front, rear, e, loads):
+        """Forces from the body on an arm's front and rear joints for the loads (force, point) on it."""
+        total = sum(fo for fo, _ in loads)
+        m = sum(np.cross(p - front, fo) for fo, p in loads)
+        span = rear - front
+        p_rear = np.cross(-m, span) / float(span @ span)  # its moment about front cancels m (across the axis)
+        p_rear = p_rear + e * (-float(total @ e) / 2.0)
+        return -total - p_rear, p_rear
+
+    lf_, lr_ = inner(hp.lca_front, hp.lca_rear, ea, [(-f_l, lbj), (d * nd, dl)])
+    uf_, ur_ = inner(hp.uca_front, hp.uca_rear, eu, [(-f_u, ubj)])
+    # on the body: minus the body's force on each joint; the damper and the tie rod pull the body
+    # toward the arm and the knuckle when in tension
+    return {"lca_front": -lf_, "lca_rear": -lr_, "uca_front": -uf_, "uca_rear": -ur_,
+            "damper_upper": -d * nd, "tie_inner": -t * nt, "ball_joint_lower": f_l, "ball_joint_upper": f_u,
+            "tie_rod_tension": t, "damper_tension": d, "damper_lower_point": dl}
+
+
+def corner_mount_forces(table: dict, side: float, travel: float, force: np.ndarray,
+                        contact: np.ndarray | None = None) -> dict:
+    """mount_forces of a corner on a K&C table (a left-wheel table; side < 0 mirrors it) at a
+    travel (m, held inside the table) for the tyre force (N, body axes) at `contact` (design
+    frame, m; default under the wheel): {mount: (point, force)}, design frame, metres and newtons."""
+    hp = Hardpoints.from_json(table["hardpoints_mm"])
+    rows = table["rows"]
+    lo, hi = rows[0]["travel_mm"] / 1000.0, rows[-1]["travel_mm"] / 1000.0
+    flip = np.array([1.0, -1.0 if side < 0 else 1.0, 1.0])
+    sol = solve_at_travel(hp, min(max(travel, lo), hi))
+    r = mount_forces(hp, sol, np.asarray(force, dtype=float) * flip,
+                     None if contact is None else np.asarray(contact, dtype=float) * flip)
+    points = {m: getattr(hp, m) for m in MOUNTS}
+    return {m: (points[m] * flip, r[m] * flip) for m in MOUNTS}
+
+
 def front_view_ic(hp: Hardpoints) -> np.ndarray | None:
     """Front-view instant centre (y, z) of the arm lines at design, when the pivot axes are along x."""
     def line(inner_a, inner_b, outer):
@@ -281,10 +404,8 @@ def front_view_ic(hp: Hardpoints) -> np.ndarray | None:
     return p1 + t * d1
 
 
-def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings | None = None) -> dict:
-    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg); with
-    bushings, every row also has the compliance (deg per kN at the contact point, deg per kN m
-    about z)."""
+def _sweep(hp: Hardpoints, travel: float, n: int) -> tuple[np.ndarray, list[dict]]:
+    """The bench solutions at n travels evenly over +-travel (m), and those travels."""
     bench = DoubleWishboneBench(hp)
     z0 = float(hp.wheel_center[2])
     # Map lower-arm angle to travel: march outward from design in small steps.
@@ -308,7 +429,6 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
     tz = tz[order]
     th = np.array(thetas)[order]
     grid = np.linspace(-travel, travel, n)
-    rows = []
     bench._phi, bench._psi = 0.0, 0.0
     sols = []
     for z in grid:
@@ -318,6 +438,15 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
         lo, hi = theta - 0.01, theta + 0.01
         theta = brentq(f, lo, hi, xtol=1e-14, rtol=1e-14)
         sols.append(bench.solve(theta))
+    return grid, sols
+
+
+def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings | None = None) -> dict:
+    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg); with
+    bushings, every row also has the compliance (deg per kN at the contact point, deg per kN m
+    about z)."""
+    grid, sols = _sweep(hp, travel, n)
+    rows = []
     wc0 = hp.wheel_center
     cp = np.array([s["contact"] for s in sols])
     dy_dz = np.gradient(cp[:, 1], cp[:, 2])
@@ -350,6 +479,81 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
 
 # the table's unit of each compliance column (per kN at the contact point, per kN m about z)
 COMPLIANCE_UNIT = {k: ("deg_per_kNm" if k.endswith("_mz") else "deg_per_kN") for k in COMPLIANCE_KEYS}
+
+
+def low_bump_steer(hp: Hardpoints, travel: float, n: int = 7) -> Hardpoints:
+    """hp with the tie rod's inner joint moved (in y and z) to where the toe follows the travel
+    least: the largest |toe - toe at design| at n travels over +-travel is minimised
+    (Nelder-Mead from the given point). Aiming at no bump steer is K2's own choice for the
+    generic layout (assumed; no source read in this repository).
+
+    The arms' motion does not depend on the tie rod, so it is solved once (at the given
+    layout's lower-arm angle for each travel); for a trial inner point only the knuckle's turn
+    psi about the kingpin axis is solved, in closed form: with v(psi) the tie rod's outer point
+    from the lower ball joint (Rodrigues about the axis u), |lbj + v(psi) - inner|^2 = l^2 is
+    A cos psi + B sin psi + C = 0."""
+    bench = DoubleWishboneBench(hp)
+    poses = []
+    for s in _sweep(hp, travel, n)[1]:
+        lbj, ubj = s["lbj"], s["ubj"]
+        r0 = bench._knuckle(lbj, ubj, 0.0)
+        u = _unit(ubj - lbj)
+        poses.append((lbj, u, r0 @ (hp.tie_outer - hp.lca_outer), r0 @ hp.axle))
+    centre = n // 2
+
+    def toe_at(pose, inner: np.ndarray, length2: float) -> float:
+        lbj, u, v0, a0 = pose
+        d = lbj - inner
+        du, uv = float(d @ u), float(u @ v0)
+        a = 2.0 * (float(d @ v0) - du * uv)
+        b = 2.0 * float(d @ np.cross(u, v0))
+        c = float(d @ d) + float(v0 @ v0) - length2 + 2.0 * du * uv
+        rr = math.hypot(a, b)
+        if rr < abs(c):
+            raise ValueError("the tie rod does not reach")
+        base = math.atan2(b, a)
+        off = math.acos(-c / rr)
+        psi = min((base + off, base - off), key=lambda p: abs(math.remainder(p, 2.0 * math.pi)))
+        psi = math.remainder(psi, 2.0 * math.pi)
+        ax = a0 * math.cos(psi) + np.cross(u, a0) * math.sin(psi) + u * float(u @ a0) * (1.0 - math.cos(psi))
+        return math.atan2(float(ax[0]), float(ax[1]))
+
+    def inner_of(p) -> np.ndarray:
+        return np.array([float(hp.tie_inner[0]), float(p[0]), float(p[1])])
+
+    def worst(p) -> float:
+        inner = inner_of(p)
+        length2 = float(np.sum((hp.tie_outer - inner) ** 2))
+        try:
+            toes = [toe_at(pose, inner, length2) for pose in poses]
+        except ValueError:
+            return 1e3
+        return max(abs(t - toes[centre]) for t in toes)
+
+    res = minimize(worst, [float(hp.tie_inner[1]), float(hp.tie_inner[2])], method="Nelder-Mead",
+                   options={"xatol": 1e-5, "fatol": 1e-7, "maxiter": 400})
+    return dataclasses.replace(hp, tie_inner=inner_of(res.x))
+
+
+_POINTS = ("lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_outer", "tie_inner", "tie_outer",
+           "wheel_center")
+
+
+@lru_cache(maxsize=64)
+def _builtin(key: tuple) -> Hardpoints:
+    y, z, radius, travel = key
+    return low_bump_steer(generic_sla(np.array([0.0, y, z]), radius), travel)
+
+
+def builtin_hardpoints(wheel_center: np.ndarray, radius: float, travel: float) -> Hardpoints:
+    """The builtin double wishbone of a LEFT wheel: the generic layout with the tie rod placed for
+    the least bump steer over +-travel (m). The layout does not depend on the wheel's x, so it is
+    made at x = 0 and moved there; the same geometry always gives the same points."""
+    x, y, z = (float(v) for v in wheel_center)
+    hp = _builtin((y, z, float(radius), float(travel)))
+    shift = np.array([x, 0.0, 0.0])
+    moved = {k: getattr(hp, k) + shift for k in _POINTS + ("damper_lower", "damper_upper") if getattr(hp, k) is not None}
+    return dataclasses.replace(hp, axle=np.array(hp.axle), **moved)
 
 
 def save_table(table: dict, path: str | Path) -> None:

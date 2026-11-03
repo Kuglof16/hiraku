@@ -197,7 +197,11 @@ class FrameStatic(BuiltinTool):
         out = frame_outputs(res)
         mesh, why = mesh_of(design, params)
         if mesh is not None:
-            out["fields"].append(surface_field(res["model"], mesh))
+            plates = frozenset(p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset")
+            out["fields"].append(surface_field(res["model"], mesh, plates=plates))
+            if plates & set(mesh["element_member"]):
+                out["effects"].append({"name": "the gusset plates on the mesh are drawn at 0: the beam model carries "
+                                               "them as mass only"})
         elif why:
             out["effects"].append({"name": why})
         if up is None and step is not None:

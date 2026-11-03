@@ -96,6 +96,10 @@ class MF61:
 
     def fx0(self, fz: float, kappa: float, gamma: float = 0.0) -> tuple[float, float]:
         """Pure longitudinal force and the slip stiffness (4.E9)-(4.E18)."""
+        return self._fx0(fz, kappa, gamma)[:2]
+
+    def _fx0(self, fz: float, kappa: float, gamma: float) -> tuple[float, float, float]:
+        """Fx0, Kxk and Dx."""
         dfz = (fz - self.fz0) / self.fz0
         cx = self.PCX1                                                              # (4.E11)
         dx = self.mu_x(fz, gamma) * fz                                              # (4.E12)
@@ -105,7 +109,7 @@ class MF61:
         svx = fz * (self.PVX1 + self.PVX2 * dfz) * self.lmux                        # (4.E18)
         kx = kappa + shx                                                            # (4.E10)
         ex = min(1.0, (self.PEX1 + self.PEX2 * dfz + self.PEX3 * dfz * dfz) * (1.0 - self.PEX4 * _sgn(kx)))  # (4.E14)
-        return _mf(bx, cx, dx, ex, kx) + svx, kxk                                  # (4.E9)
+        return _mf(bx, cx, dx, ex, kx) + svx, kxk, dx                              # (4.E9)
 
     def _fy0(self, fz: float, ta: float, gs: float) -> tuple[float, float, float, float, float, float]:
         """Pure lateral force (4.E19)-(4.E30) at gamma* = gs: Fy0, mu_y, Kya, SHy, SVy, By Cy."""
@@ -130,14 +134,18 @@ class MF61:
     # ------------------------------------------------------------ combined slip
     def forces(self, fz: float, kappa: float, tan_alpha: float, gamma: float = 0.0) -> tuple[float, float, float]:
         """Fx, Fy (N) and Mz (N m) in combined slip (4.E50)-(4.E78)."""
+        return self.forces_and_peaks(fz, kappa, tan_alpha, gamma)[:3]
+
+    def forces_and_peaks(self, fz: float, kappa: float, tan_alpha: float, gamma: float = 0.0) -> tuple:
+        """Fx, Fy, Mz and the peaks Dx, Dy and the slip stiffness Kxk the formula used (one evaluation)."""
         if fz <= 0.0:
-            return 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         dfz = (fz - self.fz0) / self.fz0
         gs = math.sin(gamma)
         ta = tan_alpha
         cos_a = 1.0 / math.sqrt(1.0 + ta * ta)                                      # cos(alpha') (4.E6), forward rolling
 
-        fx0, kxk = self.fx0(fz, kappa, gamma)
+        fx0, kxk, dx_peak = self._fx0(fz, kappa, gamma)
         # Fx combined (4.E50)-(4.E57)
         exa = min(1.0, self.REX1 + self.REX2 * dfz)
         shxa = self.RHX1
@@ -180,7 +188,7 @@ class MF61:
         fy0_g0 = fy0 if gs == 0.0 else self._fy0(fz, ta, 0.0)[0]
         t = dt * math.cos(ct * math.atan(bt * at_eq - et * (bt * at_eq - math.atan(bt * at_eq)))) * cos_a  # (4.E73)
         mz = -t * (gyk * fy0_g0) + mzr + s * fx                                     # (4.E71), (4.E72)
-        return fx, fy, mz
+        return fx, fy, mz, dx_peak, kxk, muy * fz
 
     # ------------------------------------------------------------ helpers
     def trail(self, fz: float, tan_alpha: float = 0.0, gamma: float = 0.0) -> float:

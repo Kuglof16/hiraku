@@ -211,8 +211,9 @@ class Sim:
         lo, hi = self.s_lo[i], self.s_hi[i]
         sc = lo if s < lo else (hi if s > hi else s)
         ext = s - sc
+        rows = self.coef[i]
         vals = []
-        for row in self.coef[i]:
+        for row in rows[:2]:  # wheel centre x and y: value, first and second derivative
             v, d1, d2 = row[0], 0.0, 0.0
             for ck in row[1:]:
                 d2 = d2 * sc + 2.0 * d1
@@ -222,6 +223,16 @@ class Sim:
                 v = v + d1 * ext
                 d2 = 0.0
             vals.append((v, d1, d2))
+        # dz is the travel itself (PathPoly.from_table): sc, 1, 0, as its polynomial evaluates
+        vals.append((sc + 1.0 * ext if ext != 0.0 else sc, 1.0, 0.0))
+        for row in rows[3:]:  # camber and toe: value and first derivative
+            v, d1 = row[0], 0.0
+            for ck in row[1:]:
+                d1 = d1 * sc + v
+                v = v * sc + ck
+            if ext != 0.0:
+                v = v + d1 * ext
+            vals.append((v, d1, 0.0))
         sd_ = -1.0 if self.side[i] < 0 else 1.0
         (x, x1, x2), (y, y1, y2), (z, z1, z2), (cb, cb1, _), (te, te1, _) = vals
         side = self.side[i]

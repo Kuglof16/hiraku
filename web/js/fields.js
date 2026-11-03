@@ -49,6 +49,26 @@ export function preferredField(sameKind, meshes) {
   return [...onMesh].sort((a, b) => rank(a) - rank(b))[0] ?? sameKind.find((f) => !f.mesh_id) ?? sameKind[0] ?? null;
 }
 
+// The same field in another analysis (e.g. another design version's): the same kind,
+// both on a mesh or both on the beams, the same surface and label. The mesh_id is left
+// out, as each version has its own mesh.
+export function sameField(a, b) {
+  return !!a && !!b && a.kind === b.kind && !!a.mesh_id === !!b.mesh_id && (a.surface ?? null) === (b.surface ?? null) && (a.label ?? null) === (b.label ?? null);
+}
+
+// One colour scale for several contours of the same field (e.g. before and after a
+// change): the allowable value when every contour's top is it, else the largest
+// recorded value; the bottom is the lowest bottom. Returns the contours on that scale.
+export function onSharedScale(cts) {
+  const all = cts.filter(Boolean);
+  if (!all.length) return cts;
+  const min = Math.min(...all.map((c) => c.min));
+  const byLimit = all.every((c) => c.limitKnown) && new Set(all.map((c) => c.max)).size === 1;
+  let max = byLimit ? all[0].max : Math.max(...all.map((c) => c.fieldMax));
+  if (!(max > min)) max = min + (Math.abs(min) || 1);
+  return cts.map((c) => (c ? { ...c, key: `${c.key}|scale ${min} ${max}`, min, max, limitKnown: byLimit && c.limitKnown, crit: byLimit ? c.crit : null } : c));
+}
+
 // An upper limit from the criterion, when it is about this field's unit.
 function upperLimit(field, criterion) {
   const lim = criterion?.limit;

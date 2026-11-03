@@ -101,7 +101,7 @@ class FrameKitTest(unittest.TestCase):
 class RunningGearTest(unittest.TestCase):
     def test_four_wheels_is_v1(self):
         from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
-        s = Suspension("spring", 20.0, 1.2, 150.0)
+        s = Suspension("kc_table", 20.0, 1.2, 150.0, "builtin:double_wishbone")
         sup = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s)
         self.assertEqual(sup, V1["supports"])
         self.assertEqual([corner_name(x, sup) for x in sup], ["前左", "前右", "後左", "後右"])

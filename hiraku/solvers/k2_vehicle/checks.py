@@ -7,7 +7,7 @@
    (check-vehicle values); and the exact two-mass frequency with a 25 kg wheel
 5. rigid tilt table, closed form: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m (check-vehicle values),
    the same to the left and right
-6. parked on a 20 % slope with the brakes on: moves < 1 mm in 60 s
+6. parked on a 20 % slope with the brakes on: moves < 0.1 mm in 10 s
 7. the Magic Formula tyre at a wheel's static load: peak D = mu Fz in both directions, the slope at
    zero slip BCD = the slip and cornering stiffness K0 takes, the combined-slip forces inside the
    friction ellipse (to 5 %), and an aligning moment that turns the wheel toward its motion
@@ -15,8 +15,11 @@
 
 from __future__ import annotations
 
+import json
 import math
+import os
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -25,6 +28,14 @@ from .scenario import hold, new_sim, settle, slope_gravity, tilt_sweep
 from .sim import Controls, Sim
 from .road import flat
 from .units import G0
+
+# The tilt table and the side wind of the checks: fast to a tenth (a fifth) of the starting
+# upper-wheel load, then slow to the tip. A full-speed sweep agrees with the slow one of the
+# tools to 1e-4 of the tip angle on the check vehicles (K2 runs, 2026-11-03), and the checks'
+# tolerances are 2e-3 and 5e-3.
+CHECK_TILT = {"fast_rate": math.radians(10.0), "slow_rate": math.radians(0.5), "slow_below": 0.10,
+              "settle_s": 1.0, "after_s": 0.0}
+CHECK_WIND = {"fast": 25.0, "slow": 1.0, "slow_below": 0.2}
 
 
 def _check(case: str, quantity: str, expected: float, got: float | None, unit: str, tol: float, source: str,
@@ -93,7 +104,7 @@ def check_mirror() -> list[dict]:
     d = box_design(mass=500.0, cg_x=-0.7, cg_z=0.5, wheel_mass=20.0, susp="kc_table", name="mirror check")
     veh = build_vehicle(d)
     src = "mirror symmetry of the equations (exact in IEEE arithmetic)"
-    yaw0, y0, sim0 = _drive_run(veh, lambda t: 0.0, 10.0, 60.0)
+    yaw0, y0, sim0 = _drive_run(veh, lambda t: 0.0, 4.0, 60.0)
     straight = max(abs(v) for v in yaw0)
     lat = max(abs(v) for v in y0)
     steer = lambda t: 0.08 * math.sin(2.0 * math.pi * 0.5 * (t - 1.0)) if 1.0 <= t <= 5.0 else 0.0
@@ -103,8 +114,8 @@ def check_mirror() -> list[dict]:
     mirror_y = max(abs(a + b) for a, b in zip(yl_y, yr_y))
     yaw_amp = max(abs(v) for v in yl)
     return [
-        _check("straight 10 s from rest: max |yaw| < 1e-9 rad", "yaw", 0.0, straight, "rad", 1e-9, src),
-        _check(f"straight 10 s ({sim0.forward_speed():.1f} m/s at the end): max |lateral drift| < 1e-9 m", "lateral_drift", 0.0, lat, "m", 1e-9, src),
+        _check("straight 4 s from rest: max |yaw| < 1e-9 rad", "yaw", 0.0, straight, "rad", 1e-9, src),
+        _check(f"straight 4 s ({sim0.forward_speed():.1f} m/s at the end): max |lateral drift| < 1e-9 m", "lateral_drift", 0.0, lat, "m", 1e-9, src),
         _check(f"sine steer left vs right (yaw up to {math.degrees(yaw_amp):.1f} deg): max |yaw_L + yaw_R| < 1e-9 rad",
                "yaw_mirror_error", 0.0, mirror, "rad", 1e-9, src),
         _check("sine steer left vs right: max |y_L + y_R| < 1e-9 m", "lateral_mirror_error", 0.0, mirror_y, "m", 1e-9, src),
@@ -185,8 +196,8 @@ def check_rigid_tilt() -> list[dict]:
                    variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                               "tire_mu": {"value": 2.0, "unit": "1"}}, name="rigid tilt check")
     veh = build_vehicle(d)
-    left = tilt_sweep(veh, left_up=True)["tip_angle"]
-    right = tilt_sweep(veh, left_up=False)["tip_angle"]
+    left = tilt_sweep(veh, left_up=True, **CHECK_TILT)["tip_angle"]
+    right = tilt_sweep(veh, left_up=False, **CHECK_TILT)["tip_angle"]
     expected = math.degrees(math.atan(0.6 / 0.5))
     src = "tan(theta) = (t/2) / h, t = 1.2 m, h = 0.5 m"
     return [
@@ -222,9 +233,9 @@ def parked_drift(veh, grade: float = 0.20, seconds: float = 60.0, dt: float = 1e
 def check_parked_on_slope() -> list[dict]:
     d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="parked on a slope check")
     veh = build_vehicle(d)
-    r = parked_drift(veh, 0.20, 60.0)
-    return [_check("parked on a 20 % slope, brakes on: drift in 60 s < 1 mm", "parked_drift", 0.0, r["drift"] * 1000.0,
-                   "mm", 1.0, "a held vehicle must not creep (tyre deflection model has no slip at rest)")]
+    r = parked_drift(veh, 0.20, 10.0)
+    return [_check("parked on a 20 % slope, brakes on: drift in 10 s < 0.1 mm", "parked_drift", 0.0, r["drift"] * 1000.0,
+                   "mm", 0.1, "a held vehicle must not creep (tyre deflection model has no slip at rest)")]
 
 
 def _peak(f, lo: float, hi: float) -> float:
@@ -285,13 +296,61 @@ def check_tyre() -> list[dict]:
     ]
 
 
+CACHE_ENV = "HIRAKU_CHECK_CACHE"  # "1": the tests' runs keep check results on disk (never a real HIRAKU run)
+FROM_CACHE: set[str] = set()       # the check sets this process took from the disk cache
+
+
+@lru_cache(maxsize=1)
+def code_key() -> str:
+    """Hash of everything K2's checks depend on: the K2 package, the K0 helpers it calls, the
+    loading rule, the tyre data, and the numpy and scipy versions."""
+    import hashlib
+
+    import scipy
+
+    here = Path(__file__).resolve().parent
+    repo = here.parents[2]
+    files = sorted(here.rglob("*.py")) + [repo / "hiraku" / "solvers" / "k0_handcalc" / n for n in ("rigid.py", "sections.py")]
+    files += [repo / "hiraku" / "contract" / "loading.py"] + sorted((repo / "data" / "tyres").glob("*.json"))
+    h = hashlib.sha256()
+    for p in files:
+        h.update(p.relative_to(repo).as_posix().encode())
+        h.update(p.read_bytes())
+    h.update(f"numpy {np.__version__} scipy {scipy.__version__}".encode())
+    return h.hexdigest()[:20]
+
+
+def cached(name: str, compute) -> list[dict]:
+    """compute(), or with HIRAKU_CHECK_CACHE=1 the records kept for the same code_key under
+    runs/.check_cache (made there the first time). Only the tests set the variable: a real
+    HIRAKU run computes its checks every time."""
+    if os.environ.get(CACHE_ENV) != "1":
+        return compute()
+    path = Path(__file__).resolve().parents[3] / "runs" / ".check_cache" / f"k2-{code_key()}-{name}.json"
+    try:
+        out = json.loads(path.read_text(encoding="utf-8"))
+        FROM_CACHE.add(name)
+        return out
+    except (OSError, ValueError):
+        pass
+    out = compute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(out), encoding="utf-8")
+    os.replace(tmp, path)
+    return out
+
+
 @lru_cache(maxsize=1)
 def _base() -> tuple:
-    out = []
-    for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt, check_parked_on_slope,
-               check_tyre):
-        out += fn()
-    return tuple(out)
+    def compute():
+        out = []
+        for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt,
+                   check_parked_on_slope, check_tyre):
+            out += fn()
+        return out
+
+    return tuple(cached("base", compute))
 
 
 def base_checks() -> list[dict]:

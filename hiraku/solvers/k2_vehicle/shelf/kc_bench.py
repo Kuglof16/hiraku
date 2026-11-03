@@ -7,7 +7,61 @@ import numpy as np
 from .. import kinematics
 from ..checks import _check
 from ..model import build_vehicle
-from .base import K2Tool, P, _res
+from .base import K2Tool, P, Pair, _res
+
+
+def _q(v: float, unit: str) -> dict:
+    return {"value": float(v), "unit": unit}
+
+
+def k0_inputs(table: dict) -> dict:
+    """The inputs of K0's kc.roll_center_height and kc.aligning_steer (by formula id) from a K&C
+    table: its hardpoints (left wheel) and its contact point at the design travel; k_t when the
+    table has its bushings."""
+    hp = kinematics.Hardpoints.from_json(table["hardpoints_mm"])
+    li, ui = 0.5 * (hp.lca_front + hp.lca_rear), 0.5 * (hp.uca_front + hp.uca_rear)
+    r0 = min(table["rows"], key=lambda r: abs(r["travel_mm"]))
+    rc = {"y_li": _q(li[1] * 1000.0, "mm"), "z_li": _q(li[2] * 1000.0, "mm"),
+          "y_lo": _q(hp.lca_outer[1] * 1000.0, "mm"), "z_lo": _q(hp.lca_outer[2] * 1000.0, "mm"),
+          "y_ui": _q(ui[1] * 1000.0, "mm"), "z_ui": _q(ui[2] * 1000.0, "mm"),
+          "y_uo": _q(hp.uca_outer[1] * 1000.0, "mm"), "z_uo": _q(hp.uca_outer[2] * 1000.0, "mm"),
+          "y_c": _q(r0["contact_mm"][1], "mm"), "z_c": _q(r0["contact_mm"][2], "mm")}
+    axis = (hp.uca_outer - hp.lca_outer) / np.linalg.norm(hp.uca_outer - hp.lca_outer)
+    nt = (hp.tie_outer - hp.tie_inner) / np.linalg.norm(hp.tie_outer - hp.tie_inner)
+    arm = abs(float(np.cross(hp.tie_outer - hp.lca_outer, nt) @ axis))
+    steer = {"k_z": _q(axis[2], "1"), "a": _q(arm * 1000.0, "mm")}
+    if "bushings" in table:
+        steer["k_t"] = _q(table["bushings"]["tie_rod_N_per_mm"], "N/mm")
+    return {"kc.roll_center_height": rc, "kc.aligning_steer": steer}
+
+
+def _mount_checks() -> list[dict]:
+    """Mount forces of kinematics.mount_forces on a layout with a closed-form answer: arms level and
+    parallel in front view (lower arm 400 mm, its damper 300 mm out, both vertical), the kingpin
+    upright with the ball joints 300 mm apart, the contact 200 mm below the lower one."""
+    a = np.array
+    hp = kinematics.Hardpoints(a([0.1, 0.2, 0.2]), a([-0.1, 0.2, 0.2]), a([0.0, 0.6, 0.2]),
+                               a([0.1, 0.3, 0.5]), a([-0.1, 0.3, 0.5]), a([0.0, 0.6, 0.5]),
+                               a([-0.12, 0.25, 0.35]), a([-0.12, 0.6, 0.35]), a([0.0, 0.65, 0.3]),
+                               a([0.0, 1.0, 0.0]), 0.3, a([0.0, 0.5, 0.2]), a([0.0, 0.5, 0.6]))
+    sol = dict(kinematics.DoubleWishboneBench(hp).solve(0.0), contact=a([0.0, 0.6, 0.0]))
+    up = kinematics.mount_forces(hp, sol, a([0.0, 0.0, 2000.0]))
+    side = kinematics.mount_forces(hp, sol, a([0.0, 800.0, 0.0]))
+    gen = kinematics.generic_sla(a([0.0, 0.55, 0.3]), 0.3)
+    f = a([300.0, -900.0, 2500.0])
+    r = kinematics.mount_forces(gen, kinematics.solve_at_travel(gen, 0.03), f)
+    total = sum(r[m] for m in kinematics.MOUNTS)
+    return [
+        _check("vertical 2 kN at the contact, level parallel arms: the damper carries it by the lever", "damper_force",
+               -2000.0 * 0.4 / 0.3, up["damper_tension"], "N", 1e-9,
+               "moment about the lower arm's axis: F_z L = D a (L = 400 mm to the ball joint, a = 300 mm to the damper)"),
+        _check("lateral 800 N at the contact 200 mm below the lower ball joint: the upper arm's pull", "upper_arm_force",
+               800.0 * 0.2 / 0.3, float(side["ball_joint_upper"][1]), "N", 1e-9,
+               "moment about the lower ball joint: F_y c = F_u h (c = 200 mm, h = 300 mm between the ball joints)"),
+        _check("generic layout at 30 mm bump, tyre force (300, -900, 2500) N: the forces on the body add up to it",
+               "mount_force_sum_error", 0.0, float(np.linalg.norm(total - f)), "N", 1e-6,
+               "balance of the whole corner: the body takes what the road gives"),
+    ]
 
 
 def _series(channel: str, unit: str, x_name: str, x_unit: str, xs, ys) -> dict:
@@ -27,8 +81,8 @@ class KcBenchTool(K2Tool):
     Results: roll_center_height (mm, design travel), camber_at_bump / camber_at_rebound and
     toe_at_bump / toe_at_rebound (deg, change at the ends of the table), and the compliance as
     the change at a round load: toe_at_1kN_lateral, camber_at_1kN_lateral,
-    toe_at_1kN_longitudinal, camber_at_1kN_longitudinal (deg per 1 kN), toe_at_100Nm_aligning
-    (deg per 100 N m).
+    toe_at_1kN_longitudinal, camber_at_1kN_longitudinal (deg per 1 kN), toe_at_aligning_moment
+    (deg at the load case's aligning_moment).
     series: against x = travel (mm): camber, toe, roll_center_height, track_change (the wheel
     centre's y, mm); against x = lateral_force (kN): toe_lateral, camber_lateral; against
     x = longitudinal_force (kN): toe_longitudinal, camber_longitudinal; against
@@ -43,6 +97,13 @@ class KcBenchTool(K2Tool):
               P("lateral_force", "kN", 3.0, "the lateral force sweep goes from - to + this"),
               P("longitudinal_force", "kN", 3.0, "the longitudinal force sweep goes from - to + this"),
               P("aligning_moment", "N*m", 100.0, "the aligning moment sweep goes from - to + this"))
+    pairs = (Pair("roll_center_height", "kc.roll_center_height", "h_rc",
+                  note="inputs: the table's hardpoints and its contact point at the design travel "
+                       "(hiraku.solvers.k2_vehicle.shelf.kc_bench.k0_inputs); K2 takes the roll centre from the "
+                       "contact point's motion over the table"),
+             Pair("toe_at_aligning_moment", "kc.aligning_steer", "toe", (("M", "aligning_moment"),),
+                  "k_z, a and k_t from k0_inputs; K0 lets only the tie rod give way, K2 also the arm bushings, "
+                  "so K2 turns more"))
 
     def own_checks(self) -> list[dict]:
         out = []
@@ -78,6 +139,7 @@ class KcBenchTool(K2Tool):
         worst = max(abs(c2[k] / c1[k] - 0.5) for k in kinematics.COMPLIANCE_KEYS if abs(c1[k]) > 0.0)
         out.append(_check("all joint stiffnesses doubled: compliance halves", "compliance_ratio_error", 0.0, worst, "1",
                           2e-3, "linear springs; the stiff ball joints and wheel pad stay the same, so a little off"))
+        out += _mount_checks()
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:
@@ -112,11 +174,12 @@ class KcBenchTool(K2Tool):
         notes = list(veh.assumptions)
         if all(c in r0 for c in cols.values()):
             per = {k: r0[c] for k, c in cols.items()}  # deg per kN, deg per kN m
+            moment = self.q(lp, "aligning_moment", "N*m")
             res += [_res("toe_at_1kN_lateral", per["toe_per_fy"], "deg"),
                     _res("camber_at_1kN_lateral", per["camber_per_fy"], "deg"),
                     _res("toe_at_1kN_longitudinal", per["toe_per_fx"], "deg"),
                     _res("camber_at_1kN_longitudinal", per["camber_per_fx"], "deg"),
-                    _res("toe_at_100Nm_aligning", per["toe_per_mz"] * 0.1, "deg")]
+                    _res("toe_at_aligning_moment", per["toe_per_mz"] * moment / 1000.0, "deg", f"{moment:g} N*m")]
             for name, unit, top, keys in (("lateral_force", "kN", self.q(lp, "lateral_force", "N") / 1000.0, ("fy",)),
                                           ("longitudinal_force", "kN", self.q(lp, "longitudinal_force", "N") / 1000.0,
                                            ("fx",)),

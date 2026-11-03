@@ -35,6 +35,8 @@ Record = dict[str, Any]
 
 MATERIALS = Path(__file__).resolve().parents[2] / "data" / "materials" / "materials.json"
 MIN_STATION_GAP_MM = 100.0  # stations closer than this would make members shorter than the joints (assumption)
+GUSSET_LEG_MM = 60.0  # gusset leg set by CHOICES joints = gusset unless given (assumption: 1.5 x the cross member width)
+GUSSET_LEG_MIN_MM = 30.0  # a gusset leg that is not 0 is at least this (assumption: smaller plates than the joint)
 
 
 class DesignGenError(ValueError):
@@ -152,7 +154,25 @@ VARIABLES: dict[str, Var] = {
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
                                      "as a multiple of the wheel's static load"),
     "bump_stop_factor": Var("1", 10.0, meaning="assumption: bump and rebound stop stiffness, as a multiple of the spring"),
+    # joint reinforcement at the T joints (where a cross member ends on the side of a rail): the shape
+    # follows from these variables alone (CHOICES["joints"] is a short way to set them). Written into
+    # design.variables only when changed from their defaults, so a design without reinforcement is
+    # the same as before these variables existed.
+    "gusset_leg": Var("mm", 0.0, 0.0, 150.0, "gusset leg along the rail and along the cross member; 0: no gussets, "
+                      f"else {GUSSET_LEG_MIN_MM:g} to 150 mm: four triangular plates at every T joint, ahead of and "
+                      "behind the cross member on its upper and lower wall (CHOICES joints = gusset sets "
+                      f"{GUSSET_LEG_MM:g} mm, 1.5 x the cross member width, an assumption)"),
+    "gusset_thickness": Var("mm", 2.3, 1.6, 4.5, "gusset plate thickness (used when gusset_leg > 0); the default (the "
+                            "tube wall) is an assumption"),
+    "cross_members_through": Var("1", 0.0, 0.0, 1.0, "1: the cross members pass through a hole in the rail's inner "
+                                 "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
+                                 "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
+                                 "model's members are unchanged; 0: they end on the rail's side"),
 }
+SWITCHES = ("cross_members_through",)  # 0 or 1
+# Reinforcement variables, written into design.variables only when one of their group differs from its default.
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
+LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
     "tyre_relaxation_length": ("mm", "assumption: the tyre's relaxation length, taken as the wheel radius"),
@@ -208,13 +228,65 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(str(e)) from None
         if var.revisable and not var.lo <= val <= var.hi:
             raise DesignGenError(f"{name} = {val:g} {var.unit} is outside {var.lo:g} to {var.hi:g} {var.unit}")
+        if name in SWITCHES and val not in (0.0, 1.0):
+            raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
+        if name == "gusset_leg" and 0.0 < val < GUSSET_LEG_MIN_MM:
+            raise DesignGenError(f"gusset_leg is 0 (no gussets) or {GUSSET_LEG_MIN_MM:g} to {var.hi:g} mm, got {val:g}")
         vals[name] = val
     return vals
 
 
+def choice_values(choices: dict | None) -> dict[str, Record]:
+    """The variables a set of CHOICES stands for ({"joints": "gusset"} -> gusset_leg 60 mm, cross_members_through 0).
+    A size it sets (CHOICE_SIZES) may be given as a value too; the switches may not."""
+    out: dict[str, Record] = {}
+    for k, opt in (choices or {}).items():
+        if k not in CHOICES:
+            raise DesignGenError(f"no choice {k!r}; the choices: {', '.join(CHOICES)}")
+        if opt not in CHOICES[k]:
+            raise DesignGenError(f"{k} must be one of {', '.join(CHOICES[k])}, got {opt!r}")
+        out.update({name: _q(v, VARIABLES[name].unit) for name, v in JOINT_VALUES[opt].items()})
+    return out
+
+
+def apply_choices(choices: dict | None, values: dict) -> dict:
+    """values with the variables the choices stand for: a size given in values (CHOICE_SIZES) is kept,
+    a switch given in values is an error. The result must still be the chosen option."""
+    set_by = choice_values(choices)
+    clash = sorted(k for k in set_by if k in values and k not in CHOICE_SIZES)
+    if clash:
+        raise DesignGenError(f"{', '.join(clash)} come from the choices {choices}; do not give them as values")
+    out = {**set_by, **values}
+    for k, opt in (choices or {}).items():
+        got = _joints({n: (q["value"] if isinstance(q, dict) else q) for n, q in out.items()})
+        if got != opt:
+            raise DesignGenError(f"{k} = {opt} does not go with the values given (they make {got}); "
+                                 f"a gusset needs gusset_leg > 0")
+    return out
+
+
+def _joints(v: dict) -> str:
+    """butt / gusset / through (or gusset+through) from the variables (missing ones at their defaults)."""
+    leg = float(v.get("gusset_leg", VARIABLES["gusset_leg"].default))
+    through = float(v.get("cross_members_through", 0.0)) == 1.0
+    return {(False, False): "butt", (True, False): "gusset", (False, True): "through"}.get((leg > 0, through),
+                                                                                        "gusset+through")
+
+
+def choices_of(design: Record) -> dict[str, str]:
+    """The CHOICES a design was built with (from its variables)."""
+    return {"joints": _joints({k: q["value"] for k, q in values_of(design).items()})}
+
+
 def values_of(design: Record) -> dict[str, Record]:
-    """The generator variables a design carries (design.variables), as quantities."""
-    return {k: v for k, v in design.get("variables", {}).items() if k in VARIABLES}
+    """The generator variables a design carries (design.variables), as quantities. A design from before
+    gusset_leg alone set the gussets (variable gussets) is read as the same shape: gussets 0 -> gusset_leg 0."""
+    now = design.get("variables", {})
+    out = {k: v for k, v in now.items() if k in VARIABLES}
+    if "gussets" in now and float(now["gussets"]["value"]) == 0.0:
+        out.pop("gusset_leg", None)
+        out.pop("gusset_thickness", None)
+    return out
 
 
 def _q(v: float, unit: str) -> Record:
@@ -233,7 +305,15 @@ OCCUPANT_BACK_MM = 55.0  # the occupant's mass box centre this far behind the se
 CARGO_SHORT_MM = 50.0  # the cargo box is this much shorter than the deck
 TITLE = "2 人乗り 4 輪のはしご形フレームの電動車 (前輪で操舵、後輪で駆動、右ハンドル)"
 DESCRIPTION = "2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive"
-CHOICES: dict[str, list[str]] = {}  # nothing to choose yet beyond the variables
+# How the T joints (a cross member ending on the side of a rail) are made: butt (the cross member
+# welded on the rail's side, the first version), gusset (plus triangular plates, gusset_leg and
+# gusset_thickness) or through (the cross member through the rail's inner wall to its outer wall).
+# A shortcut for the variables in JOINT_VALUES; the variables alone give the same design.
+CHOICES: dict[str, tuple[str, ...]] = {"joints": ("butt", "gusset", "through")}
+JOINT_VALUES = {"butt": {"gusset_leg": 0.0, "cross_members_through": 0.0},
+                "gusset": {"gusset_leg": GUSSET_LEG_MM, "cross_members_through": 0.0},
+                "through": {"gusset_leg": 0.0, "cross_members_through": 1.0}}
+CHOICE_SIZES = ("gusset_leg",)  # set by a choice, but may be given as a value with it
 
 
 def applies(flags: dict) -> bool:
@@ -271,9 +351,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     cross = frame.section(*rect_tube(v["cross_b"], v["cross_h"], v["cross_t"]))
     frame.ladder(stations, rail_y, rail_z, rail, cross)
 
-    # running gear: front steer, rear drive, coil springs
+    # running gear: front steer, rear drive, double wishbones with coil springs (K2's builtin K&C table;
+    # the spring rate is the wheel rate along the wheel centre's vertical travel)
     def spring(rate: float) -> Suspension:
-        return Suspension("spring", rate, 1.2, v["suspension_travel"])
+        return Suspension("kc_table", rate, 1.2, v["suspension_travel"], "builtin:double_wishbone")
 
     supports = four_wheels(wb, track, r, ww, spring(v["front_spring_rate"]), spring(v["rear_spring_rate"]))
 
@@ -324,9 +405,25 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                      (250.0, 120.0, 200.0), 8.0),
                 x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
     lay.reorder(PART_ORDER)
+    material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
+    rho = float(material["density_kg_m3"])
+    tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
+    if v["gusset_leg"] > 0:
+        for st in tee:
+            for side in "LR":
+                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho))
+    if v["cross_members_through"] == 1:
+        if v["cross_h"] - v["cross_t"] >= v["rail_h"] - v["rail_t"]:
+            raise DesignGenError("cross_members_through = 1 needs cross members lower than the rails "
+                                 "(cross_h - cross_t < rail_h - rail_t), else their walls would lie in the rails' walls")
+        for st in tee:
+            for side in "LR":
+                lay.parts.append(frame.through_part(f"{side}{st}", f"cross_{st}", rho))
 
+    written = {k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
-    variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items() if k not in variables})
+    variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items()
+                      if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
     variables["tyre_relaxation_length"] = _q(r, "mm")
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
     return {
@@ -338,5 +435,5 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "supports": supports,
         "parts": lay.parts,
         **frame.part(),
-        "materials": {"stkr400": json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]},
+        "materials": {"stkr400": material},
     }

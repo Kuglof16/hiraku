@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
+from .. import kinematics
 from ..checks import _check
 from ..drive import SpeedController, controls, start_rolling
 from ..model import DesignError, box_design, build_vehicle
@@ -65,7 +68,8 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
                         "fn": [(o["n"][k][0] * o["ntot"][k], o["n"][k][1] * o["ntot"][k], o["n"][k][2] * o["ntot"][k])
                                for k in range(sim.n)],
                         "acc": tuple(o["acc"]), "cg": sim.cg_world().tolist(), "t": sim.t, "torque": total,
-                        "g": list(sim.g)}
+                        "g": list(sim.g), "s": list(sim.s), "rot": sim.rotation().tolist(),
+                        "origin": sim.design_origin().tolist()}
                 if rec is not None:
                     rec.snap = []
                     rec.keep_snapshot()
@@ -85,6 +89,27 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
             "x_step": x_step + run_up, "road": road, "recorder": rec}
 
 
+def mount_vectors(veh, snap: dict) -> list:
+    """The forces each K&C corner puts on the body at its mounts (kinematics.corner_mount_forces of
+    the corner's tyre force, its normal included, at the snapshot's travel), as joint vectors at
+    '<support>.<hardpoint key>': the mount's point and the force the body receives, world axes.
+    A corner whose hardpoints have no damper points gives none."""
+    rot = np.asarray(snap["rot"])
+    origin = np.asarray(snap["origin"])
+    out = []
+    for i, c in enumerate(veh.corners):
+        if c.table is None or "damper_lower" not in c.table["hardpoints_mm"] or snap["n"][i] <= 0.0:
+            continue
+        f_body = rot.T @ np.asarray(snap["f"][i])
+        contact = rot.T @ (np.asarray(snap["p"][i]) - origin)  # where the tyre touches, design frame
+        for mount, (point, force) in kinematics.corner_mount_forces(c.table, c.side, snap["s"][i], f_body,
+                                                                    contact).items():
+            out.append({"kind": "joint", "at": f"{c.id}.{mount}",
+                        "origin_mm": [float(x) * 1000.0 for x in origin + rot @ point],
+                        "vector_N": [float(x) for x in rot @ force]})
+    return out
+
+
 class StepClimbTool(K2Tool):
     """Step climb driven in K2 (step_climb_dynamic; P1, feeds R1). The analysis
     department's step_climb is the hand-calculation balance -> K1; this one drives over
@@ -101,7 +126,8 @@ class StepClimbTool(K2Tool):
     push of run 1 did not lift the stepping wheels, e.g. the driven wheels spun first; the
     *_wheel_* values are then those of the steepest push reached, not of a lift-off),
     climbed (1, run 2; where says
-    "grip" or "torque" when it did not), peak_wheel_force (N, run 2, where),
+    "grip" or "torque" when it did not), climbable (1: run 1 or run 2 got the stepping wheels
+    onto the step), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
     series, vectors and scene all come from run 1: the series run from the standstill
     against the step until 1.5 s after the lift-off (the torque of the lift-off held), the
@@ -207,6 +233,7 @@ class StepClimbTool(K2Tool):
             inertia = [-(sum(snap["f"][i][k] for i in range(len(snap["f"]))) + m * snap["g"][k]) for k in range(3)]
             vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in snap["cg"]],
                             "vector_N": [float(x) for x in inertia]})
+            vectors += mount_vectors(veh, snap)
         if not crawl["lifted"]:
             notes.append("pushing with a growing torque did not lift the stepping wheels"
                          + (" (the driven wheels spun: grip)" if crawl["slip"] else ""))
@@ -249,7 +276,9 @@ class StepClimbTool(K2Tool):
                 slipping = any(abs(sim.om[i] * veh.corners[i].radius - sim.forward_speed()) > 0.2 for i in driven)
                 reason = "grip" if slipping or motor is None else "torque"
                 break
+        # climbable: either run gets the stepping wheels onto the step (K0's step_climb.climb_limit)
         res += [_res("climbed", 1.0 if t_climb is not None else 0.0, "1", reason),
+                _res("climbable", 1.0 if t_climb is not None or crawl["lifted"] else 0.0, "1"),
                 _res("peak_wheel_force", peak, "N", peak_id), _res("peak_vertical_wheel_force", peak_z, "N")]
         if t_climb is not None:
             res.append(_res("climb_time", t_climb, "s"))

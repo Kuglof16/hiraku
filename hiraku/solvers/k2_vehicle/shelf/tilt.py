@@ -6,7 +6,7 @@ import math
 
 from scipy.optimize import brentq
 
-from ..checks import _check
+from ..checks import CHECK_TILT, _check
 from ..model import box_design, build_vehicle
 from ..scenario import tilt_sweep
 from ..units import G0
@@ -68,7 +68,7 @@ class TiltTool(K2Tool):
                        variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="tilt check, springs")
         veh = build_vehicle(d)
-        r = tilt_sweep(veh, left_up=True)
+        r = tilt_sweep(veh, left_up=True, **CHECK_TILT)
         got = None if r["tip_angle"] is None else math.degrees(r["tip_angle"])
         k_roll = 4.0 * 20e3 * 0.6 ** 2
         expected = math.degrees(tilt_closed_form(500.0, 0.5, 80.0, 0.3, 1.2, k_roll, 4.0 * 20e3))

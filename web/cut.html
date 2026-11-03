@@ -88,6 +88,75 @@
   .grid-tile .tag small { font-size: 1em; font-weight: 400; margin-left: 4px; font-family: Consolas, monospace; }
   .grid-tile .tag.over { color: #c8402a; border-color: #c8402a; }
   .grid-tile .asm { position: absolute; box-sizing: border-box; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  /* N07 (js/cut_n07.js): sizes and colours from layout.json n07 (set inline) */
+  .n07-view { position: absolute; box-sizing: border-box; overflow: hidden; }
+  .n07-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n07-mark { position: absolute; box-sizing: border-box; border: 3px solid; border-radius: 50%; pointer-events: none; }
+  .n07-legend { position: absolute; box-sizing: border-box; border: 2px solid; border-radius: 12px; padding: 18px 16px; overflow: hidden; display: flex; flex-direction: column; }
+  .n07-legend h3 { margin: 0 0 18px; white-space: nowrap; }
+  .n07-legend p { margin: 0 0 14px; color: #5c5a54; }
+  .n07-legend .scale { position: relative; flex: 1 1 auto; min-height: 120px; max-height: 420px; margin: 0.6em 0 26px; }
+  .n07-legend .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 26px; border: 1.5px solid #1b1a17; box-sizing: border-box; }
+  .n07-legend .ticks { position: absolute; left: 36px; right: 0; top: 0; bottom: 0; font-family: Consolas, monospace; }
+  .n07-legend .ticks span { position: absolute; left: 0; transform: translateY(-50%); white-space: nowrap; }
+  .n07-legend .sw { display: inline-block; width: 16px; height: 16px; vertical-align: -2px; margin-right: 6px; }
+  .n07-legend .rows { margin-bottom: 14px; }
+  .n07-legend .row { color: #8a857a; margin-bottom: 10px; }
+  .n07-legend .row b, .n07-legend .row span { display: block; font-weight: 400; }
+  .n07-legend .row span { font-family: Consolas, monospace; }
+  .n07-legend .row.on { color: #1b1a17; }
+  .n07-legend .row.on b, .n07-legend .row.on span { font-weight: 700; }
+  .n07-legend .src { margin: 0; }
+  .n07-label { position: absolute; color: #1b1a17; font-weight: 700; line-height: 1.2; background: rgba(251, 249, 244, 0.88); border: 1.5px solid #c9c3b6; border-radius: 8px; padding: 6px 14px; }
+  /* N03 (js/cut_n03.js) and N06 (js/cut_n06.js): sizes and colours from layout.json n03 / n06 (set inline) */
+  .n03-view { position: absolute; box-sizing: border-box; overflow: hidden; }
+  .n03-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n03-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
+  .n03-popup { position: absolute; box-sizing: border-box; overflow: hidden; box-shadow: 0 6px 18px rgba(27, 26, 23, 0.18); }
+  .n03-popup h3 { margin: 0; line-height: 1; font-weight: 700; }
+  .n03-popup .chart { display: block; }
+  .n03-popup .none { margin: 0; color: #a8a49a; }
+  .n06-tile { position: absolute; box-sizing: border-box; overflow: hidden; transform-origin: 50% 50%; }
+  .n06-tile canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n06-tile b { position: absolute; font-weight: 700; line-height: 1.15; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile b .why { font-weight: 700; }
+  .n06-tile .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile .none { position: absolute; color: #a8a49a; }
+  /* N17 (js/cut_n17.js): box, sizes and colours from layout.json n17 (set inline); every text is at least the page's own size */
+  .n17-page { position: absolute; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; border: 2px solid; border-radius: 12px; line-height: 1.35; }
+  .n17-page small { font-size: 1em; font-weight: 400; color: #5c5a54; }
+  .n17-head { flex: none; border-bottom: 2px solid #c9c3b6; padding-bottom: 0.5em; margin-bottom: 0.6em; }
+  .n17-kicker { color: #5c5a54; }
+  .n17-head h2 { margin: 0.1em 0 0.3em; font-weight: 700; line-height: 1.25; }
+  .n17-chips { display: flex; flex-wrap: wrap; gap: 0.3em 1.2em; font-weight: 700; }
+  .n17-page .ok { color: #2f7d4f; }
+  .n17-page .miss { color: #c8402a; }
+  .n17-page .wait { color: #8a857a; }
+  .n17-body { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .n17-domain { margin-bottom: 0.7em; }
+  .n17-domain h3 { margin: 0 0 0.25em; font-size: 1em; font-weight: 700; }
+  .n17-line { font-weight: 400; }
+  .n17-group { margin: 0.2em 0 0.35em 1em; }
+  .n17-group h4 { margin: 0 0 0.1em; font-size: 1em; font-weight: 400; color: #5c5a54; }
+  .n17-bar { display: grid; grid-template-columns: minmax(0, 1fr) 34% 5em; align-items: center; gap: 0.8em; padding: 0.05em 0.3em; border-radius: 6px; }
+  .n17-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.5; }
+  .n17-bar i { position: relative; display: block; height: 0.7em; background: #ece7dc; border-radius: 3px; }
+  .n17-bar i b { position: absolute; left: 0; top: 0; bottom: 0; background: #2b59c3; border-radius: 3px; }
+  .n17-bar i.mid::after { content: ""; position: absolute; left: 50%; top: -0.15em; bottom: -0.15em; border-left: 2px solid #8a857a; }
+  .n17-bar.sens i b { background: #8e6bbf; }
+  .n17-num { text-align: right; font-family: Consolas, monospace; }
+  .n17-note { margin: 0.15em 0 0.3em 1em; color: #5c5a54; }
+  .n17-dropped { margin-left: 0; }
+  .n17-next { flex: none; margin-top: 0.5em; padding: 0.5em 0.8em; border: 2px dashed #c9c3b6; border-radius: 10px; transition: none; }
+  .n17-next h3 { margin: 0 0 0.2em; font-size: 1em; font-weight: 700; color: #5c5a54; }
+  .n17-next ul { margin: 0; padding: 0; list-style: none; }
+  .n17-next li { margin: 0.1em 0; }
+  .n17-next li b { margin-right: 0.5em; }
+  .n17-next li small { display: block; }
+  .n17-next.lit { border: 2px solid #d9861c; background: #fff3dc; box-shadow: 0 0 0 4px rgba(217, 134, 28, 0.25), 0 0 28px rgba(217, 134, 28, 0.55); }
+  .n17-next.lit h3 { color: #b0650c; }
+  .n17-bar.lit { background: #fff3dc; box-shadow: 0 0 0 2px #d9861c, 0 0 18px rgba(217, 134, 28, 0.5); }
+  .n17-bar.lit i b { background: #d9861c; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>
