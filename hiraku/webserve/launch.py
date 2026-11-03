@@ -37,6 +37,8 @@ REQUIREMENTS_DIR = REPO_DIR / "data" / "requirements"
 KEY_NAME = "ANTHROPIC_API_KEY"
 MODES = ("scripted", "claude")
 _FILE_RE = re.compile(r"^[A-Za-z0-9_.-]+\.ya?ml$")
+REQUESTS_DIR = "_requests"  # under the runs folder: requests settled in A1/A2 (hiraku.intake.request)
+_REQUEST_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 _RUN_FOLDER = "run folder:"
 
 
@@ -70,6 +72,17 @@ def put_inbox(run_dir: Path, kind: str, fields: dict[str, Any]) -> str:
     return f"{INBOX_DIR}/{name}"
 
 
+def check_designable(requirements: Path) -> None:
+    """Refuse a request whose product no kind of design suits (the run could not make version 1)."""
+    import yaml
+
+    from hiraku.designgen import archetypes
+
+    flags = (yaml.safe_load(requirements.read_text(encoding="utf-8")) or {}).get("flags") or {}
+    if not archetypes(flags):
+        raise LaunchError(422, "この製品の設計の作り方がまだ無いので、走らせられません (製品の性質に合う設計の型が無い)")
+
+
 def read_requirements(path: Path) -> dict[str, Any]:
     """What the screen shows about a requirements file (its words and limits)."""
     from hiraku.catalog import load_requirements
@@ -79,8 +92,10 @@ def read_requirements(path: Path) -> dict[str, Any]:
             "cost_limit_usd": r.get("cost_limit_usd"), "round_limit": r.get("round_limit")}
 
 
-def run_command(requirements: Path, mode: str, runs_dir: Path) -> list[str]:
+def run_command(requirements: Path, mode: str, runs_dir: Path, intake_events: Path | None = None) -> list[str]:
     cmd = [sys.executable, "-u", "-m", "hiraku", "run", str(requirements), "--runs", str(runs_dir)]
+    if intake_events is not None:  # a request settled in A1/A2: the run emits these intake events as they are
+        cmd += ["--intake-events", str(intake_events)]
     return cmd + (["--scripted"] if mode == "scripted" else [])
 
 
@@ -133,10 +148,29 @@ class Launcher:
             raise LaunchError(404, f"no requirements file {name}")
         return path
 
-    def start(self, name: Any, mode: Any) -> dict[str, Any]:
+    @property
+    def requests_dir(self) -> Path:
+        """Where A1/A2 requests are saved (hiraku.intake.request.handle_answer): <id>/requirements.yaml, intake.json."""
+        return self.runs_dir / REQUESTS_DIR
+
+    def _request_of(self, request_id: Any) -> tuple[Path, Path]:
+        if not isinstance(request_id, str) or not _REQUEST_RE.match(request_id):
+            raise LaunchError(400, "request must be the id of a request saved from the screen")
+        folder = self.requests_dir / request_id
+        req, events = folder / "requirements.yaml", folder / "intake.json"
+        if not (req.is_file() and events.is_file()):
+            raise LaunchError(404, f"no saved request {request_id}")
+        return req, events
+
+    def start(self, name: Any, mode: Any, request: Any = None) -> dict[str, Any]:
         if mode not in MODES:
             raise LaunchError(400, f"mode must be one of {', '.join(MODES)}")
-        path = self._path_of(name)
+        events = None
+        if request is not None:
+            path, events = self._request_of(request)
+            check_designable(path)
+        else:
+            path = self._path_of(name)
         if mode == "claude" and not self.claude_ready():
             raise LaunchError(403, f"{KEY_NAME} is not set where this server runs; start the server in a window that has it")
         with self.lock:
@@ -145,10 +179,11 @@ class Launcher:
             self.runs_dir.mkdir(parents=True, exist_ok=True)
             before = {p.name for p in self.runs_dir.iterdir()}
             env = {**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
-            proc = subprocess.Popen(self.command(path, mode, self.runs_dir), cwd=str(REPO_DIR), env=env,
+            cmd = self.command(path, mode, self.runs_dir, events) if events is not None else self.command(path, mode, self.runs_dir)
+            proc = subprocess.Popen(cmd, cwd=str(REPO_DIR), env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                     text=True, encoding="utf-8", errors="replace")
-            info: dict[str, Any] = {"run_id": None, "mode": mode, "requirements": name,
+            info: dict[str, Any] = {"run_id": None, "mode": mode, "requirements": name if request is None else f"{REQUESTS_DIR}/{request}",
                                     "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
             tail: deque[str] = deque(maxlen=20)
             threading.Thread(target=self._read, args=(proc, info, tail), daemon=True).start()

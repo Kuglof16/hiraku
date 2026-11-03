@@ -52,10 +52,11 @@
   .n01-card .miss { color: #c8402a; }
   .n01-card table { width: 100%; border-collapse: collapse; }
   .n01-card td:last-child { text-align: right; font-family: Consolas, monospace; }
-  .n01-legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
-  .n01-legend i { display: block; height: 14px; border-radius: 3px; }
-  .n01-legend span:nth-of-type(2) { grid-column: 2; justify-self: start; }
-  .n01-legend span:nth-of-type(3) { grid-column: 2; justify-self: end; margin-top: -1.2em; }
+  .n01-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
+  .n01-legend span:first-child { grid-column: 1 / -1; }
+  .n01-legend i { display: block; height: 14px; border-radius: 3px; grid-column: 1 / -1; }
+  .n01-legend span:nth-of-type(2) { justify-self: start; }
+  .n01-legend span:nth-of-type(3) { justify-self: end; white-space: nowrap; }
   .n01-note { color: #5c5a54; margin: 0; }
   /* N02: sizes and colours from layout.json n02 (set inline) */
   .n02-pane { position: absolute; box-sizing: border-box; overflow: hidden; }
@@ -116,12 +117,12 @@
   .n03-popup h3 { margin: 0; line-height: 1; font-weight: 700; }
   .n03-popup .chart { display: block; }
   .n03-popup .none { margin: 0; color: #a8a49a; }
-  .n06-tile { position: absolute; box-sizing: border-box; overflow: hidden; transform-origin: 50% 50%; }
-  .n06-tile canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
-  .n06-tile b { position: absolute; font-weight: 700; line-height: 1.15; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
-  .n06-tile b .why { font-weight: 700; }
-  .n06-tile .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
-  .n06-tile .none { position: absolute; color: #a8a49a; }
+  .n06-tile, .n06-big { position: absolute; box-sizing: border-box; overflow: hidden; transform-origin: 50% 50%; }
+  .n06-tile canvas, .n06-big canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .n06-tile b, .n06-big b { position: absolute; font-weight: 700; line-height: 1.15; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile b .why, .n06-big b .why { font-weight: 700; }
+  .n06-tile .mark, .n06-big .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+  .n06-tile .none, .n06-big .none { position: absolute; color: #a8a49a; }
   /* N17 (js/cut_n17.js): box, sizes and colours from layout.json n17 (set inline); every text is at least the page's own size */
   .n17-page { position: absolute; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; border: 2px solid; border-radius: 12px; line-height: 1.35; }
   .n17-page small { font-size: 1em; font-weight: 400; color: #5c5a54; }
@@ -157,6 +158,23 @@
   .n17-next.lit h3 { color: #b0650c; }
   .n17-bar.lit { background: #fff3dc; box-shadow: 0 0 0 2px #d9861c, 0 0 18px rgba(217, 134, 28, 0.5); }
   .n17-bar.lit i b { background: #d9861c; }
+  /* the story check's note (js/cut.js checkStory): position and size set inline from layout.json */
+  .story-over { position: absolute; margin: 0; z-index: 10; white-space: nowrap; color: #c8402a; background: rgba(251, 249, 244, 0.92); border-radius: 4px; padding: 0 6px; }
+  /* N06: the ✕ is inside the tile's one tag */
+  .n06-tile b .mark, .n06-big b .mark { position: static; background: none; padding: 0; margin: 0; border-radius: 0; }
+  .n01-card h3 .num { font-weight: 700; }
+  /* the large words: sizes set inline (from the boxes in layout.json) */
+  .n01-card .verdict { margin: 0.1em 0 0; font-weight: 700; line-height: 1.1; }
+  .n02-pane b .verdict { display: block; margin-top: 0.15em; line-height: 1.1; }
+  .n02-pane .ok { color: #2f7d4f; }
+  .n02-pane .miss { color: #c8402a; }
+  .n03-reading { font-weight: 700; line-height: 1.1; white-space: nowrap; color: #1b1a17; }
+  .n07-label .fixed { font-weight: 700; }
+  /* N16's list in a narrow column: the checks on their own line under the step's name */
+  .n16-steps .asm-steps.compact .nm { max-width: calc(100% - 2em); }
+  .n16-steps .asm-steps.compact .cks { float: none; display: flex; margin-left: 1.8em; }
+  .n17-change { display: block; font-weight: 700; line-height: 1.2; margin: 0.1em 0; color: #1b1a17; }
+  .grid-header .num { font-weight: 700; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>

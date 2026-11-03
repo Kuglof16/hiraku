@@ -8,15 +8,30 @@
 // n17. A missing key is named on the page.
 //
 // times: before lead_s the page is not shown; from light_s the next step is lit.
+//
+// The story (layout.json story): the next step is the one place to read. Its block is the
+// cut's one tag and holds one change (the report's first next), its sentence large (as
+// large as fits the page's width on one line, up to N17_STYLE.change_of_title x title_px)
+// and its reason at the story's body text size; from light_s everything else on the page
+// is drawn pale (layout.json n17.dim_opacity). Before / after figures of the change are not
+// shown: the report's next holds only the change and its reason in words, and the
+// effects and sensitivities hold the present values only (no value after the change), so
+// a figure after the change would be a guess.
 
 import { clearOfBand } from "./compose.js";
+import { storyOf } from "./cut_n03.js";
 import { DOMAIN_JA, esc, fmt, quantityName } from "./labels.js";
+
+// Not in layout.json (written here until the promo department gives a key for it): the
+// largest size of the change's sentence (a multiple of page.title_px).
+export const N17_STYLE = { change_of_title: 1.5 };
 
 const $ = (id) => document.getElementById(id);
 
 // Every value the cut reads (nested ones by their path); the top's min_text_px too.
 const N17_KEYS = [
   "duration_s",
+  "dim_opacity",
   "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px",
   "times.lead_s", "times.light_s",
   "colors.bg", "colors.panel", "colors.rule",
@@ -63,6 +78,7 @@ export class CutN17 {
     this.layout = layout;
     this.spec = layout.n17;
     this.minPx = layout.min_text_px;
+    this.story = storyOf(layout, "n17");
     this.report = s.report;
     if (!this.report) throw new Error("報告の記録がまだ無い (report.written)");
     this.stage = $("stage");
@@ -99,6 +115,18 @@ export class CutN17 {
       this.nextHtml();
     this.stage.append(el);
     this.el = el;
+    // the change's sentence on one line across the next block, not below the body text size
+    const change = el.querySelector(".n17-change");
+    if (change) {
+      const room = el.querySelector(".n17-next ul").clientWidth;
+      let px = parseFloat(change.style.fontSize);
+      change.style.whiteSpace = "nowrap";
+      while (change.scrollWidth > room && px > this.story.bodyPx) {
+        px -= 1;
+        change.style.fontSize = `${px}px`;
+      }
+      change.style.whiteSpace = "";
+    }
     this.fit();
   }
 
@@ -153,10 +181,13 @@ export class CutN17 {
 
   nextHtml() {
     const next = this.report.next ?? [];
-    const rows = next.length
-      ? next.map((n) => `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b> ${esc(n.change)}<small>${esc(n.reason)}</small></li>`).join("")
+    const n = next[0];
+    const big = Math.round(this.spec.page.title_px * N17_STYLE.change_of_title);
+    const rows = n
+      ? `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b><span class="n17-change" style="font-size:${big}px">${esc(n.change)}</span><small>${esc(n.reason)}</small></li>`
       : `<li class="none">報告に「次」が書かれていない</li>`;
-    return `<div class="n17-next" data-box="n17.next"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
+    const px = Math.max(this.spec.page.text_px, this.story.bodyPx);
+    return `<div class="n17-next" data-box="n17.next" data-kind="label" style="font-size:${px}px"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
   }
 
   // The text steps down a pixel at a time (title and the rest together, neither below
@@ -209,6 +240,20 @@ export class CutN17 {
       }
       note.textContent = `入りきらない分野 (報告の記録にはある): ${dropped.map((d) => DOMAIN_JA[d] ?? d).join("、")}`;
     }
+    // still over: the kept domains' notes (assumptions, mismatches) go, then their effects
+    // (their sensitivities, the reason of the change, stay), then the change's sentence
+    // steps down, not below page.title_px (it stays the largest text on the page)
+    for (const n of [...body.querySelectorAll(".n17-domain .n17-note, .n17-domain [data-box$='.effects']")].reverse()) {
+      if (!over()) break;
+      n.remove();
+    }
+    const change = el.querySelector(".n17-change");
+    let cp = change ? parseFloat(change.style.fontSize) : 0;
+    const least = Math.max(this.story.bodyPx, this.spec.page.title_px);
+    while (over() && change && cp > least) {
+      cp -= 1;
+      change.style.fontSize = `${cp}px`;
+    }
     el.dataset.textPx = String(px);
     el.dataset.titlePx = String(title);
     if (folded.length) el.dataset.folded = folded.join(",");
@@ -223,6 +268,7 @@ export class CutN17 {
     const lit = t >= T.light_s;
     this.el.querySelector(".n17-next").classList.toggle("lit", lit);
     this.el.querySelector(".n17-bar.strongest")?.classList.toggle("lit", lit);
+    for (const part of this.el.querySelectorAll(".n17-head, .n17-body")) part.style.opacity = lit ? String(this.spec.dim_opacity) : "";
     document.documentElement.dataset.n17Lit = lit ? "1" : "0";
   }
 }

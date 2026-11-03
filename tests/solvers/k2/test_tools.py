@@ -92,6 +92,27 @@ def k0_formulas():
     return {f["formula_id"]: f for f in solvers.formula_registry().list_formulas()}
 
 
+class Units(unittest.TestCase):
+    def test_rpm_counts_revolutions_as_k0_does(self):
+        # rpm is a frequency (revolutions per second after / 60), as K0 and the QA known answers
+        # read it; a motor speed limit becomes rad/s only where the motor needs it (2 pi rad a turn)
+        import math
+        from hiraku.solvers.k0_handcalc import units as k0_units
+        from hiraku.solvers.k2_vehicle.shelf import StepClimbTool
+        from hiraku.solvers.k2_vehicle.units import si
+        self.assertAlmostEqual(si({"value": 600.0, "unit": "rpm"}, "Hz"), 10.0, places=12)
+        self.assertEqual(SI_OF["rpm"], SI_OF["Hz"])
+        with self.assertRaises(ValueError):
+            si({"value": 60.0, "unit": "rpm"}, "rad/s")
+        self.assertAlmostEqual(si({"value": 180.0, "unit": "deg/s"}, "rad/s"), math.pi, places=12)
+        self.assertAlmostEqual(k0_units.UNIT_TABLE["rpm"][0], si({"value": 1.0, "unit": "rpm"}, "Hz"), places=15)
+        tool = StepClimbTool()  # declares the motor params
+        for given, want in (({"value": 6000.0, "unit": "rpm"}, 2.0 * math.pi * 100.0),
+                            ({"value": 100.0, "unit": "Hz"}, 2.0 * math.pi * 100.0),
+                            ({"value": 500.0, "unit": "rad/s"}, 500.0)):
+            self.assertAlmostEqual(tool.turn_rate({"motor_max_speed": given}, "motor_max_speed"), want, places=9)
+
+
 class Declarations(unittest.TestCase):
     """The load-case params and the K0 pairs that the load-case builders and the agents use."""
 

@@ -803,7 +803,7 @@ class RunChecker:
         and not miss what the measures find."""
         from qa import mesh_quality
 
-        mine = mesh_quality.measure(m.get("nodes_mm") or [], m.get("elements") or [])
+        mine = mesh_quality.measure(m.get("nodes_mm") or [], m.get("elements") or [], m.get("element_member"))
         topo, n_el = mine["topology"], len(m.get("elements") or [])
         bad = [k for k in range(n_el) if mine["degenerate"][k] or mine["jacobian_ratio"][k] <= 0]
         if bad:
@@ -813,8 +813,8 @@ class RunChecker:
             self.warn("mesh.quality", w, f"{mid}: {topo['coincident_nodes']} nodes lie on another node "
                                          f"(within {mesh_quality.TOL_MM} mm) without being merged")
         if topo["orientation_conflicts"]:
-            self.warn("mesh.quality", w, f"{mid}: {topo['orientation_conflicts']} shared edges run the same way in "
-                                         f"both elements (an element faces the other side)")
+            self.warn("mesh.quality", w, f"{mid}: {topo['orientation_conflicts']} edges within one member run the "
+                                         f"same way in both elements (an element faces the other side)")
         q = m.get("quality")
         if not isinstance(q, dict):
             return

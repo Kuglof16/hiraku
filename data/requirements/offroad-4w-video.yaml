@@ -207,7 +207,7 @@ requirements:
     basis: assumption (no public basis found)
 # Every test that applies to the flags and has a load-case builder; each has a
 # scripted step. P1, S5 and N1 have no criterion: they are compared but not judged.
-tests: [P1, R1, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3, H5]
+tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3, H5]
 # Cases past the limit, for showing the failing side: their verdicts are expected to be red.
 # P1 and R1 at a 250 mm step, and P1 at a step higher than the front wheel (hiraku/catalog/build.py);
 # F1, S4 and S5 from the K2 builders; T1 at an assumed air temperature from the analysis builders.

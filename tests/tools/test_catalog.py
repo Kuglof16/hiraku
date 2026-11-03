@@ -145,6 +145,29 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
+    def test_the_frame_yield_leaves_out_another_parts_members(self):
+        d = loaded_design()
+        frame_y = min_frame_yield(d)[0]
+        d["materials"]["weak"] = dict(next(iter(d["materials"].values())), name="weak tube", yield_MPa=frame_y - 30)
+        d["parts"].append({"id": "rollbar", "name": "rollbar", "kind": "rollbar",
+                           "box": {"center_mm": [0, 0, 1000], "size_mm": [50, 900, 50]}, "mass_kg": 5.0})
+        bar = dict(d["members"][0], id="rollbar_top", material="weak", part="rollbar")
+        d["members"].append(bar)
+        self.assertEqual(min_frame_yield(d)[0], frame_y)  # the roll bar is R4's, not the frame's
+        d["members"][-1] = dict(bar, part="frame")
+        self.assertEqual(min_frame_yield(d)[0], frame_y - 30)
+
+    def test_r1s_judges_the_joints_of_r1s_step_on_the_shell(self):
+        out = build_load_cases(self.catalog, self.req, loaded_design(), ["P1", "R1", "R1s"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100", "R1s-step100"])
+        r1, r1s = by_id["R1-step100"], by_id["R1s-step100"]
+        self.assertEqual((r1s["criterion"]["quantity"], r1s["criterion"]["limit"]),
+                         ("max_hot_spot_stress", r1["criterion"]["limit"]))
+        self.assertEqual(r1s["params"], r1["params"])
+        self.assertEqual(contract.errors("load_case", r1s), [])
+        self.assertNotIn("R1s", self.catalog.select_tests(self.req["flags"], self.req.get("speed_class")))
+
     def test_a_design_with_too_few_occupants_for_a_loading(self):
         # the contract's rule (hiraku.contract.loading): one occupant part cannot fill "two"
         d = loaded_design()
