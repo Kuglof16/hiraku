@@ -80,10 +80,13 @@ def _remove(path: str, tries: int = 10, wait_s: float = 0.2) -> None:
 
 
 def check_passes(c: Record) -> bool:
-    """A check passes when |got - expected| <= tolerance_rel |expected| (tolerance_rel itself when expected is 0)."""
+    """A check passes when |got - expected| <= tolerance_abs if the check gives one (contract: for expected
+    values of 0), else <= tolerance_rel |expected| (tolerance_rel itself when expected is 0)."""
     got = c.get("got")
     if not isinstance(got, (int, float)) or isinstance(got, bool) or not math.isfinite(got):
         return False
+    if isinstance(c.get("tolerance_abs"), (int, float)):
+        return abs(got - c["expected"]) <= c["tolerance_abs"]
     scale = abs(c["expected"]) if c["expected"] != 0 else 1.0
     return abs(got - c["expected"]) <= c["tolerance_rel"] * scale
 

@@ -114,6 +114,7 @@ class K2Tool(ABC):
     name = "k2"
     title = "K2"
     domain = "handling"
+    stage = 2  # contract tool_spec.stage (HK5 light first): 2 for K2's time simulations of the vehicle
     tests: list[str] = []
     params: tuple[P, ...] = ()
     pairs: tuple[Pair, ...] = ()
@@ -138,7 +139,7 @@ class K2Tool(ABC):
         checks = self.check()
         return {"name": self.name, "title": self.title, "domain": self.domain, "base": "K2", "tests": list(self.tests),
                 "origin": "builtin", "usable": all(c["pass"] for c in checks), "checks": checks,
-                "formulas": self.formula_ids()}
+                "formulas": self.formula_ids(), "stage": self.stage}
 
     def formula_ids(self) -> list[str]:
         return list(dict.fromkeys(p.formula_id for p in self.pairs))
@@ -149,7 +150,7 @@ class K2Tool(ABC):
         BuiltinTool.describe()."""
         return {"name": self.name, "title": self.title, "domain": self.domain, "tests": list(self.tests),
                 "params": [p.describe() for p in (LOADING,) + self.params],
-                "predicts": [p.describe() for p in self.pairs], "formulas": self.formula_ids()}
+                "predicts": [p.describe() for p in self.pairs], "formulas": self.formula_ids(), "stage": self.stage}
 
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
         t0 = time.perf_counter()
