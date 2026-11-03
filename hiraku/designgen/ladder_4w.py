@@ -23,6 +23,12 @@ cross members, lower_cross), and brackets (parts of kind bracket) hold the upper
 pivots and the tie rods' and toe links' inner ends. The footwell starts behind the front
 wheels' steering sweep, at a front bulkhead (a panel) with the dash posts and the dash
 cross member that holds the steering column (build_dash).
+The driver's place comes from four variables: the seats' cushion top seat_height above the floor; the
+accelerator's pad at pedal_x with the large driver's right foot on it (kit/body.place_pedals); the
+steering wheel's centre steering_wheel_height above the seats' cushion top at steering_x less
+STEERING_WHEEL_BEHIND_MM; the column from the wheel's centre forward and down at steering_column_angle
+to above the pinion on the rack (kit/steering.place). Their defaults put the parts where the generator
+put them before they were variables (_driver_v1); their ranges come from the AIST body sizes.
 The parts of the drive, steering, brakes, restraints and the battery's switch come from
 the kits (kit/drivetrain.py, steering.py, body.py, safety.py), and every part carries its
 system and links (kit/systems.py) when the contract has those fields. The occupants are
@@ -115,6 +121,8 @@ VARIABLES: dict[str, Var] = {
                       "150 mm behind it (where the back of the earlier steering box was)"),
     "battery_x": Var("mm", -1045.0, -1700.0, -300.0, "battery centre (x); it hangs from the cross members either side "
                      "and must fit between them (seat_x moves the seat cross members)"),
+    # the driver's place (seat_height, steering_column_angle, steering_wheel_height, pedal_x) are added after
+    # the layout constants below: their defaults and ranges come from the AIST body sizes (_DRIVER_V1)
     # chassis
     "front_spring_rate": Var("N/mm", 20.0, 5.0, 60.0, "front suspension spring rate per wheel"),
     "rear_spring_rate": Var("N/mm", 20.0, 5.0, 60.0, "rear suspension spring rate per wheel"),
@@ -362,6 +370,11 @@ def values_of(design: Record) -> dict[str, Record]:
         out.pop("gusset_thickness", None)
     if "rollbar" not in now and not any(m["id"].startswith("rollbar_") for m in design.get("members", [])):
         out["rollbar"] = _q(0.0, "1")  # built when the roll bar was off by default
+    if "pedal_x" not in now and "seat_x" in now:
+        # built when the pedals were under the large driver's foot in the seat: they moved with seat_x
+        shift = float(now["seat_x"]["value"]) - VARIABLES["seat_x"].default
+        if shift:
+            out["pedal_x"] = _q(VARIABLES["pedal_x"].default + shift, "mm")
     return out
 
 
@@ -403,6 +416,80 @@ REAR_OVERHANG_RAILS = ("rail_L_S2B", "rail_R_S2B", "rail_L_BE", "rail_R_BE")
 # steering_x and battery_x move everything behind the footwell back by this much, so that the toes are
 # behind the bulkhead (FOOT_SHIFT_MM: 320 mm puts them 15 mm behind it; K4 people.fit foot_room checks it).
 FOOT_SHIFT_MM = 320.0
+SEAT_LENGTH_MM = 500.0  # the seat's box along x and across (assumption, as the first v1)
+SEAT_WIDTH_MM = 500.0
+SEAT_HEIGHT_V1_MM = 260.0  # the first v1's seat box height: its cushion top this far above the floor (assumption)
+SEAT_HEIGHT_MIN_MM = 200.0  # the seat's frame and cushion at least this tall (assumption, no source)
+COLUMN_ANGLE_RANGE_DEG = (20.0, 50.0)  # steering_column_angle's range (its meaning below says why)
+
+
+def _driver_v1() -> dict[str, float]:
+    """The driver's place in the default design, from the AIST body sizes (k4_geometry.people) and the other
+    variables' defaults, as the generator placed it before these were variables: the large driver (m95) in
+    the seat with the heels on the footwell floor and the knee at people.KNEE_ANGLE_DEG, the accelerator
+    under the ball of the right foot (pedal_x), the steering wheel's rim KNEE_GAP_MM above the knee's top
+    with the column at kit/steering.COLUMN_ANGLE_DEG (steering_wheel_height: its centre above the seat's
+    cushion top). Also the values the ranges come from (see the variables' meanings)."""
+    from hiraku.solvers.k4_geometry import people
+
+    d = {k: x.default for k, x in VARIABLES.items()}
+    floor_top = d["rail_height"] + d["rail_h"] / 2.0 + ON_RAILS_MM + PANEL_T_MM  # the floors' top (both 20 mm)
+    seat_top = floor_top + SEAT_HEIGHT_V1_MM
+    back = d["seat_x"] - SEAT_LENGTH_MM / 2.0
+    big = people.seated(back, seat_top, 0.0, floor_top, people.BIG)
+    knee_top = float(big.legs["R"].knee[2]) + big.radii["thigh"]
+    wheel_z = float(steering.wheel_centre(0.0, 0.0, knee_top, steering.COLUMN_ANGLE_DEG)[2])
+    small = people.seated(back, seat_top, 0.0, floor_top, people.SMALL)
+    f5 = people.SIZES[people.SMALL]
+    return {
+        "pedal_x": float(big.legs["R"].ball[0]),
+        "steering_wheel_height": wheel_z - seat_top,
+        "knee_top_above_seat": knee_top - seat_top,
+        "small_ball_ahead_of_back": float(small.legs["R"].ball[0]) - back,
+        "small_level_thigh_seat": f5["knee_joint_height"] - f5["trochanter_height"],
+        "big_shoulder_above_seat": people.SIZES[people.BIG]["shoulder_height"],
+    }
+
+
+_DRIVER_V1 = _driver_v1()
+_DRIVER_VARS = {
+    "seat_height": Var("mm", SEAT_HEIGHT_V1_MM, SEAT_HEIGHT_MIN_MM, float(math.floor(_DRIVER_V1["small_level_thigh_seat"])),
+                       "the seats' cushion top (the seat box's top) above the floor under them; the occupants, the "
+                       "steering wheel (steering_wheel_height) and the roll bar's top (rollbar_height) go up with it. "
+                       f"Range: at least {SEAT_HEIGHT_MIN_MM:g} mm for the seat's frame and cushion (assumption, no "
+                       "source); at most the small person's (AIST young adult female 5th percentile) knee joint height "
+                       "sitting I13 less the trochanterion height I11 (399.1 - 58.0 mm): higher, her thigh slopes down "
+                       "from the hip to the knee with the heels on the floor"),
+    "steering_column_angle": Var("deg", steering.COLUMN_ANGLE_DEG, *COLUMN_ANGLE_RANGE_DEG,
+                                 "the steering column below the horizontal, forward and down from the steering wheel's "
+                                 "centre (the wheel square to it); its length runs from the wheel's centre to above the "
+                                 "pinion on the rack (kit/steering.column_length), and the intermediate shaft from there "
+                                 "to the pinion. Range: from 20 deg (assumption, no source: flatter, the wheel stands "
+                                 "within 20 deg of upright before the chest) to 50 deg (at the default steering_x a column "
+                                 "steeper than about 50.6 deg puts the dash at or below the tops of the front towers' "
+                                 "rear posts, which the dash posts stand on, and the layout does not close)"),
+    "steering_wheel_height": Var("mm", _DRIVER_V1["steering_wheel_height"],
+                                 float(math.ceil(_DRIVER_V1["knee_top_above_seat"])),
+                                 _DRIVER_V1["big_shoulder_above_seat"],
+                                 "the steering wheel's centre above the seats' cushion top (seat_height moves it with the "
+                                 "seat). The default is where the generator put it before: the rim's lowest point "
+                                 "50 mm above the large driver's knee top (AIST young adult male 95th percentile, "
+                                 "knee at 100 deg, heels on the floor) with the column at 35 deg. Range: from the large "
+                                 "driver's knee top above the seat (lower, the hub is at the knee) to his acromiale "
+                                 "height sitting I3 (637.5 mm; higher, the hands reach up past the shoulders)"),
+    "pedal_x": Var("mm", _DRIVER_V1["pedal_x"],
+                   float(math.floor(VARIABLES["seat_x"].lo - SEAT_LENGTH_MM / 2.0 + _DRIVER_V1["small_ball_ahead_of_back"])),
+                   0.0,
+                   "where the ball of the driver's right foot presses the accelerator (x of the middle of the pad's "
+                   "upper face, at the height of the ball with the heel on the footwell floor; the brake pedal beside "
+                   "it); the driver's right leg reaches it (the knee bends or opens), and it stays when seat_x moves. "
+                   "The default is under the large driver's ball of the foot with the knee at 100 deg in the default "
+                   "seat. Range: from the small person's (AIST female 5th percentile) ball of the foot, knee at 100 "
+                   "deg, in the seat at its rearmost seat_x, to the front axle (the footwell is behind it); whether "
+                   "the pads stand on the footwell floor clear of the bulkhead is K4's (foot_support, foot_room)"),
+}
+VARIABLES = {k: x for name, var in VARIABLES.items()
+             for k, x in ([(name, var)] + (list(_DRIVER_VARS.items()) if name == "battery_x" else []))}
 # The occupants' bodies as parts (kit/body.py, hiraku.contract.loading.person_of: the parts of a person
 # share the id before the first "."): the trunk keeps the occupant's id, the limbs are <id>.<segment>_<L|R>.
 BODY_PARTS = True
@@ -551,17 +638,20 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if v["lamps"] == 1:
         _kit(safety.place_lamps, lay, "front_body", E - v["cross_b"] / 2.0, rail_z, "deck")
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
-        lay.put(Item(pid, label, "seat", (500.0, 500.0, 260.0), 12.0), x=seat_x, y=y, z=bottom_at(lay.top_of("floor")))
+        lay.put(Item(pid, label, "seat", (SEAT_LENGTH_MM, SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=seat_x, y=y,
+                z=bottom_at(lay.top_of("floor")))
     _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
                 x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
-    # pedals from the driver's foot, then the steering from the driver's knee (kit/body.py, kit/steering.py)
-    feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0)
-    knee = feet["pose"].legs["R"].knee
+    # the pedals at pedal_x with the driver's right foot on them, then the steering wheel at steering_wheel_height
+    # above the seat and its column at steering_column_angle (kit/body.py, kit/steering.py)
+    feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0,
+                ball_x=v["pedal_x"])
     _kit(steering.place, lay, 12.0, v["steering_x"] - STEERING_WHEEL_BEHIND_MM, -seat_y, -seat_y + STEERING_INBOARD_MM,
-         float(knee[2]) + feet["pose"].radii["thigh"], rho, avoid=("pedal_accel", "pedal_brake"))
+         None, rho, avoid=("pedal_accel", "pedal_brake"), column_angle=v["steering_column_angle"],
+         wheel_z=lay.top_of("seat_R") + v["steering_wheel_height"])
     if BODY_PARTS:
         from hiraku.solvers.k4_geometry.people import grip_points
 
