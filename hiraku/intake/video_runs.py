@@ -44,7 +44,7 @@ N14_NAME = "offroad-4w-n14.yaml"  # the scripted plan is looked up by the file's
 def n09_requirements(product: str) -> Record:
     """The product's requirements for the N09 scene: no design or tests (it stops at the picks), the scene's sentence."""
     req = {k: v for k, v in load_product(product).items() if k not in ("design_file", "tests", "beyond")}
-    return {**req, "want": N09_WANTS.get(product, req["want"])}
+    return {**req, "want": N09_WANTS.get(product, req["want"]), "stop_after": "picks"}  # the run ends once the domains are picked
 
 
 def write_n09_file(product: str, runs: Path | str = layout.RUNS_DIR) -> Path:

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from hiraku import contract
 from hiraku.catalog import load_requirements
 from hiraku.intake import video_runs
 
@@ -31,6 +32,8 @@ class N09SentenceTest(unittest.TestCase):
         self.assertIn("電池", req["want"])
         for key in ("design_file", "tests", "beyond"):
             self.assertNotIn(key, req)
+        self.assertEqual(req["stop_after"], "picks")
+        self.assertEqual(contract.errors("requirements_file", req), [])
         self.assertEqual(video_runs.n09_requirements("care-bed")["want"], load_requirements_want("care-bed"))
 
     def test_the_file_for_a_real_run_is_written_with_that_sentence(self):
