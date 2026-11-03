@@ -161,19 +161,23 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
 
     def test_r3_plan_on_version_2(self):
-        """Wider track (the wheels further outboard of the rails): still within the tolerance."""
+        """Wider track (the wheels further outboard of the rails), and that with thicker rails (stiffer in torsion:
+        the ladder twists less, but the end cross member's moment stays): still within the tolerance."""
         from hiraku import designgen
 
-        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -200, "unit": "mm"}})
-        lc = BUILDERS["R3"](spec("R3"), REQ, v2)
-        got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
-        preds = {}
-        for p in PLANS["R3"]["predictions"]:
-            extra = p["inputs_from"](v2, lc)
-            out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
-            preds[p["quantity"]] = out["outputs"][p["output"]]
-        hand = preds["fatigue_damage"]["value"]
-        self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        wide = {"track": mm(1220), "steering_x": mm(-200)}
+        for changes in (wide, dict(wide, rail_t=mm(4.5))):
+            v2 = designgen.regenerate(DESIGN, changes)
+            lc = BUILDERS["R3"](spec("R3"), REQ, v2)
+            got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
+            preds = {}
+            for p in PLANS["R3"]["predictions"]:
+                extra = p["inputs_from"](v2, lc)
+                out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
+                preds[p["quantity"]] = out["outputs"][p["output"]]
+            hand = preds["fatigue_damage"]["value"]
+            self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"{sorted(changes)}: hand {hand:.4f}, tool {got:.4f}")
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
