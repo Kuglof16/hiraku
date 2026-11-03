@@ -62,6 +62,20 @@ tests:
       HIRAKU's choice. The hand calculation takes one rail as a simple beam;
       the 3D frame shares the load through the cross members, so 15 % is
       allowed.
+  - id: R1s
+    domain: strength
+    title: 静的強度 (管のつなぎ目の壁)
+    # listed by the requirements files that run it; not picked from the flags yet (a product's
+    # scripted plan needs its frame_shell step first)
+    applies_if: not always
+    requirement_keys: [Q15, Q33, Q40, Q61]
+    build: r1_joint
+    tolerance_rel: 0.15
+    tolerance_basis: >-
+      HIRAKU's choice, as R1. R1 again with the frame as shells (frame_shell): judged on the IIW
+      hot-spot stress where the tubes meet, which the beams of R1 do not see. The element maximum is not
+      used because at a sharp re-entrant corner it keeps rising as the mesh is refined (the analysis
+      department's runs at 10, 5 and 2.5 mm).
   - {id: R2, domain: strength, title: 衝撃 (落錘・落下・段差), applies_if: lean or cargo or self_propelled, requirement_keys: [Q40]}
   - {id: R3, domain: strength, title: 疲労・耐久, applies_if: always, requirement_keys: [Q90, Q91, Q92]}
   - {id: R4, domain: strength, title: 横転時の保護枠 (ROPS), applies_if: ride and rough, requirement_keys: [Q31, Q64]}
