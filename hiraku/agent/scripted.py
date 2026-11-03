@@ -29,7 +29,7 @@ from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import CATALOG_DIR, REPO_ROOT, beyond_plans, external_builders, is_beyond, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, trusted_analysis, write_report)
+                                    revise_design, rule_check, trusted_analysis, write_report)
 from hiraku.tools.judge import verdict_line
 from hiraku.tools.summary import design_summary
 
@@ -376,11 +376,10 @@ def _answer_drop(ctx: RunContext, drop: Record) -> None:
 
 
 def _check_rules(ctx: RunContext, agent: str) -> Record | None:
-    """The intake's rule_check on this version's parts (rule_check.recorded), said in one line."""
-    from hiraku.intake.tools import TOOLS
-
+    """The intake's rule_check on this version's parts (rule_check.recorded), said in one line; the
+    assembly tile follows the system rules (functions.rule_check)."""
     try:
-        out = TOOLS["rule_check"]["function"](ctx, {}, agent)
+        out = rule_check(ctx, {}, agent)
     except ToolError as e:
         ctx.store.emit("agent.said", agent=agent, text=f"規則を当てられませんでした: {e}")
         return None

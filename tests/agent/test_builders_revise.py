@@ -22,6 +22,7 @@ from hiraku.catalog import CatalogError, build_load_cases, load_catalog, read_da
 from hiraku.contract import layout
 from hiraku.tools import ToolError
 from hiraku.tools.functions import get_context, revise_design
+from hiraku.tools.judge import update_judgement
 from tests.tools import fakes
 from tests.tools.helpers import REQUIREMENTS, requirements_with_tests
 
@@ -128,6 +129,48 @@ class BeyondBuildTest(unittest.TestCase):
         named_badly = types.SimpleNamespace(BUILDERS={"H1": lambda spec, req, design: fakes._h1_builder({}, req, design)})
         with builders(named_badly), self.assertRaisesRegex(CatalogError, "id ending -beyond"):
             build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], beyond=["H1"])
+
+
+class SystemCheckTest(BuildersCase, unittest.TestCase):
+    """A system rule (category system) that hits a part turns the assembly tile red."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.enterContext(builders(fakes.builders_module()))
+        design = self.root / "design.json"
+        design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+        self.ctx = start_run(requirements_with_tests(self.root, ["P1", "R1", "H1"]), design_path=design,
+                             root=self.root / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf(assembly=True),
+                             designgen=fakes.FakeDesigngen())
+        rule = {"rule_id": "SY-01", "category": "system", "text": "モーターから駆動輪まで torque の鎖がつながる",
+                "check": "True", "origin": "builtin", "trust": 2, "basis": "test"}
+        self.ctx.store.emit("knowledge.imported", agent="lead", data={
+            "doc": {"doc_id": "SY", "filename": "system.yaml", "origin": "builtin"}, "rules": [rule]})
+
+    def check(self, rule_id, hits):
+        s = self.ctx.store
+        return s.add_record("rule_check", {"rule_check_id": s.next_id("rule_check"), "design_version": 1,
+                                           "rule_id": rule_id, "targets": ["motor"], "hits": hits, "pass": not hits},
+                            design_version=1, agent="packager")
+
+    def tile(self):
+        return next(j for j in self.ctx.store.judgements() if j["domain"] == "assembly")
+
+    def test_a_system_miss_turns_assembly_red_and_says_where(self):
+        self.check("SY-01", [{"part_id": "motor", "values": {}, "message": "後輪までの torque の鎖が切れている"}])
+        tile = update_judgement(self.ctx, "assembly")
+        self.assertEqual((tile["state"], tile["red_count"]), ("red", 1))
+        self.assertIn("系の欠け 1 件: SY-01", tile["summary"])
+        self.assertIn("後輪までの torque の鎖が切れている", tile["summary"])
+        self.check("SY-01", [])  # checked again after the fix: the latest check counts
+        self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
+
+    def test_other_categories_and_other_domains_are_not_affected(self):
+        self.check("XX-01", [{"part_id": "seat", "values": {}, "message": "m"}])  # not a system rule
+        self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
+        self.check("SY-01", [{"part_id": "motor", "values": {}, "message": "m"}])
+        self.assertNotIn("系の欠け", update_judgement(self.ctx, "strength")["summary"])
 
 
 class BeyondRunTest(BuildersCase, unittest.TestCase):

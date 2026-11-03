@@ -706,6 +706,19 @@ FUNCTIONS = {
     "write_report": write_report,
 }
 
+def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
+    """The intake's rule_check (hiraku.intake.tools.TOOLS), then the assembly tile again: a system
+    rule that hits a part turns it red (judge.system_misses)."""
+    from hiraku.intake.tools import TOOLS
+
+    out = TOOLS["rule_check"]["function"](ctx, args or {}, agent)
+    from hiraku.tools.judge import SYSTEM_DOMAIN
+
+    if SYSTEM_DOMAIN in ctx.picked:
+        update_judgement(ctx, SYSTEM_DOMAIN, out.get("design_version"))
+    return out
+
+
 # The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them).
 INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
