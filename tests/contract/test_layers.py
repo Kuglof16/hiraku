@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2] / "hiraku"
 LAYERS = ["contract", "solvers", "designgen", "store", "catalog", "intake", "tools", "agent", "webserve", "__main__"]
 
 # Upward imports that exist today and are being removed (lead asked the owners).
-KNOWN_UPWARD = {("catalog", "tools"), ("intake", "tools")}
+KNOWN_UPWARD = {("catalog", "tools")}
 
 
 def _package(module: str) -> str | None:
