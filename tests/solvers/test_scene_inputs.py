@@ -125,7 +125,9 @@ class LaunchTest(unittest.TestCase):
         f_max = REG.evaluate("launch.peak_tractive_force",
                              {k: got["inputs"][k] for k in ("T", "i", "eta", "r")})["outputs"]["F_max"]
         self.assertEqual(f_max["unit"], "N")
-        self.assertAlmostEqual(f_max["value"], before["F_max"], delta=1e-9 * before["F_max"])
+        # r is now the loaded radius (scene_inputs.loaded_radius): F_max goes up by free / loaded
+        scale = got["radius"]["free_r_mm"] / got["radius"]["r_mm"]
+        self.assertAlmostEqual(f_max["value"], before["F_max"] * scale, delta=1e-9 * before["F_max"])
         now = k2_tests.launch_inputs(DESIGN, LAUNCH_LC)
         for k in ("P", "eta", "C_rr", "C_d", "A", "rho"):
             self.assertEqual(now[k]["value"], before[k], k)
@@ -142,6 +144,8 @@ class LaunchTest(unittest.TestCase):
         ins = {k: frm[ref.split(".", 1)[1]] for k, ref in first["inputs"].items()}
         f_max = REG.evaluate(first["formula_id"], ins)["outputs"]["F_max"]
         before = old_launch(DESIGN, LAUNCH_LC)
+        rad = scene_inputs.launch_inputs(DESIGN, "two_cargo", LAUNCH_LC["params"])["radius"]
+        before["F_max"] *= rad["free_r_mm"] / rad["r_mm"]  # the loaded radius (scene_inputs.loaded_radius)
         self.assertAlmostEqual(f_max["value"], before["F_max"], delta=1e-9 * before["F_max"])
         # time_to_speed with the predicted F_max and with the F_max the builder computed before
         from hiraku.catalog.summary import design_summary

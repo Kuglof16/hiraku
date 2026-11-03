@@ -64,7 +64,8 @@ SHARED = ("max_speed", "occupants", "occupant_mass", "cargo_mass", "cargo_height
           "battery_max_temperature", "controller_max_temperature", "motor_max_temperature", "drag_coefficient",
           "frontal_area", "side_force_coefficient", "side_area", "centre_of_pressure_height", "air_density",
           "front_cornering_stiffness", "rear_cornering_stiffness", "bumper_stiffness", "bumper_stroke",
-          "crush_stiffness", "fatigue_fat_class", "fatigue_slope", "fatigue_knee_cycles", "fatigue_slope_after_knee",
+          "crush_stiffness", "fatigue_fat_class", "fatigue_slope", "fatigue_knee_cycles",
+          "fatigue_slope_after_knee_constant_amplitude",
           "tyre_stiffness", "tyre_damping_ratio", "tyre_slip_stiffness_coeff", "bump_stop_factor")
 
 VARIABLES: dict[str, Var] = {

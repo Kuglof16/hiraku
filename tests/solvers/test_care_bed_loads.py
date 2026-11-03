@@ -136,10 +136,12 @@ class BedFormulasTest(unittest.TestCase):
     def test_side_rail_push_and_lug(self):
         d, t = 25.4, 1.6
         Z = math.pi * (d**4 - (d - 2 * t) ** 4) / (32 * d)
-        got = k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), d=(d, "mm"), t=(t, "mm"),
-                 s=(0, "mm"), t_s=(2.3, "mm"), E=(205000, "MPa"), G=(1e15, "MPa"))  # posts rigid in torsion: bar fixed
-        self.assertAlmostEqual(got["sigma_post"], 300 * 400 / Z, places=9)
-        self.assertAlmostEqual(got["sigma"], max(300 * 400, 600 * 700 / 8) / Z, places=9)
+        got = k0("bed.side_rail_push", F=(600, "N"), H=(400, "mm"), S=(700, "mm"), n=(2, "1"), u2=(0, "mm"),
+                 u3=(0, "mm"), d=(d, "mm"), t=(t, "mm"), s=(0, "mm"), t_s=(2.3, "mm"), g=(0, "mm"), t_g=(4.5, "mm"),
+                 b_k=(200, "mm"), t_k=(20, "mm"), E=(205000, "MPa"), G=(1e-3, "MPa"), k_f1=(0, "N*mm"),
+                 k_f2=(0, "N*mm"), k_f3=(0, "N*mm"), k_f4=(0, "N*mm"))  # next to no torsion: plain cantilevers
+        self.assertAlmostEqual(got["sigma_post"], 300 * 400 / Z, places=6)
+        self.assertAlmostEqual(got["sigma"], max(300 * 400, 600 * 700 / 4) / Z, places=6)  # the bar simply supported
         lug = k0("bed.lug_bending", F=(2000, "N"), h_p=(100, "mm"), w=(40, "mm"), t=(6, "mm"), d=(10, "mm"))
         self.assertAlmostEqual(lug["sigma_root"], 1000 * 100 / (6 * 40**2 / 6), places=9)
         self.assertAlmostEqual(lug["sigma_bearing"], 1000 / (10 * 6), places=9)

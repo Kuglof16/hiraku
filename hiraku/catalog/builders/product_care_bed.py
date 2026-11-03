@@ -284,13 +284,40 @@ def r5_rail_inputs(design: Record, load_case: Record) -> Record:
 
     nodes = {n["id"]: n["xyz_mm"] for n in design["nodes"]}
     v = _design_values(design)
+    dflt = {k: x.default for k, x in care_bed.VARIABLES.items()}
+    val = lambda k: v.get(k, dflt[k])  # noqa: E731
     F = units.to_unit(load_case["params"]["load_y"], "N")
     mat = design["materials"][care_bed.ROUND]
+    sockets = sorted((m for m in design["members"] if m["id"].startswith("socket_L")),
+                     key=lambda m: -nodes[m["node_b"]][0])  # head to foot; node_b is the post's foot
+    xs = [nodes[m["node_b"]][0] for m in sockets]
+    sock = design["sections"][sockets[0]["section"]]["dims_mm"]
+    u = [xs[0] - x for x in xs[1:-1]] + [0.0, 0.0]
+    # each post's foot: the upper rail twists between the neighbouring cross members (taken as holding it), G J of the
+    # rail's tube over each length, both sides in parallel
+    from hiraku.solvers.k0_handcalc import sections
+
+    rail = next(m for m in design["members"] if m["id"].startswith("rail_L"))
+    rd = design["sections"][rail["section"]]["dims_mm"]
+    tube = design["materials"][rail["material"]]
+    GJ = tube["E_MPa"] / (2.0 * (1.0 + tube["nu"])) * sections.rect_tube(rd["b"], rd["h"], rd["t"])["J"]
+    held = sorted(nodes[m["node_a"]][0] for m in design["members"] if m["id"].startswith("cross_")
+                  and nodes[m["node_a"]][1] > 0)
+    k_f = []
+    for m in sockets:
+        x = nodes[m["node_a"]][0]  # the socket's rail end
+        lo = [h for h in held if h < x - 1e-6]
+        hi = [h for h in held if h > x + 1e-6]
+        k_f.append(GJ * sum(1.0 / abs(x - side[i]) for side, i in ((lo, -1), (hi, 0)) if side))
+    k_f += [0.0] * (4 - len(k_f))
     return {"F": q(abs(F), "N"), "H": q(nodes["LSTP1"][2] - nodes["LSP1"][2], "mm"),
-            "S": q(nodes["LSTP1"][0] - nodes["LSTK"][0], "mm"), "d": q(v["side_rail_d"], "mm"),
-            "t": q(v["side_rail_t"], "mm"), "s": q(v.get("side_rail_sleeve_height", 0.0), "mm"),
-            "t_s": q(v.get("side_rail_sleeve_t", care_bed.VARIABLES["side_rail_sleeve_t"].default), "mm"),
-            "E": q(mat["E_MPa"], "MPa"), "G": q(mat["E_MPa"] / (2.0 * (1.0 + mat["nu"])), "MPa")}
+            "S": q(xs[0] - xs[-1], "mm"), "n": q(len(xs), "1"), "u2": q(u[0], "mm"), "u3": q(u[1], "mm"),
+            "d": q(v["side_rail_d"], "mm"), "t": q(v["side_rail_t"], "mm"),
+            "s": q(val("side_rail_sleeve_height"), "mm"), "t_s": q(val("side_rail_sleeve_t"), "mm"),
+            "g": q(val("side_rail_gusset_leg"), "mm"), "t_g": q(val("side_rail_gusset_t"), "mm"),
+            "b_k": q(sock["b"], "mm"), "t_k": q(sock["t"], "mm"),
+            "E": q(mat["E_MPa"], "MPa"), "G": q(mat["E_MPa"] / (2.0 * (1.0 + mat["nu"])), "MPa"),
+            **{f"k_f{i + 1}": q(k, "N*mm") for i, k in enumerate(k_f)}}
 
 
 R5_DECK_STEP = {
@@ -302,15 +329,19 @@ R5_DECK_STEP = {
                                                          "b_g", "h_g", "t_g")},
                      "inputs_from": r5_deck_inputs}],
 }
+RAIL_INPUTS = ("F", "H", "S", "n", "u2", "u3", "d", "t", "s", "t_s", "g", "t_g", "b_k", "t_k", "E", "G", "k_f1", "k_f2",
+               "k_f3", "k_f4")
 R5_RAIL_STEP = {
     "tool": "bed_static",
     "say": "上の棒の真ん中を押す力を 2 本の柱が半分ずつ受け、片持ちの梁として根元で曲がるとみて、応力を先に出します",
     "predictions": [{"quantity": "max_stress", "formula_id": "bed.side_rail_push", "output": "sigma",
-                     "assumptions": ["2 本の柱が半分ずつ受ける", "柱の根元 (差し込み) は回らない",
+                     "assumptions": ["上の棒は柱の上に載った梁 (柱は押す向きのばねと、ねじりのばね)", "柱の根元 (受け口) は回らない",
                                      "差し込みの筒の中では柱と筒が 1 本の管として曲がる",
-                                     "上の棒の両端は、柱がねじれる分だけ回る (柱のねじりのばね)"],
-                     "inputs": {k: f"from.{k}" for k in ("F", "H", "S", "d", "t", "s", "t_s", "E", "G")},
-                     "inputs_from": r5_rail_inputs}],
+                                     "ガセットは柱の両わきの 2 枚の板、根元で柱の太さ、先で 0 (4 段に分けて段の真ん中の深さ)",
+                                     "受け口は柱の根元のモーメントとねじりを受ける角管",
+                                     "床の枠の横の部材は入れない: 柱をとても強くすると (柱 4 本とガセット 150 mm など) いちばん大きい"
+                                     "応力が横の部材に移り、この式の届く範囲の外になる"],
+                     "inputs": {k: f"from.{k}" for k in RAIL_INPUTS}, "inputs_from": r5_rail_inputs}],
 }
 
 # ---------------------------------------------------------------- P5 the back and knee actuators
@@ -457,7 +488,7 @@ def r3_uses(spec: Record, req: Record, design: Record) -> Record:
         "requirement_keys": ["Q92", *keys],
         "criterion": {"quantity": "fatigue_damage", "op": "<", "limit": q(1.0, "1"),
                       "basis": "Miner's rule over the counts of Q92: the welds last while the damage stays below 1",
-                      "requirement_keys": ["Q92"]},
+                      "requirement_keys": ["Q92"], "stand_in_quantity": "stress_range"},
         "tolerance_rel": tolerance(spec, R3_TOL),
     }
 
@@ -496,15 +527,27 @@ def r3_inputs(design: Record, load_case: Record) -> Record:
             "N_knee": design["variables"]["fatigue_knee_cycles"]}
 
 
+R3_INPUTS = ("n1", "dS1", "n2", "dS2", "n3", "dS3", "n4", "dS4", "FAT", "m", "N_knee")
 R3_PREDICTIONS = [{"quantity": "fatigue_damage", "formula_id": "bed.use_damage", "output": "D_worst",
                    "assumptions": ["着座: 利用者が乗り降りするたびに床の枠の応力が 0 から載せた分まで 1 回振れる",
                                    "背上げ・膝上げ: 金具の耳の根元が最大の力の応力まで 1 回振れる",
                                    "昇降: 枠の応力は変わらない (リンクは模型に無い)", "柵の上げ下げは入れない",
                                    "溶接は床の枠・背上げの金具の耳の根元・膝上げの金具の耳の根元の 3 か所、悪い方をとる",
                                    "S-N の曲がり点より下は傾き 2m − 1 (振幅の変わる繰り返し、IIW-1823-07 (2008) 4.3.1 節 p.110)"],
-                   "inputs": {k: f"from.{k}" for k in ("n1", "dS1", "n2", "dS2", "n3", "dS3", "n4", "dS4", "FAT", "m",
-                                                       "N_knee")},
-                   "inputs_from": r3_inputs}]
+                   "inputs": {k: f"from.{k}" for k in R3_INPUTS}, "inputs_from": r3_inputs},
+                  {"quantity": "stress_range", "formula_id": "bed.use_damage", "output": "dS_worst",
+                   "assumptions": ["悪い方の溶接の応力の幅 (損傷が両方とも 0 に近いときは、損傷でなくこちらで比べる)"],
+                   "inputs": {k: f"from.{k}" for k in R3_INPUTS}, "inputs_from": r3_inputs}]
+
+# When the K0 and the tool damages are both below this, their ratio means nothing (a range far below the knee): the
+# comparison is made on stress_range instead. The contract's criterion.stand_in_quantity rule: 1e-6 x the limit (1)
+R3_TINY_DAMAGE = 1e-6 * 1.0
+
+
+def r3_compared_quantity(k0_damage: float, tool_damage: float) -> str:
+    """The R3 quantity to compare K0 with the tool on: fatigue_damage, or stress_range when both damages are below
+    R3_TINY_DAMAGE."""
+    return "stress_range" if max(abs(k0_damage), abs(tool_damage)) < R3_TINY_DAMAGE else "fatigue_damage"
 
 T3_STEP = {
     "tool": "actuator_duty",
@@ -514,12 +557,17 @@ T3_STEP = {
 R3_STEP = {
     "tool": "use_fatigue",
     "say": ("使い方ごとの回数と応力の幅 (着座は床の枠、背上げ・膝上げは金具の耳の根元) から、曲がり点より下を傾き 2m − 1 で延ばした "
-            "S-N とマイナー則で、溶接ごとの損傷を先に出します。悪い方で判定します"),
+            "S-N とマイナー則で、溶接ごとの損傷を先に出します。悪い方で判定します。損傷が両方とも 1e-12 より小さいときは、"
+            "悪い方の溶接の応力の幅で照合します"),
     "predictions": R3_PREDICTIONS,
 }
 
 BUILDERS = {"S1": s1_tipping, "R5": r5_static, "P5": p5_actuators, "T3": t3_duty, "R3": r3_uses}
 PLANS = {"P5": P5_PLAN}
+# P5's actuator_linkage results (actuator_stroke at actuator_<which>) go into T3's actuator_duty as its upstream. The
+# catalog joins every P5 case to the T3 case (build.feeds_map; P5-knee too: T3 then waits for both, and actuator_duty
+# takes the stroke of its own actuator only)
+FEEDS = {"P5": ["T3"]}
 STEPS = {"R5-deck": R5_DECK_STEP, "R5-side-rail": R5_RAIL_STEP, "S1-side-rail-push": S1_PUSH_STEP,
          "R3-uses": R3_STEP}  # by load case id
 STEP_PREFIXES = {"S1-edge": S1_STEP, "T3-": T3_STEP}  # by the start of the load case id (S1's and T3's carry numbers)
@@ -556,5 +604,5 @@ def inputs_for(design: Record, load_case: Record) -> Record:
     return out
 
 
-__all__ = ["BUILDERS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "STEPS", "T3_PREDICTIONS", "inputs_for",
-           "predictions_for", "step_for"]
+__all__ = ["BUILDERS", "FEEDS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "R3_TINY_DAMAGE", "STEPS", "T3_PREDICTIONS",
+           "inputs_for", "predictions_for", "r3_compared_quantity", "step_for"]
