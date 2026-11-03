@@ -299,11 +299,13 @@ def _design_for(tool):
 
 
 class _MeshFieldTests:
-    """A tool that needs_mesh (TOOL) on the ladder demo, given its frame_mesh as params["mesh"]: the
-    mesh and the tool's analysis pass check_run's rules for meshes and the fields on them (one value
-    per element or node of a mesh created before, of the same version). A tool that applies to its
-    own design types (_design_for) runs on that design with no mesh given (it meshes the design
-    itself) and is held to its status and the analysis schema. Mixed into a TestCase per tool."""
+    """A tool that needs_mesh (TOOL) on its design (_design_for), given the mesh analyze would give it
+    as params["mesh"]: the tool's own make_mesh(design) when it has one (mesher = the tool's name), else
+    the version's frame_mesh on the ladder demo. The mesh and the tool's analysis pass check_run's rules
+    for meshes and the fields on them (one value per element or node of a mesh created before, of the
+    same version). A tool for its own design types without make_mesh gets no mesh and may return
+    results and per-member values only (docs/contract.md, a tool that makes its own mesh). Mixed into a
+    TestCase per tool."""
 
     TOOL = None
 
@@ -314,7 +316,12 @@ class _MeshFieldTests:
         why = cls.TOOL.applies(cls.design) if callable(getattr(cls.TOOL, "applies", None)) else None
         if why:
             raise unittest.SkipTest(f"{cls.TOOL.name} does not apply to the {cls.kind or 'ladder demo'} design: {why}")
-        cls.mesh = None if cls.kind else dict(solvers.frame_mesh(cls.design), mesh_id="mesh-0001")
+        make = getattr(cls.TOOL, "make_mesh", None)
+        cls.own = callable(make)
+        if cls.own:
+            cls.mesh = dict(make(cls.design), mesh_id="mesh-0001")
+        else:
+            cls.mesh = None if cls.kind else dict(solvers.frame_mesh(cls.design), mesh_id="mesh-0001")
 
     def test_each_mesh_tool_on_the_demo_mesh(self):
         design, mesh, tool = self.design, self.mesh, self.TOOL
@@ -323,28 +330,16 @@ class _MeshFieldTests:
         with self.subTest(tool=tool.name, design=self.kind or "ladder demo"):
             out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh} if mesh else {})
             self.assertEqual(out.get("status"), "ok", out.get("error"))
-            if mesh is None:
-                # contract (more than one mesh per version): a tool that meshes the design itself records
-                # that mesh (mesh.created, with mesher) and its fields name it by mesh_id; without mesh
-                # fields, results and per-member fields only
-                rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
-                self.assertEqual(contract.errors("analysis", rec), [])
-                named = {f["mesh_id"] for f in out.get("fields", []) if f.get("mesh_id")}
-                if named:
-                    own = out.get("mesh")
-                    self.assertIsInstance(own, dict, f"fields on mesh {sorted(named)} but the tool gives no mesh record")
-                    self.assertEqual(own.get("mesher"), tool.name, "its mesh does not say mesher")
-                    self.assertEqual(named, {own.get("mesh_id")}, "its fields name another mesh than its own")
-                    checker = cr.RunChecker(ROOT)
-                    checker.where_of = ["mesh.created", "analysis.finished"]
-                    checker.designs[design["design_version"]] = (-1, design)
-                    checker.recs["mesh"][own["mesh_id"]] = (0, own)
-                    checker.recs["analysis"]["ana-0001"] = (1, rec)
-                    checker.check_meshes()
-                    self.assertEqual([str(f) for f in checker.findings if f.level == "error"], [],
-                                     "\n".join(str(f) for f in checker.findings))
+            named = {f["mesh_id"] for f in out.get("fields", []) if f.get("mesh_id")}
+            if mesh is None:  # no make_mesh: results and per-member values only
+                self.assertEqual(named, set(), "fields name a mesh, but the tool has no make_mesh to make it")
+                self.assertEqual(contract.errors("analysis", dict(out, analysis_id="ana-0001",
+                                                                  prediction_ids=["pred-0001"])), [])
                 return
-            self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
+            if self.own:
+                self.assertEqual(mesh.get("mesher"), tool.name, "make_mesh's mesh does not say mesher = the tool")
+            self.assertIn("mesh-0001", named, "no field on the mesh")
+            self.assertEqual(named, {"mesh-0001"}, "fields name another mesh than the one given")
             rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
             checker = cr.RunChecker(ROOT)
             checker.where_of = ["mesh.created", "analysis.finished"]
