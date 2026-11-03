@@ -187,8 +187,7 @@
    "cuts": [
     "N17"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N17.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n17_app_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
