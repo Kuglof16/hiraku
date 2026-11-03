@@ -38,13 +38,14 @@ def requirement(req: Record, key: str, unit: str | None = None) -> Record:
 
 
 def loading_requirement(req: Record) -> str:
-    """The loading to check (Q30): one of hiraku.contract.protocols.LOADINGS."""
+    """The loading to check (Q30): one of hiraku.contract.protocols.LOADINGS. Without Q30, the
+    requirements file's default_loading (a one-person product: driver), else DEFAULT_LOADING."""
     for r in req["requirements"]:
         if r["key"] == "Q30":
             if r.get("value") not in LOADINGS:
                 raise CatalogError(f"Q30 must be one of {', '.join(LOADINGS)}, got {r.get('value')!r}")
             return r["value"]
-    return DEFAULT_LOADING
+    return req.get("default_loading") or DEFAULT_LOADING
 
 
 def check_design_loading(req: Record, design: Record, loading: str) -> None:
@@ -311,6 +312,9 @@ def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: 
         if beyond and not (is_beyond(lc) and lc["title"].startswith(BEYOND_TITLE)):
             raise CatalogError(f"the case past the limit of {tid} ({lc['load_case_id']}) must have an id ending "
                                f"{BEYOND_SUFFIX} and a title starting {BEYOND_TITLE}")
+        # docs/contract.md: a case that names no loading gets the requirements file's default_loading
+        if req.get("default_loading") and "loading" not in (lc.get("params") or {}):
+            lc["params"] = dict(lc.get("params") or {}, loading=req["default_loading"])
     return cases
 
 
