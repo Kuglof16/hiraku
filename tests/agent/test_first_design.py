@@ -26,7 +26,10 @@ from tests.tools.helpers import REQUIREMENTS
 def requirements_without_design(folder: Path, tests: list[str]) -> Path:
     req = read_data(REQUIREMENTS)
     req.pop("design_file")
-    req["tests"] = tests
+    if tests is None:  # the tests are not fixed: the catalog picks them on version 1 (a products file's run)
+        req.pop("tests", None)
+    else:
+        req["tests"] = tests
     path = folder / "requirements.json"
     path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
     return path
@@ -145,6 +148,28 @@ class FirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual(next(r for r in self.ctx.requirements_file["requirements"] if r["key"] == "Q15")["value"], 100)
         out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "答えの段差で"}, "designer")
         self.assertEqual([lc["load_case_id"] for lc in out["load_cases"]], ["P1-step120", "R1-step120"])
+
+
+class DeferredChecksTest(FirstDesignCase, unittest.TestCase):
+    """No tests in the file (Claude picks them): no tool is checked at the start; version 1's tests'
+    tools are checked when propose_design builds the load cases."""
+    tests = None
+
+    def test_the_tools_are_checked_once_version_1_has_its_tests(self):
+        from hiraku.tools.functions import list_tools
+        from hiraku.tools.shelf import DEFERRED_TEXT, NOT_YET
+
+        self.assertNotIn("tool.checked", self.kinds())
+        self.assertIn(DEFERRED_TEXT, [e.get("text") for e in self.ctx.store.events()])
+        self.assertTrue(all(line.get("not_checked") == NOT_YET for line in list_tools(self.ctx)))
+        out = propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+        tests = {lc["test_id"] for lc in self.ctx.load_cases}
+        checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
+        self.assertTrue(checked)
+        self.assertTrue(all(set(self.ctx.tools[n].tests) & tests for n in checked))
+        self.assertEqual(out["design_version"], 1)
+        for e in self.ctx.store.events():
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
 
 
 class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):

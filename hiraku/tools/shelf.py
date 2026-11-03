@@ -170,14 +170,25 @@ def keep_check(folder: Path, code: str, name: str, run_id: str, spec: Record) ->
     os.replace(tmp, path)
 
 
-def check_shelf(ctx: RunContext, test_ids: list[str] | None = None) -> dict[str, Record]:
+NOT_YET = "試験がまだ決まっていないので、まだ確かめていない"
+DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、道具は版 1 の試験が決まってから、その試験に使う分だけ確かめます"
+
+
+def defer_shelf(ctx: RunContext) -> None:
+    """A run whose tests are not fixed at the start (a products file: Claude picks the domains): no
+    tool is checked yet; propose_design checks the tools of the first version's tests."""
+    ctx.store.emit("agent.said", agent="system", text=DEFERRED_TEXT)
+
+
+def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_checked: bool = False) -> dict[str, Record]:
     """Check the tools the run's tests can use (tools_for_tests; all of them when test_ids is None)
     and emit tool.checked for each; the others are named in one agent.said and stay without a
     spec, so analyze refuses them (HK2) and list_tools says why (NOT_CHECKED). A check of the same
-    source from an earlier run in the same runs folder is reused (reused_check). Once the stop
-    button's stop.request is in the run folder the rest are not checked: the run is about to stop."""
-    names = tools_for_tests(ctx.tools, test_ids)
-    left = [n for n in ctx.tools if n not in names]
+    source from an earlier run in the same runs folder is reused (reused_check). skip_checked: tools
+    the run checked before are left as they are (the first version's tests after defer_shelf). Once
+    the stop button's stop.request is in the run folder the rest are not checked: the run is about to stop."""
+    names = [n for n in tools_for_tests(ctx.tools, test_ids) if not (skip_checked and n in ctx.specs)]
+    left = [n for n in ctx.tools if n not in names and n not in ctx.specs]
     if left:
         ctx.store.emit("agent.said", agent="system",
                        text=f"この実行の試験 ({'・'.join(test_ids or [])}) には使わないので確かめない道具: "

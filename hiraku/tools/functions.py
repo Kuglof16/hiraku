@@ -21,7 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
+from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, unchecked_tools
 from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
@@ -301,7 +301,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
     `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
-    lines = {n: _unchecked_line(n, ctx.tools[n]) for n in unchecked_tools(ctx)}
+    lines = {n: _unchecked_line(n, ctx.tools[n], ctx.version) for n in unchecked_tools(ctx)}
     if args.get("tool"):
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
@@ -315,14 +315,14 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     return [s if "not_checked" in s else _tool_line(s) for s in out]
 
 
-def _unchecked_line(name: str, tool: Any) -> Record:
+def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
     """list_tools' line for a tool this run did not check (check_shelf): not usable, and why."""
     line: Record = {"name": name}
     for key in ("title", "domain", "base", "tests"):
         value = getattr(tool, key, None)
         if value is not None:
             line[key] = list(value) if key == "tests" else value
-    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED}
+    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED if version else NOT_YET}
 
 
 # ---------------------------------------------------------------------------- prediction
@@ -822,6 +822,8 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
                              text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
     if skipped:
         ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
+    # the tools of version 1's tests that the start did not check (a run whose tests were not fixed then)
+    check_shelf(ctx, list(dict.fromkeys(lc["test_id"] for lc in load_cases)), skip_checked=True)
     init_judgements(ctx)
     return {
         "design_version": 1,

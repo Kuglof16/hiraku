@@ -12,6 +12,7 @@ from hiraku.contract import layout
 from hiraku.contract.protocols import AnalysisTool, FormulaRegistry
 from hiraku.store import RunStore
 from hiraku.tools import RunContext, check_shelf, load_designgen, load_solvers
+from hiraku.tools.shelf import defer_shelf
 from hiraku.tools.judge import init_judgements
 
 Record = dict[str, Any]
@@ -129,7 +130,11 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     try:
         if design is not None:
             store.write_design(design)
-        check_shelf(ctx, run_test_ids(req, load_cases))
+        test_ids = run_test_ids(req, load_cases)
+        if test_ids is None:  # Claude picks the tests: the tools are checked once version 1 has them
+            defer_shelf(ctx)
+        else:
+            check_shelf(ctx, test_ids)
         if design is not None:
             init_judgements(ctx)
     except KeyboardInterrupt:  # the tool checks take a while; do not leave the folder "running"
@@ -171,7 +176,8 @@ def picks_for_file_tests(picked: Record, tests: list[str], load_cases: list[Reco
 def run_test_ids(req: Record, load_cases: list[Record]) -> list[str] | None:
     """The tests a run can use, for the tool checks (check_shelf): its load cases' tests; before the
     first version, the requirements file's tests and the tests that feed them (P1 for R1); None
-    when they are not fixed yet (no load cases and no `tests` in the file: every tool is checked)."""
+    when they are not fixed yet (no load cases and no `tests` in the file: the checks wait for version 1,
+    shelf.defer_shelf)."""
     if load_cases:
         return list(dict.fromkeys(lc["test_id"] for lc in load_cases))
     if not req.get("tests"):
