@@ -478,6 +478,192 @@ def end_cross_member_inputs(design: dict, loading: str | None = None) -> dict:
     }
 
 
+def _left_rail(design: dict) -> tuple[dict, dict, list[str], float, float]:
+    """(nodes, member props, the left rail's nodes front to back, rail y, rail z) of a ladder frame."""
+    nodes = node_table(design)
+    props = member_props(design)
+    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
+             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and mp["a"][1] > 0]
+    if not rails:
+        raise DesignError("the calculation needs a ladder frame: rails along x")
+    y_r, z_r = float(rails[0]["a"][1]), float(rails[0]["a"][2])
+    left = sorted({n for n, p in nodes.items() if abs(p[1] - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6},
+                  key=lambda n: -nodes[n][0])
+    return nodes, props, left, y_r, z_r
+
+
+def _mirror(nodes: dict, n: str) -> str | None:
+    p = nodes[n]
+    return next((m for m, q in nodes.items() if abs(q[0] - p[0]) < 1e-6 and abs(q[1] + p[1]) < 1e-6
+                 and abs(q[2] - p[2]) < 1e-6), None)
+
+
+def _rail_piece(props: dict, a: str, b: str):
+    return _member_between(props, a, b)
+
+
+def rail_springs(design: dict, node: str) -> dict:
+    """Rotational springs (N*mm/rad) of the left rail at one of its nodes against the rest of the ladder, for
+    moments that come in at the node and its mirror on the right rail as an antisymmetric pair (left-right
+    opposite pitch, alike roll and yaw). Each is a chain along the rail (nodes front to back, the ends free):
+
+    - k_x (roll): the rail's St Venant torsion G J / L between nodes; at each station (a cross member joining the
+      node and its mirror at the rails' height) the cross member in double curvature, 6 E I / w (vertical bending);
+    - k_z (yaw): the rail bent sideways, E I / L between nodes (the rail's moment E I times the change of its yaw);
+      the cross member in double curvature sideways, 6 E I / w;
+    - k_y (the opposite pitch, the ladder's warping): the rail bent vertically, E I / L between nodes; the cross
+      member twisted by the two rails' opposite pitch, 2 G J / w; and the rails' own torsion, which the warping
+      twists, 4 G J / w^2 per unit length (from E I_w psi''' - G J psi' with I_w = I w^2 / 2, psi' = 2 theta / w).
+    """
+    nodes, props, left, y_r, z_r = _left_rail(design)
+    if node not in left:
+        raise DesignError(f"node {node} is not on the left rail")
+    w = 2.0 * y_r
+    idx = {n: i for i, n in enumerate(left)}
+    K = {k: np.zeros((len(left), len(left))) for k in ("x", "y", "z")}
+
+    def add(Km, i, j, k):
+        Km[i, i] += k
+        Km[j, j] += k
+        Km[i, j] -= k
+        Km[j, i] -= k
+
+    for a_, b_ in zip(left, left[1:]):
+        mp = _rail_piece(props, a_, b_)
+        if mp is None:
+            raise DesignError(f"no rail member between {a_} and {b_}")
+        mat, sec = mp["material"], mp["section"]
+        E = float(mat["E_MPa"])
+        G = E / (2.0 * (1.0 + float(mat["nu"])))
+        L = mp["length"]
+        i, j = idx[a_], idx[b_]
+        add(K["x"], i, j, G * sec["J"] / L)
+        add(K["z"], i, j, E * sec["Iy"] / L)
+        add(K["y"], i, j, E * sec["Iz"] / L)
+        f = 4.0 * G * sec["J"] / w**2 * L / 2.0
+        K["y"][i, i] += f
+        K["y"][j, j] += f
+    for n in left:
+        m = _mirror(nodes, n)
+        cross = _member_between(props, n, m) if m else None
+        if cross is None:
+            continue
+        E = float(cross["material"]["E_MPa"])
+        G = E / (2.0 * (1.0 + float(cross["material"]["nu"])))
+        s, L = cross["section"], cross["length"]
+        i = idx[n]
+        K["x"][i, i] += 6.0 * E * s["Iz"] / L
+        K["z"][i, i] += 6.0 * E * s["Iy"] / L
+        K["y"][i, i] += 2.0 * G * s["J"] / L
+    out = {}
+    for k, Km in K.items():
+        f = np.zeros(len(left))
+        f[idx[node]] = 1.0
+        out[f"k_{k}"] = 1.0 / float(np.linalg.solve(Km, f)[idx[node]])
+    return out
+
+
+def mount_frames(design: dict) -> list[dict]:
+    """The U-frames under (or over) the rails: a member from a left rail node to a node off the rails (a leg), a
+    member from there to its mirror (a cross member off the rails' height) and the mirror leg back to the mirror
+    rail node. [{"leg", "cross", "leg_mirror", "base", "tip"}], front to back."""
+    nodes, props, left, y_r, z_r = _left_rail(design)
+    on_left = set(left)
+    on_rails = {n for n, p in nodes.items() if abs(abs(p[1]) - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6}
+    out = []
+    for mp in props.values():
+        m = mp["member"]
+        for base, tip in ((m["node_a"], m["node_b"]), (m["node_b"], m["node_a"])):
+            if base not in on_left or tip in on_rails:
+                continue
+            t_m, b_m = _mirror(nodes, tip), _mirror(nodes, base)
+            if t_m is None or b_m is None or abs(nodes[tip][1]) < 1e-6:
+                continue
+            cross = _member_between(props, tip, t_m)
+            leg_m = _member_between(props, t_m, b_m)
+            if cross is None or leg_m is None:
+                continue
+            out.append({"leg": m["id"], "cross": cross["member"]["id"], "leg_mirror": leg_m["member"]["id"],
+                        "base": base, "tip": tip})
+    return sorted(out, key=lambda u: -nodes[u["base"]][0])
+
+
+def ladder_twist_setup(design: dict) -> dict:
+    """The ladder as a thin-walled beam for ladder_twist_rate (as end_cross_member_inputs takes it): its ends, GJ
+    (the rails' St Venant torsion and the cross members' twist smeared over the length), EIw (the rails bending
+    opposite ways) and the roll inertia along it."""
+    nodes, props, left, y_r, z_r = _left_rail(design)
+    w = 2.0 * y_r
+    rail = _rail_piece(props, left[0], left[1])
+    mat = rail["material"]
+    E, nu = float(mat["E_MPa"]), float(mat["nu"])
+    G = E / (2.0 * (1.0 + nu))
+    rail_nodes = [n for n, p in nodes.items() if abs(abs(p[1]) - w / 2.0) < 1e-6]
+    xr = [float(nodes[n][0]) for n in rail_nodes]
+    x_rear_end, x_front_end = min(xr), max(xr)
+    cross_GJw = sum(G * mp["section"]["J"] * mp["length"] for mp in props.values()
+                    if abs(abs(mp["a"][1]) - w / 2.0) < 1e-6 and abs(abs(mp["b"][1]) - w / 2.0) < 1e-6
+                    and abs(mp["a"][1] - mp["b"][1]) > 1e-6)
+    sec = rail["section"]
+    return {"x_rear_end": x_rear_end, "x_front_end": x_front_end, "w": w,
+            "GJ": 2.0 * G * sec["J"] + cross_GJw / (x_front_end - x_rear_end), "EIw": E * sec["Iz"] * w**2 / 2.0,
+            "pieces": roll_inertia_along(design)}
+
+
+def mount_leg_inputs(design: dict, loading: str | None = None) -> list[dict]:
+    """Quantities for frame_static.mount_leg_stress for each U-frame's left leg (mount_frames), front to back:
+    the leg and the half cross member's geometry and tubes, the rail's springs at the leg's node (rail_springs),
+    and the free ladder's pitch of the left rail there for 1 kN up at the left and down at the right front / rear
+    wheel (theta = -(w/2) psi', psi' from ladder_twist_rate as end_cross_member_inputs takes the ladder).
+    [{"leg", "leg_mirror", "cross", "node", "inputs"}]."""
+    if loading is not None:
+        design = on_board(design, loading)
+    frames = mount_frames(design)
+    if not frames:
+        return []
+    nodes = node_table(design)
+    props = member_props(design)
+    sup = design.get("supports", [])
+    x_rear = min(s["position_mm"][0] for s in sup)
+    rear = sorted((s for s in sup if abs(s["position_mm"][0] - x_rear) < 1e-6), key=lambda s: -s["position_mm"][1])
+    front = sorted((s for s in sup if abs(s["position_mm"][0] - x_rear) > 1e-6), key=lambda s: -s["position_mm"][1])
+    if len(rear) < 2 or len(front) < 2:
+        raise DesignError("the mount leg calculation needs a left and a right wheel at the front and at the rear")
+    tw = ladder_twist_setup(design)
+
+    def pitch(pair, x_at):
+        track = float(pair[0]["position_mm"][1]) - float(pair[-1]["position_mm"][1])
+        rate = ladder_twist_rate(tw["pieces"], tw["x_rear_end"], tw["x_front_end"], tw["GJ"], tw["EIw"],
+                                 float(pair[0]["position_mm"][0]), 1000.0 * track, x_at)
+        return -tw["w"] / 2.0 * rate
+
+    out = []
+    for u in frames:
+        leg, crs = props[u["leg"]], props[u["cross"]]
+        sl, sx = (design["sections"][x["member"]["section"]] for x in (leg, crs))
+        for s in (sl, sx):
+            d = s.get("dims_mm", {})
+            if s.get("shape") != "rect_tube" or abs(float(d["b"]) - float(d["h"])) > 1e-9:
+                raise DesignError("the mount leg calculation is for square tubes (rect_tube with b = h)")
+        B, T = nodes[u["base"]], nodes[u["tip"]]
+        mat = leg["material"]
+        x_at = float(B[0])
+        q = quantity
+        out.append({
+            "leg": u["leg"], "leg_mirror": u["leg_mirror"], "cross": u["cross"], "node": u["base"],
+            "inputs": {
+                "dx": q(float(T[0] - B[0]), "mm"), "dy": q(float(T[1] - B[1]), "mm"), "dz": q(float(T[2] - B[2]), "mm"),
+                "y_p": q(abs(float(T[1])), "mm"),
+                "b_l": q(float(sl["dims_mm"]["b"]), "mm"), "t_l": q(float(sl["dims_mm"]["t"]), "mm"),
+                "b_x": q(float(sx["dims_mm"]["b"]), "mm"), "t_x": q(float(sx["dims_mm"]["t"]), "mm"),
+                "E": q(float(mat["E_MPa"]), "MPa"), "nu": q(float(mat["nu"]), "1"),
+                **{k: q(v, "N*mm") for k, v in rail_springs(design, u["base"]).items()},
+                "theta_front": q(pitch(front, x_at), "rad"), "theta_rear": q(pitch(rear, x_at), "rad"),
+            },
+        })
+    return out
+
+
 ROLLBAR_POSTS = ("rollbar_post_L", "rollbar_post_R")
 ROLLBAR_TOP = "rollbar_top"
 
