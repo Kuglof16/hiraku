@@ -67,43 +67,39 @@ export function storyOf(layout, name) {
   return { message: own.message ?? null, limits, bodyPx: limits.body_text_px };
 }
 
-// One tile large and the rest as a small list, inside the box of a grid {x, y, cols, rows,
-// tile_w, tile_h, gap_x, gap_y} (the story: show one representative large). The large one
-// takes the first ceil(cols / 2) columns over all rows; the n - 1 others fill the columns
-// left, row by row, as many rows as they need. Returns { big, small: [rect, ...] }.
-export function featureRects(g, n) {
-  const W = g.cols * g.tile_w + (g.cols - 1) * g.gap_x;
-  const H = g.rows * g.tile_h + (g.rows - 1) * g.gap_y;
-  const bc = Math.min(g.cols - 1, Math.ceil(g.cols / 2));
-  const big = { x: g.x, y: g.y, w: bc * g.tile_w + (bc - 1) * g.gap_x, h: H };
-  const cols = Math.max(1, g.cols - bc);
-  const rows = Math.max(1, Math.ceil((n - 1) / cols));
-  const left = g.x + big.w + g.gap_x;
-  const w = (W - big.w - g.gap_x - (cols - 1) * g.gap_x) / cols;
-  const h = (H - (rows - 1) * g.gap_y) / rows;
-  const small = [];
-  for (let i = 0; i < n - 1; i += 1) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    small.push({ x: Math.round(left + c * (w + g.gap_x)), y: Math.round(g.y + r * (h + g.gap_y)), w: Math.floor(w), h: Math.floor(h) });
+// The keys of the one tile shown large (feature) and of the small list (list), in a cut's
+// layout section (the story: show one representative large).
+export const FEATURE_KEYS = [
+  "feature.x", "feature.y", "feature.w", "feature.h",
+  "list.x", "list.y", "list.w", "list.h", "list.cols", "list.rows", "list.gap_x", "list.gap_y",
+];
+
+// The slots of a list {x, y, w, h, cols, rows, gap_x, gap_y}, row by row from the left:
+// each (w - (cols - 1) gap_x) / cols wide and (h - (rows - 1) gap_y) / rows high.
+export function listRects(L) {
+  const w = (L.w - (L.cols - 1) * L.gap_x) / L.cols;
+  const h = (L.h - (L.rows - 1) * L.gap_y) / L.rows;
+  const out = [];
+  for (let r = 0; r < L.rows; r += 1) {
+    for (let c = 0; c < L.cols; c += 1) out.push({ x: Math.round(L.x + c * (w + L.gap_x)), y: Math.round(L.y + r * (h + L.gap_y)), w: Math.floor(w), h: Math.floor(h) });
   }
-  return { big, small };
+  return out;
 }
 
 export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
-  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px",
+  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title",
   "times.lead_s", "times.loop_to_s", "times.accel_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
 
 // Not in layout.json (written here until the promo department gives keys for them): the
 // view's and the popup's border and the popup's corner, the padding inside the popup and
-// around the rate (a fraction of popup.text_px), the rate's text size (popup.text_px), and
-// the largest size of the reading (a multiple of popup.title_px; it is also held to the
-// popup's width).
-export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1, reading_of_title: 2 };
+// around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
+// The reading's largest size is layout.json n03.popup.reading_of_title x title_px (it is
+// also held to the popup's width).
+export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
 
@@ -242,7 +238,7 @@ export class CutN03 {
         const [lo, hi] = extent(c.s.values);
         r.textContent = [lo, hi].map((v) => `${fmt(v, 3)} ${unitOf(c)}`).sort((a, b) => b.length - a.length)[0];
         el.append(r);
-        let px = Math.round(P.title_px * S.reading_of_title);
+        let px = Math.round(P.title_px * P.reading_of_title);
         r.style.fontSize = `${px}px`;
         while (r.scrollWidth > chartW && px > this.story.bodyPx) {
           px -= 1;

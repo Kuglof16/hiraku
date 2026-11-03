@@ -677,6 +677,16 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .runlist button.go { color: var(--panel); background: var(--ink); }
 .runlist .why { color: var(--muted); font-size: 13px; }
 .runlist .confirm { color: var(--red); font-size: 14px; font-weight: 600; }
+.runlist .demo-runs { border: 1.5px solid var(--ink); border-radius: 12px; padding: 2px 12px; margin-bottom: 6px; }
+.runlist .demo-runs .lreq:last-child { border-bottom: none; }
+.runlist .demo .dhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 17px; }
+.runlist .demo .cut { font-size: 12px; font-weight: 700; color: var(--blue); border: 1.5px solid var(--blue); border-radius: 999px; padding: 0 8px; }
+.runlist .demo .shows { font-size: 14px; margin-top: 2px; }
+.runlist .demo .err { color: var(--red); font-size: 14px; }
+.runlist .demo .cost { font-size: 14px; margin-top: 2px; }
+.runlist .demo .cost.over { color: var(--red); font-weight: 600; }
+.runlist .over { color: var(--red); font-size: 13px; font-weight: 600; }
+.runlist .demo-a1 { font-size: 15px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 14px; text-decoration: none; white-space: nowrap; }
 .runlist .keyless { margin: 4px 0 8px; padding: 8px 12px; font-size: 15px; background: var(--card, #fffdf8); border: 1.5px solid var(--line); border-radius: 10px; }
 .mode .launch-link { margin-left: 10px; font-size: 15px; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 1px 10px; text-decoration: none; white-space: nowrap; }
 body.video .mode .launch-link { display: none; }

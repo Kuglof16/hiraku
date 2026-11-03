@@ -16,13 +16,13 @@
 // Nothing is coloured by hand: a last version that is not all green stays as it is.
 
 import * as THREE from "three";
-import { clearOfBand, gridRects, squeeze } from "./compose.js";
+import { clearOfBand, squeeze } from "./compose.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { esc } from "./labels.js";
 import { channelsOf, motionOf, xSeriesOf } from "./series.js";
 import { AssemblyStage, assemblyRecord } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { featureRects, storyOf } from "./cut_n03.js";
+import { FEATURE_KEYS, listRects, storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -31,7 +31,7 @@ const params = new URLSearchParams(location.search);
 const COMMON_KEYS = [
   "duration_s",
   "header.x", "header.y", "header.w", "header.h", "header.size_px",
-  "grid.x", "grid.y", "grid.cols", "grid.rows", "grid.tile_w", "grid.tile_h", "grid.gap_x", "grid.gap_y",
+  ...FEATURE_KEYS,
   "tests",
   "tile.border_px", "tile.radius_px", "tile.label.x", "tile.label.y", "tile.label.size_px",
   "tile.mark.size_px", "tile.mark.right", "tile.mark.top",
@@ -230,13 +230,12 @@ export class CutGrid {
     Object.assign(this.header.style, { left: `${H.x}px`, top: `${H.y}px`, width: `${H.w}px`, height: `${H.h}px`, fontSize: `${Math.max(H.size_px, this.story.bodyPx)}px`, lineHeight: `${H.h}px` });
     this.stage.append(this.header);
 
-    const cells = gridRects(sp.grid);
-    if (sp.tests.length > cells.length) throw new Error(`layout.json の ${this.name}.tests は ${sp.tests.length} 枚、grid は ${cells.length} 枚分`);
-    // one representative tile large, the others as a small list in the grid's box
+    const slots = listRects(sp.list);
+    if (sp.tests.length - 1 > slots.length) throw new Error(`layout.json の ${this.name}.tests の一覧は ${sp.tests.length - 1} 枚、list は ${slots.length} 枠`);
+    // one representative tile in the feature box, the others in the list's slots, in order
     this.featured = this.featuredKey();
-    const fr = featureRects(sp.grid, sp.tests.length);
     let j = 0;
-    const rects = sp.tests.map((key) => (key === this.featured ? fr.big : fr.small[j++]));
+    const rects = sp.tests.map((key) => (key === this.featured ? sp.feature : slots[j++]));
     this.tiles = sp.tests.map((key, i) => {
       const r = rects[i];
       const def = TILES[key];

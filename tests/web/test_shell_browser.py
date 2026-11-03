@@ -28,7 +28,7 @@ def n07_layout():
         "duration_s": 15.3,
         "view": {"x": 96, "y": 96, "w": 1500, "h": 790},
         "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20},
-        "label": {"x": 120, "y": 120, "size_px": 30},
+        "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08},
         "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0},
         "turn_deg": 90,
         "zoom": {"fill": 0.45},
