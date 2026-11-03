@@ -123,13 +123,13 @@
   <div id="caption"></div>
   <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
 </div>
-<div id="ver">v2</div>
+<div id="ver">v4</div>
 <div id="err"></div>
 
 <script src="pet3d.js"></script>
 <script type="module">
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 const HP = window.HirakuPets;
@@ -145,10 +145,23 @@ for (const k of Object.keys(CHOICES)) if (CHOICES[k].includes(q.get(k))) S[k] = 
 if (ROLES.some((r) => r.id === q.get("role"))) S.role = q.get("role");
 for (const k of ["edges", "nodes", "spin"]) if (q.has(k)) S[k] = q.get(k) === "1";
 S.t = q.has("t") && isFinite(parseFloat(q.get("t"))) ? parseFloat(q.get("t")) : null;
+// orbit = camera offset from the target (x,y,z) and the camera up (x,y,z),
+// in pet units; pan = the target point (x,y,z). Any direction is allowed
+// (straight above or below too). The v3 form "azimuth,elevation,distance" is
+// still read.
 S.orbit = null;
+S.pan = null;
 if (q.has("orbit")) {
   const o = q.get("orbit").split(",").map(Number);
-  if (o.length === 3 && o.every(isFinite)) S.orbit = o;
+  if (o.length === 6 && o.every(isFinite) && Math.hypot(o[0], o[1], o[2]) > 0 && Math.hypot(o[3], o[4], o[5]) > 0) S.orbit = o;
+  else if (o.length === 3 && o.every(isFinite)) {
+    const [az, el, d] = o;
+    S.orbit = [d * Math.sin(az) * Math.cos(el), d * Math.sin(el), d * Math.cos(az) * Math.cos(el), 0, 1, 0];
+  }
+}
+if (q.has("pan")) {
+  const o = q.get("pan").split(",").map(Number);
+  if (o.length === 3 && o.every(isFinite)) S.pan = o;
 }
 const UI = q.get("ui") !== "0";
 if (!UI) document.documentElement.classList.add("no-ui");
@@ -161,7 +174,8 @@ function urlNow() {
   if (S.mesh !== "coarse") p.set("mesh", S.mesh);
   p.set("cam", S.cam);
   if (S.spin) p.set("spin", "1");
-  if (S.orbit && S.view === "one") p.set("orbit", S.orbit.map((v) => v.toFixed(3)).join(","));
+  if (S.orbit && S.view !== "sizes") p.set("orbit", S.orbit.map((v) => v.toFixed(4)).join(","));
+  if (S.pan && S.view !== "sizes") p.set("pan", S.pan.map((v) => v.toFixed(4)).join(","));
   if (frozen !== null) p.set("t", (+frozen.toFixed(3)).toString());
   if (!UI) p.set("ui", "0");
   return location.pathname + "?" + p.toString().replace(/%2C/g, ",");
@@ -240,37 +254,61 @@ function buildPets() {
 const FOV = 24;
 const CAMS = { front: [0, 6], three: [34, 16], side: [90, 6] }; // azimuth, elevation (degrees)
 const F = HP.FRAME;
-const TARGET = new THREE.Vector3(F.cx, F.cy, 0);
+const HOME = new THREE.Vector3(F.cx, F.cy, 0);
 const half = Math.tan((FOV * Math.PI) / 360);
+const target = () => (S.pan ? new THREE.Vector3(S.pan[0], S.pan[1], S.pan[2]) : HOME.clone());
 
 function fitDistance(aspect) {
   return Math.max(F.h / 2 / half, F.w / 2 / (half * aspect)) * 1.04 + 0.6;
 }
-function placeCamera(cam, aspect, preset, orbit) {
-  cam.fov = FOV; cam.aspect = aspect; cam.near = 0.1; cam.far = 60;
+// Camera pose = offset from the target + up vector. Presets come from CAMS;
+// a dragged pose (S.orbit) is used as it is, or, for the cells of the grid,
+// with its distance scaled from the reference aspect `ref` to the cell.
+function placeCamera(cam, aspect, ref, useOrbit) {
+  cam.fov = FOV; cam.aspect = aspect; cam.near = 0.1; cam.far = 80;
   cam.updateProjectionMatrix();
-  let az, el, dist;
-  if (orbit) [az, el, dist] = orbit;
-  else { [az, el] = CAMS[preset].map((d) => (d * Math.PI) / 180); dist = fitDistance(aspect); }
-  cam.position.set(
-    TARGET.x + dist * Math.sin(az) * Math.cos(el),
-    TARGET.y + dist * Math.sin(el),
-    TARGET.z + dist * Math.cos(az) * Math.cos(el)
-  );
-  cam.lookAt(TARGET);
+  const off = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  if (useOrbit && S.orbit) {
+    off.fromArray(S.orbit, 0);
+    up.fromArray(S.orbit, 3).normalize();
+    if (ref) off.multiplyScalar(fitDistance(aspect) / fitDistance(ref));
+  } else {
+    const [az, el] = CAMS[S.cam].map((d) => (d * Math.PI) / 180);
+    const d = fitDistance(aspect);
+    off.set(d * Math.sin(az) * Math.cos(el), d * Math.sin(el), d * Math.cos(az) * Math.cos(el));
+  }
+  const tg = useOrbit ? target() : HOME.clone();
+  cam.up.copy(up);
+  cam.position.copy(tg).add(off);
+  cam.lookAt(tg);
 }
 
+// Free rotation in every direction (trackball): left drag turns, wheel or
+// middle drag zooms, right drag pans. One view drives oneCam; the grid
+// drives ctrlCam (reference aspect 1) and every cell follows its pose.
 const oneCam = new THREE.PerspectiveCamera();
-const controls = new OrbitControls(oneCam, renderer.domElement);
-controls.enableDamping = false;
-controls.target.copy(TARGET);
-controls.minDistance = 4; controls.maxDistance = 40;
-controls.addEventListener("end", () => {
-  const off = oneCam.position.clone().sub(TARGET);
-  const dist = off.length();
-  S.orbit = [Math.atan2(off.x, off.z), Math.asin(off.y / dist), dist];
-  writeURL();
-});
+const ctrlCam = new THREE.PerspectiveCamera();
+const controls = new TrackballControls(oneCam, renderer.domElement);
+controls.staticMoving = true;
+controls.rotateSpeed = 3.0;
+controls.zoomSpeed = 1.2;
+controls.panSpeed = 0.8;
+controls.minDistance = 3; controls.maxDistance = 45;
+let userMove = false, urlDirty = false, lastUrlWrite = 0;
+function capturePose() {
+  const cam = controls.object;
+  const r4 = (v) => +v.toFixed(4);
+  const off = cam.position.clone().sub(controls.target);
+  S.orbit = [off.x, off.y, off.z, cam.up.x, cam.up.y, cam.up.z].map(r4);
+  S.pan = controls.target.distanceTo(HOME) > 1e-4 ? controls.target.toArray().map(r4) : null;
+  // snap the camera to the rounded pose, so the URL gives the same picture
+  controls.target.copy(target());
+  placeCamera(cam, cam.aspect, null, true);
+  urlDirty = true;
+}
+controls.addEventListener("start", () => { userMove = true; });
+controls.addEventListener("change", () => { if (userMove) capturePose(); });
+controls.addEventListener("end", () => { if (userMove) urlDirty = true; });
 
 let cells = [];
 let W = 0, H = 0;
@@ -283,16 +321,21 @@ function layout() {
   cells = [];
   labels.innerHTML = "";
   caption.innerHTML = "";
-  controls.enabled = S.view === "one";
+  controls.enabled = S.view !== "sizes";
+  userMove = false;
   const ri = ROLES.findIndex((r) => r.id === S.role);
 
   if (S.view === "grid") {
+    placeCamera(ctrlCam, 1, null, true);
+    controls.object = ctrlCam;
+    controls.target.copy(target());
+    controls.handleResize();
     const labH = 40, pad = 8;
     const cw = (W - pad * 2) / 5, ch = (H - pad * 2) / 2;
     ROLES.forEach((r, i) => {
       const x = pad + (i % 5) * cw, y = pad + Math.floor(i / 5) * ch;
       const cell = { x, y, w: cw, h: ch - labH, i, cam: new THREE.PerspectiveCamera() };
-      placeCamera(cell.cam, cell.w / cell.h, S.cam, null);
+      placeCamera(cell.cam, cell.w / cell.h, 1, true);
       cells.push(cell);
       const l = document.createElement("div");
       l.className = "cell-lab" + (i === ri ? " sel" : "");
@@ -302,12 +345,13 @@ function layout() {
     });
   } else if (S.view === "one") {
     const cell = { x: 0, y: 0, w: W, h: H, i: ri, cam: oneCam };
-    placeCamera(oneCam, W / H, S.cam, S.orbit);
-    controls.target.copy(TARGET);
-    controls.update();
+    placeCamera(oneCam, W / H, null, true);
+    controls.object = oneCam;
+    controls.target.copy(target());
+    controls.handleResize();
     cells.push(cell);
-    const r = ROLES[ri], c = pets[ri].counts;
-    caption.innerHTML = `<b>${r.name}</b> · ${r.propName}<small>${r.id} · 節点 ${c.nodes} · 要素 ${c.elements}</small>`;
+    const r = ROLES[ri], b = pets[ri].body;
+    caption.innerHTML = `<b>${r.name}</b> · ${r.propName}<small>${r.id} · ${b.caption}</small>`;
   } else {
     // sizes: the pet box at 184 px (video N00) and 48 px (app list)
     const sec = (text, x, y) => {
@@ -325,7 +369,7 @@ function layout() {
     ROLES.forEach((r, i) => {
       const x = 16 + (i % perRow) * (big + gap), yy = y + Math.floor(i / perRow) * (big + 22);
       const cell = { x, y: yy, w: big, h: big, i, cam: new THREE.PerspectiveCamera() };
-      placeCamera(cell.cam, 1, S.cam, null);
+      placeCamera(cell.cam, 1, null, false);
       cells.push(cell);
       const l = document.createElement("div");
       l.className = "cell-lab";
@@ -339,7 +383,7 @@ function layout() {
     ROLES.forEach((r, i) => {
       const x = 16 + i * (small + 10);
       const cell = { x, y, w: small, h: small, i, cam: new THREE.PerspectiveCamera() };
-      placeCamera(cell.cam, 1, S.cam, null);
+      placeCamera(cell.cam, 1, null, false);
       cells.push(cell);
     });
   }
@@ -367,19 +411,20 @@ const legend = document.getElementById("legend");
   }
 })();
 let legendText = "";
+// title = the quantity of the role (speed, plastic strain, ...), values relative 0..1
 function updateLegend(t) {
-  const show = S.view === "one";
+  const role = ROLES.findIndex((r) => r.id === S.role);
+  // no legend for a body without a contour (the packager's assembly)
+  const show = S.view === "one" && pets[role].body.quantity !== null;
   legend.style.display = show ? "block" : "none";
   if (!show) return;
-  const c = pets[ROLES.findIndex((r) => r.id === S.role)].contour(t, S.state);
-  const lines = [
-    c.loadCase === "mismatch" ? "荷重: 体重が左足に偏る (食い違い)" : `荷重 ${Math.round(c.load * 100)} %` + (S.state === "working" ? " (増分)" : ""),
-    `最大 ${c.max.toFixed(2)} · 最小 ${c.min.toFixed(2)}`,
-  ];
+  const c = pets[role].contour(t, S.state);
+  const lines = c.info.concat([`最大 ${c.max.toFixed(2)} · 最小 ${c.min.toFixed(2)}`]);
   if (c.max > 1) lines.push("1.0 より上も赤で塗る");
-  const text = lines.join("<br>");
+  const text = c.quantity + "|" + lines.join("<br>");
   if (text !== legendText) {
-    legend.querySelector(".info").innerHTML = text;
+    legend.querySelector(".info").innerHTML = lines.join("<br>");
+    legend.querySelector(".ttl").textContent = c.quantity;
     legendText = text;
   }
 }
@@ -391,6 +436,16 @@ const nowT = () => (frozen !== null ? frozen : (performance.now() - t0) / 1000);
 
 function render() {
   const t = nowT();
+  if (controls.enabled) {
+    controls.update();
+    // the grid cells follow the dragged pose
+    if (S.view === "grid" && userMove) for (const c of cells) placeCamera(c.cam, c.w / c.h, 1, true);
+  }
+  if (urlDirty && performance.now() - lastUrlWrite > 200) {
+    urlDirty = false;
+    lastUrlWrite = performance.now();
+    writeURL();
+  }
   renderer.setScissorTest(false);
   renderer.clear();
   renderer.setScissorTest(true);
@@ -401,7 +456,7 @@ function render() {
     p.group.visible = true;
     p.group.rotation.y = S.spin ? t * 0.6 : 0;
     p.update(t, S.state, c.cam);
-    const dist = c.cam.position.distanceTo(TARGET);
+    const dist = c.cam.position.distanceTo(S.view === "sizes" ? HOME : target());
     p.setPixelScale((c.h * dpr) / (2 * dist * half));
     const gy = H - c.y - c.h;
     renderer.setViewport(c.x, gy, c.w, c.h);
@@ -438,7 +493,7 @@ function changed(k) {
   if (k === "mesh") buildPets();
   if (k === "bg") applyBg();
   if (k === "edges" || k === "nodes") for (const p of pets) p.setOptions({ [k]: S[k] });
-  if (k === "cam") S.orbit = null;
+  if (k === "cam") { S.orbit = null; S.pan = null; }
   if (["view", "role", "cam", "mesh"].includes(k)) layout();
   syncPanel();
   writeURL();
@@ -465,8 +520,12 @@ slider.addEventListener("input", () => { frozen = parseFloat(slider.value); sync
 document.getElementById("copy").addEventListener("click", () => navigator.clipboard?.writeText(location.href));
 
 // click a cell in the grid -> look at that pet alone
+// (a drag that turned the view is not a click)
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener("click", (e) => {
   if (S.view !== "grid") return;
+  if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
   const r = renderer.domElement.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   const c = cells.find((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);

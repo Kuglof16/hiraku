@@ -6,8 +6,8 @@
 // number printed is a recorded value.
 
 import { DOMAINS, DOMAIN_JA, esc, fmt, fmtVU, unitLabel } from "./labels.js";
-import { colorOf } from "./colormap.js";
-import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
+import { OVER_COLOR, colorOf } from "./colormap.js";
+import { FIELD_JA, contourOf, fieldsOf, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 
@@ -76,7 +76,7 @@ function partRects(design, view, ct, interfering) {
     const h = z[2] * view.k;
     const v = ct?.parts?.[p.id];
     const hit = interfering.has(p.id);
-    const fill = typeof v === "number" ? colorOf(v, ct.max, ct.min) : hit ? "#f3c9bd" : "#efe9dc";
+    const fill = typeof v === "number" ? (overOf(ct, p.id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : hit ? "#f3c9bd" : "#efe9dc";
     const stroke = hit ? "#c8402a" : typeof v === "number" ? "#1d1d1f" : "#c9c3b6";
     out.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="${hit ? 2 : 1}" opacity="${typeof v === "number" || hit ? 0.9 : 0.7}"/>`);
   }
@@ -124,7 +124,7 @@ function partValueTags(design, view, ct) {
     .filter((p) => typeof ct.parts[p.id] === "number")
     .map((p) => {
       const c = p.box.center_mm;
-      const over = ct.limitKnown && ct.parts[p.id] > ct.max;
+      const over = overOf(ct, p.id, ct.parts[p.id]);
       const name = String(p.name ?? p.id).replace(/\s*[（(].*$/, "");
       return `<text x="${view.X(c[0]).toFixed(1)}" y="${(view.Y(c[2] + p.box.size_mm[2] / 2) - 4).toFixed(1)}" class="tv${over ? " over" : ""}">${esc(name)} ${esc(fmtVU(ct.parts[p.id], ct.field.unit, 3))}</text>`;
     })

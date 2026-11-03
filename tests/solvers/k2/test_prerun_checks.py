@@ -1,4 +1,4 @@
-"""The six checks K2 must pass before any scenario runs."""
+"""The seven checks K2 must pass before any scenario runs."""
 
 import unittest
 
@@ -39,6 +39,15 @@ class PreRunChecks(unittest.TestCase):
         res = checks.check_parked_on_slope()
         self.assert_all_pass(res)
         self.assertLess(res[0]["got"], 1.0)
+
+    def test_magic_formula_tyre(self):
+        res = checks.check_tyre()
+        self.assert_all_pass(res)
+        by = {c["quantity"]: c for c in res}
+        self.assertEqual(set(by), {"peak_longitudinal_force", "peak_lateral_force", "slip_stiffness",
+                                   "cornering_stiffness", "friction_ellipse", "aligning_moment_sign"})
+        # the scaled tyre is the K0 tyre at small slip: the check vehicle's defaults
+        self.assertAlmostEqual(by["cornering_stiffness"]["expected"] / by["peak_lateral_force"]["expected"] * 0.8, 8.0)
 
 
 if __name__ == "__main__":

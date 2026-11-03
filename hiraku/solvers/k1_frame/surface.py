@@ -79,4 +79,4 @@ def surface_field(fm: FrameModel, mesh: dict, n_points: int = N_POINTS) -> dict:
     if not np.all(np.isfinite(values)):
         raise DesignError("the beam stress painted on the mesh is not finite")
     return {"kind": "stress", "label": LABEL, "unit": "MPa", "mesh_id": mesh["mesh_id"],
-            "per_element": [float(v) for v in values], "surface": "top"}
+            "per_element": [round(float(v), 3) for v in values], "surface": "top"}  # 0.001 MPa keeps the record small

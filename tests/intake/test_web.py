@@ -45,6 +45,7 @@ for (const slug of Object.keys(DEMOS)) {{
     asked: hearingRows(m).length,
     open: hearingRows(m).filter((r) => r.state === 'open').length,
     reqs: m.requirements.length,
+    fresh: m.requirements.filter((r) => r.fresh).length,
     rules: allRules(m).length,
     checks: m.checks.size,
     top: ruleTree(m).map((n) => n.label),
@@ -53,7 +54,10 @@ for (const slug of Object.keys(DEMOS)) {{
 console.log(JSON.stringify(out));
 """)
         self.assertEqual({k: v["lit"] for k, v in got.items()},
-                         {"offroad-4w": 7, "care-bed": 5, "electric-guitar": 2, "serving-robot": 7})
+                         {"offroad-4w": 7, "care-bed": 5, "electric-guitar": 2, "serving-robot": 7, "offroad-4w-file": 7})
+        # the run started from the vehicle's file: the file stands, nothing is asked, two defaults are added
+        self.assertEqual((got["offroad-4w-file"]["asked"], got["offroad-4w-file"]["open"]), (0, 0))
+        self.assertEqual(got["offroad-4w-file"]["fresh"], 2)  # Q57 and Q63 are the only rows the hearing added
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])

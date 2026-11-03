@@ -75,6 +75,38 @@ def all_formulas() -> list[Formula]:
         requires=[(sp.And(2 * t < b, 2 * t < h, rho > 0), "wall thickness t must be less than half of b and h, rho positive")],
         symbols=s,
     ))
+    s = _sym("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
+    G = s["E"] / (2 * (1 + s["nu"]))
+    K_frame = 2 * G * s["J_r"] * s["L"] + s["n_c"] * G * s["J_c"] * s["w"]  # N*mm^3 per (rad/mm)^2
+    K_spring = 2 * s["k_f"] * (s["t_f"] / 2) ** 2 * s["d_f"] ** 2 + 2 * s["k_r"] * (s["t_r"] / 2) ** 2 * s["d_r"] ** 2
+    M_twist = s["I0"] * 1e6 * s["r_x"] ** 2  # kg*mm^2 * mm^2
+    out.append(Formula(
+        formula_id="modal.ladder_twist_mode",
+        title="はしご形のフレームのねじりの固有振動数 (左右のレールが逆に動くモード)",
+        domain="nvh",
+        expression="psi = psi' (x - x_I); K = 2 G J_r L + n_c G J_c w + sum over wheels k (t/2)^2 d^2; "
+                   "f = sqrt(K / (I0 r_x^2)) / (2 pi) (Rayleigh)",
+        inputs={"E": _in("MPa", "Young's modulus", min=0), "nu": _in("1", "Poisson's ratio", min=0, max=0.5),
+                "J_r": _in("mm^4", "torsion constant of a rail (Bredt for a tube)", min=0),
+                "J_c": _in("mm^4", "torsion constant of a cross member", min=0),
+                "n_c": _in("1", "number of cross members", min=0),
+                "w": _in("mm", "distance between the rails (length of a cross member)", min=0),
+                "L": _in("mm", "length of the frame", min=0),
+                "I0": _in("kg*m^2", "roll inertia of everything on the frame about the vehicle's x axis", min=0),
+                "r_x": _in("mm", "spread of that roll inertia along x (radius of gyration about its centroid x_I)", min=0),
+                "k_f": _in("N/mm", "front wheel rate", min=0), "k_r": _in("N/mm", "rear wheel rate", min=0),
+                "t_f": _in("mm", "front track", min=0), "t_r": _in("mm", "rear track", min=0),
+                "d_f": _in("mm", "front axle ahead of x_I"), "d_r": _in("mm", "rear axle ahead of x_I (negative behind)")},
+        outputs={"f": ("Hz", "first twist frequency of the frame", sp.sqrt(1e3 * (K_frame + K_spring) / M_twist) / (2 * sp.pi)),
+                 "spring_share": ("1", "share of the suspension springs in the twist stiffness", K_spring / (K_frame + K_spring))},
+        assumptions=["the twist angle varies linearly along x about the roll inertia's centroid (a Rayleigh upper bound)",
+                     "rails and cross members twist (Bredt), joints rigid; the rails' opposite bending is left out",
+                     "the weights sit on the frame nodes that carry them; the suspension springs are vertical"],
+        source="Rayleigh's method for the lowest mode; Saint-Venant torsion of thin-walled closed tubes (Bredt) "
+               "(textbook vibration and structures)",
+        requires=[(sp.And(s["I0"] > 0, s["r_x"] > 0, s["L"] > 0), "I0, r_x and L must be positive")],
+        symbols=s,
+    ))
     s = _sym("v", "r", "i")
     v, r, i = s["v"], s["r"], s["i"]
     f_wheel = (v / 3.6) / (2 * sp.pi * r / 1000)

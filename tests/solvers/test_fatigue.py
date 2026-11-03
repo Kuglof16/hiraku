@@ -74,6 +74,63 @@ class RoadDamageFormulaTest(unittest.TestCase):
         self.assertGreater(rougher["D"], a["D"])
 
 
+class FourWheelFormulaTest(unittest.TestCase):
+    QC = RoadDamageFormulaTest.BASE
+
+    def four(self, **over):
+        b = self.QC
+        base = dict(sigma_ra=q(b["sigma_w"]["value"] / b["W"]["value"] * 1000.0, "MPa"), sigma_rb=q(0.0, "MPa"),
+                    sigma_fa=q(0.0, "MPa"), sigma_fb=q(0.0, "MPa"),
+                    W_f=b["W"], m_uf=b["m_u"], k_sf=b["k_s"], zeta_f=b["zeta"], W_r=b["W"], m_ur=b["m_u"], k_sr=b["k_s"],
+                    zeta_r=b["zeta"], k_t=b["k_t"], L=q(1700.0, "mm"), G_d=b["G_d"], v=b["v"], d=b["d"], FAT=b["FAT"],
+                    m=b["m"], N_knee=b["N_knee"], m2=b["m2"])
+        return {k: v["value"] for k, v in solvers.formula_registry().evaluate(
+            "fatigue.road_damage_four_wheels", {**base, **over})["outputs"].items()}
+
+    def test_one_wheel_is_the_quarter_car(self):
+        """With only one wheel stressing the weld, the four-wheel damage is the one-wheel formula's."""
+        one = RoadDamageFormulaTest.ev(RoadDamageFormulaTest())
+        four = self.four()
+        for k in ("D", "sigma_s", "nu0", "n"):
+            self.assertAlmostEqual(four[k], one[k], delta=1e-9 * abs(one[k]), msg=k)
+
+    def test_tracks_add_and_axles_interfere(self):
+        a = self.four()["sigma_s"]
+        s = self.QC["sigma_w"]["value"] / self.QC["W"]["value"] * 1000.0
+        two = self.four(sigma_rb=q(s, "MPa"))["sigma_s"]  # the other track: independent, variances add
+        self.assertAlmostEqual(two, a * 2**0.5, delta=1e-9 * a)
+        same = self.four(sigma_fa=q(s, "MPa"))["sigma_s"]  # the same track a wheelbase earlier: neither sum nor root sum
+        self.assertTrue(0.0 < same < 2 * a and abs(same - a * 2**0.5) > 1e-3 * a)
+
+
+class EndCrossMemberTest(unittest.TestCase):
+    def test_demo_overhang_and_the_split(self):
+        from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+
+        ec = end_cross_member_inputs(DESIGN, loading="two_cargo")
+        self.assertEqual((ec["end_cross_member"], ec["joint_cross_member"], ec["supports"]),
+                         ("cross_E", "cross_B", ["RL", "RR", "FL", "FR"]))
+        reg = solvers.formula_registry()
+        out = {k: v["value"] for k, v in reg.evaluate("frame_static.end_cross_member_stress", ec["inputs"])["outputs"].items()}
+        z = 20.0 / ((40.0**4 - 35.4**4) / 12.0)  # h_c / 2 over I of the 40 x 40 x 2.3 tube
+        self.assertAlmostEqual(out["sigma_ra"] + out["sigma_rb"], 2 * out["M_sym"] * z, places=9)
+        self.assertAlmostEqual(out["sigma_ra"] - out["sigma_rb"], 2 * out["M_anti_rear"] * z, places=9)
+        self.assertAlmostEqual(out["sigma_fa"], -out["sigma_fb"], places=12)
+        flat = dict(ec["inputs"], misfit_rear=q(0.0, "rad"), misfit_front=q(0.0, "rad"))
+        out0 = {k: v["value"] for k, v in reg.evaluate("frame_static.end_cross_member_stress", flat)["outputs"].items()}
+        self.assertAlmostEqual(out0["sigma_ra"], out0["sigma_rb"], places=12)  # no twist: both rear wheels alike
+
+    def test_twist_rate_without_warping_is_st_venant(self):
+        from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_rate
+
+        GJ, M = 6.0e10, 1.0e6
+        pieces = [(1000.0, 5.0e6)]  # all the roll inertia at the front end: the whole frame behind carries M
+        rate = ladder_twist_rate(pieces, -1000.0, 1000.0, GJ, 1.0, -900.0, M, 0.0)
+        self.assertAlmostEqual(rate, M / GJ, delta=1e-6 * M / GJ)
+        warped = ladder_twist_rate(pieces, -1000.0, 1000.0, GJ, 2.0e16, -900.0, M, 0.0)
+        self.assertLess(warped, M / GJ)  # the rails' bending stiffens the ladder against twist
+
+
 class InfluenceTest(unittest.TestCase):
     def test_superposition_reproduces_the_static_stress(self):
         S, cols, pts = influence(DESIGN, "z")
