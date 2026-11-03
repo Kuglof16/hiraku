@@ -482,7 +482,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#launch .lreq")
             ask = page.locator("#launch button[data-launch-ask]")
             self.assertIn("$2", ask.text_content())  # the cost limit shows before anything starts
@@ -493,7 +493,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.wait_for_selector("#launch button[data-launch-ask]")
             self.assertFalse(lau.started)  # nothing ran yet
             page.click('#launch button[data-launch="scripted"]')
-            page.wait_for_url(f"**/?run={run_id}", timeout=30000)
+            page.wait_for_url(f"**/?run={run_id}&dev=1", timeout=30000)
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.evaluate("window.hiraku.ready")
             self.assertGreater(page.evaluate("window.hiraku.player.events.length"), 0)
@@ -556,7 +556,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#launch .demo-runs")
             got = page.evaluate("""() => ({
                 first: document.querySelector('#launch h3').textContent,
@@ -604,7 +604,7 @@ class BrowserReplayTest(unittest.TestCase):
             posted = []
             page.on("request", lambda r: posted.append(r.url) if r.method == "POST" else None)
             page.click("#launch .lreq.demo[data-demo='n09'] a.demo-a1")
-            page.wait_for_url("**/?new=1&demo=n09")
+            page.wait_for_url("**/?new=1&demo=n09&dev=1")
             page.wait_for_function("document.querySelector('#view-intake textarea')?.value.length > 0")
             self.assertEqual(page.input_value("#view-intake textarea"), "在宅で使う電動の介護ベッドを作りたい")
             self.assertIn("依頼から始める", page.text_content("#draftbar"))
@@ -612,10 +612,10 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(posted, [])
             self.assertFalse(lau.started)
             # the file row's Claude run, confirmed, starts on its file
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1&dev=1")
             page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
             page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch='claude']")
-            page.wait_for_url(f"**/?run={run_id}-claude", timeout=30000)
+            page.wait_for_url(f"**/?run={run_id}-claude&dev=1", timeout=30000)
             self.assertEqual([(s["mode"], s["requirements"]) for s in lau.started], [("claude", "offroad-4w-n12.yaml")])
             self.assertEqual(errors, [])
             page.close()
@@ -628,7 +628,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#launch .demo-runs")
             row = "#launch .lreq.demo[data-demo='n12']"
             self.assertTrue(page.is_disabled(f"{row} button:has-text('Claude で走らせる')"))
@@ -637,6 +637,86 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertFalse(page.is_disabled(f"{row} button[data-launch='scripted']"))
             self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n09'] a.demo-a1").count(), 1)
             self.assertIn("上限 $2.00 で止まる", page.text_content("#launch .lreq.demo[data-demo='demo'] .lbtns .over"))
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
+
+    DEV_WORDS = ("products/", ".yaml", "ANTHROPIC_API_KEY", "A1", "N0")
+    KEYLESS = "Claude で実行するには、API キーを設定して HIRAKU を起動し直してください。"
+
+    def test_run_list_for_people_without_the_key(self):
+        """No ?dev=1: no files, key names, intake tab names or cut numbers on the list; the line about
+        the key once at the top (the Claude buttons only look unpressable); ?dev=1 shows them all."""
+        base, lau, _, close = self._demo_server({})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            text = page.inner_text("#runlist")
+            for w in self.DEV_WORDS:
+                self.assertNotIn(w, text)
+            self.assertEqual(text.count(self.KEYLESS), 1)
+            self.assertEqual(page.locator("#runlist .keyless").count(), 1)
+            self.assertIn("README の「動かし方」", page.text_content("#runlist .keyless a.readme"))
+            self.assertEqual(text.count("記録を再生する (無料・すぐ)"), 1)
+            self.assertEqual(text.count("Claude で新しく実行する (Anthropic の API キーが要ります・1 回 $2 まで)"), 1)  # every fake file: $2
+            row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
+            # one line per row: an id without a line of its own shows its title; one verb per button
+            self.assertIn("要件の間違い", page.inner_text(row("n12")))
+            self.assertTrue(page.is_disabled(f"{row('n12')} button.claude"))
+            self.assertEqual(page.locator("#launch button[data-launch-ask]").count(), 0)
+            self.assertEqual([page.text_content(f"{row('n12')} button[data-launch='scripted']"), page.text_content(f"{row('n09')} a.demo-a1")], ["再現する", "試す"])
+            self.assertEqual(page.locator("#launch .pick").count(), 0)  # no saved run, no demo row `video`
+            # くわしく opens the developers' lines of that row
+            page.click(f"{row('n12')} details.more summary")
+            more = page.inner_text(f"{row('n12')} details.more")
+            for w in ("offroad-4w-n12.yaml", "N11", "要件の誤りを見つけて直す", "上限 $2.00"):
+                self.assertIn(w, more)
+            # ?dev=1: as before
+            page.goto(f"{base}/?list=1&dev=1")
+            page.wait_for_selector("#launch .demo-runs")
+            text = page.inner_text("#runlist")
+            for w in self.DEV_WORDS:
+                self.assertIn(w, text)
+            self.assertEqual(page.locator("#runlist .keyless").count(), 1)
+            self.assertNotIn(self.KEYLESS, text)
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
+
+    def test_run_list_for_people_with_the_key(self):
+        """With the key: no line about it, 実行する asks with the cost limit first, 試す opens A1 without ?dev=1."""
+        base, lau, run_id, close = self._demo_server({"ANTHROPIC_API_KEY": "test-value-not-a-real-key"})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            text = page.inner_text("#runlist")
+            self.assertEqual(page.locator("#runlist .keyless").count(), 0)
+            for w in self.DEV_WORDS:
+                self.assertNotIn(w, text)
+            row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
+            page.click(f"{row('demo')} button[data-launch-ask]")
+            page.wait_for_selector(f"{row('demo')} .confirm")
+            confirm = page.text_content(f"{row('demo')} .confirm")
+            for w in ("見込みは $12.50", "費用の上限は $2.00", "途中で止まります"):
+                self.assertIn(w, confirm)
+            page.click("#launch button[data-launch-cancel]")
+            page.wait_for_selector(f"{row('demo')} button[data-launch-ask]")
+            self.assertFalse(lau.started)
+            page.click(f"{row('n09')} a.demo-a1")
+            page.wait_for_url("**/?new=1&demo=n09")
+            page.goto(f"{base}/?list=1")
+            page.click(f"{row('n12')} button[data-launch-ask]")
+            page.click(f"{row('n12')} button[data-launch='claude']")
+            page.wait_for_url(f"**/?run={run_id}-claude", timeout=30000)
+            self.assertEqual([(s["mode"], s["requirements"]) for s in lau.started], [("claude", "offroad-4w-n12.yaml")])
             self.assertEqual(errors, [])
             page.close()
         finally:
@@ -1385,6 +1465,12 @@ class BrowserReplayTest(unittest.TestCase):
             )
             self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
             page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .pick")
+            pick = page.evaluate("""() => { const p = document.querySelector("#launch .pick");
+                return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > *"),
+                         run: p.dataset.run, href: p.querySelector("a.go").getAttribute("href"), verb: p.querySelector("a.go").textContent }; }""")
+            self.assertEqual(pick, {"n": 1, "first": True, "run": run_id, "href": f"?run={run_id}", "verb": "見る"})
+            page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#runlist h3")
             listing = page.evaluate(
                 """() => ({ heads: [...document.querySelectorAll("#runlist > h3")].map((h) => h.textContent),
