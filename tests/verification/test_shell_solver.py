@@ -103,12 +103,14 @@ class BoxTube(unittest.TestCase):
         x0, x1 = (float(xs[np.argmin(np.abs(xs - f * b["L"]))]) for f in (0.3, 0.7))
         rate = (ring_twist(model.nodes, U, x1) - ring_twist(model.nodes, U, x0)) / (x1 - x0)
         expected = ka.bredt_torsion(b["T"], b["L"], ka.shear_modulus(self.E, self.nu), b["b"], b["h"], b["t"])
+        # the shell walls also twist as strips: Bredt plus s t^3 / 3 (0.37 % stiffer than Bredt alone here)
+        self.assertAlmostEqual(abs(rate) / expected["twist_rate_walls"], 1.0, delta=0.001)
         self.assertAlmostEqual(abs(rate) / expected["twist_rate"], 1.0, delta=0.01)
         st = self.shell.element_stresses(model, U)
         c = st.centres
         mid = np.nonzero((c[:, 0] > 0.3 * b["L"]) & (c[:, 0] < 0.7 * b["L"]))[0]
         tau = np.abs(st.in_plane((1.0, 0.0, 0.0), "mid")[mid, 2])
-        self.assertLess(float(np.max(np.abs(tau / expected["shear_stress"] - 1))), 0.02)
+        self.assertLess(float(np.max(np.abs(tau / expected["shear_stress_walls"] - 1))), 0.001)
 
 
 if __name__ == "__main__":
