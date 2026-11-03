@@ -109,6 +109,21 @@ class Corner:
     def dof(self) -> bool:
         return self.susp != "rigid"
 
+    @property
+    def rolling_radius(self) -> float:
+        """K2's effective rolling radius (m) at the static load: radius - static_load / k_z.
+
+        K2's tyre is a disc on a radial spring (Sim._normal): the contact point lies on the road
+        under the disc, |rh| = radius - deflection from the wheel centre, and Sim._slip takes the
+        slip velocity there, so the wheel rolls without slip at v = omega |rh| and the drive
+        torque meets the road force on the same arm |rh| (Sim._spin). K2 has no separate
+        effective rolling radius: it is this loaded radius (in the run it moves with the load).
+        A real tyre's effective rolling radius lies between the loaded and the free radius
+        (H. B. Pacejka, Tire and Vehicle Dynamics, 3rd ed. (2012), the effective rolling radius
+        of the tyre models; not checked against the book). The Magic Formula's r0 (MF61) is the
+        free radius and only scales the aligning moment terms; it plays no part here."""
+        return self.radius - self.static_load / self.k_z
+
 
 @dataclass(eq=False)
 class Vehicle:
