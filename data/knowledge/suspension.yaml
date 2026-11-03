@@ -1,0 +1,20 @@
+# Built-in rules: suspension (サス). See sheet-metal.yaml for the shape.
+# These two rules are checks of the mechanics, not taken from a source (assumption).
+doc_id: KN-SU
+title: サスの決まり
+category: suspension
+rules:
+  - id: SU-01
+    text: サスのストロークは、通る段差の高さ (Q15) 以上
+    kinds: [support]
+    check: travel_mm >= req_Q15
+    trust: 3
+    basis: engineering assumption, not taken from a source; Q15 is the step height in mm
+  - id: SU-02
+    text: 荷を載せた静的なたわみは、サスのストローク以内
+    kinds: [support]
+    check: static_load_N <= stiffness_N_per_mm * travel_mm
+    trust: 3
+    basis: >-
+      engineering assumption: the whole mass is shared equally by the supports and the spring is linear,
+      so the static deflection is load / stiffness
