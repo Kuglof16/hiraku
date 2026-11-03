@@ -325,6 +325,9 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
         if name == "gusset_leg" and 0.0 < val < GUSSET_LEG_MIN_MM:
             raise DesignGenError(f"gusset_leg is 0 (no gussets) or {GUSSET_LEG_MIN_MM:g} to {var.hi:g} mm, got {val:g}")
+        if name in PLATE_T_VARS and val not in PLATE_KG_M2:
+            raise DesignGenError(f"{name} is a standard sheet thickness: one of "
+                                 f"{', '.join(f'{t:g}' for t in PLATE_KG_M2)} mm, got {val:g}")
         if name in INTEGERS and val != round(val):
             raise DesignGenError(f"{name} is a whole number, got {val:g}")
         if name in ZERO_OR_AT_LEAST and 0.0 < val < ZERO_OR_AT_LEAST[name]:
@@ -451,7 +454,14 @@ PLATE_FINISH = "painted"  # assumption
 FLOOR_PLATE_T_MM = 3.2  # the footwell floor, the floor under the seats and the deck (one value: _driver_v1)
 BULKHEAD_PLATE_T_MM = 2.3
 PLATE_T_MM = {"floor_front": FLOOR_PLATE_T_MM, "floor": FLOOR_PLATE_T_MM, "deck": FLOOR_PLATE_T_MM,
-              "bulkhead": BULKHEAD_PLATE_T_MM}
+              "bulkhead": BULKHEAD_PLATE_T_MM}  # the defaults of the thickness variables (PLATE_T_VARS)
+# The catalogue's unit mass (kg/m2, the checkers included) of each NFP-400 standard thickness read from A101 (see
+# above). Only these thicknesses may be chosen: 4.5, 6.0 mm and the others are standard sizes too, but their unit
+# masses were not read here.
+PLATE_KG_M2 = {2.3: 19.73, 3.2: 26.79}
+# The plate thickness variables and the plate parts each sets (floor_t: both floors, the seats and the feet on one
+# level, as _driver_v1 takes it)
+PLATE_T_VARS = {"floor_t": ("floor_front", "floor"), "deck_t": ("deck",), "bulkhead_t": ("bulkhead",)}
 # The front body (outer panel and bumper) is a box around them, not one plate: its mass stays the first v1's
 # (assumption) and it is taken as steel of PLATE_STEEL (assumption, not checked)
 FRONT_BODY_KG = 15.0
@@ -669,6 +679,17 @@ OPTIONAL.update({
     "rollbar_front_posts": ("rollbar_front_posts",),
     "fenders": ("fenders", "fender_front_deg", "fender_rear_deg", "fender_width", "fender_gap"),
 })
+_PLATE_WORDS = {"floor_t": "the footwell floor and the floor under the seats (the seats, the people, the pedals and the "
+                           "steering wheel stand on its top, so they move up or down with it)",
+                "deck_t": "the deck (the cargo on it)", "bulkhead_t": "the front bulkhead"}
+for _k, _pids in PLATE_T_VARS.items():
+    _t0 = PLATE_T_MM[_pids[0]]
+    VARIABLES[_k] = Var("mm", _t0, min(PLATE_KG_M2), max(PLATE_KG_M2),
+                        f"the sheet thickness of {_PLATE_WORDS[_k]}: one of the NFP-400 standard thicknesses whose unit "
+                        f"mass was read from Nippon Steel's catalogue A101 ({', '.join(f'{t:g}' for t in PLATE_KG_M2)} "
+                        f"mm; PLATE_KG_M2). The default {_t0:g} mm is an assumption, not sized. Written into "
+                        "design.variables only when it is not the default")
+    OPTIONAL[_k] = (_k,)
 SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
 SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
 FENDER_T_MM = 3.0  # fender wall (assumption)
@@ -731,7 +752,7 @@ def plate_masses(lay: Layout, density: float) -> None:
     """The plate parts (PLATE_T_MM) of PLATE_STEEL, each weighing its own sheet (plate_mass): the kits took the
     pedals', the master cylinder's and the rear lamps' masses out of the plates they stand on (kit/body.py,
     kit/safety.py), which held only while the plates' masses were a budget; those parts now weigh on top."""
-    for pid in PLATE_T_MM:
+    for pid in PLATE_T_MM:  # the plate parts
         p = lay.part(pid)
         p["mass_kg"] = plate_mass(p["box"]["size_mm"], density)
         p["material"], p["finish"] = PLATE_STEEL, PLATE_FINISH
@@ -816,11 +837,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
                              f"sweep) to the seat cross member S1 ({S1:g} mm) is shorter than {MIN_STATION_GAP_MM:g} "
                              f"mm; move seat_x back or make the wheelbase longer")
     steel = json.loads(MATERIALS.read_text(encoding="utf-8"))[PLATE_STEEL]
+    plate_t = {pid: v[k] for k, pids in PLATE_T_VARS.items() for pid in pids}
     rho_plate = float(steel["density_kg_m3"])
-    ff_size = (floor_front_x - S1, 2.0 * floor_half, PLATE_T_MM["floor_front"])
+    ff_size = (floor_front_x - S1, 2.0 * floor_half, plate_t["floor_front"])
     lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size, rho_plate)),
             x=rear_at(S1), y=0.0, z=bottom_at(on_rails))
-    fl_size = (S1 - S2, track, PLATE_T_MM["floor"])
+    fl_size = (S1 - S2, track, plate_t["floor"])
     lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size, rho_plate)), x=lay.between("S1", "S2"),
             y=0.0, z=bottom_at(on_rails))
     deck_len = S2 - DECK_GAP_MM - E
@@ -832,7 +854,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         return min(rail_y - v["tower_b"] / 2.0, uca - mounts.BRACKET_PAD_MM) - DECK_TOWER_GAP_MM
 
     deck_w = min(DECK_WIDTH_MM, 2.0 * inside_mounts(False))
-    dk_size = (deck_len, deck_w, PLATE_T_MM["deck"])
+    dk_size = (deck_len, deck_w, plate_t["deck"])
     lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size, rho_plate)),
             x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
     lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0),
@@ -907,7 +929,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if bh_h <= 0:
         raise DesignGenError("the dash cross member under the steering column would be below the rails; "
                              "move steering_x or seat_x")
-    bh_size = (PLATE_T_MM["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
+    bh_size = (plate_t["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
     lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size, rho_plate)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
