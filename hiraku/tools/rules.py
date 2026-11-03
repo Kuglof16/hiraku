@@ -62,12 +62,23 @@ def _stage_ja(n: int) -> str:
     return f"段 {n} ({STAGE_NAMES_JA.get(n, '?')})"
 
 
+def _verdict_tool(ctx: RunContext, ver: Record) -> str | None:
+    """The tool of the analysis a verdict came from (through its comparison, or analysis_id for unsupported_load)."""
+    ana_id = ver.get("analysis_id")
+    if ana_id is None and ver.get("comparison_id"):
+        ana_id = (ctx.store.get("comparison", ver["comparison_id"]) or {}).get("analysis_id")
+    return (ctx.store.get("analysis", ana_id) or {}).get("tool") if ana_id else None
+
+
 def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> list[tuple[int, Record, str]]:
     """HK5: the load cases of the current version, of a stage below `stage` (shelf.load_case_stage),
     in the picked domains and assembly, that are red (a failing verdict), not judged, or held back
-    from passing (judge.held_cases): [(stage, load case, what)], lowest stage first. Not counted: the
-    load case `skip` (the one being analyzed), cases past the limit (catalog.is_beyond: meant to
-    fail), cases no usable tool checks and those no K0 formula can predict (unpredictable_cases)."""
+    from passing (judge.held_cases): [(stage, load case, what)], lowest stage first. The load case
+    `skip` (the one being analyzed) counts only when its latest verdict is red and came from a tool of
+    a lower stage (red on the beam: revise before the heavy analysis); not judged or held, it waits as
+    the others do not (its heavier tool may be what settles it). Not counted: cases past the limit
+    (catalog.is_beyond: meant to fail), cases no usable tool checks and those no K0 formula can
+    predict (unpredictable_cases)."""
     v = ctx.version
     if not v or stage <= 0:
         return []
@@ -77,12 +88,17 @@ def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> li
     out = []
     for lc in ctx.load_cases:
         lc_id = lc["load_case_id"]
-        if lc_id == skip or "criterion" not in lc or lc["domain"] not in domains or is_beyond(lc):
+        if "criterion" not in lc or lc["domain"] not in domains or is_beyond(lc):
             continue
         n = load_case_stage(ctx, lc)
         if n is None or n >= stage:
             continue
         ver = verdicts.get(lc_id)
+        if lc_id == skip:  # the same load case: only a red from a lighter tool stops the heavier one
+            made_by = _verdict_tool(ctx, ver) if ver is not None and not ver["pass"] else None
+            if made_by is not None and tool_stage(ctx, made_by) < stage:
+                out.append((n, lc, f"赤、{ver['verdict_id']}"))
+            continue
         if ver is not None and not ver["pass"]:
             out.append((n, lc, f"赤、{ver['verdict_id']}"))
             continue

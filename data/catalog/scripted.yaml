@@ -58,18 +58,18 @@ offroad-4w:
         steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を前へ出す (steering_x -570 mm から -200 mm へ)
       source: >-
-        the demo scripted run 20261103-225321-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
-        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (226.6 mm)
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (268.6 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 12, unit: kW}
+        motor_peak_power: {value: 13, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: >-
-        the demo scripted run 20261103-225321-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.479 s against 6 s); version 3 with this change:
-        P3 ver-0012 (5.744 s)
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.878 s against 6 s); version 3 with this change
+        (13 kW): P3 ver-0012 (5.834 s). 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
   steps:
     - &p1_step
       load_case: P1-step100
@@ -308,16 +308,16 @@ offroad-4w-n15:
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       changes:
         track: {value: 1220, unit: mm}
-        steering_x: {value: -520, unit: mm}
+        steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
-        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -520 mm へ、50 mm 前へ出す
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -200 mm へ前へ出す
       source: >-
         the N15 scripted run 20261103-221019-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
         version 2 with this change: H1 ver-0004 (30 deg), H3 ver-0005 (226.6 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 13, unit: kW}
+        motor_peak_power: {value: 15, unit: kW}
       reason: >-
         P3: 40 km/h までが 6.48 s で 6 s を超えるので、モーターの最大出力を 10 kW から 13 kW に上げる
       source: >-

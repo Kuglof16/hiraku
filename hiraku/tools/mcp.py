@@ -232,6 +232,29 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
 RECORDED_REFUSALS = ("propose_design",)
 
 
+TOOL_ERRORS_FILE = "tool.errors.log"  # in the run folder: the traceback of each exception a tool let out
+
+
+def tool_failure(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None, e: BaseException) -> str:
+    """Write the exception's traceback to <run>/TOOL_ERRORS_FILE, say it in the record (agent.said of system,
+    data.tool_error), and give the caller a sentence to act on (the same call can be tried again)."""
+    import traceback
+    from datetime import datetime
+
+    what = f"{type(e).__name__}: {e}"
+    try:
+        with (ctx.store.path / TOOL_ERRORS_FILE).open("a", encoding="utf-8") as f:
+            f.write(f"--- {datetime.now().isoformat(timespec='seconds')} {name} by {agent or '?'}\n"
+                    f"args: {json.dumps(args, ensure_ascii=False, default=str)[:2000]}\n"
+                    + "".join(traceback.format_exception(type(e), e, e.__traceback__)))
+        ctx.store.emit("agent.said", agent="system", text=f"道具 {name} の中で思わぬ失敗がありました ({what[:300]})",
+                       data={"tool_error": name, "agent": agent, "error": what[:2000], "log": TOOL_ERRORS_FILE})
+    except Exception:  # the answer below still goes back
+        pass
+    return (f"道具 {name} の中で思わぬ失敗がありました ({what[:500]})。HIRAKU の側の不具合で、記録 ({TOOL_ERRORS_FILE}) に"
+            "残しました。同じ入力でもう一度呼んでください。同じ失敗が続くときは、そう報告して先へ進んでください")
+
+
 def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Callable) -> Callable:
     full = contract.mcp_name(name)
 
@@ -246,6 +269,8 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
                 ctx.store.emit("agent.said", agent="system", text=f"{name} は断られました: {e}",
                                data={"refused": name, "agent": agent, "reason": str(e)})
             return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:  # a bug in a tool: kept with its traceback in the run folder, the caller told
+            return {"content": [{"type": "text", "text": tool_failure(ctx, name, args, agent, e)}], "is_error": True}
         return {"content": [{"type": "text", "text": _text(for_agent(name, result))}]}
 
     return handler

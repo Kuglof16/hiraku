@@ -1,5 +1,5 @@
 {
-  "description": "HIRAKU's hooks (HK1-HK4, role start and stop): python -m hiraku hook <Event> on the current run",
+  "description": "HIRAKU's hooks (HK1-HK5, role start and stop): python -m hiraku hook <Event> on the current run",
   "hooks": {
     "PreToolUse": [
       {

@@ -37,7 +37,7 @@ def _check_input(name: str, args: dict[str, Any]) -> None:
 
 
 def _gate(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None = None) -> None:
-    """HK1-HK3 again inside the tool. A call that gets here was not denied by a PreToolUse hook
+    """HK1-HK3 and HK5 again inside the tool. A call that gets here was not denied by a PreToolUse hook
     (that hook records its own denial and the call never runs), so a denial here is recorded
     once, as hook.denied, the same way: a direct call, a hook that did not run or answered
     allow on an older state (the plugin's hook command is a separate process)."""

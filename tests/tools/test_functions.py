@@ -851,6 +851,10 @@ class RunToolsOnlyTest(RunCase, unittest.TestCase):
         self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
+        (ev,) = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and "確かめない道具" in e["text"]]
+        self.assertEqual(ev["data"], {"tests": ["P1", "R1"], "checked": ["step_climb", "frame_static", "frame_shell"],
+                                      "not_checked": ["tilt"]})
+        self.assert_events_fit()
         self.assertEqual(self.extra["tilt"].runs, [])
         line = next(t for t in list_tools(self.ctx) if t["name"] == "tilt")
         self.assertFalse(line["usable"])
