@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
+from hiraku.webserve.launch import DEMO_RUNS_FILE, PLUGIN_LOCK_FILE, Launcher, LaunchError
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
@@ -450,6 +450,78 @@ class LaunchTest(unittest.TestCase):
         big = json.dumps({"run_id": out["run_id"], "name": "big.md", "text": "x" * 2_100_000}).encode()
         self.assertEqual(drop(None, raw=big)[0], 413)
         self.assertFalse((run / "knowledge" / "big.md").exists())
+
+    def make_run(self, run_id, status="running", driver=None, lock=False):
+        """A run folder as if started elsewhere (not by this server)."""
+        run = self.runs / run_id
+        run.mkdir(parents=True)
+        project = {"run_id": run_id, "status": status, **({"driver": driver} if driver else {})}
+        (run / "project.json").write_text(json.dumps(project), encoding="utf-8")
+        if lock:
+            (run / PLUGIN_LOCK_FILE).write_bytes(b"")
+        return run
+
+    def call(self, base, route, body):
+        req = urllib.request.Request(base + route, data=json.dumps(body).encode(), method="POST",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_a_going_run_started_elsewhere_takes_the_drop_and_the_answer(self):
+        base = self.serve({})
+        rid = "20261103-130000-elsewhere"
+        run = self.make_run(rid, driver="agent_sdk")
+        status, got = self.call(base, "/api/launch/knowledge", {"run_id": rid, "name": "a.md", "text": "曲げの決まり"})
+        self.assertEqual((status, got["request"]), (200, "inbox/1-knowledge.json"))
+        self.assertEqual((run / "knowledge" / "a.md").read_text(encoding="utf-8"), "曲げの決まり")
+        self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "a.md"})
+        status, got = self.call(base, "/api/launch/hearing", {"run_id": rid, "answer": {"answers": {}, "useDefaults": True}})
+        self.assertEqual((status, got["answered"]), (200, True))
+        self.assertTrue((run / "hearing.answer.json").exists())
+        # stop stays with the run started here
+        self.assertEqual(self.call(base, "/api/launch/stop", {"run_id": rid})[0], 409)
+        self.assertFalse((run / "stop.request").exists())
+
+    def test_a_plugin_run_takes_the_drop_only_while_its_lock_is_there(self):
+        base = self.serve({})
+        held = self.make_run("20261103-130001-plugin-held", driver="claude_code_plugin", lock=True)
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": held.name, "name": "a.md", "text": "x"})[0], 200)
+        self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": held.name, "answer": {"answers": {}, "useDefaults": True}})[0], 200)
+        loose = self.make_run("20261103-130002-plugin-loose", driver="claude_code_plugin")
+        status, got = self.call(base, "/api/launch/knowledge", {"run_id": loose.name, "name": "a.md", "text": "x"})
+        self.assertEqual(status, 409)
+        self.assertIn(PLUGIN_LOCK_FILE, got["error"])
+        self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": loose.name, "answer": {"answers": {}}})[0], 409)
+        self.assertFalse((loose / "knowledge").exists() or (loose / "inbox").exists() or (loose / "hearing.answer.json").exists())
+
+    def test_a_finished_run_refuses_the_drop_and_the_answer(self):
+        base = self.serve({})
+        for status_, driver in (("done", None), ("stopped", "agent_sdk"), ("failed", "claude_code_plugin")):
+            run = self.make_run(f"20261103-14000{len(status_)}-{status_}", status=status_, driver=driver, lock=True)
+            status, got = self.call(base, "/api/launch/knowledge", {"run_id": run.name, "name": "a.md", "text": "x"})
+            self.assertEqual(status, 409, status_)
+            self.assertIn("not running", got["error"])
+            self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": run.name, "answer": {"answers": {}}})[0], 409)
+            self.assertFalse((run / "knowledge").exists() or (run / "hearing.answer.json").exists())
+
+    def test_a_bad_id_or_a_folder_outside_the_runs_is_refused(self):
+        base = self.serve({})
+        outside = self.tmp / "20261103-150000-outside"  # a running run, but not in the runs folder
+        outside.mkdir()
+        (outside / "project.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
+        self.runs.mkdir(exist_ok=True)
+        for rid in ("../20261103-150000-outside", "..", "", 7, None, "20261103-150000-Bad", "x/../20261103-150000-outside"):
+            for route, body in (("/api/launch/knowledge", {"name": "a.md", "text": "x"}), ("/api/launch/hearing", {"answer": {"answers": {}}})):
+                status, _ = self.call(base, route, {"run_id": rid, **body})
+                self.assertIn(status, (400, 409), (rid, route))
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": "20261103-150000-outside", "name": "a.md", "text": "x"})[0], 409)
+        self.assertFalse((outside / "knowledge").exists() or (outside / "hearing.answer.json").exists())
+        # a folder without a readable project.json
+        (self.runs / "20261103-150001-noproject").mkdir()
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": "20261103-150001-noproject", "name": "a.md", "text": "x"})[0], 409)
 
     def test_a_request_from_A1_runs_with_its_intake_events(self):
         """A1 -> A2 -> 始める without a command: /api/request (the domains and the hearing),
