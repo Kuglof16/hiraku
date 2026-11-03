@@ -49,7 +49,8 @@ class RollbarDesignTest(unittest.TestCase):
         self.assertFalse(any(m["id"].startswith("rollbar") for m in d["members"]))
         self.assertFalse(any(p["kind"] == "rollbar" for p in d["parts"]))
         self.assertEqual(d["variables"]["rollbar"]["value"], 0.0)
-        self.assertEqual(set(d["materials"]), {"stkr400"})
+        # the tubes are stkr400; the plates (floors, deck, bulkhead) and the front body are ss400 since 318ea65
+        self.assertEqual(set(d["materials"]), {"stkr400", "ss400"})
 
     def test_default_has_the_roll_bar(self):
         d = ladder_4w.build()

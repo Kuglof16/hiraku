@@ -589,13 +589,13 @@ OPTIONAL["seat_slide"] = ("seat_slide",)
 #   nearest frame member, sized from the gap; a part none can reach is held through what it touches.
 MOUNT_GROUPS = {
     "mount_floor": ("floor", "floor_front", "deck", "front_body"),
-    "mount_electrics": ("battery", "controller", "aux", "main_switch"),
+    "mount_electrics": ("battery", "battery2", "controller", "aux", "main_switch"),
     "mount_seats": ("seat_R", "seat_L", "seat_belt_R", "seat_belt_L"),
     "mount_drive": ("reducer", "motor"),
 }
 _MOUNT_WORDS = {"mount_floor": "the floor panels, the deck and the front body (each on the rails or cross members "
                                "under it)",
-                "mount_electrics": "the battery, the controller, the wiring box and the main switch (to the cross "
+                "mount_electrics": "the battery (each pack), the controller, the wiring box and the main switch (to the cross "
                                    "members beside, above or below them)",
                 "mount_seats": "the seats and the seat belts' anchors (the seats stand on the floor, so a seat is "
                                "held through the floor; each belt's anchor goes to the nearest member). Without "
@@ -691,6 +691,47 @@ for _k, _pids in PLATE_T_VARS.items():
                         f"mm; PLATE_KG_M2). The default {_t0:g} mm is an assumption, not sized. Written into "
                         "design.variables only when it is not the default")
     OPTIONAL[_k] = (_k,)
+# The seats' cushion depth (seat_depth): the seat box's length along x. The seat back (the box's rear face, where
+# K4 and kit/body.py seat the people: k4_geometry.people.seated, body._seat_frame) stays at
+# seat_x - SEAT_LENGTH_MM / 2 whatever the depth, so the people, the pedals, the steering wheel and the seat belts
+# stay where they are; the cushion's front edge moves. The range is from the AIST body sizes read in
+# k4_geometry.people (young adults, AIST anthropometric database 1991-92, read 2026-11-03):
+# - at least the large person's trunk box (kit/body.occupant_parts: from the seat back to twice the hip's distance
+#   ahead of it, J9 Buttock-trochanterion length, sitting, male 95th percentile 146.0 mm): 292.0 mm. Shorter, the
+#   trunk's box reaches past the cushion's front edge;
+# - at most the small person's buttock-knee length (J5 Buttock-knee length, sitting, female 5th percentile 511.0 mm).
+#   Longer, the cushion's front edge is past the front of her knees.
+# Rule HU-02 (data/knowledge/human.yaml) limits the depth to J6 Buttock-popliteal length, sitting, female 5th
+# percentile 406.0 mm (its basis: https://www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif, read 2026-11-03); J6 is
+# not among the values in k4_geometry.people, so the range here does not use it. The seat's mass does not change with
+# the depth (the 12 kg is an assumption, as before).
+SEAT_DEPTH_RANGE_MM = (2.0 * _people.SIZES[_people.BIG]["buttock_trochanter"], _people.SIZES[_people.SMALL]["buttock_knee"])
+VARIABLES["seat_depth"] = Var(
+    "mm", SEAT_LENGTH_MM, *SEAT_DEPTH_RANGE_MM,
+    "the seats' cushion depth (the seat box's length along x); the seat back stays at seat_x - "
+    f"{SEAT_LENGTH_MM / 2.0:g} mm, the front edge moves (the people sit where they did). The default is the first "
+    f"v1's {SEAT_LENGTH_MM:g} mm (assumption). Range: from {SEAT_DEPTH_RANGE_MM[0]:g} mm, the large person's trunk box "
+    "(twice the AIST young adult male 95th percentile buttock-trochanterion length J9, 146.0 mm), to "
+    f"{SEAT_DEPTH_RANGE_MM[1]:g} mm, the small person's buttock-knee length (AIST young adult female 5th percentile "
+    "J5). Rule HU-02 asks for at most the female 5th percentile buttock-popliteal length J6 (406 mm). Written into "
+    "design.variables only when it is not the default")
+OPTIONAL["seat_depth"] = ("seat_depth",)
+# The battery as two packs (battery_split = 2): the v1 pack's box cut in two across y, each half its width and
+# mass, side by side under the floor between the seat cross members with BATTERY_SPLIT_GAP_MM between them (the
+# two together BATTERY_SPLIT_GAP_MM wider than the one pack). Each hangs from the seat cross members on its side
+# (Layout.mounts), as the one pack does from both sides. The two are wired in series (each 8 of the 16 cells: half
+# the voltage, the whole capacity), the second pack to the first, the first to the main switch (kit/systems.links).
+# A pack's own case, terminals and the wire between the packs are not added (no source for their mass).
+BATTERY_SPLIT_GAP_MM = 20.0  # between the two packs (assumption: room for the wire and the hands)
+BATTERY_RAIL_GAP_MM = 20.0  # the pack(s) together this much narrower than the clear width between the rails (as v1)
+VARIABLES["battery_split"] = Var(
+    "1", 1.0, 1.0, 2.0,
+    "1: one battery pack (v1); 2: two packs, the v1 pack cut in two across y (each half the mass), side by side "
+    f"{BATTERY_SPLIT_GAP_MM:g} mm apart under the floor between the seat cross members, each on the cross members "
+    "on its side, wired in series (the second to the first). build() refuses when the packs do not fit between the "
+    "rails or between the seat cross members. Written into design.variables only when it is 2")
+OPTIONAL["battery_split"] = ("battery_split",)
+INTEGERS = INTEGERS + ("battery_split",)
 SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
 SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
 FENDER_T_MM = 3.0  # fender wall (assumption)
@@ -737,7 +778,7 @@ def applies(flags: dict) -> bool:
 
 
 # Part list order of v1 (the rest after them as placed: each wheel, then its suspension)
-PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux",
+PART_ORDER = ["battery", "battery2", "main_switch", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux",
               "floor_front", "pedal_accel", "pedal_brake", "brake_master", "floor", "deck", "front_body", "bulkhead",
               "steering_wheel",
               "steering_column", "steering_shaft", "steering_rack", "tie_rod_FL", "tie_rod_FR", "seat_R", "seat_belt_R",
@@ -864,13 +905,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
             x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
     lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0),
                  FRONT_BODY_KG), x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
-    # the battery fits between the rails under the floor; its volume and mass go with the capacity
-    scale = v["battery_capacity"] / BATTERY_V1["capacity"]
-    b_w = min(BATTERY_V1["width"], lay.rail_inner_gap() - 20.0)
-    b_l = BATTERY_V1["length"] * BATTERY_V1["width"] / b_w * scale
-    lay.put(Item("battery", f"電池 (LiFePO4 {v['battery_voltage']:g} V {v['battery_capacity']:g} Ah)", "battery",
-                 (b_l, b_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale),
-            x=v["battery_x"], y=0.0, z=top_at(lay.bottom_of("floor")))
+    place_battery(lay, v)
     motor_mass = MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"])
     material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
     rho = float(material["density_kg_m3"])
@@ -889,16 +924,17 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     _kit(safety.place_main_switch, lay, "aux")
     if v["lamps"] == 1:
         _kit(safety.place_lamps, lay, "front_body", E - v["cross_b"] / 2.0, rail_z, "deck")
+    seat_back = seat_x - SEAT_LENGTH_MM / 2.0  # the seat back stays here whatever seat_depth is
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
-        lay.put(Item(pid, label, "seat", (SEAT_LENGTH_MM, SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=seat_x, y=y,
-                z=bottom_at(lay.top_of("floor")))
+        lay.put(Item(pid, label, "seat", (v["seat_depth"], SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=rear_at(seat_back),
+                y=y, z=bottom_at(lay.top_of("floor")))
     _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
     if v["seat_slide"] > 0:
         _belt_behind_travel(lay, "seat_belt_R", v["seat_slide"] / 2.0)
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
-                x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
+                x=lay.rear_of(seat) + SEAT_LENGTH_MM / 2.0 - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
     # the pedals at pedal_x with the driver's right foot on them, then the steering wheel at steering_wheel_height
     # above the seat and its column at steering_column_angle (kit/body.py, kit/steering.py)
     feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0,
@@ -1047,6 +1083,50 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     return design
+
+
+BATTERY_IDS = ("battery", "battery2")  # the packs' part ids (battery_split of them)
+
+
+def place_battery(lay: Layout, v: dict[str, float]) -> list[str]:
+    """The battery under the floor between the rails, its volume and mass going with the capacity: one pack
+    (battery_split = 1, v1), or the same pack cut in two across y (battery_split = 2), each half the width and mass,
+    BATTERY_SPLIT_GAP_MM apart, centred on battery_x. Returns the packs' ids. Two packs that do not fit between the
+    rails, or along x between the seat cross members' faces, are a DesignGenError (the one pack is left to K4)."""
+    n = int(v["battery_split"])
+    gap = BATTERY_SPLIT_GAP_MM if n == 2 else 0.0
+    scale = v["battery_capacity"] / BATTERY_V1["capacity"]
+    room = lay.rail_inner_gap() - BATTERY_RAIL_GAP_MM - gap  # for the packs' width together
+    if room <= 0.0:
+        raise DesignGenError(f"battery_split = 2: the clear width between the rails ({lay.rail_inner_gap():g} mm) leaves "
+                             f"no room for two packs {gap:g} mm apart; make rail_spacing wider or use one pack")
+    b_w = min(BATTERY_V1["width"], room)
+    b_l = BATTERY_V1["length"] * BATTERY_V1["width"] / b_w * scale
+    x = v["battery_x"]
+    if n == 2:
+        front = lay.station_x("S1") - v["cross_b"] / 2.0
+        rear = lay.station_x("S2") + v["cross_b"] / 2.0
+        if x + b_l / 2.0 > front + TOL_FIT_MM or x - b_l / 2.0 < rear - TOL_FIT_MM:
+            raise DesignGenError(f"battery_split = 2: the packs ({b_l:.0f} mm long at battery_x = {x:g} mm) do not fit "
+                                 f"between the seat cross members' faces ({rear:g} to {front:g} mm); make "
+                                 "battery_capacity smaller, rail_spacing wider (the packs get shorter) or move battery_x")
+    z = top_at(lay.bottom_of("floor"))
+    if n == 1:
+        lay.put(Item("battery", f"電池 (LiFePO4 {v['battery_voltage']:g} V {v['battery_capacity']:g} Ah)", "battery",
+                     (b_l, b_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale), x=x, y=0.0, z=z)
+        return ["battery"]
+    half_w = b_w / 2.0
+    out = []
+    for k, (pid, sign, side) in enumerate(zip(BATTERY_IDS, (-1.0, 1.0), ("右", "左")), 1):
+        lay.put(Item(pid, f"電池 {k} ({side}。LiFePO4 {v['battery_voltage'] / 2.0:g} V {v['battery_capacity']:g} Ah、"
+                          f"2 つを直列で {v['battery_voltage']:g} V)", "battery",
+                     (b_l, half_w, BATTERY_V1["height"]), BATTERY_V1["mass"] * scale / 2.0),
+                x=x, y=sign * (half_w + gap) / 2.0, z=z)
+        out.append(pid)
+    return out
+
+
+TOL_FIT_MM = 1e-6
 
 
 def _belt_behind_travel(lay: Layout, belt: str, back_mm: float) -> None:

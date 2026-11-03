@@ -80,7 +80,9 @@ def _plate_strip() -> Formula:
                  "theta_bend": ("rad", "the strip end's rotation about the axis across the strip", th_c),
                  "theta_twist": ("rad", "the strip end's twist about the strip's axis", th_a)},
         assumptions=[
-            "板の中心は動かず回らない (板のほかの触れた所が中心を押さえる)。帯は中心で固定した片持ち",
+            "板の中心は動かず回らない (板のほかの触れた所が中心を押さえる)。帯は中心で固定した片持ち。"
+            "そのため、中心が動いて回る板では、この式は小さめに出る (v1 でブレーキを隔壁に寄せた形: 中心が 1.9 mm 動き "
+            "0.02 rad 回り、帯の端で約 5.4 mm の分が入らず、道具より 30 % 小さい)",
             "帯の幅は荷重の来る所で触れた面の幅 w_0、中心へ c (= 2 tan 45°) で広がり、板の幅 w_1 まで (道具と同じ考え)",
             "曲げは I = w t³/12、ねじれは薄い帯の J = w t³/3。板の面内の曲げ・伸びは硬いとみて入れない",
             "荷重の点は帯の端に剛につながる (ペダルと台は剛体)。小さな変形の線形",
