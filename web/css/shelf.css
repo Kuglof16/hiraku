@@ -38,6 +38,7 @@
 .sh-f { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sh-f code { margin-left: 6px; font-size: 12px; }
 .sh-base b { font-family: var(--mono); }
+.sh-applies { margin-top: 2px; font-size: 13px; color: var(--muted); }
 
 .sh-mark { font-size: 12px; border-radius: 999px; padding: 0 10px; border: 1.5px solid; }
 .sh-mark.claude { color: var(--purple); border-color: var(--purple); }

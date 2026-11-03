@@ -1,15 +1,17 @@
 import io
 import json
+import os
 import shutil
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from hiraku.webserve.launch import DEMO_RUNS_FILE, PLUGIN_LOCK_FILE, Launcher, LaunchError
+from hiraku.webserve.launch import DEMO_RUNS_FILE, PLUGIN_ALIVE_FILE, PLUGIN_ALIVE_S, Launcher, LaunchError
 from hiraku.webserve import server as webserver
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
@@ -306,6 +308,38 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class PetsTest(unittest.TestCase):
+    def test_pets_script_is_served_as_it_is_or_404(self):
+        """GET /pets/pet3d.js passes the given pets file through as JavaScript; without it, 404."""
+        tmp = Path(tempfile.mkdtemp())
+        servers = []
+        try:
+            src = b"(function () { window.HirakuPets = { shape: 'example' }; })();\n"
+            (tmp / "pet3d.js").write_bytes(src)
+            for name in ("pet3d.js", "absent.js"):
+                s = make_server("127.0.0.1", 0, tmp, tmp, quiet=True, saved_dir=None, launcher=False, pets_file=tmp / name)
+                threading.Thread(target=s.serve_forever, daemon=True).start()
+                servers.append(s)
+                url = f"http://127.0.0.1:{s.server_address[1]}/pets/pet3d.js"
+                if name == "pet3d.js":
+                    with urllib.request.urlopen(url, timeout=5) as r:
+                        self.assertEqual(r.read(), src)
+                        self.assertTrue(r.headers["Content-Type"].startswith("text/javascript"))
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(url, timeout=5)
+                    self.assertEqual(cm.exception.code, 404)
+            # only that one file: other paths under /pets/ are not served from its folder
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(f"http://127.0.0.1:{servers[0].server_address[1]}/pets/absent.js", timeout=5)
+            self.assertEqual(cm.exception.code, 404)
+        finally:
+            for s in servers:
+                s.shutdown()
+                s.server_close()
+            shutil.rmtree(tmp)
+
+
 class OpenTest(unittest.TestCase):
     """python -m hiraku.webserve --open (what HIRAKU.cmd runs): the browser opens on the server's page."""
 
@@ -385,6 +419,14 @@ class ShelfTest(unittest.TestCase):
         self.assertEqual([t["name"] for t in got["tools"]], ["frame_static"])
         self.assertEqual(got["formulas"][0]["formula_id"], "frame_static.rail_bending")
         self.assertEqual(self.calls, 1)
+
+    def test_archetype_titles(self):
+        from types import SimpleNamespace
+
+        from hiraku.webserve.shelf import archetype_titles
+
+        kinds = {"a": SimpleNamespace(TITLE="型 A (説明)"), "b": SimpleNamespace(), "c": SimpleNamespace(TITLE=None)}
+        self.assertEqual(archetype_titles(kinds), {"a": "型 A (説明)"})
 
     def test_a_runs_tool_files(self):
         status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.py")
@@ -554,14 +596,17 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(drop(None, raw=big)[0], 413)
         self.assertFalse((run / "knowledge" / "big.md").exists())
 
-    def make_run(self, run_id, status="running", driver=None, lock=False):
-        """A run folder as if started elsewhere (not by this server)."""
+    def make_run(self, run_id, status="running", driver=None, alive=None):
+        """A run folder as if started elsewhere (not by this server). alive: how many seconds
+        ago its plugin.alive was touched (None: no such file)."""
         run = self.runs / run_id
         run.mkdir(parents=True)
         project = {"run_id": run_id, "status": status, **({"driver": driver} if driver else {})}
         (run / "project.json").write_text(json.dumps(project), encoding="utf-8")
-        if lock:
-            (run / PLUGIN_LOCK_FILE).write_bytes(b"")
+        if alive is not None:
+            (run / PLUGIN_ALIVE_FILE).write_bytes(b"")
+            t = time.time() - alive
+            os.utime(run / PLUGIN_ALIVE_FILE, (t, t))
         return run
 
     def call(self, base, route, body):
@@ -588,22 +633,28 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(self.call(base, "/api/launch/stop", {"run_id": rid})[0], 409)
         self.assertFalse((run / "stop.request").exists())
 
-    def test_a_plugin_run_takes_the_drop_only_while_its_lock_is_there(self):
+    def test_a_plugin_run_takes_the_drop_only_while_its_session_keeps_it_alive(self):
         base = self.serve({})
-        held = self.make_run("20261103-130001-plugin-held", driver="claude_code_plugin", lock=True)
+        held = self.make_run("20261103-130001-plugin-held", driver="claude_code_plugin", alive=1.0)
         self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": held.name, "name": "a.md", "text": "x"})[0], 200)
         self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": held.name, "answer": {"answers": {}, "useDefaults": True}})[0], 200)
-        loose = self.make_run("20261103-130002-plugin-loose", driver="claude_code_plugin")
-        status, got = self.call(base, "/api/launch/knowledge", {"run_id": loose.name, "name": "a.md", "text": "x"})
-        self.assertEqual(status, 409)
-        self.assertIn(PLUGIN_LOCK_FILE, got["error"])
-        self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": loose.name, "answer": {"answers": {}}})[0], 409)
-        self.assertFalse((loose / "knowledge").exists() or (loose / "inbox").exists() or (loose / "hearing.answer.json").exists())
+        # no plugin.alive, or one older than PLUGIN_ALIVE_S: no session reads the inbox
+        for name, alive in (("20261103-130002-plugin-loose", None), ("20261103-130003-plugin-stale", PLUGIN_ALIVE_S + 30)):
+            loose = self.make_run(name, driver="claude_code_plugin", alive=alive)
+            status, got = self.call(base, "/api/launch/knowledge", {"run_id": loose.name, "name": "a.md", "text": "x"})
+            self.assertEqual(status, 409)
+            self.assertIn(PLUGIN_ALIVE_FILE, got["error"])
+            self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": loose.name, "answer": {"answers": {}}})[0], 409)
+            self.assertFalse((loose / "knowledge").exists() or (loose / "inbox").exists() or (loose / "hearing.answer.json").exists())
+        # a plugin.lock alone (a short lock around the plugin state) does not count
+        locked = self.make_run("20261103-130004-plugin-locked", driver="claude_code_plugin")
+        (locked / "plugin.lock").write_bytes(b"")
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": locked.name, "name": "a.md", "text": "x"})[0], 409)
 
     def test_a_finished_run_refuses_the_drop_and_the_answer(self):
         base = self.serve({})
         for status_, driver in (("done", None), ("stopped", "agent_sdk"), ("failed", "claude_code_plugin")):
-            run = self.make_run(f"20261103-14000{len(status_)}-{status_}", status=status_, driver=driver, lock=True)
+            run = self.make_run(f"20261103-14000{len(status_)}-{status_}", status=status_, driver=driver, alive=1.0)
             status, got = self.call(base, "/api/launch/knowledge", {"run_id": run.name, "name": "a.md", "text": "x"})
             self.assertEqual(status, 409, status_)
             self.assertIn("not running", got["error"])

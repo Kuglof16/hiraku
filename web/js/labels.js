@@ -53,6 +53,7 @@ export const RULES = [
   { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみの道具だけ" },
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
+  { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
 ];
 
 export const BASE_JA = {
@@ -190,7 +191,59 @@ const QUANTITY_JA = {
   toe_longitudinal: "前後力によるトー",
   camber_longitudinal: "前後力によるキャンバー",
   toe_aligning: "アライニングトルクによるトー",
+  // judged quantities of the scripted video runs (report lines)
+  temp_battery_max: "電池のいちばん高い温度",
+  temp_controller_max: "制御器のいちばん高い温度",
+  knee_room: "ひざの前のすき間",
+  tip_slope_angle: "山側の輪が浮く斜面の角度",
+  climbable: "段差を登れるか",
 };
+
+// Names for viewers who do not know CAE (the video's pages): the trade's words left out.
+// A quantity not listed here reads as quantityName.
+const PLAIN_JA = {
+  max_hot_spot_stress: "つなぎ目の応力",
+  min_side_load: "軽い側の輪の重さ",
+  first_frame_mode: "フレームのいちばん低い揺れの速さ",
+  fatigue_damage: "くり返しの力による傷み",
+};
+
+export function plainName(q) {
+  return PLAIN_JA[q] ?? quantityName(q);
+}
+
+// The design's numbers that the reports' next steps and sensitivities name, in the viewers'
+// words (K5's paths: variables.<name>, sections.<id>.dims_mm.<dim>, parts.<id>.<field>,
+// materials.<id>.<field>). The record has no names for variables or sections; a number not
+// listed here has no name (null), and a page leaves it out rather than show the path.
+const VARIABLE_JA = {
+  motor_peak_torque: "モーターの最大トルク",
+  motor_peak_power: "モーターの最大出力",
+  gear_ratio: "減速比",
+  battery_capacity: "電池の容量",
+  battery_x: "電池の前後の位置",
+  wheelbase: "ホイールベース",
+  track: "トレッド",
+};
+const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
+const PART_FIELD_JA = { mass_kg: "重さ" };
+const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
+
+// "variables.motor_peak_torque" -> "モーターの最大トルク"; "sections.rt40x80x4.5.dims_mm.t"
+// -> "フレームの管の板厚"; "parts.battery.mass_kg" -> "電池の重さ" (the part's name in the
+// design, before any bracket); null when it has no name here.
+export function designNumberName(path, design = null) {
+  const p = String(path ?? "").split(".");
+  if (p[0] === "variables") return VARIABLE_JA[p[1]] ?? null;
+  if (p[0] === "sections" && p.at(-2) === "dims_mm") return DIM_JA[p.at(-1)] ? `フレームの管の${DIM_JA[p.at(-1)]}` : null;
+  if (p[0] === "parts" && PART_FIELD_JA[p.at(-1)]) {
+    const part = (design?.parts ?? []).find((x) => x.id === p[1]);
+    const name = part?.name ? String(part.name).replace(/\s*[（(].*$/, "") : null;
+    return name ? `${name}の${PART_FIELD_JA[p.at(-1)]}` : null;
+  }
+  if (p[0] === "materials") return MATERIAL_FIELD_JA[p.at(-1)] ?? null;
+  return null;
+}
 
 const VECTOR_JA = { reaction: "反力", grip: "グリップ", load: "荷重", wind: "風", inertia: "慣性力", joint: "取付点の力" };
 
@@ -199,7 +252,8 @@ export function vectorName(kind) {
 }
 
 // Results that answer yes or no (recorded as 1 or 0).
-const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "reached_target", "moved_uphill"]);
+const YES_NO = new Set(["slides_first", "wheel_lift", "two_wheel_lift", "climbed", "climbable", "reached_target", "moved_uphill"]);
+export const isYesNo = (q) => YES_NO.has(q);
 
 // A result's value with its unit, or はい / いいえ for a yes-or-no result.
 export function resultText(r, sig = 3) {

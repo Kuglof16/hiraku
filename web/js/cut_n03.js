@@ -10,11 +10,15 @@
 // flat, P3, else the launch on the slope, P2): its motion with each wheel's road reaction
 // and grip arrows and the centre of gravity. The popup charts one graph at a time (the
 // story's limit): the battery's temperature (drive), then the speed against time
-// (acceleration), with a cursor at the record time; its title names the tests charted.
+// (acceleration), with a cursor at the record time; its title is in words only (the
+// tests' ids are for the makers, in data-tests). The battery's chart has the load case's
+// limit as a dashed line that says "上限 <value> <unit>", and when every recorded value
+// keeps to it, "✓ 上限より下" by the reading from loop_to_s (the drive has played out).
 // The representative shown large is the recorded sample nearest to the cursor, under the
 // title (the one emphasised number): the message is "長く走っても熱くならず、どこまで
 // 速いか", so the value itself is what is read; the graph under it is the small context.
-// The squeeze is in the view's corner (rateLabel, as the N05 tiles).
+// The squeeze is in the view's corner (rateLabel, as the N05 tiles), as a note
+// (data-kind "note": for the makers, not counted).
 //
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
 // missing key is named on the page.
@@ -89,7 +93,7 @@ export function listRects(L) {
 export const N03_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
-  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title",
+  "popup.x", "popup.y", "popup.w", "popup.h", "popup.title_px", "popup.text_px", "popup.reading_of_title", "popup.ok_of_reading",
   "times.lead_s", "times.loop_to_s", "times.accel_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
@@ -98,7 +102,7 @@ export const N03_KEYS = [
 // view's and the popup's border and the popup's corner, the padding inside the popup and
 // around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
 // The reading's largest size is layout.json n03.popup.reading_of_title x title_px (it is
-// also held to the popup's width).
+// also held to the popup's width); "✓ 上限より下" is popup.ok_of_reading x the reading's size.
 export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
@@ -118,27 +122,58 @@ export function newestOf(s, { test, lcId }, pick) {
 
 const LINE = "#2b59c3";
 const RED = "#c8402a";
+const OK_GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
+
+// Round steps for an axis from lo to hi: about four, of 1, 2 or 5 times a power of ten.
+function niceTicks(lo, hi) {
+  const raw = (hi - lo) / 4;
+  if (!(raw > 0)) return [lo];
+  const p = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((k) => k * p).find((s) => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(Number(v.toFixed(9)));
+  return out;
+}
 
 // A chart of one channel against time (SVG in its own pixels): its name and unit at the
 // top left, the recorded value nearest to the cursor at the top right, a dashed line at
-// `limit` when given. Returns the SVG text and the functions that move the cursor.
-function chartSvg(s, w, h, textPx, name, limit) {
+// `limit` when given. The axis runs from `floor` (the case's surroundings, e.g. the
+// ambient temperature, else 0) or the lowest value if lower, to the limit or the highest
+// value, with round steps labelled at the left (light lines), so the room left under the
+// limit reads as a number. The cursor is gray (red is the colour of a limit).
+// Returns the SVG text and the functions that move the cursor.
+function chartSvg(s, w, h, textPx, name, limit, floor = 0) {
   const [t0, t1] = extent(s.t_s);
   let [lo, hi] = extent(s.values);
+  if (Number.isFinite(floor)) lo = Math.min(lo, floor);
   if (limit !== null) [lo, hi] = [Math.min(lo, limit), Math.max(hi, limit)];
-  const top = textPx + 8;
+  const top = textPx * 2 + 8; // under the title, and room for the limit's words above its line
   const bottom = h - 4;
-  const X = (t) => ((t - t0) / (t1 - t0 || 1)) * w;
+  const ticks = niceTicks(lo, hi);
+  const tickW = Math.ceil(Math.max(...ticks.map((v) => fmt(v, 3).length)) * textPx * 0.62) + 8;
+  const X = (t) => tickW + ((t - t0) / (t1 - t0 || 1)) * (w - tickW);
   const Y = (v) => bottom - ((v - lo) / (hi - lo || 1)) * (bottom - top);
+  const grid = ticks
+    .map((v) => `<line x1="${tickW}" x2="${w}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e2ddd2" stroke-width="1"/>` +
+      `<text class="tick" x="${tickW - 6}" y="${(Y(v) + textPx * 0.35).toFixed(1)}" text-anchor="end" font-size="${textPx}" fill="#5c5a54">${esc(fmt(v, 3))}</text>`)
+    .join("");
   const step = Math.max(1, Math.ceil(s.t_s.length / 300));
   const pts = [];
   for (let k = 0; k < s.t_s.length; k += step) pts.push(`${X(s.t_s[k]).toFixed(1)},${Y(s.values[k]).toFixed(1)}`);
   const unit = unitLabel(s.unit) || "1";
+  // the limit's line says what it is and its value (the load case's criterion), at its
+  // right end, above the line when there is room under the title, else below it
+  const ly = limit !== null ? Y(limit) : 0;
+  const above = ly - 6 - textPx >= textPx + 4; // clear of the title
   const svg =
     `<text x="0" y="${textPx}" font-size="${textPx}" fill="#5c5a54">${esc(name)} [${esc(unit)}]</text>` +
-    (limit !== null ? `<line x1="0" x2="${w}" y1="${Y(limit).toFixed(1)}" y2="${Y(limit).toFixed(1)}" stroke="${RED}" stroke-width="1.5" stroke-dasharray="6 4"/>` : "") +
+    grid +
+    (limit !== null
+      ? `<line x1="${tickW}" x2="${w}" y1="${ly.toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${RED}" stroke-width="1.5" stroke-dasharray="6 4"/>` +
+        `<text class="limit" x="${w}" y="${(above ? ly - 6 : ly + 6 + textPx).toFixed(1)}" text-anchor="end" font-size="${textPx}" fill="${RED}">${esc(`上限 ${fmt(limit, 3)} ${unitLabel(s.unit)}`.trim())}</text>`
+      : "") +
     `<polyline points="${pts.join(" ")}" fill="none" stroke="${LINE}" stroke-width="2.2"/>` +
-    `<line class="cur" x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="${RED}" stroke-width="1.5"/>`;
+    `<line class="cur" x1="0" x2="0" y1="${top}" y2="${bottom}" stroke="#8a857a" stroke-width="1.5"/>`;
   return { svg, X };
 }
 
@@ -187,7 +222,8 @@ export class CutN03 {
     Object.assign(box.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: sp.colors.panel, border });
     box.innerHTML =
       `<canvas data-kind="moving"></canvas>` +
-      `<span class="rate" data-box="n03.view.rate" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
+      // the squeeze of the record's time is a note for the makers, not for the viewers
+      `<span class="rate" data-box="n03.view.rate" data-kind="note" style="right:${pad}px;bottom:${pad}px;font-size:${Math.round(P.text_px * S.rate_of_text)}px"></span>`;
     if (!clearOfBand({ x: V.x, y: V.y, w: V.w, h: V.h }, this.layout)) box.dataset.outside = "1";
     this.stage.append(box);
     this.box = box;
@@ -221,7 +257,8 @@ export class CutN03 {
       h3.dataset.kind = "label";
       h3.dataset.tests = tests.join(" ");
       Object.assign(h3.style, { fontSize: `${titlePx}px`, marginBottom: `${pad}px` });
-      h3.textContent = tests.length ? `${title} (${tests.join("・")})` : title;
+      // the viewers do not know the tests' ids: the title only (the ids stay in data-tests)
+      h3.textContent = title;
       el.append(h3);
       pop.append(el);
       if (!list.length) {
@@ -245,17 +282,39 @@ export class CutN03 {
           r.style.fontSize = `${px}px`;
         }
         r.style.marginBottom = `${pad}px`;
+        r.dataset.px = String(px);
         return r;
       });
-      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0);
+      // a chart with a limit: whether every recorded value keeps to it (the criterion's op),
+      // said with "✓ 上限より下" on its own line under the reading, about half the
+      // reading's size (it is shown for under a second: loop_to_s .. accel_s), from
+      // loop_to_s (the drive has played out); its room is kept while it is hidden
+      const keeps = (c) => {
+        if (c.limit === null || c.limit === undefined) return null;
+        const test = { "<=": (v) => v <= c.limit, "<": (v) => v < c.limit }[c.op];
+        return test ? c.s.values.every(test) : null;
+      };
+      const oks = list.map((c, i) => {
+        if (!keeps(c)) return null;
+        const ok = document.createElement("div");
+        ok.className = "n03-ok";
+        ok.dataset.box = `n03.popup.${c.key}.ok`;
+        ok.dataset.kind = "label";
+        const px = Math.max(textPx, Math.round(Number(readings[i].dataset.px) * P.ok_of_reading));
+        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px` });
+        ok.textContent = "✓ 上限より下";
+        readings[i].after(ok);
+        return ok;
+      });
+      const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0) - oks.reduce((a, o) => a + (o ? o.offsetHeight + pad : 0), 0);
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
         el,
         charts: list.map((c, i) => {
-          const { svg, X } = chartSvg(c.s, chartW, h, textPx, c.name, c.limit ?? null);
+          const { svg, X } = chartSvg(c.s, chartW, h, textPx, c.name, c.limit ?? null, c.floor ?? 0);
           el.insertAdjacentHTML("beforeend", `<svg class="chart" data-box="n03.popup.${c.key}" data-kind="graph" width="${chartW}" height="${h}" viewBox="0 0 ${chartW} ${h}" style="margin-top:${i ? pad : 0}px">${svg}</svg>`);
           const node = el.lastElementChild;
-          return { ...c, X, cur: node.querySelector(".cur"), now: readings[i], unit: unitOf(c) };
+          return { ...c, X, cur: node.querySelector(".cur"), now: readings[i], unit: unitOf(c), ok: oks[i] };
         }),
       };
     };
@@ -265,7 +324,8 @@ export class CutN03 {
     // one graph at a time (story): the battery's temperature on the long drive, then the speed
     this.pages = {
       drive: page("drive", "長く走ったときの電池の温度", [
-        { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null },
+        { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null, op: this.heat?.lc.criterion?.op ?? null,
+          floor: this.ambient(this.battery?.s?.unit) },
       ]),
       launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }]),
     };
@@ -274,6 +334,13 @@ export class CutN03 {
     const spans = [this.drive, this.heat].filter(Boolean).flatMap((r) => [...channelsOf(r.ana).values()].flatMap((c) => [c.t_s[0], c.t_s.at(-1)]));
     this.driveSpan = spans.length ? [Math.min(...spans), Math.max(...spans)] : null;
     this.launchSpan = this.launch ? [this.launchView.motion.t0, this.launchView.motion.t1] : null;
+  }
+
+  // The surroundings' temperature of the thermal load case (its params.ambient_temperature,
+  // in the channel's unit), else 0: the bottom of the battery chart's axis.
+  ambient(unit) {
+    const a = this.heat?.lc.params?.ambient_temperature;
+    return a && a.unit === unit && Number.isFinite(a.value) ? a.value : 0;
   }
 
   // The thermal record's channel of the battery (temp.<id> of a battery part of the design),
@@ -357,7 +424,9 @@ export class CutN03 {
     for (const c of this.pages[phase].charts) {
       if (tau === null) continue;
       c.cur.setAttribute("transform", `translate(${c.X(tau).toFixed(1)} 0)`);
-      c.now.textContent = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
+      c.now.firstChild.nodeValue = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
+      // the ✓ once the long drive has played to its end (loop_to_s) and kept to the limit
+      if (c.ok) c.ok.style.visibility = phase === "drive" && t >= T.loop_to_s ? "visible" : "hidden";
     }
     let view;
     if (launch) {

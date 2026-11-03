@@ -8,8 +8,7 @@ the page's own corner note ("上限を越えた: ...") is not shown.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The layout is a copy of the promo department's layout.json (the sections the cut pages
-read, without the notes) as of their commit with the feature / list boxes and the size
-keys; the check times are its check.times,
+read, without the notes) as of their commit 52d12e9; the check times are its check.times,
 and for N01 / N02, which have none there, the lead time, the middle and the end. The
 records are the other cut tests' (shape examples); N01 and N02 need a run made by the
 real tools (HIRAKU_WEB_DEV_RUNS, a folder made by tests.web.dev_k2_run) and are skipped
@@ -38,25 +37,30 @@ from tests.web.test_cut_n03_n06_browser import n03_n06_events
 from tests.web.test_cut_n17_browser import REPORT, long_report, report_events
 
 KINDS = ["label", "graph", "legend", "number", "moving"]
+# Cuts whose text in a named box (data-box, not inside data-kind "note") is held to the
+# story's body text size, as promo/layout_check.py counts it
+BOXED_BODY = {"n03", "n04", "n06", "n07", "n15", "n16", "n17"}
 
-# The promo department's layout.json (their commit with the feature / list boxes and the
-# size keys, not in main yet), the sections the cut pages read, without the notes.
+# The promo department's layout.json (as of their commit 52d12e9: 11e1cc7's values, N03's
+# shorter drive (loop_to_s 2.0), N04's own assembly box, n03.popup.ok_of_reading and
+# n17.page.domain_of_title), the sections the cut pages read, without the notes.
 LAYOUT_JSON = r"""{
   "stage": {"w": 1920, "h": 1080},
   "subtitle_band": {"y": 910, "h": 170},
   "safe": {"x": 96, "y": 60, "w": 1728, "h": 850},
   "min_text_px": 18,
   "colors": {"night": "#131311", "ink": "#1b1a17", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
+  "n00": {"camera": {"fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12}, "motion": {"pass_dur_s": 0.9, "hop_period_s": 0.9, "idle_shift_s": 1.3}},
   "n01": {"duration_s": 4.0, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "pane": {"x": 1520, "y": 96, "w": 304, "h": 790}, "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2}, "times": {"lead_s": 0.4, "zoom_s": 1.6}, "zoom": {"from": 1.6, "to": 1.06}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n02": {"duration_s": 7.0, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"], "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}, "verdict": {"of_label": 2}}, "times": {"lead_s": 0.3}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n03": {"duration_s": 5.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2}, "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n04": {"duration_s": 4.0, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n03": {"duration_s": 5.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2, "ok_of_reading": 0.55}, "times": {"lead_s": 0.3, "loop_to_s": 2.0, "accel_s": 2.9}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n04": {"duration_s": 4.0, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "assembly": {"x": 96, "y": 160, "w": 1728, "h": 726}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 84, "h": 84, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n05": {"duration_s": 5.0, "grid": {"x": 96, "y": 280, "cols": 4, "rows": 3, "tile_w": 408, "tile_h": 180, "gap_x": 32, "gap_y": 26}, "tile": {"border_px": 2, "radius_px": 10, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "hero": {"x": 210, "y": 60, "w": 1500, "h": 750, "src": "media/n05_hero_2x.png"}, "hero_motion": {"push_scale": 1.04, "burst_scale": 1.7, "burst_dur_s": 0.4, "ease": [0.5, 0, 0.9, 0.4]}, "ease": {"tile": [0.2, 0.9, 0.3, 1.15]}, "title": {"name": {"y": 58, "size_px": 124}, "tag": {"y": 186, "size_px": 42}, "gloss": {"y": 244, "size_px": 24, "text": "CAE = コンピュータで設計を試す技術"}}, "times": {"burst_s": 1.25, "tiles_s": 1.35, "tile_in_s": 0.6, "tile_stagger_s": 0.05, "name_s": 1.75, "tag_s": 2.3, "gloss_s": 2.4, "door_open_s": 0.55, "latch_s": 0.38, "mesh_in_s": 0.2, "mesh_out_s": 0.78, "points_s": 0.0, "hero_in_s": 0.3, "points_out_s": 0.36}, "door": {"crack_dur_s": 0.2, "crack_deg": 12, "crack_ease": [0.25, 0, 0.3, 1], "hold_dur_s": 0.12, "open_dur_s": 0.38, "angle_deg": 105, "perspective_px": 2400, "ease": [0.45, 0, 0.8, 0.55], "seam_w_px": 4, "seam_glow_w_px": 220, "spill_dur_s": 0.9, "hero_fade_dur_s": 0.35, "hero_fade_scale": 1.1, "panel": {"inset_px": 72, "upper_h_px": 300, "gap_px": 40, "line_px": 2, "bevel_px": 16}, "handle": {"w_px": 12, "h_px": 200, "seam_gap_px": 48}, "crack_overshoot_deg": 3, "settle_dur_s": 0.1, "latch_dur_s": 0.17, "latch_deg": 0.8, "thickness_px": 24, "dolly_px": 260, "dolly_ease": [0.55, 0, 0.85, 0.5], "bolt": {"w_px": 120, "h_px": 18, "reach_px": 40, "travel_px": 72, "gap_px": 64}}, "rays": {"count": 26, "seed": 7, "width_min_deg": 0.7, "width_max_deg": 3.6, "spread_deg": 62, "length_px": 1500, "blur_px": 6, "peak_alpha": 0.32, "crack_scale": 0.12, "shimmer_min_dur_s": 0.45, "shimmer_max_dur_s": 1.1, "out_dur_s": 0.5}, "dust": {"count": 90, "seed": 11, "size_min_px": 2, "size_max_px": 7, "w": 1600, "h": 760, "drift_px": 70, "in_dur_s": 0.3, "out_dur_s": 0.7}, "bloom": {"peak_alpha": 0.3, "rise_dur_s": 0.12, "fall_dur_s": 0.55}, "hero_mesh": {"size_px": 50, "jitter": 0.28, "seed": 5, "line_px": 1.3, "in_dur_s": 0.4, "reach_px": 520, "spread_dur_s": 0.27, "jitter_dur_s": 0.04, "el_dur_s": 0.13, "end_scale": 0.15}, "hero_points": {"seed": 13, "outline_keep": 0.8, "jitter": 0.35, "scatter_min_px": 160, "scatter_max_px": 760, "margin_px": 24, "gather_dur_s": 0.22, "stagger_s": 0.08, "ease": [0.12, 0.75, 0.3, 1], "dot_px": 4.6, "node_dot_px": 6.4, "start_alpha": 0.35, "fade_dur_s": 0.22, "hero_in_dur_s": 0.16, "mask": {"cell_px": 10, "cols": 150, "rows": 75, "src": "media/n05_hero_2x.png", "threshold": 128, "cover": 0.5, "rows_hex": ["00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000003000000000000000000000", "00000000000000007800000000000000000000", "0000000000000000fc00000000000000000000", "00000000000000007801e00000000000000000", "00000000000000007803e00000000000000000", "00000000000000003003f00000000000000000", "00000000000000007c03e60000000000000000", "0000000000000000fc01fff000000000000000", "0000000000000000fc01ffffc0000000000000", "0000000000000000fc1ffffffe000000000000", "0000000000000038feffffffff000000000000", "0000000000000040fcffffffff000000000000", "0000000000000044fcffffffff000000000000", "00000000000000007cffffffff000000000000", "00000000000000687fffffffff000000000000", "00000000000000707fffffffff000000000000", "00000000000000007fffffffff800000000000", "0000000000000080ffffffffffe00000000000", "0000000000000007fffffffffff00000000000", "000000000000013ffffffffffff00000000000", "000000000000027ffff7ffffffb00000000000", "00000000003ff8ffffffffffff100000000000", "00000000007fffffffffffff7e500000000000", "0000000001fffffffffffffc7e900000000000", "0000000001fffffffffffff1fd900000000000", "0000000003ffffffffffffe0ff900000000000", "0000000007fffffffffffff0fd300000000000", "0000000007ffffffffffffc0fd200000000000", "0000000007ffffffffffff007d600000000000", "000000000ffffffffffffc007f400000000000", "000000000ffffffffffff0007fc00000000000", "000000000fffffffffff00003f800000000000", "000000000ffffffffffe000006000000000000", "0000000007ffffffffff000000000000000000", "0000000007ffffffffff000000000000000000", "0000000003fffff3ffe7000000000000000000", "0000000003ffdfcfff87000000000000000000", "0000000000fff63fff89800000000000000000", "00000000003c7cfeff51800000000000000000", "0000000000001ff8ff71000000000000000000", "00000000000003e1ffe1000000000000000000", "0000000000000081fef3000000000000000000", "0000000000000001ffeb000000000000000000", "0000000000000001fe43000000000000000000", "0000000000000001fc46000000000000000000", "0000000000000001fc46000000000000000000", "0000000000000000fe0c000000000000000000", "0000000000000000ffb8000000000000000000", "00000000000000007ff0000000000000000000", "00000000000000003fe0000000000000000000", "00000000000000000fc0000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000", "00000000000000000000000000000000000000"]}}, "tile_fx": {"ghosts": 2, "ghost_lag_s": 0.035, "ghost_alpha": 0.32, "land_dur_s": 0.5, "land_glow_px": 26}, "name_wipe": {"wipe_dur_s": 0.65, "feather_px": 180, "sweep_w_px": 300, "afterglow_dur_s": 1.3}, "fly_from": {"x": 960, "y": 470}, "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"]},
-  "n06": {"duration_s": 11.7, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 96, "w": 1104, "h": 790}, "list": {"x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24}, "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}}, "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n07": {"duration_s": 15.3, "view": {"x": 96, "y": 96, "w": 1500, "h": 790}, "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20}, "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08}, "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0}, "turn_deg": 90, "zoom": {"fill": 0.45}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n06": {"duration_s": 11.7, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 96, "w": 1104, "h": 790}, "list": {"x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24}, "tests": ["tilt_over", "step_stuck", "step_break", "battery_hot", "parts_clash", "wind"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}}, "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n07": {"duration_s": 15.3, "view": {"x": 96, "y": 96, "w": 1500, "h": 790}, "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20}, "label": {"x": 120, "y": 120, "size_px": 30, "of_view_h": 0.08}, "ring": {"of_view_h": 0.08}, "times": {"lead_s": 0.3, "turn_to_s": 5.5, "zoom_s": 5.5, "zoom_to_s": 7.5, "swap_s": 11.0, "swap_to_s": 13.0}, "turn_deg": 90, "zoom": {"fill": 0.45}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "feature": {"x": 96, "y": 160, "w": 852, "h": 726}, "list": {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 84, "h": 84, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48}, "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
-  "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5}, "dim_opacity": 0.3, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5, "domain_of_title": 1.4}, "dim_opacity": 0.3, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
   "story": {
     "defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
     "cuts": {
@@ -64,7 +68,7 @@ LAYOUT_JSON = r"""{
       "n01": {"message": "越えられる段差 (100 mm) と、越えられない段差 (250 mm)", "limits": {"number": 2}},
       "n02": {"message": "傾き・風・悪路・急ハンドル・急ブレーキの、どれで倒れるかが分かる", "limits": {"label": 5}},
       "n03": {"message": "長く走っても熱くならず、どこまで速いかが分かる"},
-      "n04": {"message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)", "limits": {"label": 8, "moving": 8}},
+      "n04": {"message": "衝突・振動・組み立てまで、全部を 1 度に見る (呼ばれた札が記録の色のまま灯る)", "limits": {"label": 8, "moving": 8}},
       "n05": {"message": "HIRAKU — CAE を、すべての作り手へ拓く", "limits": {"label": 12, "moving": 12}},
       "n06": {"message": "作ってみると、うまくいかない", "limits": {"label": 6}},
       "n07": {"message": "つなぎ目が弱く、補強で直る (CAE が作る前に見つける)"},
@@ -121,6 +125,7 @@ READ = """async (t) => {
   for (const el of stage.querySelectorAll("[data-kind]")) {
     if (!shown(el)) continue;
     const k = el.dataset.kind;
+    if (k === "note") continue; // notes and sources are not counted (promo/layout_check.py)
     counts[k] = (counts[k] ?? 0) + 1;
     (items[k] ??= []).push(el.dataset.box ?? el.className?.baseVal ?? el.className ?? el.tagName);
   }
@@ -129,7 +134,9 @@ READ = """async (t) => {
     if (el.classList.contains("story-over") || el.classList.contains("err")) continue;
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
     if (!shown(el)) continue;
-    texts.push({ text: el.textContent.trim().slice(0, 40), px: parseFloat(getComputedStyle(el).fontSize), kind: el.closest("[data-kind]")?.dataset.kind ?? null });
+    texts.push({ text: el.textContent.trim().slice(0, 40), px: parseFloat(getComputedStyle(el).fontSize),
+                 kind: el.closest('[data-kind~="note"]') ? null : el.closest("[data-kind]")?.dataset.kind ?? null,
+                 boxed: !!el.closest("[data-box]") && !el.closest('[data-kind~="note"]') });
   }
   const note = document.querySelector(".story-over");
   return { err: document.querySelector(".err")?.textContent ?? null, counts, items, texts,
@@ -318,6 +325,10 @@ class CutStoryTest(unittest.TestCase):
                 self.assertLessEqual(n, lim[k], (where, k, got["items"][k]))
             for x in got["texts"]:
                 least = lim["body_text_px"] if x["kind"] else self.layout["min_text_px"]
+                # as promo/layout_check.py's busy check: text inside a named box (less notes)
+                # is body text too, on the cuts the review of the first stills went through
+                if cut in BOXED_BODY and x["boxed"]:
+                    least = lim["body_text_px"]
                 self.assertGreaterEqual(x["px"], least - 0.01, (where, x))
             self.assertIsNone(got["note"], where)
             self.assertEqual(got["over"], "0", where)
@@ -361,8 +372,9 @@ class CutStoryTest(unittest.TestCase):
     def test_missing_keys_are_named(self):
         """Each key the cut pages read from the promo department's boxes and sizes: without it
         the page says "layout.json の <cut> に無い: <key>" and draws nothing."""
-        cases = [("n02", "pane.verdict.of_label"), ("n03", "popup.reading_of_title"), ("n07", "label.of_view_h"),
-                 ("n17", "page.change_of_title"), ("n17", "dim_opacity"), ("n06", "feature.w"), ("n06", "list.cols"),
+        cases = [("n02", "pane.verdict.of_label"), ("n03", "popup.reading_of_title"), ("n03", "popup.ok_of_reading"),
+                 ("n07", "label.of_view_h"), ("n07", "ring.of_view_h"),
+                 ("n17", "page.change_of_title"), ("n17", "page.domain_of_title"), ("n17", "dim_opacity"), ("n06", "feature.w"), ("n06", "list.cols"),
                  ("n04", "list.gap_y"), ("n04", "feature.x"), ("n15", "list.rows"), ("n15", "feature.h")]
         for i, (cut, key) in enumerate(cases):
             layout = copy.deepcopy(self.layout)
@@ -482,7 +494,7 @@ class CutStoryTest(unittest.TestCase):
         seen = self.check_cut("n07", self.base, self.runs["n07"])
         for got in seen.values():
             self.assertEqual(got["counts"].get("legend"), 1)
-            self.assertEqual(got["counts"].get("number"), 1)
+            self.assertNotIn("number", got["counts"])  # the legend is the stress and the allowable only
             self.assertEqual(got["counts"].get("label"), 1)
             self.assert_larger(got, 1)
             self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
