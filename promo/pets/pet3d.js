@@ -3187,9 +3187,22 @@
       };
     }
 
-    // o.across (or opts.run = "across" at create): run across instead of in place
+    // o.across (or opts.run = "across" at create): run across instead of in place.
+    // Extra pose terms a page may add on top of the state (all optional; with
+    // none given the pose is exactly the state's):
+    //   o.squash  + squashes the body down (and wider), - stretches it up
+    //   o.lean    forward lean of the torso (radians, as report's)
+    //   o.tilt    sideways tilt of the torso (radians, as mismatch's)
+    //   o.antenna bend of the antenna to the side (radians)
+    //   o.turn    turn of the body and legs about the vertical (radians)
+    //   o.arm     swing of the prop arm (radians, - raises the prop forward)
+    //   o.lookX, o.lookY  shift of the pupils (body units)
+    //   o.report  0..1: mixes in report's lean (to ease into report from idle)
+    //   o.check   true / false: show / hide the tick (default: state "pass")
+    //   o.shadow  scale of the contact shadow (default 1)
     function update(t, state, camera, o) {
       state = STATES.includes(state) ? state : "idle";
+      const ex = o || {};
       const across = o && o.across !== undefined ? !!o.across : opts.run === "across";
       U.uT.value = t;
       B.update(t, state);
@@ -3201,10 +3214,10 @@
       let hopY = 0, lean = 0, tilt = 0, squash = 0;
       const run = state === "run" ? runPose(t, across) : null;
       mover.position.x = run ? run.x : 0;
-      hop.rotation.y = run ? run.yaw : 0;
+      hop.rotation.y = (run ? run.yaw : 0) + (ex.turn || 0);
       for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : 0;
       shoulders.L.rotation.x = run ? 0.75 * run.swing : 0;
-      shoulders.R.rotation.x = run ? -0.3 * run.swing : 0;
+      shoulders.R.rotation.x = (run ? -0.3 * run.swing : 0) + (ex.arm || 0);
       if (run) {
         hopY = run.hopY;
         lean = run.lean;
@@ -3217,6 +3230,10 @@
       } else if (state === "mismatch") {
         tilt = 0.24 + 0.03 * Math.sin((TAU * t) / 2.2);
       }
+      if (ex.report !== undefined && state !== "report") lean += ex.report * (0.2 + 0.025 * Math.sin((TAU * t) / 1.8));
+      lean += ex.lean || 0;
+      tilt += ex.tilt || 0;
+      squash += ex.squash || 0;
       hop.position.y = hopY;
       torso.position.y = PIVOT_Y + (state === "pass" || run ? 0 : bob);
       // bodies that lean by themselves (handling rolls in the corner)
@@ -3225,13 +3242,13 @@
       const sxz = 1 - 0.012 * breathe + squash * 0.6;
       torso.scale.set(sxz, sy, sxz);
 
-      antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0);
+      antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0) + (ex.antenna || 0);
       antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) - lean * 0.4 - (run ? 0.5 * run.hopY : 0);
 
       const bp = t % 4.3;
       const blink = bp < 0.16 ? 1 - 0.9 * Math.sin((Math.PI * bp) / 0.16) : 1;
-      const lookX = state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0;
-      const lookY = state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005;
+      const lookX = (state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0) + (ex.lookX || 0);
+      const lookY = (state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005) + (ex.lookY || 0);
       for (const e of eyes) {
         e.lid.scale.y = blink;
         e.pupil.position.set(lookX - e.side * 0.008, lookY, 0);
@@ -3239,7 +3256,7 @@
 
       tipMat.emissiveIntensity = state === "working" ? 0.25 + 0.25 * Math.sin(TAU * t * 1.2) : 0;
 
-      check.visible = state === "pass";
+      check.visible = ex.check !== undefined ? !!ex.check : state === "pass";
       question.visible = state === "mismatch";
       marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * t) / 1.4) + hopY;
       marks.rotation.z = state === "mismatch" ? 0.12 * Math.sin((TAU * t) / 2.2) : 0;
@@ -3250,7 +3267,7 @@
         if (state === "mismatch") marks.rotateZ(0.12 * Math.sin((TAU * t) / 2.2));
       }
 
-      const s = 1.55 * (1 - hopY * 1.1);
+      const s = 1.55 * (1 - hopY * 1.1) * (ex.shadow ?? 1);
       blob.scale.set(s * 1.25, s, 1);
 
       // links between the moved torso and the feet frame (handling)
@@ -3323,5 +3340,136 @@
     };
   }
 
-  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create };
+  // ---- anim: curves for pages that move pets about -----------------------
+  // Pure functions of time (no clock, no random numbers), so a page that uses
+  // them stays a function of t. Lengths are whatever the page passes (px).
+  const c01 = (u) => clamp(u, 0, 1);
+  const easeIo = (u) => { u = c01(u); return u * u * (3 - 2 * u); };
+  const easeOut = (u) => 1 - (1 - c01(u)) ** 3;
+  // ease out past 1 and back: 0 at 0, 1 at 1, peaking at 1 + over (over >= 0).
+  // f(u) = 1 + (s + 1)(u - 1)^3 + s (u - 1)^2 peaks at 1 + 4 s^3 / (27 (s + 1)^2);
+  // s is found from over by bisection
+  const backS = new Map();
+  function easeBack(u, over) {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    if (!(over > 0)) return easeOut(u);
+    let s = backS.get(over);
+    if (s === undefined) {
+      let lo = 0, hi = 20;
+      for (let i = 0; i < 60; i++) {
+        const m = (lo + hi) / 2;
+        if ((4 * m ** 3) / (27 * (m + 1) ** 2) < over) lo = m; else hi = m;
+      }
+      s = (lo + hi) / 2;
+      backS.set(over, s);
+    }
+    const v = u - 1;
+    return 1 + (s + 1) * v ** 3 + s * v * v;
+  }
+  const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
+  // Height at q in [0, 1] of a jump that ends rise up from where it started and
+  // tops out over above the higher end: y(q) = b q - (b - rise) q^2, a parabola
+  // in time (constant gravity), with top = max(rise, 0) + over,
+  // b = 2 top + 2 sqrt(top (top - rise)). Also its slope dy/dq.
+  function jumpY(q, rise, over) {
+    const top = Math.max(rise, 0) + over;
+    const b = 2 * top + 2 * Math.sqrt(top * (top - rise));
+    return { y: b * q - (b - rise) * q * q, v: b - 2 * (b - rise) * q, v0: b, v1: Math.abs(2 * rise - b) };
+  }
+  // shape of the curves inside hop (fractions of a contact, of the flight,
+  // and the settle's turns)
+  const HOP = { hit: 0.35, release: 0.2, settleTurns: 1.5, settleAmp: 0.4 };
+  // One jump the way an animator draws it, at tau seconds after it starts:
+  // crouch (anticipation) for crouch_s, squashing to crouch; flight for air_s on
+  // jumpY(rise_px, over_px), stretched along its speed (stretch at the fastest);
+  // the landing squashes to land_sq over land_s; then the small bounces
+  // [[up_px, dur_s], ...], each landing squashing less; then a settle that
+  // stretches and squashes once more and dies out over settle_s.
+  // Returns y (up, px, from the start), bounce (y above the end, after the
+  // landing), q (flight 0..1), air (off the ground), squash (+ squashed,
+  // - stretched), lean (lean_k x squash), antenna (antenna_k x the squash
+  // antenna_lag_s ago: the antenna follows through), land (the landing's
+  // tau) and end (tau at which everything is back at rest).
+  function hop(tau, J) {
+    const c = J.crouch_s || 0, a = J.air_s || 0, rise = J.rise_px || 0, over = J.over_px || 0;
+    const fall = Math.max(over, 1e-6);
+    const segs = [];
+    let at = 0;
+    const add = (kind, dur, o) => { segs.push(Object.assign({ kind, t0: at, dur }, o)); at += dur; };
+    if (c > 0) add("crouch", c);
+    let sEnd = 0;
+    if (a > 0) {
+      const j = jumpY(1, rise, over);
+      sEnd = -(J.stretch || 0) * j.v1 / Math.max(j.v0, j.v1);
+      add("air", a);
+    }
+    const land = at;
+    const bs = J.bounces || [];
+    let amp = J.land_sq || 0, ls = J.land_s || 0;
+    let s0 = a > 0 ? sEnd : (c > 0 ? (J.crouch || 0) : 0);
+    for (let i = 0; i <= bs.length; i++) {
+      const next = bs[i];
+      const k = next ? Math.sqrt(Math.min(1, next[0] / fall)) : 0;
+      const st = next ? (J.stretch || 0) * k : 0;
+      add("contact", ls, { s0, amp, s1: -st });
+      if (next) {
+        add("bounce", next[1], { up: next[0], st });
+        s0 = -st;
+        amp = (J.land_sq || 0) * k;
+        ls = (J.land_s || 0) * (0.5 + 0.5 * k);
+      }
+    }
+    add("settle", J.settle_s || 0, { amp });
+    const end = at;
+
+    function sample(x) {
+      const r = { y: 0, bounce: 0, q: 0, air: false, squash: 0 };
+      if (x <= 0) return r;
+      if (x >= end) { r.y = rise; r.q = 1; return r; }
+      for (const g of segs) {
+        if (x >= g.t0 + g.dur) {
+          if (g.kind === "air") r.q = 1;
+          continue;
+        }
+        const u = g.dur > 0 ? (x - g.t0) / g.dur : 1;
+        if (g.kind === "crouch") {
+          r.squash = (J.crouch || 0) * easeIo(u);
+        } else if (g.kind === "air") {
+          const j = jumpY(u, rise, over);
+          r.y = j.y;
+          r.q = u;
+          r.air = true;
+          const stretch = -(J.stretch || 0) * Math.abs(j.v) / Math.max(j.v0, j.v1);
+          const from = c > 0 ? (J.crouch || 0) : 0;
+          r.squash = from + (stretch - from) * easeIo(u / HOP.release);
+        } else {
+          r.y = rise;
+          if (a > 0) r.q = 1;
+          if (g.kind === "contact") {
+            r.squash = u < HOP.hit ? g.s0 + (g.amp - g.s0) * easeOut(u / HOP.hit)
+                                   : g.amp + (g.s1 - g.amp) * easeIo((u - HOP.hit) / (1 - HOP.hit));
+          } else if (g.kind === "bounce") {
+            r.bounce = 4 * g.up * u * (1 - u);
+            r.y = rise + r.bounce;
+            r.air = true;
+            r.squash = -g.st * Math.abs(1 - 2 * u);
+          } else {
+            r.squash = -g.amp * HOP.settleAmp * Math.sin(2 * Math.PI * HOP.settleTurns * u) * (1 - u) ** 2;
+          }
+        }
+        return r;
+      }
+      return r;
+    }
+    const r = sample(tau);
+    r.lean = (J.lean_k || 0) * r.squash;
+    r.antenna = (J.antenna_k || 0) * sample(tau - (J.antenna_lag_s || 0)).squash;
+    r.land = land;
+    r.end = end;
+    return r;
+  }
+  const anim = { smooth: easeIo, out: easeOut, back: easeBack, hump, jumpY, hop, HOP };
+
+  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create, anim };
 })();

@@ -24,11 +24,15 @@
      --t-tagline, --t-row, --t-light, --t-step from n00.times). Chips are
      placed by the script below from n00.pets; the pets' boxes are placed
      at each t by the module from n00.pets, n00.title_pets and n00.motion.
+     Each jump is pet3d's anim.hop (crouch, parabola, stretch, landing squash,
+     small bounces, settle) with each role's own values (n00.play.jump / cast).
      After the name has been said the pets play with the letters (n00.play):
-     a letter sinks and comes back when a pet lands on it (harder for crash,
-     which tosses the pet already there), NVH shakes K out of line and the
-     two pets on U push it back, and lead does a hop with the tick. The
-     letters move by a transform on their <b>, set at each t by the module. */
+     a letter sinks and comes back when a pet lands on it, by its weight
+     (harder for crash, which tosses the pet already there), NVH shakes K out
+     of line and the two pets on U wind up and push it back, lead does a hop
+     with the tick, and each pet does one small thing once seated (acts).
+     The clocks stop by n00.play.stop.still_s. The letters move by a
+     transform on their <b>, set at each t by the module. */
 
   .name {
     position: absolute;
@@ -334,9 +338,13 @@ const SEAT = { h: seatH, w: (seatH * P.w) / P.h };
 // ---- the play with the letters (layout.json n00.play) ------------------------
 // Every function here is of t alone. A letter's move is {dx, dy, rot, sx, sy}
 // (design px, radians), applied to its <b> about its bottom centre (ox, oy).
+// The pets' jumps are pet3d's anim.hop: crouch, a parabola, squash and
+// stretch, small bounces and a settle, each pet with its own values
+// (n00.play.jump, and n00.play.cast for each role).
 const PL = R.play;
-const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
-const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
+const A = HP.anim;
+const smooth = A.smooth, hump = A.hump;
+const rad = (d) => (d * Math.PI) / 180;
 // the sink and come back: d(u) = sin(3 pi u) (1 - u)^2, scaled to a peak of 1
 const BOUNCE = (() => {
   let m = 0;
@@ -345,10 +353,21 @@ const BOUNCE = (() => {
 })();
 const bounce = (u) => (u <= 0 || u >= 1 ? 0 : (Math.sin(3 * Math.PI * u) * (1 - u) ** 2) / BOUNCE);
 const lead = PETS.find((p) => p.id === PL.cheer.role);
-const CH = PL.cheer, SH = PL.shake, PU = PL.push;
+const CH = PL.cheer, SH = PL.shake, PU = PL.push, TO = PL.crash.toss, ST = PL.stop;
+// a role's jump: the defaults with the role's own values on top
+const castOf = (id) => Object.assign({}, PL.jump, PL.cast[id] || {});
 // [letter, start, dur, sink, squash] for every landing on a letter (filled
 // once the pets' times are known, below)
 const LANDS = [];
+
+// how far K is out of line (1 = as shaken out, 0 = in line): out with an
+// overshoot while it shakes, back with an overshoot when it is pushed
+function kOut(t) {
+  if (t < SH.start_s) return 0;
+  const k0 = PU.start_s + PU.letter_from * PU.dur_s;
+  if (t < k0) return A.back((t - SH.start_s) / SH.dur_s, SH.over);
+  return 1 - A.back((t - k0) / (PU.start_s + PU.dur_s - k0), PU.letter_over);
+}
 function letterMove(i, t) {
   const m = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
   if (t < PL.from_s || t >= PL.still_s) return m;
@@ -360,12 +379,9 @@ function letterMove(i, t) {
     m.sx += 0.5 * sq * d;
   }
   if (i === SH.letter) {
-    // shake and slide out, hold, then pushed back in line
     const u = (t - SH.start_s) / SH.dur_s;
-    let out = smooth(u);
-    if (t >= PU.start_s) out = 1 - smooth((t - PU.start_s) / PU.dur_s);
-    const tau = t - SH.start_s;
-    const shake = u > 0 && u < 1 ? rad(SH.rot_deg) * Math.sin(2 * Math.PI * SH.hz * tau) * (1 - u) : 0;
+    const out = kOut(t);
+    const shake = u > 0 && u < 1 ? rad(SH.rot_deg) * Math.sin(2 * Math.PI * SH.hz * (t - SH.start_s)) * (1 - u) : 0;
     m.dx += SH.dx_px * out;
     m.rot += rad(SH.tilt_deg) * out + shake;
   }
@@ -379,31 +395,47 @@ function onLetter(i, t, x, y) {
   const c = Math.cos(m.rot), s = Math.sin(m.rot);
   return { x: o.ox + m.dx + c * ax - s * ay, y: o.oy + m.dy + s * ax + c * ay, rot: m.rot };
 }
-// the pet's own part of the play, on top of riding its letter: {x, y} px
-// (up negative) and roll (radians, positive = top to the screen's left)
-function petPlay(p, t) {
-  const r = { x: 0, y: 0, roll: 0 };
-  if (t < PL.from_s || t >= PL.still_s) return r;
-  const toss = PL.crash.toss;
-  if (p.id === toss.role) {
-    const crash = PETS.find((q) => q.id === "cae.crash");
-    const u = (t - (crash.lit + M.pass_dur_s + toss.delay_s)) / toss.dur_s;
-    if (u > 0 && u < 1) r.y -= 4 * toss.up_px * u * (1 - u);
+
+// a pusher's lean (0..1 of lean_deg; negative: wound back) and step (0..1 of
+// step_px; negative: back to the right) at t: wind up, shove (ease out), hold,
+// and back with an overshoot
+function pushShape(P, k, t) {
+  const t0 = P.start_s + P.lag_s[k];
+  const w = (t - (t0 - P.wind_s)) / P.wind_s;
+  const u = (t - t0) / P.dur_s;
+  const wind = { lean: -P.wind_deg / P.lean_deg, step: -P.wind_px / P.step_px[k] };
+  if (u >= 1 || w <= 0) return { lean: 0, step: 0 };
+  if (u < 0) { const s = smooth(w); return { lean: wind.lean * s, step: wind.step * s }; }
+  if (u < P.push_in) {
+    const s = A.out(u / P.push_in);
+    return { lean: wind.lean + (1 - wind.lean) * s, step: wind.step + (1 - wind.step) * s };
   }
-  const k = PU.roles.indexOf(p.id);
-  if (k >= 0) {
-    const h = hump((t - PU.start_s) / PU.dur_s);
-    r.x -= PU.step_px[k] * h;
-    r.roll += rad(PU.lean_deg) * h;
-  }
-  if (p === lead) {
-    const u = (t - CH.start_s) / CH.dur_s;
-    if (u > 0 && u < 1) r.y -= 4 * CH.up_px * u * (1 - u);
+  if (u < P.hold_to) return { lean: 1, step: 1 };
+  const s = 1 - A.back((u - P.hold_to) / (1 - P.hold_to), P.over);
+  return { lean: s, step: s };
+}
+// a small thing a pet does once it is on the name (n00.play.acts): turn
+// (radians), arm, tilt, lean, lookX, lookY; zero outside [at_s, at_s + dur_s]
+function act(p, t) {
+  const a = p.act, r = { turn: 0, arm: 0, tilt: 0, lean: 0, lookX: 0, lookY: 0 };
+  if (!a) return r;
+  const u = (t - a.at_s) / a.dur_s;
+  if (u <= 0 || u >= 1) return r;
+  const amp = rad(a.amp_deg), h = hump(u);
+  if (a.kind === "look") {           // turns to one side, then the other
+    const s = Math.sin(2 * Math.PI * u) * h;
+    r.turn = amp * s;
+    r.lookX = PL.act_eye * s;
+  } else if (a.kind === "fiddle") {  // lifts its prop and turns it about, looking at it
+    r.arm = -amp * h + 0.3 * amp * Math.sin(6 * Math.PI * u) * h;
+    r.lookX = PL.act_eye * h;
+    r.lookY = -PL.act_eye * h;
+  } else if (a.kind === "sway") {    // rocks side to side twice
+    r.tilt = amp * Math.sin(4 * Math.PI * u) * h;
+  } else if (a.kind === "nod") {     // nods twice
+    r.lean = amp * Math.sin(2 * Math.PI * u) ** 2;
   }
   return r;
-}
-function cheering(p, t) {
-  return p === lead && t > CH.start_s && t < CH.start_s + CH.dur_s;
 }
 
 // ---- pets --------------------------------------------------------------------
@@ -416,61 +448,110 @@ PETS.forEach((p, i) => {
   const ink = INK[p.seat.letter];
   // the feet on the seat, and (domain pets) in the row
   p.seatFoot = { x: ink.x0 + p.seat.at * (ink.x1 - ink.x0), y: ink.top - TP.lift_px };
+  p.shift = M.idle_shift_s * i;
+  p.act = PL.acts[p.id] || null;
   if (p.chip) {
     p.rowFoot = { x: p.x + FOOT.fx * P.w, y: P.y + FOOT.fy * P.h };
     p.lit = T.light_s + p.k * T.step_s;
-    // shift the pet's clock so its pass hop starts from the ground at p.lit
-    p.shift = Math.ceil(p.lit / M.hop_period_s + 1) * M.hop_period_s - p.lit;
-  } else {
-    p.shift = M.idle_shift_s * i;
-  }
-  if (p.chip) {
-    const c = p.id === "cae.crash" ? PL.crash : PL.land;
-    LANDS.push([p.seat.letter, p.lit + M.pass_dur_s, c.dur_s, c.sink_px, c.squash]);
+    p.J = castOf(p.id);
+    p.J.rise_px = p.rowFoot.y - p.seatFoot.y;
+    p.go = p.lit + p.J.react_s;                         // the crouch starts
+    p.up = p.go + p.J.crouch_s;                         // off the ground
+    p.land = p.up + p.J.air_s;                          // on the letter
+    const heavy = p.id === "cae.crash";
+    const c = heavy ? PL.crash : PL.land, w = heavy ? 1 : p.J.weight;
+    LANDS.push([p.seat.letter, p.land, c.dur_s, c.sink_px * w, c.squash * w]);
   }
 });
-LANDS.push([lead.seat.letter, CH.start_s + CH.dur_s, CH.land_dur_s, CH.sink_px, CH.squash]);
+const crash = PETS.find((q) => q.id === "cae.crash");
+const tossAt = crash.land + TO.delay_s;
+const cheerLand = CH.start_s + CH.crouch_s + CH.air_s;
+LANDS.push([lead.seat.letter, cheerLand, CH.land_dur_s, CH.sink_px, CH.squash]);
 
-// The pose at t (timeline.js time): idle until the chip lights, the pass hop
-// while jumping onto the name, then report. Nothing here reads a wall clock
-// or random numbers.
-function stateAt(p, t) {
-  if (cheering(p, t)) return "pass";
-  if (!p.chip || t < p.lit) return "idle";
-  return t < p.lit + M.pass_dur_s ? "pass" : "report";
+// the pet's own part of the play, on top of riding its letter: {x, y} px
+// (up negative), roll (radians, positive = top to the screen's left) and the
+// pose terms for pet3d's update (squash, lean, antenna, ...)
+function petPlay(p, t) {
+  const r = { x: 0, y: 0, roll: 0, pose: { squash: 0, lean: 0, antenna: 0, tilt: 0, turn: 0, arm: 0, lookX: 0, lookY: 0 } };
+  const add = (h) => { r.pose.squash += h.squash; r.pose.lean += h.lean; r.pose.antenna += h.antenna; };
+  if (p.chip && t > p.go) {
+    // the jump onto the name: placeAt moves the box until the landing; here the
+    // crouch, the stretch, the landing and the small bounces after it
+    const h = A.hop(t - p.go, p.J);
+    add(h);
+    r.y -= h.bounce;
+    if (t < p.up) r.pose.lookY += p.J.look_up * smooth((t - p.go) / p.J.crouch_s);
+    else if (t < p.land) r.pose.lookY += p.J.look_up * (1 - smooth((t - p.up) / p.J.air_s));
+  }
+  if (p.id === TO.role && t > tossAt) {
+    const h = A.hop(t - tossAt, TO);
+    add(h);
+    r.y -= h.y;
+  }
+  const k = PU.roles.indexOf(p.id);
+  if (k >= 0) {
+    const s = pushShape(PU, k, t);
+    r.x -= PU.step_px[k] * s.step;
+    r.roll += rad(PU.lean_deg) * s.lean;
+  }
+  if (p === lead && t > CH.start_s) {
+    const h = A.hop(t - CH.start_s, CH);
+    add(h);
+    r.y -= h.y;
+  }
+  const a = act(p, t);
+  for (const key of ["turn", "arm", "tilt", "lean", "lookX", "lookY"]) r.pose[key] += a[key];
+  return r;
+}
+// the tick over the head: from the crouch to a little after the landing
+function ticked(p, t) {
+  if (p.chip && t > p.go && t < p.land + p.J.check_after_s) return true;
+  const cl = cheerLand + CH.check_after_s;
+  return p === lead && t > CH.start_s && t < cl;
+}
+// the pets' clock: t, slowing to a halt from stop.from_s to stop.still_s (so
+// the breathing and blinking stop too)
+function clock(t) {
+  const a = ST.from_s, d = ST.still_s - ST.from_s;
+  if (t <= a) return t;
+  const s = Math.min(t - a, d);
+  return a + s - (s * s) / (2 * d);
 }
 
-// Height of the jump at q in [0, 1] for a rise of D px (up is positive):
-// s(q) = b q + c q^2 with s(1) = D and the top at D + over (0 < q_top < 1).
-function jumpY(q, D, over) {
-  const top = D + over;
-  const b = 2 * top + 2 * Math.sqrt(top * over);
-  return b * q - (b - D) * q * q;
-}
-
-// Where the pet's box is at t: {x, y, w, h, yaw} in design px and radians.
-const rad = (d) => (d * Math.PI) / 180;
+// Where the pet's box is at t: {x, y, w, h, yaw, roll} in design px and
+// radians, and the pose terms (pose) for update.
 function placeAt(p, t) {
   // the seat rides its letter, and the pet's own play goes on top
   const on = onLetter(p.seat.letter, t, p.seatFoot.x, p.seatFoot.y);
   const own = petPlay(p, t);
   const seat = { foot: { x: on.x + own.x, y: on.y + own.y }, w: SEAT.w, h: SEAT.h,
                  yaw: rad(p.seat.yaw_deg || 0), roll: own.roll - on.rot };
-  let at = seat;
-  if (p.chip && t < p.lit + M.pass_dur_s) {
+  let at = seat, air = false;
+  if (p.chip && t < p.land) {
     const row = { foot: p.rowFoot, w: P.w, h: P.h, yaw: 0, roll: 0 };
-    if (t <= p.lit) at = row;
+    if (t <= p.up) at = row;
     else {
-      const q = (t - p.lit) / M.pass_dur_s;
-      const D = row.foot.y - seat.foot.y;
-      at = { foot: { x: row.foot.x + (seat.foot.x - row.foot.x) * q,
-                     y: row.foot.y - jumpY(q, D, M.jump_over_px) },
-             w: row.w + (seat.w - row.w) * q, h: row.h + (seat.h - row.h) * q,
-             yaw: row.yaw + (seat.yaw - row.yaw) * q, roll: seat.roll * q };
+      // ballistic: x even in time, y on the hop's parabola; the box shrinks
+      // from the row's size to the seat's, and the pet leans into the jump
+      const q = (t - p.up) / p.J.air_s;
+      const y = A.jumpY(q, row.foot.y - seat.foot.y, p.J.over_px).y;
+      const k = smooth(q);
+      const dir = Math.sign(row.foot.x - seat.foot.x);
+      air = true;
+      at = { foot: { x: row.foot.x + (seat.foot.x - row.foot.x) * q, y: row.foot.y - y },
+             w: row.w + (seat.w - row.w) * k, h: row.h + (seat.h - row.h) * k,
+             yaw: row.yaw + (seat.yaw - row.yaw) * k,
+             roll: seat.roll * q + dir * rad(p.J.tumble_deg) * (1 - 2 * q) * hump(q) };
     }
   }
+  const pose = own.pose;
+  if (p.chip) {
+    pose.report = t > p.land ? smooth((t - p.land) / p.J.report_in_s) : 0;
+    if (air) pose.shadow = p.J.shadow_air;
+  }
+  pose.check = ticked(p, t);
   return { x: at.foot.x - FOOT.fx * at.w, y: at.foot.y - FOOT.fy * at.h, w: at.w, h: at.h,
-           yaw: at.yaw, roll: at.roll };
+           yaw: at.yaw, roll: at.roll, pose };
 }
 
 // Each canvas is placed on whole device pixels and holds as many pixels as it
@@ -486,6 +567,7 @@ function draw(t) {
     o.el.style.transform = still ? "" : `translate(${(m.dx * uCss).toFixed(3)}px, ${(m.dy * uCss).toFixed(3)}px) ` +
       `rotate(${m.rot.toFixed(5)}rad) scale(${m.sx.toFixed(5)}, ${m.sy.toFixed(5)})`;
   });
+  const c = clock(t);
   for (const p of PETS) {
     const b = placeAt(p, t);
     const x = Math.round(b.x * devPx), y = Math.round(b.y * devPx);
@@ -501,8 +583,7 @@ function draw(t) {
     // roll about the feet after the yaw (rotation order Z, Y, X)
     p.pet.group.rotation.set(0, b.yaw, b.roll || 0, "ZYX");
     p.pet.group.visible = true;
-    // the cheer's pass hop starts from the ground at cheer.start_s
-    p.pet.update(cheering(p, t) ? t - CH.start_s : t + p.shift, stateAt(p, t), cam);
+    p.pet.update(c + p.shift, "idle", cam, b.pose);
     renderer.render(scene, cam);
     p.pet.group.visible = false;
     p.ctx.clearRect(0, 0, w, h);
@@ -510,7 +591,7 @@ function draw(t) {
   }
 }
 
-window.N00_SEATS = { INK, SEAT, FOOT, placeAt, letterMove };
+window.N00_SEATS = { INK, SEAT, FOOT, placeAt, letterMove, clock, LANDS };
 window.promo.onSeek(draw);
 draw(window.promo.t);
 window.__n00Built();

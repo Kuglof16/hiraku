@@ -35,6 +35,7 @@
      in with its letter. Then K stands tilted; the pet on U pushes it, a
      second hops over to help, and K goes back in line; then one by one the
      pets report, and all hold still by n18.pets.stop.still_s (n18.pets).
+     The hops are pet3d's anim.hop (crouch, arc, squash, settle) as on N00.
      One WebGL renderer off the page draws each pet alone; the frame is
      copied into that pet's 2D canvas, as on N00.
      ?layer=fg: the paper and the door (.bg-only) are not drawn. */
@@ -537,14 +538,38 @@ function letterInk() {
 const INK = letterInk();
 
 // ---- the play (n18.pets). Every function here is of t alone ------------------
-const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
-const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
-const arc = (u) => (u <= 0 || u >= 1 ? 0 : 4 * u * (1 - u));
-const FX = G.fix, TRY = G.try, HELP = G.help, PUSH = G.push, REP = G.report, STOP = G.stop;
-// how far the letter is out of line: 1 = tilted as it came, 0 = in line
+// The hops are pet3d's anim.hop (crouch, a parabola, squash and stretch, a
+// settle), as on N00.
+const A = HP.anim;
+const smooth = A.smooth, hump = A.hump;
+const FX = G.fix, TRY = G.try, HELP = G.help, PUSH = G.push, REP = G.report, STOP = G.stop, ARR = G.arrive;
+// a pusher's lean (0..1 of lean_deg; negative: wound back) and step (0..1 of
+// step_px; negative: back to the right) at t: wind up, shove (ease out), hold,
+// and back with an overshoot (as N00's push)
+function pushShape(P, k, t) {
+  const t0 = P.start_s + P.lag_s[k];
+  const w = (t - (t0 - P.wind_s)) / P.wind_s;
+  const u = (t - t0) / P.dur_s;
+  const wind = { lean: -P.wind_deg / P.lean_deg, step: -P.wind_px / P.step_px[k] };
+  if (u >= 1 || w <= 0) return { lean: 0, step: 0 };
+  if (u < 0) { const s = smooth(w); return { lean: wind.lean * s, step: wind.step * s }; }
+  if (u < P.push_in) {
+    const s = A.out(u / P.push_in);
+    return { lean: wind.lean + (1 - wind.lean) * s, step: wind.step + (1 - wind.step) * s };
+  }
+  if (u < P.hold_to) return { lean: 1, step: 1 };
+  const s = 1 - A.back((u - P.hold_to) / (1 - P.hold_to), P.over);
+  return { lean: s, step: s };
+}
+// the first try as one push of its own (step_px a number, no lag)
+const TRY_P = Object.assign({}, TRY, { step_px: [TRY.step_px], lag_s: [0] });
+// how far the letter is out of line: 1 = tilted as it came, 0 = in line. The
+// try moves it give of the way and lets it spring back; the push moves it
+// back in line with an overshoot
 function out(t) {
-  if (t >= PUSH.start_s) return 1 - smooth((t - PUSH.start_s) / PUSH.dur_s);
-  return 1 - TRY.give * hump((t - TRY.start_s) / TRY.dur_s);
+  const k0 = PUSH.start_s + PUSH.letter_from * PUSH.dur_s;
+  if (t >= k0) return 1 - A.back((t - k0) / (PUSH.start_s + PUSH.dur_s - k0), PUSH.letter_over);
+  return 1 - TRY.give * Math.max(0, pushShape(TRY_P, 0, t).step);
 }
 // a letter's move {dx, dy, rot, sx, sy} (design px, radians) about its bottom centre
 function letterMove(i, t) {
@@ -563,26 +588,38 @@ function onLetter(i, t, x, y) {
   const c = Math.cos(m.rot), s = Math.sin(m.rot);
   return { x: o.ox + m.dx + c * ax - s * ay, y: o.oy + m.dy + s * ax + c * ay, rot: m.rot };
 }
-// a pet's own part: {x, y} px (up negative) and roll (radians, + = top to the left)
+// a pet's own part: {x, y} px (up negative), roll (radians, + = top to the
+// left) and the pose terms for pet3d's update (squash, lean, antenna, report)
 function petPlay(p, t) {
-  const r = { x: 0, y: 0, roll: 0 };
+  const r = { x: 0, y: 0, roll: 0, pose: { squash: 0, lean: 0, antenna: 0 } };
+  const add = (h) => { r.pose.squash += h.squash; r.pose.lean += h.lean; r.pose.antenna += h.antenna; };
+  // it comes down with its letter and gives a little under its own weight
+  add(A.hop(t - p.arriveAt, ARR));
   if (p.id === TRY.role) {
-    const h = hump((t - TRY.start_s) / TRY.dur_s);
-    r.x -= TRY.step_px * h;
-    r.roll += rad(TRY.lean_deg) * h;
+    const s = pushShape(TRY_P, 0, t);
+    r.x -= TRY.step_px * s.step;
+    r.roll += rad(TRY.lean_deg) * s.lean;
   }
   if (p.id === HELP.role) {
-    const go = (t - HELP.start_s) / HELP.hop_dur_s, back = (t - HELP.back_s) / HELP.hop_dur_s;
-    r.x -= HELP.to_px * (smooth(go) - smooth(back));
-    r.y -= HELP.up_px * (arc(go) + arc(back));
+    // over to the first pusher and back: a crouch, an arc, a landing each way
+    for (const [t0, sign] of [[HELP.start_s, 1], [HELP.back_s, -1]]) {
+      const h = A.hop(t - t0, HELP);
+      add(h);
+      r.y -= h.y;
+      r.x -= sign * HELP.to_px * h.q;            // even in x: a ballistic arc
+    }
   }
   const k = PUSH.roles.indexOf(p.id);
   if (k >= 0) {
-    const h = hump((t - PUSH.start_s) / PUSH.dur_s);
-    r.x -= PUSH.step_px[k] * h;
-    r.roll += rad(PUSH.lean_deg) * h;
+    const s = pushShape(PUSH, k, t);
+    r.x -= PUSH.step_px[k] * s.step;
+    r.roll += rad(PUSH.lean_deg) * s.lean;
   }
-  r.y -= REP.up_px * arc((t - p.reportAt) / REP.hop_dur_s);
+  // report: a hop of its own size, then the report lean eased in
+  const h = A.hop(t - p.reportAt, p.repJ);
+  add(h);
+  r.y -= h.y;
+  r.pose.report = smooth((t - p.reportAt - p.repJ.crouch_s) / REP.report_in_s);
   return r;
 }
 // the pets' clock: t, slowing to a halt from stop.from_s to stop.still_s
@@ -604,13 +641,18 @@ PETS.forEach((p, i) => {
   const k = REP.order.indexOf(p.id);
   if (k < 0) throw new Error(`n18: ${p.id} not in pets.report.order`);
   p.reportAt = REP.start_s + k * REP.step_s;
+  const own = REP.hops[p.id];
+  if (!own) throw new Error(`n18: no report hop for ${p.id}`);
+  p.repJ = Object.assign({}, REP.hop, { over_px: own[0], air_s: own[1] });
+  // its letter's letter-in (title.css: 0.07 s a letter) and the moment it is down
+  p.arriveAt = R.times.name_s + p.seat.letter * 0.07 + ARR.after_s;
 });
 
 function placeAt(p, t) {
   const on = onLetter(p.seat.letter, t, p.seatFoot.x, p.seatFoot.y);
   const own = petPlay(p, t);
   return { x: on.x + own.x - FOOT.fx * SEAT.w, y: on.y + own.y - FOOT.fy * SEAT.h, w: SEAT.w, h: SEAT.h,
-           yaw: rad(p.seat.yaw_deg || 0), roll: own.roll - on.rot };
+           yaw: rad(p.seat.yaw_deg || 0), roll: own.roll - on.rot, pose: own.pose };
 }
 
 // Each canvas sits on whole device pixels and holds as many pixels as it shows;
@@ -635,7 +677,7 @@ function draw(t) {
     p.pet.setPixelScale(h / (2 * dist * half));
     p.pet.group.rotation.set(0, b.yaw, b.roll || 0, "ZYX");
     p.pet.group.visible = true;
-    p.pet.update(c + p.shift, t >= p.reportAt ? "report" : "idle", cam);
+    p.pet.update(c + p.shift, "idle", cam, b.pose);
     renderer.render(scene, cam);
     p.pet.group.visible = false;
     p.ctx.clearRect(0, 0, w, h);

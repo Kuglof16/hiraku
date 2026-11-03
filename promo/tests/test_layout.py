@@ -27,6 +27,51 @@ def box_prefix(cut: str) -> str:
     return "labels." if cut.startswith("labels_") else cut + "."
 
 
+def hop_times(j: dict) -> tuple[float, float]:
+    """(landing, end) of one pet3d anim.hop with the values j, in s from its
+    start: crouch_s + air_s, then the landing (land_s), each small bounce
+    [up_px, dur_s] with its landing (land_s x (0.5 + 0.5 sqrt(up / over))),
+    and the settle (settle_s)."""
+    land = j.get("crouch_s", 0) + j.get("air_s", 0)
+    end = land + j.get("land_s", 0)
+    over = max(j.get("over_px", 0), 1e-6)
+    for up, dur in j.get("bounces", []):
+        k = min(1.0, up / over) ** 0.5
+        end += dur + j.get("land_s", 0) * (0.5 + 0.5 * k)
+    return land, end + j.get("settle_s", 0)
+
+
+def n00_jumps(n: dict) -> dict:
+    """Each domain pet's jump onto the name (n00.play.jump with the role's
+    n00.play.cast on top): role -> its values with go (the crouch starts), land
+    and end (all at rest), in s."""
+    t, pl = n["times"], n["play"]
+    domains = [s["role"] for s in n["title_pets"]["seats"] if s["role"].startswith("cae.")]
+    order = ["cae.handling", "cae.powertrain", "cae.aero", "cae.crash", "cae.strength", "cae.nvh", "cae.thermal"]
+    assert sorted(domains) == sorted(order)
+    out = {}
+    for k, role in enumerate(order):
+        j = {**pl["jump"], **pl["cast"][role]}
+        go = t["light_s"] + k * t["step_s"] + j["react_s"]
+        land, end = hop_times(j)
+        out[role] = {**j, "lit": t["light_s"] + k * t["step_s"], "go": go, "land": go + land, "end": go + end}
+    return out
+
+
+def blinks_clear(stop: dict, shift: float, count: int) -> list:
+    """Pets (index, clock at a blink) whose blink (pet3d: clock % 4.3 < 0.16)
+    falls while the clocks t + shift x index slow to a halt (stop.from_s to
+    stop.from_s + (still_s - from_s) / 2 on the clock): empty when none does."""
+    lo, hi = stop["from_s"], stop["from_s"] + (stop["still_s"] - stop["from_s"]) / 2
+    bad = []
+    for i in range(count):
+        for k in range(0, 40):
+            b0 = 4.3 * k - shift * i
+            if b0 < hi and b0 + 0.16 > lo:
+                bad.append((i, b0))
+    return bad
+
+
 def hero_mask(png: Path, box_w: float, box_h: float, cell: float, threshold: int = 128,
               cover: float = 0.5) -> list[str]:
     """Where a picture is, cell by cell, as layout.json n05.hero_points.mask.rows_hex.
@@ -536,16 +581,42 @@ class ReferenceLook(unittest.TestCase):
         self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
         self.assertTrue(0 < tr["give"] < 1)                                    # the first try fails
         self.assertGreaterEqual(tr["start_s"], fx["settle_s"] + fx["settle_dur_s"])
-        self.assertLessEqual(hp["start_s"] + hp["hop_dur_s"], pu["start_s"])
+        # the helper's hops: a crouch, an arc, a landing; over before the push, back after it
+        h_land, h_end = hop_times(hp)
+        self.assertGreater(hp["crouch_s"], 0)
+        self.assertGreater(hp["land_sq"], 0)
+        self.assertLessEqual(hp["start_s"] + h_land, pu["start_s"])
         self.assertLessEqual(tr["start_s"] + tr["dur_s"], pu["start_s"] + 0.5 * pu["dur_s"])
-        self.assertGreaterEqual(hp["back_s"], pu["start_s"] + pu["dur_s"])
-        self.assertLessEqual(hp["back_s"] + hp["hop_dur_s"], rep["start_s"])   # all seated again
+        self.assertGreaterEqual(hp["back_s"], pu["start_s"] + max(pu["lag_s"]) + pu["dur_s"])
+        self.assertLessEqual(hp["back_s"] + h_land, rep["start_s"])            # all seated again
+        # the pushes wind up first and come back with an overshoot (as N00's)
+        for p in (tr, pu):
+            self.assertGreater(p["wind_s"], 0)
+            self.assertTrue(0 < p["push_in"] < p["hold_to"] < 1)
+            self.assertLessEqual(p["lean_deg"] * (1 + p["over"]), 30)
+        self.assertEqual(len(pu["lag_s"]), len(pu["roles"]))
         self.assertLessEqual(max(tr["lean_deg"], pu["lean_deg"]), 25)
-        self.assertLessEqual(max(hp["up_px"], rep["up_px"]), 0.25 * size)
-        # then one report each, and everything still before 8.5 s
-        last = rep["start_s"] + (len(rep["order"]) - 1) * rep["step_s"] + rep["hop_dur_s"]
+        self.assertLessEqual(hp["over_px"], 0.25 * size)
+        # each pet comes down with its letter and gives under its weight
+        self.assertGreater(g["arrive"]["land_sq"], 0)
+        self.assertLessEqual(fx["letter"] * 0.07 + g["arrive"]["after_s"] + hop_times(g["arrive"])[1] + t["name_s"], tr["start_s"])
+        # then one report each: a hop of its own (heights and times in the air
+        # differ), on the shared shape with a crouch, and everything still before 8.5 s
+        hops = rep["hops"]
+        self.assertEqual(sorted(hops), sorted(rep["order"]))
+        self.assertGreaterEqual(len({v[0] for v in hops.values()}), 4)
+        self.assertGreaterEqual(len({v[1] for v in hops.values()}), 3)
+        self.assertGreater(rep["hop"]["crouch_s"], 0)
+        self.assertGreater(rep["hop"]["land_sq"], 0)
         st = g["stop"]
-        self.assertLessEqual(last, st["still_s"])
+        for k, role in enumerate(rep["order"]):
+            up, air = hops[role]
+            self.assertLessEqual(up, 0.25 * size, role)
+            end = hop_times({**rep["hop"], "over_px": up, "air_s": air})[1]
+            # (the antenna follows antenna_lag_s behind the body)
+            self.assertLessEqual(rep["start_s"] + k * rep["step_s"] + end + rep["hop"]["antenna_lag_s"], st["still_s"], role)
+        # the hops overlap (the next starts before the one before has landed)
+        self.assertLess(rep["step_s"], rep["hop"]["crouch_s"] + min(v[1] for v in hops.values()))
         self.assertLess(st["from_s"], st["still_s"])
         self.assertLess(st["still_s"], 8.5)
         self.assertGreaterEqual(rep["start_s"], t["tag_s"])
@@ -555,12 +626,7 @@ class ReferenceLook(unittest.TestCase):
         self.assertIn("const bp = t % 4.3;", pet3d)
         self.assertIn("const blink = bp < 0.16 ?", pet3d)
         ids = re.findall(r'\{ id: "([a-z.]+)", name:', pet3d)
-        shift = r["n00"]["motion"]["idle_shift_s"]
-        lo, hi = st["from_s"], st["from_s"] + (st["still_s"] - st["from_s"]) / 2
-        for i in range(len(ids)):
-            for k in range(0, 40):
-                b0 = 4.3 * k - shift * i               # clock t at which a blink starts
-                self.assertFalse(b0 < hi and b0 + 0.16 > lo, (ids[i], b0))
+        self.assertEqual(blinks_clear(st, r["n00"]["motion"]["idle_shift_s"], len(ids)), [])
         # the vehicle stays clear above the pets
         self.assertGreaterEqual(n["vehicle"]["y"], r["safe"]["y"])
 
@@ -609,7 +675,7 @@ class ReferenceLook(unittest.TestCase):
         self.assertLess(t["row_s"] + 0.5, t["light_s"] + 1e-9)          # the row is in before the first chip
         self.assertLess(t["light_s"] + 6 * t["step_s"] + n["motion"]["pass_dur_s"], n["duration_s"])
         self.assertEqual(n["motion"]["pass_dur_s"], n["motion"]["hop_period_s"])  # one hop per jump
-        self.assertGreater(n["motion"]["jump_over_px"], 0)              # the pet comes down onto its letter
+        self.assertNotIn("jump_over_px", n["motion"])                   # the jumps are n00.play.jump / cast
         lim = r["story"]["cuts"]["n00"]["limits"]
         self.assertGreaterEqual(lim["label"], 7)                        # the 7 chips
         self.assertGreaterEqual(lim["moving"], 10)                      # the ten pets
@@ -650,38 +716,95 @@ class ReferenceLook(unittest.TestCase):
         # all six letters are in while the voice says the name (from 0.3 s)
         nm = n["name"]
         self.assertLessEqual(t["name_s"] + 5 * nm["in_step_s"] + nm["in_dur_s"], 1.0 + 1e-9)
-        # the play starts after the name has been said, and is still before 7.5 s
+        # the play starts after the name has been said, and everything is still by 7.4 s
         self.assertGreaterEqual(pl["from_s"], 1.3)
-        self.assertLessEqual(pl["still_s"], 7.5)
-        first_land = t["light_s"] + m["pass_dur_s"]
-        last_land = t["light_s"] + 6 * t["step_s"] + m["pass_dur_s"]
-        self.assertGreaterEqual(first_land, pl["from_s"])
-        self.assertLessEqual(last_land + max(pl["land"]["dur_s"], pl["crash"]["dur_s"]), pl["still_s"])
-        sh, pu, ch = pl["shake"], pl["push"], pl["cheer"]
-        self.assertLessEqual(sh["start_s"] + sh["dur_s"], pu["start_s"])
-        self.assertLessEqual(pu["start_s"] + pu["dur_s"], pl["still_s"])
-        self.assertLessEqual(ch["start_s"] + ch["dur_s"] + ch["land_dur_s"], pl["still_s"])
-        self.assertEqual(ch["dur_s"], m["hop_period_s"])                 # one pass hop
+        self.assertLessEqual(pl["still_s"], 7.4)
+        jumps = n00_jumps(n)
+        # each jump: a crouch first (anticipation), a stretch in the air, a squash
+        # on landing, and it lands within the old pass slot after its chip lights
+        for role, j in jumps.items():
+            self.assertGreaterEqual(j["crouch_s"], 0.1, role)
+            self.assertGreater(j["crouch"], 0.1, role)
+            self.assertGreater(j["stretch"], 0, role)
+            self.assertGreater(j["land_sq"], j["stretch"], role)
+            self.assertGreater(j["settle_s"], 0, role)
+            self.assertLessEqual(j["land"] - j["lit"], m["pass_dur_s"], role)
+            self.assertLessEqual(j["over_px"], 0.35 * size, role)
+            self.assertLessEqual(len(j["bounces"]), 2, role)
+            for up, dur in j["bounces"]:
+                self.assertLess(up, j["over_px"], role)                     # small next to the jump
+            self.assertLessEqual(j["end"], pl["still_s"], role)
+            self.assertLessEqual(j["land"] + (pl["crash"] if role == "cae.crash" else pl["land"])["dur_s"], pl["still_s"])
+            self.assertLess(pl["land"]["sink_px"] * j["weight"], 0.1 * size)
+        # not ten of one: heights, times in the air, crouches and weights differ
+        for key in ("over_px", "air_s", "crouch_s", "crouch", "react_s", "weight"):
+            self.assertGreaterEqual(len({j[key] for j in jumps.values()}), 3, key)
+        self.assertGreaterEqual(len({len(j["bounces"]) for j in jumps.values()}), 3)
+        # the jumps overlap: the next pet crouches before the one before has settled
+        order = list(jumps.values())
+        self.assertTrue(any(b["go"] < a["end"] for a, b in zip(order, order[1:])))
+        self.assertGreaterEqual(order[0]["land"], pl["from_s"])
+        sh, pu, ch, to = pl["shake"], pl["push"], pl["cheer"], pl["crash"]["toss"]
+        # shake, then the push (wound up first, the second pusher a little later)
+        self.assertGreaterEqual(sh["start_s"], jumps["cae.nvh"]["land"])
+        self.assertLessEqual(sh["start_s"] + sh["dur_s"], pu["start_s"] - pu["wind_s"])
+        self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
+        self.assertEqual(len(pu["roles"]), len(pu["lag_s"]))
+        self.assertGreater(pu["wind_s"], 0)
+        self.assertGreater(pu["wind_deg"], 0)
+        self.assertTrue(0 < pu["push_in"] < pu["hold_to"] < 1)
+        self.assertTrue(0 < pu["letter_from"] < 1)
+        self.assertLessEqual(pu["start_s"] + max(pu["lag_s"]) + pu["dur_s"], pl["still_s"])
+        self.assertGreaterEqual(pu["start_s"] - pu["wind_s"], jumps["cae.thermal"]["end"] - 0.1)
+        # the toss: after crash lands, a passive hop (no crouch)
+        self.assertEqual(to["crouch_s"], 0)
+        land, end = hop_times(to)
+        self.assertLessEqual(jumps["cae.crash"]["land"] + to["delay_s"] + end, pl["still_s"])
+        # lead's cheer: a crouch, a hop with the tick, a landing on A
+        self.assertGreater(ch["crouch_s"], 0)
+        land, end = hop_times(ch)
+        self.assertLessEqual(ch["start_s"] + end, pl["still_s"])
+        self.assertLessEqual(ch["start_s"] + land + ch["land_dur_s"], pl["still_s"])
+        self.assertLessEqual(max(ch["over_px"], to["over_px"]), 0.25 * size)
         # small moves, so the letters stay readable: under a tenth of the letter size
         for k in ("sink_px", "dx_px"):
             for part in (pl["land"], pl["crash"], sh, ch):
                 if k in part:
                     self.assertLess(part[k], 0.1 * size + 1e-9, (k, part[k]))
-        self.assertLessEqual(max(pu["step_px"]), 0.1 * size)
-        # the pets' own hops are small next to the letters
-        self.assertLessEqual(max(ch["up_px"], pl["crash"]["toss"]["up_px"]), 0.25 * size)
+        # (the push overshoots back past the seat by over x the step, the other way)
+        self.assertLessEqual(max(max(pu["step_px"]), pu["wind_px"]), 0.1 * size)
+        self.assertLess(pu["over"], 0.5)
+        # (the shake dies out as the slide eases out past its tilt and back)
         self.assertLessEqual(sh["tilt_deg"] + sh["rot_deg"], 8)
+        self.assertLessEqual(sh["tilt_deg"] * (1 + sh["over"]), 8)
         self.assertLessEqual(pu["lean_deg"], 20)
-        self.assertGreater(pl["crash"]["sink_px"], pl["land"]["sink_px"])    # crash lands harder
+        self.assertGreater(pl["crash"]["sink_px"], pl["land"]["sink_px"] * jumps["cae.crash"]["weight"] * 0.5)
         # the shaken letter is the NVH pet's; the pushers sit on the next letter
         self.assertEqual(roles["cae.nvh"]["letter"], sh["letter"])
-        self.assertEqual(len(pu["roles"]), len(pu["step_px"]))
         for role in pu["roles"]:
             self.assertEqual(roles[role]["letter"], sh["letter"] + 1)
-        nvh_land = t["light_s"] + 5 * t["step_s"] + m["pass_dur_s"]
-        self.assertGreaterEqual(sh["start_s"], nvh_land)
-        self.assertEqual(roles[pl["crash"]["toss"]["role"]]["letter"], roles["cae.crash"]["letter"])
+        self.assertEqual(roles[to["role"]]["letter"], roles["cae.crash"]["letter"])
         self.assertIn(ch["role"], roles)
+        # one small thing each once seated, of a few kinds, small, and over
+        # before the clocks stop; the domain pets' after they have settled
+        acts = pl["acts"]
+        self.assertGreaterEqual(len({a["kind"] for a in acts.values()}), 4)
+        for role, a in acts.items():
+            self.assertIn(role, roles)
+            self.assertIn(a["kind"], ("look", "fiddle", "sway", "nod"))
+            self.assertLessEqual(a["amp_deg"], 25)
+            self.assertGreaterEqual(a["at_s"], pl["from_s"])
+            self.assertLessEqual(a["at_s"] + a["dur_s"], pl["stop"]["from_s"], role)
+            if role in jumps:
+                self.assertGreaterEqual(a["at_s"], jumps[role]["end"] - 0.05, role)
+        for role in roles:                                    # every pet has its own moment
+            self.assertTrue(role in acts or role in pu["roles"] or role == ch["role"], role)
+        # the clocks stop by 7.4 s, and no pet holds still with its eyes shut
+        st = pl["stop"]
+        self.assertLess(st["from_s"], st["still_s"])
+        self.assertLessEqual(st["still_s"], 7.4)
+        self.assertGreaterEqual(st["from_s"], ch["start_s"] + hop_times(ch)[0])
+        self.assertEqual(blinks_clear(st, m["idle_shift_s"], 10), [])
 
     def test_n00_page(self):
         html = (lc.SCREENS / "n00.html").read_text(encoding="utf-8")
@@ -703,12 +826,18 @@ class ReferenceLook(unittest.TestCase):
         self.assertEqual(len(ids), 10)
         self.assertIn('data-kind="moving"', html)
         # the seats come from n00.title_pets, measured on the name's letters
-        for part in ("R.title_pets.seats", "measureText", "actualBoundingBoxAscent", "TP.h_em", "M.jump_over_px"):
+        for part in ("R.title_pets.seats", "measureText", "actualBoundingBoxAscent", "TP.h_em"):
             self.assertIn(part, html)
+        self.assertNotIn("jump_over_px", html)
         self.assertNotIn('class="tag"', html)                           # no name tags any more
         # the play: every letter is a <b> moved at each t from n00.play
         for part in ("R.play", "<b>${c}</b>", "letterMove", "onLetter", "var(--name-in-dur)", "var(--name-in-step)"):
             self.assertIn(part, html)
+        # the jumps and hops are pet3d's anim (crouch, arc, squash), with each
+        # role's values from n00.play.jump / cast, passed to update as pose terms
+        for part in ("HP.anim", "A.hop(", "A.jumpY(", "PL.jump", "PL.cast", "PL.acts", "PL.stop", "b.pose"):
+            self.assertIn(part, html)
+        self.assertNotIn('"pass"', html)                                 # no pet3d pass hop on top
         for banned in BANNED:
             self.assertNotIn(banned, html)
 
@@ -1623,6 +1752,50 @@ class InBrowser(unittest.TestCase):
         self.assertNotEqual(got[5.65][sh["letter"]], "")          # K out of line, before the push
         self.assertAlmostEqual(k["dx"], sh["dx_px"], places=3)
         self.assertAlmostEqual(k["rot"], sh["tilt_deg"] * 3.141592653589793 / 180, places=4)
+
+    def test_n00_pets_still_by_7_4_and_clear_of_the_tagline(self):
+        from promo import export
+
+        n = lc.load_layout()["n00"]
+        pix = """() => [...document.querySelectorAll('canvas[data-pet]')].map((c) => c.toDataURL() + c.style.left + c.style.top)"""
+        # the drawn pixels of each pet (alpha > 40) against the tagline's text, in design px
+        hits = """() => {
+          const stage = document.querySelector('.stage').getBoundingClientRect(), u = stage.width / 1920;
+          const rg = document.createRange(); rg.selectNodeContents(document.querySelector('.tagline'));
+          const tb = rg.getBoundingClientRect();
+          const out = [];
+          for (const c of document.querySelectorAll('canvas[data-pet]')) {
+            const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+            let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+            for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++)
+              if (d[(y * c.width + x) * 4 + 3] > 40) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+            if (x1 < 0) continue;
+            const b = c.getBoundingClientRect(), sx = b.width / c.width, sy = b.height / c.height;
+            if (b.left + x0 * sx < tb.right && b.left + (x1 + 1) * sx > tb.left &&
+                b.top + y0 * sy < tb.bottom && b.top + (y1 + 1) * sy > tb.top) out.push(c.dataset.pet);
+          }
+          return out;
+        }"""
+        cap = export.Capture(lc.SCREENS / "n00.html", scale=0.25)
+        try:
+            seek = lambda t: cap.page.evaluate("t => window.__export.seek(t)", t)
+            got = {}
+            for t in (2.45, 7.4, 8.5, 2.45):
+                seek(t)
+                got.setdefault(t, []).append(cap.page.evaluate(pix))
+            over = {}
+            fps = 15
+            for i in range(int(1.9 * fps), int(5.4 * fps) + 1):
+                seek(i / fps)
+                for pet in cap.page.evaluate(hits):
+                    over[pet] = over.get(pet, 0) + 1
+        finally:
+            cap.close()
+        self.assertEqual(got[2.45][0], got[2.45][1])                          # the same t, the same picture
+        self.assertEqual(got[7.4][0], got[8.5][0])                            # all still by 7.4 s
+        self.assertLessEqual(n["play"]["stop"]["still_s"], 7.4)
+        for pet, k in over.items():                                           # over the tagline at most 0.2 s
+            self.assertLessEqual(k / fps, 0.2, pet)
 
     def test_labels_come_and_go(self):
         from promo import export
