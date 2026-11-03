@@ -48,8 +48,7 @@
    "cuts": [
     "N03"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N03.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n03_app_1080p.mp4",
    "overlay": [
     {
      "frames": "${WORK}/frames/labels_n03",
@@ -65,8 +64,7 @@
    "cuts": [
     "N04"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N04.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n04_app_1080p.mp4",
    "overlay": [
     {
      "frames": "${WORK}/frames/labels_n04",
@@ -96,8 +94,7 @@
    "cuts": [
     "N06"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N06.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n06_app_1080p.mp4"
   },
   {
    "cuts": [
