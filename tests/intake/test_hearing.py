@@ -253,11 +253,14 @@ class SampleAnswersTest(unittest.TestCase):
                     self.assertIn(r["source"], ("hearing", "default"))
                     self.assertEqual(contract.errors("requirement", r), [])
 
-    def test_the_demo_vehicle_keeps_some_questions_open_on_purpose(self):
+    def test_the_demo_vehicle_answers_every_question_of_the_hearing(self):
         req = load_product("offroad-4w")
         answers, note = load_answers(answers_file("offroad-4w"))
         p = prepare(req, answers, note)
-        self.assertEqual(p.unresolved, ["Q03", "Q20", "Q91"])
+        self.assertEqual(p.unresolved, [])
+        by = {a["key"]: a["source"] for a in p.answered["answers"]}
+        for key in ("Q03", "Q20", "Q91"):
+            self.assertEqual(by[key], "hearing", key)
         self.assertEqual(p.answered["note"], note)
 
     def test_answers_file_with_a_stray_key_is_refused(self):

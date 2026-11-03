@@ -25,7 +25,7 @@ export function emptyModel() {
     designVersion: 0,
     domains: null, // the domains_picked data, or the project's picks until one arrives
     domainsFromProject: false,
-    hearing: { asked: null, answered: null },
+    hearing: { asked: null, answered: null, ruleQuestions: [] },
     requirements: [], // {key, name, value, unit, source, trust, basis, note, fresh}
     docs: new Map(), // doc_id -> {doc, rules}
     checks: new Map(), // rule_id -> rule_check
@@ -75,6 +75,12 @@ export function apply(m, e) {
       m.speedClass = d.speed_class || m.speedClass;
       break;
     case "hearing.asked":
+      {
+        // the rule hits not answered yet stay on the screen when others are asked later; the answered ones go
+        const kept = ruleRows(m).filter((r) => !r.answer).map(({ rule_id, parts, text, choices }) => ({ rule_id, parts, text, choices }));
+        const fresh = d.rule_questions || [];
+        m.hearing.ruleQuestions = [...fresh, ...kept.filter((k) => !fresh.some((f) => f.rule_id === k.rule_id))];
+      }
       m.hearing.asked = d;
       m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
       break;
@@ -140,7 +146,7 @@ export function hearingRows(m) {
 
 /** The rule hits the lead asked about (hearing.asked rule_questions), each with the person's answer once there is one. */
 export function ruleRows(m) {
-  const asked = m.hearing.asked?.rule_questions || [];
+  const asked = m.hearing.ruleQuestions || [];
   const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
   return asked.map((q) => {
     const a = answers.get(q.rule_id) || null;

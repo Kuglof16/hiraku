@@ -99,7 +99,7 @@ console.log(JSON.stringify(out));
         self.assertEqual(got["offroad-4w"]["checks"], 31)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
-        self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
+        self.assertEqual(got["offroad-4w"]["open"], 0)  # the sample answers cover every question
         self.assertEqual(got["care-bed"]["open"], 0)
         self.assertGreater(got["care-bed"]["reqs"], 15)
 
@@ -303,7 +303,15 @@ events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: '
 intake.update();
 console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
 """)
-        self.assertEqual(got, [["U1-04", "asking"]])
+        self.assertEqual(got, [["U1-04", "asking"], ["SM-01", "asking"]])  # SM-01 was not answered: it stays, U1-04 is asked again
+
+    def test_the_answered_hits_go_and_the_unanswered_stay_when_others_are_asked_later(self):
+        got = self.run_body("""
+events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: 'MF-01', parts: ['m1'], text: '薄い' }] })];
+intake.update();
+console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
+""")
+        self.assertEqual(got, [["MF-01", "asking"], ["SM-01", "asking"]])  # U1-04 was answered: gone
 
 
 class StaticTest(unittest.TestCase):
