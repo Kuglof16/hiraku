@@ -38,6 +38,14 @@ their bodies as parts (kit/body.py): the trunk keeps the occupant's id, each lim
 hiraku.contract.loading.person_of reads them); the segments' mass shares are D. A. Winter's
 (kit/body.SEGMENT_SHARE, not checked in this repository).
 
+Options a failed requirement may call for, all off by default (each a variable, CHOICES the short ways to set
+them): mounts from the parts to the frame (mount_<group>, kit/attach.py; FN-15, load_path R8 free parts), stands
+for the pedals (pedal_mount; FN-12, R7 foot), a side frame outboard of the seats (side_bars, side_net; FN-05 and
+FN-07, R8 push at point R), the roll bar's outrigger section, rear stays and front posts (rollbar_foot_*,
+rollbar_stays, rollbar_front_posts; FN-01, R4) and fenders on the uprights (fenders; FN-19, shape only). The
+members the options add start with rops_ or side_, and build() refuses an option whose members or parts reach
+into another body further than K4 allows.
+
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
 Weight, young adult male 95th percentile (source: read from
@@ -549,7 +557,10 @@ _MOUNT_WORDS = {"mount_floor": "the floor panels, the deck and the front body (e
                 "mount_electrics": "the battery, the controller, the wiring box and the main switch (to the cross "
                                    "members beside, above or below them)",
                 "mount_seats": "the seats and the seat belts' anchors (the seats stand on the floor, so a seat is "
-                               "held through the floor; each belt's anchor goes to the nearest member)",
+                               "held through the floor; each belt's anchor goes to the nearest member). Without "
+                               "mount_floor the floor, the seats and what touches them hang on the two belt anchors "
+                               "alone (load_path R8-stress on version 1 with mount_seats only: 357 MPa in "
+                               "rollbar_post_L, against 163 MPa allowed)",
                 "mount_drive": "the reducer and the motor (to the rear cross member)"}
 _OPTION_VARS: dict[str, Var] = {
     k: Var("1", 0.0, 0.0, 1.0, f"1: mounts (kit/attach.py: a spacer up to {20:g} mm, else a bracket of two plates; "
