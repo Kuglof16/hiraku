@@ -512,7 +512,7 @@
       "thickness_px": 44, "spill_dur_s": 1.4, "shade_alpha": 0.55,
       "_note": "two night leaves (the N17b ground split down the middle), hinged on their outer edges, as N05's door: from times.open_s they part by crack_deg over crack_dur_s (crack_ease), hold hold_dur_s, then swing out towards the viewer to angle_deg over open_dur_s (ease), darkening to shade_alpha as they turn; each leaf's free edge has a lit thickness (thickness_px) and its other three sides a faint outline (line_px), unseen while the door is shut (it lies on the stage's edges). The first stills (crack 10 deg over 0.2 s, hold 0.1 s, swing 0.5 s with N05's ease) were still mostly dark at 1.4 s; the second (perspective 2400 as N05) threw the leaves out of the frame by about 1.28 s, so the swing was hard to see. Behind them warm light on the paper (the spill) fades over spill_dur_s from the swing, so from about 2.6 s the ground is bare paper. Hidden once open"
     },
-    "vehicle": { "y": 110, "w": 460, "_note": "centred; ink lines on the paper (no halo). Height w / 2 (viewBox 600 x 300)" },
+    "vehicle": { "y": 70, "w": 460, "_note": "centred; ink lines on the paper (no halo). Height w / 2 (viewBox 600 x 300). Was at y 110 (bottom 340) until the pets sat on the name (2026-11-04): their boxes reach up to about 324, 310 while they hop (n18.pets); at 70 the bottom is 300" },
     "title": {
       "name": { "y": 400, "size_px": 170 },
       "tag": { "y": 618, "size_px": 48 }
@@ -527,6 +527,18 @@
       "_note": "before the line (v2, after the reference's closing): count motes at seeded places in a w x h ellipse about (stage centre, cy), kept margin_px inside the stage and above the subtitle band, each of a seeded radius dot_*_px, are drawn in to seeded points on the line (x = stage centre, y within the light box, more towards its middle) over gather_dur_s (ease: slow, then fast) after a seeded delay of up to stagger_s from times.gather_s; they brighten from start_alpha and go out as they reach the line. A faint glow on the line's place rises to seed_glow_alpha meanwhile and hands over to the light at times.line_s. All motes are in by gather_s + stagger_s + gather_dur_s = times.line_s"
     },
     "rule": { "y": 596, "w": 400, "h": 2, "_note": "centred, ink, under the name as on N00; grows from the centre with the name (0.6 s from times.name_s + 0.55 s)" },
+    "pets": {
+      "_note": "the ten 3D pets of promo/pets/pet3d.js (v8) on the top edge of the name, in the seats of n00.title_pets (read from there, not copied, so N00 and N18 always have the same order; lengths relative to the name, so they scale with n18.title.name.size_px), seen with n00.camera, in a box of n00.pets' aspect, idle clocks shifted by n00.motion.idle_shift_s x index as on N00. Each pet comes in with its letter (title.css letter-in: 0.7 s, 0.07 s a letter from times.name_s). fix: the letter (index into HIRAKU, 4 = K) stands tilted tilt_deg and moved dx_px right (about the bottom centre of its line box, as n00.play) from the start; when it is in (settle_s = name_s + 4 x 0.07 + 0.7) it wobbles settle_deg at settle_hz, dying out over settle_dur_s. try: the pet on the next letter (role) leans lean_deg towards it and steps step_px left (a hump over dur_s, from start_s); the letter goes back give of the way and springs out again. help: a second pet (role) hops left to_px (up_px high, hop_dur_s) from start_s, to just behind the first; push: from start_s both lean (lean_deg) and step (step_px, in roles order) over dur_s and the letter goes back in line (eased); help.back_s: the helper hops back to its seat. report: from start_s, one pet every step_s in order (left to right on the name), each does a small hop (up_px over hop_dur_s) and stays in report (pet3d: leans to tell). stop: from from_s the pets' clocks slow to a halt at still_s (the clock's speed falls linearly to 0), so from still_s nothing on the screen moves. Every pose is a function of t only",
+      "fix": { "letter": 4, "tilt_deg": 7, "dx_px": 10, "settle_s": 4.38, "settle_dur_s": 0.45, "settle_hz": 3.5, "settle_deg": 2.5 },
+      "try": { "role": "cae.thermal", "start_s": 4.85, "dur_s": 0.75, "lean_deg": 22, "step_px": 16, "give": 0.55 },
+      "help": { "role": "packager", "start_s": 5.3, "hop_dur_s": 0.35, "to_px": 34, "up_px": 18, "back_s": 6.5 },
+      "push": { "roles": ["cae.thermal", "packager"], "start_s": 5.7, "dur_s": 0.7, "lean_deg": 20, "step_px": [14, 14] },
+      "report": { "order": ["designer", "cae.handling", "cae.powertrain", "cae.aero", "cae.crash", "lead",
+                            "cae.strength", "cae.nvh", "cae.thermal", "packager"],
+                  "start_s": 6.9, "step_s": 0.1, "hop_dur_s": 0.35, "up_px": 14 },
+      "stop": { "from_s": 7.92, "still_s": 8.18,
+                "_note": "the clocks are t + idle_shift_s x index (N00's), and pet3d blinks while clock % 4.3 < 0.16: lead's clock + 5.2 (index 4) blinks at about 7.70-7.86 s and index 7's at 8.10-8.26 s; the slowing clock runs from from_s to from_s + (still_s - from_s) / 2 = 8.05, between the two, so no pet holds still with its eyes shut (the first stills, from 7.9 to 8.4, froze index 7 mid-blink)" }
+    },
     "times": {
       "gather_s": 0.0,
       "line_s": 0.4,
@@ -692,7 +704,11 @@
         }
       },
       "n18": {
-        "message": "解析の前に予測し、理由を説明する — HIRAKU"
+        "message": "解析の前に予測し、理由を説明する — HIRAKU",
+        "limits": {
+          "moving": 12,
+          "why": "the ten 3D pets on the name (n18.pets) are data-kind moving while they breathe and play (they stop by n18.pets.stop.still_s), the same ten as N00's end; with them the name and then the tag come in (11 measured at 3.8 and 4.6 s)"
+        }
       }
     }
   },
@@ -716,7 +732,7 @@
       "n08b": [1.5, 5.2, 5.8, 7.5, 9.8],
       "n10": [0.6, 2.4, 4.6, 5.6, 8.3],
       "n17b": [0.5, 1.5, 2.5, 3.5, 4.5, 5.8],
-      "n18": [0, 0.3, 0.6, 1.0, 1.2, 1.4, 1.8, 2.6, 3.8, 4.6, 5.8, 7.0, 8.5],
+      "n18": [0, 0.3, 0.6, 1.0, 1.2, 1.4, 1.8, 2.6, 3.8, 4.6, 5.1, 5.5, 5.8, 6.1, 6.7, 7.0, 7.5, 8.5],
       "labels_n01": [0, 0.25, 2.0, 3.8],
       "labels_n02": [0.25, 3.5, 6.8],
       "labels_n03": [0.25, 2.5, 4.8],
@@ -741,6 +757,8 @@
       { "cut": "n07", "a": "n07.view", "b": "n07.label", "why": "the before / after label sits inside the view's top left on purpose (n07.label)" },
       { "cut": "n16", "a": "n16.view", "b": "n16.seek", "why": "the seek bar sits over the view's lower edge on purpose (n16.seek)" },
       { "cut": "n18", "a": "n18.light", "b": "n18.vehicle", "why": "the vehicle is drawn over the vertical light on purpose" },
+      { "cut": "n18", "a": "n18.pet.*", "b": "n18.pet.*", "why": "as on N00: a pet's box is a transparent canvas bigger than the pet; the two pets on one letter (and on neighbouring letters) have boxes that touch, and the helper hops to just behind the first pusher (n18.pets.help)" },
+      { "cut": "n18", "a": "n18.pet.*", "b": "n18.title.name", "why": "as on N00: seated, the box's lower edge reaches past the letter's ink top into the name's line box; the pet is drawn on the letter's top edge and never inside the letter (n00.title_pets puts the feet on the ink top)" },
       { "cut": "n05", "a": "n05.door", "b": "n05.hero", "why": "the vehicle stands in front of the closed door on purpose; it fades out as the door swings open" },
       { "cut": "n08", "a": "n08.*", "b": "n08.*", "why": "N08's dialogs, warnings and the stack of manuals pile up over one another and over the main window on purpose: the pile is the picture (too much to learn)" },
       { "cut": "n17b", "a": "n17b.vision*", "b": "n17b.lanes*", "why": "the planned 100,000 is drawn faint behind the lanes on purpose while they start to grow; it is gone (2.3 s) before the commits stream in" }
