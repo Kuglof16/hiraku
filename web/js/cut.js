@@ -570,7 +570,8 @@ class CutN02 {
       const { ok, over } = def.test ? this.casesOf(def.test) : {};
       const px = Math.max(st.label.size_px, this.story.bodyPx);
       const verdict = ok ? this.verdictOf(ok) : null;
-      const big = Math.max(this.story.bodyPx, Math.floor((r.w - 2 * st.border_px - 2 * st.label.x) / VERDICT_CHARS));
+      // the verdict fills the pane's width up to twice the pane's name, so it stays above the vehicle
+      const big = Math.max(this.story.bodyPx, Math.min(2 * px, Math.floor((r.w - 2 * st.border_px - 2 * st.label.x) / VERDICT_CHARS)));
       el.dataset.ok = verdict === null ? "" : verdict ? "1" : "0";
       el.innerHTML =
         `<canvas class="main"></canvas><canvas class="over"></canvas>` +
