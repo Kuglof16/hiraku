@@ -358,7 +358,7 @@ def all_formulas() -> list[Formula]:
                      "IIW-type S-N curve (no mean stress correction)", "linear damage accumulation (Miner)",
                      "the uses' ranges differ, so the cycles are a spectrum: below the knee the slope is 2 m - 1 "
                      "(IIW-1823-07 (2008) sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not the constant-"
-                     "amplitude slope of the design variable fatigue_slope_after_knee"],
+                     "amplitude slope of the design variable fatigue_slope_after_knee_constant_amplitude"],
         source=("S-N curve N = 2e6 (FAT / range)^m and Miner's rule: A. F. Hobbacher, Recommendations for Fatigue "
                 "Design of Welded Joints and Components, 2nd ed., Springer 2016 (IIW), not checked in this repository; "
                 "the slope 2 m - 1 below the knee for a spectrum: IIW-1823-07 (2008) sec. 4.3.1, p.110 (read in that "

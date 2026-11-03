@@ -166,11 +166,11 @@ VARIABLES: dict[str, Var] = {
     # A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed.,
     # Springer 2016 (IIW), not checked in this repository; FAT 71 and the slope 22 are assumptions.
     # The counts of use (R3) are a spectrum: the damage takes 2 m - 1 below the knee (IIW-1823-07 (2008)
-    # sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not fatigue_slope_after_knee
+    # sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not fatigue_slope_after_knee_constant_amplitude
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see the module)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
-    "fatigue_slope_after_knee": Var("1", 22.0, meaning="assumption: the constant-amplitude slope beyond the knee; the "
+    "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption: the constant-amplitude slope beyond the knee; the "
                                     "damage over the counts of use (a spectrum) does not use it, it takes 2 m - 1"),
 }
 # requirement key -> (variable, unit): propose() takes these from the requirements, not from the caller
