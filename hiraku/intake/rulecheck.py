@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from hiraku.intake import expression, facts
+from hiraku.intake import expression, facts, systems
 
 Record = dict[str, Any]
 
@@ -52,11 +52,14 @@ def check_all(
     *,
     disabled: set[str] | None = None,
     id_factory: Callable[[], str] | None = None,
+    flags: dict[str, Any] | None = None,
 ) -> list[Record]:
     """Every enabled rule against one design: a list of rule_check records.
 
     id_factory gives the next rule_check_id (the run store's next_id); without it the ids are rchk-0001, ...
     A rule with no target in this design still gets a record (targets empty, pass true): that is an answer too.
+    flags: the product's flags, which say what systems it needs (hiraku.intake.systems); without them the
+    rules of the system category are reported as not evaluable (missing flags).
     """
     disabled = disabled or set()
     ts = facts.targets(design, requirements)
@@ -64,7 +67,7 @@ def check_all(
     for rule in rules:
         if rule["rule_id"] in disabled:
             continue
-        rec = check_rule(rule, ts)
+        rec = systems.check_rule(rule, design, flags) if systems.is_system_check(rule["check"]) else check_rule(rule, ts)
         rid = id_factory() if id_factory else f"rchk-{len(out) + 1:04d}"
         out.append({"rule_check_id": rid, "design_version": design["design_version"], **rec})
     return out

@@ -280,7 +280,8 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     problems = _ensure_builtin(ctx)
     persist = ev.known(ev.RULE_CHECK_RECORDED)
     ids = (lambda: store.next_id("rule_check")) if persist else None
-    checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
+    checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids,
+                                  flags=ctx.project.get("flags"))
     if persist:
         through_store = ev.store_records(store, "rule_check")  # the store writes rchk-NNNN.json and emits the event
         for c in checks:
