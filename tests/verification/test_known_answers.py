@@ -311,6 +311,22 @@ class PlatesAndShells(unittest.TestCase):
         sq = ka.bredt_torsion(ka.BOX["T"], ka.BOX["L"], G, ka.BOX["b"], ka.BOX["h"], ka.BOX["t"])
         self.assertEqual((round(sq["shear_stress"], 2), round(math.degrees(sq["twist"]), 4)), (34.63, 1.0595))
 
+    def test_walls_twisting_as_thin_strips(self):
+        y, t, s = sp.symbols("y t s", positive=True)
+        phi = t**2 / 4 - y**2  # Prandtl stress function across a thin strip
+        self.assertEqual(sp.diff(phi, y, 2), -2)
+        self.assertEqual([phi.subs(y, v) for v in (-t / 2, t / 2)], [0, 0])
+        self.assertEqual(sp.simplify(2 * s * sp.integrate(phi, (y, -t / 2, t / 2)) - s * t**3 / 3), 0)
+        G = ka.shear_modulus(ka.SHELL["E"], ka.SHELL["nu"])
+        b = ka.BOX
+        out = ka.bredt_torsion(b["T"], b["L"], G, b["b"], b["h"], b["t"])
+        self.assertAlmostEqual(out["J_open"], 2 * (b["b"] + b["h"] - 2 * b["t"]) * b["t"] ** 3 / 3, places=9)
+        # the cell and the strips in parallel: their torques add up to T at one twist rate
+        th = out["twist_rate_walls"]
+        self.assertAlmostEqual(G * th * out["J"] + G * th * out["J_open"], b["T"], places=6)
+        self.assertAlmostEqual(out["shear_stress_walls"], G * th * out["J"] / (2 * (b["b"] - b["t"]) * (b["h"] - b["t"]) * b["t"]), places=9)
+        self.assertEqual(round((out["twist_rate_walls"] / out["twist_rate"] - 1) * 100, 3), -0.368)  # % for BOX
+
 
 class VehicleStatics(unittest.TestCase):
     def test_tilt_by_moments(self):
