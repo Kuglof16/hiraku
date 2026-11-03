@@ -139,6 +139,9 @@ class UseFatigue(BuiltinTool):
                  "dS1 from bed.deck_frame_udl (the user on less the user off), dS2 and dS3 from bed.lug_bending with "
                  "F = bed.lever_actuator_force F_max; the tool takes the frame's range in the 3D frame and the force with "
                  "the loads' heights"),
+        Predicts("stress_range", "bed.use_damage", "dS_worst",
+                 "the range at the worst weld; compared in place of the damage when both damages are next to 0 "
+                 "(hiraku.catalog.builders.product_care_bed.R3_TINY_DAMAGE)"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -178,9 +181,10 @@ class UseFatigue(BuiltinTool):
             ranges[f"lug_{which}"] = lug_root_stress(res["F_max"], h_p, v["bracket_width"], v["bracket_t"])
             where[f"lug_{which}"] = f"bracket_{which}"
         D = weld_damage(ranges, counts, fat, m, n_knee)
-        worst = max(D, key=D.get)
+        worst = max(D, key=lambda w: (D[w], ranges[w]))  # with no damage anywhere: the weld of the largest range
         m2 = spectrum_slope(m)
         results = [result("fatigue_damage", D[worst], "1", where[worst]),
+                   result("stress_range", ranges[worst], "MPa", where[worst]),
                    result("uses_life_factor", 1.0 / D[worst] if D[worst] > 0 else math.inf, "1", where[worst])]
         for w in WELDS:
             results.append(result(f"fatigue_damage_{w}", D[w], "1", where[w]))
@@ -218,6 +222,18 @@ def duty(stroke_mm: float, speed_m_s: float, uses: float, strokes_per_use: float
     return {"run_time": run, "on_time": on, "duty": 100.0 * on / SECONDS_PER_HOUR}
 
 
+def upstream_stroke(upstream: dict | None, at: str) -> tuple[str, float] | None:
+    """(load case id, mm) of the first ok upstream analysis with a result actuator_stroke where `at`."""
+    for lc_id, ana in (upstream or {}).items():
+        if not isinstance(ana, dict) or ana.get("status") != "ok":
+            continue
+        for r in ana.get("results", []):
+            if r.get("quantity") == "actuator_stroke" and r.get("where") == at and r.get("unit") == "mm" \
+                    and math.isfinite(float(r.get("value", math.nan))):
+                return lc_id, abs(float(r["value"]))
+    return None
+
+
 def actuator_duty_known_answers() -> list[Record]:
     out = []
     r, ax = 100.0, 400.0
@@ -253,6 +269,8 @@ class ActuatorDuty(BuiltinTool):
         Predicts("actuator_duty", "bed.actuator_duty", "duty", "s = bed.lever_actuator_force stroke (the lever's)"),
         Predicts("actuator_run_time", "bed.actuator_duty", "run_time"),
     )
+    upstream = ("an ok analysis with the result actuator_stroke at actuator_<actuator> (actuator_linkage of P5, which "
+                "feeds T3): its stroke replaces the one computed here")
 
     def known_answers(self) -> list[Record]:
         return actuator_duty_known_answers()
@@ -268,12 +286,19 @@ class ActuatorDuty(BuiltinTool):
         k = param_value(load_case, "strokes_per_use", "1")
         if n is None or n < 0 or k is None or k < 0:
             raise LoadCaseError("uses_per_hour and strokes_per_use must be 0 or more")
-        stroke = abs(res["stroke"])
-        got = duty(stroke, speed, n, k)
         at = f"actuator_{which}"
+        own = abs(res["stroke"])
+        up = upstream_stroke(params.get("upstream_analyses"), at)
+        stroke = own if up is None else up[1]
+        got = duty(stroke, speed, n, k)
         results = [result("actuator_duty", got["duty"], "%", at), result("actuator_run_time", got["run_time"], "s", at),
                    result("actuator_on_time", got["on_time"], "s", at), result("actuator_stroke", stroke, "mm", at)]
-        effects = []
+        if up is None:
+            effects = [{"name": "stroke: the lever's, computed here (no upstream actuator_linkage analysis of this "
+                                "actuator)", "value": own, "unit": "mm"}]
+        else:
+            effects = [{"name": f"stroke: from the upstream analysis {up[0]} (actuator_stroke at {at}); computed here "
+                                f"{own:.4g} mm", "value": up[1], "unit": "mm"}]
         whole = _var(design, "actuator_stroke")
         if whole is not None:
             results.append(result("actuator_stroke_left", whole - stroke, "mm", at))
