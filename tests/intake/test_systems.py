@@ -279,26 +279,54 @@ class RulesFileTest(unittest.TestCase):
 
 
 class WithTheOtherRulesTest(unittest.TestCase):
-    def test_check_all_gives_records_the_contract_takes(self):
-        design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
-        product = load_product("offroad-4w")
-        rules = knowledge.all_rules(knowledge.load_builtin())
-        checks = rulecheck.check_all(rules, design, product["requirements"], flags=product["flags"])
-        self.assertEqual(len(checks), len(rules))
+    def setUp(self):
+        self.design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
+        self.product = load_product("offroad-4w")
+        self.rules = knowledge.all_rules(knowledge.load_builtin())
+
+    def run_all(self, design, flags=True):
+        kwargs = {"flags": self.product["flags"]} if flags else {}
+        checks = rulecheck.check_all(self.rules, design, self.product["requirements"], **kwargs)
+        self.assertEqual(len(checks), len(self.rules))
         for c in checks:
             self.assertEqual(contract.errors("rule_check", c), [], c["rule_id"])
-        by = {c["rule_id"]: c for c in checks}
-        flags = product["flags"]
+        return {c["rule_id"]: c for c in checks if c["rule_id"].startswith("SY-")}
+
+    def test_check_all_gives_records_the_contract_takes(self):
+        by = self.run_all(self.design)
+        flags = self.product["flags"]
         self.assertTrue(flags["ride"] and flags["self_propelled"] and flags["rough"] and flags["battery"])
-        # the demo vehicle has no parts for brakes, restraints, a roll bar or a fuse, and says nothing about links
-        self.assertEqual(hit_ids(by["SY-03"]), ["design"])
-        self.assertEqual(hit_ids(by["SY-05"]), ["seat_R", "seat_L"])
-        self.assertEqual(hit_ids(by["SY-06"]), ["design"])
-        self.assertEqual(hit_ids(by["SY-09"]), ["battery"])
-        self.assertIn("motor", {n["part_id"] for n in by["SY-01"]["not_evaluable"]})
-        self.assertEqual(by["SY-01"]["hits"], [])
-        flagless = {c["rule_id"]: c for c in rulecheck.check_all(rules, design, product["requirements"])}
+        self.assertEqual(sorted(by), sorted(RULES))
+        flagless = self.run_all(self.design, flags=False)
         self.assertEqual(flagless["SY-01"]["not_evaluable"], [{"part_id": "design", "missing": ["flags"]}])
+        self.assertEqual(flagless["SY-01"]["targets"], ["design"])
+
+    def test_the_demo_vehicle_has_every_system_it_needs_and_joins_them(self):
+        by = self.run_all(self.design)
+        for rid, rec in by.items():
+            self.assertEqual((rec["hits"], rec["not_evaluable"]), ([], []), rid)
+        self.assertEqual(by["SY-07"]["targets"], [])  # not a road vehicle: no lamps asked for
+        for rid in ("SY-01", "SY-02", "SY-03", "SY-04", "SY-05", "SY-06", "SY-08", "SY-09"):
+            self.assertTrue(by[rid]["targets"] and by[rid]["pass"], rid)
+
+    def test_the_demo_vehicle_with_a_system_taken_out_says_where(self):
+        belts = ("seat_belt_R", "seat_belt_L")
+        for rid, gone, expected in (("SY-03", ("pedal_brake",), ["design"]), ("SY-05", belts, ["seat_R", "seat_L"]),
+                                    ("SY-06", ("rollbar",), ["design"]), ("SY-09", ("main_switch",), ["battery"])):
+            rec = self.run_all(without(self.design, *gone))[rid]
+            self.assertEqual(sorted(hit_ids(rec)), sorted(expected), rid)
+            self.assertLessEqual(set(hit_ids(rec)), set(rec["targets"]), rid)
+        others = self.run_all(without(self.design, "pedal_brake"))
+        self.assertTrue(all(r["pass"] for rid, r in others.items() if rid != "SY-03"))
+
+    def test_the_demo_vehicle_without_links_cannot_be_followed(self):
+        bare = copy.deepcopy(self.design)
+        for p in bare["parts"]:
+            p["connects_to"] = []
+        by = self.run_all(bare)
+        self.assertEqual(by["SY-01"]["hits"], [])
+        self.assertIn("motor", {n["part_id"] for n in by["SY-01"]["not_evaluable"]})
+        self.assertLessEqual({n["part_id"] for n in by["SY-01"]["not_evaluable"]}, set(by["SY-01"]["targets"]))
 
     def test_the_flags_are_the_contracts(self):
         for spec in systems.specs().values():
