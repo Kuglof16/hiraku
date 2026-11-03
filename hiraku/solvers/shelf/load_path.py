@@ -582,6 +582,18 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         results += _push(design, lp, values, on_part, vectors, effects)
     else:
         raise DesignError(f"load_kind must be one of {', '.join(LOAD_KINDS)}, got {kind!r}")
+    # the contract's unsupported_load: the load points with no path to the frame (a floating control, or a point R
+    # with nothing outboard to take the push); the judge makes it a failing verdict
+    if kind in ("hand", "foot"):
+        unsupported = list(dict.fromkeys(lost))
+    elif kind == "push":
+        opened = next(r for r in results if r["quantity"] == "occupant_push_open")
+        unsupported = [w.strip() for w in (opened.get("where") or "").split(",") if w.strip()] if opened["value"] else []
+        unsupported = unsupported if len(unsupported) == int(opened["value"]) else [opened.get("where")] * int(opened["value"])
+    else:
+        unsupported = []
+    if unsupported:
+        results.append(result("unsupported_load", len(unsupported), "1", _where(unsupported)))
     loaded = [pid for pid in dict.fromkeys(lost) if pid in free]  # the free parts this load case loads, named first
     results.insert(0, result("free_parts", len(free), "1", _where(loaded + [p for p in free if p not in loaded])))
     for pid in dict.fromkeys(lost):
@@ -860,7 +872,10 @@ class LoadPath(BuiltinTool):
         touch = float(run_param(params, TOUCH))
         out = analyse_load_path(design, kind, values, touch)
         n_springs = len(out.pop("contacts"))
-        out.pop("free")
+        free = out.pop("free")
         out["assumptions"] = list(ASSUMPTIONS) + ([f"触れる許し {touch:g} mm (run の params.touch)"] if touch != TOUCH_MM else [])
+        if free:
+            out["assumptions"].append(f"どこにも繋がらない部品 {len(free)} 個の質量は枠に載っていない (応力とたわみは、"
+                                      "それらが繋がったときより小さく出る)")
         out["effects"].append({"name": f"触れている所 (ばね) {n_springs} か所", "value": float(n_springs), "unit": "1"})
         return out
