@@ -16,9 +16,12 @@ speeds first, then positions with the new speeds.
 
 Wheel spin and the tyre deflection states are separate first-order states.
 Brakes and rolling resistance are Coulomb torques applied implicitly (a held
-wheel stays exactly at zero spin). The tyre's tangential force comes from a
-deflection state d with relaxation length sigma: dd/dt = v_slip - (|w r|/sigma) d,
-F = -k d, k = C / sigma, so a standing tyre is a spring and does not creep.
+wheel stays exactly at zero spin). The tyre's tangential force and its
+deflection state are the corner's force law (tyre.py).
+
+One step: corner kinematics -> road contacts -> per corner (wheel axis, normal
+contact, slip in the tyre frame, tyre force, wheel spin, generalised forces)
+-> body forces -> mass matrix and solve -> semi-implicit Euler -> tyre states.
 
 Left/right symmetry: corners are ordered in mirror pairs, sums over corners
 run in that order (a pair cancels exactly), and the linear solve runs on the
@@ -37,10 +40,8 @@ import numpy as np
 
 from .model import Vehicle
 from .road import Road
+from .tyre import tyre_of
 from .units import G0
-
-LOW_SPEED_DAMPING_RATIO = 0.7   # tyre deflection-state damping at standstill (fades out above V_LOW)
-V_LOW = 1.0                     # m/s
 
 
 def quat_to_r(q) -> np.ndarray:
@@ -80,6 +81,20 @@ def euler_from_r(r) -> tuple[float, float, float]:
     return roll, pitch, yaw
 
 
+def _to_world(rot, x, y, z):
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+    return (r00 * x + r01 * y + r02 * z,
+            r10 * x + r11 * y + r12 * z,
+            r20 * x + r21 * y + r22 * z)
+
+
+def _to_body(rot, x, y, z):
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+    return (r00 * x + r10 * y + r20 * z,
+            r01 * x + r11 * y + r21 * z,
+            r02 * x + r12 * y + r22 * z)
+
+
 @dataclass
 class Controls:
     steer: list   # per corner (rad)
@@ -105,23 +120,16 @@ class Sim:
         self.radius = [f(c.radius) for c in cs]
         self.k_z = [f(c.k_z) for c in cs]
         self.c_z = [f(c.c_z) for c in cs]
-        self.sigma = [f(c.sigma) for c in cs]
-        self.kx = [f(c.c_long / c.sigma) for c in cs]
-        self.ky = [f(c.c_lat / c.sigma) for c in cs]
-        self.mu = [f(c.mu) for c in cs]
+        self.tyres = [tyre_of(c) for c in cs]
         self.c_rr = [f(c.c_rr) for c in cs]
         self.j_w = [f(max(c.j_w, 1e-6)) for c in cs]
         self.spins = [c.kind == "wheel" for c in cs]
-        self.caster = [c.kind == "caster" for c in cs]
         self.k_w = [f(c.k_w) for c in cs]
         self.c_w = [f(c.c_w) for c in cs]
         self.preload = [f(c.preload) for c in cs]
         self.s_min = [f(c.s_min) for c in cs]
         self.s_max = [f(c.s_max) for c in cs]
         self.k_stop = [f(c.k_stop) for c in cs]
-        m_corner = [c.static_load / G0 for c in cs]
-        self.cx_ls = [2.0 * LOW_SPEED_DAMPING_RATIO * math.sqrt(k * m) for k, m in zip(self.kx, m_corner)]
-        self.cy_ls = [2.0 * LOW_SPEED_DAMPING_RATIO * math.sqrt(k * m) for k, m in zip(self.ky, m_corner)]
         self.i_s = [[float(veh.i_s[a, b]) for b in range(3)] for a in range(3)]
         self.m_dof = float(veh.m_s)
         for i in self.dofidx:
@@ -215,25 +223,17 @@ class Sim:
         return (hx + x, hy + sd_ * y, hz + z, x1, sd_ * y1, z1, x2, sd_ * y2, z2,
                 -side * cb1, -side * te1, self.camber0[i] + cb, self.toe0[i] + te)
 
-    # ----------------------------------------------------------------- step
-    def step(self, ctl: Controls, ext=None):
-        """Advance one step. ext: list of (force, point) in body axes, the point relative
-        to the sprung CG (e.g. aerodynamic drag and side force at their centres of pressure)."""
-        h = self.dt
-        n = self.n
-        r00, r01, r02, r10, r11, r12, r20, r21, r22 = _r_tuple(self.q)
+    def _kinematics(self, rot):
+        """Per corner: (path values, wheel-centre position and velocity in world axes), and the centres."""
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
         px, py, pz = self.p
         vx, vy, vz = self.v
         wx, wy, wz = self.w
-        Wx = r00 * wx + r01 * wy + r02 * wz
-        Wy = r10 * wx + r11 * wy + r12 * wz
-        Wz = r20 * wx + r21 * wy + r22 * wz
         s_ = self.s
         sd_ = self.sd
-
         geo = []
         centres = []
-        for i in range(n):
+        for i in range(self.n):
             g = self._path(i, s_[i])
             cx, cy, cz, dcx, dcy, dcz = g[0], g[1], g[2], g[3], g[4], g[5]
             sdi = sd_[i]
@@ -248,6 +248,17 @@ class Sim:
             Vz = vz + r20 * bx + r21 * by + r22 * bz
             geo.append((g, Cx, Cy, Cz, Vx, Vy, Vz))
             centres.append((Cx, Cy, Cz))
+        return geo, centres
+
+    # ----------------------------------------------------------------- step
+    def step(self, ctl: Controls, ext=None):
+        """Advance one step. ext: list of (force, point) in body axes, the point relative
+        to the sprung CG (e.g. aerodynamic drag and side force at their centres of pressure)."""
+        h = self.dt
+        n = self.n
+        rot = _r_tuple(self.q)
+        W = _to_world(rot, *self.w)
+        geo, centres = self._kinematics(rot)
         contacts = self.road.contacts(centres, self.radius)
 
         rows = [None] * n          # per-corner contributions, summed in mirror pairs below
@@ -262,202 +273,222 @@ class Sim:
         o_spring = [0.0] * n
         keep = [None] * n
         om_new = [0.0] * n
-        steer = ctl.steer
         for i in range(n):
-            g, Cx, Cy, Cz, Vx, Vy, Vz = geo[i]
-            cx, cy, cz, dcx, dcy, dcz, ddx_, ddy_, ddz_, thx, thz, camber, toe = g
-            side = self.side[i]
-            psi = steer[i] - side * toe
-            phi = -side * camber
-            cphi = math.cos(phi)
-            abx, aby, abz = -cphi * math.sin(psi), cphi * math.cos(psi), math.sin(phi)
-            ax = r00 * abx + r01 * aby + r02 * abz
-            ay = r10 * abx + r11 * aby + r12 * abz
-            az = r20 * abx + r21 * aby + r22 * abz
+            (rows[i], qs[i], o_spring[i], om_new[i], keep[i], o_ntot[i], o_fx[i], o_fy[i], o_f[i], o_p[i], o_n[i],
+             o_slide[i]) = self._corner(i, geo[i], contacts[i], rot, W, ctl, h)
 
-            # normal contact
-            kz, cz_ = self.k_z[i], self.c_z[i]
-            fnx = fny = fnz = 0.0
-            ntot = 0.0
-            pex = pey = pez = 0.0
-            rad = self.radius[i]
-            mnx = mny = mnz = 0.0
-            for (qx_, qy_, qz_, nx, ny, nz, dep) in contacts[i]:
-                if dep <= 0.0:
-                    continue
-                # the wheel is a disc: its lowest point toward this contact plane
-                sa = ax * nx + ay * ny + az * nz
-                cg2 = 1.0 - sa * sa
-                cgam = math.sqrt(cg2) if cg2 > 0.0 else 0.0
-                dc = rad - dep
-                dep = rad * cgam - dc
-                if dep <= 0.0:
-                    continue
-                fk = kz * dep - cz_ * (Vx * nx + Vy * ny + Vz * nz)
-                if fk <= 0.0:
-                    continue
-                if cgam > 1e-12:
-                    ux, uy, uz = (nx - sa * ax) / cgam, (ny - sa * ay) / cgam, (nz - sa * az) / cgam
-                else:
-                    ux, uy, uz = nx, ny, nz
-                qx_ = Cx - rad * ux + dep * nx
-                qy_ = Cy - rad * uy + dep * ny
-                qz_ = Cz - rad * uz + dep * nz
-                fnx += fk * nx
-                fny += fk * ny
-                fnz += fk * nz
-                ntot += fk
-                pex += fk * qx_
-                pey += fk * qy_
-                pez += fk * qz_
-                # moment of this normal force about the wheel centre
-                qcx, qcy, qcz = qx_ - Cx, qy_ - Cy, qz_ - Cz
-                mnx += fk * (qcy * nz - qcz * ny)
-                mny += fk * (qcz * nx - qcx * nz)
-                mnz += fk * (qcx * ny - qcy * nx)
-            if ntot > 0.0:
-                pex, pey, pez = pex / ntot, pey / ntot, pez / ntot
-                fm = math.sqrt(fnx * fnx + fny * fny + fnz * fnz)
-                nex, ney, nez = fnx / fm, fny / fm, fnz / fm
+        rhs6, sm, jj = self._body_forces(rows, rot, ext)
+        mm, rhs = self._mass_matrix(geo, rot, sm, jj, rhs6, qs)
+        sol, (gx, gy, gz) = self._solve(mm, rhs)
+        self._integrate(sol, gx, gy, gz, h)
+        self.om = om_new
+        self._relax_tyres(geo, keep, o_ntot, rot, h)
+        self.t += h
+
+        self.out = {"ntot": o_ntot, "fx": o_fx, "fy": o_fy, "f": o_f, "p": o_p, "n": o_n, "sliding": o_slide,
+                    "spring": o_spring, "steer": list(ctl.steer), "centres": centres,
+                    "camber": [geo[i][0][11] for i in range(n)], "toe": [geo[i][0][12] for i in range(n)],
+                    "acc": (sol[0] + gx, sol[1] + gy, sol[2] + gz)}
+
+    def _corner(self, i, gi, contacts, rot, W, ctl, h):
+        """Forces of corner i: its generalised-force row and travel force, spring force, new wheel
+        spin, the tyre frame kept for the state update, and the outputs."""
+        g, Cx, Cy, Cz, Vx, Vy, Vz = gi
+        camber, toe = g[11], g[12]
+        ax, ay, az = self._wheel_axis(i, rot, ctl.steer[i], camber, toe)
+        (fnx, fny, fnz, ntot, pex, pey, pez, nex, ney, nez, mnx, mny, mnz) = self._normal(
+            i, contacts, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az)
+        (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re) = self._slip(
+            i, W, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az, pex, pey, pez, nex, ney, nez)
+        vroll = abs(self.om[i]) * re
+        fl, ft_, sliding, lim = self.tyres[i].force(self.dx[i], self.dy[i], vsl, vst, vroll, ntot)
+        ftx = fl * lx + ft_ * tx
+        fty = fl * ly + ft_ * ty
+        ftz = fl * lz + ft_ * tz
+        fx_ = fnx + ftx
+        fy_ = fny + fty
+        fz_ = fnz + ftz
+        on, mbx, mby, mbz = self._spin(i, ctl, h, ax, ay, az, rhx, rhy, rhz, ftx, fty, ftz, mnx, mny, mnz, ntot, re)
+        row, qsi, spring = self._generalised(i, rot, g, fx_, fy_, fz_, mbx, mby, mbz, rhx, rhy, rhz)
+        keep = (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim)
+        return (row, qsi, spring, on, keep, ntot, fl, ft_, (fx_, fy_, fz_), (pex, pey, pez), (nex, ney, nez),
+                sliding)
+
+    def _wheel_axis(self, i, rot, steer, camber, toe):
+        """Spin axis of corner i in world axes from the steer angle and the path's camber and toe."""
+        side = self.side[i]
+        psi = steer - side * toe
+        phi = -side * camber
+        cphi = math.cos(phi)
+        abx, aby, abz = -cphi * math.sin(psi), cphi * math.cos(psi), math.sin(phi)
+        return _to_world(rot, abx, aby, abz)
+
+    def _normal(self, i, contacts, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az):
+        """Normal contact of the wheel disc on the road contact planes: total force (world), its
+        size, the mean contact point, the unit normal and the moment of the normal forces about
+        the wheel centre."""
+        kz, cz_ = self.k_z[i], self.c_z[i]
+        fnx = fny = fnz = 0.0
+        ntot = 0.0
+        pex = pey = pez = 0.0
+        rad = self.radius[i]
+        mnx = mny = mnz = 0.0
+        for (qx_, qy_, qz_, nx, ny, nz, dep) in contacts:
+            if dep <= 0.0:
+                continue
+            # the wheel is a disc: its lowest point toward this contact plane
+            sa = ax * nx + ay * ny + az * nz
+            cg2 = 1.0 - sa * sa
+            cgam = math.sqrt(cg2) if cg2 > 0.0 else 0.0
+            dc = rad - dep
+            dep = rad * cgam - dc
+            if dep <= 0.0:
+                continue
+            fk = kz * dep - cz_ * (Vx * nx + Vy * ny + Vz * nz)
+            if fk <= 0.0:
+                continue
+            if cgam > 1e-12:
+                ux, uy, uz = (nx - sa * ax) / cgam, (ny - sa * ay) / cgam, (nz - sa * az) / cgam
             else:
-                pex, pey, pez = Cx, Cy, Cz - rad
-                nex, ney, nez = 0.0, 0.0, 1.0
+                ux, uy, uz = nx, ny, nz
+            qx_ = Cx - rad * ux + dep * nx
+            qy_ = Cy - rad * uy + dep * ny
+            qz_ = Cz - rad * uz + dep * nz
+            fnx += fk * nx
+            fny += fk * ny
+            fnz += fk * nz
+            ntot += fk
+            pex += fk * qx_
+            pey += fk * qy_
+            pez += fk * qz_
+            # moment of this normal force about the wheel centre
+            qcx, qcy, qcz = qx_ - Cx, qy_ - Cy, qz_ - Cz
+            mnx += fk * (qcy * nz - qcz * ny)
+            mny += fk * (qcz * nx - qcx * nz)
+            mnz += fk * (qcx * ny - qcy * nx)
+        if ntot > 0.0:
+            pex, pey, pez = pex / ntot, pey / ntot, pez / ntot
+            fm = math.sqrt(fnx * fnx + fny * fny + fnz * fnz)
+            nex, ney, nez = fnx / fm, fny / fm, fnz / fm
+        else:
+            pex, pey, pez = Cx, Cy, Cz - rad
+            nex, ney, nez = 0.0, 0.0, 1.0
+        return fnx, fny, fnz, ntot, pex, pey, pez, nex, ney, nez, mnx, mny, mnz
 
-            # tyre frame and slip
-            lx = ay * nez - az * ney
-            ly = az * nex - ax * nez
-            lz = ax * ney - ay * nex
-            ln = math.sqrt(lx * lx + ly * ly + lz * lz)
-            if ln < 1e-12:
-                lx, ly, lz, ln = 1.0, 0.0, 0.0, 1.0
-            lx, ly, lz = lx / ln, ly / ln, lz / ln
-            tx = ney * lz - nez * ly
-            ty = nez * lx - nex * lz
-            tz = nex * ly - ney * lx
-            rhx, rhy, rhz = pex - Cx, pey - Cy, pez - Cz
-            arx = ay * rhz - az * rhy
-            ary = az * rhx - ax * rhz
-            arz = ax * rhy - ay * rhx
-            om = self.om[i]
-            vsx_ = Vx + (Wy * rhz - Wz * rhy) + om * arx
-            vsy_ = Vy + (Wz * rhx - Wx * rhz) + om * ary
-            vsz_ = Vz + (Wx * rhy - Wy * rhx) + om * arz
-            vsl = vsx_ * lx + vsy_ * ly + vsz_ * lz
-            vst = vsx_ * tx + vsy_ * ty + vsz_ * tz
-            re = math.sqrt(rhx * rhx + rhy * rhy + rhz * rhz)
-            vroll = abs(om) * re
-            lam = vroll / self.sigma[i]
-            fade = 1.0 / (1.0 + (vroll / V_LOW) ** 2)
-            dxi, dyi = self.dx[i], self.dy[i]
-            if self.caster[i]:
-                rr = self.c_rr[i] * ntot / math.sqrt(vsl * vsl + vst * vst + 1e-4)
-                fl, ft_ = -rr * vsl, -rr * vst
-            else:
-                fl = -self.kx[i] * dxi - self.cx_ls[i] * fade * (vsl - lam * dxi)
-                ft_ = -self.ky[i] * dyi - self.cy_ls[i] * fade * (vst - lam * dyi)
-            lim = self.mu[i] * ntot
-            mag = math.sqrt(fl * fl + ft_ * ft_)
-            sliding = mag > lim
-            if sliding:
-                sc = lim / mag if mag > 0.0 else 0.0
-                fl, ft_ = fl * sc, ft_ * sc
-            ftx = fl * lx + ft_ * tx
-            fty = fl * ly + ft_ * ty
-            ftz = fl * lz + ft_ * tz
-            fx_ = fnx + ftx
-            fy_ = fny + fty
-            fz_ = fnz + ftz
+    def _slip(self, i, W, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az, pex, pey, pez, nex, ney, nez):
+        """Tyre frame (l along the heading, t across, both in the contact plane), the contact
+        point from the wheel centre, the spin's velocity per rad/s there, the slip velocities
+        along l and t, and the effective rolling radius."""
+        Wx, Wy, Wz = W
+        lx = ay * nez - az * ney
+        ly = az * nex - ax * nez
+        lz = ax * ney - ay * nex
+        ln = math.sqrt(lx * lx + ly * ly + lz * lz)
+        if ln < 1e-12:
+            lx, ly, lz, ln = 1.0, 0.0, 0.0, 1.0
+        lx, ly, lz = lx / ln, ly / ln, lz / ln
+        tx = ney * lz - nez * ly
+        ty = nez * lx - nex * lz
+        tz = nex * ly - ney * lx
+        rhx, rhy, rhz = pex - Cx, pey - Cy, pez - Cz
+        arx = ay * rhz - az * rhy
+        ary = az * rhx - ax * rhz
+        arz = ax * rhy - ay * rhx
+        om = self.om[i]
+        vsx_ = Vx + (Wy * rhz - Wz * rhy) + om * arx
+        vsy_ = Vy + (Wz * rhx - Wx * rhz) + om * ary
+        vsz_ = Vz + (Wx * rhy - Wy * rhx) + om * arz
+        vsl = vsx_ * lx + vsy_ * ly + vsz_ * lz
+        vst = vsx_ * tx + vsy_ * ty + vsz_ * tz
+        re = math.sqrt(rhx * rhx + rhy * rhy + rhz * rhz)
+        return lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re
 
-            # spin: implicit Coulomb torque of the brake and the rolling resistance
-            mtx = rhy * ftz - rhz * fty + mnx
-            mty = rhz * ftx - rhx * ftz + mny
-            mtz = rhx * fty - rhy * ftx + mnz
-            tau = mtx * ax + mty * ay + mtz * az
-            if self.spins[i]:
-                jw = self.j_w[i]
-                drive = ctl.drive[i]
-                om_free = om + h * (drive + tau) / jw
-                brake = ctl.brake[i]
-                cap = brake + self.c_rr[i] * ntot * re
-                dlim = h * cap / jw
-                if abs(om_free) <= dlim:
-                    on = 0.0
-                elif om_free > 0.0:
-                    on = om_free - dlim
-                else:
-                    on = om_free + dlim
-                t_res = (on - om_free) * jw / h
-                t_brake = t_res * (brake / cap) if cap > 0.0 else 0.0
-                react = drive + t_brake
-                mbx = mtx - tau * ax - react * ax
-                mby = mty - tau * ay - react * ay
-                mbz = mtz - tau * az - react * az
-            else:
-                on = 0.0
-                mbx, mby, mbz = mtx, mty, mtz
-            om_new[i] = on
+    def _spin(self, i, ctl, h, ax, ay, az, rhx, rhy, rhz, ftx, fty, ftz, mnx, mny, mnz, ntot, re):
+        """New wheel spin (implicit Coulomb torque of the brake and the rolling resistance) and the
+        moment the corner passes to the body (world axes)."""
+        mtx = rhy * ftz - rhz * fty + mnx
+        mty = rhz * ftx - rhx * ftz + mny
+        mtz = rhx * fty - rhy * ftx + mnz
+        tau = mtx * ax + mty * ay + mtz * az
+        if not self.spins[i]:
+            return 0.0, mtx, mty, mtz
+        om = self.om[i]
+        jw = self.j_w[i]
+        drive = ctl.drive[i]
+        om_free = om + h * (drive + tau) / jw
+        brake = ctl.brake[i]
+        cap = brake + self.c_rr[i] * ntot * re
+        dlim = h * cap / jw
+        if abs(om_free) <= dlim:
+            on = 0.0
+        elif om_free > 0.0:
+            on = om_free - dlim
+        else:
+            on = om_free + dlim
+        t_res = (on - om_free) * jw / h
+        t_brake = t_res * (brake / cap) if cap > 0.0 else 0.0
+        react = drive + t_brake
+        mbx = mtx - tau * ax - react * ax
+        mby = mty - tau * ay - react * ay
+        mbz = mtz - tau * az - react * az
+        return on, mbx, mby, mbz
 
-            # generalised forces of this corner
-            fbx = r00 * fx_ + r10 * fy_ + r20 * fz_
-            fby = r01 * fx_ + r11 * fy_ + r21 * fz_
-            fbz = r02 * fx_ + r12 * fy_ + r22 * fz_
-            # one contribution per corner and quantity, so mirror pairs cancel exactly
-            crx = cy * fbz - cz * fby
-            cry = cz * fbx - cx * fbz
-            crz = cx * fby - cy * fbx
-            if self.dof[i]:
-                rbx = r00 * rhx + r10 * rhy + r20 * rhz
-                rby = r01 * rhx + r11 * rhy + r21 * rhz
-                rbz = r02 * rhx + r12 * rhy + r22 * rhz
-                lvx = dcx + (0.0 * rbz - thz * rby)
-                lvy = dcy + (thz * rbx - thx * rbz)
-                lvz = dcz + (thx * rby - 0.0 * rbx)
-                si_, sdi = s_[i], sd_[i]
-                spring = self.preload[i] + self.k_w[i] * si_ + self.c_w[i] * sdi
-                if si_ > self.s_max[i]:
-                    spring += self.k_stop[i] * (si_ - self.s_max[i])
-                elif si_ < self.s_min[i]:
-                    spring += self.k_stop[i] * (si_ - self.s_min[i])
-                o_spring[i] = spring
-                # centripetal / Coriolis of the unsprung point
-                ux = wy * cz - wz * cy
-                uy = wz * cx - wx * cz
-                uz = wx * cy - wy * cx
-                ex = wy * dcz - wz * dcy
-                ey = wz * dcx - wx * dcz
-                ez = wx * dcy - wy * dcx
-                sd2 = sdi * sdi
-                acx_i = (wy * uz - wz * uy) + 2.0 * ex * sdi + ddx_ * sd2
-                acy_i = (wz * ux - wx * uz) + 2.0 * ey * sdi + ddy_ * sd2
-                acz_i = (wx * uy - wy * ux) + 2.0 * ez * sdi + ddz_ * sd2
-                mu_ = self.mu_[i]
-                crx -= mu_ * (cy * acz_i - cz * acy_i)
-                cry -= mu_ * (cz * acx_i - cx * acz_i)
-                crz -= mu_ * (cx * acy_i - cy * acx_i)
-                qs[i] = (fbx * lvx + fby * lvy + fbz * lvz) - spring - mu_ * (dcx * acx_i + dcy * acy_i + dcz * acz_i)
-                c2 = cx * cx + cy * cy + cz * cz
-                rows[i] = (fx_, fy_, fz_, crx, cry, crz, mbx, mby, mbz,
-                           mu_ * acx_i, mu_ * acy_i, mu_ * acz_i, mu_ * cx, mu_ * cy, mu_ * cz,
-                           mu_ * (c2 - cx * cx), mu_ * (c2 - cy * cy), mu_ * (c2 - cz * cz),
-                           mu_ * cx * cy, mu_ * cx * cz, mu_ * cy * cz)
-            else:
-                rows[i] = (fx_, fy_, fz_, crx, cry, crz, mbx, mby, mbz) + (0.0,) * 12
+    def _generalised(self, i, rot, g, fx_, fy_, fz_, mbx, mby, mbz, rhx, rhy, rhz):
+        """Row of corner i for the body sums (force, moment, unsprung terms of the mass matrix),
+        the generalised force on its travel, and the spring force."""
+        cx, cy, cz, dcx, dcy, dcz, ddx_, ddy_, ddz_, thx, thz = g[:11]
+        fbx, fby, fbz = _to_body(rot, fx_, fy_, fz_)
+        # one contribution per corner and quantity, so mirror pairs cancel exactly
+        crx = cy * fbz - cz * fby
+        cry = cz * fbx - cx * fbz
+        crz = cx * fby - cy * fbx
+        if not self.dof[i]:
+            return (fx_, fy_, fz_, crx, cry, crz, mbx, mby, mbz) + (0.0,) * 12, 0.0, 0.0
+        wx, wy, wz = self.w
+        rbx, rby, rbz = _to_body(rot, rhx, rhy, rhz)
+        lvx = dcx + (0.0 * rbz - thz * rby)
+        lvy = dcy + (thz * rbx - thx * rbz)
+        lvz = dcz + (thx * rby - 0.0 * rbx)
+        si_, sdi = self.s[i], self.sd[i]
+        spring = self.preload[i] + self.k_w[i] * si_ + self.c_w[i] * sdi
+        if si_ > self.s_max[i]:
+            spring += self.k_stop[i] * (si_ - self.s_max[i])
+        elif si_ < self.s_min[i]:
+            spring += self.k_stop[i] * (si_ - self.s_min[i])
+        # centripetal / Coriolis of the unsprung point
+        ux = wy * cz - wz * cy
+        uy = wz * cx - wx * cz
+        uz = wx * cy - wy * cx
+        ex = wy * dcz - wz * dcy
+        ey = wz * dcx - wx * dcz
+        ez = wx * dcy - wy * dcx
+        sd2 = sdi * sdi
+        acx_i = (wy * uz - wz * uy) + 2.0 * ex * sdi + ddx_ * sd2
+        acy_i = (wz * ux - wx * uz) + 2.0 * ey * sdi + ddy_ * sd2
+        acz_i = (wx * uy - wy * ux) + 2.0 * ez * sdi + ddz_ * sd2
+        mu_ = self.mu_[i]
+        crx -= mu_ * (cy * acz_i - cz * acy_i)
+        cry -= mu_ * (cz * acx_i - cx * acz_i)
+        crz -= mu_ * (cx * acy_i - cy * acx_i)
+        qsi = (fbx * lvx + fby * lvy + fbz * lvz) - spring - mu_ * (dcx * acx_i + dcy * acy_i + dcz * acz_i)
+        c2 = cx * cx + cy * cy + cz * cz
+        row = (fx_, fy_, fz_, crx, cry, crz, mbx, mby, mbz,
+               mu_ * acx_i, mu_ * acy_i, mu_ * acz_i, mu_ * cx, mu_ * cy, mu_ * cz,
+               mu_ * (c2 - cx * cx), mu_ * (c2 - cy * cy), mu_ * (c2 - cz * cz),
+               mu_ * cx * cy, mu_ * cx * cz, mu_ * cy * cz)
+        return row, qsi, spring
 
-            o_ntot[i] = ntot
-            o_fx[i] = fl
-            o_fy[i] = ft_
-            o_f[i] = (fx_, fy_, fz_)
-            o_p[i] = (pex, pey, pez)
-            o_n[i] = (nex, ney, nez)
-            o_slide[i] = sliding
-            keep[i] = (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim)
-
+    def _body_forces(self, rows, rot, ext):
+        """Generalised forces on the body (world force, body moment) with the gyroscopic term and
+        the external loads; the unsprung first moment and inertia sums for the mass matrix."""
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
         (qtx, qty, qtz, qrx, qry, qrz, mbx, mby, mbz, acx, acy, acz, smx, smy, smz,
          j00, j11, j22, j01, j02, j12) = self._psum(rows)
         # body torques from the corners (world -> body) and gyroscopic term
         qrx += r00 * mbx + r10 * mby + r20 * mbz
         qry += r01 * mbx + r11 * mby + r21 * mbz
         qrz += r02 * mbx + r12 * mby + r22 * mbz
+        wx, wy, wz = self.w
         i_s = self.i_s
         iwx = i_s[0][0] * wx + i_s[0][1] * wy + i_s[0][2] * wz
         iwy = i_s[1][0] * wx + i_s[1][1] * wy + i_s[1][2] * wz
@@ -475,8 +506,14 @@ class Sim:
             qrx += pty * fez - ptz * fey
             qry += ptz * fex - ptx * fez
             qrz += ptx * fey - pty * fex
+        return [qtx, qty, qtz, qrx, qry, qrz], (smx, smy, smz), (j00, j11, j22, j01, j02, j12)
 
-        # mass matrix
+    def _mass_matrix(self, geo, rot, sm, jj, rhs6, qs):
+        """The mass matrix M(q) and the right-hand side (body forces, then the travel forces)."""
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+        smx, smy, smz = sm
+        j00, j11, j22, j01, j02, j12 = jj
+        i_s = self.i_s
         nd = 6 + self.m
         mm = np.zeros((nd, nd))
         md = self.m_dof
@@ -495,7 +532,7 @@ class Sim:
         i01 = i_s[0][1] - j01
         i02 = i_s[0][2] - j02
         i12 = i_s[1][2] - j12
-        rhs = [qtx, qty, qtz, qrx, qry, qrz]
+        rhs = list(rhs6)
         for k, i in enumerate(self.dofidx):
             g = geo[i][0]
             cx, cy, cz, dcx, dcy, dcz = g[0], g[1], g[2], g[3], g[4], g[5]
@@ -519,19 +556,26 @@ class Sim:
         mm[3, 3], mm[3, 4], mm[3, 5] = i00, i01, i02
         mm[4, 3], mm[4, 4], mm[4, 5] = i10, i11, i12
         mm[5, 3], mm[5, 4], mm[5, 5] = i20, i21, i22
-        rhs = np.array(rhs)
+        return mm, np.array(rhs)
 
+    def _solve(self, mm, rhs):
+        """Generalised accelerations (gravity not included) and the gravity acceleration to add."""
+        nd = 6 + self.m
         if self.lock == "heave":
             keep_idx = [2] + list(range(6, nd))
             sol = np.zeros(nd)
             sol[keep_idx] = np.linalg.solve(mm[np.ix_(keep_idx, keep_idx)], rhs[keep_idx])
-            gx, gy, gz = 0.0, 0.0, self.g[2]
+            g = (0.0, 0.0, self.g[2])
         else:
             sol = self._solve_sym(mm, rhs)
-            gx, gy, gz = self.g
-        sol = sol.tolist()
+            g = tuple(self.g)
+        return sol.tolist(), g
 
-        # semi-implicit Euler
+    def _integrate(self, sol, gx, gy, gz, h):
+        """Semi-implicit Euler: speeds first, then positions, attitude and travels with the new speeds."""
+        vx, vy, vz = self.v
+        wx, wy, wz = self.w
+        px, py, pz = self.p
         vx += h * (sol[0] + gx)
         vy += h * (sol[1] + gy)
         vz += h * (sol[2] + gz)
@@ -547,6 +591,7 @@ class Sim:
             qn = quat_mul(self.q, (math.cos(ang / 2.0), wx * sh, wy * sh, wz * sh))
             nq = math.sqrt(qn[0] * qn[0] + qn[1] * qn[1] + qn[2] * qn[2] + qn[3] * qn[3])
             self.q = [qn[0] / nq, qn[1] / nq, qn[2] / nq, qn[3] / nq]
+        s_, sd_ = self.s, self.sd
         new_sd = list(sd_)
         new_s = list(s_)
         for k, i in enumerate(self.dofidx):
@@ -554,53 +599,35 @@ class Sim:
             new_s[i] = s_[i] + h * new_sd[i]
         self.sd = new_sd
         self.s = new_s
-        self.om = om_new
 
-        # tyre deflection states with the new speeds (geometry of this step)
-        Wx = r00 * wx + r01 * wy + r02 * wz
-        Wy = r10 * wx + r11 * wy + r12 * wz
-        Wz = r20 * wx + r21 * wy + r22 * wz
+    def _relax_tyres(self, geo, keep, ntot, rot, h):
+        """Tyre deflection states with the new speeds and spins (geometry and tyre frame of this step)."""
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+        vx, vy, vz = self.v
+        wx, wy, wz = self.w
+        Wx, Wy, Wz = _to_world(rot, wx, wy, wz)
+        n = self.n
         new_dx = [0.0] * n
         new_dy = [0.0] * n
         for i in range(n):
-            if self.caster[i] or o_ntot[i] <= 0.0:
+            if ntot[i] <= 0.0:
                 continue
             g = geo[i][0]
             cx, cy, cz, dcx, dcy, dcz = g[0], g[1], g[2], g[3], g[4], g[5]
             lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim = keep[i]
-            sdi = new_sd[i]
+            sdi = self.sd[i]
             bx = wy * cz - wz * cy + dcx * sdi
             by = wz * cx - wx * cz + dcy * sdi
             bz = wx * cy - wy * cx + dcz * sdi
-            on = om_new[i]
+            on = self.om[i]
             vsx_ = vx + r00 * bx + r01 * by + r02 * bz + (Wy * rhz - Wz * rhy) + on * arx
             vsy_ = vy + r10 * bx + r11 * by + r12 * bz + (Wz * rhx - Wx * rhz) + on * ary
             vsz_ = vz + r20 * bx + r21 * by + r22 * bz + (Wx * rhy - Wy * rhx) + on * arz
             vsl = vsx_ * lx + vsy_ * ly + vsz_ * lz
             vst = vsx_ * tx + vsy_ * ty + vsz_ * tz
-            lam = abs(on) * re / self.sigma[i]
-            if lam * h < 1e-9:
-                e, gg = 1.0, h
-            else:
-                e = math.exp(-lam * h)
-                gg = (1.0 - e) / lam
-            dxn = self.dx[i] * e + vsl * gg
-            dyn = self.dy[i] * e + vst * gg
-            fxe, fye = self.kx[i] * dxn, self.ky[i] * dyn
-            fe = math.sqrt(fxe * fxe + fye * fye)
-            if fe > lim:
-                sc = lim / fe
-                dxn, dyn = dxn * sc, dyn * sc
-            new_dx[i] = dxn
-            new_dy[i] = dyn
+            new_dx[i], new_dy[i] = self.tyres[i].relax(self.dx[i], self.dy[i], vsl, vst, abs(on) * re, lim, h)
         self.dx = new_dx
         self.dy = new_dy
-        self.t += h
-
-        self.out = {"ntot": o_ntot, "fx": o_fx, "fy": o_fy, "f": o_f, "p": o_p, "n": o_n, "sliding": o_slide,
-                    "spring": o_spring, "steer": list(steer), "centres": centres,
-                    "camber": [geo[i][0][11] for i in range(n)], "toe": [geo[i][0][12] for i in range(n)],
-                    "acc": (sol[0] + gx, sol[1] + gy, sol[2] + gz)}
 
     def _psum(self, rows: list) -> list:
         """Column sums of the per-corner rows: each mirror pair (L + R) first, then the pairs

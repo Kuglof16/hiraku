@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..k0_handcalc.rigid import rpy_matrix
+
 
 @dataclass
 class OBB:
@@ -31,14 +33,6 @@ class OBB:
         """Rotated by R (3 x 3) about a point."""
         p = np.asarray(about, float)
         return OBB(p + R @ (self.center - p), (R @ self.axes.T).T, self.half, self.name)
-
-
-def rpy_matrix(rpy_deg) -> np.ndarray:
-    r, p, y = np.radians(rpy_deg)
-    Rx = np.array([[1, 0, 0], [0, np.cos(r), -np.sin(r)], [0, np.sin(r), np.cos(r)]])
-    Ry = np.array([[np.cos(p), 0, np.sin(p)], [0, 1, 0], [-np.sin(p), 0, np.cos(p)]])
-    Rz = np.array([[np.cos(y), -np.sin(y), 0], [np.sin(y), np.cos(y), 0], [0, 0, 1]])
-    return Rz @ Ry @ Rx
 
 
 def from_box(center, size, rpy_deg=None, name: str = "") -> OBB:

@@ -28,6 +28,16 @@ def results(rec):
 class ModalTest(unittest.TestCase):
     def test_checks(self):
         self.assertEqual([c for c in TOOL.check() if not c["pass"]], [])
+
+    def test_the_same_modes_every_time(self):
+        """A fixed start vector and signed shapes: the scripted runs are compared byte for byte."""
+        a, b = modes(DESIGN, n_modes=6), modes(DESIGN, n_modes=6)
+        self.assertEqual(a["frequencies"].tolist(), b["frequencies"].tolist())
+        for sa, sb in zip(a["shapes"], b["shapes"]):
+            self.assertEqual({n: v.tolist() for n, v in sa.items()}, {n: v.tolist() for n, v in sb.items()})
+            comps = [c for v in sa.values() for c in v]
+            big = max(abs(c) for c in comps)
+            self.assertGreater(next(c for c in comps if abs(c) >= big * (1 - 1e-9)), 0.0)
         contract.validate("tool_spec", TOOL.spec())
 
     def test_demo(self):

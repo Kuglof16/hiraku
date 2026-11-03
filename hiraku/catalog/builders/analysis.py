@@ -44,10 +44,10 @@ def c1_crash(spec: Record, req: Record, design: Record) -> Record:
 
 
 def c1_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.vehicle import parts_on_board
+    from hiraku.contract.loading import loading_of, on_board
     from hiraku.solvers.shelf.crash import occupant_space
 
-    space = occupant_space(parts_on_board(design, load_case["params"].get("loading", "two_cargo")))
+    space = occupant_space(on_board(design, loading_of(load_case)))
     if space is None:
         raise BuildError("no occupant on board, so there is no occupant space to keep")
     return {"space": q(space, "mm")}
@@ -148,15 +148,16 @@ def r3_calc(design: Record, load_case: Record) -> Record:
 
     from hiraku.solvers.k0_handcalc.frame_inputs import rail_joint_inputs
     from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
-    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, parts_on_board, support_loads
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, support_loads
     from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
 
-    loading_name = load_case["params"].get("loading", "two_cargo")
+    loading_name = loading_of(load_case)
     try:
         sid = rail_joint_inputs(design, loading=loading_name)["support"]
     except (DesignError, KeyError, ValueError) as e:
         raise BuildError(f"no rail joint for the hand calculation: {e}") from None
-    on = parts_on_board(design, loading_name)
+    on = on_board(design, loading_name)
     summ = mass_summary(on)
     W = float(support_loads(on, summary=summ)["supports"][sid]["force_N"][2])
     m_u = sum(it.mass_kg for it in summ["items"] if it.carrier == "support" and it.carried_by[0] == sid)
@@ -441,10 +442,10 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.vehicle import parts_on_board
+    from hiraku.contract.loading import loading_of, on_board
     from hiraku.solvers.k4_geometry import AIST, knee_space
 
-    space = knee_space(parts_on_board(design, load_case["params"].get("loading", "two_cargo")))
+    space = knee_space(on_board(design, loading_of(load_case)))
     if not space:
         raise BuildError("no occupant has a part ahead of the knees")
     return {"knee_length": q(min(length for length, _ in space.values()), "mm"),

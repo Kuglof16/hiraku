@@ -3559,6 +3559,289 @@
           "minLength": 1
         }
       }
+    },
+    "tool_input.pick_domains": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 作りたいもの (文) から、使う解析の分野を選ぶ。まとめ役が使う。flags は文から読み取った製品の性質 (true の物だけでよい。理由は flag_reasons に 1 つずつ)。分野とその試験は、カタログの発動条件からコードが決める (あなたは決めない)。あなたが書くのは: 各分野を使う (使わない) 理由 reasons、製品に合わせた分野の呼び名 shown_names (たとえば配膳ロボの空力は「液体のこぼれ」)。理由が足りない分野はコードの仮の理由が付くので、結果の reasons_missing を見て付け足す。人が札を外したときは exclude。 製品の性質: - ride (乗): 人が乗って一緒に動くか - lean (預): 人が体を預けるか (寝る・座る・もたれる・手をつく) - self_propelled (走): 自分の動力で移動するか - outdoor (外): 屋外で使うか - rough (悪): 未舗装・凹凸の路面を走るか - public_road (公): 公道を走るか (法令の区分に入るか) - battery (池): 電池を積むか - electric (電): 電動で動く部分があるか (モーター・アクチュエータ) - pinch (挟): 動く部分に体が入る隙間があるか - cargo (荷): 物を載せるか - standing (置): 床・地面に自立して置くか (倒れうるか) - near_people (近): 人のすぐ近くを動くか - liquid (液): 液体を運ぶか - vibration (振): 振動源があるか (回転・弦) - continuous (続): 発熱が問題になるほど連続で動くか - assembly (組): 組み立て・分解・整備があるか - preload (張): 常にかかる内力があるか (弦・ばね) - sound (音): 音が機能か - handheld (持): 手で持つ・身に着けるか 速さの域 speed_class: - static (静): 動かない - walk (歩): 歩く速さ (2 m/s 以下) - vehicle (車): 車の速さ (40 km/h 以下)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "want",
+        "flags"
+      ],
+      "properties": {
+        "want": {
+          "type": "string",
+          "description": "人が作りたいものを言った文、そのまま"
+        },
+        "flags": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "ride",
+              "lean",
+              "self_propelled",
+              "outdoor",
+              "rough",
+              "public_road",
+              "battery",
+              "electric",
+              "pinch",
+              "cargo",
+              "standing",
+              "near_people",
+              "liquid",
+              "vibration",
+              "continuous",
+              "assembly",
+              "preload",
+              "sound",
+              "handheld"
+            ]
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "製品の性質。立てるものだけ true で渡す"
+        },
+        "speed_class": {
+          "enum": [
+            "static",
+            "walk",
+            "vehicle"
+          ],
+          "description": "速さの域"
+        },
+        "flag_reasons": {
+          "type": "object",
+          "description": "フラグ → 立てた (立てなかった) 理由。A1 のチップの説明になる",
+          "propertyNames": {
+            "enum": [
+              "ride",
+              "lean",
+              "self_propelled",
+              "outdoor",
+              "rough",
+              "public_road",
+              "battery",
+              "electric",
+              "pinch",
+              "cargo",
+              "standing",
+              "near_people",
+              "liquid",
+              "vibration",
+              "continuous",
+              "assembly",
+              "preload",
+              "sound",
+              "handheld"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "reasons": {
+          "type": "object",
+          "description": "分野 → この製品でその分野を使う理由 (1 文)",
+          "propertyNames": {
+            "enum": [
+              "handling",
+              "powertrain",
+              "aero",
+              "crash",
+              "strength",
+              "nvh",
+              "thermal"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "shown_names": {
+          "type": "object",
+          "description": "分野 → 画面に出す呼び名 (読み替えるときだけ)",
+          "propertyNames": {
+            "enum": [
+              "handling",
+              "powertrain",
+              "aero",
+              "crash",
+              "strength",
+              "nvh",
+              "thermal"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "handling",
+              "powertrain",
+              "aero",
+              "crash",
+              "strength",
+              "nvh",
+              "thermal"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "人が外した分野"
+        }
+      }
+    },
+    "tool_input.ask_user": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 要件のうち、この製品に要るのに実行の要件に無いもの (必須・確認) を、まとめて 1 回聞く。質問と選択肢はコードが 項目の表から作る。答えが無い確認の質問は、出どころつきの既定値を使う。必須の質問は答えが無いと進めない。answers には、人が実際に言ったことだけを {要件の番号: 値 か {value, unit, basis}} で入れる (推測で埋めない)。answers_file は data/requirements/products/ の答えのファイル。質問を製品に合わせて言い換えたいときは wording ({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、答えが来るか時間が切れるまで待つ)。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^Q[0-9]{2}$"
+          },
+          "description": "人の答え。値か {value, unit?, trust?, basis?}"
+        },
+        "note": {
+          "type": "string",
+          "description": "「ほかに伝えること」の文"
+        },
+        "wait_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 900,
+          "description": "答えが無いとき、画面の人の答えを最大この秒数だけ待つ。0 (既定) なら待たず、確認の質問は既定値で進む"
+        },
+        "answers_file": {
+          "type": "string",
+          "description": "答えのファイル (data/requirements/products/ の中)"
+        },
+        "wording": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^Q[0-9]{2}$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "質問の言い換え {番号: 文}"
+        },
+        "choices": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^Q[0-9]{2}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {},
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "description": "選択肢の言い換え {番号: [{label, value, unit?}]}"
+        }
+      }
+    },
+    "tool_input.import_knowledge": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 人が渡したファイル (Markdown・CSV/TSV の表・テキスト) を読み、規則にする。text と filename で渡す (または実行のフォルダの knowledge/ の中の path)。「A は B 以上」のような文はコードが式にする。式にできなかった文は 結果の needs_formula に番号 (c3 など) つきで返る: それぞれ、1 つの部品について はい / いいえ で答える式 check (結果の facts の名前だけ。要件は req_Q15、設計の変数は var_<名前>) を書いて formulas={番号: {check, kinds?, category?}} に入れ、同じ filename と text でもう一度呼ぶ。規則にならない文は skip={番号: 理由}。式の計算はコードがする。kinds は対象の部品の種類 (battery, seat, body など。frame は骨組み、support は接地点)。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "description": "ファイルの中身"
+        },
+        "path": {
+          "type": "string",
+          "description": "実行のフォルダの knowledge/ の中のファイル"
+        },
+        "formulas": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^c[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "check"
+            ],
+            "properties": {
+              "check": {
+                "type": "string"
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "category": {
+                "enum": [
+                  "sheet_metal",
+                  "fastener",
+                  "weld",
+                  "tolerance",
+                  "human",
+                  "battery",
+                  "assembly",
+                  "suspension",
+                  "manufacturing"
+                ]
+              }
+            }
+          }
+        },
+        "skip": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^c[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tool_input.rule_check": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). ナレッジの規則 (最初から入っているものと、渡されたファイルのもの) を設計の部品に当てる。パッケージ役が使う。結果は、当たった (規則に合わない) 部品、式に要る値が設計に無くて判定できなかった規則、数。disable は使わない規則の番号。規則が増えたとき、設計を直したあとにもう一度呼ぶ。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "当てる設計の版 (無ければ最新)"
+        },
+        "disable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "使わない規則の番号"
+        }
+      }
     }
   }
 }

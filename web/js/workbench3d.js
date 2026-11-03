@@ -239,7 +239,8 @@ export class Workbench3D {
     this.parts = new THREE.Group();
     this.overGhosts = new THREE.Group();
     this.names = new THREE.Group();
-    this.body.add(this.model, this.parts, this.overGhosts, this.names);
+    this.shells = new THREE.Group(); // shell meshes (one per mesh_id, built when a contour needs it)
+    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names);
 
     this.wheels = new THREE.Group();
     this.arrows = new THREE.Group();
@@ -272,6 +273,7 @@ export class Workbench3D {
 
     this.design = null;
     this.members = {}; // id -> { mesh, length, node_a, node_b, mid, width, height }
+    this.shellObjs = {}; // mesh_id -> shellObj()
     this.wheelObjs = {}; // support id -> { group, base (design position), ring, tag, r, frameNode }
     this.partObjs = {};
     this.motion = null;
@@ -299,7 +301,9 @@ export class Workbench3D {
   setDesign(design) {
     if (design === this.design) return;
     this.design = design;
-    for (const g of [this.model, this.parts, this.names, this.overGhosts, this.markers, this.wheels]) disposeTree(g);
+    for (const g of [this.model, this.shells, this.parts, this.names, this.overGhosts, this.markers, this.wheels]) disposeTree(g);
+    this.shellObjs = {};
+    this.model.visible = true;
     this.members = {};
     this.wheelObjs = {};
     this.partObjs = {};
@@ -623,14 +627,107 @@ export class Workbench3D {
     this.followApplied = null;
   }
 
+  // A shell mesh (the contract's mesh record) as faces and element edges, built once
+  // per mesh_id. Each triangle corner has its own vertex (a quad a-b-c-d is a-b-c and
+  // a-c-d), so an element takes one colour; vNode / vElem say which mesh node and
+  // element each vertex is. The edges are each element side once, on the node positions.
+  shellObj(rec) {
+    const had = this.shellObjs[rec.mesh_id];
+    if (had) return had;
+    const P = rec.nodes_mm;
+    let corners = 0;
+    for (const e of rec.elements) corners += 3 * (e.length - 2);
+    const pos = new Float32Array(corners * 3);
+    const vNode = new Uint32Array(corners);
+    const vElem = new Uint32Array(corners);
+    let k = 0;
+    rec.elements.forEach((e, ei) => {
+      for (let t = 1; t + 1 < e.length; t += 1) {
+        for (const n of [e[0], e[t], e[t + 1]]) {
+          vNode[k] = n;
+          vElem[k] = ei;
+          pos.set(P[n], k * 3);
+          k += 1;
+        }
+      }
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(corners * 3), 3));
+    geo.computeVertexNormals();
+    const faces = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.75, metalness: 0.05, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+    );
+    faces.castShadow = faces.receiveShadow = this.look.real;
+    const nodePos = new Float32Array(P.length * 3);
+    P.forEach((p, i) => nodePos.set(p, i * 3));
+    const seen = new Set();
+    const pairs = [];
+    for (const e of rec.elements) {
+      for (let i = 0; i < e.length; i += 1) {
+        const a = e[i];
+        const b = e[(i + 1) % e.length];
+        const key = Math.min(a, b) * P.length + Math.max(a, b);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push(a, b);
+      }
+    }
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute("position", new THREE.BufferAttribute(nodePos, 3));
+    eg.setIndex(pairs);
+    const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.3 }));
+    const group = new THREE.Group();
+    group.add(faces, edges);
+    group.visible = false;
+    this.shells.add(group);
+    const o = { rec, group, faces, edges, vNode, vElem, rest: pos.slice(), nodeRest: nodePos.slice() };
+    this.shellObjs[rec.mesh_id] = o;
+    return o;
+  }
+
+  // Colour a shell's faces by element values (one colour per element) or by node values.
+  paintShell(o, m, contour) {
+    const col = o.faces.geometry.getAttribute("color");
+    const rgb = new Map(); // band colour -> [r, g, b] (linear)
+    const c = new THREE.Color();
+    for (let k = 0; k < o.vNode.length; k += 1) {
+      const v = m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]];
+      const hex = colorOf(v, contour.max, contour.min);
+      let t = rgb.get(hex);
+      if (!t) rgb.set(hex, (t = c.set(hex).toArray()));
+      col.array.set(t, k * 3);
+    }
+    col.needsUpdate = true;
+  }
+
   // contour (fields.js contourOf): values per member / node / part on [min, max],
-  // modes (node displacement vectors) for a mode shape; null for plain gray.
+  // modes (node displacement vectors) for a mode shape; null for plain gray. A contour
+  // on a shell mesh draws that mesh in place of the beams.
   setContour(contour) {
     if (contour === this.keys.contour) return;
     this.keys.contour = contour;
     disposeTree(this.overGhosts);
-    this.setModeShape(contour?.modes ? contour : null);
+    const shell = contour?.mesh ? this.shellObj(contour.mesh.rec) : null;
+    for (const o of Object.values(this.shellObjs)) o.group.visible = o === shell;
+    this.model.visible = !shell;
+    this.setModeShape(contour?.modes || contour?.mesh?.modes ? contour : null);
     this.applyPartLook();
+    if (shell) {
+      this.paintShell(shell, contour.mesh, contour);
+      // the largest value on its element (or node), as recorded
+      const P = contour.mesh.rec.nodes_mm;
+      const at = contour.mesh.maxAt;
+      const ids = at.elem !== undefined ? contour.mesh.rec.elements[at.elem] : [at.node];
+      const where = new THREE.Vector3();
+      for (const n of ids) where.add(v3(P[n]));
+      where.multiplyScalar(1 / ids.length);
+      const tag = label(`最大 ${esc(fmtVU(contour.fieldMax, contour.field.unit))}`, "lbl-max");
+      tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
+      this.overGhosts.add(tag);
+      return;
+    }
     for (const [id, info] of Object.entries(this.members)) {
       const mat = info.mesh.material;
       const geo = info.mesh.geometry;
@@ -705,11 +802,44 @@ export class Workbench3D {
   setModeShape(contour) {
     this.modeShape = null;
     this.poseMembers(0);
-    if (!contour?.modes || !this.bboxIso) return;
-    const dmax = Math.max(...Object.values(contour.modes).map((d) => Math.hypot(...d)));
+    for (const o of Object.values(this.shellObjs)) this.poseShell(o, null, 0);
+    const shellModes = contour?.mesh?.modes ?? null;
+    if (!(contour?.modes || shellModes) || !this.bboxIso) return;
+    let dmax = 0;
+    for (const d of shellModes ?? Object.values(contour.modes)) dmax = Math.max(dmax, Math.hypot(...d));
     if (!(dmax > 0)) return;
     const size = this.bboxIso.getSize(new THREE.Vector3()).length();
-    this.modeShape = { modes: contour.modes, scale: (0.08 * size) / dmax };
+    const scale = (0.08 * size) / dmax;
+    this.modeShape = shellModes ? { shell: this.shellObj(contour.mesh.rec), shellModes, scale } : { modes: contour.modes, scale };
+  }
+
+  // Move a shell's nodes by k times their scaled vectors (k = 0: at rest).
+  poseShell(o, modes, k) {
+    const fp = o.faces.geometry.getAttribute("position");
+    const ep = o.edges.geometry.getAttribute("position");
+    if (!modes || k === 0) {
+      fp.array.set(o.rest);
+      ep.array.set(o.nodeRest);
+    } else {
+      for (let i = 0; i < modes.length; i += 1) {
+        const d = modes[i];
+        for (let j = 0; j < 3; j += 1) ep.array[i * 3 + j] = o.nodeRest[i * 3 + j] + d[j] * k;
+      }
+      for (let v = 0; v < o.vNode.length; v += 1) {
+        const n = o.vNode[v];
+        for (let j = 0; j < 3; j += 1) fp.array[v * 3 + j] = ep.array[n * 3 + j];
+      }
+    }
+    fp.needsUpdate = true;
+    ep.needsUpdate = true;
+    o.faces.geometry.computeBoundingSphere();
+  }
+
+  // A mode shape (or displacement) at k of its swing, on the beams or on a shell.
+  poseShape(k) {
+    const ms = this.modeShape;
+    if (ms?.shell) this.poseShell(ms.shell, ms.shellModes, k * ms.scale);
+    else this.poseMembers(k);
   }
 
   poseMembers(k) {
@@ -941,7 +1071,7 @@ export class Workbench3D {
   animate(playhead, running) {
     const k = running ? 0.18 * (1 + Math.sin(playhead * Math.PI * 2)) : 0;
     for (const info of Object.values(this.members)) info.mesh.material.emissive?.setScalar(k * 0.5);
-    if (this.modeShape) this.poseMembers(Math.sin(playhead * Math.PI * 2));
+    if (this.modeShape) this.poseShape(Math.sin(playhead * Math.PI * 2));
   }
 
   // Draw the frame, the wheels and the scene as one see-through colour (an overlay of

@@ -14,8 +14,8 @@ import * as THREE from "three";
 import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
-import { esc, fmt, quantityName, resultText } from "./labels.js";
-import { channelsOf, lerpAt, motionOf, nearestAt } from "./series.js";
+import { esc, fmt, quantityName, resultText, unitLabel } from "./labels.js";
+import { abscissa, channelsOf, extent, lerpAt, motionOf, nearestAt, xSeriesOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 
@@ -71,21 +71,27 @@ function recordOf(s, testId) {
 
 // The field a tile colours by: its kind, and for mode shapes a frame mode when there is one.
 function fieldFor(ana, kind) {
-  const fields = fieldsOf(ana).filter((f) => f.kind === kind);
+  const fields = fieldsOf(ana, { mesh: false }).filter((f) => f.kind === kind);
   if (kind === "mode_shape") return fields.find((f) => /frame|フレーム/i.test(f.label ?? "")) ?? fields[0] ?? null;
   return fields[0] ?? null;
 }
 
-// A small chart of one channel with a cursor (SVG in the tile's own pixels).
-function chartSvg(s, w, h) {
-  const t0 = s.t_s[0];
-  const t1 = s.t_s.at(-1);
-  const lo = Math.min(...s.values);
-  const hi = Math.max(...s.values);
+// A small chart of one channel (SVG in the tile's own pixels): against time with a
+// cursor, or against another quantity (x) with that quantity's name and unit in
+// its corner at textPx.
+function chartSvg(s, w, h, textPx) {
+  const a = abscissa(s);
+  const [t0, t1] = extent(a);
+  const [lo, hi] = extent(s.values);
   const X = (t) => ((t - t0) / (t1 - t0 || 1)) * w;
   const Y = (v) => h - 4 - ((v - lo) / (hi - lo || 1)) * (h - 8);
-  const pts = s.t_s.map((t, i) => `${X(t).toFixed(1)},${Y(s.values[i]).toFixed(1)}`).join(" ");
-  return { svg: `<polyline points="${pts}" fill="none" stroke="#2b59c3" stroke-width="2.2"/><line class="cur" x1="0" x2="0" y1="0" y2="${h}" stroke="#c8402a" stroke-width="1.5"/>`, X };
+  const pts = a.map((t, i) => `${X(t).toFixed(1)},${Y(s.values[i]).toFixed(1)}`).join(" ");
+  const line = `<polyline points="${pts}" fill="none" stroke="#2b59c3" stroke-width="2.2"/>`;
+  if (s.x) {
+    const name = `${quantityName(s.x.quantity)} [${unitLabel(s.x.unit) || "1"}]`;
+    return { svg: `${line}<text x="4" y="${h - 4}" font-size="${textPx}" fill="#5c5a54">${esc(name)}</text>`, X: null };
+  }
+  return { svg: `${line}<line class="cur" x1="0" x2="0" y1="0" y2="${h}" stroke="#c8402a" stroke-width="1.5"/>`, X };
 }
 
 // Every value the N05 cut reads from the layout rules; a missing one is named, not guessed.
@@ -205,12 +211,12 @@ class Cut {
     v.fitPoints(pts, VIEWS[v.view ?? "default"], 1.06);
     tile.view = v;
     tile.motion = motion;
-    // the record's time span: the motion, else the chart's channel
-    const chart = tile.def.chart ? channelsOf(ana).get(tile.def.chart) : null;
-    tile.span = motion ? [motion.t0, motion.t1] : chart ? [chart.t_s[0], chart.t_s.at(-1)] : null;
+    // the record's time span: the motion, else the chart's channel (when it is against time)
+    const chart = tile.def.chart ? channelsOf(ana).get(tile.def.chart) ?? xSeriesOf(ana).get(tile.def.chart) ?? null : null;
+    tile.span = motion ? [motion.t0, motion.t1] : chart?.t_s ? [chart.t_s[0], chart.t_s.at(-1)] : null;
     if (chart) {
       const ch = { w: Math.round(tile.inner.w * 0.42), h: Math.round(tile.inner.h * 0.36) };
-      const { svg, X } = chartSvg(chart, ch.w, ch.h);
+      const { svg, X } = chartSvg(chart, ch.w, ch.h, this.spec.tile.rate?.size_px ?? this.layout.min_text_px ?? 18);
       // below the name's line, at the right, with the name's padding
       const pad = this.spec.tile.label;
       const top = pad.y + pad.size_px + pad.y / 2;
@@ -268,7 +274,7 @@ class Cut {
       }
       if (tile.motion) tile.view.setFrame(tile.motion.frame(tau));
       tile.view.animate(t, false); // a mode shape swings with the stage clock
-      if (tile.chart) tile.chart.cur.setAttribute("transform", `translate(${tile.chart.X(tau).toFixed(1)} 0)`);
+      if (tile.chart?.cur) tile.chart.cur.setAttribute("transform", `translate(${tile.chart.X(tau).toFixed(1)} 0)`);
       tile.view.renderInto(tile.canvas.getContext("2d"), tile.canvas.width, tile.canvas.height, this.scale);
     }
   }
@@ -321,7 +327,7 @@ class CutN01 {
   caseOf(lc) {
     if (!lc) return null;
     const dyn = analysisOf(this.s, lc.load_case_id, (a) => (a.series ?? []).length > 0);
-    const still = analysisOf(this.s, lc.load_case_id, (a) => fieldsOf(a).some((f) => f.kind === "stress"));
+    const still = analysisOf(this.s, lc.load_case_id, (a) => fieldsOf(a, { mesh: false }).some((f) => f.kind === "stress"));
     return { lc, dyn, still, motion: dyn ? motionOf(dyn) : null };
   }
 
@@ -338,7 +344,7 @@ class CutN01 {
     } else {
       // The colour band's top is the allowable stress when the run judges stress (R1), so the
       // two cases are read on one scale; otherwise the field's own maximum.
-      const field = c.still ? fieldsOf(c.still).find((f) => f.kind === "stress") : null;
+      const field = c.still ? fieldsOf(c.still, { mesh: false }).find((f) => f.kind === "stress") : null;
       const lim = field ? this.allowableCriterion(field.unit) : null;
       this.contour = field ? contourOf(c.still, field, lim ?? c.lc.criterion) : null;
       v.setContour(this.contour);

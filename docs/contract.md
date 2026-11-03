@@ -71,6 +71,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` に道具が書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線)
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`・`error`)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
 - 実行を外から止めるとき (画面の止めるボタン) は、実行のフォルダに `stop.request` (`layout.STOP_REQUEST_FILE`) を置く。実行の側はそれを見て、記録を整えて `stopped`・`stop_code` `user_stop` で終わる
+- `events.jsonl` に書くのは実行のプロセスだけ (書き手が 1 つなので `seq` が抜けない)。画面のサーバーから走っている実行に伝えるもの (Claude に伝える文、ナレッジのファイルを落とした、など) は、実行のフォルダの `inbox/` (`layout.INBOX_DIR`) に 1 件 1 ファイルの JSON (`<番号>-<種類>.json`、中身は `{"kind": ..., "text": ..., "file": ...}`) で置く。落としたファイルそのものは `knowledge/<filename>` に置く。実行の側がそれを読み、`user.said` や `knowledge.imported` などの event を自分で出して、読んだファイルを消す。ヒアリングの答えは今までどおり `hearing.answer.json`
 - 設計役が最初の版を作る実行 (要件に `design_file` が無い) では、版 1 ができたあと `project.updated` (data は project 全体) で荷重条件・選んだ分野・役を出し直す
 - 報告は `report` の記録と `report.written` の event。数はコードが記録から入れ、Claude は `summary` と `next` だけを書く (文の中の数が記録と合わなければ道具が断る)
 - 実行の中で Claude が作った道具 (N13) は、実行のフォルダの `tools/` に試みごとのコード (`<name>-<n>.py`) と照合の記録 (`.check.json`) を残す。試みは通らなくても `tool.checked` (usable false) で記録に出す。道具は別のプロセスで、使える import を絞り、空のフォルダ・API キー無し・時間の上限つきで走る。悪意のあるコードを完全に閉じ込める仕組みではなく、間違いへの守り
@@ -96,7 +97,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い
 - 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
-- 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は、決まったら schema の `tool_input.*` に入れる (統括部に送る)
+- 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は schema の `tool_input.<名前>` (受付部の `hiraku/intake/tools.py` はそこから引く)
 
 ## runs/&lt;run_id&gt;/
 

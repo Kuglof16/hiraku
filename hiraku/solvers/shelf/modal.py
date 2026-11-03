@@ -10,7 +10,7 @@ import numpy as np
 from ..k0_handcalc import units
 from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import build
-from ..k1_frame.modal import MASS_CASE, modes
+from ..k1_frame.modal import MASS_CASE, modes, solve_modal
 from . import fixtures
 from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 
@@ -26,7 +26,7 @@ def _beam_modes(length, section, material, supports, tip_mass_kg=0.0, n=3):
     for node, flags in supports.items():
         fm.model.def_support(node, *flags)
     fm.model.add_load_combo(MASS_CASE, {MASS_CASE: 1.0})
-    fm.model.analyze_modal(num_modes=n, mass_combo_name=MASS_CASE, mass_direction="Y", gravity=1.0)
+    solve_modal(fm.model, n)
     return sorted(float(f) for f in fm.model.frequencies)
 
 

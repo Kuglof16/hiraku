@@ -1,5 +1,5 @@
 // Reading `series` (time histories) of an analysis for the driving animation
-// and the graph popup. Positions and angles are only converted between units
+// and the graph popup; series against another quantity (x) are only charted. Positions and angles are only converted between units
 // for drawing; numbers shown as text are the recorded sample nearest to the
 // time (nearestAt), never an interpolated value.
 //
@@ -27,6 +27,34 @@ export function channelsOf(analysis) {
     out.set(s.channel, s);
   }
   return out;
+}
+
+// Series against another quantity than time (x: {quantity, unit, values}, e.g. a K&C
+// bench's camber against wheel travel), by channel. They are charted, not animated.
+export function xSeriesOf(analysis) {
+  const out = new Map();
+  for (const s of analysis?.series ?? []) {
+    const xv = s?.x?.values;
+    if (!Array.isArray(xv) || !Array.isArray(s.values) || !xv.length || xv.length !== s.values.length) continue;
+    out.set(s.channel, s);
+  }
+  return out;
+}
+
+// A series' abscissa: its x values, else its times.
+export function abscissa(s) {
+  return s.x?.values ?? s.t_s;
+}
+
+// [smallest, largest] of an array (a loop: long series overflow a spread).
+export function extent(a) {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of a) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return [lo, hi];
 }
 
 // [i, f]: x lies between t[i] and t[i+1] at fraction f.
@@ -171,8 +199,11 @@ const GROUPS = [
 ];
 const NOT_CHARTED = /^(body_|cg_|wheel_center_|contact_|reaction_|grip_|wheel_spin\.)/;
 
+// Series against another quantity (x) are grouped by the channel's name before the dot,
+// the abscissa and the unit; such a group carries x {quantity, unit}.
 export function chartGroups(channels) {
-  const names = [...channels.keys()];
+  const all = [...channels.keys()];
+  const names = all.filter((n) => !channels.get(n).x);
   const out = [];
   const used = new Set();
   for (const g of GROUPS) {
@@ -187,5 +218,13 @@ export function chartGroups(channels) {
     if (used.has(n) || NOT_CHARTED.test(n)) continue;
     out.push({ key: n, ja: n, unit: channels.get(n).unit, channels: [n] });
   }
-  return out;
+  const against = new Map();
+  for (const n of all.filter((m) => channels.get(m).x)) {
+    const s = channels.get(n);
+    const base = n.includes(".") ? n.slice(0, n.indexOf(".")) : n;
+    const key = `${base}@${s.x.quantity}[${s.x.unit}]${s.unit}`;
+    if (!against.has(key)) against.set(key, { key, ja: base, unit: s.unit, x: { quantity: s.x.quantity, unit: s.x.unit }, channels: [] });
+    against.get(key).channels.push(n);
+  }
+  return [...out, ...against.values()];
 }
