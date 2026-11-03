@@ -31,7 +31,7 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(get_context(self.ctx, {"sections": ["design"]})["design"]["design_version"], 1)
 
     def test_list_filters(self):
-        self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})],
+        self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})["formulas"]],
                          ["step_climb.pushed_wheel_load", "step_climb.wheel_force_rigid"])
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"domain": "strength"})], ["frame_static"])
         self.assertTrue(all(t["usable"] for t in list_tools(self.ctx)))
@@ -48,9 +48,34 @@ class StartTest(RunCase, unittest.TestCase):
 
     def test_list_formulas_follows_the_tools_list(self):
         self.ctx.specs["frame_static"]["formulas"] = ["frame_static.rail_bending", "mass_props.front_wheel_load"]
-        got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})]
+        got = [f["formula_id"] for f in list_formulas(self.ctx, {"tool": "frame_static"})["formulas"]]
         self.assertIn("mass_props.front_wheel_load", got)  # named by the tool, though not its prefix
         self.assertIn("frame_static.rail_step_bending", got)  # its prefix
+
+    def test_list_formulas_for_a_tool_gives_its_pairing_with_the_notes(self):
+        pairs = [{"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma"},
+                 {"quantity": "max_stress", "formula_id": "frame_static.rail_step_bending", "output": "sigma",
+                  "note": "rigid: a first estimate"}]
+        self.tools["frame_static"].describe = lambda: {"name": "frame_static", "params": [], "predicts": pairs}
+        got = list_formulas(self.ctx, {"tool": "frame_static"})
+        self.assertEqual(got["tool"], "frame_static")
+        self.assertEqual(got["predicts"], pairs)
+        self.assertIn("note", got["how"])
+        self.assertEqual(list_formulas(self.ctx, {"tool": "step_climb"})["predicts"], [])  # no describe()
+        self.assertIsInstance(list_formulas(self.ctx), list)  # without tool: the formulas as before
+        from hiraku import contract
+
+        for f in got["formulas"]:
+            self.assertEqual(contract.errors("formula", f), [])  # the formula objects are unchanged
+
+    def test_the_tilt_tool_says_its_rigid_formula_is_a_first_estimate(self):
+        from hiraku.solvers.k2_vehicle.shelf.tilt import TiltTool
+
+        self.ctx.tools["tilt"] = TiltTool()  # describe() reads the tool's pairs; no checks run
+        got = list_formulas(self.ctx, {"tool": "tilt"})["predicts"]
+        rigid = next(p for p in got if p["quantity"] == "tilt_angle" and p["formula_id"] == "tilt.rigid_angle")
+        self.assertIn("rigid", rigid["note"])
+        self.assertTrue(any(p["formula_id"] == "tilt.spring_roll_angle" and p["quantity"] == "tilt_angle" for p in got))
 
 
 class PredictionTest(RunCase, unittest.TestCase):

@@ -81,7 +81,10 @@ DESCRIPTIONS = {
         "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
         "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む"
     ),
-    "list_formulas": "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool でその道具の式だけにする",
+    "list_formulas": (
+        "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "
+        "predicts: 道具の結果の量と式の出力の対 (note つき)}"
+    ),
     "list_tools": (
         "解析の道具の棚 (1 行ずつ)。usable が true の道具だけ analyze で使える。test_id で絞る。"
         "tool を付けるとその道具の全体 (答えの分かっている例・式)"

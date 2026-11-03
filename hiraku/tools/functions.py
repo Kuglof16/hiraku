@@ -111,9 +111,16 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     return out
 
 
-def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
-    """K0 formulas, optionally only those a tool lists for its predictions (else those whose
-    id starts with the tool's name) or those of one domain."""
+PAIRS_HOW = ("predicts: 道具のどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
+             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのある道具の横に並ぶ剛体の式は、"
+             "初めの見積もりで、解析とは食い違う)")
+
+
+def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record] | Record:
+    """K0 formulas, optionally only those of one domain. With `tool`: {"tool", "formulas" (those the
+    tool lists for its predictions, else those whose id starts with its name), "predicts" (the
+    tool's own pairing of its result quantities with formula outputs and their notes, from its
+    describe(); [] when it has none), "how"}."""
     args = args or {}
     out = ctx.formulas.list_formulas()
     tool = args.get("tool")
@@ -122,7 +129,22 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
         out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
-    return out
+    if not tool:
+        return out
+    return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
+
+
+def tool_predicts(ctx: RunContext, name: str) -> list[Record]:
+    """The tool's describe()["predicts"]: {quantity, formula_id, output, note?} per pairing."""
+    describe = getattr(ctx.tools.get(name), "describe", None)
+    if not callable(describe):
+        return []
+    try:
+        got = describe().get("predicts") or []
+    except Exception:  # a tool made in the run may describe itself badly; the formulas still list
+        return []
+    keys = ("quantity", "formula_id", "output", "note")
+    return [{k: p[k] for k in keys if k in p} for p in got if isinstance(p, dict)]
 
 
 def _tool_line(spec: Record) -> Record:
