@@ -682,10 +682,12 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
 # ---------------------------------------------------------------------------- the report (N17)
 
 
-def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None, *,
+                 computed: list[Record] | None = None) -> Record:
     """The lead's report: the summary and the next changes are its words; everything else is put
     together by code from the records (hiraku.tools.report). A number with a unit in the words
-    that matches no recorded value of that unit is refused. Writes report.json, report.written."""
+    that matches no recorded value of that unit is refused. Writes report.json, report.written.
+    computed: sensitivities already computed (the scripted driver's next items)."""
     from hiraku.tools.report import build_report
 
     _check_input("write_report", args)
@@ -694,7 +696,7 @@ def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         raise ToolError("報告を書くのはまとめ役 (lead) です。役の結果はまとめ役に返してください")
     if not args["summary"].strip():
         raise ToolError("summary に、分野ごとの結果を記録の ID と一緒に短く書いてください")
-    return ctx.store.write_report(build_report(ctx, args, agent), agent=agent)
+    return ctx.store.write_report(build_report(ctx, args, agent, computed), agent=agent)
 
 
 # ---------------------------------------------------------------------------- tools made in the run (N13)

@@ -220,13 +220,14 @@ def rule_hits(ctx: RunContext) -> list[str]:
     return [r for r, rc in latest.items() if rc["hits"]]
 
 
-def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
+def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Record] | None = None) -> Record:
     """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
     and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
-    names them; not in the contract's tool input yet)."""
+    names them; not in the contract's tool input yet). computed: sensitivities already computed
+    by sensitivities() (the scripted driver's next items, scripted_next), added to those asked."""
     if not ctx.version:
         raise ToolError("設計の版がまだ無いので、報告は書けません")
-    sens = sensitivities(ctx, args.get("sensitivity") or [])
+    sens = list(computed or []) + sensitivities(ctx, args.get("sensitivity") or [])
     texts = [args.get("summary", "")] + [f"{n.get('change', '')} {n.get('reason', '')}" for n in args.get("next") or []]
     allowed = recorded_numbers(ctx, sens)
     bad = sorted({b for t in texts for b in unknown_numbers(t, allowed)})
@@ -255,3 +256,162 @@ def build_report(ctx: RunContext, args: Record, agent: str) -> Record:
         # where HIRAKU itself got in the way of the run, in the lead's words (contract report.issues)
         **({"issues": [dict(i) for i in args["issues"]]} if args.get("issues") else {}),
     }
+
+
+# ---------------------------------------------------------------------------- the scripted driver's next items
+
+SCRIPT_MARK = "台本: "  # every next item the code writes for a scripted run starts with this
+K5_HEAVY_TOOLS = ("frame_shell",)  # re-running these for K5 takes minutes (the shell solve)
+K5_MAX_WALL_S = 30.0  # no K5 when the governing analysis took longer than this (wall_time_s)
+K5_MAX_PATHS = 3  # design paths per governing verdict
+_IN_PARENS = re.compile(r"\(([A-Za-z0-9_.:-]+)\)")
+
+
+def governing_verdicts(ctx: RunContext, domain: str) -> list[Record]:
+    """The newest verdicts of a domain on the current version that govern it: every red one, else
+    the one with the smallest margin_pct (verdicts with a null margin_pct, a limit of 0, only when
+    none has one: then the smallest margin)."""
+    from hiraku.tools.judge import latest_verdicts
+
+    mine = [v for lc_id, v in latest_verdicts(ctx, ctx.version).items()
+            if ctx.has_load_case(lc_id) and ctx.load_case(lc_id)["domain"] == domain]
+    red = [v for v in mine if not v["pass"]]
+    if red:
+        return red
+    pct = [v for v in mine if v.get("margin_pct") is not None]
+    if pct:
+        return [min(pct, key=lambda v: v["margin_pct"])]
+    return [min(mine, key=lambda v: v["margin"]["value"])] if mine else []
+
+
+def _verdict_result(analysis: Record, verdict: Record) -> Record | None:
+    """The analysis result the verdict judged: its quantity, nearest the verdict's value."""
+    hits = [r for r in analysis.get("results", []) if r["quantity"] == verdict["quantity"]]
+    return min(hits, key=lambda r: abs(r["value"] - verdict["value"]["value"])) if hits else None
+
+
+def _top_effect(analysis: Record) -> Record | None:
+    terms = [t for t in analysis.get("effects", []) if isinstance(t.get("share"), (int, float))]
+    return max(terms, key=lambda t: abs(t["share"])) if terms else None
+
+
+def candidate_paths(design: Record, analysis: Record, verdict: Record, tool: Any) -> list[str]:
+    """Design paths (hiraku.solvers.k5_sensitivity) that may move the verdict's quantity, at most
+    K5_MAX_PATHS: for a member named in the judged result's `where` or in the largest effects term,
+    its section's wall and height and its material's E; for a part, the design variables named
+    after it and its mass; else the design variables the tool's load-case parameters read (K2's
+    `var`); else, for a frame tool (K1), the most used section and its material."""
+    members = {m["id"]: m for m in design.get("members", [])}
+    parts = {p["id"]: p for p in design.get("parts", [])}
+    variables = design.get("variables") or {}
+    names = []
+    res = _verdict_result(analysis, verdict)
+    if res and isinstance(res.get("where"), str):
+        names.append(res["where"])
+    top = _top_effect(analysis)
+    if top:
+        names += _IN_PARENS.findall(top["name"])
+    paths: list[str] = []
+
+    def member_paths(m: Record) -> list[str]:
+        dims = (design.get("sections", {}).get(m.get("section")) or {}).get("dims_mm") or {}
+        out = [f"sections.{m['section']}.dims_mm.{k}" for k in ("t", "h", "d", "b") if k in dims][:2]
+        if "E_MPa" in (design.get("materials", {}).get(m.get("material")) or {}):
+            out.append(f"materials.{m['material']}.E_MPa")
+        return out
+
+    for name in dict.fromkeys(names):
+        if name in members:
+            paths += member_paths(members[name])
+        elif name in parts:
+            paths += [f"variables.{k}" for k in variables if k.startswith(name + "_")]
+            if "mass_kg" in parts[name]:
+                paths.append(f"parts.{name}.mass_kg")
+    if not paths:
+        for p in getattr(tool, "params", ()) or ():
+            paths += [f"variables.{v}" for v in getattr(p, "var", ()) or () if v in variables]
+    if not paths and members and analysis.get("base") == "K1":
+        counts: dict[str, int] = {}
+        for m in members.values():
+            counts[m.get("section")] = counts.get(m.get("section"), 0) + 1
+        common = max(counts, key=lambda sec: counts[sec])
+        paths += member_paths(next(m for m in members.values() if m.get("section") == common))
+    return list(dict.fromkeys(paths))[:K5_MAX_PATHS]
+
+
+def _num(x: float, unit: str | None = None) -> str:
+    text = f"{x:.4g}"
+    return text if unit in (None, "1") else f"{text} {unit}"
+
+
+def _margin_text(v: Record) -> str:
+    out = _num(v["margin"]["value"], v["margin"]["unit"])
+    return out + (f" ({_num(v['margin_pct'], '%')})" if v.get("margin_pct") is not None else "")
+
+
+def _raises_margin(op: str, share: float) -> str:
+    """大きく / 小さく: which way to move a number of elasticity `share` so that the margin grows."""
+    up = (share > 0) == (op in (">=", ">"))
+    return "大きく" if up else "小さく"
+
+
+def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
+    """(next items, the sensitivities computed for them) for a scripted run's report, by code from
+    the records: per picked domain of the current version, each governing verdict (governing_verdicts)
+    and the change that moves its quantity most with the direction that raises the margin, from K5
+    over candidate_paths on the verdict's load case; where K5 is not run (a heavy tool, a long
+    analysis, no candidate path, or no number that moves) the largest-share effects term and its
+    member, with no direction. Every item starts with SCRIPT_MARK; its numbers are the records'."""
+    from hiraku.solvers.k5_sensitivity import strongest
+
+    s = ctx.store
+    items: list[Record] = []
+    computed: list[Record] = []
+    for domain in ctx.picked:
+        for ver in governing_verdicts(ctx, domain):
+            cmp = s.get("comparison", ver["comparison_id"])
+            ana = s.get("analysis", cmp["analysis_id"])
+            tool = ctx.tools.get(ana["tool"])
+            wall = float(ana.get("wall_time_s") or 0.0)
+            head = (f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
+                    f"{ana['analysis_id']} {ana['tool']})")
+            why_not = None
+            if tool is None:
+                why_not = f"K5 は回していない: 道具 {ana['tool']} が棚に無い"
+            elif ana["tool"] in K5_HEAVY_TOOLS or wall > K5_MAX_WALL_S:
+                why_not = f"K5 は回していない: {ana['tool']} の解き直しが重い (解析に {wall:.0f} 秒)"
+            paths = [] if why_not else candidate_paths(s.design(), ana, ver, tool)
+            if not why_not and not paths:
+                why_not = "K5 は回していない: 動かす設計の数の候補が無い"
+            best = None
+            if paths:
+                try:
+                    (got,) = sensitivities(ctx, [{"load_case_id": ver["load_case_id"], "paths": paths}])
+                except ToolError as e:
+                    why_not = f"K5 を出せない ({e})"
+                else:
+                    computed.append(got)
+                    best = strongest(got["terms"])
+                    if best is None or best["share"] == 0:
+                        best, why_not = None, f"K5 では候補 ({'、'.join(paths)}) の中に、確かに動く数が無い"
+            if best is not None:
+                path = best["name"].split(" to ", 1)[1].split(" (", 1)[0]
+                items.append({"domain": domain,
+                              "change": f"{SCRIPT_MARK}{path} を{_raises_margin(ver['op'], best['share'])}する",
+                              "reason": f"{head}。K5: {ver['quantity']} の {path} への弾性 {best['share']:.3g} "
+                                        f"(候補 {len(paths)} つの中でいちばん大きい)"})
+                continue
+            top = _top_effect(ana)
+            if top is not None:
+                where = "・".join(_IN_PARENS.findall(top["name"])) or top["name"]
+                items.append({"domain": domain, "change": f"{SCRIPT_MARK}{where} が効いている (向きは出していない)",
+                              "reason": f"{head}。いちばん効いている項は {top['name']} で、割合 "
+                                        f"{_num(top['share'] * 100, '%')} ({why_not})"})
+            else:
+                items.append({"domain": domain, "change": f"{SCRIPT_MARK}変える数を選べない",
+                              "reason": f"{head}。{why_not}。解析の効いている項にも割合が無い"})
+    allowed = recorded_numbers(ctx, computed)
+    for item in items:  # an effects term's own name may carry numbers the checker reads otherwise
+        if unknown_numbers(f"{item['change']} {item['reason']}", allowed):
+            item["reason"] = re.sub(r"いちばん効いている項は .+? で、", "", item["reason"])
+    return items, computed
