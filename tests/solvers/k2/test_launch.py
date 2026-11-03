@@ -118,7 +118,7 @@ class RollingRadius(unittest.TestCase):
         if "launch.peak_tractive_force" not in {f["formula_id"] for f in formula_registry().list_formulas()}:
             self.skipTest("launch.peak_tractive_force is not in this K0 registry yet")
         out = formula_registry().evaluate("launch.peak_tractive_force", {
-            "T": q(20.0, "N*m"), "i": q(8.0, "1"), "eta": q(ETA, "1"), "r": res["rolling_radius"]})
+            "T": q(20.0, "N*m"), "i": q(8.0, "1"), "eta": q(ETA, "1"), "rolling_radius": res["rolling_radius"]})
         self.assertAlmostEqual(out["outputs"]["F_max"]["value"], res["peak_tractive_force"]["value"], places=6)
 
     def test_a_given_rolling_radius_is_set_beside_k2s(self):

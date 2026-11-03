@@ -187,7 +187,13 @@ class LaunchTool(K2Tool):
              Pair("top_speed", "launch.top_speed", "v_top", _launch_inputs[1:],
                   "the formula has no motor speed limit: it predicts top_speed only when top_speed's where is "
                   "motor_power; where = motor_max_speed means the motor speed limit held it (then compare "
-                  "top_speed_power); " + _top_note))
+                  "top_speed_power); " + _top_note),
+             Pair("peak_tractive_force", "launch.peak_tractive_force", "F_max",
+                  (("T", "motor_torque"), ("i", "gear_ratio"), ("eta", "efficiency"),
+                   ("rolling_radius", "rolling_radius")),
+                  "F_max = T i eta / rolling_radius; K2's rolling_radius is the loaded radius at its static wheel "
+                  "load, K0's (when the load case gives none) the free radius less K0's static wheel load / "
+                  "tyre_stiffness: the two static loads differ a little (v1: 288.2 mm in K2, 287.4 mm in K0)"))
 
     def own_checks(self) -> list[dict]:
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="launch check",
