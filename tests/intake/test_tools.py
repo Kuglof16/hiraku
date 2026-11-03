@@ -4,10 +4,11 @@ import unittest
 from pathlib import Path
 
 from hiraku import contract
+from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake.tools import TOOLS
 from hiraku.store import RunStore
-from hiraku.tools.context import RunContext, ToolError
+from hiraku.tools.context import RunContext
 from tests.intake.designs import mini_design
 
 FIXTURES = Path(__file__).with_name("fixtures")

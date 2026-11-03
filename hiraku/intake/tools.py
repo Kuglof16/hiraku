@@ -19,12 +19,12 @@ from typing import Any, Callable
 from hiraku import contract
 from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
+from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
 from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
 from hiraku.intake.products import PRODUCTS_DIR, load_product, product_files
-from hiraku.tools.context import ToolError
 
 Record = dict[str, Any]
 
