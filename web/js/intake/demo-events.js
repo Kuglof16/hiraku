@@ -12,7 +12,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -355,7 +355,7 @@ export const DEMOS = {
    "agent": "lead",
    "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -1589,7 +1589,7 @@ export const DEMOS = {
       "unit": "deg"
      },
      "steering_wheel_height": {
-      "value": 495.411492555231,
+      "value": 495.4114925552308,
       "unit": "mm"
      },
      "pedal_x": {
@@ -2353,21 +2353,23 @@ export const DEMOS = {
        "center_mm": [
         -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         458.2223500654828,
         911.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 6.87645690910344,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
        "LAp2",
        "RAp2",
        "LS1",
        "RS1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2400,7 +2402,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -330.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -2450,7 +2452,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -220.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -2498,9 +2500,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -350.0,
+        -332.29999999999995,
         -220.0,
-        714.5183687566542
+        697.7183687566543
        ],
        "size_mm": [
         120.0,
@@ -2560,21 +2562,23 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2607,15 +2611,15 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
         483.6,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 9.891818181818183,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -2624,6 +2628,8 @@ export const DEMOS = {
        "LE",
        "RE"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2681,6 +2687,8 @@ export const DEMOS = {
        "LAp1",
        "RAp1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2711,17 +2719,19 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -280.0,
+        -271.15,
         0.0,
-        630.4431784698709
+        622.0431784698708
        ],
        "size_mm": [
-        20.0,
+        2.3,
         740.0,
-        400.88635693974163
+        384.08635693974145
        ]
       },
-      "mass_kg": 6.592353425231306,
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
       "carried_by": [
        "LAt2",
        "LDT",
@@ -2772,7 +2782,7 @@ export const DEMOS = {
        "center_mm": [
         -720.0,
         -300.0,
-        1205.411492555231
+        1188.6114925552308
        ],
        "size_mm": [
         40.0,
@@ -2817,7 +2827,7 @@ export const DEMOS = {
        "center_mm": [
         -420.0,
         -300.0,
-        995.3492310923181
+        978.5492310923179
        ],
        "size_mm": [
         772.4647532568737,
@@ -2867,16 +2877,16 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         -235.0,
-        531.8082994683936
+        523.4082994683935
        ],
        "size_mm": [
-        547.360052837795,
+        531.1037549373495,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        75.61744543525063,
+        75.14594426906802,
         90.0
        ]
       },
@@ -3019,7 +3029,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -3054,7 +3064,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         -540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -3093,7 +3103,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -3128,7 +3138,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -3167,7 +3177,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         -300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -3197,7 +3207,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -3227,7 +3237,7 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
@@ -3261,7 +3271,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3296,7 +3306,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3331,16 +3341,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -111.175,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         -3.2899932439578037
        ]
       },
@@ -3366,7 +3376,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3401,7 +3411,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3436,7 +3446,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3471,16 +3481,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -488.825,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         3.2899932439578
        ]
       },
@@ -3506,7 +3516,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3541,7 +3551,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3576,7 +3586,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3611,7 +3621,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         447.325,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -3646,7 +3656,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3681,7 +3691,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3716,7 +3726,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3751,7 +3761,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         152.675,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -3786,7 +3796,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -4963,7 +4973,7 @@ export const DEMOS = {
        "center_mm": [
         -285.0,
         -300.0,
-        851.8934450716384
+        835.0934450716383
        ],
        "size_mm": [
         50.0,
@@ -4998,7 +5008,7 @@ export const DEMOS = {
        "center_mm": [
         -1400.0,
         0.0,
-        1810.0
+        1793.2
        ],
        "size_mm": [
         42.69999999999982,
@@ -5324,7 +5334,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -5332,7 +5342,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        -350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -5356,7 +5366,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        600.0,
-       1810.0
+       1793.2
       ]
      },
      {
@@ -5380,7 +5390,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        -600.0,
-       1810.0
+       1793.2
       ]
      }
     ],
@@ -5859,6 +5869,15 @@ export const DEMOS = {
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "stkm13a": {
@@ -12549,7 +12568,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w-file",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -12927,7 +12946,7 @@ export const DEMOS = {
    "agent": "lead",
    "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -13977,7 +13996,7 @@ export const DEMOS = {
       "unit": "deg"
      },
      "steering_wheel_height": {
-      "value": 495.411492555231,
+      "value": 495.4114925552308,
       "unit": "mm"
      },
      "pedal_x": {
@@ -14741,21 +14760,23 @@ export const DEMOS = {
        "center_mm": [
         -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         458.2223500654828,
         911.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 6.87645690910344,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
        "LAp2",
        "RAp2",
        "LS1",
        "RS1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -14788,7 +14809,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -330.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -14838,7 +14859,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -220.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -14886,9 +14907,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -350.0,
+        -332.29999999999995,
         -220.0,
-        714.5183687566542
+        697.7183687566543
        ],
        "size_mm": [
         120.0,
@@ -14948,21 +14969,23 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -14995,15 +15018,15 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
         483.6,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 9.891818181818183,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -15012,6 +15035,8 @@ export const DEMOS = {
        "LE",
        "RE"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -15069,6 +15094,8 @@ export const DEMOS = {
        "LAp1",
        "RAp1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -15099,17 +15126,19 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -280.0,
+        -271.15,
         0.0,
-        630.4431784698709
+        622.0431784698708
        ],
        "size_mm": [
-        20.0,
+        2.3,
         740.0,
-        400.88635693974163
+        384.08635693974145
        ]
       },
-      "mass_kg": 6.592353425231306,
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
       "carried_by": [
        "LAt2",
        "LDT",
@@ -15160,7 +15189,7 @@ export const DEMOS = {
        "center_mm": [
         -720.0,
         -300.0,
-        1205.411492555231
+        1188.6114925552308
        ],
        "size_mm": [
         40.0,
@@ -15205,7 +15234,7 @@ export const DEMOS = {
        "center_mm": [
         -420.0,
         -300.0,
-        995.3492310923181
+        978.5492310923179
        ],
        "size_mm": [
         772.4647532568737,
@@ -15255,16 +15284,16 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         -235.0,
-        531.8082994683936
+        523.4082994683935
        ],
        "size_mm": [
-        547.360052837795,
+        531.1037549373495,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        75.61744543525063,
+        75.14594426906802,
         90.0
        ]
       },
@@ -15407,7 +15436,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -15442,7 +15471,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         -540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -15481,7 +15510,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -15516,7 +15545,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -15555,7 +15584,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         -300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -15585,7 +15614,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -15615,7 +15644,7 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
@@ -15649,7 +15678,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15684,7 +15713,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15719,16 +15748,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -111.175,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         -3.2899932439578037
        ]
       },
@@ -15754,7 +15783,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -15789,7 +15818,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15824,7 +15853,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15859,16 +15888,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -488.825,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         3.2899932439578
        ]
       },
@@ -15894,7 +15923,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -15929,7 +15958,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15964,7 +15993,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15999,7 +16028,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         447.325,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -16034,7 +16063,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -16069,7 +16098,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -16104,7 +16133,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -16139,7 +16168,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         152.675,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -16174,7 +16203,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -17351,7 +17380,7 @@ export const DEMOS = {
        "center_mm": [
         -285.0,
         -300.0,
-        851.8934450716384
+        835.0934450716383
        ],
        "size_mm": [
         50.0,
@@ -17386,7 +17415,7 @@ export const DEMOS = {
        "center_mm": [
         -1400.0,
         0.0,
-        1810.0
+        1793.2
        ],
        "size_mm": [
         42.69999999999982,
@@ -17712,7 +17741,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -17720,7 +17749,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        -350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -17744,7 +17773,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        600.0,
-       1810.0
+       1793.2
       ]
      },
      {
@@ -17768,7 +17797,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        -600.0,
-       1810.0
+       1793.2
       ]
      }
     ],
@@ -18247,6 +18276,15 @@ export const DEMOS = {
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "stkm13a": {
