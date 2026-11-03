@@ -162,7 +162,7 @@ const intakeListeners = new Set();
 let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
 let intake = null;
 const intakeApi = {
-  events: () => player.events.slice(0, player.applied),
+  events: () => (draft ? draftEvents() : player.events.slice(0, player.applied)),
   onEvent(fn) {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
@@ -171,12 +171,140 @@ const intakeApi = {
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
+    if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
     return ownRunGoing() ? answerHearing : undefined;
   },
   get dropFile() {
     return ownRunGoing() ? dropFile : undefined;
   },
+  // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
+  get send() {
+    return draft && !draft.busy ? draftSend : undefined;
+  },
+  get editFlags() {
+    return draft?.state && !draft.busy ? (flags) => draftChange({ flags }) : undefined;
+  },
+  get exclude() {
+    return draft?.state && !draft.busy ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
+  },
+  get setLimits() {
+    return draft?.state && !draft.busy ? (limits) => draftChange({ limits }) : undefined;
+  },
 };
+
+// ---- a new request (?new=1): A1 and A2 before a run --------------------------------------
+// The server keeps nothing between the calls (hiraku.intake.request): each answer carries the
+// draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
+// request as the person's words, and the server's warnings as the lead's). When the hearing is
+// settled the request's files are saved and 始める starts a run on them (--intake-events).
+const draft = params.has("new")
+  ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false }
+  : null;
+
+function draftEvents() {
+  const list = [
+    ...(draft.want ? [{ kind: "user.said", agent: "user", text: draft.want }] : []),
+    ...draft.events,
+    ...draft.warnings.map((w) => ({ kind: "agent.said", agent: "lead", text: w })),
+  ];
+  return list.map((e, i) => ({ seq: i, t: 0, ts: "", run_id: "request", ...e }));
+}
+
+async function postRequest(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+// One call at a time; the bar says what is going on, and an error stays there in its words.
+async function draftCall(busy, fn) {
+  Object.assign(draft, { busy, error: "" });
+  renderDraft();
+  try {
+    await fn();
+  } catch (e) {
+    draft.error = e.message ?? String(e);
+  }
+  draft.busy = "";
+  renderDraft();
+}
+
+function takeDraft(got) {
+  draft.state = got.draft;
+  draft.events = got.events ?? [];
+  draft.warnings = got.warnings ?? [];
+}
+
+function draftSend(text) {
+  return draftCall(draft.useClaude ? "Claude が分野を選んでいます (数十秒かかります)…" : "分野を選んでいます…", async () => {
+    draft.want = text;
+    draft.done = null;
+    draft.excluded = [];
+    takeDraft(await postRequest("/api/request", { want: text, claude: draft.useClaude }));
+  });
+}
+
+function draftChange(change) {
+  return draftCall("選び直しています…", async () => {
+    if (change.exclude) draft.excluded = change.exclude;
+    draft.done = null;
+    takeDraft(await postRequest("/api/request", { draft: draft.state, ...change }));
+  });
+}
+
+function draftAnswer({ answers, note }) {
+  return draftCall("答えを確かめています…", async () => {
+    const got = await postRequest("/api/request/answer", { draft: draft.state, answers: answers ?? {}, note: note ?? "" });
+    draft.state = got.draft ?? draft.state;
+    draft.events = got.events ?? draft.events;
+    draft.done = got;
+  });
+}
+
+async function draftStart(mode) {
+  if (mode === "claude" && !draft.confirm) {
+    draft.confirm = true;
+    renderDraft();
+    return;
+  }
+  draft.confirm = false;
+  await draftCall("走らせています…", async () => {
+    const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
+    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+  });
+}
+
+// The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
+function renderDraft() {
+  const bar = $("draftbar");
+  if (!draft || !bar) return;
+  const d = draft.done;
+  const rf = d?.requirements_file ?? {};
+  const usd = typeof rf.cost_limit_usd === "number" ? fmtUsd(rf.cost_limit_usd) : "—";
+  const keyed = !!draft.claudeReady;
+  let body;
+  if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
+  else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
+  else if (d?.ready) {
+    const scripted =
+      `<button data-start="scripted">台本で始める (Claude は呼ばない)</button>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`);
+    const claude = !keyed
+      ? `<button disabled>Claude で始める</button><span class="why">HIRAKU を起こした窓に ${esc(draft.keyName ?? "ANTHROPIC_API_KEY")} が無い</span>`
+      : draft.confirm
+        ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
+        : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
+    body = `<b>要件がそろいました</b>${scripted}${claude}`;
+  } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
+  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、既定値のまま進めてください</span>`;
+  else
+    body =
+      `<span>依頼のタブで、作りたいものを書いて送ってください</span>` +
+      (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
+  bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
+  intake?.update();
+}
 
 function ownRunGoing() {
   const s = player.state;
@@ -203,7 +331,12 @@ async function dropFile(name, text) {
 }
 
 function renderIntake(tab) {
-  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (!intake) {
+    // in a new request the bar (renderDraft) sits above the screens
+    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab });
+    renderDraft();
+  }
   if (intake.screen !== tab) intake.show(tab);
   // (and when the run turns out to be this screen's own, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
@@ -898,6 +1031,8 @@ async function seekAndDraw(t) {
 let readyResolve;
 const ready = new Promise((r) => (readyResolve = r));
 window.hiraku = {
+  // a new request's steps, for the tests (the screen's own controls call the same)
+  request: draft ? { send: (t) => draftSend(t), answer: (a) => draftAnswer(a), start: (m) => draftStart(m), get state() { return draft; } } : null,
   player,
   ready,
   seek: seekAndDraw,
@@ -1153,7 +1288,8 @@ async function renderLaunch(message = "") {
   const keyless = info.claude_ready
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+  const fresh = `<p><a class="new-request" href="?new=1">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
 async function launch(file, mode) {
@@ -1206,6 +1342,31 @@ $("runlist").addEventListener("click", (ev) => {
   }
 });
 
+// A new request: the intake tabs on the draft (whether Claude can be asked comes from the launcher).
+async function startDraft() {
+  ui.pinnedTab = "A1";
+  try {
+    const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });
+  } catch (e) {
+    draft.error = `サーバーに聞けなかった: ${e.message ?? e}`;
+  }
+  drawn.rev = -1;
+  renderDraft();
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-start], [data-start-cancel]");
+  if (!b || !draft) return;
+  if (b.dataset.startCancel) {
+    draft.confirm = false;
+    renderDraft();
+  } else draftStart(b.dataset.start);
+});
+$("view-intake").addEventListener("change", (ev) => {
+  if (draft && ev.target.matches("[data-use-claude]")) draft.useClaude = ev.target.checked;
+});
+
 // No run in the URL: open the server's default run (a saved run), else the run list.
 async function openDefault() {
   let runs;
@@ -1229,4 +1390,5 @@ else if (params.get("src")) {
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
 } else if (params.get("list")) showRunList();
+else if (draft) startDraft();
 else openDefault();

@@ -638,6 +638,55 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["lost"], [None, False, False])  # no recorded part for the limit: no part held to it
         page.close()
 
+    def test_a_new_request_from_A1_to_a_run(self):
+        """?new=1: write the request in A1 and send it, answer the hearing, then 台本で始める starts a
+        run on the saved request (with its intake events) and the screen follows it."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        run_id = "20261103-120000-offroad-4w-fake"
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, run_id, 20.0)
+
+        def command(req, mode, runs, intake_events=None):
+            seen.append((Path(req).name, intake_events and Path(intake_events).name, mode))
+            return fake(req, mode, runs)
+
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?new=1")
+            page.wait_for_selector("#draftbar")
+            self.assertIn("作りたいものを書いて", page.text_content("#draftbar"))
+            page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
+            page.click("#view-intake button:has-text('送る')")
+            page.wait_for_function("window.hiraku.request.state.state && !window.hiraku.request.state.busy")
+            self.assertIn("分野が決まりました", page.text_content("#draftbar"))
+            self.assertGreater(page.evaluate("window.hiraku.request.state.events.length"), 0)
+            page.evaluate("async () => { await window.hiraku.request.answer({ answers: { Q30: 'two_cargo', Q40: 150, Q50: 40, Q70: '私有地だけ' } }); }")
+            page.wait_for_selector("#draftbar button[data-start='scripted']")
+            self.assertIn("要件がそろいました", page.text_content("#draftbar"))
+            self.assertTrue(page.is_disabled("#draftbar button:has-text('Claude で始める')"))  # no key in this server's window
+            page.click("#draftbar button[data-start='scripted']")
+            page.wait_for_url(f"**/?run={run_id}", timeout=30000)
+            self.assertEqual(seen, [("requirements.yaml", "intake.json", "scripted")])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
         """On a run this screen started and still going, a file given to A5 lands in the run's
         knowledge/ with a request in its inbox/ (the run turns it into events), and A5 says so."""
