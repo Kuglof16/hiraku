@@ -28,7 +28,11 @@ from hiraku.catalog.loading import LOADING_JA
 # (-16 %: the model shares the load over the parallel contacts). 30 %. Since the bulkhead is a 2.3 mm sheet
 # (2026-11-04) the pedal on it bends the plate: with load_path.plate_strip K0 18.4 mm against the tool's 24.0 mm
 # for that v1 case, 45.0 against 49.5 mm with version 2's stands on the bulkhead (tests/solvers/
-# test_load_path_plate_k0).
+# test_load_path_plate_k0). With the pedals on the post's beam (pedal_mount = post, 2026-11-04) the beam's twist
+# (F r_t^2 L / (G J)) and the post node (load_path.post_node) were added: version 2 at track 1220, K0 0.282 mm
+# (0.080 before: bending only) against the tool's 0.338 mm (+20 %). The rest is the frame under the post: in the
+# tool the post's foot drops 0.087 mm and tips 2.5e-4 rad, which K0 takes as rigid. The twist term moved the
+# demo's grip from 0.87 to 0.95 mm (the tool 1.05 mm, +10 %).
 R7_TOL = 0.3
 # R8: free_parts is a count; the graph search and rigid_body_check find the same parts (the contacts are the same).
 R8_TOL = 0.05
@@ -323,12 +327,89 @@ def chain_inputs(design: Record, part_id: str, point, F: float, directions=None)
             d_plate = best
             notes.append("板の帯: " + ", ".join(pid for pid, _ in strips))
     s = props[mid]["section"]
-    E = float(props[mid]["material"]["E_MPa"])
+    mat = props[mid]["material"]
+    E = float(mat["E_MPa"])
+    G = E / (2.0 * (1.0 + float(mat.get("nu", 0.3))))
+    r_t, d_root = 0.0, 0.0
+    if chain is not None and L > 0.0:
+        r_t, d_root, root_note = _twist_and_root(design, props, mid, last.t, near, s, p, F, directions)
+        notes += root_note
     ct = sum(1.0 / k for k, _, _ in joints)
     cr = sum(float(np.dot(p - x, p - x)) / kr for _, kr, x in joints)
     k_r = 1.0 / cr if cr > 0 else 1e12  # every contact on the load's line: its rotation does not move the point
     return {"F": q(F, "N"), "k_t": q(1.0 / ct, "N/mm"), "k_r": q(k_r, "N/mm"), "L": q(L, "mm"), "E": q(E, "MPa"),
-            "I": q(min(s["Iy"], s["Iz"]), "mm^4"), "delta_plate": q(d_plate, "mm")}, notes
+            "I": q(min(s["Iy"], s["Iz"]), "mm^4"), "delta_plate": q(d_plate, "mm"), "G": q(G, "MPa"),
+            "J": q(float(s["J"]), "mm^4"), "r_t": q(r_t, "mm"), "delta_root": q(d_root, "mm")}, notes
+
+
+def _column_at(design: Record, props: dict, node: str, mid: str):
+    """The two other members at `node` when they make one straight column through it (the cantilever's root
+    partway up a post): [(member, far node, length)] x 2, else None."""
+    others = [m for m in design["members"] if m["id"] != mid and node in (m["node_a"], m["node_b"])]
+    if len(others) != 2:
+        return None
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    ends = [(m["id"], m["node_b"] if m["node_a"] == node else m["node_a"]) for m in others]
+    d = [xyz[far] - xyz[node] for _, far in ends]
+    u = [v / np.linalg.norm(v) for v in d]
+    if float(np.dot(u[0], u[1])) > -1.0 + 1e-6 or props[ends[0][0]]["section"] != props[ends[1][0]]["section"]:
+        return None
+    return [(m, far, float(np.linalg.norm(v))) for (m, far), v in zip(ends, d)]
+
+
+def _twist_and_root(design: Record, props: dict, mid: str, t: float, near: str, sec: Record, p, F: float,
+                    directions) -> tuple[float, float, list[str]]:
+    """control_deflection's r_t (the load's lever about the landing member's axis at the landing point) and
+    delta_root (load_path.post_node, when the cantilever's root node is partway up a straight column), for the
+    load direction that moves the point most of `directions` (none given: r_t 0, the root rigid)."""
+    from hiraku.solvers import formula_registry
+
+    if not directions:
+        return 0.0, 0.0, []
+    m = props[mid]["member"]
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    A_, B_ = xyz[m["node_a"]], xyz[m["node_b"]]
+    axis = (B_ - A_) / np.linalg.norm(B_ - A_)
+    land = A_ + t * (B_ - A_)
+    others = {x["node_a"] for x in design["members"] if x["id"] != mid} | {x["node_b"] for x in design["members"]
+                                                                         if x["id"] != mid}
+    root = near if near in others else (m["node_b"] if near == m["node_a"] else m["node_a"])
+    col = _column_at(design, props, root, mid)
+    reg = formula_registry()
+    E_m = float(props[mid]["material"]["E_MPa"])
+    G_m = E_m / (2.0 * (1.0 + float(props[mid]["material"].get("nu", 0.3))))
+    best = (-1.0, 0.0, 0.0)
+    for u in directions:
+        f = np.asarray(u, float)
+        f = f / np.linalg.norm(f)
+        r_t = abs(float(axis @ np.cross(p - land, f)))
+        d_root = 0.0
+        if col is not None:
+            e = (xyz[col[1][1]] - xyz[root]) / col[1][2]
+            u1 = np.cross(e, [0.0, 0.0, 1.0]) if abs(e[2]) < 0.9 else np.cross(e, [1.0, 0.0, 0.0])
+            u1 /= np.linalg.norm(u1)
+            u2 = np.cross(e, u1)
+            Fv = F * f
+            M = np.cross(p - xyz[root], Fv)
+            cs, cm = props[col[0][0]]["section"], props[col[0][0]]["material"]
+            Ec = float(cm["E_MPa"])
+            I = min(cs["Iy"], cs["Iz"])
+            ins = {"F": q(F, "N"), "N": q(float(Fv @ e), "N"), "T": q(float(M @ e), "N*mm"),
+                   "P_1": q(float(Fv @ u1), "N"), "M_1": q(float(M @ np.cross(e, u1)), "N*mm"),
+                   "P_2": q(float(Fv @ u2), "N"), "M_2": q(float(M @ np.cross(e, u2)), "N*mm"),
+                   "a": q(col[0][2], "mm"), "b": q(col[1][2], "mm"), "E": q(Ec, "MPa"),
+                   "G": q(Ec / (2.0 * (1.0 + float(cm.get("nu", 0.3)))), "MPa"), "A": q(float(cs["A"]), "mm^2"),
+                   "I_1": q(I, "mm^4"), "I_2": q(I, "mm^4"), "J": q(float(cs["J"]), "mm^4")}
+            d_root = reg.evaluate("load_path.post_node", ins)["outputs"]["delta"]["value"]
+        L_tw = float(np.linalg.norm(land - xyz[root]))
+        score = F * r_t ** 2 * L_tw / (G_m * float(sec["J"])) + d_root
+        if score > best[0]:
+            best = (score, r_t, d_root)
+    notes = []
+    if col is not None:
+        notes.append(f"根元の節 {root} は柱 ({col[0][0]}, {col[1][0]}) の途中: 柱の両端 {col[0][1]}・{col[1][1]} を固定とみて"
+                     "、その節の動きを足した (load_path.post_node、柱の I は小さい方を両方向に)")
+    return best[1], best[2], notes
 
 
 def _force(load_case: Record, name: str, default: float) -> float:
@@ -386,7 +467,7 @@ _CHAIN = ["部品は剛体。触れている所 (すき間 2 mm 以下) をボ�
 _FREE = ["触れている所を部材からたどって、届かない部品を数える (carried_by は見ない)"]
 FREE_PREDICTION = {"quantity": "free_parts", "formula_id": "load_path.free_parts", "output": "n", "assumptions": _FREE,
                    "inputs": {"n_parts": "from.n_parts", "n_held": "from.n_held"}, "inputs_from": free_inputs}
-_CONTROL = {k: f"from.{k}" for k in ("F", "k_t", "k_r", "L", "E", "I", "delta_plate")}
+_CONTROL = {k: f"from.{k}" for k in ("F", "k_t", "k_r", "L", "E", "I", "delta_plate", "G", "J", "r_t", "delta_root")}
 
 R7_PLAN = {
     "tool": "load_path",
