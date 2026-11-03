@@ -53,7 +53,7 @@ class SharedShape(unittest.TestCase):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
                                 "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n10", "n15",
-                                "n16", "n17", "n18", "check"})
+                                "n16", "n17", "n18", "story", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -73,6 +73,20 @@ class SharedShape(unittest.TestCase):
             self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
         self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
         self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_every_cut_has_one_message(self):
+        # the maker: the screens were too busy; each cut gets one message and limits on what it shows
+        st = self.rules["story"]
+        cuts = [k for k in st["cuts"]]
+        self.assertEqual(len(cuts), 21)
+        for k, c in st["cuts"].items():
+            self.assertTrue(c["message"].strip(), k)
+            if "limits" in c:
+                self.assertTrue(c["limits"].get("why"), k)  # every exception says why
+                for name in c["limits"]:
+                    self.assertTrue(name == "why" or name in st["defaults"], (k, name))
+        d = st["defaults"]
+        self.assertGreaterEqual(d["body_text_px"], self.rules["min_text_px"])
 
     def test_n03_n06_n07_n17_for_the_screens_department(self):
         # drawn by the screens department from these values (narration draft 6)

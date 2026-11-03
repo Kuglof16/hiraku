@@ -1123,6 +1123,144 @@ window.PROMO_LAYOUT = {
       "_note": "line: thin vertical line grows; open: it opens into a band; draw: vehicle strokes start; out: fade to black"
     }
   },
+  "story": {
+    "_note": "What each cut must get across in about 3 seconds (one message), and how much it may show. The maker on 2026-11-03: the screens are too busy to come across in the demo. Counts are of things on screen at one time t; elements say what they are with data-kind (label, graph, legend, number, moving) so layout_check can count them. A cut's limits are the defaults unless it lists its own, each with a why.",
+    "defaults": {
+      "label": 3,
+      "graph": 1,
+      "legend": 1,
+      "number": 1,
+      "moving": 3,
+      "body_text_px": 24,
+      "_note": "label: name tags and ticks; graph: plots; legend: colour bars; number: emphasised figures; moving: things in motion at once; body_text_px: smallest size of text the viewer must read (the global min_text_px 18 stays for notes and sources)"
+    },
+    "cuts": {
+      "n00": {
+        "message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)",
+        "limits": {
+          "label": 7,
+          "why": "the seven domain chips under the pets are the point of the cut"
+        }
+      },
+      "n01": {
+        "message": "越えられる段差 (100 mm) と、越えられない段差 (250 mm)",
+        "limits": {
+          "number": 2,
+          "why": "the two step heights are the comparison"
+        }
+      },
+      "n02": {
+        "message": "傾き・風・悪路・急ハンドル・急ブレーキの、どれで倒れるかが分かる",
+        "limits": {
+          "label": 5,
+          "why": "one tag per test; no figures in the panes"
+        }
+      },
+      "n03": {
+        "message": "長く走っても熱くならず、どこまで速いかが分かる"
+      },
+      "n04": {
+        "message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)",
+        "limits": {
+          "label": 8,
+          "moving": 8,
+          "why": "the eight tiles of the grid; each tile shows a picture and a tick or cross only"
+        }
+      },
+      "n05": {
+        "message": "HIRAKU — CAE を、すべての作り手へ拓く",
+        "limits": {
+          "label": 12,
+          "moving": 12,
+          "why": "the title over the twelve preset tests; the tiles carry pictures, no figures"
+        }
+      },
+      "n06": {
+        "message": "作ってみると、うまくいかない",
+        "limits": {
+          "label": 6,
+          "why": "six failures, one tag each, no figures"
+        }
+      },
+      "n07": {
+        "message": "つなぎ目が弱く、補強で直る (CAE が作る前に見つける)"
+      },
+      "n08": {
+        "message": "CAE のツールは高く、使いこなすのが難しい",
+        "limits": {
+          "label": 40,
+          "moving": 12,
+          "body_text_px": 18,
+          "why": "the clutter is the message: a plain CAE tool buried in windows; nothing on it needs to be read"
+        }
+      },
+      "n08b": {
+        "message": "小さな会社の CAE の導入率は 16 %",
+        "limits": {
+          "number": 2,
+          "graph": 1,
+          "why": "99 % and 16 % side by side, then the two bars"
+        }
+      },
+      "n09": {
+        "message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)",
+        "limits": {
+          "label": 7,
+          "why": "the seven domains light up"
+        }
+      },
+      "n10": {
+        "message": "AI の答えも、CAE ツールで確かめる (3 問とも ✓)",
+        "limits": {
+          "number": 3,
+          "label": 3,
+          "why": "one emphasised figure per question (the difference); the rest is small"
+        }
+      },
+      "n11": {
+        "message": "予測を書くまで、解析は動かない (hooks が止める)"
+      },
+      "n12": {
+        "message": "手計算と解析が食い違ったら、原因 (単位の間違い) を突き止める",
+        "limits": {
+          "number": 2,
+          "why": "the predicted and the analysed value"
+        }
+      },
+      "n13": {
+        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う"
+      },
+      "n14": {
+        "message": "渡したノウハウが、設計のチェックの規則になる"
+      },
+      "n15": {
+        "message": "全部の分野が緑になるまで、設計を直す",
+        "limits": {
+          "label": 8,
+          "moving": 8,
+          "why": "the same eight tiles as N04, all turning green"
+        }
+      },
+      "n16": {
+        "message": "組み立ての順番まで、3D で確かめる"
+      },
+      "n17": {
+        "message": "結果だけでなく、次に何を変えればよいかを示す"
+      },
+      "n17b": {
+        "message": "部署ごとの Claude Code のセッションが、並んで作った",
+        "limits": {
+          "label": 8,
+          "number": 4,
+          "moving": 8,
+          "why": "one lane per session; the four counts at the end"
+        }
+      },
+      "n18": {
+        "message": "解析の前に予測し、理由を説明する — HIRAKU"
+      }
+    }
+  },
   "check": {
     "times": {
       "n00": [
