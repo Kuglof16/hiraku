@@ -5714,5 +5714,2927 @@ export const DEMOS = {
     ]
    }
   }
+ ],
+ "offroad-4w-file": [
+  {
+   "seq": 0,
+   "ts": "2026-11-03T10:00:00.000+09:00",
+   "t": 0.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "run.started",
+   "agent": "system",
+   "data": {
+    "run_id": "20261103-100000-offroad-4w-file",
+    "created_at": "2026-11-03T10:00:00.000+09:00",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "product": "offroad-4w",
+    "flags": {
+     "ride": true,
+     "lean": true,
+     "self_propelled": true,
+     "outdoor": true,
+     "rough": true,
+     "public_road": false,
+     "battery": true,
+     "electric": true,
+     "pinch": true,
+     "cargo": true,
+     "standing": true,
+     "vibration": true,
+     "continuous": true,
+     "assembly": true
+    },
+    "status": "running",
+    "round_limit": 1,
+    "cost_limit_usd": 2.0,
+    "cost_usd": 0.0,
+    "requirements": [
+     {
+      "key": "Q11",
+      "name": "路面の摩擦係数 (砂利)",
+      "value": 0.6,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (gravel; no public value found)"
+     },
+     {
+      "key": "Q12",
+      "name": "路面の粗さ (ISO 8608 のクラス)",
+      "value": "C",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the forest road taken as ISO 8608 class C. ISO 8608 covers unpaved roads too (https:\/\/www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the table in https:\/\/link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)"
+     },
+     {
+      "key": "Q13",
+      "name": "縦の坂 (止まって発進できる一番急な坂)",
+      "value": 14,
+      "unit": "%",
+      "source": "default",
+      "trust": 1,
+      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+     },
+     {
+      "key": "Q14",
+      "name": "横の傾き",
+      "value": 15,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (no basis found)"
+     },
+     {
+      "key": "Q15",
+      "name": "段差",
+      "value": 100,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q18",
+      "name": "横風 (瞬間)",
+      "value": 30,
+      "unit": "m/s",
+      "source": "default",
+      "trust": 1,
+      "basis": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
+     },
+     {
+      "key": "Q19",
+      "name": "気温 (範囲の高い端)",
+      "value": 40,
+      "unit": "degC",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the hot end of a -10 to 40 degC range of use)"
+     },
+     {
+      "key": "Q30",
+      "name": "人数と荷重の組 (見る組)",
+      "value": "two_cargo",
+      "source": "user",
+      "trust": 1,
+      "basis": "request (2 人乗り、積載 150 kg)",
+      "note": "MVP は two_cargo (2 人 + 荷) だけを見る。empty・driver・two はまだ見ない。乗員と荷は設計の部品 (kind occupant / cargo)"
+     },
+     {
+      "key": "Q31",
+      "name": "体格の範囲",
+      "value": "若年女性 5 % 〜 若年男性 95 %",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+     },
+     {
+      "key": "Q33",
+      "name": "体重 (強さの不利側)",
+      "value": 76.6,
+      "unit": "kg",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+     },
+     {
+      "key": "Q40",
+      "name": "積載",
+      "value": 150,
+      "unit": "kg",
+      "source": "user",
+      "trust": 1,
+      "basis": "request",
+      "note": "乗員とは別の荷として扱う (聞いていない)"
+     },
+     {
+      "key": "Q41",
+      "name": "荷の重心の高さ (荷台の床から)",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
+     },
+     {
+      "key": "Q50",
+      "name": "最高速度",
+      "value": 40,
+      "unit": "km/h",
+      "source": "user",
+      "trust": 1,
+      "basis": "request"
+     },
+     {
+      "key": "Q51",
+      "name": "0 → 最高速度 (Q50) の時間",
+      "value": 6,
+      "unit": "s",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q52",
+      "name": "停止距離",
+      "value": 14,
+      "unit": "m",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+     },
+     {
+      "key": "Q53",
+      "name": "止まっていられる坂",
+      "value": 20,
+      "unit": "%",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+     },
+     {
+      "key": "Q54",
+      "name": "航続",
+      "value": 20,
+      "unit": "km",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q57",
+      "name": "最低地上高",
+      "source": "default",
+      "trust": 1,
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "value": 180,
+      "unit": "mm"
+     },
+     {
+      "key": "Q60",
+      "name": "倒れない角度 (Q30 の組で)",
+      "value": 24,
+      "unit": "deg",
+      "source": "default",
+      "trust": 1,
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+     },
+     {
+      "key": "Q61",
+      "name": "安全率 (降伏に対して)",
+      "value": 1.5,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q63",
+      "name": "挟み込みの隙間",
+      "source": "default",
+      "trust": 1,
+      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q65",
+      "name": "衝突の速さ",
+      "value": 40,
+      "unit": "km/h",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the top speed, Q50)"
+     },
+     {
+      "key": "Q70",
+      "name": "公道を走るか",
+      "value": "私有地 (林道) だけ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption of this fixed file; Q70 is a required question and was not asked"
+     },
+     {
+      "key": "Q82",
+      "name": "出荷の形",
+      "value": "完成車",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+     },
+     {
+      "key": "Q90",
+      "name": "悪路の走行距離 (疲労)",
+      "value": 5000,
+      "unit": "km",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (no public basis found)"
+     }
+    ],
+    "domain_picks": [],
+    "load_cases": [],
+    "agents": [],
+    "design_versions": [],
+    "speed_class": "vehicle"
+   }
+  },
+  {
+   "seq": 1,
+   "ts": "2026-11-03T10:00:02.000+09:00",
+   "t": 2.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "domains.picked",
+   "agent": "lead",
+   "text": "7 分野: 操安 (5)・動力 (4)・空力 (2)・衝突 (1)・強度信頼性 (5)・音振 (3)・熱 (2)",
+   "data": {
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "flags": {
+     "ride": true,
+     "lean": true,
+     "self_propelled": true,
+     "outdoor": true,
+     "rough": true,
+     "public_road": false,
+     "battery": true,
+     "electric": true,
+     "pinch": true,
+     "cargo": true,
+     "standing": true,
+     "near_people": false,
+     "liquid": false,
+     "vibration": true,
+     "continuous": true,
+     "assembly": true,
+     "preload": false,
+     "sound": false,
+     "handheld": false
+    },
+    "speed_class": "vehicle",
+    "picks": [
+     {
+      "domain": "handling",
+      "shown_name": "操安",
+      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S2 旋回での転倒 (J ターン・定常円)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる",
+      "test_ids": [
+       "S1",
+       "S2",
+       "S3",
+       "S4",
+       "S5"
+      ]
+     },
+     {
+      "domain": "powertrain",
+      "shown_name": "動力",
+      "reason": "走・池 に当てはまるので、P1 段差を越える・P2 坂を登る・坂で発進する・P3 加速・最高速度・P4 航続・稼働時間 を当てる",
+      "test_ids": [
+       "P1",
+       "P2",
+       "P3",
+       "P4"
+      ]
+     },
+     {
+      "domain": "aero",
+      "shown_name": "空力",
+      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
+      "test_ids": [
+       "F1",
+       "F2"
+      ]
+     },
+     {
+      "domain": "crash",
+      "shown_name": "衝突",
+      "reason": "乗・走 に当てはまるので、C1 壁への正面衝突 を当てる",
+      "test_ids": [
+       "C1"
+      ]
+     },
+     {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "預・荷・走・乗・悪・池 に当てはまるので、R1 静的強度・R2 衝撃 (落錘・落下・段差)・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R6 電池の取付の振動 を当てる",
+      "test_ids": [
+       "R1",
+       "R2",
+       "R3",
+       "R4",
+       "R6"
+      ]
+     },
+     {
+      "domain": "nvh",
+      "shown_name": "音振",
+      "reason": "振・乗・走・電・預 に当てはまるので、N1 固有振動数と加振・N2 乗り心地・N3 騒音 を当てる",
+      "test_ids": [
+       "N1",
+       "N2",
+       "N3"
+      ]
+     },
+     {
+      "domain": "thermal",
+      "shown_name": "熱",
+      "reason": "池・続・電 に当てはまるので、T1 電池の温度・T2 モーター・制御器の温度 を当てる",
+      "test_ids": [
+       "T1",
+       "T2"
+      ]
+     }
+    ],
+    "off": [],
+    "assembly_test_ids": [
+     "H1",
+     "H2",
+     "H3",
+     "H4",
+     "H5",
+     "G2"
+    ]
+   }
+  },
+  {
+   "seq": 2,
+   "ts": "2026-11-03T10:00:03.000+09:00",
+   "t": 3.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「板金の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SM",
+     "filename": "板金の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SM-01",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (inside bend radius not smaller than the sheet thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "SM-02",
+      "doc_id": "KN-SM",
+      "category": "sheet_metal",
+      "text": "穴の中心から板の縁までの距離は板厚の 2 倍以上",
+      "check": "hole_edge_mm >= 2 * thickness_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb in sheet-metal design guides (hole centre to edge at least twice the thickness); no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 3,
+   "ts": "2026-11-03T10:00:03.200+09:00",
+   "t": 3.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「締結の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-FS",
+     "filename": "締結の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "FS-01",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
+      "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "FS-02",
+      "doc_id": "KN-FS",
+      "category": "fastener",
+      "text": "鋼どうしのねじのかみ合い長さは呼び径以上",
+      "check": "thread_engagement_mm >= bolt_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a rule of thumb for steel screwed into steel; no single primary source was read (assumption)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 4,
+   "ts": "2026-11-03T10:00:03.400+09:00",
+   "t": 3.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-WD",
+     "filename": "溶接の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "WD-01",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
+      "check": "section_ratio_max <= 35",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-02",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
+      "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 5,
+   "ts": "2026-11-03T10:00:03.600+09:00",
+   "t": 3.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「公差の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-TL",
+     "filename": "公差の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "TL-01",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "組み合う部品の隙間は、公差の積み上げより大きい",
+      "check": "clearance_mm > tolerance_stack_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "ordinary tolerance-stack practice (assumption); no single primary source was read",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     },
+     {
+      "rule_id": "TL-02",
+      "doc_id": "KN-TL",
+      "category": "tolerance",
+      "text": "固定のボルトの位置の公差は、(隙間穴の径 - ボルトの径) / 2 以内",
+      "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame",
+        "body"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 6,
+   "ts": "2026-11-03T10:00:03.800+09:00",
+   "t": 3.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-HU",
+     "filename": "人の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "HU-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の幅は、座位殿幅 (若年女性 95 %) 391 mm 以上",
+      "check": "size_y_mm >= 391",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下",
+      "check": "size_x_mm <= 406",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HU-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "動いて閉じる隙間は、指が入る 25 mm より小さくしない",
+      "check": "closing_gap_mm >= 25",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "suspension",
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 7,
+   "ts": "2026-11-03T10:00:04.000+09:00",
+   "t": 4.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-BT",
+     "filename": "電池の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "BT-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "使う気温の高い側は、LiFePO4 セルの上限 55 degC 以下",
+      "check": "req_Q19 <= 55",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "BT-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の電圧は 60 V (直流) 以下。超えると高電圧の扱いが要る",
+      "check": "var_battery_voltage <= 60",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 8,
+   "ts": "2026-11-03T10:00:04.200+09:00",
+   "t": 4.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-AS",
+     "filename": "組み立ての決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "AS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "1 人で持ち上げる部品は 23 kg 以下",
+      "check": "mass_kg <= 23",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "applies_to": {
+       "kinds": [
+        "battery",
+        "motor",
+        "controller",
+        "electrical",
+        "body",
+        "steering",
+        "seat",
+        "suspension",
+        "wheel"
+       ]
+      }
+     },
+     {
+      "rule_id": "AS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "部品の箱は地面より下に出ない",
+      "check": "bottom_z_mm >= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 9,
+   "ts": "2026-11-03T10:00:04.400+09:00",
+   "t": 4.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SU",
+     "filename": "サスの決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SU-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "サスのストロークは、通る段差の高さ (Q15) 以上",
+      "check": "travel_mm >= req_Q15",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption, not taken from a source; Q15 is the step height in mm",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "SU-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "荷を載せた静的なたわみは、サスのストローク以内",
+      "check": "static_load_N <= stiffness_N_per_mm * travel_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "engineering assumption: the whole mass is shared equally by the supports and the spring is linear, so the static deflection is load / stiffness",
+      "applies_to": {
+       "kinds": [
+        "support"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 10,
+   "ts": "2026-11-03T10:00:04.600+09:00",
+   "t": 4.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「製造の決まり」から 1 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-MF",
+     "filename": "製造の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "MF-01",
+      "doc_id": "KN-MF",
+      "category": "manufacturing",
+      "text": "角形鋼管の肉厚は、規格品の下限 1.6 mm 以上",
+      "check": "wall_mm >= 1.6",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 11,
+   "ts": "2026-11-03T10:00:06.000+09:00",
+   "t": 6.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "hearing.answered",
+   "agent": "lead",
+   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "data": {
+    "answers": [
+     {
+      "key": "Q57",
+      "name": "最低地上高",
+      "source": "default",
+      "trust": 1,
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "value": 180,
+      "unit": "mm"
+     },
+     {
+      "key": "Q63",
+      "name": "挟み込みの隙間",
+      "source": "default",
+      "trust": 1,
+      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "value": "ISO 13854 (指 25 mm)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
+   "ts": "2026-11-03T10:00:11.000+09:00",
+   "t": 11.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "渡されたナレッジ「ノウハウメモ (見本).md」から 2 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "U1",
+     "filename": "ノウハウメモ (見本).md",
+     "origin": "dropped"
+    },
+    "rules": [
+     {
+      "rule_id": "U1-01",
+      "doc_id": "U1",
+      "category": "sheet_metal",
+      "text": "曲げの内側の半径は板厚以上",
+      "check": "bend_radius_mm >= thickness_mm",
+      "origin": "dropped",
+      "trust": 3,
+      "basis": "dropped file ノウハウメモ (見本).md, line 4; the person's own know-how, not checked against a source",
+      "check_by": "code"
+     },
+     {
+      "rule_id": "U1-03",
+      "doc_id": "U1",
+      "category": "battery",
+      "text": "電池の質量は 30 kg 以下",
+      "check": "mass_kg <= 30",
+      "origin": "dropped",
+      "trust": 3,
+      "basis": "dropped file ノウハウメモ (見本).md, line 8; the person's own know-how, not checked against a source",
+      "check_by": "code",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 13,
+   "ts": "2026-11-03T10:00:12.000+09:00",
+   "t": 12.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "design.created",
+   "agent": "designer",
+   "design_version": 1,
+   "data": {
+    "design_version": 1,
+    "parent_version": null,
+    "name": "offroad-4w v1: 2-seat electric off-road vehicle, ladder frame, rear drive, right-hand drive",
+    "change_reason": "first version (fixed demo design)",
+    "variables": {
+     "wheelbase": {
+      "value": 1700.0,
+      "unit": "mm"
+     },
+     "track": {
+      "value": 1100.0,
+      "unit": "mm"
+     },
+     "wheel_radius": {
+      "value": 300.0,
+      "unit": "mm"
+     },
+     "wheel_width": {
+      "value": 200.0,
+      "unit": "mm"
+     },
+     "rail_spacing": {
+      "value": 700.0,
+      "unit": "mm"
+     },
+     "rail_height": {
+      "value": 380.0,
+      "unit": "mm"
+     },
+     "front_overhang": {
+      "value": 400.0,
+      "unit": "mm"
+     },
+     "rear_overhang": {
+      "value": 400.0,
+      "unit": "mm"
+     },
+     "max_speed": {
+      "value": 40.0,
+      "unit": "km/h"
+     },
+     "occupants": {
+      "value": 2.0,
+      "unit": "1"
+     },
+     "occupant_mass": {
+      "value": 76.6,
+      "unit": "kg"
+     },
+     "cargo_mass": {
+      "value": 150.0,
+      "unit": "kg"
+     },
+     "motor_peak_power": {
+      "value": 10.0,
+      "unit": "kW"
+     },
+     "motor_peak_torque": {
+      "value": 50.0,
+      "unit": "N*m"
+     },
+     "motor_max_speed": {
+      "value": 6000.0,
+      "unit": "rpm"
+     },
+     "gear_ratio": {
+      "value": 10.0,
+      "unit": "1"
+     },
+     "drivetrain_efficiency": {
+      "value": 0.95,
+      "unit": "1"
+     },
+     "motor_efficiency": {
+      "value": 0.88,
+      "unit": "1"
+     },
+     "controller_efficiency": {
+      "value": 0.96,
+      "unit": "1"
+     },
+     "regen_efficiency": {
+      "value": 0.5,
+      "unit": "1"
+     },
+     "aux_power": {
+      "value": 150.0,
+      "unit": "W"
+     },
+     "battery_voltage": {
+      "value": 51.2,
+      "unit": "V"
+     },
+     "battery_capacity": {
+      "value": 100.0,
+      "unit": "Ah"
+     },
+     "battery_resistance": {
+      "value": 0.02,
+      "unit": "ohm"
+     },
+     "mass_factor": {
+      "value": 1.05,
+      "unit": "1"
+     },
+     "rolling_resistance": {
+      "value": 0.03,
+      "unit": "1"
+     },
+     "battery_heat_capacity": {
+      "value": 50000.0,
+      "unit": "J/K"
+     },
+     "battery_thermal_resistance": {
+      "value": 0.25,
+      "unit": "K/W"
+     },
+     "motor_heat_capacity": {
+      "value": 11000.0,
+      "unit": "J/K"
+     },
+     "motor_thermal_resistance": {
+      "value": 0.06,
+      "unit": "K/W"
+     },
+     "controller_heat_capacity": {
+      "value": 3600.0,
+      "unit": "J/K"
+     },
+     "controller_thermal_resistance": {
+      "value": 0.1,
+      "unit": "K/W"
+     },
+     "drag_coefficient": {
+      "value": 0.8,
+      "unit": "1"
+     },
+     "frontal_area": {
+      "value": 1.6,
+      "unit": "m^2"
+     },
+     "side_force_coefficient": {
+      "value": 1.0,
+      "unit": "1"
+     },
+     "side_area": {
+      "value": 2.4,
+      "unit": "m^2"
+     },
+     "centre_of_pressure_height": {
+      "value": 800.0,
+      "unit": "mm"
+     },
+     "air_density": {
+      "value": 1.225,
+      "unit": "kg/m^3"
+     },
+     "front_cornering_stiffness": {
+      "value": 25000.0,
+      "unit": "N/rad"
+     },
+     "rear_cornering_stiffness": {
+      "value": 30000.0,
+      "unit": "N/rad"
+     },
+     "max_steer_angle": {
+      "value": 30.0,
+      "unit": "deg"
+     },
+     "bumper_stiffness": {
+      "value": 100.0,
+      "unit": "N/mm"
+     },
+     "bumper_stroke": {
+      "value": 80.0,
+      "unit": "mm"
+     },
+     "crush_stiffness": {
+      "value": 600.0,
+      "unit": "N/mm"
+     },
+     "fatigue_fat_class": {
+      "value": 71.0,
+      "unit": "MPa"
+     },
+     "fatigue_slope": {
+      "value": 3.0,
+      "unit": "1"
+     },
+     "fatigue_knee_cycles": {
+      "value": 10000000.0,
+      "unit": "1"
+     },
+     "fatigue_slope_after_knee": {
+      "value": 22.0,
+      "unit": "1"
+     },
+     "tyre_stiffness": {
+      "value": 150.0,
+      "unit": "N/mm"
+     },
+     "rail_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "rail_h": {
+      "value": 80.0,
+      "unit": "mm"
+     },
+     "rail_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "cross_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "cross_h": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "cross_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "seat_x": {
+      "value": -725.0,
+      "unit": "mm"
+     },
+     "seat_y": {
+      "value": 300.0,
+      "unit": "mm"
+     },
+     "steering_x": {
+      "value": -250.0,
+      "unit": "mm"
+     },
+     "battery_x": {
+      "value": -725.0,
+      "unit": "mm"
+     },
+     "front_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+     },
+     "rear_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+     },
+     "suspension_travel": {
+      "value": 150.0,
+      "unit": "mm"
+     },
+     "cargo_height": {
+      "value": 300.0,
+      "unit": "mm"
+     },
+     "battery_max_temperature": {
+      "value": 55.0,
+      "unit": "degC"
+     },
+     "controller_max_temperature": {
+      "value": 85.0,
+      "unit": "degC"
+     },
+     "motor_max_temperature": {
+      "value": 155.0,
+      "unit": "degC"
+     },
+     "tyre_damping_ratio": {
+      "value": 0.05,
+      "unit": "1"
+     },
+     "tyre_slip_stiffness_coeff": {
+      "value": 10.0,
+      "unit": "1"
+     },
+     "bump_stop_factor": {
+      "value": 10.0,
+      "unit": "1"
+     },
+     "tyre_relaxation_length": {
+      "value": 300.0,
+      "unit": "mm"
+     },
+     "wheel_inertia": {
+      "value": 0.63,
+      "unit": "kg*m^2"
+     }
+    },
+    "supports": [
+     {
+      "id": "FL",
+      "kind": "wheel",
+      "position_mm": [
+       0.0,
+       550.0,
+       300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+       "type": "spring",
+       "stiffness_N_per_mm": 20.0,
+       "damping_Ns_per_mm": 1.2,
+       "travel_mm": 150.0
+      },
+      "actuation": {
+       "drive": false,
+       "brake": true,
+       "steer": true
+      },
+      "frame_node": "LA"
+     },
+     {
+      "id": "FR",
+      "kind": "wheel",
+      "position_mm": [
+       0.0,
+       -550.0,
+       300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+       "type": "spring",
+       "stiffness_N_per_mm": 20.0,
+       "damping_Ns_per_mm": 1.2,
+       "travel_mm": 150.0
+      },
+      "actuation": {
+       "drive": false,
+       "brake": true,
+       "steer": true
+      },
+      "frame_node": "RA"
+     },
+     {
+      "id": "RL",
+      "kind": "wheel",
+      "position_mm": [
+       -1700.0,
+       550.0,
+       300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+       "type": "spring",
+       "stiffness_N_per_mm": 20.0,
+       "damping_Ns_per_mm": 1.2,
+       "travel_mm": 150.0
+      },
+      "actuation": {
+       "drive": true,
+       "brake": true,
+       "steer": false
+      },
+      "frame_node": "LB"
+     },
+     {
+      "id": "RR",
+      "kind": "wheel",
+      "position_mm": [
+       -1700.0,
+       -550.0,
+       300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+       "type": "spring",
+       "stiffness_N_per_mm": 20.0,
+       "damping_Ns_per_mm": 1.2,
+       "travel_mm": 150.0
+      },
+      "actuation": {
+       "drive": true,
+       "brake": true,
+       "steer": false
+      },
+      "frame_node": "RB"
+     }
+    ],
+    "parts": [
+     {
+      "id": "battery",
+      "name": "電池 (LiFePO4 51.2 V 100 Ah)",
+      "kind": "battery",
+      "box": {
+       "center_mm": [
+        -725.0,
+        0.0,
+        330.0
+       ],
+       "size_mm": [
+        500.0,
+        600.0,
+        200.0
+       ]
+      },
+      "mass_kg": 50.0,
+      "carried_by": [
+       "LS1",
+       "RS1",
+       "LS2",
+       "RS2"
+      ]
+     },
+     {
+      "id": "motor",
+      "name": "モーターと減速機",
+      "kind": "motor",
+      "box": {
+       "center_mm": [
+        -1550.0,
+        0.0,
+        310.0
+       ],
+       "size_mm": [
+        250.0,
+        300.0,
+        220.0
+       ]
+      },
+      "mass_kg": 25.0,
+      "carried_by": [
+       "LB",
+       "RB"
+      ]
+     },
+     {
+      "id": "controller",
+      "name": "モーターの制御器",
+      "kind": "controller",
+      "box": {
+       "center_mm": [
+        -1110.0,
+        0.0,
+        300.0
+       ],
+       "size_mm": [
+        250.0,
+        200.0,
+        80.0
+       ]
+      },
+      "mass_kg": 4.0,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ]
+     },
+     {
+      "id": "aux",
+      "name": "配線と 12 V の補機",
+      "kind": "electrical",
+      "box": {
+       "center_mm": [
+        -300.0,
+        0.0,
+        300.0
+       ],
+       "size_mm": [
+        300.0,
+        300.0,
+        100.0
+       ]
+      },
+      "mass_kg": 6.0,
+      "carried_by": [
+       "LA",
+       "RA",
+       "LS1",
+       "RS1"
+      ]
+     },
+     {
+      "id": "floor_front",
+      "name": "足元の床",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -225.0,
+        0.0,
+        440.0
+       ],
+       "size_mm": [
+        450.0,
+        600.0,
+        20.0
+       ]
+      },
+      "mass_kg": 6.0,
+      "carried_by": [
+       "LA",
+       "RA",
+       "LS1",
+       "RS1"
+      ]
+     },
+     {
+      "id": "floor",
+      "name": "座席の下の床",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -725.0,
+        0.0,
+        440.0
+       ],
+       "size_mm": [
+        550.0,
+        1100.0,
+        20.0
+       ]
+      },
+      "mass_kg": 8.0,
+      "carried_by": [
+       "LS1",
+       "RS1",
+       "LS2",
+       "RS2"
+      ]
+     },
+     {
+      "id": "deck",
+      "name": "荷台の床",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -1625.0,
+        0.0,
+        440.0
+       ],
+       "size_mm": [
+        950.0,
+        880.0,
+        20.0
+       ]
+      },
+      "mass_kg": 18.0,
+      "carried_by": [
+       "LS2",
+       "RS2",
+       "LB",
+       "RB",
+       "LE",
+       "RE"
+      ]
+     },
+     {
+      "id": "front_body",
+      "name": "前の外板とバンパー",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        220.0,
+        0.0,
+        570.0
+       ],
+       "size_mm": [
+        360.0,
+        600.0,
+        280.0
+       ]
+      },
+      "mass_kg": 15.0,
+      "carried_by": [
+       "LF",
+       "RF",
+       "LA",
+       "RA"
+      ]
+     },
+     {
+      "id": "steering",
+      "name": "ハンドルとペダル",
+      "kind": "steering",
+      "box": {
+       "center_mm": [
+        -250.0,
+        -200.0,
+        750.0
+       ],
+       "size_mm": [
+        300.0,
+        200.0,
+        500.0
+       ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+       "RA",
+       "RS1"
+      ]
+     },
+     {
+      "id": "seat_R",
+      "name": "運転席",
+      "kind": "seat",
+      "box": {
+       "center_mm": [
+        -725.0,
+        -300.0,
+        580.0
+       ],
+       "size_mm": [
+        500.0,
+        500.0,
+        260.0
+       ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ]
+     },
+     {
+      "id": "seat_L",
+      "name": "助手席",
+      "kind": "seat",
+      "box": {
+       "center_mm": [
+        -725.0,
+        300.0,
+        580.0
+       ],
+       "size_mm": [
+        500.0,
+        500.0,
+        260.0
+       ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ]
+     },
+     {
+      "id": "occupant_R",
+      "name": "運転者 (体重は強さの不利側)",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -780.0,
+        -300.0,
+        970.0
+       ],
+       "size_mm": [
+        450.0,
+        450.0,
+        520.0
+       ]
+      },
+      "mass_kg": 76.6,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ]
+     },
+     {
+      "id": "occupant_L",
+      "name": "同乗者 (体重は強さの不利側)",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -780.0,
+        300.0,
+        970.0
+       ],
+       "size_mm": [
+        450.0,
+        450.0,
+        520.0
+       ]
+      },
+      "mass_kg": 76.6,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ]
+     },
+     {
+      "id": "cargo",
+      "name": "荷",
+      "kind": "cargo",
+      "box": {
+       "center_mm": [
+        -1625.0,
+        0.0,
+        600.0
+       ],
+       "size_mm": [
+        900.0,
+        880.0,
+        300.0
+       ]
+      },
+      "mass_kg": 150.0,
+      "carried_by": [
+       "LS2",
+       "RS2",
+       "LB",
+       "RB",
+       "LE",
+       "RE"
+      ]
+     },
+     {
+      "id": "wheel_FL",
+      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+       "center_mm": [
+        0.0,
+        550.0,
+        300.0
+       ],
+       "size_mm": [
+        600.0,
+        200.0,
+        600.0
+       ]
+      },
+      "mass_kg": 14.0
+     },
+     {
+      "id": "susp_FL",
+      "name": "前左のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+       "center_mm": [
+        0.0,
+        410.0,
+        330.0
+       ],
+       "size_mm": [
+        250.0,
+        120.0,
+        200.0
+       ]
+      },
+      "mass_kg": 8.0
+     },
+     {
+      "id": "wheel_FR",
+      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+       "center_mm": [
+        0.0,
+        -550.0,
+        300.0
+       ],
+       "size_mm": [
+        600.0,
+        200.0,
+        600.0
+       ]
+      },
+      "mass_kg": 14.0
+     },
+     {
+      "id": "susp_FR",
+      "name": "前右のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+       "center_mm": [
+        0.0,
+        -410.0,
+        330.0
+       ],
+       "size_mm": [
+        250.0,
+        120.0,
+        200.0
+       ]
+      },
+      "mass_kg": 8.0
+     },
+     {
+      "id": "wheel_RL",
+      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+       "center_mm": [
+        -1700.0,
+        550.0,
+        300.0
+       ],
+       "size_mm": [
+        600.0,
+        200.0,
+        600.0
+       ]
+      },
+      "mass_kg": 14.0
+     },
+     {
+      "id": "susp_RL",
+      "name": "後左のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+       "center_mm": [
+        -1700.0,
+        410.0,
+        330.0
+       ],
+       "size_mm": [
+        250.0,
+        120.0,
+        200.0
+       ]
+      },
+      "mass_kg": 8.0
+     },
+     {
+      "id": "wheel_RR",
+      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+       "center_mm": [
+        -1700.0,
+        -550.0,
+        300.0
+       ],
+       "size_mm": [
+        600.0,
+        200.0,
+        600.0
+       ]
+      },
+      "mass_kg": 14.0
+     },
+     {
+      "id": "susp_RR",
+      "name": "後右のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+       "center_mm": [
+        -1700.0,
+        -410.0,
+        330.0
+       ],
+       "size_mm": [
+        250.0,
+        120.0,
+        200.0
+       ]
+      },
+      "mass_kg": 8.0
+     }
+    ],
+    "nodes": [
+     {
+      "id": "LF",
+      "xyz_mm": [
+       400.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LA",
+      "xyz_mm": [
+       0.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LS1",
+      "xyz_mm": [
+       -450.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LS2",
+      "xyz_mm": [
+       -1000.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LB",
+      "xyz_mm": [
+       -1700.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LE",
+      "xyz_mm": [
+       -2100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RF",
+      "xyz_mm": [
+       400.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RA",
+      "xyz_mm": [
+       0.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RS1",
+      "xyz_mm": [
+       -450.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RS2",
+      "xyz_mm": [
+       -1000.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RB",
+      "xyz_mm": [
+       -1700.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RE",
+      "xyz_mm": [
+       -2100.0,
+       -350.0,
+       380.0
+      ]
+     }
+    ],
+    "members": [
+     {
+      "id": "rail_L_FA",
+      "node_a": "LF",
+      "node_b": "LA",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_AS1",
+      "node_a": "LA",
+      "node_b": "LS1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_S1S2",
+      "node_a": "LS1",
+      "node_b": "LS2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_S2B",
+      "node_a": "LS2",
+      "node_b": "LB",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_BE",
+      "node_a": "LB",
+      "node_b": "LE",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_FA",
+      "node_a": "RF",
+      "node_b": "RA",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_AS1",
+      "node_a": "RA",
+      "node_b": "RS1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_S1S2",
+      "node_a": "RS1",
+      "node_b": "RS2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_S2B",
+      "node_a": "RS2",
+      "node_b": "RB",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_BE",
+      "node_a": "RB",
+      "node_b": "RE",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_F",
+      "node_a": "LF",
+      "node_b": "RF",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_A",
+      "node_a": "LA",
+      "node_b": "RA",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_S1",
+      "node_a": "LS1",
+      "node_b": "RS1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_S2",
+      "node_a": "LS2",
+      "node_b": "RS2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_B",
+      "node_a": "LB",
+      "node_b": "RB",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "cross_E",
+      "node_a": "LE",
+      "node_b": "RE",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     }
+    ],
+    "sections": {
+     "rt40x80x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 40.0,
+       "h": 80.0,
+       "t": 2.3
+      }
+     },
+     "rt40x40x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 40.0,
+       "h": 40.0,
+       "t": 2.3
+      }
+     }
+    },
+    "materials": {
+     "stkr400": {
+      "name": "JIS G 3466 STKR400 (square and rectangular steel tube for general structure)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     }
+    }
+   }
+  },
+  {
+   "seq": 14,
+   "ts": "2026-11-03T10:00:14.000+09:00",
+   "t": 14.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0001",
+    "design_version": 1,
+    "rule_id": "SM-01",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 15,
+   "ts": "2026-11-03T10:00:14.100+09:00",
+   "t": 14.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0002",
+    "design_version": 1,
+    "rule_id": "SM-02",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "hole_edge_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 16,
+   "ts": "2026-11-03T10:00:14.200+09:00",
+   "t": 14.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0003",
+    "design_version": 1,
+    "rule_id": "FS-01",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "frame",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 17,
+   "ts": "2026-11-03T10:00:14.300+09:00",
+   "t": 14.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0004",
+    "design_version": 1,
+    "rule_id": "FS-02",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "frame",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 18,
+   "ts": "2026-11-03T10:00:14.400+09:00",
+   "t": 14.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0005",
+    "design_version": 1,
+    "rule_id": "WD-01",
+    "targets": [
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 19,
+   "ts": "2026-11-03T10:00:14.500+09:00",
+   "t": 14.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0006",
+    "design_version": 1,
+    "rule_id": "WD-02",
+    "targets": [
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "frame",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 20,
+   "ts": "2026-11-03T10:00:14.600+09:00",
+   "t": 14.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0007",
+    "design_version": 1,
+    "rule_id": "TL-01",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "frame",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 21,
+   "ts": "2026-11-03T10:00:14.700+09:00",
+   "t": 14.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0008",
+    "design_version": 1,
+    "rule_id": "TL-02",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "frame",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 22,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
+    "rule_id": "HU-01",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 23,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0010",
+    "design_version": 1,
+    "rule_id": "HU-02",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "size_x_mm": 500.0
+      },
+      "message": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下 に合わない (size_x_mm = 500)"
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "size_x_mm": 500.0
+      },
+      "message": "座面の奥行きは、座位殿・膝窩距離 (若年女性 5 %) 406 mm 以下 に合わない (size_x_mm = 500)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0011",
+    "design_version": 1,
+    "rule_id": "HU-03",
+    "targets": [
+     "susp_FL",
+     "susp_FR",
+     "susp_RL",
+     "susp_RR",
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "susp_FL",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "susp_FR",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "susp_RL",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "susp_RR",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "frame",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 25,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0012",
+    "design_version": 1,
+    "rule_id": "BT-01",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0013",
+    "design_version": 1,
+    "rule_id": "BT-02",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0014",
+    "design_version": 1,
+    "rule_id": "AS-01",
+    "targets": [
+     "battery",
+     "motor",
+     "controller",
+     "aux",
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "steering",
+     "seat_R",
+     "seat_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR"
+    ],
+    "hits": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      },
+      "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 50)"
+     },
+     {
+      "part_id": "motor",
+      "values": {
+       "mass_kg": 25.0
+      },
+      "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 25)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0015",
+    "design_version": 1,
+    "rule_id": "AS-02",
+    "targets": [
+     "battery",
+     "motor",
+     "controller",
+     "aux",
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "steering",
+     "seat_R",
+     "seat_L",
+     "occupant_R",
+     "occupant_L",
+     "cargo",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0016",
+    "design_version": 1,
+    "rule_id": "SU-01",
+    "targets": [
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0017",
+    "design_version": 1,
+    "rule_id": "SU-02",
+    "targets": [
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0018",
+    "design_version": 1,
+    "rule_id": "MF-01",
+    "targets": [
+     "frame"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0019",
+    "design_version": 1,
+    "rule_id": "U1-01",
+    "targets": [
+     "battery",
+     "motor",
+     "controller",
+     "aux",
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "steering",
+     "seat_R",
+     "seat_L",
+     "occupant_R",
+     "occupant_L",
+     "cargo",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "battery",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "motor",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "controller",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "aux",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "steering",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "occupant_R",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "occupant_L",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "cargo",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "wheel_FL",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "susp_FL",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "wheel_FR",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "susp_FR",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "wheel_RL",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "susp_RL",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "wheel_RR",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     },
+     {
+      "part_id": "susp_RR",
+      "missing": [
+       "bend_radius_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "U1-03",
+    "targets": [
+     "battery"
+    ],
+    "hits": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      },
+      "message": "電池の質量は 30 kg 以下 に合わない (mass_kg = 50)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  }
  ]
 };

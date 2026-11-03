@@ -45,7 +45,7 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertEqual(len(o.allowed_tools), 18)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
-        self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze"])
+        self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])
         self.assertEqual(o.agents["cae-strength"].skills, o.skills)
         self.assertEqual(len(o.plugins), 1)
         self.assertTrue(Path(o.plugins[0]["path"]).is_dir())

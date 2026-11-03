@@ -59,8 +59,15 @@ def intake(
     flag_reasons: dict[str, str] | None = None,
     exclude: list[str] | None = None,
     docs: bool = True,
+    from_file: bool = False,
 ) -> IntakeResult:
-    """Pick the domains, settle the hearing, and list the events. `requirements`: what the request already says."""
+    """Pick the domains, settle the hearing, and list the events. `requirements`: what the request already says.
+
+    from_file: the requirements are a file somebody wrote (a run started from a requirements file): the file
+    stands, nothing is asked but a `must` item it lacks, and a default is added (source default) for an item
+    it lacks and has one for. Without it (a request typed in A1) every missing `must` and `confirm` item is asked.
+    The merged requirements are `result.requirements_file["requirements"]`: use them as project.requirements.
+    """
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
                            exclude=exclude)
     slug = product or slug_for(want)
@@ -72,6 +79,6 @@ def intake(
     req: Record = {"want": domains["want"], "product": slug, "flags": domains["flags"], "requirements": list(requirements or [])}
     if speed_class:
         req["speed_class"] = speed_class
-    prepared = hearing.prepare(req, answers, note, product_defaults=own)
+    prepared = hearing.prepare(req, answers, note, product_defaults=own, ask_confirm=not from_file)
     built_in = knowledge.load_builtin() if docs else []
     return IntakeResult(domains, prepared, built_in, ev.intake_events(domains, prepared, built_in))
