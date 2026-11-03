@@ -772,20 +772,22 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     dof = {round(r["element_size_mm"], 9): r["n_dof_free"] for r in timing_rows}
     effects.append({"name": ("mesh convergence solves: " + ", ".join(
         f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements, {dof.get(round(float(s), 9), 0)} free DOF)"
-        for s in times) + f" (in {solved_in}; their clock times in timings_s)"),
+        for s in times) + " (where and how long each took: timings_s)"),
         "value": float(len(times)), "unit": "1"})
     return rec, effects
 
 
 def shell_timings(res: dict, converged: bool) -> dict[str, float]:
     """analysis.timings_s (clock times, never in results, effects or text): the shell solve's parts
-    (analyze_shell's *_s timings) and, after mesh_convergence, each other level's solve and the wait for them."""
+    (analyze_shell's *_s timings) and, after mesh_convergence, each other level's solve (named with where it ran:
+    this process or another, which hangs on the free memory) and the wait for them."""
     out = {f"shell_{k[:-2]}": float(v) for k, v in res["timings"].items() if k.endswith("_s")}
     if converged:
         t = res["frame"].model.timings
         for row in t.get("convergence_levels", []):
             if row["where"] != "base":
-                out[f"convergence_level_{row['element_size_mm']:g}mm"] = float(row["total_s"])
+                where = "other_process" if "other process" in row["where"] else "this_process"
+                out[f"convergence_level_{row['element_size_mm']:g}mm_{where}"] = float(row["total_s"])
         out["convergence_wait"] = float(t.get("convergence_wait", 0.0))
     return out
 
