@@ -101,6 +101,9 @@
 .in-q.answered { border-color: var(--i-green); }
 .in-q.defaulted { border-color: var(--i-yellow); }
 .in-q.open { border-color: var(--i-red); }
+.in-rq { border-style: dashed; }
+.in-parts-hit { color: var(--i-muted); font-size: 14px; margin: 4px 0; }
+.in-parts-hit code { background: var(--i-paper); border: 1px solid var(--i-rule); border-radius: 4px; padding: 0 5px; margin: 0 2px; }
 .in-q header { display: flex; align-items: baseline; gap: 10px; }
 .in-state { margin-left: auto; font-size: 13px; color: var(--i-muted); }
 .in-badge { font-size: 12px; border-radius: 4px; padding: 0 8px; border: 1.5px solid var(--i-ink); }

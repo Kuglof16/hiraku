@@ -280,20 +280,54 @@ def write_request(run_path: Path, asked: Record) -> Path:
     return path
 
 
+RULE_CHOICES = ("revise_design", "drop_rule")  # what a person can decide about a rule that hit
+
+
+def check_rule_answers(raw: Any, asked: list[Record] | None = None) -> list[Record]:
+    """The rule answers [{rule_id, choice, note?}] as the contract has them. `asked` are the run's rule_questions: the
+    rule must be one of them and the choice one it offered (missing choices: both)."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise IntakeError("rule_answers は [{rule_id, choice, note}] の形で渡してください")
+    offered = {q["rule_id"]: tuple(q.get("choices") or RULE_CHOICES) for q in asked or []}
+    out: list[Record] = []
+    for a in raw:
+        if not isinstance(a, dict) or set(a) - {"rule_id", "choice", "note"} or not {"rule_id", "choice"} <= set(a):
+            raise IntakeError("rule_answers の 1 件は {rule_id, choice, note} (note は任意) の形です")
+        if a["choice"] not in RULE_CHOICES:
+            raise IntakeError(f"{a['rule_id']} の choice は {' か '.join(RULE_CHOICES)} です ({a['choice']!r} は使えません)")
+        if asked is not None and a["rule_id"] not in offered:
+            raise IntakeError(f"規則 {a['rule_id']} は聞いていません。聞いたのは {', '.join(offered) or 'なし'} です")
+        if asked is not None and a["choice"] not in offered[a["rule_id"]]:
+            raise IntakeError(f"{a['rule_id']} の選択肢は {' か '.join(offered[a['rule_id']])} です")
+        out.append({k: str(v) if k == "note" else v for k, v in a.items() if v not in (None, "")})
+    return out
+
+
 def save_answer(run_path: Path, body: Record) -> Path:
     """What the screen's server calls with the body of A2's answer: checks it and writes hearing.answer.json."""
     body = dict(body)
     if "useDefaults" in body:  # A2's button sends the JavaScript spelling
         body["use_defaults"] = body.pop("useDefaults")
-    unknown = [k for k in body if k not in ("answers", "note", "use_defaults")]
+    if "ruleAnswers" in body:
+        body["rule_answers"] = body.pop("ruleAnswers")
+    unknown = [k for k in body if k not in ("answers", "note", "use_defaults", "rule_answers")]
     if unknown:
-        raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults だけ)")
+        raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults・rule_answers だけ)")
     answers = body.get("answers", {})
     if not isinstance(answers, dict):
         raise IntakeError("answers は {要件の番号: 値} の形で渡してください")
     for key, answer in answers.items():
         _answer_requirement(item(key), answer)  # the same checks as when it is applied
+    asked = None
+    request = Path(run_path) / REQUEST_FILE
+    if request.exists():  # the questions this answer is for: a rule answer must be to one of them
+        asked = json.loads(request.read_text(encoding="utf-8")).get("rule_questions") or []
+    rule_answers = check_rule_answers(body.get("rule_answers"), asked)
     clean = {"answers": answers, "note": str(body.get("note") or ""), "use_defaults": bool(body.get("use_defaults", True))}
+    if rule_answers:
+        clean["rule_answers"] = rule_answers
     path = Path(run_path) / ANSWER_FILE
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
@@ -331,8 +365,15 @@ def hearing_text(prepared: Prepared) -> str:
     by = {"hearing": 0, "default": 0}
     for r in prepared.answered["answers"]:
         by[r["source"]] += 1
+    rules = prepared.asked.get("rule_questions") or []
+    if rules and not prepared.asked["questions"]:  # only rule hits were asked
+        got = {a["rule_id"]: a["choice"] for a in prepared.answered.get("rule_answers", [])}
+        dropped = [r for r, c in got.items() if c == "drop_rule"]
+        return (f"当たった規則の相談 {len(rules)} 件、答え {len(got)} 件" + (f"、この実行で外す規則 {'・'.join(dropped)}" if dropped else "")
+                + (f"、答えが無いまま {len(rules) - len(got)} 件" if len(got) < len(rules) else ""))
     if not prepared.asked["questions"]:  # nothing to ask: the requirements file stands
         keys = "・".join(r["key"] for r in prepared.answered["answers"] if r["source"] == "default")
         return "要件のファイルのまま進みます" + (f" (既定値で足した {by['default']} 件: {keys})" if by["default"] else "")
     left = f"、答えが無いまま {len(prepared.unresolved)} 件" if prepared.unresolved else ""
-    return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}"
+    more = (f"。当たった規則の相談 {len(rules)} 件、答え {len(prepared.answered.get('rule_answers', []))} 件") if rules else ""
+    return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}{more}"
