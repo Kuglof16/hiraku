@@ -24,6 +24,7 @@ import { channelsOf, motionOf, xSeriesOf } from "./series.js";
 import { AssemblyStage, assemblyRecord } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { FEATURE_KEYS, listRects, storyOf } from "./cut_n03.js";
+import { TilePets, loadPets, missingPetKeys } from "./cut_pets.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -36,7 +37,7 @@ const COMMON_KEYS = [
   "tests",
   "tile.border_px", "tile.radius_px", "tile.label.x", "tile.label.y", "tile.label.size_px",
   "tile.mark.size_px", "tile.mark.right", "tile.mark.top",
-  "tile.pet.w", "tile.pet.h", "tile.pet.right", "tile.pet.bottom", "tile.rate.size_px",
+  "tile.pet.w", "tile.pet.h", "tile.pet.right", "tile.pet.bottom", "tile.pet.feature.w", "tile.pet.feature.h", "tile.rate.size_px",
   "times.lead_s",
 ];
 const CUT_KEYS = {
@@ -147,7 +148,7 @@ export class CutGrid {
       const n16 = N16_KEYS.filter((k) => at(layout.n16, k) === undefined);
       why.push(n16.length && `layout.json の n16 に無い: ${n16.join(", ")}`);
     }
-    const top = TOP_KEYS.filter((k) => at(layout, k) === undefined);
+    const top = [...TOP_KEYS.filter((k) => at(layout, k) === undefined), ...missingPetKeys(layout)];
     why.push(top.length && `layout.json に無い: ${top.join(", ")}`);
     if (why.some(Boolean)) throw new Error(why.filter(Boolean).join(" / "));
 
@@ -169,6 +170,51 @@ export class CutGrid {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
     this.build();
+    // the pets come with /pets/pet3d.js; the page waits for them (cut.js awaits loaded)
+    this.loaded = this.attachPets();
+  }
+
+  // The tiles' 3D pets (cut_pets.js), when the server serves pet3d.js; else none.
+  async attachPets() {
+    const root = document.documentElement;
+    let HP = null;
+    try {
+      HP = await loadPets();
+      if (!HP) {
+        root.dataset.pets = "none";
+        return;
+      }
+      this.pets = new TilePets(HP, this.layout, this.tiles.map((tile) => ({ key: tile.key, box: tile.petBox, w: tile.petSize.w, h: tile.petSize.h, changes: this.colourChanges(tile) })));
+      this.pets.resize(this.scale);
+      root.dataset.pets = "on";
+    } catch (e) {
+      this.pets = null;
+      root.dataset.pets = `error: ${e}`;
+    }
+  }
+
+  // A tile's colour over the cut, for its pet: [{ at, state }] in time order; the first
+  // (at null) is its colour from the start, each later one a change. N04: the named tiles
+  // take their judgement's colour when the voice names them (lit), the others none; N15:
+  // the judgement of each version from when that version is shown.
+  colourChanges(tile) {
+    const st = (v) => this.s.judgements[`${v}|${tile.key}`]?.state ?? null;
+    if (this.name === "n04") {
+      const v = this.versions.at(-1);
+      const s = st(v);
+      if (s === "pending") return [{ at: null, state: "pending" }];
+      const lit = this.namedTimes().find(([k]) => k === tile.key)?.[1];
+      return lit === undefined || (s !== "green" && s !== "red") ? [{ at: null, state: null }] : [{ at: null, state: null }, { at: lit, state: s }];
+    }
+    const n = this.versions.length;
+    const T = this.spec.times;
+    const startOf = (k) => (k === 0 ? null : k === n - 1 ? T.all_green_s : T.rounds_from_s + (k * (T.all_green_s - T.rounds_from_s)) / (n - 1));
+    const out = [{ at: null, state: st(this.versions[0]) }];
+    for (let k = 1; k < n; k += 1) {
+      const s = st(this.versions[k]);
+      if (s !== out.at(-1).state) out.push({ at: startOf(k), state: s });
+    }
+    return out;
   }
 
   // The tile shown large, chosen for the cut's message (layout.json story):
@@ -263,9 +309,11 @@ export class CutGrid {
         background: this.colors.panel, border: `${st.border_px}px solid ${this.colors.rule}`, borderRadius: `${st.radius_px}px`,
       });
       if (!clearOfBand(r, this.layout)) el.dataset.outside = "1";
-      el.innerHTML = `<div class="pet" data-box="${box}.pet" style="right:${st.pet.right}px;bottom:${st.pet.bottom}px;width:${st.pet.w}px;height:${st.pet.h}px"></div>`;
+      // the pet's box: tile.pet at the bottom right, tile.pet.feature's size in the large tile
+      const petSize = key === this.featured ? { w: st.pet.feature.w, h: st.pet.feature.h } : { w: st.pet.w, h: st.pet.h };
+      el.innerHTML = `<div class="pet" data-box="${box}.pet" style="right:${st.pet.right}px;bottom:${st.pet.bottom}px;width:${petSize.w}px;height:${petSize.h}px"></div>`;
       this.stage.append(el);
-      const tile = { key, def, el, rect: r, inner: { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px } };
+      const tile = { key, def, el, rect: r, inner: { w: r.w - 2 * st.border_px, h: r.h - 2 * st.border_px }, petBox: el.querySelector(".pet"), petSize };
       // one layer per version: its label, mark and drawing
       tile.layers = this.versions.map((v) => this.makeLayer(tile, v));
       return tile;
@@ -426,6 +474,7 @@ export class CutGrid {
 
   resize(scale) {
     this.scale = scale;
+    this.pets?.resize(scale);
     const areas = this.tiles.flatMap((t) => t.layers.map((l) => l.area).filter(Boolean));
     const w = Math.max(1, this.asm?.w ?? 1, ...areas.map((a) => a.w));
     const h = Math.max(1, this.asm?.h ?? 1, ...areas.map((a) => a.h));
@@ -471,6 +520,7 @@ export class CutGrid {
     document.documentElement.dataset.version = String(v);
     this.setHeader(v);
     const end = this.name === "n04" ? T.assembly_s : sp.duration_s;
+    if (gridShown) this.pets?.draw(t);
     for (const tile of this.tiles) {
       tile.el.style.visibility = gridShown ? "visible" : "hidden";
       tile.layers.forEach((l, i) => (l.el.style.display = i === k ? "" : "none"));

@@ -32,7 +32,7 @@ def grid_layout():
     header = {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}
     grid = {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}
     tile = {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10},
-            "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}
+            "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}
     feature = {"x": 96, "y": 160, "w": 852, "h": 726}
     lst = {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}
     common = {"header": header, "grid": grid, "feature": feature, "list": lst, "tests": list(TESTS), "tile": tile}
@@ -40,6 +40,7 @@ def grid_layout():
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
         "min_text_px": 18,
+        "n00": {"camera": {"fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12}, "motion": {"pass_dur_s": 0.9, "hop_period_s": 0.9, "idle_shift_s": 1.3}},
         "n01": {"colors": dict(COLORS), "overlay": dict(OVERLAY)},
         "n04": {"duration_s": 4.0, **copy.deepcopy(common), "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
                 "colors": dict(COLORS), "overlay": dict(OVERLAY)},
@@ -389,7 +390,7 @@ class GridCutTest(unittest.TestCase):
         base = self.serve(layout, events={"20261102-120000-grid-v1": domain_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, times.crash_s", err)
+        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, tile.pet.feature.w, tile.pet.feature.h, times.crash_s", err)
         self.assertIn("layout.json の n16 に無い: view.x, view.y, view.w, view.h", err)
         self.assertIn("layout.json に無い: min_text_px", err)
         self.assertEqual(page.evaluate("document.querySelectorAll('.grid-tile').length"), 0)

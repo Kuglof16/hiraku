@@ -1,15 +1,24 @@
 // N07: the contour of a stress analysis on the frame's plate mesh. The vehicle turns
 // slowly in the colours of the version before the reinforcement, the camera comes to
 // that version's largest element, and the colours go over to the version after it, on
-// one colour scale; then it stays there. The words on the page are only "補強の前" /
-// "補強の後" and the stress's name and unit: the difference is shown by the colours and
-// the shape, not by naming the analyses. One tag, one colour bar (its two ends) and one
-// number (the largest value of the state shown), as the story's limits ask; the
-// notes under them are small. The tag is large (label.of_view_h), and with the version after it
-// says in green "✓ 直った" when the records judge that version a pass on the load case (its
-// verdicts, else the domain's judgement of the version); otherwise nothing is added. Positions, sizes, colours, the length and the
-// times come from layout.json n07; a missing key is named on the page.
-// cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
+// one colour scale; then it stays there. The viewers do not know CAE: the words on the
+// page are only "補強の前" / "補強の後", and a legend of two things, "応力 [MPa]" and
+// "許容 <the load case's criterion limit>" (no names of analyses or of stress measures).
+// The tag is large (label.of_view_h), and with the version after it says in green
+// "✓ 直った" when the records judge that version a pass on the load case (its verdicts,
+// else the domain's judgement of the version); otherwise nothing is added. Positions,
+// sizes, colours, the length and the times come from layout.json n07; a missing key is
+// named on the page.
+// cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>][&paint=element|member]
+//
+// paint (two ways to colour the plates, both from the record only):
+//   element (the default): each element's shell stress (the surface "max" field), on bands
+//     whose top is the allowable value. Elements above it keep the colour past the top,
+//     with no words added.
+//   member: each element takes its member's value of the quantity the load case is judged
+//     on (a per-member field, see judgedMemberField): red above the allowable, green at or
+//     under it, so the plates say what the verdict says. Without that field for a version
+//     shown, the page says "記録に部材ごとの値が無い" and paints as element.
 //
 // times: lead_s..turn_to_s the turn (turn_deg in all); zoom_s..zoom_to_s the camera
 // comes to the largest element (its neighbourhood then takes zoom.fill of the view's
@@ -17,10 +26,10 @@
 // camera, same scale). Before lead_s and after each step the picture holds still.
 
 import * as THREE from "three";
-import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
+import { BAND_COLORS, BANDS, GRAY } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { esc, fmt, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { esc, fmt, unitLabel } from "./labels.js";
 import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 
@@ -29,9 +38,30 @@ const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
-// Short names of judged quantities for the legend's line (else labels.js quantityName).
-const SHORT_JA = { max_hot_spot_stress: "ホットスポット応力" };
-const dec1 = (v) => Number(v).toFixed(1);
+const NO_MEMBER_JA = "記録に部材ごとの値が無い";
+const OPS = { "<=": (v, L) => v <= L, "<": (v, L) => v < L, ">=": (v, L) => v >= L, ">": (v, L) => v > L };
+
+// The per-member field of the quantity a criterion judges, in an analysis: a field
+// without a mesh with per_member values, of the element field's kind, and either
+// carrying the criterion's quantity (field.quantity, when a record has it) or, as the
+// contract's field has no quantity key, the one whose largest value is the analysis's
+// recorded result of that quantity (same unit; equal to the digits the field's value is
+// written with: the record keeps 472.04 in the field and 472.0421… in the result). Found
+// by kind and the recorded quantity, never by the label's words; exactly one must match,
+// else null.
+export function judgedMemberField(ana, kind, crit) {
+  if (!ana || !crit?.quantity) return null;
+  const cands = fieldsOf(ana, { mesh: false }).filter((f) => f.kind === kind && !f.mesh_id && f.per_member && Object.keys(f.per_member).length);
+  const tagged = cands.filter((f) => f.quantity === crit.quantity);
+  if (tagged.length) return tagged.length === 1 ? tagged[0] : null;
+  const r = (ana.results ?? []).find((x) => x.quantity === crit.quantity);
+  if (!r || !Number.isFinite(r.value)) return null;
+  const top = (f) => Math.max(...Object.values(f.per_member).filter(Number.isFinite));
+  // half a unit of the last decimal the value is written with (472.04: 0.005)
+  const half = (v) => 0.5 * 10 ** -((String(v).split(".")[1] ?? "").length) + 1e-9 * Math.max(1, Math.abs(v));
+  const same = cands.filter((f) => f.unit === r.unit && Math.abs(top(f) - r.value) <= half(top(f)));
+  return same.length === 1 ? same[0] : null;
+}
 
 const N07_KEYS = [
   "duration_s",
@@ -117,55 +147,37 @@ export class CutN07 {
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
     if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
-    // What the colours are. (a) When both versions record a field per element of the judged
-    // quantity itself (a mesh field whose quantity is the criterion's, e.g. the hot-spot
-    // stress per element), the colours are that field, on the criterion's band, and agree
-    // with the verdict (the contract's field has no quantity key yet, so the records so far
-    // are all (b)). (b) Otherwise the colours stay the element stress picked above, and
-    // the legend says in two short lines what the colours are and what is judged (the
-    // criterion's quantity, its recorded value and the allowable), so that a red spot left
-    // after the reinforcement does not contradict "✓ 直った" (which the verdict decides).
-    let fb2 = fb;
-    let fa2 = fa;
-    const judgedOn = (ana) => fieldsOf(ana).filter((f) => crit && f.quantity === crit.quantity && f.mesh_id && s.meshes[f.mesh_id]);
-    const jb = judgedOn(before);
-    if (jb.length) {
-      const pb = preferredField(jb, s.meshes);
-      const pa = after ? judgedOn(after).find((f) => sameField(f, pb)) : null;
-      if (!after || pa) {
-        fb2 = pb;
-        fa2 = pa;
-      }
-    }
-    this.colourBy = fb2 !== fb ? "judged" : "element";
-    const [cb, ca] = onSharedScale([contourOf(before, fb2, crit, s.meshes), fa2 ? contourOf(after, fa2, crit, s.meshes) : null]);
+    // A: the element stress (the "max" surface first, preferredField) on the allowable's band
+    const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
-      { version: vb, name: STATE_JA[0], ana: before, field: fb2, ct: cb, judged: this.judgedOf(vb, before) },
-      ...(fa2 ? [{ version: va, name: STATE_JA[1], ana: after, field: fa2, ct: ca, fixed: this.passes(va), judged: this.judgedOf(va, after) }] : []),
+      { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
+      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca, fixed: this.passes(va) }] : []),
     ];
+    // B: each version's per-member field of the judged quantity, painted onto the plates
+    this.paint = "element";
+    this.paintNote = null;
+    if (params.get("paint") === "member") {
+      const fields = this.cases.map((c) => judgedMemberField(c.ana, fb.kind, crit));
+      const limit = crit?.limit;
+      const test = OPS[crit?.op];
+      if (fields.every(Boolean) && limit && test && fields.every((f) => f.unit === limit.unit)) {
+        this.paint = "member";
+        this.cases.forEach((c, i) => (c.ct = this.memberPaint(c.ct, fields[i], (v) => test(v, limit.value))));
+      } else this.paintNote = NO_MEMBER_JA;
+    }
   }
 
-  // What the record judges for version v on the cut's load case: the value, the operator
-  // that holds between it and the limit, and the limit, from its verdict (the last one for an
-  // analysis of v), else from the analysis's result of the criterion's quantity against the
-  // load case's limit (compared here); null when the records have neither.
-  judgedOf(v, ana) {
-    const s = this.s;
-    const crit = this.lc?.criterion;
-    if (!crit?.quantity || !crit.limit) return null;
-    const ver = Object.values(s.verdicts)
-      .filter((x) => x.load_case_id === this.lc.load_case_id && x.quantity === crit.quantity && s.analyses[s.comparisons[x.comparison_id]?.analysis_id]?.design_version === v)
-      .at(-1);
-    const r = (ana?.results ?? []).find((x) => x.quantity === crit.quantity);
-    const value = ver?.value ?? (r ? { value: r.value, unit: r.unit } : null);
-    const limit = ver?.limit ?? crit.limit;
-    const op = ver?.op ?? crit.op;
-    if (!value || value.unit !== limit.unit) return null;
-    const holds = { "<=": value.value <= limit.value, "<": value.value < limit.value, ">=": value.value >= limit.value, ">": value.value > limit.value }[op];
-    if (holds === undefined) return null;
-    // the sign is what holds between the two numbers written; whether it passes is the verdict's
-    const NOT = { "<=": ">", "<": "≥", ">=": "<", ">": "≤" };
-    return { quantity: crit.quantity, value, limit, sign: holds ? opLabel(op) : NOT[op], pass: ver ? ver.pass === true : holds };
+  // A contour that colours each element of the mesh by its member's value in a per-member
+  // field: green where the criterion holds, the overlay's red where it does not, the
+  // neutral gray where the member has no value. The mesh, its scale and the element the
+  // camera goes to are the element contour's (the turn and the zoom are the same in A and B).
+  memberPaint(ct, field, holds) {
+    const mesh = ct.mesh.rec;
+    const red = this.spec.overlay.color;
+    const per = field.per_member;
+    const states = (mesh.element_member ?? []).map((m) => (Number.isFinite(per[m]) ? (holds(per[m]) ? "pass" : "over") : "none"));
+    const colors = states.map((x) => (x === "pass" ? GREEN : x === "over" ? red : GRAY));
+    return { ...ct, key: `${ct.key}|member ${field.label ?? ""}`, mesh: { ...ct.mesh, colors, states }, memberField: field };
   }
 
   // Does the record judge version v a pass on the cut's load case? Its verdicts on that load
@@ -233,10 +245,8 @@ export class CutN07 {
     this.buildLabel();
   }
 
-  // A tall legend: the stress's name and unit, the colour bar upright with its two ends (the
-  // top says when it is the allowable value), the largest recorded value of the state shown
-  // (the one emphasised number), and small notes: the colour past the allowable value, one
-  // scale for both states.
+  // A tall legend of two things: the stress's name and unit, and the colour bar upright
+  // with the allowable value where it applies (A: its top; B: where red meets green).
   buildLegend() {
     const sp = this.spec;
     const L = sp.legend;
@@ -251,37 +261,35 @@ export class CutN07 {
     // what is read is at least the story's body text size
     const tp = Math.max(this.px(L.title_px), this.story.bodyPx);
     const xp = Math.max(this.px(L.text_px), this.story.bodyPx);
-    const ticks = [
-      `<span style="top:0%">${esc(ct.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct.max, 3))}</span>`,
-      `<span style="top:100%">${esc(fmt(ct.min, 3))}</span>`,
-    ];
-    const rows = this.cases
-      .map((c) => `<div class="row" data-version="${c.version}"><b>${esc(c.name)}</b><span>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</span></div>`)
-      .join("");
-    // (b) of pick: the colours are the element stress and the judgement is another quantity:
-    // two short lines, what the colours are and what is judged (for the state shown)
-    const crit = this.lc?.criterion;
-    const explain = this.colourBy === "element" && crit?.quantity && crit.quantity !== "max_stress" && this.cases.some((c) => c.judged);
-    const judgedRows = explain
-      ? this.cases
-          .map((c) => {
-            const j = c.judged;
-            // phrases that break between them, never inside a word
-            const parts = j ? ["判定:", SHORT_JA[j.quantity] ?? quantityName(j.quantity), `${dec1(j.value.value)} ${unitLabel(j.value.unit)} ${j.sign}`, `許容 ${dec1(j.limit.value)}`] : [];
-            return `<p class="judged" data-version="${c.version}" data-pass="${j ? (j.pass ? "1" : "0") : ""}">${parts.map((x) => `<span style="display:inline-block">${esc(x)}</span>`).join(" ")}</p>`;
-          })
-          .join("")
-      : "";
-    el.dataset.colourBy = this.colourBy;
+    // the allowable value is the load case's criterion limit (in the field's unit)
+    const lim = this.lc?.criterion?.limit;
+    const allowable = lim && lim.unit === f.unit && Number.isFinite(lim.value) ? lim.value : null;
+    // A: the bands, the allowable at the top. B: green under the allowable, red above it,
+    // the allowable where they meet. Without an allowable: the bands and the top value.
+    const OVER_SHARE = 20; // % of the bar above the allowable in B
+    const bar = this.paint === "member"
+      ? `linear-gradient(0deg, ${GREEN} 0% ${100 - OVER_SHARE}%, ${this.spec.overlay.color} ${100 - OVER_SHARE}% 100%)`
+      : `linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})`;
+    const tickAt = this.paint === "member" ? OVER_SHARE : 0;
+    const tick = allowable !== null ? `許容 ${fmt(allowable, 4)}` : fmt(ct.max, 3);
+    el.dataset.paint = this.paint;
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
-      `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
-      `<div class="rows" style="font-size:${xp}px">${rows}</div>` +
-      (explain ? `<div class="explain" style="font-size:${xp}px"><p class="colour">${esc(`色: 要素の${FIELD_JA[f.kind] ?? f.kind}`)}</p>${judgedRows}</div>` : "") +
-      (ct.limitKnown ? `<p style="font-size:${this.minPx}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
-      (this.cases.length > 1 ? `<p class="src" style="font-size:${this.minPx}px">前と後で同じ目盛り</p>` : "");
+      `<div class="scale" data-kind="legend" style="font-size:${xp}px"><i class="bar" style="background:${bar}"></i>` +
+      `<div class="ticks"><span class="allowable" style="top:${tickAt}%">${esc(tick)}</span></div></div>`;
     this.stage.append(el);
     this.legend = el;
+    // B without its field: the page says so, in the view's bottom left (small, not a label)
+    if (this.paintNote) {
+      const n = document.createElement("div");
+      n.className = "n07-note";
+      n.dataset.box = "n07.note";
+      const V = sp.view;
+      Object.assign(n.style, { left: `${V.x + 24}px`, top: `${V.y + V.h - 24 - Math.ceil(this.minPx * 1.4)}px`, fontSize: `${this.minPx}px` });
+      n.textContent = this.paintNote;
+      this.stage.append(n);
+      this.note = n;
+    }
   }
 
   buildLabel() {
@@ -303,15 +311,6 @@ export class CutN07 {
     this.label.textContent = c.name;
     if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
     this.label.dataset.fixed = c.fixed ? "1" : "0";
-    // only the state shown has its largest value on the legend (the one emphasised number)
-    for (const row of this.legend.querySelectorAll(".row")) {
-      const on = Number(row.dataset.version) === c.version;
-      row.classList.toggle("on", on);
-      row.style.display = on ? "" : "none";
-      if (on) row.dataset.kind = "number";
-      else delete row.dataset.kind;
-    }
-    for (const p of this.legend.querySelectorAll(".judged")) p.style.display = Number(p.dataset.version) === c.version ? "" : "none";
   }
 
   resize(scale) {

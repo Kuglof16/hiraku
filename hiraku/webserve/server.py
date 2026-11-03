@@ -17,6 +17,9 @@ Standard library only. Routes:
                                         hearing, then the request's files under runs/_requests/<id>/
     GET /layout.json                    the video's layout rules (promo/screens/layout.json,
                                         the promo department's), read by the cut pages
+    GET /pets/pet3d.js                  the promo department's 3D pets (promo/pets/pet3d.js,
+                                        read only, passed through as it is); 404 without the
+                                        file, and the cut pages then draw no pets
     GET /api/shelf                      the tool shelf for A4: every builtin tool's spec and
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
@@ -55,6 +58,8 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 WEB_DIR = REPO_DIR / "web"
 SAVED_DIR = REPO_DIR / SHOWCASE_DIR  # saved runs kept in the repository
 LAYOUT_FILE = REPO_DIR / "promo" / "screens" / "layout.json"  # the video's layout rules (promo's)
+PETS_FILE = REPO_DIR / "promo" / "pets" / "pet3d.js"  # the 3D pets (promo's), served at PETS_PATH
+PETS_PATH = "/pets/pet3d.js"
 SAMPLE_ID = "sample"
 SAMPLE_EVENTS = EXAMPLES_DIR / "events.sample.jsonl"
 
@@ -245,6 +250,7 @@ class Handler(BaseHTTPRequestHandler):
     default_run: str | None = None
     launcher: Launcher | None = None
     layout_file: Path = LAYOUT_FILE
+    pets_file: Path = PETS_FILE
     shelf: Shelf = Shelf()
     quiet: bool = False
 
@@ -269,6 +275,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"no layout file ({Path(self.layout_file).name})"}, HTTPStatus.NOT_FOUND)
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
                 self._send_json({"error": f"layout file unreadable: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if path == PETS_PATH:
+            self._send_pets()
             return
         if path == "/api/shelf":
             self._send_json(self.shelf.get())
@@ -372,6 +381,20 @@ class Handler(BaseHTTPRequestHandler):
         body["run_id"] = run_id
         self._send_json(body)
 
+    def _send_pets(self) -> None:
+        """The pets' script, read from pets_file as it is (only this one file)."""
+        try:
+            data = Path(self.pets_file).read_bytes()
+        except OSError:
+            self._send_json({"error": f"no pets file ({Path(self.pets_file).name})"}, HTTPStatus.NOT_FOUND)
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", CONTENT_TYPES[".js"])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _send_static(self, path: str) -> None:
         rel = path.lstrip("/") or "index.html"
         root = self.web_dir.resolve()
@@ -456,6 +479,7 @@ def make_server(
     launcher: Launcher | bool | None = None,
     layout_file: Path | str = LAYOUT_FILE,
     shelf: Shelf | None = None,
+    pets_file: Path | str = PETS_FILE,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
@@ -475,6 +499,7 @@ def make_server(
             "default_run": default_run,
             "launcher": launcher or None,
             "layout_file": Path(layout_file),
+            "pets_file": Path(pets_file),
             "shelf": shelf or Shelf(),
             "quiet": quiet,
         },

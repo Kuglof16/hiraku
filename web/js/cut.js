@@ -763,6 +763,7 @@ async function main() {
     if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
     cut = new CUTS[name](layout, stateOf(events));
+    if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
     window.hiraku.cut = cut;
     if (!ONLY_HERO) initStory(layout, name);
     player.duration = layout[name].duration_s;

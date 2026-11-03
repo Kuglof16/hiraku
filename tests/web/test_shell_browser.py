@@ -284,15 +284,16 @@ class ShellBrowserTest(unittest.TestCase):
         for t in times:
             for word in ("梁", "シェル"):
                 self.assertNotIn(word, at[t]["text"], t)
-        # one scale for both versions; each version's maximum as recorded
+        # one scale for both versions; the legend is the stress's name and the allowable only
         got = page.evaluate(
             """() => { const c = window.hiraku.cut; const lg = document.querySelector('[data-box="n07.legend"]');
                 return { scales: c.cases.map((x) => [x.ct.min, x.ct.max]), title: lg.querySelector("h3").textContent,
-                         rows: [...lg.querySelectorAll(".row")].map((r) => [...r.children].map((x) => x.textContent)) }; }"""
+                         text: lg.innerText.split("\\n").map((s) => s.trim()).filter(Boolean) }; }"""
         )
         self.assertEqual(got["scales"][0], got["scales"][1])
         self.assertEqual(got["title"], "応力 [MPa]")
-        self.assertEqual(got["rows"], [[name, f"最大 {sig4(self.shells[v]['results'][0]['value'])} MPa"] for name, v in (("補強の前", 1), ("補強の後", 2))])
+        limit = self.events[0]["data"]["load_cases"][0]["criterion"]["limit"]["value"]
+        self.assertEqual(got["text"], ["応力 [MPa]", f"許容 {sig4(limit)}"])
         page.close()
 
     def test_n07_boxes_stay_out_of_the_subtitle_band(self):
