@@ -193,6 +193,25 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_element": [1.0]}), [])
         self.assertNotEqual(contract.errors("mesh", {**m, "elements": [[0, 1]]}), [])
 
+    def test_solid_and_mixed_meshes(self):
+        m = load("mesh.json")
+        no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
+        self.assertNotEqual(contract.errors("mesh", no_t), [])
+        hex20 = list(range(20))
+        solid = {**no_t, "element_type": "solid", "nodes_mm": [[0.0, 0.0, float(i)] for i in range(20)],
+                 "elements": [hex20], "element_member": ["bracket"]}
+        self.assertEqual(contract.errors("mesh", solid), [])
+        self.assertNotEqual(contract.errors("mesh", {**solid, "elements": [list(range(21))]}), [])
+        mixed = {**solid, "element_type": "mixed"}
+        self.assertNotEqual(contract.errors("mesh", mixed), [])
+        links = [{"id": "c1", "kind": "rbe3", "master": 0, "nodes": [1, 2, 3], "weights": [1.0, 1.0, 1.0]},
+                 {"id": "c2", "kind": "spring", "nodes": [4, 5], "stiffness": [1e3, 1e3, 1e3, 0.0, 0.0, 0.0]},
+                 {"id": "c3", "kind": "rbe2", "master": 6, "nodes": [7, 8], "components": "123456"}]
+        mixed = {**mixed, "element_kind": ["hex20"], "connections": links}
+        self.assertEqual(contract.errors("mesh", mixed), [])
+        self.assertNotEqual(contract.errors("mesh", {**mixed, "connections": [{"id": "c4", "kind": "glue"}]}), [])
+        self.assertNotEqual(contract.errors("mesh", {**mixed, "element_kind": ["hex27"]}), [])
+
     def test_error_estimate_and_mesh_convergence(self):
         m = load("mesh.json")
         est = {"kind": "error_estimate", "unit": "%", "mesh_id": m["mesh_id"], "per_element": [3.2, 18.0]}

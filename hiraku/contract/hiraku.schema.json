@@ -1383,7 +1383,7 @@
       }
     },
     "mesh": {
-      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a shell mesh of the frame (mid-surfaces of the tube walls and plates), made by code from one design version. Analyses of that version name it by mesh_id in their fields.",
+      "description": "runs/<run_id>/v<NNN>/meshes/mesh-NNNN.json: a finite-element mesh made by code from one design version: shells on the mid-surfaces of tube walls and plates, solids for thick parts, or both with connections. Analyses of that version name it by mesh_id in their fields.",
       "type": "object",
       "required": [
         "mesh_id",
@@ -1391,8 +1391,7 @@
         "element_type",
         "nodes_mm",
         "elements",
-        "element_member",
-        "member_thickness_mm"
+        "element_member"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1406,9 +1405,11 @@
         },
         "element_type": {
           "enum": [
-            "shell"
+            "shell",
+            "solid",
+            "mixed"
           ],
-          "description": "Shell elements with 3 or 4 nodes on the mid-surface."
+          "description": "shell: 3 or 4 nodes on the mid-surface; solid: hexahedra (8 or 20 nodes); mixed: both, with element_kind per element and the links in connections."
         },
         "formulation": {
           "type": "string",
@@ -1430,13 +1431,25 @@
           "items": {
             "type": "array",
             "minItems": 3,
-            "maxItems": 4,
+            "maxItems": 20,
             "items": {
               "type": "integer",
               "minimum": 0
             }
           },
-          "description": "Node indices (into nodes_mm), counter-clockwise seen from the outer side."
+          "description": "Node indices (into nodes_mm). quad4 and tri3: counter-clockwise seen from the outer side. hex8: nodes 0-3 counter-clockwise seen from +zeta (the bottom face), 4-7 above them in the same order. hex20: the 8 corner nodes, then the mid-edge nodes of edges 0-1, 1-2, 2-3, 3-0, 4-5, 5-6, 6-7, 7-4, 0-4, 1-5, 2-6, 3-7."
+        },
+        "element_kind": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "quad4",
+              "tri3",
+              "hex8",
+              "hex20"
+            ]
+          },
+          "description": "For each element, its kind. Required when element_type is mixed."
         },
         "element_member": {
           "type": "array",
@@ -1451,7 +1464,7 @@
             "type": "number",
             "exclusiveMinimum": 0
           },
-          "description": "Wall thickness of each member (or part) in the mesh."
+          "description": "Wall thickness of each shell member (or part) in the mesh. Required when element_type is shell."
         },
         "notes": {
           "type": "string",
@@ -1545,8 +1558,145 @@
               "type": "string"
             }
           }
+        },
+        "connections": {
+          "type": "array",
+          "description": "Links between nodes that are not elements: rigid and interpolating ties, springs and bushes, shell-to-solid joints and tied faces.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "rbe2",
+                  "rbe3",
+                  "spring",
+                  "shell_solid",
+                  "tie"
+                ],
+                "description": "rbe2: rigid link from master to nodes; rbe3: master moves as the weighted average of nodes (adds no stiffness); spring: 6-dof spring or bush between two nodes; shell_solid: shell edge nodes tied to solid_nodes over thickness_mm; tie: faces glued to a surface that does not share nodes."
+              },
+              "master": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "rbe2: the independent node; rbe3: the reference (dependent) node."
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "weights": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "rbe3: one per node."
+              },
+              "components": {
+                "type": "string",
+                "pattern": "^[1-6]{1,6}$",
+                "description": "rbe2: tied dofs, e.g. 123456."
+              },
+              "stiffness": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 6,
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "spring: kx, ky, kz in N/mm and krx, kry, krz in N*mm/rad, along frame."
+              },
+              "frame": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "$ref": "#/$defs/vec3"
+                },
+                "description": "spring: its three axes (unit vectors)."
+              },
+              "point_mm": {
+                "$ref": "#/$defs/vec3"
+              },
+              "solid_nodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "thickness_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "faces": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 8,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "description": "tie: the faces (4 to 8 nodes) glued to the other surface."
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "element_type": {
+                "const": "shell"
+              }
+            },
+            "required": [
+              "element_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "member_thickness_mm"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "element_type": {
+                "const": "mixed"
+              }
+            },
+            "required": [
+              "element_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "element_kind"
+            ]
+          }
+        }
+      ]
     },
     "vector": {
       "description": "An arrow to draw: a reaction, grip force, applied load, wind, inertia, or the force the body receives at a suspension pickup (joint: at is '<support id>.<hardpoint key>').",
