@@ -5,7 +5,9 @@ import unittest
 import numpy as np
 
 from hiraku.solvers.fe import FEModel, StaticSolver, checks, precheck, resultant
-from hiraku.solvers.fe.connect import Spring, distributing_link, rbe3_forces, rigid_link
+from hiraku.solvers.fe.beam import Beam, line_mesh
+from hiraku.solvers.fe.connect import (Spring, default_rotation_weights, distributing_link, rbe3_forces,
+                                       rbe3_full_matrices, rbe3_loads, rbe3_matrices, rigid_link)
 from hiraku.solvers.fe.shell import MITC4
 from hiraku.solvers.k1_shell.checks import grid
 from hiraku.solvers.k1_shell.solve import spread_load
@@ -96,6 +98,105 @@ class LinkTest(unittest.TestCase):
         self.assertGreater(out["rbe3"][0], 1e-4 * np.abs(out["rbe3"][2][:3]).max())  # the footprint deforms
         self.assertGreater(out["rbe3"][1], out["rbe2"][1])  # more flexible: more energy under the same load
         self.stats = out
+
+
+class LineRBE3Test(unittest.TestCase):
+    """RBE3 on nodes that lie on one line (a shell edge, a beam's nodes): the connected nodes' rotations
+    fix the twist about the line."""
+
+    def edge_model(self):
+        m, idx = plate()
+        ref = m.add_node(REF)
+        edge = idx[-1]  # the tip edge: one straight line of nodes
+        return m, idx, ref, edge
+
+    def test_translations_alone_are_refused_on_a_line(self):
+        m, idx, ref, edge = self.edge_model()
+        with self.assertRaises(ValueError):
+            distributing_link(ref, edge, m.nodes, rotation_weights=0.0)
+
+    def test_balance_and_no_added_stiffness(self):
+        applied = np.r_[FORCE, MOMENT + np.cross(REF, FORCE)]
+        m, idx, ref, edge = self.edge_model()
+        link = m.add(distributing_link(ref, edge, m.nodes))
+        self.assertIsNotNone(link.rotation_weights)  # chosen because the nodes are on one line
+        F = np.zeros((len(m.nodes), 6))
+        F[ref, :3], F[ref, 3:] = FORCE, MOMENT
+        sol = StaticSolver(m).solve(F)
+        Ku = sol.layout.node_array(sol.K @ sol.U)
+        delivered = resultant(m.nodes[edge], Ku[edge])
+        self.assertLess(np.abs(delivered - applied).max(), 1e-9 * np.abs(applied).max())
+        self.assertLess(precheck.equilibrium(sol)["residual"], 1e-9)
+        self.assertLess(precheck.rigid_body_energy(m)["constraint_residual"], 1e-12)
+        # the same plate with the link's nodal loads put on the edge: the same displacements
+        m0, idx0 = plate()
+        F0 = np.zeros((len(m0.nodes), 6))
+        F0[edge] = rbe3_loads(REF, m0.nodes[edge], FORCE, MOMENT)
+        self.assertLess(np.abs(resultant(m0.nodes, F0) - applied).max(), 1e-9 * np.abs(applied).max())
+        sol0 = StaticSolver(m0).solve(F0)
+        n = len(m0.nodes)
+        self.assertLess(np.abs(sol.displacements[:n] - sol0.displacements).max(),
+                        1e-10 * np.abs(sol0.displacements).max())
+
+    def test_twist_about_the_line_goes_to_the_rotations_by_weight(self):
+        """A moment about the edge's own line (y) reaches the edge nodes as moments about y shared in proportion
+        to the weights, whatever the rotation-weight factor; it puts no net force on them."""
+        m, idx, ref, edge = self.edge_model()
+        x = m.nodes[edge]
+        w = np.linspace(1.0, 2.0, len(edge))
+        c = (w[:, None] * x).sum(axis=0) / w.sum()
+        for factor in (1e-3, 1.0):
+            v = default_rotation_weights(x, w, factor)
+            f = rbe3_loads(c, x, (0, 0, 0), (0.0, 1000.0, 0.0), w, v)
+            self.assertLess(np.abs(f[:, 4] - 1000.0 * w / w.sum()).max(), 1e-9 * 1000.0)
+            self.assertLess(np.abs(f[:, :3].sum(axis=0)).max(), 1e-9 * 1000.0)
+
+    def test_on_beam_nodes(self):
+        """A beam cantilever along x, RBE3 from an off-axis point to its last three nodes: the load arrives in
+        full and the tip moves as the beam carries the same loads put on the nodes directly."""
+        x, c = line_mesh((0, 0, 0), (600.0, 0, 0), 6)
+        def model():
+            mm = FEModel(x)
+            mm.add(Beam(c, 2e5, 8e4, 400.0, 2e4, 3e4, 4e4))
+            mm.fix(0, "all")
+            return mm
+        p = np.array([550.0, 40.0, -30.0])
+        ids = [4, 5, 6]
+        m = model()
+        ref = m.add_node(p)
+        m.add(distributing_link(ref, ids, m.nodes))
+        F = np.zeros((len(m.nodes), 6))
+        F[ref, :3], F[ref, 3:] = FORCE, MOMENT
+        sol = StaticSolver(m).solve(F)
+        applied = np.r_[FORCE, MOMENT + np.cross(p, FORCE)]
+        R = sol.reactions()
+        self.assertLess(np.abs(resultant(m.nodes, R) + applied).max(), 1e-9 * np.abs(applied).max())
+        m0 = model()
+        F0 = np.zeros((len(x), 6))
+        F0[ids] = rbe3_loads(p, x[ids], FORCE, MOMENT)
+        sol0 = StaticSolver(m0).solve(F0)
+        self.assertLess(np.abs(sol.displacements[:len(x)] - sol0.displacements).max(),
+                        1e-10 * np.abs(sol0.displacements).max())
+
+    def test_solid_nodes_on_a_line_are_refused(self):
+        from hiraku.solvers.fe.solid import Hex8
+        nodes = np.array([[i, j, k] for k in (0, 10) for j in (0, 10) for i in (0, 10)], float)
+        m = FEModel(nodes)
+        m.add(Hex8([[0, 1, 3, 2, 4, 5, 7, 6]], 2e5, 0.3))
+        ref = m.add_node((5.0, 5.0, 20.0))
+        m.add(distributing_link(ref, [4, 5], m.nodes))
+        with self.assertRaises(ValueError):
+            m.equations()
+
+    def test_plane_footprint_is_unchanged(self):
+        """Nodes off one line: no rotation weights by default, the same matrices as before."""
+        m, idx = plate()
+        e = idx[-2:].ravel()
+        H, G = rbe3_matrices(REF, m.nodes[e])
+        H2, Hr, G2, Gr = rbe3_full_matrices(REF, m.nodes[e])
+        self.assertEqual(np.abs(H - H2).max(), 0.0)
+        self.assertEqual(np.abs(G - G2).max(), 0.0)
+        self.assertEqual(np.abs(Hr).max() + np.abs(Gr).max(), 0.0)
 
 
 class ConstraintMethodOnLinksTest(unittest.TestCase):
