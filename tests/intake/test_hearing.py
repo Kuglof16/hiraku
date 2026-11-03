@@ -259,7 +259,7 @@ class SampleAnswersTest(unittest.TestCase):
         p = prepare(req, answers, note)
         self.assertEqual(p.unresolved, [])
         by = {a["key"]: a["source"] for a in p.answered["answers"]}
-        for key in ("Q03", "Q20", "Q91", "Q95"):
+        for key in ("Q03", "Q20", "Q91"):
             self.assertEqual(by[key], "hearing", key)
         self.assertEqual(p.answered["note"], note)
 

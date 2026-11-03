@@ -1161,7 +1161,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 4 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 7 件、既定値 4 件",
    "data": {
     "answers": [
      {
@@ -1200,6 +1200,22 @@ export const DEMOS = {
       "unit": "mm"
      },
      {
+      "key": "Q03",
+      "name": "使う頻度・年数",
+      "value": "週末ごと、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
+     },
+     {
+      "key": "Q20",
+      "name": "水・ほこり (IP)",
+      "value": "IP54",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer, dust and splashing water on a forest road)"
+     },
+     {
       "key": "Q34",
       "name": "弱い人がいるか",
       "value": "いない",
@@ -1231,6 +1247,14 @@ export const DEMOS = {
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (steel tube frame)"
+     },
+     {
+      "key": "Q91",
+      "name": "運転時間",
+      "value": "1 日 2 時間、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
      }
     ],
     "note": "林道だけで使い、公道は走らない"

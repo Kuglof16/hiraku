@@ -11,12 +11,6 @@ answers:
     value: 週末ごと、5 年
     trust: 3
     basis: assumption (a sample answer)
-  Q95:
-    value: 500
-    unit: kg
-    trust: 1
-    basis: >-
-      request (the sentence says 500 kg まで), read as the vehicle's own mass without riders and cargo; the sentence does not say, so confirm
   Q20:
     value: IP54
     trust: 3
