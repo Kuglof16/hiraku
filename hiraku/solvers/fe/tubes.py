@@ -680,6 +680,7 @@ class FrameShells:
     refs: dict = field(default_factory=dict)  # hardpoint node -> ref node
     footprints: list = field(default_factory=list)
     weld_strips: bool = False
+    tie_sets: list = field(default_factory=list)  # (ring nodes, faces) of each tie
 
     def tube_of_element(self) -> list:
         out = []
@@ -806,6 +807,7 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
     model.rotation_nodes.update(used.tolist())
     xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
     ties = []
+    tie_sets = []  # (ring nodes, faces (k, 4)) of each tie, for the mesh record's connections
     tied: set[int] = set()
     for tb in tubes.values():
         for end in ("a", "b"):
@@ -835,7 +837,9 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
             except ValueError as err:
                 raise TubeMeshError(f"tube {tb.id} at node {e['node']}: {err}") from None
             ties.append(c)
-    return FrameShells(model, tubes, joints, hosts, ties, xyz, size, stub, footprints=fps, weld_strips=weld_strips)
+            tie_sets.append((np.asarray(ring, int), np.asarray(near, int)))
+    return FrameShells(model, tubes, joints, hosts, ties, xyz, size, stub, footprints=fps, weld_strips=weld_strips,
+                       tie_sets=tie_sets)
 
 
 def _wall_area(tb: Tube) -> float:
@@ -1097,24 +1101,75 @@ def _static_checks(model: FEModel, Fs: dict) -> dict:
     return {"solve": solve}
 
 
-def analyse_loads(design: dict, cases_loads: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True,
-                  weld_strips: bool = True) -> dict:
-    """The frame shell under load cases {name: [BodyLoad]} (as analyse, which gives K2's two), held 3-2-1. Per
-    case also the structural hot spots (hot_spots, outside the mount patches and the holds) and the largest."""
-    from .shell import shell_stresses
+def mesh_record(fs: FrameShells, design: dict, mesher: str) -> dict:
+    """The contract `mesh` record (no mesh_id) of a FrameShells: shell elements tube by tube in fs.tubes' order
+    (per_element values follow it: element_values), the nodes they use (renumbered from 0), element_member
+    (member_at of each element's centre), member_thickness_mm, the ties as connections (kind tie: nodes the
+    ring, faces the host's faces) and quality (fe.quality.record_quality, the ties as links)."""
+    from .quality import record_quality
 
+    quads = np.concatenate([tb.quads for tb in fs.tubes.values()])
+    used = np.unique(np.concatenate([quads.ravel()] + [r for r, _ in fs.tie_sets] +
+                                    [f.ravel() for _, f in fs.tie_sets]))
+    index = np.full(len(fs.model.nodes), -1, int)
+    index[used] = np.arange(len(used))
+    members, thickness = [], {}
+    for tb in fs.tubes.values():
+        cen = fs.model.nodes[tb.quads].mean(axis=1)
+        for c in cen:
+            m = member_at(tb, fs, c)
+            members.append(m)
+            thickness[m] = float(tb.t)
+    conns, links = [], []
+    for k, (ring, faces) in enumerate(fs.tie_sets):
+        conns.append({"id": f"tie-{k + 1:03d}", "kind": "tie", "nodes": index[ring].tolist(),
+                      "faces": index[faces].tolist()})
+        links.append(np.concatenate([index[ring], index[faces].ravel()]).tolist())
+    rec = {"design_version": int(design.get("design_version", 1)), "mesher": mesher, "element_type": "shell",
+           "formulation": "MITC4", "element_size_mm": float(fs.size), "nodes_mm": np.round(fs.model.nodes[used], 6).tolist(),
+           "elements": index[quads].tolist(), "element_member": members, "member_thickness_mm": thickness,
+           "connections": conns,
+           "notes": (f"fe.tubes: each straight run of one section a tube of MITC4 shells, branches cut on their host's "
+                     f"wall and tied to it ({len(conns)} ties); weld strips for the IIW hot spot; at least "
+                     f"{HOT_SPOT_MIN_FACETS} facets per round tube")}
+    rec["quality"] = record_quality(rec, links=links)
+    return rec
+
+
+def element_values(fs: FrameShells, per_tube: dict) -> list:
+    """Values per tube ({tube id: (n_quads,)}) as one list in mesh_record's element order."""
+    return [float(v) for tb in fs.tubes.values() for v in per_tube[tb.id]]
+
+
+def prepare(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True, weld_strips: bool = True) -> dict:
+    """What every load case of a design shares: the shell (frame_shells), a reference node with its distributing
+    link at each suspension pickup (add_mount), the 3-2-1 holds (hold_321) and, after the first solve, the
+    factorisation. {"fs", "mounts", "held", "mt", "excluded", "size", "solver"}."""
     fs = frame_shells(design, size, facet, weld_strips=weld_strips)
     mounts = sorted({n for s in design["supports"] for n in _mount_nodes(design, s).values()})
     for n in mounts:
         add_mount(fs, n)
     held = hold_321(fs, design)
-    mt = member_tube_map(fs)
     patch_nodes = set(np.concatenate([fs.patch(n) for n in mounts]).tolist())
-    excluded = patch_nodes | {int(k) for k in held}
+    return {"fs": fs, "mounts": mounts, "held": held, "mt": member_tube_map(fs),
+            "excluded": patch_nodes | {int(k) for k in held}, "size": float(size), "solver": None}
+
+
+def analyse_loads(design: dict, cases_loads: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True,
+                  weld_strips: bool = True, prepared: dict | None = None) -> dict:
+    """The frame shell under load cases {name: [BodyLoad]} (as analyse, which gives K2's two), held 3-2-1. Per
+    case also the structural hot spots (hot_spots, outside the mount patches and the holds) and the largest.
+    prepared: prepare()'s record of this design (its shell, mounts, holds and factorisation are reused)."""
+    from .shell import shell_stresses
+
+    p = prepared if prepared is not None else prepare(design, size, facet, weld_strips)
+    fs, mounts, held, mt, excluded = p["fs"], p["mounts"], p["held"], p["mt"], p["excluded"]
     cases, solutions = {}, {}
     size_mm = float(np.ptp(fs.model.nodes, axis=0).max())
     Fs = {name: shell_load_vector(fs, loads, mt) for name, loads in cases_loads.items()}
-    shared = _static_checks(fs.model, Fs)  # analysis.run_static's checks once, one factorisation for every case
+    if p["solver"] is None:  # analysis.run_static's checks once, one factorisation for every case
+        p["solver"] = _static_checks(fs.model, Fs)
+    shared = p["solver"]
     for name, loads in cases_loads.items():
         F = Fs[name]
         res = shared["solve"](F)
@@ -1148,7 +1203,7 @@ def analyse_loads(design: dict, cases_loads: dict, size: float = ELEMENT_SIZE_MM
                 k = int(np.argmax(vm))
                 if vm[k] > best[0]:
                     best = (float(vm[k]), (tb.id, ss.centres[k]))
-                away = np.array([not any(int(i) in patch_nodes or int(i) in held for i in q) for q in tb.quads])
+                away = np.array([not any(int(i) in excluded for i in q) for q in tb.quads])
                 if away.any():
                     ka = int(np.argmax(np.where(away, vm, -1.0)))
                     if vm[ka] > best_away[0]:
@@ -1546,7 +1601,8 @@ def joint_stress(fs: FrameShells, sol, node: str, radius_factor: float = 3.0, of
     return {"MPa": best[0], "where": best[1]}
 
 
-__all__ = ["BodyLoad", "Footprint", "FrameShells", "MOUNT_KEYS", "Tube", "TubeMeshError", "add_mount", "analyse",
+__all__ = ["element_values", "mesh_record", "prepare",
+           "BodyLoad", "Footprint", "FrameShells", "MOUNT_KEYS", "Tube", "TubeMeshError", "add_mount", "analyse",
            "analyse_loads", "body_loads", "exit_param", "footprints", "frame_shells", "hold_321", "host_coords",
            "hot_spot_max", "hot_spots", "k2_states", "member_at", "member_tube_map", "perimeter", "perimeter_coord",
            "perimeter_point", "relieved_loads", "resolve_joints", "resultant_of", "section_points",
