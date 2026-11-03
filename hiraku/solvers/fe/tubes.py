@@ -787,16 +787,19 @@ def analyse(design: dict, size: float = ELEMENT_SIZE_MM, states: dict | None = N
 
 def beam_model(design: dict, n_per_member: int = 4) -> dict:
     """The design's members as fe.beam 3D beams (n_per_member elements each), E, G = E / (2 (1 + nu)) and
-    the section's A, Iy, Iz, J from the K0 section formulas (kit.sections.table), joints rigid at the
-    design nodes. Returns {"model", "node" {design node: index}}."""
-    from ...designgen.kit.sections import table
+    the section's A, Iy, Iz, J from the K0 section formulas (k0_handcalc.sections.properties), joints
+    rigid at the design nodes. Returns {"model", "node" {design node: index}}."""
+    from ..k0_handcalc.sections import properties
     from .beam import Beam
 
     xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
     names = list(xyz)
     index = {n: i for i, n in enumerate(names)}
     pts = [xyz[n] for n in names]
-    props = table(design["sections"])
+    props = {}
+    for key, sec in design["sections"].items():
+        p = properties(sec)
+        props[key] = {"A_mm2": p["A"], "Iy_mm4": p["Iy"], "Iz_mm4": p["Iz"], "J_mm4": p["J"]}
     conn, E, G, A, Iy, Iz, J, rho = [], [], [], [], [], [], [], []
     for m in design["members"]:
         a, b = xyz[m["node_a"]], xyz[m["node_b"]]
