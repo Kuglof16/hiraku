@@ -21,6 +21,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
+from hiraku.tools.shelf import NOT_CHECKED, unchecked_tools
 from hiraku.tools.judge import (OP_JA, init_judgements, make_verdict, prediction_is_unfavourable, unfavourable_side,
                                 update_judgement)
 from hiraku.tools.summary import design_summary
@@ -134,17 +135,28 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     """The checked tool shelf, one line per tool (usable=false tools cannot be run); with
     `tool`, that tool's whole spec (its known-answer checks and formulas)."""
     args = args or {}
+    lines = {n: _unchecked_line(n, ctx.tools[n]) for n in unchecked_tools(ctx)}
     if args.get("tool"):
-        spec = ctx.specs.get(args["tool"])
+        spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
-            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join(ctx.specs)})")
+            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
         return [spec]
-    out = list(ctx.specs.values())
+    out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
-        out = [s for s in out if s["domain"] == args["domain"]]
+        out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [_tool_line(s) for s in out]
+    return [s if "not_checked" in s else _tool_line(s) for s in out]
+
+
+def _unchecked_line(name: str, tool: Any) -> Record:
+    """list_tools' line for a tool this run did not check (check_shelf): not usable, and why."""
+    line: Record = {"name": name}
+    for key in ("title", "domain", "base", "tests"):
+        value = getattr(tool, key, None)
+        if value is not None:
+            line[key] = list(value) if key == "tests" else value
+    return {**line, "usable": False, "checks_passed": "0/0", "not_checked": NOT_CHECKED}
 
 
 # ---------------------------------------------------------------------------- prediction

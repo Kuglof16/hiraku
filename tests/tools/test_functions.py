@@ -379,6 +379,54 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         self.assertFalse(any("frame_static の照合" in t for t in said))
 
 
+class RunToolsOnlyTest(RunCase, unittest.TestCase):
+    """start_run checks only the tools the run's tests can use; the rest are not usable and say why."""
+
+    def setUp(self):
+        from tests.tools import fakes
+
+        self.extra = {"tilt": fakes.FakeTool("tilt", "handling", ["S1", "S1'"]),
+                      "frame_shell": fakes.FakeTool("frame_shell", "strength", ["R1"])}
+        real_shelf = fakes.shelf
+
+        def shelf(*a, **kw):
+            return {**real_shelf(*a, **kw), **self.extra}
+
+        with mock.patch.object(fakes, "shelf", shelf):
+            super().setUp()
+
+    def test_only_the_tools_of_the_runs_tests_are_checked(self):
+        checked = [e["data"]["name"] for e in self.ctx.store.events() if e["kind"] == "tool.checked"]
+        self.assertEqual(checked, ["step_climb", "frame_static", "frame_shell"])  # R1 (P1, R1); tilt is S1's
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("この実行の試験 (P1・R1) には使わないので確かめない道具: tilt", said)
+        self.assertEqual(self.extra["tilt"].runs, [])
+        line = next(t for t in list_tools(self.ctx) if t["name"] == "tilt")
+        self.assertFalse(line["usable"])
+        self.assertEqual(line["not_checked"], "この実行の試験には使わないので確かめていない")
+        self.assertEqual(list_tools(self.ctx, {"tool": "tilt"}), [line])
+        self.assertEqual([t["name"] for t in list_tools(self.ctx, {"test_id": "S1"})], ["tilt"])
+        load, _ = self.predict_p1()
+        args = {"tool": "tilt", "load_case_id": "P1-step100", "prediction_ids": [load["prediction_id"]]}
+        d = rules.check_call(self.ctx, "analyze", args)
+        self.assertEqual(d.rule, rules.HK2)
+        self.assertIn("この実行の試験には使わないので確かめていない", d.reason)
+        with self.assertRaises(ToolError):
+            analyze(self.ctx, args)
+        self.assertEqual(self.extra["tilt"].runs, [])
+
+    def test_the_tests_of_a_run(self):
+        from hiraku.agent.session import run_test_ids
+        from hiraku.tools.shelf import test_family, tools_for_tests
+
+        self.assertEqual([test_family(t) for t in ("S1'", "R1s", "S4b", "P10")], ["S1", "R1", "S4", "P10"])
+        self.assertEqual(tools_for_tests(self.ctx.tools, ["R1s"]), ["frame_static", "frame_shell"])
+        self.assertEqual(tools_for_tests(self.ctx.tools, None), list(self.ctx.tools))
+        self.assertEqual(run_test_ids({"tests": ["S1"]}, self.ctx.load_cases), ["P1", "R1"])  # the load cases first
+        self.assertEqual(run_test_ids({"tests": ["R1"]}, []), ["P1", "R1"])  # before version 1: and what feeds them
+        self.assertIsNone(run_test_ids({}, []))  # not fixed yet: every tool
+
+
 class UnusableToolTest(RunCase, unittest.TestCase):
     frame_checks_pass = False
 
