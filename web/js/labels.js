@@ -14,6 +14,62 @@ export const DOMAIN_JA = {
   assembly: "組み立て",
 };
 
+// The domains in the viewers' words (the video's pages; DOMAIN_JA keeps the trade's short names).
+export const DOMAIN_PLAIN_JA = {
+  handling: "倒れない・よけられる",
+  powertrain: "走る力",
+  aero: "風",
+  crash: "ぶつかったとき",
+  strength: "壊れない",
+  nvh: "揺れ・音",
+  thermal: "熱",
+  assembly: "組み立て",
+};
+
+// The catalog's tests (data/catalog/tests.yaml ids) in the viewers' words. A test not here
+// has no plain name (null), and a page leaves it out rather than show its id.
+const TEST_PLAIN_JA = {
+  S1: "傾けても倒れない", S2: "曲がっても倒れない", S3: "よける", S4: "急ブレーキ", S5: "でこぼこの斜面",
+  F1: "横風", F2: "空気の抵抗", F3: "こぼれ",
+  P1: "段差", P2: "坂道", P3: "加速と速さ", P4: "走れる距離", P5: "動かす力と速さ",
+  C1: "壁にぶつかる", C2: "人に当たる",
+  R1: "重さに耐える", R1s: "管のつなぎ目", R2: "落としたとき", R3: "くり返しの力", R4: "横転したときの枠", R5: "たわみ", R6: "電池の揺れ",
+  N1: "揺れ", N2: "乗り心地", N3: "音",
+  T1: "電池の熱", T2: "モーターの熱", T3: "使い続けたときの熱",
+  H1: "部品どうしの当たり", H2: "手と工具が入るか", H3: "手が届くか", H4: "挟まれないか", H5: "組み立ての順番",
+  G1: "決まりの寸法", G2: "規格",
+};
+
+export function testPlainName(id) {
+  return TEST_PLAIN_JA[id] ?? null;
+}
+
+// The trade's words in the record's sentences, and what the video's pages say instead.
+const SENTENCE_PLAIN = [
+  [/荷重条件の作り方/g, "試し方"],
+  [/荷重条件/g, "試す条件"],
+];
+
+// A test id or a rule id in a sentence ("S2 ", "U1-04", "HU-02", "R1s").
+const ID_RE = /(?<![A-Za-z0-9])(?:[A-Z]{1,3}\d*-\d+|[A-Z]\d+[a-z]?)(?![A-Za-z0-9-])/g;
+
+// A sentence of the record for the viewers: ids taken out, the trade's words replaced.
+export function plainSentence(text) {
+  let s = String(text ?? "").replace(ID_RE, "").replace(/\s{2,}/g, " ");
+  for (const [re, w] of SENTENCE_PLAIN) s = s.replace(re, w);
+  return s.replace(/^[\s・、]+/, "").replace(/\s+([、。」])/g, "$1").trim();
+}
+
+// Why a domain is not looked at, from the record's reason (domains.picked): the sentence
+// that says so (the one ending in "見ない"), else the words before a list (":"), with the
+// tests' ids and the bracketed asides taken out.
+export function plainReason(reason) {
+  const s = String(reason ?? "");
+  const said = s.split("。").map((x) => x.trim()).find((x) => x.includes("見ない"));
+  const line = (said ?? s.split(/[:：]/)[0]).replace(/\s*[（(][^)）]*[)）]/g, "");
+  return plainSentence(line);
+}
+
 export const ROLE_JA = {
   lead: "まとめ役",
   designer: "設計役",
