@@ -11,7 +11,7 @@
   /* N18: motes of light gather onto one vertical line in the dark; the line
      grows and opens into a band, the vehicle is drawn over it, then the name
      comes up in a bloom of light, the line, the repository and one small
-     line (Built with Claude). Ends on black.
+     line (HIRAKU Powered by Claude). Ends on black.
      Placement and times: layout.json n18 (CSS variables from layout.js;
      --t-gather, --t-line, --t-open, --t-draw, --t-name, --t-tag, --t-url,
      --t-credit, --t-out from n18.times; --gather-*, --name-bloom-*,
@@ -136,8 +136,6 @@
     animation: fade-up 0.6s ease-out both;
     animation-delay: var(--t-url);
   }
-  .url .powered { display: none; }
-  html.powered .url .powered { display: inline; }
   /* one small line: unbleached ink, quiet */
   .credit {
     top: var(--credit-y);
@@ -168,8 +166,8 @@
       <div class="name-halo"></div>
       <h1 class="name" aria-label="HIRAKU" data-box="n18.title.name"></h1>
       <p class="tag" data-box="n18.title.tag">CAE を、すべての作り手へ拓く。</p>
-      <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku<span class="powered"> · Powered by Claude</span></p>
-      <p class="credit" data-box="n18.credit" data-kind="note">Built with Claude</p>
+      <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku</p>
+      <p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>
     </div>
     <!-- data-kind="effect": the 150 motes move as one swarm (one thing in motion) -->
     <svg class="gather" data-kind="effect" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -184,8 +182,6 @@
   document.querySelector(".vehicle").innerHTML = drawVehicle({ halo: true });
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
     .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
-  if (new URLSearchParams(location.search).get("powered") === "1")
-    document.documentElement.classList.add("powered");
 
   // Plain numbers the CSS uses as they are (layout.js turns numbers into lengths).
   root.setProperty("--gather-start", String(R.gather.start_alpha));

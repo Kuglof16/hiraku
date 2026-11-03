@@ -208,7 +208,14 @@ class SharedShape(unittest.TestCase):
         self.assertEqual(set(n["tile"]), {"border_px", "radius_px", "label", "rate"})
         self.assertEqual(set(n["tile"]["label"]), {"x", "y", "size_px"})
         self.assertEqual(n["hero"]["x"], (self.rules["stage"]["w"] - n["hero"]["w"]) / 2)
-        self.assertEqual(set(n["title"]), {"name", "tag"})
+        self.assertEqual(set(n["title"]), {"name", "tag", "gloss"})
+        # the gloss sits between the tag line and the grid, and comes with or after the tag
+        tag, gl = n["title"]["tag"], n["title"]["gloss"]
+        self.assertGreaterEqual(gl["y"], tag["y"] + 1.2 * tag["size_px"])
+        self.assertLessEqual(gl["y"] + 1.2 * gl["size_px"], n["grid"]["y"])
+        self.assertGreaterEqual(gl["size_px"], self.rules["story"]["defaults"]["body_text_px"])
+        self.assertEqual(gl["text"], "CAE = コンピュータで設計を試す技術")
+        self.assertGreaterEqual(n["times"]["gloss_s"], n["times"]["tag_s"])
         self.assertEqual(len(n["tests"]), n["grid"]["cols"] * n["grid"]["rows"])
         self.assertEqual(set(n["fly_from"]), {"x", "y"})
         for k in ("burst_s", "tiles_s", "tile_in_s", "tile_stagger_s", "name_s", "tag_s"):
@@ -437,12 +444,67 @@ class ReferenceLook(unittest.TestCase):
 
     def test_n18_page(self):
         html = (lc.SCREENS / "n18.html").read_text(encoding="utf-8")
-        self.assertIn('<p class="credit" data-box="n18.credit" data-kind="note">Built with Claude</p>', html)
+        self.assertIn('<p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>', html)
+        self.assertNotIn("Built with Claude", html)
+        self.assertNotIn("powered", html)                  # the ?powered=1 variant is gone
         for part in ('svg class="gather"', 'class="seed-line"', 'class="name-halo"', "letter-bloom"):
             self.assertIn(part, html)
         self.assertNotIn("<img", html)                     # no logo
         for banned in BANNED:
             self.assertNotIn(banned, html)
+
+    def test_n00_rules(self):
+        r, n = self.rules, self.rules["n00"]
+        self.assertEqual(n["tagline"]["text"], "作る前に、CAE で確かめる AI エージェント")
+        self.assertGreaterEqual(n["tagline"]["size_px"], r["story"]["defaults"]["body_text_px"])
+        self.assertGreater(n["tagline"]["y"], n["rule"]["y"] + n["rule"]["h"])
+        self.assertLessEqual(n["tagline"]["y"] + 1.3 * n["tagline"]["size_px"], n["pets"]["y"])
+        p = n["pets"]
+        span = 9 * p["pitch_px"] + p["group_gap_px"] + p["w"]
+        x0 = (r["stage"]["w"] - span) / 2
+        self.assertGreaterEqual(x0, r["safe"]["x"])                    # the row is inside safe
+        self.assertLess(p["w"], p["pitch_px"])                          # boxes do not touch
+        for lab in ("chip", "tag"):
+            self.assertLess(p["y"] + p["h"] + n[lab]["gap_above_px"] + n[lab]["h"], r["subtitle_band"]["y"])
+            self.assertGreaterEqual(n[lab]["size_px"], r["story"]["defaults"]["body_text_px"])
+        t = n["times"]
+        self.assertLess(t["name_s"], t["tagline_s"])
+        self.assertLess(t["row_s"] + 0.5, t["light_s"] + 1e-9)          # the row is in before the first chip
+        self.assertLess(t["light_s"] + 6 * t["step_s"] + n["motion"]["pass_dur_s"], n["duration_s"])
+        lim = r["story"]["cuts"]["n00"]["limits"]
+        self.assertGreaterEqual(lim["label"], 10)                       # 7 chips + 3 name tags
+        self.assertGreaterEqual(lim["moving"], 10)                      # the ten pets
+        self.assertTrue(lim["why"])
+
+    def test_n00_page(self):
+        html = (lc.SCREENS / "n00.html").read_text(encoding="utf-8")
+        # three.js r170 by the importmap of promo/pets/viewer.html; pet3d.js as a plain script
+        viewer = (lc.SCREENS.parent / "pets" / "viewer.html").read_text(encoding="utf-8")
+        for part in ('"three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"',
+                     '"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"'):
+            self.assertIn(part, html)
+            self.assertIn(part, viewer)
+        self.assertIn('<script src="../pets/pet3d.js"></script>', html)
+        self.assertNotIn("pets.js\"", html.replace("pet3d.js\"", ""))   # not the flat drawing
+        self.assertIn("promo.onSeek(draw)", html)
+        # the pose depends on timeline.js's t only
+        for banned in ("Math.random", "Date.now", "performance.now", "requestAnimationFrame", "setAnimationLoop"):
+            self.assertNotIn(banned, html)
+        ids = re.findall(r'\{ id: "([a-z.]+)", (?:tag|chip):', html)
+        pet3d = (lc.SCREENS.parent / "pets" / "pet3d.js").read_text(encoding="utf-8")
+        self.assertEqual(ids, re.findall(r'\{ id: "([a-z.]+)", name:', pet3d))
+        self.assertEqual(len(ids), 10)
+        self.assertIn('data-kind="moving"', html)
+        for banned in BANNED:
+            self.assertNotIn(banned, html)
+
+    def test_n10_wait_line(self):
+        html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
+        w = self.rules["n10"]["wait"]
+        self.assertEqual(w["text"], "これから確かめる")
+        self.assertGreaterEqual(w["size_px"], self.rules["min_text_px"])
+        self.assertIn('<div class="wait" data-kind="note">${R.wait.text}</div>', html)
+        self.assertNotIn('<div class="wait">?</div>', html)
 
     def test_labels(self):
         r, lab = self.rules, self.rules["labels"]
@@ -1365,7 +1427,7 @@ class InBrowser(unittest.TestCase):
             self.assertTrue(g["margin_px"] - 0.01 <= sy <= r["subtitle_band"]["y"] - g["margin_px"] + 0.01)
             self.assertAlmostEqual(float(q["o"]), g["start_alpha"], places=3)    # seen from the first frame
         self.assertTrue(all(float(q["o"]) == 0 for q in got[0.5]["motes"]))       # all gone into the line
-        self.assertEqual(got[7.0]["credit"][0], "Built with Claude")
+        self.assertEqual(got[7.0]["credit"][0], "HIRAKU Powered by Claude")
         self.assertAlmostEqual(float(got[7.0]["credit"][1]), n["credit"]["alpha"], places=3)
         self.assertEqual(float(got[0.5]["credit"][1]), 0.0)
 

@@ -40,28 +40,51 @@ window.PROMO_LAYOUT = {
       "h": 2,
       "_note": "centred"
     },
-    "row": {
-      "y": 500,
-      "gap_px": 34
+    "tagline": {
+      "y": 458,
+      "size_px": 36,
+      "text": "作る前に、CAE で確かめる AI エージェント",
+      "_note": "added 2026-11-03: one line under the rule that says what HIRAKU is (the logo and the pets alone did not say it). Centred, ink-soft; bottom about 458 + 1.3 x 36 = 505, above pets.y"
     },
-    "agent": {
-      "w": 196
+    "pets": {
+      "y": 544,
+      "w": 160,
+      "h": 180,
+      "pitch_px": 168,
+      "group_gap_px": 36,
+      "_note": "added 2026-11-03: the ten 3D pets of promo/pets/pet3d.js (v7, packager = six-piece burr) in one row, in pet3d's ROLES order: lead, designer, packager, then the seven CAE domains in the order the chips light. Box i is w x h at y, centred on cx_i = 960 - span / 2 + w / 2 + i x pitch_px (+ group_gap_px from the fourth on), span = 9 x pitch_px + group_gap_px + w = 1708 (x 106 to 1814, inside safe). Each box is a 2D canvas: one WebGL renderer off the page (the size of one box) draws each pet alone and the frame is copied into that pet's canvas, so no pet reaches past its box"
     },
-    "pet": {
-      "size_px": 184,
-      "shift_px": 18
+    "camera": {
+      "fov_deg": 24,
+      "azimuth_deg": 24,
+      "elevation_deg": 12,
+      "_note": "every pet is seen the same way: a camera fitted to pet3d's FRAME box as promo/pets/viewer.html does (distance = max(FRAME.h / 2, FRAME.w / 2 / aspect) / tan(fov / 2) x 1.04 + 0.6), turned azimuth_deg about the vertical and raised elevation_deg"
     },
     "chip": {
-      "gap_above_px": 14,
-      "h": 52,
-      "size_px": 27
+      "gap_above_px": 12,
+      "h": 46,
+      "size_px": 24,
+      "_note": "the seven domain chips, centred under their pets. 27 px until 2026-11-03; 24 px (story body_text_px) so 強度信頼性 (about 178 px wide) clears its neighbours at pitch 168"
+    },
+    "tag": {
+      "gap_above_px": 12,
+      "h": 40,
+      "size_px": 24,
+      "_note": "name tags of lead, designer and packager (no domain chip, never lit): thin faint border, ink-soft"
+    },
+    "motion": {
+      "pass_dur_s": 0.9,
+      "hop_period_s": 0.9,
+      "_note": "a domain's pet is idle until its chip lights at light_s + k x step_s, then does one pass hop (pass_dur_s) and stays in report (leans to tell). hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager stay idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) with t from timeline.js only",
+      "idle_shift_s": 1.3
     },
     "times": {
       "name_s": 0.25,
-      "row_s": 1.1,
+      "tagline_s": 1.0,
+      "row_s": 1.4,
       "light_s": 2.0,
       "step_s": 0.42,
-      "_note": "name: first letter; row: agents and chips come in, unlit; light: first chip lights; step: gap between chips"
+      "_note": "name: first letter; tagline: the line under the rule fades in (0.6 s); row: pets, chips and tags come in, unlit (0.5 s; 1.1 s until 2026-11-03, moved for the tagline); light: first chip lights; step: gap between chips (light_s and step_s are read by bgm.py)"
     }
   },
   "n01": {
@@ -411,12 +434,18 @@ window.PROMO_LAYOUT = {
     },
     "title": {
       "name": {
-        "y": 62,
+        "y": 58,
         "size_px": 124
       },
       "tag": {
-        "y": 200,
+        "y": 186,
         "size_px": 42
+      },
+      "gloss": {
+        "y": 244,
+        "size_px": 24,
+        "text": "CAE = コンピュータで設計を試す技術",
+        "_note": "added 2026-11-03: says in small type what CAE is, under the tag line, fading in at times.gloss_s. Bottom 244 + 1.2 x 24 = 272.8, above grid.y (280); the tag (bottom 186 + 1.2 x 42 = 236.4) and the name (58 to 182) moved up 14 and 4 px to make room (they were at 200 and 62)"
       }
     },
     "times": {
@@ -426,6 +455,8 @@ window.PROMO_LAYOUT = {
       "tile_stagger_s": 0.05,
       "name_s": 1.75,
       "tag_s": 2.3,
+      "gloss_s": 2.4,
+      "_gloss_note": "added 2026-11-03: the small line under the tag (title.gloss) fades up over 0.6 s, 0.1 s after the tag starts",
       "door_open_s": 0.55,
       "latch_s": 0.38,
       "mesh_in_s": 0.2,
@@ -1159,6 +1190,11 @@ window.PROMO_LAYOUT = {
       "size_px": 20,
       "_note": "two lines (1.5 line height) end at 896, above the band"
     },
+    "wait": {
+      "text": "これから確かめる",
+      "size_px": 22,
+      "_note": "added 2026-11-03: replaces the '?' placeholders. One line in the HIRAKU hand cell of each row until its value comes in (data-kind note: a placeholder, not body text); the analysis and difference cells stay empty until theirs (the difference column, 170 px, is too narrow for the line)"
+    },
     "times": {
       "title_s": 0.15,
       "head_s": 0.3,
@@ -1336,7 +1372,7 @@ window.PROMO_LAYOUT = {
       "size_px": 20,
       "alpha": 0.62,
       "fade_dur_s": 0.8,
-      "_note": "one small line under the URL: Built with Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed, and do not list Built with Claude either way: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band"
+      "_note": "one small line under the URL: HIRAKU Powered by Claude (no Claude logo, no Anthropic colours; the Agent SDK overview's branding guidelines list Claude Agent, Claude and {YourAgentName} Powered by Claude as allowed; this is the third form. It replaced Built with Claude on 2026-11-03: see promo/README.md). Unbleached ink (--on-night) at alpha, fading in over fade_dur_s from times.credit_s. Bottom about 892, above the subtitle band"
     },
     "gather": {
       "count": 150,
@@ -1443,8 +1479,9 @@ window.PROMO_LAYOUT = {
       "n00": {
         "message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)",
         "limits": {
-          "label": 7,
-          "why": "the seven domain chips under the pets are the point of the cut"
+          "label": 10,
+          "moving": 12,
+          "why": "the seven domain chips under the pets are the point of the cut; lead, designer and packager carry a small name tag each (7 + 3 = 10). Since 2026-11-03 the ten pets are 3D (data-kind moving): all ten breathe in one row as one family, so they count 10, plus the name or a chip as it lights (12)"
         }
       },
       "n01": {
@@ -1570,9 +1607,13 @@ window.PROMO_LAYOUT = {
     "times": {
       "n00": [
         0.6,
+        1.2,
         1.8,
+        2.5,
         3.5,
-        6.5
+        4.5,
+        6.5,
+        8.0
       ],
       "n03": [
         0.5,
@@ -1712,7 +1753,7 @@ window.PROMO_LAYOUT = {
     "allow_overflow": [
       {
         "cut": "*",
-        "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url, .credit, .label-text",
+        "selector": ".tag, .tile b, .bar-row span, .fig .cap, .url, .credit, .label-text, .tagline, .gloss, .wait",
         "axis": "y",
         "max_em": 0.25,
         "why": "line-height (1 to 1.3) is shorter than the font's content box (ascent + descent), so scrollHeight runs a few px past the line box. Measured 2-7 px (0.06-0.23 em). The glyphs stay inside and no ancestor clips them; a taller line-height would move the text"

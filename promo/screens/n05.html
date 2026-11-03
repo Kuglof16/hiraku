@@ -778,6 +778,22 @@
     75%  { opacity: 1; }
     100% { opacity: 0; }
   }
+
+  /* what CAE is, in small type under the tag line (n05.title.gloss) */
+  .gloss {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--title-gloss-y);
+    margin: 0;
+    text-align: center;
+    font: 400 var(--title-gloss-size-px) / 1.2 var(--font-ja);
+    letter-spacing: 0.04em;
+    color: var(--on-night-soft);
+    white-space: nowrap;
+    animation: fade-up 0.6s ease-out both;
+    animation-delay: var(--t-gloss);
+  }
 </style>
 </head>
 <body data-duration="5">
@@ -817,6 +833,7 @@
     <div class="name-sweep"></div>
     <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
     <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
+    <p class="gloss" data-box="n05.title.gloss"></p>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -828,6 +845,7 @@
   // [name, key, svg] from tests.js. Each tile loops a line drawing of how its
   // test is run (tests.js, tests.css); it shows no result.
   const { gridCells, boxStyle, cutRules, rules: LAYOUT } = window.promoLayout;
+  document.querySelector(".gloss").textContent = cutRules.title.gloss.text;
   const R = cutRules;
   const root = document.documentElement.style;
   const TESTS = R.tests.map((key) => {

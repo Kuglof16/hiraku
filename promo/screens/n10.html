@@ -101,7 +101,8 @@
   /* the difference is the one figure each row is about */
   .diff .v { font-weight: 700; }
 
-  /* one cell's content: its value (comes in) and the "?" it replaces (goes out) */
+  /* one cell's content: its value (comes in) and, in the hand cell, the
+     "still to be checked" line it replaces (goes out); n10.wait */
   .in {
     animation: fade-up 0.35s ease-out both;
     animation-delay: var(--at);
@@ -116,14 +117,13 @@
     left: var(--table-pad-px);
     top: 50%;
     transform: translateY(-50%);
-    font: 400 var(--text-value-small-px) / 1 var(--font-latin);
-    color: var(--ink-faint);
+    font: 500 var(--wait-size-px) / 1.2 var(--font-ja);
+    color: var(--ink-soft);
+    white-space: nowrap;
     animation: fade-out 0.2s ease-in both;
     animation-delay: var(--at);
   }
   .hand .wait { --at: calc(var(--t-check) + var(--i) * var(--t-check-step)); }
-  .cae .wait  { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-cae-lag)); }
-  .diff .wait { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-diff-lag)); }
 
   .diff .v { font-size: var(--text-diff-px); }
   .tick { align-items: center; padding: 0; }
@@ -250,15 +250,19 @@
     return `<div class="in"><div class="v" data-kind="number">${signed(worst(r))}<span class="unit">%</span></div>${note}</div>`;
   }
 
-  const wait = `<div class="wait">?</div>`;
+  // Before HIRAKU's values come in, the hand cell of each row says they are
+  // still to be checked (one line per row; the analysis and difference
+  // cells stay empty until their values come in).
+  const R = window.promoLayout.cutRules;
+  const wait = `<div class="wait" data-kind="note">${R.wait.text}</div>`;
   document.querySelector(".table").insertAdjacentHTML("beforeend", DATA.rows.map((r, i) => `
     <div class="row" style="--i:${i}" data-box="n10.row.${r.key}">
       <div class="cell q" data-box="n10.row.${r.key}.q"><b>${r.q}</b><span>${r.sub}</span></div>
       <div class="cell claude" style="--i:${i}" data-box="n10.row.${r.key}.claude">${claudeCell(r)}</div>
       <div class="cell hand hk" style="--i:${i}" data-box="n10.row.${r.key}.hand">${wait}${handCell(r)}</div>
-      <div class="cell cae hk" style="--i:${i}" data-box="n10.row.${r.key}.cae">${wait}
+      <div class="cell cae hk" style="--i:${i}" data-box="n10.row.${r.key}.cae">
         <div class="in">${val(r.cae.v, r.cae.dp, r.unit)}<div class="note" data-kind="note">${r.cae.by} の解析</div></div></div>
-      <div class="cell diff" style="--i:${i}" data-box="n10.row.${r.key}.diff">${wait}${diffCell(r)}</div>
+      <div class="cell diff" style="--i:${i}" data-box="n10.row.${r.key}.diff">${diffCell(r)}</div>
       <div class="cell tick" style="--i:${i}" data-box="n10.row.${r.key}.tick">${ok(r) ? `<div class="in" data-kind="label">✓</div>` : ""}</div>
     </div>`).join(""));
 
