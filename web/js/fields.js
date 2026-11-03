@@ -75,7 +75,17 @@ export function contourOf(analysis, field, criterion, meshes = null) {
   if (!all.length) return null;
   const fieldMin = Math.min(...all);
   const fieldMax = Math.max(...all);
-  const limit = upperLimit(field, criterion);
+  let limit = upperLimit(field, criterion);
+  // Values per part only (e.g. part temperatures): the criterion is one part's limit, the
+  // part where the result of the criterion's quantity was recorded (T1: temp_battery_max
+  // at the battery). Only that part is held to it; the scale is the field's own range, so
+  // no other part is judged by another part's limit.
+  let partLimit = null;
+  if (limit !== null && Object.keys(parts).length && !Object.keys(members).length && !Object.keys(nodes).length) {
+    const at = (analysis.results ?? []).find((r) => r.quantity === criterion.quantity)?.where;
+    partLimit = at && at in parts ? { part: at, value: limit, crit: criterion } : null;
+    limit = null;
+  }
   const min = field.kind === "temperature" ? fieldMin : Math.min(0, fieldMin);
   let max = limit ?? fieldMax;
   if (!(max > min)) max = min + (Math.abs(min) || 1);
@@ -92,6 +102,7 @@ export function contourOf(analysis, field, criterion, meshes = null) {
     max,
     limitKnown: limit !== null,
     crit: limit !== null ? criterion : null,
+    partLimit,
     fieldMin,
     fieldMax,
     where: result?.where,
@@ -99,6 +110,14 @@ export function contourOf(analysis, field, criterion, meshes = null) {
     analysisId: analysis.analysis_id,
     frequency: field.frequency_Hz ?? null,
   };
+}
+
+// Whether a part's value is over its allowable value: its own limit when the contour holds
+// one part to the criterion, else the scale's top when that is the allowable value.
+export function overOf(ct, partId, v) {
+  if (typeof v !== "number" || !ct) return false;
+  if (ct.partLimit) return partId === ct.partLimit.part && v > ct.partLimit.value;
+  return ct.limitKnown && v > ct.max;
 }
 
 // A field on a shell mesh: one value per element (per_element) or per mesh node

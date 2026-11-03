@@ -27,7 +27,8 @@ import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-import { GRAY, colorOf } from "./colormap.js";
+import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
+import { overOf } from "./fields.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
@@ -488,7 +489,7 @@ export class Workbench3D {
         if (!m || m.userData.baseColor === undefined) return;
         const own = !m.userData.sub; // pieces like a spring keep their colour
         const valued = typeof v === "number" && own;
-        m.color.set(valued ? colorOf(v, ct.max, ct.min) : m.userData.baseColor);
+        m.color.set(valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : m.userData.baseColor);
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
@@ -775,7 +776,7 @@ export class Workbench3D {
     for (const [id, v] of Object.entries(contour?.parts ?? {})) {
       const o = this.partObjs[id];
       if (!o) continue;
-      const over = contour.limitKnown && v > contour.max;
+      const over = overOf(contour, id, v);
       const tag = label(`${esc(o.short)}<small>${esc(fmtVU(v, contour.field.unit))}</small>`, `lbl-val${over ? " lbl-over" : ""}`);
       tag.position.copy(o.center).add(new THREE.Vector3(0, 0, o.size[2] / 2 + 40));
       this.overGhosts.add(tag);
