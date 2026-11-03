@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
+from .. import kinematics
 from ..checks import _check
 from ..drive import SpeedController, controls, start_rolling
 from ..model import DesignError, box_design, build_vehicle
@@ -65,7 +68,8 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
                         "fn": [(o["n"][k][0] * o["ntot"][k], o["n"][k][1] * o["ntot"][k], o["n"][k][2] * o["ntot"][k])
                                for k in range(sim.n)],
                         "acc": tuple(o["acc"]), "cg": sim.cg_world().tolist(), "t": sim.t, "torque": total,
-                        "g": list(sim.g)}
+                        "g": list(sim.g), "s": list(sim.s), "rot": sim.rotation().tolist(),
+                        "origin": sim.design_origin().tolist()}
                 if rec is not None:
                     rec.snap = []
                     rec.keep_snapshot()
@@ -83,6 +87,26 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
             push(held)
     return {"ratio": best, "snap": snap, "static": static, "lifted": lifted, "slip": slip, "x_corner": x_step,
             "x_step": x_step + run_up, "road": road, "recorder": rec}
+
+
+def mount_vectors(veh, snap: dict) -> list:
+    """The forces each K&C corner puts on the body at its mounts (kinematics.corner_mount_forces of
+    the corner's tyre force, its normal included, at the snapshot's travel), as load vectors on the
+    body at the mounts, world axes."""
+    rot = np.asarray(snap["rot"])
+    origin = np.asarray(snap["origin"])
+    out = []
+    for i, c in enumerate(veh.corners):
+        if c.table is None or "damper_lower" not in c.table["hardpoints_mm"] or snap["n"][i] <= 0.0:
+            continue
+        f_body = rot.T @ np.asarray(snap["f"][i])
+        contact = rot.T @ (np.asarray(snap["p"][i]) - origin)  # where the tyre touches, design frame
+        for mount, (point, force) in kinematics.corner_mount_forces(c.table, c.side, snap["s"][i], f_body,
+                                                                    contact).items():
+            out.append({"kind": "load", "at": f"{c.id}.{mount}",
+                        "origin_mm": [float(x) * 1000.0 for x in origin + rot @ point],
+                        "vector_N": [float(x) for x in rot @ force]})
+    return out
 
 
 class StepClimbTool(K2Tool):
@@ -208,6 +232,7 @@ class StepClimbTool(K2Tool):
             inertia = [-(sum(snap["f"][i][k] for i in range(len(snap["f"]))) + m * snap["g"][k]) for k in range(3)]
             vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in snap["cg"]],
                             "vector_N": [float(x) for x in inertia]})
+            vectors += mount_vectors(veh, snap)
         if not crawl["lifted"]:
             notes.append("pushing with a growing torque did not lift the stepping wheels"
                          + (" (the driven wheels spun: grip)" if crawl["slip"] else ""))

@@ -97,6 +97,26 @@ class KcBench(unittest.TestCase):
         toe = [r["toe_deg"] for r in veh.corners[0].table["rows"]]
         self.assertLess(max(toe) - min(toe), 0.1)
 
+    def test_mount_forces_match_their_closed_forms(self):
+        from hiraku.solvers.k2_vehicle.shelf.kc_bench import _mount_checks
+        for c in _mount_checks():
+            self.assertTrue(c["pass"], c)
+
+    def test_the_step_record_shows_the_mount_loads(self):
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"}}}
+        rec = TOOLS["step_climb_dynamic"].run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        loads = [v for v in rec["vectors"] if v["kind"] == "load"]
+        self.assertEqual({v["at"].split(".")[1] for v in loads}, set(kinematics.MOUNTS))
+        # per corner the loads on the body add up to that wheel's road force (reaction + grip)
+        for cid in ("FL", "RR"):
+            got = np.sum([v["vector_N"] for v in loads if v["at"].startswith(cid + ".")], axis=0)
+            road = np.sum([v["vector_N"] for v in rec["vectors"] if v.get("at") == cid and v["kind"] in ("reaction", "grip")],
+                          axis=0)
+            np.testing.assert_allclose(got, road, atol=1e-6 * max(1.0, float(np.linalg.norm(road))))
+
     def test_a_design_without_a_kc_table_is_told_so(self):
         rec = TOOLS["kc_bench"].run(box_design(), {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})
         self.assertEqual(rec["status"], "failed")
