@@ -10,17 +10,17 @@
 // times: before lead_s the page is not shown; from light_s the next step is lit.
 //
 // The story (layout.json story): the next step is the one place to read. Its block is the
-// cut's one tag and holds one change (the report's first next), its sentence large (as
+// cut's one tag and holds one change (chooseNext: of the report's next with a design number
+// and a direction, the one whose sensitivity is strongest), its sentence large (as
 // large as fits the page's width on one line, up to page.change_of_title x title_px)
-// and its reason at the story's body text size; from light_s everything else on the page
-// is drawn pale (layout.json n17.dim_opacity). Before / after figures of the change are not
-// shown: the report's next holds only the change and its reason in words, and the
-// effects and sensitivities hold the present values only (no value after the change), so
-// a figure after the change would be a guess.
+// and the record's present value and sensitivity at the story's body text size; from
+// light_s everything else on the page is drawn pale (layout.json n17.dim_opacity). A
+// figure after the change is not shown: the report's next holds only the change in
+// words, and the sensitivities hold the present values only, so it would be a guess.
 
 import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
-import { DOMAIN_JA, esc, fmt, fmtVU, isYesNo, opLabel, plainName } from "./labels.js";
+import { DOMAIN_JA, designNumberName, esc, fmt, fmtVU, isYesNo, opLabel, plainName } from "./labels.js";
 
 // The words of the viewers (the review of the first cuts: the page was mostly English
 // internal names and test ids). A domain's line is made here from its verdicts (the
@@ -93,9 +93,43 @@ export function missingN17Keys(layout) {
 const STATE_MARK = { green: ["ok", "✓"], red: ["miss", "✕"], pending: ["wait", "…"] };
 const finite = (x) => typeof x === "number" && Number.isFinite(x);
 
-// The strongest sensitivity term (largest |share|) of the report: in the first next
-// step's domain when that domain has one, else over all domains. null when none.
-export function strongestSensitivity(report) {
+// The next step lit in "次に変えるなら": one of the report's next with a name and a
+// direction, i.e. a change written "<design number> を大きくする / を小さくする" whose number
+// has a name for the viewers (labels.js designNumberName; a step like "cross_B が効いている"
+// has neither and is left out). Of those, the one the sensitivities say acts most: the
+// largest |elasticity| (share) of its own number in its domain's sensitivity (K5, the
+// record's values). The reason: every candidate is a change the designer can make, and the
+// elasticity is the one recorded measure that compares them (how far the judged quantity
+// moves for 1 % of the number), so the strongest is the change that moves the result most.
+// A candidate without a recorded sensitivity comes after those with one; ties go by the
+// report's order. Returns { next, path, up, name, sens, index, quantity } or null.
+const CHANGE = /^(?:[^:：]*[:：]\s*)?([A-Za-z_][\w.\-]*)\s*を(大きく|小さく)する/;
+export function chooseNext(report, design = null) {
+  const cands = [];
+  (report.next ?? []).forEach((n, i) => {
+    const m = CHANGE.exec(String(n.change ?? ""));
+    if (!m) return;
+    const name = designNumberName(m[1], design);
+    if (!name) return;
+    const d = (report.domains ?? []).find((x) => x.domain === n.domain);
+    let sens = null;
+    let index = -1;
+    (d?.sensitivity ?? []).forEach((t, k) => {
+      const mm = /^(\S+) to (.+)$/.exec(t.name ?? "");
+      if (mm && mm[2] === m[1] && finite(t.share)) [sens, index] = [t, k];
+    });
+    cands.push({ i, next: n, path: m[1], up: m[2] === "大きく", name, sens, index, quantity: sens ? /^(\S+) to/.exec(sens.name)[1] : null });
+  });
+  const strength = (c) => (c.sens ? Math.abs(c.sens.share) : -1);
+  cands.sort((a, b) => strength(b) - strength(a) || a.i - b.i);
+  return cands[0] ?? null;
+}
+
+// The strongest sensitivity term (largest |share|) of the report: the chosen next step's
+// own term when it has one (chooseNext), else in the first next step's domain, else over
+// all domains. null when none.
+export function strongestSensitivity(report, chosen = null) {
+  if (chosen?.sens) return { domain: chosen.next.domain, index: chosen.index, term: chosen.sens };
   const pick = (domains) => {
     let best = null;
     for (const d of domains) {
@@ -115,9 +149,11 @@ export function strongestSensitivity(report) {
 // (members have no names in the record), the number by what it is (板厚, 重さ, ...);
 // no ids. A number it does not know keeps its last word.
 const NUMBER_JA = { t_mm: "板厚", h_mm: "断面の高さ", w_mm: "断面の幅", d_mm: "直径", mass_kg: "重さ", length_mm: "長さ" };
-function sensitivityName(name, names = {}) {
+function sensitivityName(name, names = {}, design = null) {
   const m = /^(\S+) to (.+)$/.exec(name ?? "");
   if (!m) return name ?? "";
+  const named = designNumberName(m[2], design);
+  if (named) return `${plainName(m[1])} ← ${named}`;
   const path = m[2].split(".");
   const what = NUMBER_JA[path.at(-1)] ?? path.at(-1);
   const whose = path[0] === "parts" ? names[path[1]] ?? "部品" : path[0] === "members" ? "部材" : "";
@@ -152,7 +188,9 @@ export class CutN17 {
       background: sp.colors.panel, borderColor: sp.colors.rule, padding: `${P.text_px}px ${P.text_px * 1.5}px`,
     });
     if (!clearOfBand(P, this.layout)) el.dataset.outside = "1";
-    this.strongest = strongestSensitivity(rep);
+    this.design = this.s.designs?.[rep.design_version] ?? this.s.designs?.[this.s.currentVersion] ?? null;
+    this.chosen = chooseNext(rep, this.design);
+    this.strongest = strongestSensitivity(rep, this.chosen);
     const chips = (rep.domains ?? [])
       .map((d) => {
         const [cls, mark] = STATE_MARK[d.state] ?? STATE_MARK.pending;
@@ -206,12 +244,12 @@ export class CutN17 {
     const senRows = sens
       .map((t, i) => {
         const strong = this.strongest && this.strongest.domain === d.domain && this.strongest.index === i;
-        if (!finite(t.share)) return `<div class="n17-bar none"><span class="n17-name">${esc(sensitivityName(t.name, this.partNames()))}</span><i></i><span class="n17-num">—</span></div>`;
+        if (!finite(t.share)) return `<div class="n17-bar none"><span class="n17-name">${esc(sensitivityName(t.name, this.partNames(), this.design))}</span><i></i><span class="n17-num">—</span></div>`;
         const w = top > 0 ? (Math.abs(t.share) / top) * 50 : 0;
         const side = t.share >= 0 ? `left:50%;width:${w.toFixed(1)}%` : `left:${(50 - w).toFixed(1)}%;width:${w.toFixed(1)}%`;
         return (
           `<div class="n17-bar sens${strong ? " strongest" : ""}" data-box="${key}.sens.${i}"${strong ? ' data-strongest="1"' : ""}>` +
-          `<span class="n17-name">${esc(sensitivityName(t.name, this.partNames()))}</span><i class="mid"><b style="${side}"></b></i>` +
+          `<span class="n17-name">${esc(sensitivityName(t.name, this.partNames(), this.design))}</span><i class="mid"><b style="${side}"></b></i>` +
           `<span class="n17-num">${t.share > 0 ? "+" : ""}${esc(fmt(t.share, 2))}</span></div>`
         );
       })
@@ -253,13 +291,28 @@ export class CutN17 {
     return `<p class="n17-note n17-unchecked" data-box="n17.unchecked" data-kind="note">出典を確かめていない値 ${u.length} 件: ${u.map((x) => esc(String(x.item ?? "").replace(/^Q\d+\s*/, ""))).join("、")}</p>`;
   }
 
+  // The chosen next step (chooseNext) in words: the domain, "<number's name>を大きくする /
+  // 小さくする" large, and under it what the record says of it: the number's present value
+  // and what 1 % of it does to the judged quantity (the sensitivity's value and share). No
+  // value after the change is shown (the record has none).
   nextHtml() {
     const next = this.report.next ?? [];
-    const n = next[0];
+    const c = this.chosen;
     const big = Math.round(this.spec.page.title_px * this.spec.page.change_of_title);
-    const rows = n
-      ? `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b><span class="n17-change" style="font-size:${big}px">${esc(n.change)}</span><small>${esc(n.reason)}</small></li>`
-      : `<li class="none">報告に「次」が書かれていない</li>`;
+    let rows;
+    if (c) {
+      const dir = c.up ? "大きく" : "小さく";
+      let why = "";
+      if (c.sens) {
+        const moves = (c.up ? 1 : -1) * Math.sign(c.sens.share);
+        const now = finite(c.sens.value) ? `今 ${fmtVU(c.sens.value, c.sens.unit, 4)}。` : "";
+        const effect = moves === 0 ? "変わらない" : `${fmt(Math.abs(c.sens.share), 2)} % ${moves > 0 ? "増える" : "減る"}`;
+        why = `${now}1 % ${dir}すると、${plainName(c.quantity)}が ${effect}`;
+      }
+      rows = `<li data-path="${esc(c.path)}"><b>${esc(DOMAIN_JA[c.next.domain] ?? c.next.domain)}</b><span class="n17-change" style="font-size:${big}px">${esc(`${c.name}を${dir}する`)}</span>${why ? `<small>${esc(why)}</small>` : ""}</li>`;
+    } else {
+      rows = `<li class="none">${next.length ? "報告の「次」に、名前と向きのある項が無い" : "報告に「次」が書かれていない"}</li>`;
+    }
     const px = Math.max(this.spec.page.text_px, this.story.bodyPx);
     return `<div class="n17-next" data-box="n17.next" data-kind="label" style="font-size:${px}px"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
   }
@@ -295,7 +348,7 @@ export class CutN17 {
       unchecked.textContent = `出典を確かめていない値 ${(this.report.unchecked ?? []).length} 件 (一覧は報告の記録に)`;
       el.dataset.uncheckedShort = "1";
     }
-    const keep = new Set([...(this.report.next ?? []).map((n) => n.domain), this.strongest?.domain].filter(Boolean));
+    const keep = new Set([this.chosen?.next.domain, this.strongest?.domain].filter(Boolean));
     const others = [...body.querySelectorAll(".n17-domain")].filter((s) => !keep.has(s.dataset.domain));
     const folded = [];
     for (const s of [...others].reverse()) {

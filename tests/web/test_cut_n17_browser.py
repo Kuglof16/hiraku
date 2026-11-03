@@ -39,16 +39,25 @@ REPORT = {
             "differences": [{"comparison_id": "cmp-0001", "diff_rel": -0.207, "cause_id": "cause-0001"}],
             "sensitivity": [
                 {"name": "max_stress to parts.cargo.mass_kg", "value": 150.0, "share": 0.31},
-                {"name": "max_stress to members.rail_R_S2B.section.t_mm", "value": 2.3, "share": -1.62},
-                {"name": "max_stress to members.rail_R_S2B.section.h_mm", "value": 60.0, "share": -0.85},
+                {"name": "max_stress to sections.rt40x60x2.3.dims_mm.t", "value": 2.3, "unit": "mm", "share": -1.62},
+                {"name": "max_stress to sections.rt40x60x2.3.dims_mm.h", "value": 60.0, "unit": "mm", "share": -0.85},
             ],
         },
     ],
     "unchecked": [{"item": "yield 245 MPa", "source": "materials (形の見本)"}],
-    "next": [{"domain": "strength", "change": "後ろのレールの板厚を上げる (形の見本)", "reason": "感度がいちばん大きい (形の見本)"}],
+    # three steps in the record's form (run 211933): one without a design number or a
+    # direction (left out), and two with: the one whose sensitivity is stronger is lit,
+    # though it comes later in the report
+    "next": [
+        {"domain": "strength", "change": "台本: sections.rt40x60x2.3.dims_mm.h を大きくする", "reason": "K5: 弾性 -0.85 (形の見本)"},
+        {"domain": "strength", "change": "台本: cross_B が効いている (向きは出していない)", "reason": "割合 88 % (形の見本)"},
+        {"domain": "strength", "change": "台本: sections.rt40x60x2.3.dims_mm.t を大きくする", "reason": "K5: 弾性 -1.62 (形の見本)"},
+    ],
     "summary": "強度は合格。効いているのは後ろのレールの縦の曲げ (形の見本)",
 }
 STRONGEST = 1  # the index of the term with the largest |share| in REPORT's sensitivity
+CHOSEN = "フレームの管の板厚を大きくする"  # REPORT's next[2], the step of that term
+CHOSEN_WHY = "今 2.3 mm。1 % 大きくすると、最大応力が 1.6 % 減る"  # its value and share (2 figures, as its bar)
 
 
 def long_report():
@@ -244,8 +253,14 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assertGreaterEqual(got["textPx"], layout["min_text_px"])
         # the words are the report's; a domain's line is made from its verdicts in the viewers'
         # words (the sample's ver-0001: max_stress 123.6 MPa <= 156.67 MPa), not the report's line
-        for s in [REPORT["summary"], REPORT["next"][0]["change"], REPORT["next"][0]["reason"]]:
+        for s in [REPORT["summary"], CHOSEN, CHOSEN_WHY]:
             self.assertIn(s, got["text"])
+        # one step only: not the weaker one, not the one without a name and a direction,
+        # and no ids or paths from the report's words
+        self.assertEqual(page.evaluate("[...document.querySelectorAll('.n17-next li')].map((e) => e.dataset.path)"),
+                         ["sections.rt40x60x2.3.dims_mm.t"])
+        for word in ("cross_B", "断面の高さを大きくする", "フレームの管の高さを大きくする", "sections.", "K5"):
+            self.assertNotIn(word, got["text"])
         self.assertIn("最大応力 123.6 MPa ≤ 156.7 MPa", got["text"])
         self.assertNotIn(REPORT["domains"][0]["line"], got["text"])
         # no internal names or ids: effects in Japanese, mismatches counted, the unchecked
@@ -291,7 +306,7 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assert_inside(got, layout)
         self.assertLess(got["textPx"], layout["n17"]["page"]["text_px"])
         self.assertGreaterEqual(got["textPx"], layout["min_text_px"])
-        self.assertIn(long_report()["next"][0]["change"], got["text"])
+        self.assertIn(CHOSEN, got["text"])
         self.assertTrue(got["nextLit"])
         # the domain the next step names keeps its bars, and its strongest sensitivity is lit
         self.assertEqual(got["litBars"], [f"n17.domain.strength.sens.{STRONGEST}"])
@@ -313,8 +328,28 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assertEqual(got["litBars"], [])
         self.assertTrue(got["nextLit"])
         self.assertNotIn("その数を 1 % 変えると", got["text"])
+        # no sensitivity to choose by: the first step with a name and a direction, without
+        # figures (none in the record)
+        self.assertIn("フレームの管の高さを大きくする", got["text"])
+        self.assertNotIn("今 ", got["text"])
         self.assertEqual(errors, [])
         page.close()
+
+    def test_n17_next_without_a_named_step(self):
+        """A report whose next steps have no design number and direction lights no change
+        and says so; one without next says that."""
+        for run_id, nxt, words in (("20261102-203000-reportnoname", [REPORT["next"][1]], "報告の「次」に、名前と向きのある項が無い"),
+                                   ("20261102-203000-reportnonext", [], "報告に「次」が書かれていない")):
+            rep = copy.deepcopy(REPORT)
+            rep["next"] = nxt
+            if not (self.tmp / "runs" / run_id).exists():
+                write_run(self.tmp / "runs", run_id, report_events(rep))
+            page, errors = self.open(run_id, n17_layout()["n17"]["times"]["light_s"])
+            got = page.evaluate(STATE)
+            self.assertIn(words, got["text"])
+            self.assertNotIn("cross_B", got["text"])
+            self.assertEqual(errors, [])
+            page.close()
 
     def test_n17_names_missing_layout_keys(self):
         layout = n17_layout()
