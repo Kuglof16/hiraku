@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
+from hiraku.catalog.build import product_step
 from hiraku.tools.context import RunContext
 from hiraku.tools.summary import design_summary
 
@@ -89,8 +90,9 @@ def _reader(name: str) -> Any:
 
 
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
-    """The product's plan plus a step from the builders' PLANS for each load case it lacks
-    (PLANS_BEYOND first for a case past the limit), ordered upstream first. `missing` lists
+    """The product's plan plus a step from the builders for each load case it lacks: the product's own
+    (PRODUCT_STEPS, e.g. the care bed's step_for), else PLANS_BEYOND for a case past the limit, else
+    PLANS; ordered upstream first. A builders' step whose tool is not on the shelf goes to `unshelved`. `missing` lists
     the load cases nobody gave a step for. A product step whose load case this run did not
     build (another step height, say) is left out: its causes were written for that load case.
     So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
@@ -105,11 +107,15 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     for lc in ctx.load_cases:
         if lc["load_case_id"] in have:
             continue
-        recipe = (is_beyond(lc) and past.get(lc["test_id"])) or recipes.get(lc["test_id"])
+        # the product's own step first (hiraku.catalog.build.plan_steps keeps the same order)
+        recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and past.get(lc["test_id"]))
+                  or recipes.get(lc["test_id"]))
         if recipe is None:
             out["missing"].append(lc["load_case_id"])
+        elif ctx.tools and recipe["tool"] not in ctx.tools:
+            out["unshelved"].append((lc["load_case_id"], recipe["tool"]))
         else:
-            out["steps"].append({**recipe, "load_case": lc["load_case_id"]})
+            out["steps"].append({**copy.copy(recipe), "load_case": lc["load_case_id"]})
     ordered: list[Record] = []
     left = list(out["steps"])
     in_plan = {s["load_case"] for s in left}
@@ -367,6 +373,36 @@ def _toolless_specs(test_id: str) -> list[Record]:
         return []
 
 
+# A product's own hand calculations per load case: product -> (module, function(load_case) -> its K0
+# predictions, function(design, load_case) -> the from.<name> values). Listed for a load case of that
+# product that has no plan step, and where the plan step has fewer of them.
+PRODUCT_PREDICTIONS = {"care-bed": ("hiraku.catalog.builders.product_care_bed", "predictions_for", "inputs_for")}
+
+
+def _product_specs(ctx: RunContext, lc: Record) -> list[Record]:
+    """The product's own predictions for this load case (PRODUCT_PREDICTIONS), [] when it has none.
+    A prediction with from. refs but no inputs_from of its own reads them through the product's inputs function."""
+    where = PRODUCT_PREDICTIONS.get(ctx.project.get("product"))
+    if where is None:
+        return []
+    try:
+        mod = importlib.import_module(where[0])
+        preds, given = getattr(mod, where[1]), getattr(mod, where[2])
+    except (ImportError, AttributeError):
+        return []
+    out = []
+    for spec in preds(lc) or []:
+        uses_from = any(str(r).startswith("from.") for r in (spec.get("inputs") or {}).values())
+        if uses_from and not spec.get("inputs_from"):
+            spec = {**spec, "inputs_from": given}
+        out.append(spec)
+    return out
+
+
+def _key(spec: Record) -> tuple:
+    return spec.get("formula_id"), spec.get("quantity"), spec.get("output")
+
+
 def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any = None) -> list[Record]:
     """Per load case (one, or all of the run): for each formula the run's plan uses on it (the scripted
     run's plan: data/catalog/scripted.yaml and the builders' PLANS), its inputs with values and units
@@ -402,6 +438,13 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
                     "この式の入力をコードで読む手順はありません。list_formulas で入力の名前と単位を見て、"
                     "get_context の design_summary と荷重条件から自分で入れ、どこから取ったかを assumptions に書いてください")})
         toolless = _toolless_specs(lc["test_id"]) if not steps else []
+        # the product's own predictions the plan step lacks (all of them when there is no step)
+        listed = {_key(e) for e in entries}
+        own = [s for s in _product_specs(ctx, lc) if _key(s) not in listed]
+        if own and not steps:
+            toolless = toolless + own
+        else:
+            entries += [_entry(ctx, lc, steps[0]["tool"], spec, None) for spec in own]
         entries += [_entry(ctx, lc, None, spec, None) for spec in toolless]
         item: Record = {"load_case_id": lc["load_case_id"], "test_id": lc["test_id"], "domain": lc["domain"],
                         "criterion": lc.get("criterion"), "formulas": entries}

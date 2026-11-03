@@ -284,6 +284,19 @@ def beyond_plans() -> dict[str, Record]:
     return dict(getattr(mod, "PLANS_BEYOND", {})) if mod is not None else {}
 
 
+def product_step(product: str, load_case: Record) -> Record | None:
+    """The product's own scripted step for one load case (PRODUCT_STEPS of hiraku.catalog.builders),
+    or None when the product has none for it."""
+    mod = _builders_module()
+    own = getattr(mod, "PRODUCT_STEPS", {}).get(product) if mod is not None else None
+    if own is None:
+        return None
+    try:
+        return own(load_case) or None
+    except Exception:  # a step function that does not know this load case gives no step
+        return None
+
+
 def plan_steps(product: str, load_case: Record) -> list[Record]:
     """The steps hiraku.catalog.builders has for one load case: the product's own (PRODUCT_STEPS),
     the one past the limit (PLANS_BEYOND, for a load case id ending in -beyond) and the general one
@@ -293,14 +306,9 @@ def plan_steps(product: str, load_case: Record) -> list[Record]:
     if mod is None:
         return []
     out = []
-    own = getattr(mod, "PRODUCT_STEPS", {}).get(product)
-    if own is not None:
-        try:
-            step = own(load_case)
-        except Exception:  # a step function that does not know this load case gives no step
-            step = None
-        if step:
-            out.append(step)
+    step = product_step(product, load_case)
+    if step:
+        out.append(step)
     tid = load_case.get("test_id")
     if str(load_case.get("load_case_id", "")).endswith("-beyond") and tid in getattr(mod, "PLANS_BEYOND", {}):
         out.append(mod.PLANS_BEYOND[tid])
