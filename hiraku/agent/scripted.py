@@ -384,10 +384,14 @@ def _check_rules(ctx: RunContext, agent: str) -> Record | None:
 
 def _ask_on_hits(ctx: RunContext, checked: Record) -> bool:
     """The lead asks the person what to do about the parts a rule hits (the rule's sentence and
-    the parts come from the rule_check record). False when nothing was hit."""
+    the parts come from the rule_check record): the rules of the files the person dropped when
+    they hit anything, else every hit. False when nothing was hit."""
     hits = checked.get("hits") or []
     if not hits:
         return False
+    dropped = {e["data"]["doc"]["doc_id"] for e in ctx.store.events()
+               if e["kind"] == "knowledge.imported" and e["data"]["doc"].get("origin") == "dropped"}
+    hits = [h for h in hits if h["rule_id"].split("-", 1)[0] in dropped] or hits
     named = "、".join(f"{h['rule_id']}「{h['text']}」({'・'.join(h['parts'])})" for h in hits[:3])
     ctx.store.emit("agent.said", agent="lead",
                    text=f"規則に当たる部品があります: {named}。設計を直しますか、それとも、この規則は外しますか")
