@@ -3,8 +3,11 @@
     GET  /api/launch   what can be started: the requirement files, whether a Claude run
                        can start (ANTHROPIC_API_KEY is set where this server runs), and
                        the run started here, if one is still going
+                       and the demo runs (data/requirements/demo_runs.yaml, see demo_runs)
     POST /api/launch   {"requirements": "<file name>", "mode": "scripted" | "claude"}
-                       -> {"run_id": ...} once the run folder exists
+                       -> {"run_id": ...} once the run folder exists; the name is a file
+                       directly in the requirements folder, or a path listed as `file`
+                       in demo_runs.yaml (e.g. products/care-bed.yaml)
     POST /api/launch/stop  {"run_id": ...}: asks the run started here to stop, by
                        putting layout.STOP_REQUEST_FILE in its folder (the run then
                        ends as stopped, stop_code user_stop, within seconds)
@@ -12,8 +15,8 @@
 A run is `python -m hiraku run data/requirements/<file> [--scripted] --runs <runs>`
 in a child process with this server's environment. The key is never put into a
 response or written anywhere, and the screen never asks for it: the child reads
-it from the environment like any run. Only files in the requirements folder can
-be named, one run at a time. The server refuses a request from another web page
+it from the environment like any run. Only files in the requirements folder (and
+the demo runs' listed files under it) can be named, one run at a time. The server refuses a request from another web page
 (a run costs money); see Handler.do_POST.
 """
 
@@ -40,6 +43,10 @@ _FILE_RE = re.compile(r"^[A-Za-z0-9_.-]+\.ya?ml$")
 REQUESTS_DIR = "_requests"  # under the runs folder: requests settled in A1/A2 (hiraku.intake.request)
 _REQUEST_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 _RUN_FOLDER = "run folder:"
+DEMO_RUNS_FILE = "demo_runs.yaml"  # the design department's list of demo runs, in the requirements folder
+PRODUCTS_DIR = "products"
+_PART_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+_PRODUCT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 class LaunchError(Exception):
@@ -92,6 +99,17 @@ def read_requirements(path: Path) -> dict[str, Any]:
             "cost_limit_usd": r.get("cost_limit_usd"), "round_limit": r.get("round_limit")}
 
 
+def relative_file(name: Any) -> str:
+    """A demo run's `file`: a relative path of plain parts (no drive, no leading /, no . or ..),
+    ending in a .yaml/.yml file name. Returns it with / between the parts."""
+    if not isinstance(name, str) or not name or "\\" in name or name.startswith("/"):
+        raise ValueError("file must be a path relative to data/requirements/")
+    parts = name.split("/")
+    if not all(_PART_RE.match(p) and p not in (".", "..") for p in parts) or not _FILE_RE.match(parts[-1]):
+        raise ValueError(f"file must be a path relative to data/requirements/, not {name!r}")
+    return name
+
+
 def run_command(requirements: Path, mode: str, runs_dir: Path, intake_events: Path | None = None) -> list[str]:
     cmd = [sys.executable, "-u", "-m", "hiraku", "run", str(requirements), "--runs", str(runs_dir)]
     if intake_events is not None:  # a request settled in A1/A2: the run emits these intake events as they are
@@ -126,25 +144,111 @@ class Launcher:
         files = []
         if self.requirements_dir.is_dir():
             for p in sorted(self.requirements_dir.iterdir()):
-                if not (p.is_file() and _FILE_RE.match(p.name)):
+                if not (p.is_file() and _FILE_RE.match(p.name)) or p.name == DEMO_RUNS_FILE:
                     continue
-                try:
-                    files.append({"file": p.name, **self.reader(p)})
-                except Exception as e:  # a file that does not load is shown, not hidden
-                    files.append({"file": p.name, "error": f"{type(e).__name__}: {e}"})
+                files.append(self._read_file(p.name, p))
+        demo, demo_error = self.demo_runs()
         return {
             "requirements": files,
+            "demo_runs": demo,
+            "demo_runs_error": demo_error,
             "claude_ready": self.claude_ready(),
             "key_name": KEY_NAME,
             "running": self.current if self.running() else None,
             "started": self.started[-10:],
         }
 
-    def _path_of(self, name: Any) -> Path:
-        if not isinstance(name, str) or not _FILE_RE.match(name):
-            raise LaunchError(400, "requirements must be the name of a file in data/requirements/")
-        path = self.requirements_dir / name
+    def _read_file(self, name: str, path: Path) -> dict[str, Any]:
+        try:
+            return {"file": name, **self.reader(path)}
+        except Exception as e:  # a file that does not load is shown, not hidden
+            return {"file": name, "error": f"{type(e).__name__}: {e}"}
+
+    def _demo_list(self) -> list[Any] | None:
+        """demo_runs.yaml's `runs` as written; None when there is no such file. Raises when it does not load."""
+        import yaml
+
+        path = self.requirements_dir / DEMO_RUNS_FILE
         if not path.is_file():
+            return None
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        runs = doc.get("runs") if isinstance(doc, dict) else None
+        if not isinstance(runs, list):
+            raise ValueError(f"{DEMO_RUNS_FILE} needs a list under runs:")
+        return runs
+
+    def demo_files(self) -> set[str]:
+        """The relative paths listed as `file` in demo_runs.yaml (only well-formed ones)."""
+        try:
+            runs = self._demo_list() or []
+        except Exception:
+            return set()
+        out = set()
+        for r in runs:
+            try:
+                out.add(relative_file(r.get("file") if isinstance(r, dict) else None))
+            except ValueError:
+                pass
+        return out
+
+    def demo_runs(self) -> tuple[list[dict[str, Any]], str | None]:
+        """The demo runs in demo_runs.yaml's order, and why the file did not load (None if it did
+        or is not there). A row that cannot be used keeps its id, title and shows with an error."""
+        import yaml
+
+        try:
+            runs = self._demo_list()
+        except Exception as e:
+            return [], f"{DEMO_RUNS_FILE}: {type(e).__name__}: {e}"
+        rows = []
+        for r in runs or []:
+            if not isinstance(r, dict):
+                rows.append({"id": "", "title": "", "shows": "", "cuts": [], "error": "each run must be a mapping"})
+                continue
+            cuts = r.get("cuts") or []
+            row: dict[str, Any] = {"id": str(r.get("id") or ""), "title": str(r.get("title") or ""),
+                                   "shows": str(r.get("shows") or ""),
+                                   "cuts": [str(c) for c in cuts] if isinstance(cuts, list) else [str(cuts)]}
+            file, request = r.get("file"), r.get("request")
+            if (file is None) == (request is None):
+                rows.append({**row, "error": "a run needs either file or request"})
+            elif file is not None:
+                try:
+                    name = relative_file(file)
+                except ValueError as e:
+                    rows.append({**row, "file": str(file), "error": str(e)})
+                    continue
+                path = self.requirements_dir / name
+                rows.append({**row, **(self._read_file(name, path) if path.is_file()
+                                       else {"file": name, "error": f"no requirements file {name}"})})
+            else:
+                product = request.get("product") if isinstance(request, dict) else None
+                if not isinstance(product, str) or not _PRODUCT_RE.match(product):
+                    rows.append({**row, "error": "request must be {product: <name in products/>}"})
+                    continue
+                path = self.requirements_dir / PRODUCTS_DIR / f"{product}.yaml"
+                try:
+                    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                    want = doc.get("want") if isinstance(doc, dict) else None
+                    if not isinstance(want, str) or not want.strip():
+                        raise ValueError(f"no want in {PRODUCTS_DIR}/{product}.yaml")
+                    rows.append({**row, "product": product, "want": want.strip()})
+                except Exception as e:
+                    rows.append({**row, "product": product, "error": f"{type(e).__name__}: {e}"})
+        return rows, None
+
+    def _path_of(self, name: Any) -> Path:
+        if isinstance(name, str) and not _FILE_RE.match(name) and name in self.demo_files():
+            path = (self.requirements_dir / name).resolve()
+            if not path.is_relative_to(self.requirements_dir.resolve()):  # (relative_file already keeps it inside)
+                raise LaunchError(400, "requirements must be a file under data/requirements/")
+            if not path.is_file():
+                raise LaunchError(404, f"no requirements file {name}")
+            return path
+        if not isinstance(name, str) or not _FILE_RE.match(name):
+            raise LaunchError(400, "requirements must be the name of a file in data/requirements/ or a file listed in demo_runs.yaml")
+        path = self.requirements_dir / name
+        if name == DEMO_RUNS_FILE or not path.is_file():
             raise LaunchError(404, f"no requirements file {name}")
         return path
 

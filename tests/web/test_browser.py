@@ -506,6 +506,109 @@ class BrowserReplayTest(unittest.TestCase):
                 lau.proc.wait()
             shutil.rmtree(tmp)
 
+    def _demo_server(self, env):
+        """A launcher on a requirements folder with a demo_runs.yaml: a file row (N12), a request row (N09)."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        req = tmp / "requirements"
+        (req / "products").mkdir(parents=True)
+        (req / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "offroad-4w-n12.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 在宅で使う電動の介護ベッドを作りたい\n", encoding="utf-8")
+        (req / "demo_runs.yaml").write_text(
+            "runs:\n"
+            "  - id: n12\n    title: 要件の間違い\n    shows: 要件の誤りを見つけて直す\n    file: offroad-4w-n12.yaml\n    cuts: [N12]\n"
+            "  - id: n09\n    title: 依頼から始める\n    shows: 依頼の文から分野を選ぶ\n    request: {product: care-bed}\n    cuts: [N09]\n",
+            encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        lau = Launcher(tmp / "runs", req, env=env, command=fake_command(SAMPLE_EVENTS, run_id, 2.0), reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
+        def close():
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        return f"http://127.0.0.1:{server.server_address[1]}", lau, run_id, close
+
+    def test_demo_runs_on_the_run_list(self):
+        """デモの実行 sits first in the launch box, in demo_runs.yaml's order: a file row runs
+        through the same Claude confirmation, a request row opens A1 with the product's want in."""
+        base, lau, run_id, close = self._demo_server({"ANTHROPIC_API_KEY": "test-value-not-a-real-key"})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            got = page.evaluate("""() => ({
+                first: document.querySelector('#launch h3').textContent,
+                ids: [...document.querySelectorAll('#launch .lreq.demo')].map((e) => e.dataset.demo),
+                text: document.querySelector('#launch .demo-runs').textContent,
+                files: [...document.querySelectorAll('#launch .lreq:not(.demo) .rid')].map((e) => e.textContent),
+            })""")
+            self.assertEqual(got["first"], "デモの実行")
+            self.assertEqual(got["ids"], ["n12", "n09"])
+            for words in ("要件の間違い", "要件の誤りを見つけて直す", "N12", "依頼から始める", "N09", "在宅で使う電動の介護ベッドを作りたい"):
+                self.assertIn(words, got["text"])
+            self.assertEqual(got["files"], ["offroad-4w-n12.yaml", "offroad-4w.yaml"])  # the files below stay as they were
+            self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n12'] a.demo-a1").count(), 0)  # a file row runs, not A1
+            ask = page.locator("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
+            self.assertIn("$2", ask.text_content())
+            ask.click()
+            page.wait_for_selector("#launch .lreq.demo[data-demo='n12'] .confirm")
+            self.assertIn("費用の上限は $2", page.text_content("#launch .confirm"))
+            self.assertEqual(page.locator("#launch .confirm").count(), 1)  # only the demo row asks
+            page.click("#launch button[data-launch-cancel]")
+            page.wait_for_selector("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
+            self.assertFalse(lau.started)  # nothing ran yet
+            # the request row: A1 opens with the want written in, and nothing is sent
+            posted = []
+            page.on("request", lambda r: posted.append(r.url) if r.method == "POST" else None)
+            page.click("#launch .lreq.demo[data-demo='n09'] a.demo-a1")
+            page.wait_for_url("**/?new=1&demo=n09")
+            page.wait_for_function("document.querySelector('#view-intake textarea')?.value.length > 0")
+            self.assertEqual(page.input_value("#view-intake textarea"), "在宅で使う電動の介護ベッドを作りたい")
+            self.assertIn("依頼から始める", page.text_content("#draftbar"))
+            self.assertIsNone(page.evaluate("window.hiraku.request.state.state"))
+            self.assertEqual(posted, [])
+            self.assertFalse(lau.started)
+            # the file row's Claude run, confirmed, starts on its file
+            page.goto(f"{base}/?list=1")
+            page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
+            page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch='claude']")
+            page.wait_for_url(f"**/?run={run_id}-claude", timeout=30000)
+            self.assertEqual([(s["mode"], s["requirements"]) for s in lau.started], [("claude", "offroad-4w-n12.yaml")])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
+
+    def test_demo_runs_without_the_key(self):
+        base, lau, _, close = self._demo_server({})
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?list=1")
+            page.wait_for_selector("#launch .demo-runs")
+            row = "#launch .lreq.demo[data-demo='n12']"
+            self.assertTrue(page.is_disabled(f"{row} button:has-text('Claude で走らせる')"))
+            self.assertIn("ANTHROPIC_API_KEY", page.text_content(f"{row} .why"))
+            self.assertEqual(page.locator(f"{row} button[data-launch-ask]").count(), 0)
+            self.assertFalse(page.is_disabled(f"{row} button[data-launch='scripted']"))
+            self.assertEqual(page.locator("#launch .lreq.demo[data-demo='n09'] a.demo-a1").count(), 1)
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            close()
+
     def test_project_updated_and_report_written(self):
         events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         project = copy.deepcopy(events[0]["data"])

@@ -9,7 +9,8 @@ Standard library only. Routes:
     GET /api/runs/<run_id>/events?offset=N
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
-    GET /api/launch, POST /api/launch   start a run from the screen (launch.py)
+    GET /api/launch, POST /api/launch   start a run from the screen (launch.py); GET also lists
+                                        the demo runs of data/requirements/demo_runs.yaml
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
     POST /api/launch {request, mode}    start a run from a request settled in A1/A2 (--intake-events)
     POST /api/request, /api/request/answer

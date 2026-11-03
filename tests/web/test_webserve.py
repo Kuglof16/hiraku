@@ -345,9 +345,9 @@ class LaunchTest(unittest.TestCase):
                 lau.proc.wait()
         shutil.rmtree(self.tmp)
 
-    def serve(self, env, hold_s=3.0):
-        lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
-                       reader=fake_reader, wait_s=20)
+    def serve(self, env, hold_s=3.0, command=None, reader=fake_reader):
+        lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=command or fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
+                       reader=reader, wait_s=20)
         self.launchers = [*getattr(self, "launchers", []), lau]
         server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -515,6 +515,86 @@ class LaunchTest(unittest.TestCase):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
         self.assertEqual((status, out["run_id"]), (200, self.RUN + "-claude"))
+
+    DEMO = (
+        "runs:\n"
+        "  - id: n12\n    title: 間違いを見つける\n    shows: 要件の誤りを Claude が見つける\n    file: offroad-4w-n12.yaml\n    cuts: [N12]\n"
+        "  - id: bed\n    title: 介護ベッド\n    shows: 製品の要件から走る\n    file: products/care-bed.yaml\n"
+        "  - id: broken\n    title: 読めない\n    shows: x\n    file: products/broken.yaml\n"
+        "  - id: n09\n    title: 依頼から\n    shows: A1 で分野を選ぶ\n    request: {product: care-bed}\n    cuts: [N09]\n"
+        "  - id: up\n    title: 外\n    shows: x\n    file: ../secret.yaml\n"
+    )
+
+    def demo_setup(self):
+        req = self.tmp / "requirements"
+        (req / "offroad-4w-n12.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "products").mkdir()
+        (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 介護ベッドを作りたい\n", encoding="utf-8")
+        (req / "products" / "broken.yaml").write_text("product: [\n", encoding="utf-8")
+        (req / "products" / "serving-robot.yaml").write_text("product: serving-robot\n", encoding="utf-8")
+        (self.tmp / "secret.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "demo_runs.yaml").write_text(self.DEMO, encoding="utf-8")
+
+        def reader(path):
+            if path.name == "broken.yaml":
+                raise ValueError("does not load")
+            return fake_reader(path)
+
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+
+        def command(path, mode, runs):
+            seen.append(Path(path))
+            return fake(path, mode, runs)
+
+        return self.serve({"ANTHROPIC_API_KEY": self.SECRET}, command=command, reader=reader), seen
+
+    def launch_info(self, base):
+        with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+            return json.loads(r.read())
+
+    def test_demo_runs_are_listed_in_their_order(self):
+        base, _ = self.demo_setup()
+        info = self.launch_info(base)
+        self.assertIsNone(info["demo_runs_error"])
+        rows = {r["id"]: r for r in info["demo_runs"]}
+        self.assertEqual([r["id"] for r in info["demo_runs"]], ["n12", "bed", "broken", "n09", "up"])
+        n12 = rows["n12"]
+        self.assertEqual((n12["title"], n12["shows"], n12["cuts"], n12["file"]), ("間違いを見つける", "要件の誤りを Claude が見つける", ["N12"], "offroad-4w-n12.yaml"))
+        self.assertEqual((n12["want"], n12["cost_limit_usd"], n12["round_limit"]), ("見本の要件", 2.0, 1))  # read by the launcher's reader
+        self.assertNotIn("error", n12)
+        self.assertEqual((rows["bed"]["file"], rows["bed"]["cost_limit_usd"]), ("products/care-bed.yaml", 2.0))
+        self.assertIn("does not load", rows["broken"]["error"])  # shown, not hidden
+        self.assertEqual(rows["broken"]["title"], "読めない")
+        n09 = rows["n09"]
+        self.assertEqual((n09["product"], n09["want"], n09["cuts"]), ("care-bed", "介護ベッドを作りたい", ["N09"]))
+        self.assertNotIn("file", n09)
+        self.assertIn("error", rows["up"])
+        # demo_runs.yaml itself is not a requirements file to run
+        self.assertNotIn("demo_runs.yaml", [r["file"] for r in info["requirements"]])
+
+    def test_demo_runs_missing_or_not_loading(self):
+        base = self.serve({})
+        info = self.launch_info(base)
+        self.assertEqual((info["demo_runs"], info["demo_runs_error"]), ([], None))
+        (self.tmp / "requirements" / "demo_runs.yaml").write_text("runs: [\n", encoding="utf-8")
+        info = self.launch_info(base)
+        self.assertEqual(info["demo_runs"], [])
+        self.assertIn("demo_runs.yaml", info["demo_runs_error"])
+        (self.tmp / "requirements" / "demo_runs.yaml").write_text("other: 1\n", encoding="utf-8")
+        self.assertIn("runs", self.launch_info(base)["demo_runs_error"])
+
+    def test_a_listed_demo_file_runs_and_unlisted_paths_do_not(self):
+        base, seen = self.demo_setup()
+        req = self.tmp / "requirements"
+        for bad in ("products/serving-robot.yaml", "../secret.yaml", str(self.tmp / "secret.yaml"),
+                    (self.tmp / "secret.yaml").as_posix(), "products/../offroad-4w.yaml", "products\\care-bed.yaml"):
+            self.assertEqual(self.post(base, {"requirements": bad, "mode": "scripted"})[0], 400, bad)
+        self.assertEqual(self.post(base, {"requirements": "demo_runs.yaml", "mode": "scripted"})[0], 404)
+        self.assertEqual(seen, [])  # nothing was started
+        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "claude"})
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN + "-claude", "products/care-bed.yaml"))
+        self.assertEqual([p.resolve() for p in seen], [(req / "products" / "care-bed.yaml").resolve()])
 
     def test_refuses_other_files_and_other_pages(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
