@@ -30,8 +30,7 @@ class VerdictLineTest(unittest.TestCase):
         v = {"test_id": "S5", "quantity": "tip_slope_angle", "value": {"value": 41.85, "unit": "deg"}, "op": ">",
              "limit": {"value": 43.31, "unit": "deg"}, "pass": False, "margin_pct": -3.37}
         self.assertEqual(verdict_line(v), "S5 tip_slope_angle 41.85 deg ≤ 43.31 deg (基準 > 43.31 deg に届かない、余裕 -3 %)")
-        ok = dict(v, value={"value": 50.0, "unit": "deg"}, pass_=None, margin_pct=15.4)
-        ok["pass"] = True
+        ok = {**v, "value": {"value": 50.0, "unit": "deg"}, "pass": True, "margin_pct": 15.4}
         self.assertEqual(verdict_line(ok), "S5 tip_slope_angle 50 deg > 43.31 deg (余裕 15 %)")
 
 
