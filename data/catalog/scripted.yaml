@@ -55,23 +55,24 @@ offroad-4w:
   revise:
     # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
+      fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
       changes:
         track: {value: 1220, unit: mm}
-        steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を前へ出す (steering_x -570 mm から -200 mm へ)
+        H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す
       source: >-
-        the demo scripted run 20261104-004233-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
-        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (268.6 mm)
+        the demo scripted run 20261104-061935-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002
+        (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_slide 158.5 mm):
+        H1 ver-0004 (30 deg), H3 ver-0005 (knee_room 10.0 mm), ver-0006 (knee_angle_room 28.26 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 13, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: >-
-        the demo scripted run 20261104-004233-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.878 s against 6 s); version 3 with this change
-        (13 kW): P3 ver-0012 (5.834 s). 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
+        the demo scripted run 20261104-061935-offroad-4w-scripted, version 2: P3 ver-0009 (time_to_speed 7.004 s against 6 s); version 3 with this change
+        (13 kW): P3 ver-0015 (5.935 s). Before the plates' catalogue mass, 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
   steps:
     - &p1_step
       load_case: P1-step100
@@ -276,16 +277,16 @@ offroad-4w-video:
   extends: offroad-4w
   revise:
     - say: 組み立て・動力・強度 (つなぎ目) の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くし、レールの肉厚を上げてつなぎ目にガセットを足します
+      fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
       changes:
         track: {value: 1220, unit: mm}
-        steering_x: {value: -200, unit: mm}
         motor_peak_power: {value: 12, unit: kW}
         rail_t: {value: 4.5, unit: mm}
         gusset_leg: {value: 80, unit: mm}
         gusset_thickness: {value: 3.2, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す。
+        H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す。
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる。
         R1s: 横の部材の端がレールの側の壁を曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm にし、
         つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足す (トレッドを広げると横の部材が長くなり、肉厚だけでは足りない)
@@ -308,25 +309,26 @@ offroad-4w-n15:
     - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
   revise:
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
+      fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
       changes:
         track: {value: 1220, unit: mm}
-        steering_x: {value: -200, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
-        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -200 mm へ前へ出す
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、運転席・ステアリング・ペダルの位置を直す
       source: >-
-        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
-        version 2 with this change: H1 ver-0004 (30 deg), H3 ver-0005 (268.6 mm). steering_x is the demo plan's value,
-        until the seat and steering values are searched by code (the analysis department's driver fit)
+        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm), ver-0003
+        (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_slide 158.5 mm): H1 ver-0005 (30 deg),
+        H3 ver-0006 (knee_room 10.0 mm), ver-0007 (knee_angle_room 28.26 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 15, unit: kW}
       reason: >-
-        P3: 40 km/h までが 6.88 s で 6 s を超えるので、モーターの最大出力を 10 kW から 15 kW に上げる
+        P3: 40 km/h までが 7.00 s で 6 s を超えるので、モーターの最大出力を 10 kW から 15 kW に上げる
         (あとで強度のためにレールを重くしても 6 s に収まるように)
       source: >-
-        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 2: P3 ver-0019 (time_to_speed 6.878 s); version 3 with this change: P3 ver-0035 (5.519 s);
-        version 4 (heavier rails): P3 ver-0053 (5.746 s). On version 4 the launch tool gives 6.080 s at 13 kW and 5.886 s at 14 kW
+        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 2: P3 ver-0021 (time_to_speed 7.004 s); version 3 with this change: P3 ver-0038 (5.612 s);
+        version 4 (heavier rails): P3 ver-0057 (5.840 s). Before the plates' catalogue mass, version 4 gave 6.080 s at 13 kW
+        and 5.886 s at 14 kW (the launch tool)
     - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
       changes:
         rail_t: {value: 4.5, unit: mm}
@@ -336,10 +338,10 @@ offroad-4w-n15:
       reason: >-
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
         レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 3 で、つなぎ目のホットスポットは 560 MPa、限界 163 MPa)
+        (版 3 で、つなぎ目のホットスポットは 562 MPa、限界 163 MPa)
       source: >-
-        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 3: R1s ver-0036 (frame_shell ana-0046 max_hot_spot_stress 559.7 MPa at rail_L_BE, cmp-0076);
-        version 4 with this change: R1s ver-0054 (frame_shell ana-0070 123.0 MPa at rail_L_BE, cmp-0116).
+        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 3: R1s ver-0039 (frame_shell ana-0049 max_hot_spot_stress 562.1 MPa at rail_R_BE, cmp-0087);
+        version 4 with this change: R1s ver-0058 (frame_shell ana-0074 124.2 MPa at rail_L_BE, cmp-0131).
         The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
