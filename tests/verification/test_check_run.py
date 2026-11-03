@@ -683,6 +683,24 @@ class CheckRun(unittest.TestCase):
         v.update(change)
         return ev
 
+    @staticmethod
+    def _past_limit_without_formula(state="pending", status="stopped", code="not_judged"):
+        """HK4 (contract, 67c3e74): a case no K0 formula predicts, with an analysis result past its criterion
+        (R1 at 200 MPa against 156.7) and no comparison or verdict, does not hold the stop: the run ends
+        not judged and the tile stays off green."""
+        ev = [e for e in sample_events() if e["kind"] not in ("comparison.recorded", "verdict.recorded")]
+        by_kind(ev, "analysis.finished")["data"]["results"][0]["value"] = 200.0
+        by_kind(ev, "judgement.updated")["data"].update(state=state, verdict_ids=[], red_count=0)
+        by_kind(ev, "run.finished")["data"].update(
+            status=status, stop_code=code,
+            stop_reason="R1-step100: 基準を超えた結果があるが、手計算 (K0) の式が無いので判定していない")
+        return renumber(ev)
+
+    def test_h4_a_past_limit_case_without_a_formula_ends_not_judged(self):
+        self.assertEqual(self.rules(self._past_limit_without_formula()), set())
+        self.assertFlags(self._past_limit_without_formula(state="green"), "judgement.state")  # never green
+        self.assertFlags(self._past_limit_without_formula(status="done", code="done"), "HK4_no_stop_before_judged")
+
     def test_unsupported_load_verdict_comes_from_the_analysis(self):
         verdict_rules = lambda ev: {r for r in self.rules(ev) if r.startswith("verdict.")}
         self.assertEqual(verdict_rules(self._unsupported(sample_events())), set())
