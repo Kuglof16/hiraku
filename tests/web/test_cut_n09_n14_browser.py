@@ -295,6 +295,8 @@ class CutN09N14Test(unittest.TestCase):
                     # Claude's reason as the record has it (not cut), at 18 px, a note
                     self.assertEqual((r["state"], r["line"], r["linePx"], r["lineKind"]), ("lit", CLAUDE_REASON[d], 18, "note"), (t, d))
                     self.assertFalse(r["cutWide"], (t, d))
+                # one size for every chip's second line (the promo department), assembly's included
+                self.assertEqual(r["linePx"], 18, (t, d))
                 # every chip's words inside the chip
                 self.assertTrue(r["inside"], (t, d, r))
                 self.assertFalse(r["over"], (t, d))

@@ -38,8 +38,8 @@
 // its turn a chip waits with its plain words.
 //
 // Story (layout.json story.cuts.n09): label 8, the seven domains and assembly. The eight
-// names are the labels; the second lines are notes (data-kind note, text_px x 0.7, at least
-// min_text_px, as the chips box says; Claude's reasons at min_text_px).
+// names are the labels; the second lines are notes (data-kind note), all eight at min_text_px
+// (the promo department: one size for every chip's second line).
 //
 // Positions, sizes, colours, the length and the times come from layout.json n09; a missing
 // key is named on the page.
@@ -195,7 +195,7 @@ export class CutN09 {
     this.stage.append(box);
     const rowH = (C.h - (DOMAINS.length - 1) * C.row_gap) / DOMAINS.length;
     const namePx = Math.max(C.text_px, body);
-    const linePx = Math.max(Math.round(C.text_px * 0.7), this.layout.min_text_px);
+    const linePx = this.layout.min_text_px;
     const T = sp.times;
     this.chips = chipsOf(this.picked).map((c, k) => ({ ...c, at: T.chips_from_s + k * T.chip_step_s }));
     this.rows = {};
