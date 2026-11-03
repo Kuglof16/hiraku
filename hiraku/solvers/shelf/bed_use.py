@@ -16,7 +16,7 @@ use_fatigue: each use is one cycle of a stress range at one weld.
 The S-N curve is the design's (fatigue_fat_class at 2e6 cycles, fatigue_slope, fatigue_knee_cycles). The uses'
 ranges differ, so the cycles are a spectrum: below the knee the curve goes on with slope 2 m - 1, as IIW-1823-07
 (2008) sec. 4.3.1, p.110 gives for Miner summation of a spectrum (read in that document by the quality department;
-library_fatigue.spectrum_slope). The design variable fatigue_slope_after_knee is the constant-amplitude slope and is
+library_fatigue.spectrum_slope). The design variable fatigue_slope_after_knee_constant_amplitude is the constant-amplitude slope and is
 not used. The damage judged is the worst weld's.
 
 actuator_duty: the stroke one raise takes is the lever's (the pin-to-pin length at the largest raise less that at
@@ -206,7 +206,7 @@ class UseFatigue(BuiltinTool):
             "assumptions": [
                 f"S-N の曲がり点より下は、傾き {m2:g} (= 2 × {m:g} − 1) で延ばした。使い方ごとに応力の幅が違うので振幅の変わる繰り返し "
                 "(スペクトル) で、IIW-1823-07 (2008) 4.3.1 節 (p.110) は、その Miner の和に 2m − 1 を使う (品質保証部がその文書で"
-                "確かめた)。設計の変数 fatigue_slope_after_knee は一定の振幅のときの傾きなので、ここでは使わない",
+                "確かめた)。設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので、ここでは使わない",
                 "使い方 1 回が、その溶接の応力の幅 1 回 (0 から載せた分まで)。平均応力の補正はしない",
                 "着座: 利用者の重さだけを 3D の枠に載せた応力 (枠は線形なので、それが幅)",
                 "背上げ・膝上げ: 1 回の上げで背と膝の金具の耳の根元がそれぞれ 1 回、起こす間の最大の力の応力まで振れる",

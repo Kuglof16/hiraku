@@ -125,7 +125,7 @@ def launch_inputs(design: dict, loading: str | None = None, params: dict | None 
     return {
         "inputs": {
             "T": quantity(float(motor.torque), "N*m"), "i": quantity(float(motor.gear), "1"),
-            "eta": quantity(float(motor.efficiency), "1"), "r": quantity(float(r) * 1000.0, "mm"),
+            "eta": quantity(float(motor.efficiency), "1"), "rolling_radius": quantity(float(r) * 1000.0, "mm"),
             "P": quantity(float(motor.power) / 1000.0, "kW"), "C_rr": quantity(float(veh.corners[0].c_rr), "1"),
             "C_d": quantity(float(aero.cd), "1"), "A": quantity(float(aero.front_area), "m^2"),
             "rho": quantity(float(aero.rho), "kg/m^3"),

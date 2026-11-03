@@ -101,29 +101,29 @@ class LaunchTest(unittest.TestCase):
     def test_formula_on_the_shelf(self):
         f = FORMULAS["launch.peak_tractive_force"]
         self.assertEqual(f["domain"], "powertrain")
-        self.assertEqual({k: v["unit"] for k, v in f["inputs"].items()}, {"T": "N*m", "i": "1", "eta": "1", "r": "mm"})
+        self.assertEqual({k: v["unit"] for k, v in f["inputs"].items()}, {"T": "N*m", "i": "1", "eta": "1", "rolling_radius": "mm"})
         self.assertEqual(f["outputs"]["F_max"]["unit"], "N")
         self.assertTrue(f["assumptions"])
         self.assertIn("definition", f["source"])
         out = REG.evaluate("launch.peak_tractive_force", {"T": {"value": 50.0, "unit": "N*m"},
                                                           "i": {"value": 8.0, "unit": "1"},
                                                           "eta": {"value": 0.9, "unit": "1"},
-                                                          "r": {"value": 0.3, "unit": "m"}})
+                                                          "rolling_radius": {"value": 0.3, "unit": "m"}})
         self.assertAlmostEqual(out["outputs"]["F_max"]["value"], 50.0 * 8.0 * 0.9 / 0.3, places=9)
         with self.assertRaises(ValueError):
             REG.evaluate("launch.peak_tractive_force", {"T": {"value": 50.0, "unit": "N*m"},
                                                         "i": {"value": 8.0, "unit": "1"},
                                                         "eta": {"value": 0.9, "unit": "1"},
-                                                        "r": {"value": 0.0, "unit": "mm"}})
+                                                        "rolling_radius": {"value": 0.0, "unit": "mm"}})
 
     def test_inputs_and_f_max_as_before(self):
         got = scene_inputs.launch_inputs(DESIGN, "two_cargo", LAUNCH_LC["params"])
-        shape_ok(self, got, ("T", "i", "eta", "r", "P", "C_rr", "C_d", "A", "rho"))
+        shape_ok(self, got, ("T", "i", "eta", "rolling_radius", "P", "C_rr", "C_d", "A", "rho"))
         self.assertTrue(got["driven_wheels"])
         self.assertTrue({"m", "grade", "v", "lambda", "F_max"} <= set(got["other_inputs"]))
         before = old_launch(DESIGN, LAUNCH_LC)
         f_max = REG.evaluate("launch.peak_tractive_force",
-                             {k: got["inputs"][k] for k in ("T", "i", "eta", "r")})["outputs"]["F_max"]
+                             {k: got["inputs"][k] for k in ("T", "i", "eta", "rolling_radius")})["outputs"]["F_max"]
         self.assertEqual(f_max["unit"], "N")
         # r is now the loaded radius (scene_inputs.loaded_radius): F_max goes up by free / loaded
         scale = got["radius"]["free_r_mm"] / got["radius"]["r_mm"]

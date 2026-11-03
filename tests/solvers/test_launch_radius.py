@@ -32,8 +32,8 @@ class LoadedRadiusTest(unittest.TestCase):
         want = free - sum(ground[s["id"]]["force_N"][2] / kt for s in driven) / len(driven)
         self.assertAlmostEqual(rad["free_r_mm"], free, places=6)
         self.assertAlmostEqual(rad["r_mm"], want, places=6)
-        self.assertAlmostEqual(got["inputs"]["r"]["value"], want, places=6)
-        self.assertEqual(got["inputs"]["r"]["unit"], "mm")
+        self.assertAlmostEqual(got["inputs"]["rolling_radius"]["value"], want, places=6)
+        self.assertEqual(got["inputs"]["rolling_radius"]["unit"], "mm")
         self.assertTrue(0.0 < free - want < 0.1 * free)  # a deflection, small against the radius
 
     def test_free_radius_without_tyre_stiffness(self):
@@ -47,7 +47,7 @@ class LoadedRadiusTest(unittest.TestCase):
     def test_the_plan_says_which_radius(self):
         first = k2_tests.PLANS["P3"]["predictions"][0]
         self.assertTrue(any("荷重でたわんだ半径" in a and "自由半径" in a for a in first["assumptions"]))
-        self.assertEqual(k2_tests.launch_inputs(DESIGN, LC)["r"]["value"],
+        self.assertEqual(k2_tests.launch_inputs(DESIGN, LC)["rolling_radius"]["value"],
                          scene_inputs.launch_inputs(DESIGN, "two_cargo", LC["params"])["radius"]["r_mm"])
 
 
