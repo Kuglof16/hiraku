@@ -208,7 +208,7 @@ class PartsFromTheVariablesTest(unittest.TestCase):
         self.assertEqual(knee_space(d)["occupant_R"][1], where)
         self.assertAlmostEqual(knee_space(d)["occupant_R"][0] - J5, room, places=6)
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
-        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)
+        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)[0]  # H3-body-size (knee_room); [1] is H3-knee-angle
         got = h3_calc(d, lc)
         self.assertAlmostEqual(got["knee_length"]["value"] - got["buttock_knee"]["value"], room, places=6)
 
@@ -269,7 +269,7 @@ class Run10H3Test(unittest.TestCase):
     def h3(self, d):
         tool = {t.name: t for t in solvers.builtin_tools()}["assembly"]
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
-        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)
+        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)[0]  # H3-body-size (knee_room); [1] is H3-knee-angle
         rec = tool.run(d, lc, [{"prediction_id": "pred-0001"}], {})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         got = {r["quantity"]: r for r in rec["results"]}
