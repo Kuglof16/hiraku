@@ -54,6 +54,8 @@ LOCK_STALE_S = 30.0  # a lock older than this was left by a process that died
 POLL_S = 1.0  # how often the server reads the outbox, the inbox and stop.request
 # in STATE_FILE, written by the server: rules.unpredictable_cases of the run (the hook command has no registry)
 UNPREDICTABLE_KEY = "unpredictable"
+# in STATE_FILE, written by the server: shelf.stages_of (HK5 stages; the hook command has no tools)
+STAGES_KEY = "stages"
 
 STOPPED_SESSION_CLOSED = "Claude Code のセッションが閉じたので、実行を止めました"
 STOPPED_NEW_RUN = "同じセッションで新しい実行を始めたので、この実行は止めました"
@@ -199,7 +201,7 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
         state = read_state(run_dir)
         # no registry here: the load cases no K0 formula can predict are the server's (UNPREDICTABLE_KEY)
         ctx = RunContext(store=store, formulas=None, tools={}, specs=specs_from_events(store.events()),
-                         unpredictable=state.get(UNPREDICTABLE_KEY))
+                         unpredictable=state.get(UNPREDICTABLE_KEY), stages=state.get(STAGES_KEY))
         notes: list[Record] = []
 
         def emit(kind: str, **kw: Any) -> None:
@@ -429,21 +431,28 @@ class PluginServer:
         self.close(*end_status(ctx, blocks))
 
     def note_unpredictable(self, ctx: RunContext) -> None:
-        """Leave rules.unpredictable_cases in the hooks' state for the hook command (which has no
-        registry), when it changed."""
+        """Leave rules.unpredictable_cases and the HK5 stages (shelf.stages_of) in the hooks' state for
+        the hook command (which has no registry and no tools), when they changed."""
         from hiraku.tools import rules
 
         if ctx.formulas is None or ctx.project["status"] != "running":
             return
+        from hiraku.tools.shelf import stages_of
+
         try:
             cases = rules.unpredictable_cases(ctx)
         except Exception as e:  # the hooks then hold the stop as before (no load case set aside)
             print(f"hiraku mcp: unpredictable_cases: {type(e).__name__}: {e}", file=sys.stderr)
             return
+        try:
+            stages = stages_of(ctx)
+        except Exception as e:  # the hook command then uses the fallback table only
+            print(f"hiraku mcp: stages_of: {type(e).__name__}: {e}", file=sys.stderr)
+            stages = None
         with locked(ctx.store.path):
             state = read_state(ctx.store.path)
-            if state.get(UNPREDICTABLE_KEY) != cases:
-                write_state(ctx.store.path, {**state, UNPREDICTABLE_KEY: cases})
+            if state.get(UNPREDICTABLE_KEY) != cases or state.get(STAGES_KEY) != stages:
+                write_state(ctx.store.path, {**state, UNPREDICTABLE_KEY: cases, STAGES_KEY: stages})
 
     # ------------------------------------------------------------------ notes, inbox, stop button
 

@@ -41,7 +41,8 @@ class StartTest(RunCase, unittest.TestCase):
     def test_list_tools_is_one_line_per_tool(self):
         lines = list_tools(self.ctx)
         self.assertEqual(lines[0], {"name": "step_climb", "title": "fake step_climb", "domain": "powertrain",
-                                    "base": "K2", "tests": ["P1"], "usable": True, "checks_passed": "1/1"})
+                                    "base": "K2", "tests": ["P1"], "usable": True, "checks_passed": "1/1",
+                                    "stage": 1})  # HK5: STAGE_FALLBACK, the fake spec has no stage
         self.assertEqual([t["name"] for t in list_tools(self.ctx, {"test_id": "R1"})], ["frame_static"])
         (full,) = list_tools(self.ctx, {"tool": "frame_static"})
         self.assertEqual(full["checks"][0]["case"], "known answer")
