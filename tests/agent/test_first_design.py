@@ -116,6 +116,35 @@ class HearingByClaudeTest(unittest.TestCase):
             self.assertIn(HEARING_CLAUDE_TEXT, lead_task(ctx))
 
 
+class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
+    """Contract cb66036: revise_design takes the generator's choices (get_context design_choices) besides changes."""
+
+    def setUp(self):
+        super().setUp()
+        propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
+
+    def test_a_choice_sets_its_variables(self):
+        from hiraku.tools.functions import revise_design
+
+        got = get_context(self.ctx, {"sections": ["design_choices"]})["design_choices"]
+        self.assertIn("bulkhead", got["choices"]["pedal_mount"])
+        out = revise_design(self.ctx, {"choices": {"pedal_mount": "bulkhead"}, "reason": "R7: ペダルの力を隔壁へ"},
+                            "designer")
+        moved = {c["variable"]: c for c in out["changes"]}
+        self.assertEqual(moved["pedal_mount"]["to"]["value"], 2)  # the variable the choice stands for
+        self.assertEqual(out["choices"], {"pedal_mount": "bulkhead"})
+        self.assertEqual(self.ctx.version, 2)
+
+    def test_an_unknown_choice_or_value_is_refused(self):
+        from hiraku.tools.functions import revise_design
+
+        with self.assertRaisesRegex(ToolError, "design_choices"):
+            revise_design(self.ctx, {"choices": {"no_such": "x"}, "reason": "r"}, "designer")
+        with self.assertRaisesRegex(ToolError, "bulkhead"):
+            revise_design(self.ctx, {"choices": {"pedal_mount": "roof"}, "reason": "r"}, "designer")
+        self.assertEqual(self.ctx.version, 1)
+
+
 class FirstDesignTest(FirstDesignCase, unittest.TestCase):
     def test_the_run_starts_without_a_design(self):
         self.assertEqual(self.ctx.version, 0)

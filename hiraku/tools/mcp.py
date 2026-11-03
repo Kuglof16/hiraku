@@ -82,7 +82,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
                                     "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
-                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables。"
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
