@@ -547,13 +547,20 @@ function setCompare(s, chain, ct) {
     cmpView.tags.innerHTML = `<span data-version="${c.version}">版 ${c.version}</span><span data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
   }
   cmpView?.tags && (cmpView.tags.hidden = !c);
-  if (was !== !!c) {
-    resize3d();
+  // The right view keeps clear the strip under the legend (from the legend's left edge to
+  // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
+  // left view looks through the same camera, so its vehicle sits the same way in its half.
+  const lg = $("legend");
+  const room = c && !lg.hidden ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0;
+  if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
+    if (was !== !!c) resize3d();
+    bench.setReserve(room);
     // the half-wide (or whole) view: frame the vehicle again, or the focus for the new shape
     if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
     bench.focusKey = undefined;
   }
 }
+const LEGEND_GAP_PX = 12;
 
 // A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
@@ -806,10 +813,11 @@ function draw() {
     const ct = buildContour(s, chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
-    setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     if (!contour?.mesh) ui.zoomMax = false;
+    renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
-    renderLegend(contour);
+    cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);

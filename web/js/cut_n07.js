@@ -1,29 +1,28 @@
-// N07: the contour of a shell analysis. The vehicle turns slowly while the stress
-// colours run over its frame (a front of colour from the front to the rear), then the
-// camera comes close to the largest element of the version before the change, and
-// the colours go over to the version after it, on one colour scale. Positions, sizes,
-// colours and times come from layout.json n07; a missing key is named on the page.
+// N07: the contour of a stress analysis on the frame's plate mesh. The vehicle turns
+// slowly in the colours of the version before the reinforcement, the camera comes to
+// that version's largest element, and the colours go over to the version after it, on
+// one colour scale; then it stays there. The words on the page are only "補強の前" /
+// "補強の後" and the stress's name and unit: the difference is shown by the colours and
+// the shape, not by naming the analyses. Positions, sizes, colours, the length and the
+// times come from layout.json n07; a missing key is named on the page.
 // cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
 //
-// times: 0..turn_to_s the turn (turn_deg in all); lead_s..turn_to_s the colours run
-// over the frame; zoom_s..zoom_to_s the camera comes to the largest element (its
-// neighbourhood then takes `zoom` of the view's smaller side); swap_s..swap_to_s the
-// version after the change fades in over the one before (same camera, same scale).
-//
-// The front of colour leaves the elements it has not reached plain, rather than
-// showing them at a share of their values: the record has one load step, so values in
-// between would be made up.
+// times: lead_s..turn_to_s the turn (turn_deg in all); zoom_s..zoom_to_s the camera
+// comes to the largest element (its neighbourhood then takes zoom.fill of the view's
+// height); swap_s..swap_to_s the version after fades in over the one before (same
+// camera, same scale). Before lead_s and after each step the picture holds still.
 
 import * as THREE from "three";
-import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
+import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
-import { FIELD_JA, SURFACE_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
+import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
 import { esc, fmt, fmtVU, unitLabel } from "./labels.js";
 import { VIEWS, Workbench3D, isoToThree } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
+const STATE_JA = ["補強の前", "補強の後"];
 
 const N07_KEYS = [
   "duration_s",
@@ -31,7 +30,7 @@ const N07_KEYS = [
   "legend.x", "legend.y", "legend.w", "legend.h", "legend.title_px", "legend.text_px",
   "label.x", "label.y", "label.size_px",
   "times.lead_s", "times.turn_to_s", "times.zoom_s", "times.zoom_to_s", "times.swap_s", "times.swap_to_s",
-  "turn_deg", "zoom",
+  "turn_deg", "zoom.fill",
   "colors.bg", "colors.panel", "colors.rule",
   "overlay.color", "overlay.opacity",
 ];
@@ -47,13 +46,12 @@ const clamp01 = (p) => Math.max(0, Math.min(1, p));
 const smooth = (p) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(p));
 const along = (t, a, b) => clamp01((t - a) / Math.max(1e-9, b - a));
 
-// Where the cut is at time t (layout.json n07.times): the turn's angle (deg), the share
-// of the colour front, of the zoom and of the swap (0..1).
+// Where the cut is at time t (layout.json n07.times): the turn's angle (deg) and the
+// shares of the zoom and of the swap (0..1).
 export function n07Progress(sp, t) {
   const T = sp.times;
   return {
-    turnDeg: sp.turn_deg * smooth(along(t, 0, T.turn_to_s)),
-    sweep: along(t, T.lead_s, T.turn_to_s),
+    turnDeg: sp.turn_deg * smooth(along(t, T.lead_s, T.turn_to_s)),
     zoom: smooth(along(t, T.zoom_s, T.zoom_to_s)),
     mix: smooth(along(t, T.swap_s, T.swap_to_s)),
   };
@@ -66,7 +64,7 @@ function meshFields(s, ana) {
 }
 
 // The newest ok analysis of a load case and version with a field on a mesh.
-function shellAnalysis(s, lcId, version) {
+function meshAnalysis(s, lcId, version) {
   return s.order.analyses.map((id) => s.analyses[id]).filter((a) => a.status === "ok" && a.load_case_id === lcId && a.design_version === version && meshFields(s, a).length).at(-1) ?? null;
 }
 
@@ -78,8 +76,7 @@ export class CutN07 {
     this.s = s;
     this.spec = layout.n07;
     this.minPx = layout.min_text_px;
-    const px = (v) => Math.max(this.minPx, v);
-    this.px = px;
+    this.px = (v) => Math.max(this.minPx, v);
     this.pick();
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -89,31 +86,31 @@ export class CutN07 {
     this.build();
   }
 
-  // The load case (?lc=, else the first in the project's order with a shell analysis) and
-  // the versions (?before= / ?after=, else the first and the last with one on that case).
+  // The load case (?lc=, else the first in the project's order with a mesh field) and the
+  // versions (?before= / ?after=, else the first and the last with one on that case).
   pick() {
     const s = this.s;
     const cases = (s.project?.load_cases ?? []).map((c) => c.load_case_id);
-    const withShell = (lc) => [...s.versions].sort((a, b) => a - b).filter((v) => shellAnalysis(s, lc, v));
-    const lc = params.get("lc") ?? cases.find((c) => withShell(c).length) ?? null;
-    const versions = lc ? withShell(lc) : [];
-    if (!versions.length) throw new Error(`シェルの解析の記録が無い${lc ? ` (${lc})` : ""}`);
+    const withMesh = (lc) => [...s.versions].sort((a, b) => a - b).filter((v) => meshAnalysis(s, lc, v));
+    const lc = params.get("lc") ?? cases.find((c) => withMesh(c).length) ?? null;
+    const versions = lc ? withMesh(lc) : [];
+    if (!versions.length) throw new Error(`メッシュの上の値の記録が無い${lc ? ` (${lc})` : ""}`);
     const num = (k) => (params.has(k) ? Number(params.get(k)) : null);
     const vb = num("before") ?? versions[0];
     const va = num("after") ?? versions.at(-1);
     this.lc = (s.project?.load_cases ?? []).find((c) => c.load_case_id === lc) ?? null;
-    const before = shellAnalysis(s, lc, vb);
-    if (!before) throw new Error(`版 ${vb} のシェルの解析の記録が無い (${lc})`);
+    const before = meshAnalysis(s, lc, vb);
+    if (!before) throw new Error(`版 ${vb} のメッシュの上の値の記録が無い (${lc})`);
     const fb = preferredField(meshFields(s, before), s.meshes);
-    const after = va !== vb ? shellAnalysis(s, lc, va) : null;
-    if (va !== vb && !after) throw new Error(`版 ${va} のシェルの解析の記録が無い (${lc})`);
+    const after = va !== vb ? meshAnalysis(s, lc, va) : null;
+    if (va !== vb && !after) throw new Error(`版 ${va} のメッシュの上の値の記録が無い (${lc})`);
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
     if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);
     this.cases = [
-      { version: vb, ana: before, field: fb, ct: cb },
-      ...(fa ? [{ version: va, ana: after, field: fa, ct: ca }] : []),
+      { version: vb, name: STATE_JA[0], ana: before, field: fb, ct: cb },
+      ...(fa ? [{ version: va, name: STATE_JA[1], ana: after, field: fa, ct: ca }] : []),
     ];
   }
 
@@ -160,21 +157,14 @@ export class CutN07 {
     bv.fitPoints(bv.contentPoints(), VIEWS.default, 1.12);
     this.orbit = bv.cameraView();
     this.focus = bv.maxFocus(first.ct);
-    this.focusView = bv.focusView(this.focus, sp.zoom);
-    // the colour front runs along x (ISO) from the front of the mesh to its rear
-    const P = first.ct.mesh.rec.nodes_mm;
-    let lo = Infinity;
-    let hi = -Infinity;
-    for (const p of P) {
-      lo = Math.min(lo, p[0]);
-      hi = Math.max(hi, p[0]);
-    }
-    this.front = { axis: 0, from: hi, to: lo };
-    this.sweepK = null;
+    this.focusView = bv.focusView(this.focus, sp.zoom.fill, "height");
     this.buildLegend();
     this.buildLabel();
   }
 
+  // A tall legend: the stress's name and unit, the colour bar upright with its ends and
+  // band edges (the scale's own values), the colour past the allowable value, and each
+  // state's largest recorded value.
   buildLegend() {
     const sp = this.spec;
     const L = sp.legend;
@@ -188,19 +178,21 @@ export class CutN07 {
     const unit = unitLabel(f.unit);
     const tp = this.px(L.title_px);
     const xp = this.px(L.text_px);
-    const where = f.surface ? `シェル・${SURFACE_JA[f.surface] ?? f.surface}` : "シェル";
-    const top = ct.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct.max, 3);
+    // band edges every other band, as on the workbench's legend; the top says when it is the allowable value
+    const ticks = [];
+    for (let i = BANDS; i >= 0; i -= 2) {
+      const v = ct.min + ((ct.max - ct.min) * i) / BANDS;
+      ticks.push(`<span style="top:${((BANDS - i) / BANDS) * 100}%">${esc(i === BANDS && ct.limitKnown ? `許容 ${fmt(v, 4)}` : fmt(v, 3))}</span>`);
+    }
     const rows = this.cases
-      .map((c) => `<tr data-version="${c.version}"><td>版 ${c.version}</td><td>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</td></tr>`)
+      .map((c) => `<div class="row" data-version="${c.version}"><b>${esc(c.name)}</b><span>最大 ${esc(fmtVU(c.ct.fieldMax, f.unit))}</span></div>`)
       .join("");
     el.innerHTML =
       `<h3 style="font-size:${tp}px">${esc(FIELD_JA[f.kind] ?? f.kind)} [${esc(unit || "1")}]</h3>` +
-      `<p style="font-size:${xp}px">${esc(where)}</p>` +
-      `<i class="bar" style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i>` +
-      `<div class="ends" style="font-size:${xp}px"><span>${esc(fmt(ct.min, 3))}</span><span>${esc(top)}</span></div>` +
-      (ct.limitKnown ? `<p style="font-size:${xp}px"><i class="sw" style="background:${OVER_COLOR}"></i> 許容を超えた所</p>` : "") +
-      `<table style="font-size:${xp}px">${rows}</table>` +
-      `<p class="src" style="font-size:${this.minPx}px">色の目盛りは ${this.cases.length} つの版で同じ</p>`;
+      `<div class="scale" style="font-size:${xp}px"><i class="bar" style="background:linear-gradient(0deg, ${BAND_COLORS.map((c, i) => `${c} ${(i * 100) / BANDS}% ${((i + 1) * 100) / BANDS}%`).join(",")})"></i><div class="ticks">${ticks.join("")}</div></div>` +
+      (ct.limitKnown ? `<p style="font-size:${xp}px"><i class="sw" style="background:${OVER_COLOR}"></i>許容を超えた所</p>` : "") +
+      `<div class="rows" style="font-size:${xp}px">${rows}</div>` +
+      (this.cases.length > 1 ? `<p class="src" style="font-size:${this.minPx}px">前と後で同じ目盛り</p>` : "");
     this.stage.append(el);
     this.legend = el;
   }
@@ -210,28 +202,17 @@ export class CutN07 {
     const el = document.createElement("div");
     el.className = "n07-label";
     el.dataset.box = "n07.label";
-    // the layout gives no width: the words wrap before the stage's right margin, as wide as the view's left one
-    const maxW = this.layout.stage.w - sp.view.x - sp.label.x;
-    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, maxWidth: `${maxW}px`, fontSize: `${this.px(sp.label.size_px)}px` });
+    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${this.px(sp.label.size_px)}px` });
     this.stage.append(el);
     this.label = el;
     this.labelFor = null;
   }
 
-  // The words on the label: the version shown, with its recorded reason for the change.
   setLabel(c) {
     if (this.labelFor === c) return;
     this.labelFor = c;
-    const why = c.version !== this.cases[0].version ? this.s.designs[c.version]?.change_reason : null;
-    const b = document.createElement("b");
-    b.textContent = `版 ${c.version}`;
-    this.label.replaceChildren(b, why ? ` ${why}` : "");
-    const r = this.label.getBoundingClientRect();
-    const k = r.height / (this.label.offsetHeight || 1) || 1;
-    const box = { x: this.spec.label.x, y: this.spec.label.y, w: r.width / k, h: r.height / k };
-    if (!clearOfBand(box, this.layout)) this.label.dataset.outside = "1";
-    else delete this.label.dataset.outside;
-    for (const tr of this.legend.querySelectorAll("tr")) tr.classList.toggle("on", Number(tr.dataset.version) === c.version);
+    this.label.textContent = c.name;
+    for (const row of this.legend.querySelectorAll(".row")) row.classList.toggle("on", Number(row.dataset.version) === c.version);
   }
 
   resize(scale) {
@@ -243,7 +224,7 @@ export class CutN07 {
     }
   }
 
-  // The camera at time t: on the turn, then on the way to the largest element.
+  // The camera: on the turn, then on the way to the largest element.
   cameraAt(p) {
     const o = this.orbit;
     const off = o.position.clone().sub(o.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), (p.turnDeg * Math.PI) / 180);
@@ -261,25 +242,19 @@ export class CutN07 {
     const p = n07Progress(this.spec, t);
     this.now = { t, ...p };
     const [b, a] = this.cases;
-    const k = p.sweep;
-    if (k !== this.sweepK) {
-      b.view.sweepShell({ ...this.front, k });
-      this.sweepK = k;
-    }
-    const cam = this.cameraAt(p);
-    b.view.lookFrom(cam);
+    b.view.lookFrom(this.cameraAt(p));
     const mix = a ? p.mix : 0;
-    b.el.style.opacity = "1";
     if (mix < 1) b.view.renderInto(b.el.getContext("2d"), b.el.width, b.el.height, this.scale);
+    b.el.style.opacity = mix < 1 ? "1" : "0";
     if (a) {
       a.el.style.opacity = String(mix);
       a.view.copyCamera(b.view);
       if (mix > 0) a.view.renderInto(a.el.getContext("2d"), a.el.width, a.el.height, this.scale);
     }
     this.setLabel(a && mix >= 0.5 ? a : b);
-    // the mark: a ring round the largest element (of the version before) at the zoom's end
+    // the ring round the largest element (of the version before), as wide as zoom.fill of the view's height
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
-    const d = this.spec.zoom * Math.min(this.inner.w, this.inner.h);
+    const d = this.spec.zoom.fill * this.inner.h;
     Object.assign(this.mark.style, {
       left: `${BORDER_PX + ((at.x + 1) / 2) * this.inner.w - d / 2}px`,
       top: `${BORDER_PX + ((1 - at.y) / 2) * this.inner.h - d / 2}px`,

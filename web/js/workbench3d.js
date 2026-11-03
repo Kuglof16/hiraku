@@ -337,8 +337,7 @@ export class Workbench3D {
       this.renderer.setSize(w, h, true);
       this.labelRenderer.setSize(w, h);
     }
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.applyAspect();
     for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
@@ -575,7 +574,7 @@ export class Workbench3D {
     else if (this.cgDesign) this.cgPos = this.cgDesign.clone().applyMatrix4(this.body.matrix);
     else this.cgPos = null;
     if (this.cgPos) this.cg.position.copy(this.cgPos);
-    this.cg.visible = !!this.toggles.cg && !!this.cgPos;
+    this.cg.visible = !!this.toggles.cg && !!this.cgPos && !this.closeUp;
   }
 
   // The ground under the vehicle: a ruled grid (diagram look) or earth (real look).
@@ -733,19 +732,13 @@ export class Workbench3D {
   }
 
   // Colour a shell's faces by element values (one colour per element) or by node values.
-  // sweep {axis, from, to, k}: only the corners whose coordinate on that ISO axis lies
-  // within the first share k of from -> to take their colour; the rest stay plain (a
-  // front of colour passing over the mesh; no value is made up for the plain ones).
-  paintShell(o, m, contour, sweep = null) {
+  paintShell(o, m, contour) {
     const col = o.faces.geometry.getAttribute("color");
     const rgb = new Map(); // band colour -> [r, g, b] (linear)
     const c = new THREE.Color();
-    const P = o.rec.nodes_mm;
-    const plain = this.look.real ? "#b9b4aa" : GRAY;
     for (let k = 0; k < o.vNode.length; k += 1) {
       const v = m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]];
-      const off = sweep && (P[o.vNode[k]][sweep.axis] - sweep.from) / (sweep.to - sweep.from || 1) > sweep.k;
-      const hex = off ? plain : colorOf(v, contour.max, contour.min);
+      const hex = colorOf(v, contour.max, contour.min);
       let t = rgb.get(hex);
       if (!t) rgb.set(hex, (t = c.set(hex).toArray()));
       col.array.set(t, k * 3);
@@ -846,26 +839,20 @@ export class Workbench3D {
     }
   }
 
-  // Repaint the shown shell contour with a sweep (paintShell); k >= 1 is the whole contour.
-  sweepShell(sweep) {
-    const ct = this.keys.contour;
-    if (!ct?.mesh) return;
-    this.paintShell(this.shellObj(ct.mesh.rec), ct.mesh, ct, sweep && sweep.k < 1 ? sweep : null);
-  }
-
   // The focus (maxElementFocus) of a shell contour's largest element, or null.
   maxFocus(contour) {
     const at = contour?.mesh?.maxAt?.elem;
     return at === undefined ? null : maxElementFocus(contour.mesh.rec, at, this.design);
   }
 
-  // Where the camera stands to see a focus with its neighbourhood (radius) taking `fill`
-  // of the view's smaller side: { target, position, near, far } in three.js metres.
-  focusView(f, fill = 0.5) {
+  // Where the camera stands to see a focus with its neighbourhood (radius, the diameter
+  // across) taking `fill` of the view's smaller side, or of its height with
+  // side "height": { target, position, near, far } in three.js metres.
+  focusView(f, fill = 0.5, side = "smaller") {
     const target = isoToThree(f.center.toArray());
     const d = isoToThree(f.dir.toArray()).normalize();
     const tv = Math.tan((this.camera.fov * Math.PI) / 360);
-    const t = Math.min(tv, tv * this.camera.aspect);
+    const t = side === "height" ? tv : Math.min(tv, tv * this.camera.aspect);
     const dist = (f.radius * 0.001) / (fill * t);
     const span = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() * 0.001 : dist * 20;
     return { target, position: target.clone().addScaledVector(d, dist), near: dist / 50, far: dist + span * 3 };
@@ -901,6 +888,34 @@ export class Workbench3D {
       this.focusSaved = null;
       this.focused = null;
     }
+    this.setCloseUp(!!this.focused);
+  }
+
+  // Close up (at a focus) the part boxes and the centre-of-gravity mark are left out, the
+  // toggles' state kept: the boxes stand between the camera and the frame's walls and,
+  // see-through, still tint the stress colours behind them, and the mark is a fixed 150 mm
+  // so near it fills the view. They come back as the toggles say when the view leaves.
+  setCloseUp(on) {
+    if (this.closeUp === on) return;
+    this.closeUp = on;
+    this.setToggles(this.toggles);
+  }
+
+  // Keep `right` pixels at the right of the view clear (e.g. under a legend laid over it):
+  // the camera's frustum is the free part's, laid over the whole canvas with a view
+  // offset, so fitting and focusing centre in the free part and nothing is cut at the left.
+  setReserve(right) {
+    this.reserveRight = Math.max(0, right || 0);
+    this.applyAspect();
+  }
+
+  applyAspect() {
+    const { w, h } = this.size;
+    const free = Math.max(1, w - (this.reserveRight ?? 0));
+    this.camera.aspect = free / h;
+    if (free < w) this.camera.setViewOffset(free, h, 0, 0, w, h);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
   }
 
   // A mode shape: each node moves along its recorded vector, scaled so the
@@ -1163,7 +1178,7 @@ export class Workbench3D {
 
   setToggles(t) {
     this.toggles = { ...t };
-    this.parts.visible = !!t.parts;
+    this.parts.visible = !!t.parts && !this.closeUp;
     this.arrows.visible = !!t.arrows && !this.frame;
     this.names.visible = !!t.names;
     this.markers.visible = !!t.names;
@@ -1171,7 +1186,7 @@ export class Workbench3D {
     for (const o of Object.values(this.wheelObjs)) o.tag.visible = !!t.names || o.ring.visible;
     this.overGhosts.visible = !!t.contour;
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
-    this.cg.visible = !!t.cg && !!this.cgPos;
+    this.cg.visible = !!t.cg && !!this.cgPos && !this.closeUp;
     this.placeMotionArrows(this.frame);
   }
 
@@ -1207,6 +1222,11 @@ export class Workbench3D {
     this.camera.fov = other.camera.fov;
     this.camera.near = other.camera.near;
     this.camera.far = other.camera.far;
+    // the other view's frustum, a reserved strip (setReserve) included
+    this.camera.aspect = other.camera.aspect;
+    const ov = other.camera.view;
+    if (ov?.enabled) this.camera.setViewOffset(ov.fullWidth, ov.fullHeight, ov.offsetX, ov.offsetY, ov.width, ov.height);
+    else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
     this.controls.target.copy(other.controls.target);
     this.noFollow = true;

@@ -21,19 +21,19 @@ from tests.web.test_browser import ENABLED, n05_layout, sync_playwright
 
 
 def n07_layout():
-    """The cut pages' stand-in layout rules with an n07 block in the shape cut_n07.js
-    reads (the promo department's values are not there yet; these are made up)."""
+    """The cut pages' stand-in layout rules with an n07 block: the promo department's
+    proposed n07 values (not in layout.json yet); colors and overlay as n01's."""
     layout = n05_layout()
     layout["n07"] = {
-        "duration_s": 11.0,
-        "view": {"x": 96, "y": 72, "w": 1290, "h": 800},
-        "legend": {"x": 1416, "y": 72, "w": 408, "h": 420, "title_px": 30, "text_px": 22},
-        "label": {"x": 1416, "y": 520, "size_px": 26},
-        "times": {"lead_s": 0.5, "turn_to_s": 5.0, "zoom_s": 5.0, "zoom_to_s": 7.0, "swap_s": 8.0, "swap_to_s": 9.5},
-        "turn_deg": 120,
-        "zoom": 0.6,
-        "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
-        "overlay": {"color": "#c8402a", "opacity": 0.25},
+        "duration_s": 15.3,
+        "view": {"x": 96, "y": 96, "w": 1500, "h": 790},
+        "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20},
+        "label": {"x": 120, "y": 120, "size_px": 30},
+        "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0},
+        "turn_deg": 90,
+        "zoom": {"fill": 0.45},
+        "colors": copy.deepcopy(layout["n01"]["colors"]),
+        "overlay": copy.deepcopy(layout["n01"]["overlay"]),
     }
     return layout
 
@@ -53,6 +53,21 @@ LEGEND = """() => { const b = window.hiraku.bench; const ct = b.keys.contour;
   return { rows: [...document.querySelectorAll("#legend .variants")].map((r) => [r.dataset.analysis, [...r.querySelectorAll("button")].map((x) => [x.textContent, x.classList.contains("on")])]),
            ana: ct?.analysisId ?? null, shell: Object.values(b.shellObjs).some((o) => o.group.visible), beams: b.model.visible,
            src: document.querySelector("#legend .src")?.textContent ?? "", acts: [...document.querySelectorAll("#legend .acts button")].map((x) => x.dataset.act) }; }"""
+
+
+# Screen boxes [left, top, right, bottom] of each compare view's vehicle (its outline points
+# through the view's camera), of the two canvases, of the legend and of the largest element.
+VEHICLE_BOXES = """() => { const vp = document.getElementById("viewport");
+  const R = window.hiraku.bench; const L = window.hiraku.cmpBench;
+  const rc = vp.querySelector(":scope > canvas.gl").getBoundingClientRect(); const lc = vp.querySelector(".cmp-view canvas.gl").getBoundingClientRect();
+  const at = (b, r, p) => { const q = p.clone().applyMatrix4(b.iso.matrixWorld).project(b.camera); return [r.left + (q.x + 1) / 2 * r.width, r.top + (1 - q.y) / 2 * r.height]; };
+  const box = (b, r) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of b.contentPoints()) { const [x, y] = at(b, r, p); x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    return [x0, y0, x1, y1]; };
+  const lg = document.getElementById("legend").getBoundingClientRect();
+  const f = R.maxFocus(R.keys.contour);
+  return { right: box(R, rc), left: box(L, lc), rightCanvas: [rc.left, rc.top, rc.right, rc.bottom], leftCanvas: [lc.left, lc.top, lc.right, lc.bottom],
+           legend: [lg.left, lg.top, lg.right, lg.bottom], focus: at(R, rc, f.center) }; }"""
 
 
 @unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
@@ -143,11 +158,16 @@ class ShellBrowserTest(unittest.TestCase):
         # the camera looks at the element's centre
         self.assertLess(math.dist(near["target"], page.evaluate("() => { const b = window.hiraku.bench; return b.maxFocus(b.keys.contour).center.clone().applyMatrix4(b.iso.matrix).toArray(); }")), 1e-9)
         self.assertEqual(page.evaluate("() => document.querySelector('#legend [data-act=zoom]').textContent"), "元の見え方に戻る")
+        # close up the part boxes and the centre-of-gravity mark are left out; their buttons stay on
+        seen = """() => { const b = window.hiraku.bench; return { parts: b.parts.visible, cg: b.cg.visible,
+          buttons: ["parts", "cg"].map((k) => document.querySelector(`#toggles [data-toggle=${k}]`).classList.contains("on")) }; }"""
+        self.assertEqual(page.evaluate(seen), {"parts": False, "cg": False, "buttons": [True, True]})
         page.click("#legend [data-act=zoom]")
         page.wait_for_function("!window.hiraku.bench.focused")
         back = page.evaluate(CAMERA)
         self.assertLess(math.dist(back["pos"], before["pos"]), 1e-9)
         self.assertLess(math.dist(back["target"], before["target"]), 1e-9)
+        self.assertEqual(page.evaluate(seen), {"parts": True, "cg": True, "buttons": [True, True]})
         self.assertEqual(errors, [])
         page.close()
 
@@ -177,6 +197,22 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertIn(f"版 2 (右): 最大 {sig4(v2)} MPa", got["cmp"])
         self.assertLess(got["left"][0], got["right"][0])
         self.assertAlmostEqual(got["left"][1], got["right"][1], delta=2)
+        # each vehicle on screen (its outline points projected through its view's camera) stays
+        # inside its half, and the right one clear of the legend's box
+        boxes = page.evaluate(VEHICLE_BOXES)
+        for side in ("right", "left"):
+            v, c = boxes[side], boxes[f"{side}Canvas"]
+            self.assertGreaterEqual(v[0], c[0] - 1, side)
+            self.assertLessEqual(v[2], c[2] + 1, side)
+        v, lg = boxes["right"], boxes["legend"]
+        self.assertFalse(v[0] < lg[2] and lg[0] < v[2] and v[1] < lg[3] and lg[1] < v[3], (v, lg))
+        # zoomed in, the largest element (the middle of the view's free part) is left of the legend
+        page.click("#legend [data-act=zoom]")
+        page.wait_for_function("!!window.hiraku.bench.focused")
+        page.evaluate("() => window.hiraku.seek(1e6)")
+        boxes = page.evaluate(VEHICLE_BOXES)
+        self.assertLess(boxes["focus"][0], boxes["legend"][0])
+        self.assertGreater(boxes["focus"][0], boxes["rightCanvas"][0])
         self.assertEqual(errors, [])
         page.close()
 
@@ -209,39 +245,54 @@ class ShellBrowserTest(unittest.TestCase):
         T = sp["times"]
         page, errors = self.cut(0)
         self.assertIsNone(page.evaluate("() => document.querySelector('.err')?.textContent ?? null"))
-        js = """async (t) => { await window.hiraku.seek(t); const c = window.hiraku.cut; const [b, a] = c.cases;
+        js = """async (t) => { await window.hiraku.seek(t); const c = window.hiraku.cut; const [b, a] = c.cases; const cam = b.view.camera;
           const f = c.focus.center.clone().applyMatrix4(b.view.iso.matrix);
-          const off = b.view.camera.position.clone().sub(b.view.controls.target);
-          return { now: c.now, dist: b.view.camera.position.distanceTo(f), yaw: Math.atan2(off.x, off.z) * 180 / Math.PI,
-                   after: Number(a.el.style.opacity), version: document.documentElement.dataset.n07Version,
+          const off = cam.position.clone().sub(b.view.controls.target);
+          const dist = cam.position.distanceTo(f);
+          return { now: c.now, dist, yaw: Math.atan2(off.x, off.z) * 180 / Math.PI,
+                   // the share of the view's height the largest element's neighbourhood (2 x radius) takes
+                   fill: (c.focus.radius * 0.001) / (dist * Math.tan((cam.fov * Math.PI) / 360)),
+                   before: Number(b.el.style.opacity), after: Number(a.el.style.opacity), version: document.documentElement.dataset.n07Version,
                    label: document.querySelector('[data-box="n07.label"]').textContent,
+                   text: document.getElementById("stage").innerText,
                    mark: Number(c.mark.style.opacity) }; }"""
-        at = {t: page.evaluate(js, t) for t in (0, T["turn_to_s"] / 2, T["turn_to_s"], T["zoom_to_s"], T["swap_s"], T["swap_to_s"], sp["duration_s"])}
+        times = (0, T["lead_s"], (T["lead_s"] + T["turn_to_s"]) / 2, T["turn_to_s"], T["zoom_to_s"], T["swap_s"], (T["swap_s"] + T["swap_to_s"]) / 2, T["swap_to_s"], sp["duration_s"])
+        at = {t: page.evaluate(js, t) for t in times}
         self.assertEqual(errors, [])
         self.assertEqual(page.evaluate("window.hiraku.player.duration"), sp["duration_s"])
-        # the turn: turn_deg in all by turn_to_s, half of it at the middle (the ease is symmetric)
+        # the turn: still until lead_s, turn_deg in all by turn_to_s, half of it at the middle (the ease is symmetric)
         turned = lambda a, b: (at[b]["yaw"] - at[a]["yaw"] + 540) % 360 - 180  # noqa: E731 (turn_deg < 180 here)
+        self.assertAlmostEqual(turned(0, T["lead_s"]), 0, places=6)
         self.assertAlmostEqual(abs(turned(0, T["turn_to_s"])), sp["turn_deg"], delta=0.5)
-        self.assertAlmostEqual(abs(turned(0, T["turn_to_s"] / 2)), sp["turn_deg"] / 2, delta=0.5)
-        self.assertEqual(at[0]["now"]["sweep"], 0)
-        self.assertEqual(at[T["turn_to_s"]]["now"]["sweep"], 1)
-        # the zoom: much closer to the largest element by zoom_to_s, and the mark is on
+        self.assertAlmostEqual(abs(turned(0, (T["lead_s"] + T["turn_to_s"]) / 2)), sp["turn_deg"] / 2, delta=0.5)
+        # in the colours of the version before all along the turn
+        for t in times[:4]:
+            self.assertEqual((at[t]["before"], at[t]["after"], at[t]["label"]), (1, 0, "補強の前"), t)
+        # the zoom: from turn_to_s to zoom_to_s; there the neighbourhood takes zoom.fill of the height
         self.assertLess(at[T["zoom_to_s"]]["dist"], at[T["turn_to_s"]]["dist"] / 3)
+        self.assertAlmostEqual(at[T["zoom_to_s"]]["fill"], sp["zoom"]["fill"], places=6)
         self.assertEqual(at[T["turn_to_s"]]["mark"], 0)
         self.assertEqual(at[T["zoom_to_s"]]["mark"], 1)
-        # the swap: the version after fades in between swap_s and swap_to_s, same camera
-        self.assertEqual(at[T["swap_s"]]["after"], 0)
-        self.assertEqual(at[T["swap_to_s"]]["after"], 1)
-        self.assertEqual((at[T["swap_s"]]["version"], at[T["swap_to_s"]]["version"]), ("1", "2"))
-        self.assertTrue(at[T["swap_to_s"]]["label"].startswith("版 2 "))
-        self.assertAlmostEqual(at[T["swap_to_s"]]["dist"], at[T["zoom_to_s"]]["dist"], places=6)
+        # the swap: the version after fades in between swap_s and swap_to_s, same camera, and stays
+        self.assertEqual((at[T["swap_s"]]["after"], at[T["swap_s"]]["label"]), (0, "補強の前"))
+        mid = at[(T["swap_s"] + T["swap_to_s"]) / 2]
+        self.assertAlmostEqual(mid["after"], 0.5, places=6)
+        for t in (T["swap_to_s"], sp["duration_s"]):
+            self.assertEqual((at[t]["after"], at[t]["before"], at[t]["label"], at[t]["version"]), (1, 0, "補強の後", "2"), t)
+            self.assertAlmostEqual(at[t]["dist"], at[T["zoom_to_s"]]["dist"], places=6)
+        # no word names the kind of analysis
+        for t in times:
+            for word in ("梁", "シェル"):
+                self.assertNotIn(word, at[t]["text"], t)
         # one scale for both versions; each version's maximum as recorded
         got = page.evaluate(
-            """() => { const c = window.hiraku.cut; return { scales: c.cases.map((x) => [x.ct.min, x.ct.max]),
-                rows: [...document.querySelectorAll('[data-box="n07.legend"] tr')].map((r) => r.textContent) }; }"""
+            """() => { const c = window.hiraku.cut; const lg = document.querySelector('[data-box="n07.legend"]');
+                return { scales: c.cases.map((x) => [x.ct.min, x.ct.max]), title: lg.querySelector("h3").textContent,
+                         rows: [...lg.querySelectorAll(".row")].map((r) => [...r.children].map((x) => x.textContent)) }; }"""
         )
         self.assertEqual(got["scales"][0], got["scales"][1])
-        self.assertEqual(got["rows"], [f"版 {v}最大 {sig4(self.shells[v]['results'][0]['value'])} MPa" for v in (1, 2)])
+        self.assertEqual(got["title"], "応力 [MPa]")
+        self.assertEqual(got["rows"], [[name, f"最大 {sig4(self.shells[v]['results'][0]['value'])} MPa"] for name, v in (("補強の前", 1), ("補強の後", 2))])
         page.close()
 
     def test_n07_boxes_stay_out_of_the_subtitle_band(self):
@@ -261,13 +312,19 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertEqual(got["outside"], [])
         self.assertLessEqual(got["lowest"], layout["subtitle_band"]["y"])
         self.assertGreaterEqual(got["minText"], layout["min_text_px"])
-        V = layout["n07"]["view"]
-        self.assertEqual([round(v) for v in got["boxes"]["n07.view"]], [V["x"], V["y"], V["x"] + V["w"], V["y"] + V["h"]])
+        for key in ("view", "legend"):
+            B = layout["n07"][key]
+            self.assertEqual([round(v) for v in got["boxes"][f"n07.{key}"]], [B["x"], B["y"], B["x"] + B["w"], B["y"] + B["h"]])
+        # the label sits inside the view at its place; the legend does not touch the view
+        L, V, lb = layout["n07"]["label"], got["boxes"]["n07.view"], got["boxes"]["n07.label"]
+        self.assertEqual([round(lb[0]), round(lb[1])], [L["x"], L["y"]])
+        self.assertTrue(V[0] <= lb[0] and lb[2] <= V[2] and V[1] <= lb[1] and lb[3] <= V[3])
+        self.assertLessEqual(got["boxes"]["n07.view"][2], got["boxes"]["n07.legend"][0])
         page.close()
 
     def test_n07_names_the_missing_keys(self):
         layout = n07_layout()
-        del layout["n07"]["zoom"]
+        layout["n07"]["zoom"] = 0.45  # the old form: a number, not {fill}
         del layout["n07"]["times"]["swap_to_s"]
         del layout["n07"]["legend"]["text_px"]
         self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
@@ -275,7 +332,7 @@ class ShellBrowserTest(unittest.TestCase):
             page, errors = self.cut(0)
             err = page.evaluate("() => document.querySelector('.err')?.textContent ?? null")
             self.assertIn("layout.json の n07 に無い: ", err)
-            for k in ("legend.text_px", "times.swap_to_s", "zoom"):
+            for k in ("legend.text_px", "times.swap_to_s", "zoom.fill"):
                 self.assertIn(k, err)
             page.close()
         finally:
@@ -287,7 +344,7 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertEqual(got, {"err": None, "n": 1, "v": 2})
         page.close()
         page, errors = self.cut(0, "&before=3")
-        self.assertIn("版 3 のシェルの解析の記録が無い", page.evaluate("() => document.querySelector('.err')?.textContent ?? ''"))
+        self.assertIn("版 3 のメッシュの上の値の記録が無い", page.evaluate("() => document.querySelector('.err')?.textContent ?? ''"))
         page.close()
 
 

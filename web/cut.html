@@ -92,19 +92,22 @@
   .n07-view { position: absolute; box-sizing: border-box; overflow: hidden; }
   .n07-view canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
   .n07-mark { position: absolute; box-sizing: border-box; border: 3px solid; border-radius: 50%; pointer-events: none; }
-  .n07-legend { position: absolute; box-sizing: border-box; border: 2px solid; border-radius: 12px; padding: 16px 20px; overflow: hidden; }
-  .n07-legend h3 { margin: 0 0 4px; }
-  .n07-legend p { margin: 0 0 10px; color: #5c5a54; }
-  .n07-legend .bar { display: block; height: 18px; border-radius: 3px; }
-  .n07-legend .ends { display: flex; justify-content: space-between; margin: 4px 0 12px; font-family: Consolas, monospace; }
-  .n07-legend .sw { display: inline-block; width: 16px; height: 16px; vertical-align: -2px; }
-  .n07-legend table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .n07-legend td { padding: 4px 0; color: #8a857a; }
-  .n07-legend td:last-child { text-align: right; font-family: Consolas, monospace; }
-  .n07-legend tr.on td { color: #1b1a17; font-weight: 700; }
+  .n07-legend { position: absolute; box-sizing: border-box; border: 2px solid; border-radius: 12px; padding: 18px 16px; overflow: hidden; display: flex; flex-direction: column; }
+  .n07-legend h3 { margin: 0 0 18px; white-space: nowrap; }
+  .n07-legend p { margin: 0 0 14px; color: #5c5a54; }
+  .n07-legend .scale { position: relative; flex: 1 1 auto; min-height: 120px; max-height: 420px; margin: 0.6em 0 26px; }
+  .n07-legend .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 26px; border: 1.5px solid #1b1a17; box-sizing: border-box; }
+  .n07-legend .ticks { position: absolute; left: 36px; right: 0; top: 0; bottom: 0; font-family: Consolas, monospace; }
+  .n07-legend .ticks span { position: absolute; left: 0; transform: translateY(-50%); white-space: nowrap; }
+  .n07-legend .sw { display: inline-block; width: 16px; height: 16px; vertical-align: -2px; margin-right: 6px; }
+  .n07-legend .rows { margin-bottom: 14px; }
+  .n07-legend .row { color: #8a857a; margin-bottom: 10px; }
+  .n07-legend .row b, .n07-legend .row span { display: block; font-weight: 400; }
+  .n07-legend .row span { font-family: Consolas, monospace; }
+  .n07-legend .row.on { color: #1b1a17; }
+  .n07-legend .row.on b, .n07-legend .row.on span { font-weight: 700; }
   .n07-legend .src { margin: 0; }
-  .n07-label { position: absolute; color: #1b1a17; line-height: 1.35; }
-  .n07-label b { margin-right: 0.4em; }
+  .n07-label { position: absolute; color: #1b1a17; font-weight: 700; line-height: 1.2; background: rgba(251, 249, 244, 0.88); border: 1.5px solid #c9c3b6; border-radius: 8px; padding: 6px 14px; }
   .n01-view .rate { position: absolute; font-family: Consolas, monospace; color: #5c5a54; background: rgba(251, 249, 244, 0.85); border-radius: 4px; padding: 1px 4px; }
 </style>
 </head>
