@@ -221,9 +221,9 @@ class CheckRun(unittest.TestCase):
             ("files.unknown", "warn", f"{layout.INBOX_DIR}/note.txt"),
             ("files.unknown", "warn", f"{layout.KNOWLEDGE_DIR}/other.md")])
 
-    def test_plugin_files_are_part_of_the_layout(self):
+    def test_plugin_files_and_the_tool_error_log_are_part_of_the_layout(self):
         run = write_run(self.root / "p", sample_events())
-        for name in (layout.PLUGIN_HOOKS_FILE, layout.PLUGIN_OUTBOX_FILE):
+        for name in (layout.PLUGIN_HOOKS_FILE, layout.PLUGIN_OUTBOX_FILE, layout.TOOL_ERRORS_FILE):
             (run / name).write_text("", encoding="utf-8")
         (run / "other.log").write_text("", encoding="utf-8")
         self.assertEqual([f.where for f in cr.check_run(run) if f.rule == "files.unknown"], ["other.log"])

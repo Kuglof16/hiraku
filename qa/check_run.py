@@ -401,7 +401,7 @@ class RunChecker:
             name = p.name
             if name in (layout.PROJECT_FILE, layout.EVENTS_FILE, layout.REPORT_FILE):
                 continue
-            if name in PLUGIN_FILES:  # claude_code_plugin runs (layout)
+            if name in PLUGIN_FILES or name == layout.TOOL_ERRORS_FILE:  # plugin runs; a tool's exceptions (layout)
                 continue
             finished = any(e.get("kind") == "run.finished" for e in self.events)
             if name == layout.STOP_REQUEST_FILE:
