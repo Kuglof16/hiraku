@@ -121,6 +121,9 @@ def links(design: Record) -> dict[str, Record]:
                 add(pid, _c(deck, "rest", "load"))
             continue
         via = "weld" if p["kind"] in WELDED_KINDS else "bolt"
+        for c in p.get("connects_to") or []:  # what the part was built with (a through tube's own member)
+            if c.get("to") not in (p.get("carried_by") or []):
+                add(pid, dict(c))
         nodes = p.get("carried_by") or []
         if p["kind"] == "rollbar":
             from hiraku.designgen.kit.safety import rollbar_feet

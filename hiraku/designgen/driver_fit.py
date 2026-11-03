@@ -1,6 +1,6 @@
 """The driver's place that gives the most room: a search over the ladder_4w variables that place the driver,
-the pedals, the steering wheel and the front bulkhead, for the set whose smallest occupant margin (K4,
-hiraku.solvers.k4_geometry.people.fit) is the largest.
+the seat's fore-and-aft travel (seat_slide), the pedals, the steering wheel and the front bulkhead, for the set
+whose smallest occupant margin (K4, hiraku.solvers.k4_geometry.people.fit) is the largest.
 
     from hiraku.designgen import driver_fit
     got = driver_fit.best_driver_place(design)              # design: a ladder_4w design record
@@ -9,7 +9,8 @@ hiraku.solvers.k4_geometry.people.fit) is the largest.
 
 The margins are the ones the assembly tool reports for H3 (hiraku.solvers.shelf.assembly: each is the
 smallest over the occupants, `where` the part it is measured to): knee_room, pedal_reach, wheel_reach,
-foot_room, foot_support and leg_clearance (names=COMFORT_MARGINS adds knee_angle_room). No lower limit is put on any of them beyond what K4 measures
+foot_room, foot_support, leg_clearance and knee_angle_room (MARGINS = COMFORT_MARGINS; names=REACH_MARGINS leaves
+knee_angle_room out). No lower limit is put on any of them beyond what K4 measures
 (all are in mm; 0 is where the body touches or does not reach). The other variables (track, battery_x, ...)
 stay as the design has them.
 
@@ -40,12 +41,14 @@ from hiraku.designgen.ladder_4w import DesignGenError
 Record = dict[str, Any]
 
 VARIABLES = ("seat_x", "seat_height", "steering_x", "steering_column_angle", "steering_wheel_height", "pedal_x",
-             "bulkhead_dx")
-MARGINS = ("knee_room", "pedal_reach", "wheel_reach", "foot_room", "foot_support", "leg_clearance")
-# MARGINS and K4's knee_angle_room (the pedal foot's knee angle inside the comfortable range, for the big and the
-# small person on the one seat). Not the default: with it, the search on run 10 and N15 finds no set with every
-# margin at least 0 (tests/solvers/test_driver_knee_angle.py).
-COMFORT_MARGINS = MARGINS + ("knee_angle_room",)
+             "bulkhead_dx", "seat_slide")
+REACH_MARGINS = ("knee_room", "pedal_reach", "wheel_reach", "foot_room", "foot_support", "leg_clearance")
+# REACH_MARGINS and K4's knee_angle_room (the pedal foot's knee angle inside the comfortable range, for the big and
+# the small person). With the seat fixed (seat_slide 0) the search on run 10 and N15 finds no set with every margin
+# at least 0; with seat_slide among the variables it does on v1, run 10 and N15 (tests/solvers/
+# test_driver_knee_angle.py), so these are the default.
+COMFORT_MARGINS = REACH_MARGINS + ("knee_angle_room",)
+MARGINS = COMFORT_MARGINS
 RESOLUTION = {"deg": 0.25, "mm": 0.5}  # the lattice the values are on (by unit)
 SCAN_LEVELS = 9  # levels across each variable's range in step 2
 FIRST_STEP_SHARE = 1.0 / 8.0  # the compass search's first step: this share of the range
