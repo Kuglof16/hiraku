@@ -95,6 +95,10 @@ VARIABLES: dict[str, Var] = {
     "dash_tube_d": Var("mm", 48.6, 27.2, 76.3, "dash bar (the front subframe's upper links meet at its middle), "
                        "outside diameter"),
     "dash_tube_t": Var("mm", 3.2, 2.0, 4.0, "dash bar, wall"),
+    "rear_link_tube_d": Var("mm", 34.0, 27.2, 60.5, "rear lower links (from the rear subframe's lower front pivots "
+                            "to the floor's rear cross tube; at the step's lift-off their ends carry the frame's "
+                            "largest hot spot), outside diameter"),
+    "rear_link_tube_t": Var("mm", 2.3, 2.0, 4.0, "rear lower links, wall"),
     **{k: LADDER_VARIABLES[k] for k in SHARED},
 }
 # A design built here carries these; ladder_4w's signature (rail_spacing, ...) is not among them.
@@ -411,7 +415,7 @@ def _frame(v: dict[str, float], hp: dict[str, dict], secs: dict[str, tuple[str, 
     # the roof's front corner, the driver's link passes through the steering's box.
     frame.member("front_upper_link_L", "LA_uca_rear", "D0", sec["brace"])
     frame.member("front_upper_link_R", "RA_uca_rear", "D0", sec["brace"])
-    both("rear_lower_link", "B_lca_front", "Q3", "brace")
+    both("rear_lower_link", "B_lca_front", "Q3", "rear_link")
     both("rear_diagonal", "B_uca_front", "Q3", "brace")
     both("deck_rail", "Hm", "B_damper_upper", "brace")
     both("stay", "H2", "B_damper_upper", "brace")
@@ -598,7 +602,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     v = _values(values)
     wb, track, r, ww = v["wheelbase"], v["track"], v["wheel_radius"], v["wheel_width"]
     secs = {"floor": tube(v["floor_tube_d"], v["floor_tube_t"]), "cage": tube(v["cage_tube_d"], v["cage_tube_t"]),
-            "brace": tube(v["brace_tube_d"], v["brace_tube_t"]), "dash": tube(v["dash_tube_d"], v["dash_tube_t"])}
+            "brace": tube(v["brace_tube_d"], v["brace_tube_t"]), "dash": tube(v["dash_tube_d"], v["dash_tube_t"]),
+            "rear_link": tube(v["rear_link_tube_d"], v["rear_link_tube_t"])}
 
     def spring(rate: float) -> Suspension:
         return Suspension("kc_table", rate, 1.2, v["suspension_travel"], "builtin:double_wishbone")

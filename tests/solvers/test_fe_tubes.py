@@ -401,6 +401,25 @@ class SpaceFrameShellTest(unittest.TestCase):
 
 
 @SLOW
+class RearLinkRevisionTest(unittest.TestCase):
+    """RQ3 (the rear lower link's end at the lift-off, above the yield with 34 x 2.3) can be brought under the
+    yield by the revisable variable rear_link_tube_d. Measured at 40 mm, lift-off: Q3 231.2 (34 x 2.3), 156.5
+    (42.7 x 2.3; the frame's largest then 182.7 MPa at LP3), 175.5 (48.6 x 3.2), 204.3 MPa (60.5 x 3.2): a
+    stiffer link draws more load, so the hot spot rises again past 42.7. At the default 20 mm, lift-off (step 100
+    mm): RQ3 233.2 (34 x 2.3); with 42.7 x 2.3 LQ3 158.1, RQ3 147.2 and the frame's largest 182.7 MPa at LP3."""
+
+    def test_42_7_brings_every_hot_spot_under_the_yield(self):
+        d = sf.build({"rear_link_tube_d": 42.7})
+        yield_mpa = d["materials"][sf.MATERIAL]["yield_MPa"]
+        r = tubes.analyse(d, 40.0)
+        lift = r["cases"]["lift"]
+        q3 = max(abs(h["value"]) for h in lift["hot_spots"] if h["joint"] in ("RQ3", "LQ3"))
+        self.assertAlmostEqual(q3, 156.5, delta=5.0)
+        for case in ("static", "lift"):
+            self.assertLess(abs(r["cases"][case]["hot_spot_max"]["value"]), yield_mpa, case)
+
+
+@SLOW
 class SpaceFrameConvergenceTest(unittest.TestCase):
     """Match 4: the hot spot at D0 (the dash bar's middle, where the front upper links land) and the largest
     on finer meshes."""
