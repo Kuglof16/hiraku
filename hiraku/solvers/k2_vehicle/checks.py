@@ -51,8 +51,10 @@ def _check(case: str, quantity: str, expected: float, got: float | None, unit: s
            "got": None if got is None else float(got), "unit": unit, "tolerance_rel": float(tol),
            "pass": bool(passed), "source": source}
     if expected == 0.0:
-        # an expected 0 is checked on an absolute bound (contract tool_check.tolerance_abs)
-        out["tolerance_rel"], out["tolerance_abs"] = 0.0, float(tol)
+        # an expected 0 is checked on an absolute bound: tolerance_abs (contract tool_check) says so;
+        # tolerance_rel keeps the same number, which readers without tolerance_abs take as absolute
+        # when the expected value is 0
+        out["tolerance_abs"] = float(tol)
     return out
 
 

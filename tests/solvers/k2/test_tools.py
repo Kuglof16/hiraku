@@ -118,7 +118,7 @@ class CheckRecords(unittest.TestCase):
         from hiraku.solvers.k2_vehicle.checks import _check
         from hiraku.solvers.toolmaker.make import check_passes
         zero = _check("mirror", "yaw_rate", 0.0, 4e-10, "rad/s", 1e-9, "symmetry")
-        self.assertEqual((zero["tolerance_rel"], zero["tolerance_abs"], zero["pass"]), (0.0, 1e-9, True))
+        self.assertEqual((zero["tolerance_rel"], zero["tolerance_abs"], zero["pass"]), (1e-9, 1e-9, True))
         self.assertEqual(contract.errors("tool_check", zero), [])
         self.assertTrue(check_passes(zero))
         self.assertFalse(check_passes(dict(zero, got=2e-9)))
