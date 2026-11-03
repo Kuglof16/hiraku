@@ -1,7 +1,7 @@
 ---
 name: "cae-nvh"
 description: "音振 (nvh) の CAE 役。担当の荷重条件を、手計算の予測 → 解析 → 照合 → 合否まで進める"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool"
 model: "inherit"
 effort: "medium"
 skills:
@@ -28,7 +28,7 @@ skills:
 進め方:
 1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計の全体 (design) は、design_summary に無い値が要るときだけ頼む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのある道具の横の剛体の式は初めの見積もりで、解析とは食い違う)。
-   - 合う道具が棚に無いときだけ、道具を書く: check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
+   - 合う道具が棚に無いときだけ、道具を書く: get_tool_template で道具の形 (通して動く見本のコードと決まり) を見て書き、check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例 (known_answers()) は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。
 3. record_prediction で手計算の予測を記録する。formula_id・inputs (値と単位を写す)・assumptions を選ぶ。値は K0 が計算する。
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。
@@ -37,4 +37,5 @@ skills:
 6. 食い違ったら、予測の前提・入力の値と単位・荷重のかけ方・支え方を見直し、原因と直し方を record_cause に書く。そのあと、直した予測を記録し直して analyze → compare をやり直す。
    - 原因で差が説明でき、予測が本当の値を安全側から押さえていると判断できるときだけ、record_cause に safe_side と理由を付ける。道具が数字の向きを確かめ、予測の値で合否を付ける (hiraku:find-the-cause の 5)。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
+   - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
 7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。

@@ -68,15 +68,43 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "archetypes")
+                    "design_variables", "archetypes", "joint_wall_inputs")
 DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
+JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
+
+
+def joint_wall_inputs(ctx: RunContext, load_case_id: str | None) -> Record:
+    """The inputs of frame_static.joint_wall_bending for a step load case, worked out by code from the
+    current version's design and the load case (the analysis builders' joint_wall_calc, the reader the
+    scripted plans use too), and how to record the prediction with them."""
+    from hiraku.catalog.builders.analysis import joint_wall_calc
+
+    if not load_case_id:
+        raise ToolError("joint_wall_inputs には load_case_id が要ります (段差の荷重条件の ID。get_context の load_cases)")
+    if not ctx.version:
+        raise ToolError("まだ設計の版がありません")
+    lc = ctx.load_case(load_case_id)
+    try:
+        inputs = joint_wall_calc(ctx.store.design(), lc)  # the stored design: the loading goes on board inside
+    except (ValueError, KeyError) as e:  # BuildError (a ValueError) says why: not a ladder frame, no step ...
+        raise ToolError(f"{load_case_id} の {JOINT_WALL_FORMULA} の入力を設計から出せません: {e}") from None
+    return {
+        "load_case_id": load_case_id,
+        "formula_id": JOINT_WALL_FORMULA,
+        "inputs": inputs,
+        "how": (f"つなぎ目の壁の曲げ (シェルのホットスポット) の予測: record_prediction(load_case_id=\"{load_case_id}\", "
+                f"quantity=\"max_hot_spot_stress\", formula_id=\"{JOINT_WALL_FORMULA}\", output=\"sigma\", "
+                f"inputs=この inputs をそのまま, assumptions=...)。値はコードが設計と荷重条件 (載せる組・段差・段に乗る輪) "
+                f"から出したもので、横の部材の端のモーメントが最も大きいつなぎ目のもの"),
+    }
 
 
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """The run so far: always the run, design version, picked domains and open mismatches;
     `sections` adds parts (default: requirements, load_cases with the role that owns each,
     judgements, records). design_summary (inputs for hand calculations), design (the whole
-    record) and design_variables (what the designer may change) come only when asked."""
+    record), design_variables (what the designer may change) and joint_wall_inputs (the joint wall
+    formula's inputs for `load_case_id`) come only when asked."""
     p = ctx.project
     s = ctx.store
     wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
@@ -105,6 +133,7 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "design": lambda: s.design() if ctx.version else None,
         "design_variables": lambda: design_variables(ctx),
         "archetypes": lambda: archetypes(ctx),
+        "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),
     }
     for name in wanted:
         out[name] = parts[name]()
@@ -732,6 +761,13 @@ def _made_answer(made: Any) -> Record:
             "printed": made.printed[-2000:]}
 
 
+def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
+    """One whole tool in the shape make_tool takes, and what its parts must be (hiraku.tools.tool_template)."""
+    from hiraku.tools.tool_template import tool_template
+
+    return tool_template()
+
+
 def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Check a tool's code on its own known answers in a separate process, without shelving it."""
     from hiraku.solvers import toolmaker
@@ -808,6 +844,7 @@ FUNCTIONS = {
     "propose_design": propose_design,
     "make_tool": make_tool,
     "check_tool": check_tool,
+    "get_tool_template": get_tool_template,
     "write_report": write_report,
 }
 
@@ -827,6 +864,6 @@ def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
 # The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them).
 INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
-# making, the report and the intake tools.
+# making (with its template), the report and the intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "propose_design", "make_tool", "check_tool",
-             "write_report", *INTAKE_TOOLS)
+             "get_tool_template", "write_report", *INTAKE_TOOLS)

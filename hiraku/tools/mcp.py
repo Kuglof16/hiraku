@@ -57,8 +57,12 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "get_context": {"type": "object", "additionalProperties": False, "properties": {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
-                                    "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables"},
+                                    "手計算の入力は design_summary、設計の全体は design、設計役の変数は design_variables。"
+                                    "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
+        "load_case_id": {"type": "string",
+                         "description": "joint_wall_inputs の荷重条件 (段差の R1・R1s など)"},
     }},
+    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
     "list_tools": _domain_filter({
         "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
@@ -79,7 +83,15 @@ DESCRIPTIONS = {
     "get_context": (
         "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
         "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。手計算の入力の値は "
-        "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む"
+        "design_summary から、設計の全体は design、設計役の変数は design_variables。要る部分だけを頼む。"
+        "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "
+        "sections=[\"joint_wall_inputs\"] と load_case_id で、その入力 (横の部材の端のモーメント M など、コードが設計と"
+        "荷重条件から出したもの) が返る"
+    ),
+    "get_tool_template": (
+        "道具を書く (check_tool・make_tool) ときの見本。強度の試験の道具 1 つ分の通して動くコード (code) と、"
+        "決まりの説明: 定義するクラスと欄、analyse() の引数 (design・load_case・params) の中身、結果 (results) の欄、"
+        "答えの分かっている例 known_answers() と check_record の引数、使える import"
     ),
     "list_formulas": (
         "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: その道具の式, "

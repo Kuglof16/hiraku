@@ -536,7 +536,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     except KeyboardInterrupt:
         status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
-    if status == "done" and not rules.stop_reason(ctx):  # every picked domain judged: the lead's report
+    if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []
         if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
@@ -546,7 +546,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
     s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
     if status == "done":
-        left = rules.stop_reason(ctx)
+        left = rules.unjudged_reason(ctx)
         if left:
             status, reason, code = "stopped", left, "not_judged"
         else:

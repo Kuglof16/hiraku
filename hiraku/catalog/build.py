@@ -284,6 +284,31 @@ def beyond_plans() -> dict[str, Record]:
     return dict(getattr(mod, "PLANS_BEYOND", {})) if mod is not None else {}
 
 
+def plan_steps(product: str, load_case: Record) -> list[Record]:
+    """The steps hiraku.catalog.builders has for one load case: the product's own (PRODUCT_STEPS),
+    the one past the limit (PLANS_BEYOND, for a load case id ending in -beyond) and the general one
+    (PLANS) of its test, those that exist, in that order. A product step that cannot take the load
+    case is left out."""
+    mod = _builders_module()
+    if mod is None:
+        return []
+    out = []
+    own = getattr(mod, "PRODUCT_STEPS", {}).get(product)
+    if own is not None:
+        try:
+            step = own(load_case)
+        except Exception:  # a step function that does not know this load case gives no step
+            step = None
+        if step:
+            out.append(step)
+    tid = load_case.get("test_id")
+    if str(load_case.get("load_case_id", "")).endswith("-beyond") and tid in getattr(mod, "PLANS_BEYOND", {}):
+        out.append(mod.PLANS_BEYOND[tid])
+    if tid in getattr(mod, "PLANS", {}):
+        out.append(mod.PLANS[tid])
+    return out
+
+
 def builder_for(catalog: Catalog, test_id: str) -> Builder | None:
     """The catalog's own builder (`build:` in tests.yaml) first, then hiraku.catalog.builders."""
     spec = catalog.test(test_id)
