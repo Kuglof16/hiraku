@@ -23,7 +23,8 @@ import { CutN04, CutN15 } from "./cut_grid.js";
 import { esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
+import { looksReady } from "./look.js";
 import { CutN16 } from "./cut_n16.js";
 import { CutN07 } from "./cut_n07.js";
 import { CutN03, KINDS, storyOf } from "./cut_n03.js";
@@ -188,7 +189,7 @@ class Cut {
 
   makeView(tile, design) {
     const { lc, ana } = tile.rec;
-    const v = new Workbench3D(null, params.get("tilelook") === "real" ? "real" : "zu", { renderer: this.renderer });
+    const v = cutView(this, "n05");
     v.setDesign(this.s.designs[ana.design_version] ?? design);
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);
@@ -352,7 +353,7 @@ class CutN01 {
 
   view(c, tint) {
     const design = this.s.designs[c.dyn.design_version] ?? this.s.designs[this.s.currentVersion];
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n01");
     v.setDesign(design);
     v.setLoading(c.lc.params?.loading ?? null);
     v.setMotion(c.motion);
@@ -536,7 +537,7 @@ class CutN02 {
   }
 
   makeView(c, tint, w, h) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n02");
     v.setDesign(this.s.designs[c.ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(c.lc.params?.loading ?? null);
     v.setMotion(c.motion);
@@ -761,6 +762,8 @@ window.hiraku = {
     return drawAt(t);
   },
   png: () => cut?.png?.() ?? null,
+  // the cut's 3D views (workbench3d.js cutView), for the tests
+  views: () => cutViews(),
   // what the story check found at the last frame drawn: { counts, over } (null before)
   story: () => story?.last ?? null,
 };
@@ -773,6 +776,7 @@ async function main() {
     // the events too, in seq order, for the cuts that read them as they came (N09, N13, N14)
     cut = new CUTS[name](layout, stateOf(events), [...events].sort((a, b) => a.seq - b.seq));
     if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
+    await looksReady(); // the real look's Poly Haven files, so a frame at ?t= is the same every time
     window.hiraku.cut = cut;
     if (!ONLY_HERO) initStory(layout, name);
     player.duration = layout[name].duration_s;

@@ -30,7 +30,7 @@ import { clearOfBand, cubicBezier, squeeze } from "./compose.js";
 import { fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
 import { tileContour } from "./cut_grid.js";
 
@@ -334,7 +334,7 @@ export class CutN06 {
 
   makeView(tile, c, def) {
     const ana = c.dyn ?? c.still ?? c.any;
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n06");
     v.setDesign(this.s.designs[ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     const sceneLc = c.sceneLc ?? c.lc;
     v.setLoading(sceneLc.params?.loading ?? null);
@@ -440,7 +440,7 @@ export class CutN06 {
   // that interferes is boxed in the overlay's red at its place from when its step starts
   // (as the N04 tile's boxes).
   makeAssembly(tile, clash) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n06");
     const O = this.spec.overlay;
     let stage = null;
     if (clash.rec) {

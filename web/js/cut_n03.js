@@ -28,7 +28,7 @@ import { clearOfBand, rateLabel, squeeze } from "./compose.js";
 import { contourOf } from "./fields.js";
 import { esc, fmt, unitLabel } from "./labels.js";
 import { channelsOf, extent, motionOf, nearestAt, nearestIndex } from "./series.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -358,7 +358,7 @@ export class CutN03 {
   }
 
   makeDriveView(design) {
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(design);
     v.setLoading((this.drive ?? this.heat)?.lc.params?.loading ?? null);
     v.setScene(null, null);
@@ -371,7 +371,7 @@ export class CutN03 {
 
   makeLaunchView() {
     const { lc, ana } = this.launch;
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n03");
     v.setDesign(this.s.designs[ana.design_version] ?? this.s.designs[this.s.currentVersion]);
     v.setLoading(lc.params?.loading ?? null);
     const motion = motionOf(ana);

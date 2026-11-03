@@ -31,7 +31,11 @@ ASSET_FILES = {
     "sky": ("kloofendal_48d_partly_cloudy_puresky", ["kloofendal_48d_partly_cloudy_puresky_1k.hdr"]),
     "dirt": ("dirt_floor", ["dirt_floor_diff_1k.jpg", "dirt_floor_nor_gl_1k.jpg", "dirt_floor_arm_1k.jpg"]),
     "concrete": ("brushed_concrete", ["brushed_concrete_diff_1k.jpg", "brushed_concrete_nor_gl_1k.jpg", "brushed_concrete_arm_1k.jpg"]),
+    # the cut pages' stage only (tests.web.test_cut_real_browser)
+    "horizon": ("kloofendal_48d_partly_cloudy", ["kloofendal_48d_partly_cloudy_1k.hdr"]),
+    "gravel": ("gravel_road", ["gravel_road_diff_1k.jpg", "gravel_road_nor_gl_1k.jpg", "gravel_road_arm_1k.jpg"]),
 }
+WORKBENCH_ROLES = ("sky", "dirt", "concrete")  # what the workbench's real look reads
 
 # The canvas pixel at points of the contour and the legend's swatch for the same value.
 # Members: the middle of the top of each member with one value (a member coloured from its two
@@ -202,7 +206,7 @@ class RealLookBrowserTest(unittest.TestCase):
             self.demo_events(),
         )
         self.assertEqual(errors, [])
-        expect = {role: all(f"{a}/{f}" in files for f in names) for role, (a, names) in ASSET_FILES.items()}
+        expect = {role: all(f"{a}/{f}" in files for f in names) for role, (a, names) in ASSET_FILES.items() if role in WORKBENCH_ROLES}
         self.assertEqual(got["assets"], expect)
         if expect["sky"]:
             self.assertEqual(got["intensity"], 0.8)  # look.js: the HDRI's intensity

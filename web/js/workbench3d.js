@@ -40,12 +40,12 @@ import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
 import { overOf } from "./fields.js";
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { Look } from "./look.js";
-import { RealPost, skipsDepth } from "./realpost.js";
+import { GROUND_MM, Look, cutLookOf } from "./look.js";
+import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -77,6 +77,7 @@ function contourTwin(mesh) {
       mesh.geometry,
       new THREE.MeshBasicMaterial({
         toneMapped: false,
+        fog: false, // the legend's colour, not hazed (a stage's haze)
         side: src.side,
         polygonOffset: src.polygonOffset,
         polygonOffsetFactor: src.polygonOffsetFactor,
@@ -329,10 +330,13 @@ export class Workbench3D {
   // views through one); such a view has no labels and no mouse control, and is
   // drawn with renderInto. opts.ground: "shadow" for a ground that only takes the
   // shadow (a vehicle standing on the page's own background). opts.quality: the real
-  // look's cost (look.js QUALITY; ?quality=).
+  // look's cost (look.js QUALITY; ?quality=). opts.stage: a cut page's view (look.js: the
+  // sky and its haze behind, the gravel road, the sun behind the vehicle); in the real look
+  // it is drawn through the renderer's shared post (realpost.js sharedPost: antialiasing,
+  // ambient occlusion) when its quality has them.
   constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
-    this.look = new Look(lookName, opts.quality);
+    this.look = new Look(lookName, opts.quality, { stage: !!opts.stage });
     this.ownRenderer = !opts.renderer;
     this.groundStyle = opts.ground ?? null;
     this.renderer = opts.renderer ?? new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -360,9 +364,13 @@ export class Workbench3D {
     }
 
     this.sun = this.look.setUp(this.renderer, this.scene);
+    // The lights are in the overlay's layer too: a pass that counts other lights than the
+    // pass before makes three.js choose every lit material's shader again (each frame).
+    this.scene.traverse((o) => o.isLight && o.layers.enable(OVERLAY));
     // the real look on its own renderer: antialiasing and occlusion in post (none at the low quality)
     const q = this.look.q;
     this.post = this.ownRenderer && this.look.real && (q.ao || q.msaa) ? new RealPost(this.renderer, this.scene, this.camera, q) : null;
+    this.sharedPost = !this.ownRenderer && this.look.stage && !!(q.ao || q.msaa);
 
     this.world = new THREE.Group();
     this.scene.add(this.world);
@@ -481,11 +489,14 @@ export class Workbench3D {
       pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
-      const tag = label(esc(m.id), "lbl-id");
-      tag.position.copy(g.mid);
-      this.names.add(tag);
+      if (this.labelRenderer) {
+        const tag = label(esc(m.id), "lbl-id");
+        tag.position.copy(g.mid);
+        this.names.add(tag);
+      }
     }
-    for (const [id, p] of Object.entries(nodes)) {
+    // the names of members and nodes only where labels are drawn (not on a shared renderer)
+    for (const [id, p] of this.labelRenderer ? Object.entries(nodes) : []) {
       const tag = label(esc(id), "lbl-node");
       tag.position.copy(p);
       this.names.add(tag);
@@ -505,12 +516,13 @@ export class Workbench3D {
       group.matrixAutoUpdate = false;
       const lines = [];
       if (s.kind === "wheel") {
-        // A tyre, rim, hub and spokes (the spokes show the wheel turning).
-        for (const pc of wheelPieces(r, w)) {
+        // A tyre, rim, hub and spokes (the spokes show the wheel turning); one mesh per material.
+        const pieces = wheelPieces(r, w);
+        for (const pc of pieces) if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
+        for (const pc of mergePieces(pieces)) {
           const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial("wheel", pc.sub));
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           group.add(mesh);
-          if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
         }
         for (const side of [-1, 1]) lines.push(0, side * w * 0.36, 0, r * 0.6, side * w * 0.36, 0);
         geo.dispose();
@@ -527,7 +539,7 @@ export class Workbench3D {
       group.add(ring);
       const tag = label(esc(s.id), "lbl-id");
       tag.position.set(0, 0, r + 60);
-      group.add(tag);
+      if (this.labelRenderer) group.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.wheels.add(group);
       this.wheelObjs[s.id] = { group, base: c, ring, tag, r, w, frameNode: s.frame_node ?? null };
       box.expandByPoint(c.clone().add(v3([r, w / 2, r]))).expandByPoint(c.clone().sub(v3([r, w / 2, r])));
@@ -557,20 +569,21 @@ export class Workbench3D {
         g.add(torso, ball);
       } else {
         // The part's shape for its kind inside its box, or the box itself.
-        const pieces = partPieces(p) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
+        const pieces = partPieces(p, design) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
         const holder = new THREE.Group();
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
         holder.updateMatrix();
         const lines = [];
-        for (const pc of pieces) {
+        for (const pc of pieces) pushEdges(lines, pc.geo, holder.matrix, 35);
+        // one mesh per material (the pieces of the same sub merged)
+        for (const pc of mergePieces(pieces)) {
           const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p.kind, pc.sub));
           mesh.material.userData.sub = pc.sub;
           mesh.renderOrder = 2;
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           holder.add(mesh);
-          pushEdges(lines, pc.geo, holder.matrix, 35);
         }
         g.add(holder);
         if (!this.look.real) {
@@ -585,7 +598,7 @@ export class Workbench3D {
       const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
       tag.element.title = p.name ?? p.id;
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
-      g.add(tag);
+      if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
       this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
     }
@@ -638,6 +651,14 @@ export class Workbench3D {
         const hex = valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : null;
         m.color.set(hex ?? m.userData.baseColor);
         paintTwin(x, hex);
+        // A part with a value is often inside the vehicle (a battery under the floor and the
+        // seats). The diagram look shows it through what is in front; in the real look its
+        // colour is drawn over what is in front, so it can still be read.
+        const twin = x.userData.twin;
+        if (twin && twin.material.depthTest !== !(real && valued)) {
+          twin.material.depthTest = !(real && valued);
+          twin.renderOrder = real && valued ? 3 : 0;
+        }
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
@@ -702,7 +723,9 @@ export class Workbench3D {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
+      // on a stage the road runs out to where the haze has hidden it (look.js GROUND_MM)
+      const far = this.look.stage ? GROUND_MM : 20000;
+      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - far, x1 + far, y0 - far, y1 + far));
       this.ground.add(holder);
       return;
     }
@@ -1603,16 +1626,21 @@ export class Workbench3D {
 
   render() {
     if (!this.noFollow && !this.focused) this.follow();
+    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay)
+    this.camera.updateMatrixWorld();
+    const sunDir = this.look.stage ? this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
     if (this.sun && this.bboxIso) {
-      this.scene.updateMatrixWorld();
-      this.look.aimSun(this.sun, this.controls.target, this.shadowPoints());
+      this.iso.updateWorldMatrix(true, false); // shadowPoints reads iso's world matrix (the renderer updates the rest)
+      this.look.aimSun(this.sun, this.controls.target, this.shadowPoints(), sunDir);
     }
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself
       this.renderer.toneMapping = this.look.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
       this.renderer.shadowMap.enabled = this.look.real;
+      if (this.look.real) this.renderer.shadowMap.type = this.look.q.shadow.type === "pcfsoft" ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     }
     if (this.post) this.post.render();
+    else if (this.sharedPost && !this.tinted) sharedPost(this.renderer, this.scene, this.camera, this.size.w, this.size.h, this.look.quality, this.look.q).render();
     else this.renderer.render(this.scene, this.camera);
     this.renderOverlay();
     if (this.labelRenderer) {
@@ -1638,8 +1666,14 @@ export class Workbench3D {
     const r = this.renderer;
     const autoClear = r.autoClear;
     const autoShadow = r.shadowMap.autoUpdate;
+    // the sky is in the picture already: the overlay's passes leave it out
+    const background = this.scene.background;
+    this.scene.background = null;
     r.autoClear = false;
     r.shadowMap.autoUpdate = false;
+    // the picture's pass has brought every world matrix up to date
+    const autoWorld = this.scene.matrixWorldAutoUpdate;
+    this.scene.matrixWorldAutoUpdate = false;
     if (this.keys.contour) {
       r.clearDepth();
       const hidden = [];
@@ -1654,10 +1688,15 @@ export class Workbench3D {
       this.scene.overrideMaterial = null;
       for (const o of hidden) o.visible = true;
     }
+    // the overlay's own pass only when something is shown in it (each pass walks the whole scene)
+    let shown = !!this.keys.contour;
+    if (!shown) this.scene.traverseVisible((o) => (shown ||= (o.layers.mask & (1 << OVERLAY)) !== 0 && !o.isGroup && !o.isScene && !o.isCSS2DObject));
     const mask = this.camera.layers.mask;
     this.camera.layers.set(OVERLAY);
-    r.render(this.scene, this.camera);
+    if (shown) r.render(this.scene, this.camera);
     this.camera.layers.mask = mask;
+    this.scene.matrixWorldAutoUpdate = autoWorld;
+    this.scene.background = background;
     r.autoClear = autoClear;
     r.shadowMap.autoUpdate = autoShadow;
   }
@@ -1680,6 +1719,7 @@ export class Workbench3D {
     r.setScissorTest(false);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(r.domElement, 0, H - h, w, h, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    this.canvas2d = ctx.canvas; // the canvas it was last copied to (the tests read it)
   }
 
   // Points that outline the design at rest (ISO mm): frame nodes, the corners of the
@@ -1737,6 +1777,21 @@ export class Workbench3D {
     this.followApplied = null;
   }
 }
+
+// A 3D view of a cut page (cut*.js): drawn through the cut's one renderer (cut.renderer) as a
+// stage, in the look the layout gives the cut (look.js cutLookOf: its `look` key, "real" when
+// it has none; ?look= over both). opts: more of the constructor's (e.g. quality).
+export function cutView(cut, name, opts = {}) {
+  const look = cutLookOf(cut.layout, name, new URLSearchParams(location.search));
+  const view = new Workbench3D(null, look, { renderer: cut.renderer, stage: true, ...opts });
+  CUT_VIEWS.push(view);
+  return view;
+}
+
+// The cut page's views, in the order they were made (window.hiraku.views(): the tests read
+// their looks and the canvases they were last drawn into, canvas2d).
+const CUT_VIEWS = [];
+export const cutViews = () => [...CUT_VIEWS];
 
 function sectionArea(sec) {
   const d = sec.dims_mm ?? {};

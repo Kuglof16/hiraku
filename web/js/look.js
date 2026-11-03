@@ -1,4 +1,5 @@
-// The two looks of the 3D view, chosen with ?look= (the default is "zu"):
+// The two looks of the 3D view, chosen with ?look= (the default is "zu" on the workbench;
+// on the video's cut pages the layout's look key of the cut, "real" without it: cutLookOf):
 //   zu    the diagram: unbleached paper and black ink, grey members, pale parts,
 //         a ruled ground
 //   real  a photograph-like view: outdoor sky light (image-based), sun shadows,
@@ -12,6 +13,12 @@
 // concrete are the canvas drawings.
 //
 // ?quality= (high / medium / low) picks the cost of the real look (QUALITY).
+//
+// The video's cut pages draw their views as a stage (Look opts.stage): the real look
+// there also shows the sky with its horizon (an HDRI) behind the vehicle, a haze that
+// melts the ground's far edge into it, a gravel road with dirt stains, and a sun that
+// stands behind the vehicle so its shadow falls toward the viewer. Which look a cut takes
+// is the layout's `look` key of that cut ("real" when it has none; cutLookOf).
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -32,6 +39,16 @@ export const ASSETS = {
     kind: "texture",
     side_mm: 2070,
     files: { map: "dirt_floor_diff_1k.jpg", normal: "dirt_floor_nor_gl_1k.jpg", arm: "dirt_floor_arm_1k.jpg" },
+  },
+  // the cut views (stage): the sky seen behind the vehicle, with its horizon (1k: the 2k
+  // file is 6.48 MB, api.polyhaven.com/files, over the 5 MB a file may take here)
+  horizon: { id: "kloofendal_48d_partly_cloudy", kind: "hdri", files: { hdr: "kloofendal_48d_partly_cloudy_1k.hdr" } },
+  // the cut views (stage): the road under the vehicle
+  gravel: {
+    id: "gravel_road",
+    kind: "texture",
+    side_mm: 2000,
+    files: { map: "gravel_road_diff_1k.jpg", normal: "gravel_road_nor_gl_1k.jpg", arm: "gravel_road_arm_1k.jpg" },
   },
   concrete: {
     id: "brushed_concrete",
@@ -80,6 +97,21 @@ export function qualityFromParams(params) {
 
 export function lookFromParams(params) {
   return params.get("look") === "real" ? "real" : "zu";
+}
+
+// The look of a cut: ?look= when it is given (to compare the two), else the layout's
+// `look` key of the cut, else "real".
+export function cutLookOf(layout, name, params = null) {
+  const q = params?.get("look");
+  if (q === "real" || q === "zu") return q;
+  return layout?.[name]?.look === "zu" ? "zu" : "real";
+}
+
+// Every look's assets loaded (the cut pages wait for this before they say they are ready,
+// so a frame at ?t= is the same every time).
+const PENDING = new Set();
+export async function looksReady() {
+  while (PENDING.size) await Promise.all([...PENDING]);
 }
 
 // ---- canvas textures ---------------------------------------------------------
@@ -195,6 +227,59 @@ function concreteTexture() {
   return tex;
 }
 
+// Dirt stains over the road (the stage's ground): soft blotches of one value (red =
+// how much stain), drawn once and laid over the road's own texture at a large scale, so
+// the road's tiles do not repeat to the eye. Look values, not measured.
+function stainTexture() {
+  const tex = canvasTexture(
+    drawCanvas(256, 256, (g, n) => {
+      const r = rng(41);
+      g.fillStyle = "#000000";
+      g.fillRect(0, 0, n, n);
+      for (let i = 0; i < 70; i += 1) {
+        const x = r() * n;
+        const y = r() * n;
+        const rad = 12 + r() * 46;
+        // drawn again across the edges, so the texture tiles
+        for (const dx of [-n, 0, n]) {
+          for (const dy of [-n, 0, n]) {
+            const grad = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rad);
+            grad.addColorStop(0, `rgba(255,255,255,${0.25 + r() * 0.3})`);
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            g.fillStyle = grad;
+            g.fillRect(x + dx - rad, y + dy - rad, rad * 2, rad * 2);
+          }
+        }
+      }
+    }),
+  );
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+// Yellow and black stripes at 45 degrees (the painted edge of a step): bands 16 px wide
+// every 32 px, so the 128 px square tiles. Look values.
+function hazardTexture() {
+  const tex = canvasTexture(
+    drawCanvas(128, 128, (g, n) => {
+      g.fillStyle = "#e8b81c";
+      g.fillRect(0, 0, n, n);
+      g.fillStyle = "#1b1b1b";
+      for (let x = -n; x < 2 * n; x += 32) {
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x + 16, 0);
+        g.lineTo(x + 16 + n, n);
+        g.lineTo(x + n, n);
+        g.closePath();
+        g.fill();
+      }
+    }),
+  );
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // Tyre tread height: blocks around the tyre (u) in a chevron across its width (v).
 function treadHeight() {
   return drawCanvas(256, 128, (g, w, h) => {
@@ -295,6 +380,8 @@ function woodTexture() {
 // The canvas textures by name; normal maps are made from a height drawing.
 const TEXTURES = {
   earth: () => earthTexture(),
+  stain: () => stainTexture(),
+  hazard: () => hazardTexture(),
   concrete: () => concreteTexture(),
   wood: () => woodTexture(),
   tread: () => canvasTexture(normalMapFrom(treadHeight(), 6), 6, 1), // 48 blocks round the tyre
@@ -377,17 +464,120 @@ export function memberEntry(materialName) {
 const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6" };
 
 const ENV = new WeakMap(); // renderer -> RoomEnvironment texture (the fall-back sky light)
-const SKY = new WeakMap(); // renderer -> Promise of the HDRI's environment texture (or null)
+const HDRI = new WeakMap(); // renderer -> Map(role -> Promise of { tex, el, az, haze } or null)
+const TEX = new Map(); // url -> Promise of the loaded texture (one source per file, shared by every view)
+
+function loadTexture(url) {
+  if (!TEX.has(url)) TEX.set(url, new THREE.TextureLoader().loadAsync(url));
+  return TEX.get(url);
+}
+
+// From an HDRI's own pixels: its brightest pixel (the sun) as an elevation and an azimuth
+// (rad; the azimuth as three.js' equirectangular lookup reads it, atan2(z, x)), and the mean
+// colour (linear) of its horizon line, the rows from 1 degree below it to 2 above (the far
+// land and the sky over it: the colour the far ground melts into where the photograph's
+// own horizon takes over).
+// RGBELoader flips the rows (the file's first row, the top, is v = 1: up).
+export function readHdri(image) {
+  const { data, width: W, height: H } = image;
+  const half = data instanceof Uint16Array;
+  const val = half ? (i) => THREE.DataUtils.fromHalfFloat(data[i]) : (i) => data[i];
+  const ch = Math.round(data.length / (W * H));
+  let best = -1;
+  let brightest = 0;
+  for (let k = 0; k < W * H; k += 1) {
+    const i = k * ch;
+    const lum = 0.2126 * val(i) + 0.7152 * val(i + 1) + 0.0722 * val(i + 2);
+    if (lum > best) {
+      best = lum;
+      brightest = k;
+    }
+  }
+  const row = Math.floor(brightest / W);
+  const col = brightest % W;
+  const sum = [0, 0, 0];
+  let n = 0;
+  for (let r = 0; r < H; r += 1) {
+    const deg = (0.5 - (r + 0.5) / H) * 180;
+    if (deg < -1 || deg > 2) continue;
+    for (let c = 0; c < W; c += 1) {
+      const i = (r * W + c) * ch;
+      sum[0] += val(i);
+      sum[1] += val(i + 1);
+      sum[2] += val(i + 2);
+      n += 1;
+    }
+  }
+  return {
+    el: (0.5 - (row + 0.5) / H) * Math.PI,
+    az: ((col + 0.5) / W - 0.5) * 2 * Math.PI,
+    haze: sum.map((v) => v / Math.max(1, n)),
+  };
+}
+
+// An HDRI as an environment (PMREM) texture, once per renderer and file; the horizon's is
+// also read (readHdri) for the stage.
+function hdriOf(renderer, role) {
+  let m = HDRI.get(renderer);
+  if (!m) HDRI.set(renderer, (m = new Map()));
+  if (!m.has(role)) {
+    m.set(
+      role,
+      new RGBELoader()
+        .loadAsync(assetPath(role, "hdr"))
+        .then((hdr) => {
+          const read = role === "horizon" ? readHdri(hdr.image) : null;
+          const pmrem = new THREE.PMREMGenerator(renderer);
+          const tex = pmrem.fromEquirectangular(hdr).texture;
+          pmrem.dispose();
+          hdr.dispose();
+          return { tex, ...read };
+        })
+        .catch(() => null),
+    );
+  }
+  return m.get(role);
+}
+
+// The stage (the cut views). Look values, chosen for the picture:
+//   SUN_ASIDE   the sun's azimuth from straight behind the vehicle (as the camera sees it):
+//               its shadow falls toward the viewer and a little to the side
+//   SUN_EL      the sun's height without the HDRI (with it: the HDRI's own sun, kept within SUN_EL_RANGE)
+//   HAZE        the haze (three.js Fog) from near_m past the camera's target to far_m past it
+//   GROUND_MM   half the side of the ground (ISO mm round the vehicle), to where the haze has hidden it
+//   STAIN_SIDE  the side (mm) of the dirt stains' square on the road
+const SUN_ASIDE = (40 * Math.PI) / 180;
+const SUN_EL = (50 * Math.PI) / 180;
+const SUN_EL_RANGE = [(35 * Math.PI) / 180, (65 * Math.PI) / 180];
+export const HAZE = { near_m: 8, far_m: 70 };
+export const GROUND_MM = 150000;
+const STAIN_SIDE_MM = 9000;
+// the side (mm) of the hazard stripes' square: four yellow and black pairs, 100 mm each
+const HAZARD_SIDE_MM = 400;
+// how far (mm) the paint reaches down a step's face and back over its top (look values)
+export const HAZARD_BAND_MM = 100;
+// the stain's colour (it multiplies the road's) where the stain texture is full, and its
+// second, coarser layer's scale and offset (so the pattern does not repeat to the eye)
+const STAIN_GLSL = `
+  float stainK = clamp(texture2D(stainMap, vStainUv).r * 0.7 + texture2D(stainMap, vStainUv * 0.37 + 0.31).r * 0.6, 0.0, 1.0);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.53, 0.42), stainK);
+`;
 
 export class Look {
-  constructor(name, quality = DEFAULT_QUALITY) {
+  // opts.stage: the cut views' stage (see the top of the file)
+  constructor(name, quality = DEFAULT_QUALITY, opts = {}) {
     this.name = name === "real" ? "real" : "zu";
     this.real = this.name === "real";
+    this.stage = !!opts.stage && this.real;
     this.quality = QUALITY[quality] ? quality : DEFAULT_QUALITY;
     this.q = QUALITY[this.quality];
     this.textures = {};
     this.surfaces = []; // { role, material, span_mm: [u, v] } waiting for an asset
-    this.assets = { sky: false, dirt: false, concrete: false }; // in use
+    // in use; the stage's ground is the gravel road and its sky the horizon
+    this.groundRole = this.stage ? "gravel" : "dirt";
+    this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, dirt: false, concrete: false };
+    this.backdrop = null; // the stage's sky: { tex, el, az, haze } once the HDRI is loaded
+    this.fog = null;
     this.assetsReady = Promise.resolve();
   }
 
@@ -424,42 +614,34 @@ export class Look {
     sun.castShadow = true;
     sun.shadow.mapSize.set(this.q.shadow.size, this.q.shadow.size);
     scene.add(sun, sun.target);
-    this.assetsReady = this.loadAssets(renderer, scene);
+    const ready = this.loadAssets(renderer, scene);
+    this.assetsReady = ready;
+    PENDING.add(ready);
+    ready.finally(() => PENDING.delete(ready));
     return sun;
   }
 
-  // The Poly Haven files that are there take the place of the drawn ones.
+  // The Poly Haven files that are there take the place of the drawn ones. On the stage the
+  // HDRI with the horizon lights the scene and is seen behind it (else the sky only lights it).
   async loadAssets(renderer, scene) {
     const roles = await rolesPresent();
-    if (roles.includes("sky")) {
-      if (!SKY.has(renderer)) {
-        SKY.set(
-          renderer,
-          new RGBELoader()
-            .loadAsync(assetPath("sky", "hdr"))
-            .then((hdr) => {
-              const pmrem = new THREE.PMREMGenerator(renderer);
-              const tex = pmrem.fromEquirectangular(hdr).texture;
-              pmrem.dispose();
-              hdr.dispose();
-              return tex;
-            })
-            .catch(() => null),
-        );
+    for (const role of this.stage ? ["horizon", "sky"] : ["sky"]) {
+      if (!roles.includes(role)) continue;
+      const got = await hdriOf(renderer, role);
+      if (!got) continue;
+      scene.environment = got.tex;
+      scene.environmentIntensity = 0.8;
+      this.assets[role] = true;
+      if (role === "horizon") {
+        this.backdrop = got;
+        this.fog = new THREE.Fog(new THREE.Color().setRGB(...got.haze, THREE.LinearSRGBColorSpace), HAZE.near_m, HAZE.far_m);
       }
-      const tex = await SKY.get(renderer);
-      if (tex) {
-        scene.environment = tex;
-        scene.environmentIntensity = 0.8;
-        this.assets.sky = true;
-      }
+      break;
     }
-    const loader = new THREE.TextureLoader();
-    for (const role of ["dirt", "concrete"]) {
+    for (const role of [this.groundRole, "concrete"]) {
       if (!roles.includes(role)) continue;
       try {
-        const files = ASSETS[role].files;
-        const [map, normal, arm] = await Promise.all([files.map, files.normal, files.arm].map((_, i) => loader.loadAsync(assetPath(role, ["map", "normal", "arm"][i]))));
+        const [map, normal, arm] = await Promise.all(["map", "normal", "arm"].map((f) => loadTexture(assetPath(role, f))));
         map.colorSpace = THREE.SRGBColorSpace;
         for (const t of [map, normal, arm]) {
           t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -472,6 +654,50 @@ export class Look {
         // keep the drawn texture
       }
     }
+  }
+
+  // The stage at each frame (camera and target in three.js world, m): the sky behind and
+  // the haze (not on a see-through overlay view, tinted), the sky turned so that its sun
+  // stands where the sun light is. Returns the sun's direction (unit, from the target).
+  stageFrame(scene, camera, target, tinted = false) {
+    const b = this.backdrop;
+    scene.background = !tinted && b ? b.tex : null;
+    scene.fog = !tinted && b ? this.fog : null;
+    const away = target.clone().sub(camera.position);
+    away.y = 0;
+    if (away.lengthSq() < 1e-12) away.set(-1, 0, 0);
+    const az = Math.atan2(away.z, away.x) + SUN_ASIDE;
+    const el = b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
+    if (b) {
+      // three.js turns a direction by the rotation's opposite before it looks the sky up, so a
+      // turn of (the sky's sun azimuth - the wanted azimuth) about y brings the sky's sun there
+      scene.backgroundRotation.set(0, b.az - az, 0);
+      scene.environmentRotation.set(0, b.az - az, 0);
+    }
+    if (scene.fog) {
+      const d = camera.position.distanceTo(target);
+      scene.fog.near = d + HAZE.near_m;
+      scene.fog.far = d + HAZE.far_m;
+    }
+    return new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
+  }
+
+  // The stage's road: dirt stains laid over its texture (STAIN_GLSL) at their own scale.
+  addStain(material, span_mm) {
+    const stain = this.texture("stain");
+    const repeat = new THREE.Vector2(span_mm[0] / STAIN_SIDE_MM, span_mm[1] / STAIN_SIDE_MM);
+    material.onBeforeCompile = (sh) => {
+      sh.uniforms.stainMap = { value: stain };
+      sh.uniforms.stainRepeat = { value: repeat };
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nuniform vec2 stainRepeat;\nvarying vec2 vStainUv;")
+        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvStainUv = uv * stainRepeat;");
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform sampler2D stainMap;\nvarying vec2 vStainUv;")
+        .replace("#include <map_fragment>", "#include <map_fragment>\n" + STAIN_GLSL);
+    };
+    material.customProgramCacheKey = () => "stain";
+    material.userData.stain = true;
   }
 
   // Put an asset's maps on a surface material (arm: ambient occlusion, roughness,
@@ -501,10 +727,11 @@ export class Look {
   // A ground-like surface (earth or concrete) whose uv [0, 1] spans span_mm: the drawn
   // texture now, the asset's maps once they are loaded.
   surfaceMaterial(role, span_mm, drawnSide_mm = 2500) {
-    const drawn = this.texture(role === "dirt" ? "earth" : "concrete").clone();
+    const drawn = this.texture(role === "concrete" ? "concrete" : "earth").clone();
     drawn.repeat.set(span_mm[0] / drawnSide_mm, span_mm[1] / drawnSide_mm);
     drawn.needsUpdate = true;
-    const material = new THREE.MeshStandardMaterial({ map: drawn, roughness: role === "dirt" ? 1 : 0.95, metalness: 0 });
+    const material = new THREE.MeshStandardMaterial({ map: drawn, roughness: role === "concrete" ? 0.95 : 1, metalness: 0 });
+    if (this.stage && role === this.groundRole) this.addStain(material, span_mm);
     this.addSurface({ role, material, span_mm });
     return material;
   }
@@ -522,9 +749,10 @@ export class Look {
   // points (three.js world, m) seen from the sun give the box's sides; its depth runs
   // from in front of them to the ground behind them. The biases follow the box's
   // texel: the normal offset is 1.5 texels, the depth bias 2 texels of depth.
-  aimSun(sun, center, points) {
+  // dir: the sun's direction (unit, three.js world) when the stage sets it (stageFrame).
+  aimSun(sun, center, points, dir = null) {
     if (!sun) return;
-    sun.position.copy(center).add(new THREE.Vector3(2.5, 6, 3.5));
+    sun.position.copy(center).add(dir ? dir.clone().multiplyScalar(7.4) : new THREE.Vector3(2.5, 6, 3.5));
     sun.target.position.copy(center);
     sun.target.updateMatrixWorld();
     const cam = sun.shadow.camera;
@@ -626,6 +854,17 @@ export class Look {
     return m;
   }
 
+  // The painted edge of a step (hazardTexture's yellow and black stripes): a material whose
+  // uv [0, 1] spans span_mm. Look values (paint for the picture, not from the record).
+  hazardMaterial(span_mm) {
+    const tex = this.texture("hazard").clone();
+    tex.repeat.set(span_mm[0] / HAZARD_SIDE_MM, span_mm[1] / HAZARD_SIDE_MM);
+    tex.needsUpdate = true;
+    const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    m.userData.paint = "hazard";
+    return m;
+  }
+
   // A ground that shows only the shadow falling on it (the page's background shows through).
   shadowCatcher(x0, x1, y0, y1) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.ShadowMaterial({ opacity: 0.45 }));
@@ -634,9 +873,10 @@ export class Look {
     return mesh;
   }
 
-  // The ground plane of the real look (a dirt road), spanning the box [x0, x1] x [y0, y1] in ISO mm.
+  // The ground plane of the real look (a dirt road; on the stage a gravel road), spanning the
+  // box [x0, x1] x [y0, y1] in ISO mm.
   earth(x0, x1, y0, y1) {
-    const mat = this.surfaceMaterial("dirt", [x1 - x0, y1 - y0]);
+    const mat = this.surfaceMaterial(this.groundRole, [x1 - x0, y1 - y0]);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), mat);
     mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, -1);
     mesh.receiveShadow = true;

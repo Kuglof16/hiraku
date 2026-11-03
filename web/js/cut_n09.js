@@ -32,7 +32,7 @@
 import * as THREE from "three";
 import { clearOfBand } from "./compose.js";
 import { DOMAINS, DOMAIN_JA, DOMAIN_PLAIN_JA, esc, plainReason } from "./labels.js";
-import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { VIEWS, cutView } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { applyEvent, initialState } from "./state.js";
 
@@ -213,7 +213,7 @@ export class CutN09 {
     this.viewEl.append(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
-    const v = new Workbench3D(null, "zu", { renderer: this.renderer });
+    const v = cutView(this, "n09");
     v.setDesign(design);
     v.setLoading(null);
     v.setScene(null, null);
