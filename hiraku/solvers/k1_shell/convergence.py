@@ -103,7 +103,10 @@ def richardson(values, ratio: float = REFINE_RATIO) -> dict:
 def verdict_of(values, limit_pct: float = LIMIT_PCT, ratio: float = REFINE_RATIO) -> tuple[str, float, dict | None]:
     """(verdict, change_pct, richardson numbers or None) of two or three values coarse to fine (sizes)."""
     v = [float(x) for x in values]
-    change = abs(v[-1] - v[-2]) / abs(v[-1]) * 100.0 if v[-1] != 0 else (0.0 if v[-2] == 0 else math.inf)
+    if v[-1] != 0:
+        change = abs(v[-1] - v[-2]) / abs(v[-1]) * 100.0
+    else:  # the finest is 0: 0 % when the next is 0 too, else measured against the next (100 %), not infinite
+        change = 0.0 if v[-2] == 0 else 100.0
     rich = richardson(v[-3:], ratio) if len(v) >= 3 else None
     if change <= limit_pct:  # change first: a small change is converged whatever the order
         return "converged", change, rich
@@ -127,6 +130,8 @@ def convergence_record(quantity: str, unit: str, levels: list[dict], limit_pct: 
     out = {"quantity": quantity, "unit": unit, "levels": levels, "change_pct": change, "limit_pct": limit_pct,
            "verdict": verdict}
     words = [notes] if notes else []
+    if float(vals[-1]) == 0 and float(vals[-2]) != 0:
+        words.append("the finest value is 0, so the change is measured against the next value (100 %)")
     if rich is not None:
         # a singular value has no limit: its order is kept (it shows how slowly it settles), not the extrapolation
         keys = ("observed_order",) if verdict == "singular" else ("observed_order", "extrapolated", "error_pct")

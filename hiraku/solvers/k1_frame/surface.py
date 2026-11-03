@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..k0_handcalc.vehicle import DesignError
-from .model import COMBO, FrameModel, to_design
+from .model import COMBO, FrameModel, stress_dims, to_design
 
 N_POINTS = 41
 LABEL = "梁の要素から計算した表面の応力 (von Mises、管の外の面)"
@@ -59,6 +59,7 @@ def wall_von_mises(fm: FrameModel, member_id: str, points_mm, n_points: int = N_
     Mz = pm.moment_array("Mz", n_points, COMBO)[1]
     T = pm.torque_array(n_points, COMBO)[1]
     sp = mp["section"]
+    stress_dims(sp, member_id, ("tau_per_T",))
     sigma = (-np.interp(s, x, N) / sp["A"] + np.interp(s, x, Mz) * y / sp["Iz"]
              + np.interp(s, x, My) * z / sp["Iy"])
     tau = np.abs(np.interp(s, x, T)) * sp["tau_per_T"]
