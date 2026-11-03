@@ -418,6 +418,17 @@ class UnsupportedLoadTest(RunCase, unittest.TestCase):
         self.assertEqual(compute_judgement(self.ctx, "strength")["state"], "red")
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
+        # run N13 (ver-0009): write_report and the export read a verdict without a comparison
+        from hiraku.export.tables import comparison_rows
+        from hiraku.tools.functions import write_report
+        from hiraku.tools.report import domain_parts
+
+        strength = next(p for p in domain_parts(self.ctx) if p["domain"] == "strength")
+        case = next(c for c in strength["cases"] if c["load_case_id"] == "R1-step100")
+        self.assertEqual(case["verdict_id"], ver["verdict_id"])
+        self.assertIn("unsupported_load", case["line"])
+        write_report(self.ctx, {"summary": f"R1 は荷重の通り道が無い ({ver['verdict_id']})", "next": []}, "lead")
+        comparison_rows(self.ctx.store)
 
     def test_no_unsupported_load_no_verdict(self):
         ana, _, _ = self.run_p1()

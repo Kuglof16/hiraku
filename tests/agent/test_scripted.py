@@ -112,16 +112,34 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
 
         found = {"changes": {"steering_x": {"value": -509.5, "unit": "mm"}, "seat_height": {"value": 317.0, "unit": "mm"}},
                  "smallest": {"name": "knee_room", "value": 12.0, "unit": "mm", "where": "steering_column"}}
-        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit:
+        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit,                 mock.patch.object(scripted, "range_ends", return_value=["seat_slide 300 mm (上限)"]):
             changes, reason = scripted.fit_driver(self.ctx, {"track": {"value": 1220, "unit": "mm"},
                                                              "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
         self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
         self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
+        self.assertEqual(fit.call_args.kwargs["max_evals"], scripted.FIT_EVALS)  # a fixed count by default
         self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
         self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
         self.assertEqual(changes["track"]["value"], 1220)
         self.assertIn("driver_fit", reason)
         self.assertIn("knee_room 12.0 mm", reason)
+        self.assertIn("範囲の端 (確かめていない値) で決まった: seat_slide 300 mm (上限)", reason)
+
+    def test_range_ends_names_the_bounds(self):
+        import json
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        d = json.loads((root / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        spec = {s["name"]: s for s in designgen.variables(d)}
+        lo = spec["steering_column_angle"]["min"]
+        got = scripted.range_ends(d, {"steering_column_angle": {"value": lo, "unit": "deg"},
+                                      "seat_height": {"value": spec["seat_height"]["value"], "unit": "mm"}})
+        self.assertEqual(got, [f"steering_column_angle {lo:g} deg (下限)"])
 
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))

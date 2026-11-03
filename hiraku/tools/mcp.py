@@ -19,6 +19,7 @@ from typing import Any, Callable
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from hiraku import contract
+from hiraku.contract import layout
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
@@ -232,7 +233,7 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
 RECORDED_REFUSALS = ("propose_design",)
 
 
-TOOL_ERRORS_FILE = "tool.errors.log"  # in the run folder: the traceback of each exception a tool let out
+TOOL_ERRORS_FILE = layout.TOOL_ERRORS_FILE  # in the run folder: the traceback of each exception a tool let out
 
 
 def tool_failure(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None, e: BaseException) -> str:
