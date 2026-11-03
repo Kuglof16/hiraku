@@ -142,7 +142,8 @@ class OtherSuites(unittest.TestCase):
     """The lock files that tell one qa.run_tests about another on the same PC."""
 
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
+        # its own lock folder, apart from the real suite's; a killed holder can keep a file open a moment
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.saved, rt.LOCK_DIR = rt.LOCK_DIR, Path(self._tmp.name)
 
     def tearDown(self):
@@ -184,7 +185,8 @@ class SuiteQueue(unittest.TestCase):
             "time.sleep(float(sys.argv[2]))\n")
 
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
+        # its own lock folder, apart from the real suite's; a killed holder can keep a file open a moment
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.saved, rt.LOCK_DIR = rt.LOCK_DIR, Path(self._tmp.name)
 
     def tearDown(self):
@@ -205,8 +207,14 @@ class SuiteQueue(unittest.TestCase):
         finally:
             procs.kill_tree(p)
             p.wait()
-        f = rt.take_queue(8, wait=False)  # the OS freed the lock with the process
-        self.assertIsNotNone(f)
+        # the OS frees the lock when the holder's process is gone, which on a busy machine can take a moment
+        # after the kill (the venv launcher ends before the interpreter behind it)
+        f, until = None, time.monotonic() + 30
+        while f is None and time.monotonic() < until:
+            f = rt.take_queue(8, wait=False)
+            if f is None:
+                time.sleep(0.2)
+        self.assertIsNotNone(f, "the lock was not freed within 30 s of the holder's end")
         f.close()
 
     def test_a_waiting_suite_says_whom_it_waits_for_and_then_runs(self):
