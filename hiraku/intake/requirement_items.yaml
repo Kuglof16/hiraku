@@ -1,4 +1,4 @@
-# The requirement items HIRAKU can ask about (keys Q03..Q92), the same for every product.
+# The requirement items HIRAKU can ask about (keys Q03..Q94), the same for every product.
 # Which item a product needs, and whether the person is asked, follow from the flags:
 #   applies_if  expression over the product flags (hiraku.catalog.expr); an item that does not apply
 #               is neither shown nor asked
@@ -448,3 +448,28 @@ items:
     name: 繰り返し回数
     applies_if: (lean or electric or cargo) and not self_propelled
     ask: default
+
+  - key: Q93
+    name: 乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 450
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2
+        (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it.
+        The 450 is a provisional margin, not from a source
+
+  - key: Q94
+    name: 乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 600
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted).
+        Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read
