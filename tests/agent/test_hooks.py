@@ -192,6 +192,44 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(kinds, [("agent.started", "cae.strength"), ("agent.stopped", "cae.strength")])
         self.assert_events_fit()
 
+    def test_the_lead_may_stop_once_the_revisions_are_used_up_although_cases_are_pending(self):
+        from hiraku.agent.runner import end_status
+
+        self.ctx.project["round_limit"] = 0  # version 1 - 1 >= 0: no revision left
+        self.assertIsNotNone(rules.stop_reason(self.ctx))  # R1 and P1 are still pending
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
+        self.assertEqual([e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"], [])
+        self.assertEqual(end_status(self.ctx, self.hooks.stop_blocks)[::2], ("stopped", "not_judged"))
+
+    def _stop_role(self, agent_type, agent_id="a1"):
+        return run(self.hooks.subagent_stop({"agent_id": agent_id, "agent_type": agent_type,
+                                             "stop_hook_active": False}, None, None))
+
+    def test_role_stop_blocks_are_counted_per_design_version(self):
+        from unittest import mock
+
+        held = [("strength", ["R1-step100"])]
+        with mock.patch.object(rules, "holding", return_value=held), \
+                mock.patch.object(rules, "stop_reason", return_value="R1-step100 がまだ"):
+            self.assertEqual(self._stop_role("cae-strength")["decision"], "block")
+            self.assertEqual(self._stop_role("cae-strength")["decision"], "block")
+            self.assertEqual(self._stop_role("cae-strength"), {})  # the cap of version 1
+            with mock.patch.object(type(self.ctx), "version", new_callable=mock.PropertyMock, return_value=2):
+                self.assertEqual(self._stop_role("cae-strength")["decision"], "block")  # version 2 has its own
+        blocked = [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"]
+        self.assertEqual([(e["data"]["count"], e["data"]["design_version"]) for e in blocked], [(1, 1), (2, 1), (1, 2)])
+
+    def test_the_packagers_stop_is_held_by_assembly(self):
+        from unittest import mock
+
+        with mock.patch.object(rules, "holding", return_value=[("assembly", ["H1-interference"])]), \
+                mock.patch.object(rules, "stop_reason", return_value="H1-interference がまだ"):
+            out = self._stop_role("packager")
+        self.assertEqual(out["decision"], "block")
+        ev = [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"][-1]
+        self.assertEqual((ev["agent"], ev["domain"]), ("packager", "assembly"))
+        self.assert_events_fit()
+
     def test_matchers(self):
         m = self.hooks.matchers()
         self.assertEqual(set(m), {"PreToolUse", "PostToolUse", "Stop", "SubagentStart", "SubagentStop"})
