@@ -691,6 +691,31 @@ for _k, _pids in PLATE_T_VARS.items():
                         f"mm; PLATE_KG_M2). The default {_t0:g} mm is an assumption, not sized. Written into "
                         "design.variables only when it is not the default")
     OPTIONAL[_k] = (_k,)
+# The seats' cushion depth (seat_depth): the seat box's length along x. The seat back (the box's rear face, where
+# K4 and kit/body.py seat the people: k4_geometry.people.seated, body._seat_frame) stays at
+# seat_x - SEAT_LENGTH_MM / 2 whatever the depth, so the people, the pedals, the steering wheel and the seat belts
+# stay where they are; the cushion's front edge moves. The range is from the AIST body sizes read in
+# k4_geometry.people (young adults, AIST anthropometric database 1991-92, read 2026-11-03):
+# - at least the large person's trunk box (kit/body.occupant_parts: from the seat back to twice the hip's distance
+#   ahead of it, J9 Buttock-trochanterion length, sitting, male 95th percentile 146.0 mm): 292.0 mm. Shorter, the
+#   trunk's box reaches past the cushion's front edge;
+# - at most the small person's buttock-knee length (J5 Buttock-knee length, sitting, female 5th percentile 511.0 mm).
+#   Longer, the cushion's front edge is past the front of her knees.
+# Rule HU-02 (data/knowledge/human.yaml) limits the depth to J6 Buttock-popliteal length, sitting, female 5th
+# percentile 406.0 mm (its basis: https://www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif, read 2026-11-03); J6 is
+# not among the values in k4_geometry.people, so the range here does not use it. The seat's mass does not change with
+# the depth (the 12 kg is an assumption, as before).
+SEAT_DEPTH_RANGE_MM = (2.0 * _people.SIZES[_people.BIG]["buttock_trochanter"], _people.SIZES[_people.SMALL]["buttock_knee"])
+VARIABLES["seat_depth"] = Var(
+    "mm", SEAT_LENGTH_MM, *SEAT_DEPTH_RANGE_MM,
+    "the seats' cushion depth (the seat box's length along x); the seat back stays at seat_x - "
+    f"{SEAT_LENGTH_MM / 2.0:g} mm, the front edge moves (the people sit where they did). The default is the first "
+    f"v1's {SEAT_LENGTH_MM:g} mm (assumption). Range: from {SEAT_DEPTH_RANGE_MM[0]:g} mm, the large person's trunk box "
+    "(twice the AIST young adult male 95th percentile buttock-trochanterion length J9, 146.0 mm), to "
+    f"{SEAT_DEPTH_RANGE_MM[1]:g} mm, the small person's buttock-knee length (AIST young adult female 5th percentile "
+    "J5). Rule HU-02 asks for at most the female 5th percentile buttock-popliteal length J6 (406 mm). Written into "
+    "design.variables only when it is not the default")
+OPTIONAL["seat_depth"] = ("seat_depth",)
 SIDE_NET_WIRE_MM = 3.0  # the side net's wire diameter (assumption)
 SIDE_NET_PITCH_MM = 50.0  # its mesh pitch both ways (assumption)
 FENDER_T_MM = 3.0  # fender wall (assumption)
@@ -889,16 +914,17 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     _kit(safety.place_main_switch, lay, "aux")
     if v["lamps"] == 1:
         _kit(safety.place_lamps, lay, "front_body", E - v["cross_b"] / 2.0, rail_z, "deck")
+    seat_back = seat_x - SEAT_LENGTH_MM / 2.0  # the seat back stays here whatever seat_depth is
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
-        lay.put(Item(pid, label, "seat", (SEAT_LENGTH_MM, SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=seat_x, y=y,
-                z=bottom_at(lay.top_of("floor")))
+        lay.put(Item(pid, label, "seat", (v["seat_depth"], SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=rear_at(seat_back),
+                y=y, z=bottom_at(lay.top_of("floor")))
     _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
     if v["seat_slide"] > 0:
         _belt_behind_travel(lay, "seat_belt_R", v["seat_slide"] / 2.0)
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
-                x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
+                x=lay.rear_of(seat) + SEAT_LENGTH_MM / 2.0 - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
     # the pedals at pedal_x with the driver's right foot on them, then the steering wheel at steering_wheel_height
     # above the seat and its column at steering_column_angle (kit/body.py, kit/steering.py)
     feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0,
