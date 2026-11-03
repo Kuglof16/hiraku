@@ -7,26 +7,186 @@
 <link rel="stylesheet" href="title.css">
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n18"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
 <style>
-  /* N18: motes of light gather onto one vertical line in the dark; the line
-     grows and opens into a band, the vehicle is drawn over it, then the name
-     comes up in a bloom of light, the line, the repository and one small
-     line (HIRAKU Powered by Claude). Ends on black.
+  /* N18: motes of light gather onto one vertical line in the dark (the
+     night of N17b); the line is the seam of a closed double door, which
+     parts and swings open like N05's door onto paper, the same ground as
+     N00. On the paper, in ink: the vehicle is drawn, then the name with a
+     rule under it, the line, the repository and one small line (HIRAKU
+     Powered by Claude). Ends on paper.
+     Layers, back to front: the paper (class paper-grid), warm light on it
+     behind the door (the spill), the vehicle and the words, the door, the
+     light in the seam, the motes.
      Placement and times: layout.json n18 (CSS variables from layout.js;
      --t-gather, --t-line, --t-open, --t-draw, --t-name, --t-tag, --t-url,
-     --t-credit, --t-out from n18.times; --gather-*, --name-bloom-*,
-     --credit-*, --light-grow-dur from the groups of the same names). The
-     motes are made by the script below from seeded random numbers. */
+     --t-credit from n18.times; --door-*, --gather-*, --credit-*,
+     --light-grow-dur, --light-out-dur from the groups of the same names).
+     The motes are made by the script below from seeded random numbers.
+     The ten 3D pets (promo/pets/pet3d.js) sit on the top edge of the name in
+     N00's seats (layout.json n00.title_pets, read, not copied), each coming
+     in with its letter. Then K stands tilted; the pet on U pushes it, a
+     second hops over to help, and K goes back in line; then one by one the
+     pets report, and all hold still by n18.pets.stop.still_s (n18.pets).
+     One WebGL renderer off the page draws each pet alone; the frame is
+     copied into that pet's 2D canvas, as on N00.
+     ?layer=fg: the paper and the door (.bg-only) are not drawn. */
   :root {
-    --page-bg: var(--night);
+    /* the wide swing starts after the crack and the pause */
+    --swing-at: calc(var(--t-open) + var(--door-crack-dur) + var(--door-hold-dur));
     /* set by the script from layout.json (plain numbers) */
-    --gather-start: 0.3;
+    --gather-start: 0.55;
     --seed-glow: 0.5;
-    --nb-peak: 0.95;
-    --nb-rest: 0.28;
-    --halo-peak: 0.3;
-    --halo-rest: 0.07;
+    --shade: 0.55;
     --credit-alpha: 0.62;
+  }
+
+  /* --- warm light on the paper behind the door (door.spill_dur_s) --- */
+  .spill {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 34% 62% at 50% 44%, rgba(255, 251, 241, 0.95), rgba(255, 251, 241, 0) 72%),
+      linear-gradient(90deg,
+        rgba(246, 226, 186, 0) 30%, rgba(246, 226, 186, 0.38) 50%, rgba(246, 226, 186, 0) 70%);
+    animation: spill-fade var(--door-spill-dur) ease-out both;
+    animation-delay: var(--swing-at);
+  }
+  @keyframes spill-fade {
+    0%, 25% { opacity: 1; }
+    100%    { opacity: 0; }
+  }
+
+  /* --- the door: the night split down the middle --- */
+  .door {
+    position: absolute;
+    inset: 0;
+    perspective: var(--door-perspective-px);
+    perspective-origin: 50% 50%;
+    pointer-events: none;
+    /* hidden once fully open */
+    animation: door-gone 0s linear both;
+    animation-delay: calc(var(--swing-at) + var(--door-open-dur));
+  }
+  @keyframes door-gone {
+    from { visibility: visible; }
+    to   { visibility: hidden; }
+  }
+  .leaf {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    transform-style: preserve-3d;
+  }
+  .leaf-l { left: 0; transform-origin: 0 50%; }
+  .leaf-r { right: 0; transform-origin: 100% 50%; }
+  .leaf-crack, .leaf-body {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transform-origin: inherit;
+  }
+  .leaf-crack {
+    animation: crack-l var(--door-crack-dur) var(--door-crack-ease) both;
+    animation-delay: var(--t-open);
+  }
+  .leaf-r .leaf-crack { animation-name: crack-r; }
+  /* each leaf is its half of the night ground (title.css .night), so the
+     closed door is the ground N17b ends on */
+  .leaf-body {
+    background: radial-gradient(ellipse 70% 60% at 50% 42%, var(--night-2), var(--night) 70%);
+    background-size: 200% 100%;
+    animation: swing-l var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--swing-at);
+  }
+  .leaf-l .leaf-body { background-position: 0 0; }
+  .leaf-r .leaf-body { background-position: 100% 0; animation-name: swing-r; }
+  /* the leaf's outline on its other three sides: comes up as it swings, so
+     the shut door has no frame on the stage's edges */
+  .frame {
+    position: absolute;
+    inset: 0;
+    border: var(--door-line-px) solid color-mix(in srgb, var(--on-night-soft) 35%, transparent);
+    opacity: 0;
+    animation: frame-in 0.1s linear both;
+    animation-delay: var(--swing-at);
+  }
+  .leaf-l .frame { border-right: 0; }
+  .leaf-r .frame { border-left: 0; }
+  @keyframes frame-in { from { opacity: 0; } to { opacity: 1; } }
+  /* the free edges come towards the viewer (left leaf: negative turn) */
+  @keyframes crack-l {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(-1 * var(--door-crack))); }
+  }
+  @keyframes crack-r {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(var(--door-crack)); }
+  }
+  @keyframes swing-l {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(var(--door-crack) - var(--door-angle))); }
+  }
+  @keyframes swing-r {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(calc(var(--door-angle) - var(--door-crack))); }
+  }
+  /* the leaf's thickness: a strip at the free edge, turned back by 90 deg;
+     it faces the opening and catches the light from behind */
+  .edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--door-thickness-px);
+  }
+  .leaf-l .edge {
+    left: 100%;
+    transform-origin: 0 50%;
+    transform: rotateY(90deg);
+    background: linear-gradient(90deg, #8a7a62 0%, #c9b48c 14%, #5a4f41 45%, #2a2620 100%);
+  }
+  .leaf-r .edge {
+    right: 100%;
+    transform-origin: 100% 50%;
+    transform: rotateY(-90deg);
+    background: linear-gradient(270deg, #8a7a62 0%, #c9b48c 14%, #5a4f41 45%, #2a2620 100%);
+  }
+  /* light raking across the leaf from the seam, rising with the line */
+  .rake {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation: rake calc(var(--swing-at) - var(--t-line)) ease-in both;
+    animation-delay: var(--t-line);
+  }
+  .leaf-l .rake { background: linear-gradient(270deg, rgba(246, 234, 208, 0.16), rgba(246, 234, 208, 0) 30%); }
+  .leaf-r .rake { background: linear-gradient(90deg, rgba(246, 234, 208, 0.16), rgba(246, 234, 208, 0) 30%); }
+  @keyframes rake {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  /* a swinging leaf turns away from the light and darkens */
+  .leaf-body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    animation: leaf-shade var(--door-open-dur) var(--door-ease) both;
+    animation-delay: var(--swing-at);
+  }
+  @keyframes leaf-shade {
+    from { opacity: 0; }
+    to   { opacity: var(--shade); }
   }
 
   /* --- motes drawn in to the line (n18.gather) --- */
@@ -68,58 +228,59 @@
   @keyframes seed-in  { from { opacity: 0; } to { opacity: var(--seed-glow); } }
   @keyframes seed-out { from { opacity: var(--seed-glow); } to { opacity: 0; } }
 
-  .light { left: var(--light-x); top: var(--light-y);
-           width: var(--light-w); height: var(--light-h);
-           animation-duration: var(--light-grow-dur); }
+  /* the line: grows, opens with the crack (title.css light-open), fades
+     as the leaves swing out */
+  .light {
+    left: var(--light-x); top: var(--light-y);
+    width: var(--light-w); height: var(--light-h);
+    animation:
+      light-grow var(--light-grow-dur) cubic-bezier(.5, 0, .2, 1) both,
+      light-out var(--light-out-dur) ease-in both;
+    animation-delay: var(--t-line), var(--swing-at);
+  }
+  @keyframes light-out { from { opacity: 1; } to { opacity: 0; } }
 
+  /* --- on the paper, in ink --- */
   .vehicle {
     position: absolute;
     left: var(--vehicle-x);
     top: var(--vehicle-y);
     width: var(--vehicle-w);
   }
+  .vehicle .v-line { stroke: var(--ink); }
 
-  /* --- the name comes up in a bloom of light (n18.name_bloom) --- */
-  .name-halo {
+  .name { color: var(--ink); }
+  /* the letter itself, moved by the pets' play (n18.pets) about the bottom
+     centre of its line box; the span around it does the letter-in */
+  .name b {
+    display: inline-block;
+    font-weight: inherit;
+    transform-origin: 50% 100%;
+  }
+  /* the pets come in with their letter: title.css .name span's letter-in,
+     the same duration and delay */
+  .seats { position: absolute; inset: 0; pointer-events: none; }
+  .pet {
     position: absolute;
-    left: calc((var(--stage-w) - var(--name-bloom-halo-w)) / 2);
-    top: calc(var(--title-name-y) + var(--title-name-size-px) / 2 - var(--name-bloom-halo-h) / 2);
-    width: var(--name-bloom-halo-w);
-    height: var(--name-bloom-halo-h);
-    pointer-events: none;
-    background: radial-gradient(ellipse 50% 50% at 50% 50%,
-      rgba(255, 248, 232, 1) 0%, rgba(246, 234, 208, 0.4) 40%, rgba(246, 234, 208, 0) 100%);
-    opacity: 0;
-    animation: halo var(--name-bloom-settle-dur) ease-out both;
-    animation-delay: var(--t-name);
+    display: block;
+    animation: letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: calc(var(--t-name) + var(--i) * 0.07s);
   }
-  @keyframes halo {
-    /* peaks as the last letters are in, so it does not run ahead of them */
-    0%   { opacity: 0; }
-    45%  { opacity: var(--halo-peak); }
-    100% { opacity: var(--halo-rest); }
+  .rule {
+    position: absolute;
+    left: calc((var(--stage-w) - var(--rule-w)) / 2);
+    width: var(--rule-w);
+    top: var(--rule-y);
+    height: var(--rule-h);
+    background: var(--ink);
+    animation: rule-in 0.6s ease-out both;
+    animation-delay: calc(var(--t-name) + 0.55s);
   }
-  .name span {
-    animation:
-      letter-in 0.7s cubic-bezier(.2, .7, .2, 1) both,
-      letter-bloom var(--name-bloom-settle-dur) ease-out both;
-    animation-delay:
-      calc(var(--t-name) + var(--i) * 0.07s),
-      calc(var(--t-name) + var(--i) * 0.07s);
+  @keyframes rule-in {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
   }
-  /* the peak holds while the letter comes up (letter-in fades it in), then settles */
-  @keyframes letter-bloom {
-    0%, 30% {
-      color: #fffaf0;
-      text-shadow: 0 0 var(--name-bloom-peak-blur-px) rgba(246, 234, 208, var(--nb-peak)),
-                   0 0 calc(var(--name-bloom-peak-blur-px) / 4) rgba(255, 248, 232, var(--nb-peak));
-    }
-    100% {
-      color: var(--on-night);
-      text-shadow: 0 0 var(--name-bloom-rest-blur-px) rgba(246, 234, 208, var(--nb-rest)),
-                   0 0 calc(var(--name-bloom-rest-blur-px) / 4) rgba(255, 248, 232, 0);
-    }
-  }
+  .tag { color: var(--ink); }
 
   .url, .credit {
     position: absolute;
@@ -132,46 +293,55 @@
     top: var(--url-y);
     font: 400 var(--url-size-px) / 1 var(--font-mono);
     letter-spacing: 0.02em;
-    color: var(--on-night-soft);
+    color: var(--ink-soft);
     animation: fade-up 0.6s ease-out both;
     animation-delay: var(--t-url);
   }
-  /* one small line: unbleached ink, quiet */
+  /* one small line: ink, quiet */
   .credit {
     top: var(--credit-y);
     font: 400 var(--credit-size-px) / 1 var(--font-latin);
     letter-spacing: 0.14em;
-    color: var(--on-night);
+    color: var(--ink);
     animation: credit-in var(--credit-fade-dur) ease-out both;
     animation-delay: var(--t-credit);
   }
   @keyframes credit-in { from { opacity: 0; } to { opacity: var(--credit-alpha); } }
 
-  .all {
+  .front {
     position: absolute;
-    inset: 0;
-    animation: fade-out 0.8s ease-in both;
-    animation-delay: var(--t-out);
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: var(--band-y);
+    pointer-events: none;
   }
-  @keyframes fade-out { to { opacity: 0; } }
 </style>
 </head>
 <body data-duration="9">
-<div class="stage night">
-  <div class="all">
-    <div class="safe">
-      <div class="seed-line"></div>
-      <div class="light" data-box="n18.light"><div class="light-glow"></div><div class="light-core"></div></div>
-      <div class="vehicle draw-on" data-box="n18.vehicle"></div>
-      <div class="name-halo"></div>
-      <h1 class="name" aria-label="HIRAKU" data-box="n18.title.name"></h1>
-      <p class="tag" data-box="n18.title.tag">CAE を、すべての作り手へ拓く。</p>
-      <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku</p>
-      <p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>
-    </div>
-    <!-- data-kind="effect": the 150 motes move as one swarm (one thing in motion) -->
-    <svg class="gather" data-kind="effect" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
+<div class="stage paper-grid">
+  <!-- data-kind="effect": a glow that fades as one -->
+  <div class="spill" data-kind="effect"></div>
+  <div class="safe">
+    <div class="vehicle draw-on" data-box="n18.vehicle"></div>
+    <h1 class="name" aria-label="HIRAKU" data-box="n18.title.name"></h1>
+    <div class="rule" data-box="n18.rule"></div>
+    <p class="tag" data-box="n18.title.tag">CAE を、すべての作り手へ拓く。</p>
+    <p class="url" data-box="n18.url">github.com/Kuglof16/hiraku</p>
+    <p class="credit" data-box="n18.credit" data-kind="note">HIRAKU Powered by Claude</p>
+    <div class="seats"></div>
   </div>
+  <!-- data-kind="effect": the two leaves open as one door (one thing in motion) -->
+  <div class="door bg-only" data-kind="effect" aria-hidden="true">
+    <div class="leaf leaf-l"><div class="leaf-crack"><div class="leaf-body"><div class="rake"></div><div class="frame"></div><div class="edge"></div></div></div></div>
+    <div class="leaf leaf-r"><div class="leaf-crack"><div class="leaf-body"><div class="rake"></div><div class="frame"></div><div class="edge"></div></div></div></div>
+  </div>
+  <div class="front">
+    <div class="seed-line"></div>
+    <div class="light" data-box="n18.light"><div class="light-glow"></div><div class="light-core"></div></div>
+  </div>
+  <!-- data-kind="effect": the 150 motes move as one swarm (one thing in motion) -->
+  <svg class="gather" data-kind="effect" viewBox="0 0 1920 1080" preserveAspectRatio="none" aria-hidden="true"></svg>
   <div class="guide-band"></div>
   <div class="clock"></div>
 </div>
@@ -179,17 +349,40 @@
 <script>
   const { cutRules: R, rules: LAYOUT } = window.promoLayout;
   const root = document.documentElement.style;
-  document.querySelector(".vehicle").innerHTML = drawVehicle({ halo: true });
+  document.querySelector(".vehicle").innerHTML = drawVehicle();
   document.querySelector(".name").innerHTML = [..."HIRAKU"]
-    .map((c, i) => `<span style="--i:${i}">${c}</span>`).join("");
+    .map((c, i) => `<span style="--i:${i}"><b>${c}</b></span>`).join("");
+
+  // The ten pets in pet3d.js ROLES order (tag: the role's name, for the
+  // canvas's aria-label). Their seats are N00's: layout.json n00.title_pets.
+  const PETS = [
+    { id: "lead", tag: "まとめ役" },
+    { id: "designer", tag: "設計役" },
+    { id: "packager", tag: "パッケージ役" },
+    { id: "cae.handling", tag: "操安" },
+    { id: "cae.powertrain", tag: "動力" },
+    { id: "cae.aero", tag: "空力" },
+    { id: "cae.crash", tag: "衝突" },
+    { id: "cae.strength", tag: "強度信頼性" },
+    { id: "cae.nvh", tag: "音振" },
+    { id: "cae.thermal", tag: "熱" },
+  ];
+  PETS.forEach((p) => {
+    p.key = p.id.replace(/^cae\./, "");
+    p.seat = LAYOUT.n00.title_pets.seats.find((s) => s.role === p.id);
+    if (!p.seat) throw new Error(`n18: no seat for ${p.id} in n00.title_pets`);
+  });
+  window.N18_PETS = PETS;
+  // one 2D canvas per pet, placed at each t by the module below.
+  // data-kind="moving" while the pets breathe and play (dropped once still)
+  document.querySelector(".seats").innerHTML = PETS.map((p) =>
+    `<canvas class="pet" data-box="n18.pet.${p.key}" data-kind="moving" data-pet="${p.id}"
+        aria-label="${p.tag}" style="--i:${p.seat.letter}"></canvas>`).join("");
 
   // Plain numbers the CSS uses as they are (layout.js turns numbers into lengths).
   root.setProperty("--gather-start", String(R.gather.start_alpha));
   root.setProperty("--seed-glow", String(R.gather.seed_glow_alpha));
-  root.setProperty("--nb-peak", String(R.name_bloom.peak_alpha));
-  root.setProperty("--nb-rest", String(R.name_bloom.rest_alpha));
-  root.setProperty("--halo-peak", String(R.name_bloom.halo_peak_alpha));
-  root.setProperty("--halo-rest", String(R.name_bloom.halo_rest_alpha));
+  root.setProperty("--shade", String(R.door.shade_alpha));
   root.setProperty("--credit-alpha", String(R.credit.alpha));
 
   // Seeded random numbers (mulberry32): the same seed gives the same picture.
@@ -232,5 +425,228 @@
   })();
 </script>
 <script src="timeline.js"></script>
+<script>
+  // Frames wait until the 3D pets have been built (the module below loads
+  // three.js); a seek before that would paint no pets.
+  (function () {
+    let done;
+    const built = new Promise((r) => (done = r));
+    window.__n18Built = done;
+    const base = window.promo.ready.bind(window.promo);
+    window.promo.ready = async () => { await base(); await built; };
+  })();
+</script>
+<script src="../pets/pet3d.js"></script>
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const HP = window.HirakuPets;
+const { cutRules: R, rules: L } = window.promoLayout;
+const PETS = window.N18_PETS;
+// N00's seats, camera, pet box aspect and idle clocks (layout.json n00)
+const N0 = L.n00;
+const TP = N0.title_pets, CAM = N0.camera, PB = N0.pets, M = N0.motion;
+const G = R.pets, NAME = R.title.name;
+const rad = (d) => (d * Math.PI) / 180;
+for (const p of PETS) p.box = document.querySelector(`canvas[data-pet="${p.id}"]`);
+
+// ---- one WebGL renderer off the page; each pet is drawn alone into it and
+// copied into its own 2D canvas. Transparent, so the paper shows through.
+const stageW = document.querySelector(".stage").getBoundingClientRect().width;
+const uCss = stageW / L.stage.w;
+const dpr = window.devicePixelRatio || 1;
+const devPx = uCss * dpr;
+const seatH = TP.h_em * NAME.size_px;
+const SEAT = { h: seatH, w: (seatH * PB.w) / PB.h };
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(Math.max(1, Math.round(SEAT.w * devPx)), Math.max(1, Math.round(SEAT.h * devPx)), false);
+renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const gl = renderer.domElement;
+
+// ---- scene and light: N00's (the paper setting of promo/pets/viewer.html) ----
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.75;
+scene.add(new THREE.HemisphereLight(0xfffaf0, 0xd8d2c4, 0.6));
+const key = new THREE.DirectionalLight(0xfff6e8, 2.1);
+key.position.set(-2.2, 8.0, 3.6);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 3.6, bottom: -1.6, near: 1, far: 16 });
+key.shadow.radius = 8;
+key.shadow.bias = -0.0006;
+key.shadow.normalBias = 0.02;
+key.target.position.set(0.2, 1.0, 0);
+scene.add(key, key.target);
+const rim = new THREE.DirectionalLight(0xdfe8ff, 1.3);
+rim.position.set(3.5, 3.0, -4.5);
+scene.add(rim);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30),
+  new THREE.ShadowMaterial({ color: 0x1b1a17, opacity: 0.13 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---- N00's camera (n00.camera, fitted to pet3d's FRAME in a box of n00.pets' aspect)
+const F = HP.FRAME;
+const half = Math.tan((CAM.fov_deg * Math.PI) / 360);
+const aspect = PB.w / PB.h;
+const dist = Math.max(F.h / 2 / half, F.w / 2 / (half * aspect)) * 1.04 + 0.6;
+const cam = new THREE.PerspectiveCamera(CAM.fov_deg, aspect, 0.1, 80);
+const az = rad(CAM.azimuth_deg), el = rad(CAM.elevation_deg);
+const home = new THREE.Vector3(F.cx, F.cy, 0);
+cam.position.set(home.x + dist * Math.sin(az) * Math.cos(el), home.y + dist * Math.sin(el),
+                 dist * Math.cos(az) * Math.cos(el));
+cam.lookAt(home);
+cam.updateMatrixWorld();
+const foot = new THREE.Vector3(0, 0, 0).project(cam);
+const FOOT = { fx: (foot.x + 1) / 2, fy: (1 - foot.y) / 2 };
+
+// ---- the seats on the name (n00.title_pets, measured on this name) ------------
+await document.fonts.ready;
+function letterInk() {
+  const name = document.querySelector(".name");
+  const cs = getComputedStyle(name);
+  const size = NAME.size_px;
+  const c2 = document.createElement("canvas").getContext("2d");
+  c2.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+  const stage = document.querySelector(".stage").getBoundingClientRect();
+  const mH = c2.measureText("H");
+  // line-height 1: the content box (font ascent + descent) is centred on the line
+  const baseline = NAME.y + (size - (mH.fontBoundingBoxAscent + mH.fontBoundingBoxDescent)) / 2
+                   + mH.fontBoundingBoxAscent;
+  return [...name.querySelectorAll("span")].map((s) => {
+    const m = c2.measureText(s.textContent);
+    const left = (s.getBoundingClientRect().left - stage.left) / uCss;   // the glyph's origin
+    // the play's origin: the bottom centre of the letter's <b> line box
+    const b = s.firstElementChild;
+    const br = b.getBoundingClientRect();
+    return { x0: left - m.actualBoundingBoxLeft, x1: left + m.actualBoundingBoxRight,
+             top: baseline - m.actualBoundingBoxAscent, el: b,
+             ox: (br.left + br.width / 2 - stage.left) / uCss,
+             oy: NAME.y + (b.offsetTop + b.offsetHeight) / uCss };
+  });
+}
+const INK = letterInk();
+
+// ---- the play (n18.pets). Every function here is of t alone ------------------
+const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
+const arc = (u) => (u <= 0 || u >= 1 ? 0 : 4 * u * (1 - u));
+const FX = G.fix, TRY = G.try, HELP = G.help, PUSH = G.push, REP = G.report, STOP = G.stop;
+// how far the letter is out of line: 1 = tilted as it came, 0 = in line
+function out(t) {
+  if (t >= PUSH.start_s) return 1 - smooth((t - PUSH.start_s) / PUSH.dur_s);
+  return 1 - TRY.give * hump((t - TRY.start_s) / TRY.dur_s);
+}
+// a letter's move {dx, dy, rot, sx, sy} (design px, radians) about its bottom centre
+function letterMove(i, t) {
+  const m = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
+  if (i !== FX.letter) return m;
+  const o = out(t);
+  const u = (t - FX.settle_s) / FX.settle_dur_s;
+  const wob = u > 0 && u < 1 ? rad(FX.settle_deg) * Math.sin(2 * Math.PI * FX.settle_hz * (t - FX.settle_s)) * (1 - u) ** 2 : 0;
+  m.dx = FX.dx_px * o;
+  m.rot = rad(FX.tilt_deg) * o + wob;
+  return m;
+}
+function onLetter(i, t, x, y) {
+  const m = letterMove(i, t), o = INK[i];
+  const ax = (x - o.ox) * m.sx, ay = (y - o.oy) * m.sy;
+  const c = Math.cos(m.rot), s = Math.sin(m.rot);
+  return { x: o.ox + m.dx + c * ax - s * ay, y: o.oy + m.dy + s * ax + c * ay, rot: m.rot };
+}
+// a pet's own part: {x, y} px (up negative) and roll (radians, + = top to the left)
+function petPlay(p, t) {
+  const r = { x: 0, y: 0, roll: 0 };
+  if (p.id === TRY.role) {
+    const h = hump((t - TRY.start_s) / TRY.dur_s);
+    r.x -= TRY.step_px * h;
+    r.roll += rad(TRY.lean_deg) * h;
+  }
+  if (p.id === HELP.role) {
+    const go = (t - HELP.start_s) / HELP.hop_dur_s, back = (t - HELP.back_s) / HELP.hop_dur_s;
+    r.x -= HELP.to_px * (smooth(go) - smooth(back));
+    r.y -= HELP.up_px * (arc(go) + arc(back));
+  }
+  const k = PUSH.roles.indexOf(p.id);
+  if (k >= 0) {
+    const h = hump((t - PUSH.start_s) / PUSH.dur_s);
+    r.x -= PUSH.step_px[k] * h;
+    r.roll += rad(PUSH.lean_deg) * h;
+  }
+  r.y -= REP.up_px * arc((t - p.reportAt) / REP.hop_dur_s);
+  return r;
+}
+// the pets' clock: t, slowing to a halt from stop.from_s to stop.still_s
+function clock(t) {
+  const a = STOP.from_s, d = STOP.still_s - STOP.from_s;
+  if (t <= a) return t;
+  const s = Math.min(t - a, d);
+  return a + s - (s * s) / (2 * d);
+}
+
+PETS.forEach((p, i) => {
+  p.pet = HP.create(THREE, { role: p.id, theme: "paper" });
+  p.pet.group.visible = false;
+  scene.add(p.pet.group);
+  p.ctx = p.box.getContext("2d");
+  const ink = INK[p.seat.letter];
+  p.seatFoot = { x: ink.x0 + p.seat.at * (ink.x1 - ink.x0), y: ink.top - TP.lift_px };
+  p.shift = M.idle_shift_s * i;                       // as N00's seated pets
+  const k = REP.order.indexOf(p.id);
+  if (k < 0) throw new Error(`n18: ${p.id} not in pets.report.order`);
+  p.reportAt = REP.start_s + k * REP.step_s;
+});
+
+function placeAt(p, t) {
+  const on = onLetter(p.seat.letter, t, p.seatFoot.x, p.seatFoot.y);
+  const own = petPlay(p, t);
+  return { x: on.x + own.x - FOOT.fx * SEAT.w, y: on.y + own.y - FOOT.fy * SEAT.h, w: SEAT.w, h: SEAT.h,
+           yaw: rad(p.seat.yaw_deg || 0), roll: own.roll - on.rot };
+}
+
+// Each canvas sits on whole device pixels and holds as many pixels as it shows;
+// the frame is copied 1:1.
+function draw(t) {
+  INK.forEach((o, i) => {
+    const m = letterMove(i, t);
+    const still = !m.dx && !m.dy && !m.rot && m.sx === 1 && m.sy === 1;
+    o.el.style.transform = still ? "" : `translate(${(m.dx * uCss).toFixed(3)}px, ${(m.dy * uCss).toFixed(3)}px) ` +
+      `rotate(${m.rot.toFixed(5)}rad) scale(${m.sx.toFixed(5)}, ${m.sy.toFixed(5)})`;
+  });
+  const c = clock(t);
+  for (const p of PETS) {
+    const b = placeAt(p, t);
+    const x = Math.round(b.x * devPx), y = Math.round(b.y * devPx);
+    const w = Math.round(b.w * devPx), h = Math.round(b.h * devPx);
+    if (p.box.width !== w || p.box.height !== h) { p.box.width = w; p.box.height = h; }
+    const st = p.box.style;
+    st.left = `${x / dpr}px`; st.top = `${y / dpr}px`; st.width = `${w / dpr}px`; st.height = `${h / dpr}px`;
+    if (t < STOP.still_s) p.box.dataset.kind = "moving"; else delete p.box.dataset.kind;
+    if (gl.width !== w || gl.height !== h) renderer.setSize(w, h, false);
+    p.pet.setPixelScale(h / (2 * dist * half));
+    p.pet.group.rotation.set(0, b.yaw, b.roll || 0, "ZYX");
+    p.pet.group.visible = true;
+    p.pet.update(c + p.shift, t >= p.reportAt ? "report" : "idle", cam);
+    renderer.render(scene, cam);
+    p.pet.group.visible = false;
+    p.ctx.clearRect(0, 0, w, h);
+    p.ctx.drawImage(gl, 0, 0);
+  }
+}
+
+window.N18_SEATS = { INK, SEAT, FOOT, placeAt, letterMove, clock };
+window.promo.onSeek(draw);
+draw(window.promo.t);
+window.__n18Built();
+</script>
 </body>
 </html>
