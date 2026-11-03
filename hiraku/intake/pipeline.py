@@ -11,10 +11,15 @@ own values as the defaults of the hearing.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+import yaml
+
+from hiraku import contract
 from hiraku.intake import events as ev
 from hiraku.intake import hearing, knowledge
 from hiraku.intake.domains import IntakeError, pick_domains
@@ -84,3 +89,22 @@ def intake(
     prepared = hearing.prepare(req, answers, note, product_defaults=own, ask_confirm=not from_file)
     built_in = knowledge.load_builtin() if docs else []
     return IntakeResult(domains, prepared, built_in, ev.intake_events(domains, prepared, built_in))
+
+
+def save(result: IntakeResult, folder: Path | str, *, requirements_file: Record | None = None) -> tuple[Path, Path]:
+    """Write a settled intake for `hiraku run`: folder/requirements.yaml and folder/intake.json (the events, in order).
+
+    requirements_file: the file to write when it holds more than the hearing's result (a run's design_file, limits, tests).
+    """
+    if not result.ready:
+        raise IntakeError("必須の質問にまだ答えがありません。答えてから保存してください")
+    rf = requirements_file if requirements_file is not None else result.requirements_file
+    errors = contract.errors("requirements_file", rf)
+    if errors:
+        raise IntakeError("要件のファイルとして書けません: " + "; ".join(str(e) for e in errors[:3]))
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    req_path, events_path = folder / "requirements.yaml", folder / "intake.json"
+    req_path.write_text(yaml.safe_dump(rf, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
+    events_path.write_text(json.dumps(result.events, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+    return req_path, events_path

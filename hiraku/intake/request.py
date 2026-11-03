@@ -4,8 +4,7 @@ The server keeps nothing between the calls: every answer carries a `draft`, and 
 
     first = begin(want, product=None, flags=None, picker=claude_picker)   # A1: the domains; A2: the questions
     first = revise(first["draft"], flags={...}, exclude=["noise"])        # a chip changed, a card taken off
-    done = finish(first["draft"], answers, note)                          # the hearing's answers (A2)
-    path = write_request_file(done["requirements_file"], runs_dir / "_requests")   # for `hiraku run`
+    done = save_request(first["draft"], answers, note, runs_dir / "requests")   # the files `hiraku run` takes
 
 `handle_request` and `handle_answer` are the same steps over a JSON body, for the server's POST routes.
 Where the flags come from: the person's own (`flags`), else the product's requirements file, else Claude
@@ -28,7 +27,7 @@ from hiraku.intake import events as ev
 from hiraku.intake import hearing
 from hiraku.intake.domains import IntakeError
 from hiraku.intake.guess import guess_flags
-from hiraku.intake.pipeline import intake, slug_for
+from hiraku.intake.pipeline import intake, save
 from hiraku.intake.products import load_product, product_files
 
 Record = dict[str, Any]
@@ -141,38 +140,30 @@ def finish(draft: Any, answers: Any = None, note: Any = None) -> Record:
     """The hearing's answers in: the requirements file to run (ready when every required item is settled).
 
     A2's "use the defaults" is the same call with no answers: what has a default takes it (source default).
+    `events` are domains.picked, hearing.asked (if anything was asked) and hearing.answered, as a run has them.
     """
-    d = _check_draft(draft)
-    if answers is not None and not isinstance(answers, dict):
-        raise IntakeError("answers は {Qxx: 値} の形で渡してください")
-    res = _intake(d, answers, note if isinstance(note, str) else None)
-    out: Record = {
-        "draft": d, "ready": res.ready, "unresolved": list(res.prepared.unresolved), "text": hearing.hearing_text(res.prepared),
-        "requirements_file": _file(d, res),
-        "events": [e for e in res.events if e["kind"] == ev.HEARING_ANSWERED],
-    }
+    return _settle(draft, answers, note)[0]
+
+
+def save_request(draft: Any, answers: Any, note: Any, requests_dir: Path | str, *, now: datetime | None = None) -> Record:
+    """finish(), and when the requirements are settled, the files `hiraku run` takes in
+    <requests_dir>/<request_id>/: requirements.yaml and intake.json (the intake events of a run, with the
+    built-in knowledge, in the contract's order). request_id is <YYYYmmdd-HHMMSS>-<product> (a number is added
+    if the name is taken). Without a required answer nothing is written and `ready` is false.
+    """
+    out, res, rf = _settle(draft, answers, note)
     if not res.ready:
-        keys = "・".join(q["req_key"] for q in res.prepared.asked["questions"]
-                        if q["ask"] == "must" and q["req_key"] in res.prepared.unresolved)
-        out["next"] = f"必須の質問 {keys} にまだ答えがありません。答えてから進めてください"
-    return out
-
-
-def write_request_file(requirements_file: Record, folder: Path | str, *, now: datetime | None = None) -> Path:
-    """Write the file as <folder>/<YYYYmmdd-HHMMSS>-<product>.yaml (a number is added if the name is taken)."""
-    errors = contract.errors("requirements_file", requirements_file)
-    if errors:
-        raise IntakeError("要件のファイルとして書けません: " + "; ".join(str(e) for e in errors[:3]))
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
+        return out
     stamp = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
-    base = f"{stamp}-{requirements_file['product']}"
-    path, n = folder / f"{base}.yaml", 1
-    while path.exists():
+    base = f"{stamp}-{rf['product']}"
+    requests_dir = Path(requests_dir)
+    request_id, n = base, 1
+    while (requests_dir / request_id).exists():
         n += 1
-        path = folder / f"{base}-{n}.yaml"
-    path.write_text(yaml.safe_dump(requirements_file, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
-    return path
+        request_id = f"{base}-{n}"
+    req_path, events_path = save(res, requests_dir / request_id, requirements_file=rf)
+    out.update(request_id=request_id, folder=str(req_path.parent), path=str(req_path), intake_path=str(events_path))
+    return out
 
 
 # ------------------------------------------------------------------------ the same steps over a JSON body
@@ -190,15 +181,12 @@ def handle_request(body: Any, *, picker: Picker | None = None) -> Record:
 
 
 def handle_answer(body: Any, requests_dir: Path | str, *, now: datetime | None = None) -> Record:
-    """POST /api/request/answer: {draft, answers?, note?}. When the requirements are settled the file is
-    written under requests_dir and its name (`file`) and path are in the answer; else `ready` is false."""
+    """POST /api/request/answer: {draft, answers?, note?}. When the requirements are settled the run's files
+    are written under requests_dir (save_request) and request_id, path (requirements.yaml) and intake_path
+    (intake.json) are in the answer; else `ready` is false and `next` says what is missing."""
     if not isinstance(body, dict):
         raise IntakeError("答えは {draft, answers, note} の形で渡してください")
-    done = finish(body.get("draft"), body.get("answers"), body.get("note"))
-    if done["ready"]:
-        path = write_request_file(done["requirements_file"], requests_dir, now=now)
-        done.update(file=path.name, path=str(path))
-    return done
+    return save_request(body.get("draft"), body.get("answers"), body.get("note"), requests_dir, now=now)
 
 
 # ------------------------------------------------------------------------------------------- internals
@@ -242,10 +230,10 @@ def _known(d: Record) -> str | None:
     return d["product"] if d["product"] in product_files() else None
 
 
-def _intake(d: Record, answers: Any = None, note: str | None = None):
+def _intake(d: Record, answers: Any = None, note: str | None = None, *, docs: bool = False):
     return intake(d["want"], d["flags"], d["speed_class"], product=_known(d), slug=d["product"], answers=answers, note=note,
                   requirements=d["requirements"], reasons=d["reasons"] or None, shown_names=d["shown_names"] or None,
-                  flag_reasons=d["flag_reasons"] or None, exclude=d["exclude"], docs=False)
+                  flag_reasons=d["flag_reasons"] or None, exclude=d["exclude"], docs=docs)
 
 
 def _look(d: Record, *, warnings: list[str] | None = None, cost_usd: float | None = None) -> Record:
@@ -285,3 +273,21 @@ def _file(d: Record, res: Any) -> Record:
     if errors:
         raise IntakeError("要件のファイルがきまりに合いません: " + "; ".join(str(e) for e in errors[:3]))
     return rf
+
+
+def _settle(draft: Any, answers: Any, note: Any) -> tuple[Record, Any, Record]:
+    d = _check_draft(draft)
+    if answers is not None and not isinstance(answers, dict):
+        raise IntakeError("answers は {Qxx: 値} の形で渡してください")
+    res = _intake(d, answers, note if isinstance(note, str) else None, docs=True)  # the built-in knowledge goes into intake.json
+    rf = _file(d, res)
+    out: Record = {
+        "draft": d, "ready": res.ready, "unresolved": list(res.prepared.unresolved), "text": hearing.hearing_text(res.prepared),
+        "requirements_file": rf,
+        "events": [e for e in res.events if e["kind"] in (ev.DOMAINS_PICKED, ev.HEARING_ASKED, ev.HEARING_ANSWERED)],
+    }
+    if not res.ready:
+        keys = "・".join(q["req_key"] for q in res.prepared.asked["questions"]
+                        if q["ask"] == "must" and q["req_key"] in res.prepared.unresolved)
+        out["next"] = f"必須の質問 {keys} にまだ答えがありません。答えてから進めてください"
+    return out, res, rf

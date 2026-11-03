@@ -1,4 +1,4 @@
-import re
+import json
 import tempfile
 import unittest
 from datetime import datetime
@@ -7,8 +7,9 @@ from unittest import mock
 
 from hiraku import contract
 from hiraku.catalog import load_requirements
-from hiraku.intake import IntakeError, events as ev, load_product, request
+from hiraku.intake import IntakeError, events as ev, knowledge, load_product, request
 from hiraku.intake.hearing import load_answers
+from hiraku.intake.pipeline import intake, save
 from hiraku.intake.products import answers_file
 from hiraku.intake.agent import PickRun
 from hiraku.intake.flags import FLAGS
@@ -133,8 +134,8 @@ class FinishTest(unittest.TestCase):
         self.assertEqual(by["Q60"]["source"], "default")
         self.assertEqual({k: rf.get(k) for k in request.LIMIT_KEYS}, {k: BED.get(k) for k in request.LIMIT_KEYS})  # the file's, if any
         self.assertNotIn("tests", rf)
-        self.assertEqual([e["kind"] for e in done["events"]], [ev.HEARING_ANSWERED])
-        self.assertEqual(done["events"][0]["data"]["note"], "よろしく")
+        self.assertEqual([e["kind"] for e in done["events"]], [ev.DOMAINS_PICKED, ev.HEARING_ASKED, ev.HEARING_ANSWERED])  # A1 and A2 as a run draws them
+        self.assertEqual(done["events"][-1]["data"]["note"], "よろしく")
 
     def test_a_required_item_without_an_answer_is_not_ready(self):
         first = request.begin(BED["want"], product="care-bed")
@@ -187,22 +188,29 @@ class HandlersTest(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_request_then_a_chip_then_the_answer_writes_a_file_for_hiraku_run(self):
+    def test_request_then_a_chip_then_the_answer_writes_the_files_hiraku_run_takes(self):
         first = request.handle_request({"want": BED["want"], "product": "care-bed"})
         second = request.handle_request({"draft": first["draft"], "flags": first["draft"]["flags"]})
         done = request.handle_answer({"draft": second["draft"], "answers": BED_ANSWERS}, self.dir, now=NOW)
         self.assertTrue(done["ready"])
-        self.assertEqual(done["file"], "20261103-140000-care-bed.yaml")
-        self.assertTrue(re.match(r"^[A-Za-z0-9_.-]+\.ya?ml$", done["file"]))  # what the launcher accepts as a file name
-        self.assertEqual(load_requirements(Path(done["path"])), done["requirements_file"])
+        self.assertEqual(done["request_id"], "20261103-140000-care-bed")
+        self.assertEqual(Path(done["folder"]), self.dir / done["request_id"])
+        self.assertEqual(load_requirements(Path(done["path"])), done["requirements_file"])  # folder/requirements.yaml
+        events = json.loads(Path(done["intake_path"]).read_text(encoding="utf-8"))  # folder/intake.json
+        builtin = len(knowledge.load_builtin())
+        self.assertEqual([e["kind"] for e in events],  # the contract's order, the built-in knowledge included
+                         [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * builtin + [ev.HEARING_ASKED, ev.HEARING_ANSWERED])
+        answered = {a["key"]: a for a in events[-1]["data"]["answers"]}
+        by = {r["key"]: r for r in done["requirements_file"]["requirements"]}
+        self.assertTrue(answered and all(by[k] == a for k, a in answered.items()))  # project.requirements holds what was said
         again = request.handle_answer({"draft": second["draft"], "answers": BED_ANSWERS}, self.dir, now=NOW)
-        self.assertEqual(again["file"], "20261103-140000-care-bed-2.yaml")  # nothing is overwritten
+        self.assertEqual(again["request_id"], "20261103-140000-care-bed-2")  # nothing is overwritten
 
     def test_nothing_is_written_while_a_required_answer_is_missing(self):
         first = request.handle_request({"want": BED["want"], "product": "care-bed"})
         done = request.handle_answer({"draft": first["draft"]}, self.dir, now=NOW)
         self.assertFalse(done["ready"])
-        self.assertNotIn("file", done)
+        self.assertNotIn("request_id", done)
         self.assertFalse(self.dir.exists())
 
     def test_bad_bodies(self):
@@ -212,9 +220,15 @@ class HandlersTest(unittest.TestCase):
             with self.assertRaises(IntakeError):
                 call()
 
-    def test_a_file_that_breaks_the_contract_is_not_written(self):
+    def test_save_refuses_what_is_not_ready_and_a_file_that_breaks_the_contract(self):
         with self.assertRaises(IntakeError):
-            request.write_request_file({"want": "x"}, self.dir)
+            save(intake(BED["want"], BED["flags"], product="care-bed"), self.dir / "a")  # Q30 and Q40 unanswered
+        ready = intake(BED["want"], BED["flags"], product="care-bed", answers=BED_ANSWERS)
+        with self.assertRaises(IntakeError):
+            save(ready, self.dir / "b", requirements_file={"want": "x"})
+        self.assertFalse(self.dir.exists())
+        req_path, events_path = save(ready, self.dir / "c")
+        self.assertEqual([p.name for p in (req_path, events_path)], ["requirements.yaml", "intake.json"])
 
 
 class ClaudePickerTest(unittest.TestCase):
