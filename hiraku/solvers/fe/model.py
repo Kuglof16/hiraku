@@ -181,8 +181,17 @@ class FEModel:
 
     # --- assembly
 
+    def _stiffness_key(self, lay: "Layout") -> tuple:
+        return (tuple((id(g), g.n_elements) for g in self.groups), self.nodes.shape, lay.counts.tobytes(),
+                hash(self.nodes.tobytes()))
+
     def stiffness(self, layout: "Layout | None" = None) -> sp.csr_matrix:
+        """Global stiffness (cached until the groups, nodes or DOF layout change)."""
         lay = layout or self.layout()
+        key = self._stiffness_key(lay)
+        cache = getattr(self, "_k_cache", None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
         rows, cols, vals = [], [], []
         t0 = time.perf_counter()
         for g in self.groups:
@@ -203,6 +212,7 @@ class FEModel:
             K = sp.csr_matrix((n, n))
         K = ((K + K.T) * 0.5).tocsr()
         self.timings["assemble_s"] = time.perf_counter() - t0
+        self._k_cache = (key, K)
         return K
 
     def total_mass(self) -> float:

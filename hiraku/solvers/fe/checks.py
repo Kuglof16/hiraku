@@ -1,0 +1,221 @@
+"""Known-answer checks of the fe core (solids first; connections and shells further down).
+
+Every expected value is computed here from its formula, and each function
+names where the formula comes from. The functions take mesh sizes so the
+tests can run coarse meshes every time and fine ones only with
+HIRAKU_SLOW_TESTS=1.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+
+from qa import known_answers as ka
+
+from . import mesh as fm
+from .model import FEModel, StaticSolver
+from .precheck import equilibrium, rigid_body_energy
+from .solid import Hex8, Hex20, solid_stresses, surface_load
+
+E_ST = 205000.0  # MPa, the round steel of hiraku.solvers.shelf.fixtures.STEEL
+NU_ST = 0.3
+G_ST = E_ST / (2.0 * (1.0 + NU_ST))
+
+SRC_COWPER = ("Timoshenko shear coefficient of a rectangle k = 10 (1 + nu) / (12 + 11 nu): Cowper (1966), The shear "
+              "coefficient in Timoshenko's beam theory, J. Appl. Mech. 33, 335-340 (formula as commonly quoted; "
+              "not checked against the paper here)")
+SRC_LAME = ("Lame's thick cylinder under internal pressure p: sigma_r = A - B / r^2, sigma_t = A + B / r^2, "
+            "A = p a^2 / (b^2 - a^2), B = p a^2 b^2 / (b^2 - a^2); plane strain, sigma_z = nu (sigma_r + sigma_t), "
+            "u = r [sigma_t - nu (sigma_r + sigma_z)] / E (Timoshenko & Goodier, Theory of Elasticity, 3rd ed. 1970, "
+            "section on the thick cylinder; section not checked here)")
+
+
+def solid_class(kind: str):
+    return {"hex20": Hex20, "hex8": Hex8}[kind]
+
+
+def _order(kind: str) -> int:
+    return 2 if kind == "hex20" else 1
+
+
+# ------------------------------------------------------------------ 1. patch test
+
+
+def patch_test(kind: str = "hex20", shift=(0.13, -0.09, 0.07)) -> dict:
+    """2 x 2 x 2 bricks of a unit-ish cube with the inner corner node moved (and, for HEX20, every mid-edge
+    node kept at the middle of its now straight edge). Boundary nodes get the linear field
+    u = a + B x; the inner nodes are solved. Returns the largest stress error over all Gauss points relative
+    to the exact constant stress, and the largest error of the inner nodes' displacements."""
+    order = _order(kind)
+    m = fm.box_mesh([((0, 0, 0), (1, 1, 1))], 0.5, order)
+    c = np.nonzero(np.all(np.abs(m.nodes - 0.5) < 1e-12, axis=1))[0][0]
+    m.nodes[c] += np.asarray(shift) * 0.5
+    if order == 2:  # put mid-edge nodes back on the middle of their (straight) edges
+        from .solid import EDGES
+        for e in m.conn:
+            for k, (a, b) in enumerate(EDGES):
+                m.nodes[e[8 + k]] = 0.5 * (m.nodes[e[a]] + m.nodes[e[b]])
+    E, nu = 1000.0, 0.25
+    model = FEModel(m.nodes)
+    g = model.add(solid_class(kind)(m.conn, E, nu))
+    Bm = np.array([[1.0, 0.4, -0.3], [0.2, -0.5, 0.6], [0.1, 0.7, 0.8]]) * 1e-3
+    a0 = np.array([0.01, -0.02, 0.03])
+
+    def field(x):
+        return a0 + x @ Bm.T
+
+    bnd = m.nodes_where(lambda x, y, z: (np.minimum.reduce([x, y, z, 1 - x, 1 - y, 1 - z]) < 1e-12))
+    for n in bnd:
+        for k in range(3):
+            model.prescribe(n, k, field(m.nodes[n])[k])
+    sol = StaticSolver(model).solve(np.zeros((len(m.nodes), 6)))
+    inner = np.setdiff1d(np.unique(m.conn), bnd)
+    du = np.abs(sol.displacements[inner, :3] - field(m.nodes[inner])).max()
+    eps = 0.5 * (Bm + Bm.T)
+    ev = np.array([eps[0, 0], eps[1, 1], eps[2, 2], 2 * eps[0, 1], 2 * eps[1, 2], 2 * eps[2, 0]])
+    from .solid import elasticity_matrix
+    s_exact = elasticity_matrix([E], [nu])[0] @ ev
+    sg = g.gauss_stresses(model.nodes, sol.element_displacements(g))
+    err = np.abs(sg - s_exact[None, None, :]).max() / np.abs(s_exact).max()
+    return {"stress_error_rel": float(err), "inner_displacement_error": float(du), "n_inner": int(len(inner)),
+            "rigid": rigid_body_energy(model)}
+
+
+# ------------------------------------------------------------------ 2, 5, 6. cantilever bar
+
+
+def cantilever(kind: str = "hex20", n_side: int = 2, n_len: int | None = None, L: float = 200.0, b: float = 20.0,
+               h: float = 20.0, P: float = 1000.0, integration: int | None = None) -> dict:
+    """Square bar along x, root face x = 0 clamped (all three translations of every node), uniform shear
+    traction -P / (b h) in z on the tip face. Tip deflection: mean uz of the tip face nodes.
+
+    Expected: Timoshenko beam P L^3 / (3 E I) + P L / (k G A), k from Cowper. Bending stress compared at
+    x = L/2 on the top surface (z = h/2, y = 0): sigma_xx = P (L - x) (h/2) / I. Mid-span is one bar depth
+    or more from both the clamp (where the held Poisson contraction makes the stress singular at the
+    corners) and the loaded face (Saint-Venant)."""
+    n_len = n_len or 10 * n_side
+    order = _order(kind)
+    xs = np.linspace(0, L, n_len + 1)
+    ys = np.linspace(-b / 2, b / 2, n_side + 1)
+    zs = np.linspace(-h / 2, h / 2, n_side + 1)
+    m = fm.merge([fm.grid_block(xs, ys, zs, order)], ["bar"])
+    model = FEModel(m.nodes)
+    g = model.add(solid_class(kind)(m.conn, E_ST, NU_ST, integration=integration))
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(x) < 1e-9), "xyz")
+    tip = m.nodes_where(lambda x, y, z: np.abs(x - L) < 1e-9)
+    F = surface_load(m.nodes, m.faces_where(lambda x, y, z: np.abs(x - L) < 1e-9), (0.0, 0.0, -P / (b * h)))
+    sol = StaticSolver(model).solve(F)
+    I = b * h**3 / 12.0
+    k = 10 * (1 + NU_ST) / (12 + 11 * NU_ST)
+    d_eb = P * L**3 / (3 * E_ST * I)
+    d_exp = d_eb + P * L / (k * G_ST * b * h)
+    st = solid_stresses(sol, g)
+    pt = np.nonzero(np.all(np.abs(m.nodes - [L / 2, 0.0, h / 2]) < 1e-9, axis=1))[0]
+    s_mid = float(st["stress"][pt[0], 0]) if len(pt) else float("nan")
+    s_exp = P * (L / 2) * (h / 2) / I
+    eq = equilibrium(sol, intended=np.array([0, 0, -P, 0, 0, 0]) + np.r_[0, 0, 0, np.cross([L, 0, 0], [0, 0, -P])])
+    return {"tip": float(-sol.displacements[tip, 2].mean()), "expected": d_exp, "euler_bernoulli": d_eb,
+            "stress_mid": s_mid, "stress_expected": s_exp, "n_elements": len(m.conn), "n_dof": sol.layout.n_dof,
+            "energy": sol.strain_energy(), "equilibrium": eq["residual"], "load_balance": eq["intended_residual"],
+            "model": model, "solution": sol}
+
+
+def convergence(kind: str = "hex20", sides=(1, 2, 4)) -> dict:
+    """Tip deflection of the cantilever on meshes n_side = 1, 2, 4 (10 n_side along): differences between
+    successive meshes and the observed order p = log2(|d1 - d2| / |d2 - d3|) (Richardson)."""
+    tips = [cantilever(kind, n)["tip"] for n in sides]
+    diffs = [abs(tips[i + 1] - tips[i]) for i in range(len(tips) - 1)]
+    p = math.log(diffs[0] / diffs[1], sides[1] / sides[0]) if len(diffs) > 1 and diffs[1] > 0 else float("nan")
+    r = sides[1] / sides[0]
+    extrap = tips[-1] + (tips[-1] - tips[-2]) / (r**p - 1) if np.isfinite(p) else float("nan")
+    return {"tips": tips, "diffs": diffs, "order": p, "extrapolated": extrap}
+
+
+def locking(n_len: int = 10) -> dict:
+    """One brick through the depth and the width, n_len along: HEX8 (full 2 x 2 x 2) locks in shear, HEX20 does
+    not. Ratios of the tip deflection to the Timoshenko value."""
+    out = {}
+    for kind in ("hex8", "hex20"):
+        r = cantilever(kind, 1, n_len)
+        out[kind] = r["tip"] / r["expected"]
+    out["expected"] = cantilever("hex20", 1, n_len)["expected"]
+    return out
+
+
+# ------------------------------------------------------------------ 3. thick cylinder (Lame)
+
+
+def lame_cylinder(n_r: int = 4, n_t: int = 4, a: float = 50.0, b: float = 100.0, p: float = 10.0,
+                  length: float = 20.0, kind: str = "hex20") -> dict:
+    """Quarter of a thick ring (0..90 deg), plane strain: uz = 0 on both end faces z = 0 and z = length,
+    uy = 0 on the face theta = 0, ux = 0 on theta = 90 deg (symmetry). Internal pressure p on r = a.
+    Stresses are the nodal-averaged values in polar components at the nodes of the face z = 0; the
+    largest error over all nodes of sigma_r and sigma_t relative to p, and u_r at r = a."""
+    m = fm.ring_mesh(a, b, length, n_r, n_t, 1, order=_order(kind))
+    model = FEModel(m.nodes)
+    g = model.add(solid_class(kind)(m.conn, E_ST, NU_ST))
+    model.fix(m.nodes_where(lambda x, y, z: (np.abs(z) < 1e-9) | (np.abs(z - length) < 1e-9)), "z")
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(y) < 1e-9), "y")
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(x) < 1e-9), "x")
+    r_of = np.linalg.norm(m.nodes[:, :2], axis=1)
+    faces = m.faces_where(lambda x, y, z: np.abs(np.hypot(x, y) - a) < 1e-6 * a)
+
+    def traction(x, n):
+        er = np.c_[x[:, :2], np.zeros(len(x))]
+        return p * er / np.linalg.norm(er, axis=1)[:, None]
+
+    F = surface_load(m.nodes, faces, traction)
+    sol = StaticSolver(model).solve(F)
+    st = solid_stresses(sol, g)["stress"]
+    sel = m.nodes_where(lambda x, y, z: np.abs(z) < 1e-9)
+    r = r_of[sel]
+    c, s = m.nodes[sel, 0] / r, m.nodes[sel, 1] / r
+    sx, sy, txy = st[sel, 0], st[sel, 1], st[sel, 3]
+    sr = c * c * sx + s * s * sy + 2 * c * s * txy
+    stt = s * s * sx + c * c * sy - 2 * c * s * txy
+    A = p * a * a / (b * b - a * a)
+    B = p * a * a * b * b / (b * b - a * a)
+    sr_e, st_e = A - B / r**2, A + B / r**2
+    inner = sel[np.abs(r - a) < 1e-6 * a]
+    ur = np.einsum("ij,ij->i", sol.displacements[inner, :2], m.nodes[inner, :2]) / a
+    sz = NU_ST * 2 * A
+    ur_e = a * ((A + B / a**2) - NU_ST * ((A - B / a**2) + sz)) / E_ST
+    return {"sr_err": float(np.abs(sr - sr_e).max() / p), "st_err": float(np.abs(stt - st_e).max() / p),
+            "st_inner": float(stt[np.abs(r - a) < 1e-6 * a].mean()), "st_inner_expected": A + B / a**2,
+            "sr_inner": float(sr[np.abs(r - a) < 1e-6 * a].mean()), "sr_inner_expected": -p,
+            "ur_inner": float(ur.mean()), "ur_inner_expected": ur_e, "n_elements": len(m.conn),
+            "equilibrium": equilibrium(sol)["residual"]}
+
+
+# ------------------------------------------------------------------ 4. plate with a hole, 3D
+
+
+def holed_plate(W: float = 100.0, d: float = 20.0, length: float = 200.0, T: float = 10.0, n_quarter: int = 6,
+                n_radial: int = 6, n_thick: int = 2, ratio: float = 1.25, sigma: float = 100.0,
+                kind: str = "hex20") -> dict:
+    """An eighth of a plate W x length x T with a central hole d (x = 0, y = 0 and the mid-plane z = 0 are
+    symmetry planes: ux, uy, uz held there). Tension sigma along y on the end y = length/2. Kt = nodal
+    sigma_yy at the hole edge on the x axis (x = d/2, y = 0) over the gross stress, at the mid-plane and on
+    the surface z = T/2. Expected: [Pilkey] gross Kt for d/W (qa.known_answers.hole_kt_gross), whose
+    d/W -> 0 limit is [Kirsch]'s 3 (kirsch_kt). Both are plane-stress results; through the thickness the
+    peak is higher at the mid-plane and lower at the surface."""
+    m = fm.holed_plate_mesh(W, length, T / 2.0, d, n_quarter, n_radial, n_thick, ratio, order=_order(kind))
+    model = FEModel(m.nodes)
+    g = model.add(solid_class(kind)(m.conn, E_ST, NU_ST))
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(x) < 1e-9), "x")
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(y) < 1e-9), "y")
+    model.fix(m.nodes_where(lambda x, y, z: np.abs(z) < 1e-9), "z")
+    F = surface_load(m.nodes, m.faces_where(lambda x, y, z: np.abs(y - length / 2) < 1e-9), (0.0, sigma, 0.0))
+    sol = StaticSolver(model).solve(F)
+    st = solid_stresses(sol, g)["stress"]
+    edge = m.nodes_where(lambda x, y, z: (np.abs(x - d / 2) < 1e-9) & (np.abs(y) < 1e-9))
+    z = m.nodes[edge, 2]
+    syy = st[edge, 1]
+    mid = syy[np.argmin(z)] / sigma
+    surf = syy[np.argmax(z)] / sigma
+    return {"kt_mid": float(mid), "kt_surface": float(surf), "kt_pilkey": ka.hole_kt_gross(d / W),
+            "kt_kirsch": ka.kirsch_kt(), "kt_profile": [(float(zz), float(s / sigma)) for zz, s in
+                                                        sorted(zip(z, syy))],
+            "n_elements": len(m.conn), "equilibrium": equilibrium(sol)["residual"]}
