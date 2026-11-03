@@ -21,7 +21,8 @@ mesh of the tube walls:
   and reinforces it, so the local stress where the load is put in is not a
   measure of the joint. Their stresses stay in the fields.
 - gusset parts (kind "gusset") are shell elements of the mesh, so their
-  mass is in the shell's element masses and not added again as parts.
+  mass is in the shell's element masses and not added again as parts; so
+  are the through parts (shell_parts) at the joints meshed as through.
 - parts carried by frame nodes: the force at the part's centre of gravity
   and the moment of its offset from the centroid of its carried_by nodes,
   shared equally over those nodes (as K1); each node's share is spread over
@@ -122,6 +123,21 @@ class ShellFrame:
         return self._solver
 
 
+def shell_parts(design: dict, ms: ShellMesh) -> set[str]:
+    """Parts whose mass the shell elements carry, so they are not added again as parts: the gussets
+    meshed as plates (ms.part_material), and the through parts (kind frame, id through_<member>_<node>,
+    carried_by [node]) at the joints the mesh made through (ms.through_joints), where the branch's
+    elements run on to the far wall and the near wall's hole is cut out. A through part at a joint the
+    mesh left as a plain T stays a part (a point mass at its node)."""
+    out = set(ms.part_material)
+    for p in design.get("parts", []):
+        cb = p.get("carried_by") or []
+        if (p.get("kind") == "frame" and len(cb) == 1 and cb[0] in ms.through_joints
+                and p["id"].startswith("through_") and p["id"].endswith(f"_{cb[0]}")):
+            out.add(p["id"])
+    return out
+
+
 def _hold_supports(sup: list[dict]) -> list[str]:
     """Three supports for the 3-2-1 hold, chosen as k1_frame.model.restrain_free_body does."""
     if len(sup) < 3:
@@ -197,8 +213,9 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     ground, statics, source = _ground(design, summ, g_factor, step_mm, step_supports, ground_forces)
     off = check_balance(design, summ, ground, g_factor, inertia_N)
 
-    # ---- masses: shell nodes (point masses) and parts (gussets are shell elements already)
-    parts = [it for it in items if it.carrier != "member" and it.id.removeprefix("part:") not in ms.part_material]
+    # ---- masses: shell nodes (point masses) and parts (gussets and through parts are shell elements already)
+    in_shell = shell_parts(design, ms)
+    parts = [it for it in items if it.carrier != "member" and it.id.removeprefix("part:") not in in_shell]
     m_shell = float(fr.masses_kg.sum())
     m_tot = m_shell + sum(it.mass_kg for it in parts)
     cg = (fr.masses_kg @ ms.nodes + sum(it.mass_kg * it.cg_mm for it in parts)) / m_tot
@@ -310,6 +327,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "mesh": ms,
         "mass": summ,
         "shell_mass_kg": m_shell,
+        "shell_parts": sorted(in_shell),
         "total_mass_kg": m_tot,
         "cg_mm": cg,
         "weight_N": weight,

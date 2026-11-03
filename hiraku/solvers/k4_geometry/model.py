@@ -2,8 +2,9 @@
 pairs are mounted on each other, and the moving wheel groups.
 
 Mounted pairs may overlap, the boxes being rough: members that share a node
-(welded joints) and the unsprung parts of the same support (hub in the
-wheel) any amount; a part and the members that end at its carried_by nodes,
+(welded joints), a part of kind frame and the members at its carried_by
+nodes, frame and gusset parts at the same joint, and the unsprung parts of
+the same support (hub in the wheel) any amount; a part and the members that end at its carried_by nodes,
 and a suspension part and the members at its support's frame node (bolted
 mounts), up to MOUNT_MM. Anything deeper is interference.
 """
@@ -19,6 +20,7 @@ from .obb import OBB, from_box, from_member
 
 TOUCH_MM = 1.0  # overlap up to this is touching, not interference
 MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is mounted on
+WELDED = {"frame", "gusset"}  # part kinds welded into the frame at their carried_by joints
 
 
 @dataclass
@@ -67,12 +69,16 @@ def allowance(a: Body, b: Body, design: dict) -> float:
         return float("inf") if a.nodes & b.nodes else TOUCH_MM
     if a.kind == "member" or b.kind == "member":
         part, mem = (b, a) if a.kind == "member" else (a, b)
+        if part.kind == "frame" and part.nodes & mem.nodes:  # a piece of the frame welded in at the joint
+            return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
         if part.support and part.kind == "suspension":  # arms are bolted to the frame at the mount
             fn = next((s.get("frame_node") for s in design["supports"] if s["id"] == part.support), None)
             return MOUNT_MM if fn in mem.nodes else TOUCH_MM
         return TOUCH_MM
+    if {a.kind, b.kind} <= WELDED and a.nodes & b.nodes:  # frame pieces and gussets welded at the same joint
+        return float("inf")
     return float("inf") if a.support is not None and a.support == b.support else TOUCH_MM
 
 

@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import time
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from hiraku.solvers.shelf.frame_shell import LABELS, LABEL_DISP, same_mesh
 
 ROOT = Path(__file__).resolve().parents[2]
 STEP = {"step_height": {"value": 100.0, "unit": "mm"}}
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # the long demo runs (as HIRAKU_WEB_BROWSER in tests/web)
 
 
 def tool(name):
@@ -34,8 +36,12 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertEqual((t.domain, t.base, t.tests), ("strength", "K1", ["R1"]))
         d = t.describe()
         self.assertEqual([p["name"] for p in d["params"]], ["loading", "g_factor", "step_height", "step_supports"])
-        self.assertIn("frame_static.rail_joint_stress", [p["formula_id"] for p in d["predicts"]])
-        self.assertTrue(all("stress concentration" in p["note"] for p in d["predicts"] if p["quantity"] == "max_stress"))
+        ids = [p["formula_id"] for p in d["predicts"]]
+        self.assertEqual(ids[0], "frame_static.joint_wall_bending")
+        self.assertIn("frame_static.rail_joint_stress", ids)
+        self.assertTrue(all("stress concentration" in p["note"] for p in d["predicts"]
+                            if p["quantity"] == "max_stress" and p["formula_id"].startswith("frame_static.rail_")))
+        self.assertIn("joint_wall_inputs", d["predicts"][0]["note"])
 
     def test_known_answers_pass(self):
         t0 = time.perf_counter()
@@ -71,6 +77,7 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertIn("unbalanced", rec["error"])
 
 
+@unittest.skipUnless(SLOW, "set HIRAKU_SLOW_TESTS=1 for the demo's three shell solves (about 20 s)")
 class DemoStepTest(unittest.TestCase):
     """offroad-4w-v1, R1 on a 100 mm step: three solves (about 6 s each)."""
 
@@ -218,8 +225,11 @@ class ReinforcedJointsTest(unittest.TestCase):
         d = loading.on_board(self.through, "two_cargo")
         res = analyze_shell(d, element_size_mm=20.0)
         summ = mass_summary(d)
-        self.assertAlmostEqual(res["total_mass_kg"] - res["shell_mass_kg"], summ["mass_kg"] - summ["frame_mass_kg"],
-                               places=9)
+        through = sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("through_"))
+        self.assertGreater(through, 0.0)
+        self.assertEqual(len([p for p in res["shell_parts"] if p.startswith("through_")]), 8)
+        self.assertAlmostEqual(res["total_mass_kg"] - res["shell_mass_kg"],
+                               summ["mass_kg"] - summ["frame_mass_kg"] - through, places=9)
         self.assertLess(res["residual_ratio"], 1e-6)
         self.assertFalse(res["excluded"][res["worst_element"]])
         g = loading.on_board(self.gusset, "two_cargo")

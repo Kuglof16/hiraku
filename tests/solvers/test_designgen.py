@@ -190,10 +190,41 @@ class JointReinforcementTest(unittest.TestCase):
 
     def test_butt_is_v1_byte_for_byte(self):
         raw = (ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8")
-        self.assertEqual(json.dumps(GEN.build({"gussets": one(0), "cross_members_through": one(0)}), ensure_ascii=False,
+        self.assertEqual(json.dumps(GEN.build({"gusset_leg": mm(0), "cross_members_through": one(0)}), ensure_ascii=False,
                                     indent=2), json.dumps(json.loads(raw), ensure_ascii=False, indent=2))
-        self.assertEqual(designgen.regenerate(self.gusset, {"joints": "butt"})["parts"], V1["parts"])
+        self.assertEqual(designgen.regenerate(self.gusset, {"joints": "butt"}), V1)
+        self.assertEqual(designgen.regenerate(self.gusset, {"gusset_leg": mm(0)}), V1)
+        self.assertEqual(designgen.regenerate(self.through, {"cross_members_through": one(0)}), V1)
         self.assertEqual(GEN.choices_of(V1), {"joints": "butt"})
+
+    def test_the_variables_alone_make_the_same_designs(self):
+        self.assertEqual(designgen.regenerate(V1, {"cross_members_through": {"value": 1, "unit": "1"}}), self.through)
+        self.assertEqual(designgen.regenerate(V1, {"gusset_leg": mm(60)}), self.gusset)
+        both = designgen.regenerate(V1, {"gusset_leg": mm(60), "cross_members_through": one(1)})
+        self.assertEqual(GEN.choices_of(both), {"joints": "gusset+through"})
+
+    def test_ranges_and_meanings(self):
+        spec = {v["name"]: v for v in designgen.variables(V1)}
+        for name, lo, hi in (("gusset_leg", 0.0, 150.0), ("gusset_thickness", 1.6, 4.5), ("cross_members_through", 0.0, 1.0)):
+            self.assertTrue(spec[name]["revisable"], name)
+            self.assertEqual((spec[name]["min"], spec[name]["max"]), (lo, hi))
+            self.assertTrue(spec[name]["meaning"])
+        self.assertNotIn("gussets", spec)
+        with self.assertRaisesRegex(ValueError, "0 \\(no gussets\\) or 30"):
+            designgen.regenerate(V1, {"gusset_leg": mm(10)})
+        with self.assertRaisesRegex(ValueError, "lower than the rails"):
+            designgen.regenerate(V1, {"cross_members_through": one(1), "cross_h": mm(80)})
+        with self.assertRaisesRegex(ValueError, "unknown variable 'gussets'"):
+            designgen.regenerate(V1, {"gussets": one(1)})
+
+    def test_earlier_designs_with_the_gusset_switch(self):
+        """A design that still carries gussets = 0 with a gusset_leg is read as no gussets."""
+        old = json.loads(json.dumps(V1))
+        old["variables"].update(gussets=one(0), gusset_leg=mm(60), gusset_thickness=mm(2.3))
+        self.assertEqual(GEN.choices_of(old), {"joints": "butt"})
+        self.assertEqual(designgen.regenerate(old, {})["parts"], V1["parts"])
+        old["variables"]["gussets"] = one(1)
+        self.assertEqual(designgen.regenerate(old, {})["parts"], self.gusset["parts"])
 
     def test_gusset_parts(self):
         d = self.gusset
@@ -201,8 +232,9 @@ class JointReinforcementTest(unittest.TestCase):
         g = [p for p in d["parts"] if p["kind"] == "gusset"]
         self.assertEqual(len(g), 4 * 2 * 4)  # four T stations (A, S1, S2, B), both sides, four plates each
         self.assertEqual(d["parts"][:len(V1["parts"])], V1["parts"])
-        self.assertEqual({k: d["variables"][k]["value"] for k in ("gussets", "gusset_leg", "gusset_thickness")},
-                         {"gussets": 1.0, "gusset_leg": 60.0, "gusset_thickness": 2.3})
+        self.assertEqual({k: d["variables"][k]["value"] for k in ("gusset_leg", "gusset_thickness")},
+                         {"gusset_leg": 60.0, "gusset_thickness": 2.3})
+        self.assertNotIn("gussets", d["variables"])
         rho = V1["materials"]["stkr400"]["density_kg_m3"]
         p = next(x for x in g if x["id"] == "gusset_LA_front_upper")
         self.assertEqual(p["carried_by"], ["LA"])
@@ -218,11 +250,37 @@ class JointReinforcementTest(unittest.TestCase):
 
     def test_through(self):
         d = self.through
-        self.assertEqual(d["parts"], V1["parts"])
-        self.assertEqual(d["members"], V1["members"])
+        contract.validate("design", d)
+        n = len(V1["parts"])
+        self.assertEqual(d["parts"][:n], V1["parts"])
+        self.assertEqual(d["members"], V1["members"])  # the beam model is unchanged
         self.assertEqual(d["variables"]["cross_members_through"], one(1.0))
-        self.assertNotIn("gussets", d["variables"])
+        self.assertNotIn("gusset_leg", d["variables"])
         self.assertEqual(GEN.choices_of(d), {"joints": "through"})
+        extra = d["parts"][n:]
+        self.assertEqual({p["id"] for p in extra},
+                         {f"through_cross_{st}_{s}{st}" for st in ("A", "S1", "S2", "B") for s in "LR"})
+        rho = V1["materials"]["stkr400"]["density_kg_m3"] * 1e-9
+        p = next(x for x in extra if x["id"] == "through_cross_S1_LS1")
+        xyz = next(x["xyz_mm"] for x in V1["nodes"] if x["id"] == "LS1")
+        self.assertEqual((p["kind"], p["carried_by"], p["box"]["center_mm"]), ("frame", ["LS1"], xyz))
+        self.assertEqual(p["box"]["size_mm"], [40.0, 40.0 - 2.3, 40.0])
+        area = 40 * 40 - (40 - 4.6) ** 2
+        self.assertAlmostEqual(p["mass_kg"], rho * (area * (40 - 2.3) - 2.3 * (40 - 2.3) ** 2), places=12)
+
+    def test_reinforcement_mass_in_the_whole_vehicle(self):
+        from hiraku.solvers.k0_handcalc.vehicle import mass_summary
+        base = mass_summary(V1)["mass_kg"]
+        for d in (self.gusset, self.through):
+            extra = sum(p["mass_kg"] for p in d["parts"] if p["kind"] == "gusset" or p["id"].startswith("through_"))
+            self.assertGreater(extra, 0.0)
+            self.assertAlmostEqual(mass_summary(d)["mass_kg"] - base, extra, places=9)
+
+    def test_through_parts_do_not_clash_with_the_frame(self):
+        from hiraku.solvers.k4_geometry.model import interferences
+        for d in (self.through, designgen.regenerate(V1, {"gusset_leg": mm(60), "cross_members_through": one(1)})):
+            for a, b, _ in interferences(d):
+                self.assertFalse("through_" in a + b and ("member:" in a + b or "gusset" in a + b), (a, b))
 
     def test_propose_with_a_choice(self):
         from hiraku.catalog import load_requirements
@@ -233,9 +291,11 @@ class JointReinforcementTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be one of"):
             designgen.propose("ladder_4w", {"joints": "rivet"}, {}, req)
         with self.assertRaisesRegex(ValueError, "come from the choices"):
-            designgen.propose("ladder_4w", {"joints": "gusset"}, {"gussets": one(0)}, req)
+            designgen.propose("ladder_4w", {"joints": "gusset"}, {"cross_members_through": one(1)}, req)
+        with self.assertRaisesRegex(ValueError, "gusset needs gusset_leg > 0"):
+            designgen.propose("ladder_4w", {"joints": "gusset"}, {"gusset_leg": mm(0)}, req)
         with self.assertRaisesRegex(ValueError, "switch"):
-            GEN.build({"gussets": one(0.5)})
+            GEN.build({"cross_members_through": one(0.5)})
 
     def test_gussets_do_not_clash_with_the_frame(self):
         """K4: a gusset may sink into the members at its joint (MOUNT_MM), so none counts against a member."""

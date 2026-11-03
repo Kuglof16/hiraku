@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import time
 import unittest
 from pathlib import Path
@@ -20,6 +21,7 @@ from hiraku.solvers.k1_shell.solve import ShellModel, StaticSolver, dofs_of, red
 from hiraku.solvers.shelf import fixtures
 
 DEMO = Path(__file__).resolve().parents[2] / "data" / "designs" / "offroad-4w-v1.json"
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # the long demo runs (as HIRAKU_WEB_BROWSER in tests/web)
 
 
 def demo_design() -> dict:
@@ -288,6 +290,7 @@ class DemoMeshTest(unittest.TestCase):
         contract.validate("mesh", dict(rec, mesh_id="mesh-0001"))
         self.assertEqual((len(rec["nodes_mm"]), len(rec["elements"])), (self.mesh.n_nodes, self.mesh.n_elements))
 
+    @unittest.skipUnless(SLOW, "set HIRAKU_SLOW_TESTS=1 to time the demo's assembly and solve")
     def test_assemble_factor_solve_time(self):
         model = ShellModel.from_mesh(self.mesh, self.design)
         t0 = time.perf_counter()
@@ -410,6 +413,14 @@ class ThroughMeshTest(unittest.TestCase):
         Bc, t = 40.0 - 2.3, 2.3
         per_joint = rho * (4 * Bc * t * (40.0 - 2.3) - Bc * Bc * t)  # walls through the rail, less the hole
         self.assertAlmostEqual(m(self.mesh) - m(self.butt), 8 * per_joint, places=9)
+
+    def test_through_parts_are_the_mass_change(self):
+        """designgen's through parts weigh what the shell gains by running the cross members through."""
+        from hiraku import designgen
+        d = designgen.regenerate(demo_design(), {"cross_members_through": {"value": 1, "unit": "1"}})
+        parts = sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("through_"))
+        m = lambda ms: ShellModel.from_mesh(ms, d).total_mass() * 1000.0  # noqa: E731
+        self.assertAlmostEqual(m(build_mesh(d, 10.0)) - m(self.butt), parts, places=9)
 
     def test_too_wide_a_branch_stays_a_t_joint(self):
         lad = fixtures.ladder_design()
