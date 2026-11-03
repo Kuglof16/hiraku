@@ -226,6 +226,7 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 - リポジトリを作ったのは 2026-11-02 18:51 (JST)。最初のコミットは同じ日の 18:45 で、それより前のコミットはありません
 - GitHub の Activity (リポジトリの Insights の Activity、または `gh api repos/Kuglof16/hiraku/activity`) に、サーバーが記録した push の時刻が並びます。コミットの日付と違い、手元では書き換えられません。force push はしていません
 - 開発は Claude Code のセッションを部署に分けて並べて進めました (統括部・設計部・解析部・解析部 K2 班・画面部・品質保証部・広報部・受付部)。部署ごとの枝 `claude/dept-*` も push してあり、並行して進んだことと、統括部が試験を通してから main に入れたことが、枝と merge の履歴で見えます
+- 最初の夜 (2026-11-02 の 19 時台から) は、統括部が契約を書いたあと、部署のセッションが並んで、それぞれの持ち場をまとまった単位で書きました。そのため、始めの数時間のコミットにも 1 本で 2,000〜3,000 行のものがあります。どれも `git log` で部署の枝と merge の順に追えます
 - 1 つのコミットが大きいことがあります (例: 受付の画面 A1・A2・A5 で約 7,000 行)。部署のセッションが、1 つのまとまりを書いて試験を通してからコミットしたためです
 - 開始前に、リポジトリの外 (本人のメモ) で計画を作りました: 作るものの仕様、要件と試験のカタログの分け方 (製品の性質のフラグと、それで決まる試験の一覧)、動画の絵コンテ。期間中のコードはこの計画に沿っていますが、開始前に書いたコードは写していません。計画の文書もリポジトリには入れていません
 - 行数とコミットの数は、`git log` と `git ls-files` で誰でも数え直せます
@@ -276,3 +277,22 @@ hooks の規則は HK1〜HK4 の 4 つ (`hiraku/contract/protocols.py` の `HOOK
 ## ライセンス
 
 MIT ([LICENSE](LICENSE))
+
+使っているライブラリと素材のライセンス (Python の部品は、入れた版の中の情報から読んだ):
+
+| 名前 | 版 | ライセンス |
+|---|---|---|
+| numpy | 2.4.4 | BSD-3-Clause ほか (同梱の部品の 0BSD・MIT・Zlib など) |
+| scipy | 1.18.0 | BSD |
+| PyNiteFEA | 3.2.0 | MIT |
+| sympy | 1.14.0 | BSD |
+| PyYAML | 6.0.3 | MIT |
+| jsonschema | 4.26.0 | MIT |
+| claude-agent-sdk | 0.2.173 | MIT |
+| mcp | 2.3.0 | MIT |
+| pillow | 13.0.0 | MIT-CMU |
+| pypardiso (任意) | 0.4.7 | BSD-3-Clause (中で使う Intel MKL は Intel のライセンス、確かめていない) |
+| three.js (画面、jsDelivr から読む) | 0.170.0 | MIT |
+| Playwright (ブラウザの試験だけ、requirements に入れていない) | — | Apache-2.0 (確かめていない) |
+| Poly Haven の素材 | — | CC0 |
+| BIZ UDPGothic (画面の字。同梱せず、PC にあるものを使う) | — | SIL Open Font License 1.1 (確かめていない) |
