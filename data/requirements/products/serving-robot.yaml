@@ -60,13 +60,14 @@ requirements:
     note: 床の凹凸は LG CLOi ServeBot の 5 mm、ISO 7176-2 の試験は 15・25 mm も
   - key: Q16
     name: 通る幅
-    value: 0.8
+    value: 0.7
     unit: m
     source: default
     trust: 1
     basis: >-
-      各社 (Keenon T8・T9・T10 ほか) の最小通路 0.55〜0.80 m の上の端,
-      https://www.keenon.com/en/product/T9 ほか (not checked in this repository)
+      Keenon の製品ページの最小通路 (T8 0.55 m・T10 0.59 m・T9 0.70 m) の上の端,
+      https://www.keenon.com/en/product/T9 (read 2026-11-03 in a source check; it recorded only the T9 page
+      address). The earlier value 0.80 m is on none of the pages
     note: 建物の廊下は 1.2 m 以上 (バリアフリー法施行令)
   - key: Q17
     name: 曲がり
