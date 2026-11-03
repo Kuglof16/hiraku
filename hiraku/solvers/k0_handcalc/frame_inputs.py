@@ -10,8 +10,9 @@ from the x positions; this is plain statics, not the frame model.
 
 from __future__ import annotations
 
+from ...contract.loading import on_board
 from .units import STANDARD_GRAVITY, quantity
-from .vehicle import DesignError, member_props, node_table, parts_on_board
+from .vehicle import DesignError, member_props, node_table
 
 
 def _rect_dims(section: dict) -> tuple[float, float, float]:
@@ -57,7 +58,7 @@ def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None
     loading: who and what is on board (default: the parts as listed).
     """
     if loading is not None:
-        design = parts_on_board(design, loading)
+        design = on_board(design, loading)
     nodes = node_table(design)
     props = member_props(design)
     sup = design.get("supports", [])

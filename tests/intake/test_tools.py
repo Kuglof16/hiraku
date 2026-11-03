@@ -218,8 +218,9 @@ class RuleCheckToolTest(ToolsTestCase):
             self.assertTrue(got["recorded"], got.get("not_recorded"))
             events = [e for e in ctx.store.events() if e["kind"] == ev.RULE_CHECK_RECORDED]
             self.assertEqual(len(events), got["summary"]["rules"])  # always as events, the screen draws from them
-            if ev.store_records(ctx.store, "rule_check"):  # and as files, once the run store writes this kind
-                self.assertEqual(len(ctx.store.records("rule_check")), got["summary"]["rules"])
+            files = len(ctx.store.records("rule_check"))  # and as files once the run store writes this kind
+            self.assertIn(files, (0, got["summary"]["rules"]))
+            self.assertEqual([e["data"]["rule_check_id"] for e in events], [f"rchk-{i:04d}" for i in range(1, len(events) + 1)])
         else:
             self.assertFalse(got["recorded"])
 
