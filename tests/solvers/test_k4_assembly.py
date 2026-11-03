@@ -117,6 +117,18 @@ class SlenderPartsTest(unittest.TestCase):
         self.assertEqual(blocker(box_only["part:shaft"], [box_only["part:block"]], (0, 0, 1), 2000.0), "part:block")
 
 
+class WeldedPartsTest(unittest.TestCase):
+    def test_gussets_and_through_pieces_are_frame_not_steps(self):
+        """Welded into the frame before assembly: obstacles like the members, never an assembly step."""
+        from hiraku import designgen
+
+        d = designgen.regenerate(DESIGN, {"cross_members_through": {"value": 1, "unit": "1"},
+                                          "gusset_leg": {"value": 60, "unit": "mm"}})
+        welded = {p["id"] for p in d["parts"] if p["kind"] in ("gusset", "frame")}
+        self.assertTrue(welded)
+        self.assertFalse(welded & {s["part"] for s in steps(d)})
+
+
 class CornersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -30,11 +30,16 @@ import numpy as np
 
 from .capsule import swept_overlap
 from .fastening import part_fastenings
-from .model import TOUCH_MM, Body, bodies, corners, shape_overlap
+from .model import TOUCH_MM, WELDED, Body, bodies, corners, shape_overlap
 from .obb import OBB
 
 DIRECTIONS = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
 NOT_ASSEMBLED = ("occupant", "cargo")
+
+
+def _frame(b: Body) -> bool:
+    """Members and the parts welded into the frame (gussets, through pieces): in place before assembly."""
+    return b.kind == "member" or b.kind in WELDED
 NUDGE_MM = 20.0
 CORNER = "corner"  # unit id prefix of a corner group: "corner:<support id>"
 # Build stages by part kind, earliest first; a corner group is stage 0 and kinds not listed are
@@ -192,8 +197,8 @@ def disassemble(design: dict, bs: dict[str, Body] | None = None, groups: bool = 
     from .route import PREFERRED, away_from
 
     bs = bs or bodies(design)
-    members = [b for b in bs.values() if b.kind == "member"]
-    parts = {k: b for k, b in bs.items() if b.kind not in NOT_ASSEMBLED and b.kind != "member"}
+    members = [b for b in bs.values() if _frame(b)]
+    parts = {k: b for k, b in bs.items() if b.kind not in NOT_ASSEMBLED and not _frame(b)}
     pts = np.vstack([b.obb.corners() for b in bs.values()])
     travel = float(np.max(np.ptp(pts, axis=0))) * 1.5
     found = corners(parts) if groups else {}
@@ -237,13 +242,13 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
     there), then a step with part "corner:<support>" that puts it on the frame."""
     bs = bs or bodies(design)
     asm = disassemble(design, bs)
-    members = [b for b in bs.values() if b.kind == "member"]
+    members = [b for b in bs.values() if _frame(b)]
     names = {p["id"]: p.get("name", p["id"]) for p in design.get("parts", [])}
     extent = np.vstack([b.obb.corners() for b in bs.values()])
     allowed = _step_fields()
     at_node: dict[str, set[str]] = {}
     for k, b in bs.items():
-        if b.kind != "member" and b.kind not in NOT_ASSEMBLED:
+        if not _frame(b) and b.kind not in NOT_ASSEMBLED:
             for f in part_fastenings(design, k.split(":", 1)[1], bs):
                 if f["to"].startswith("node "):
                     at_node.setdefault(f["to"].split(" ", 1)[1], set()).add(k)
