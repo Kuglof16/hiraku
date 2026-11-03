@@ -110,19 +110,24 @@ class Hardpoints:
         return cls(axle=_unit(np.asarray(d["axle"], dtype=float)), radius=float(d["radius_mm"]) / 1000.0, **kw)
 
 
-def generic_sla(wheel_center: np.ndarray, radius: float) -> Hardpoints:
+def generic_sla(wheel_center: np.ndarray, radius: float, upper_joint_z: float | None = None,
+                damper_upper_y: float | None = None) -> Hardpoints:
     """A generic short-long-arm layout scaled to the wheel (left side).
 
     Not taken from any real vehicle: lower arm 0.6 and upper arm 0.42 of the
     lateral distance from the centreline to the ball joints, upper arm inner
     pivots 15 mm lower than the outer joint, tie rod behind the axle, the damper
     from the lower arm up to the body.
+    A design can move two of them (m, design frame, the left wheel's y): the whole
+    upper arm to the ball-joint height upper_joint_z (a taller knuckle; the inner
+    pivots stay 15 mm lower), and the damper's body mount sideways to damper_upper_y
+    (e.g. to clear its frame).
     """
     wc = np.asarray(wheel_center, dtype=float)
     x, yw, zw = wc
     r = radius
     lbj = np.array([x, yw - 0.2 * r, zw - 0.40 * r])
-    ubj = np.array([x, yw - 0.3 * r, zw + 0.45 * r])
+    ubj = np.array([x, yw - 0.3 * r, zw + 0.45 * r if upper_joint_z is None else float(upper_joint_z)])
     y_in_l = lbj[1] - 0.6 * lbj[1]
     y_in_u = ubj[1] - 0.42 * ubj[1]
     lf = np.array([x + 0.12, y_in_l, lbj[2]])
@@ -134,7 +139,7 @@ def generic_sla(wheel_center: np.ndarray, radius: float) -> Hardpoints:
     # damper: on the lower arm at 0.7 of the way from its inner axis to the ball joint, up to the
     # body 0.9 r above the wheel centre and 0.1 r further in
     dl = 0.5 * (lf + lr) + 0.7 * (lbj - 0.5 * (lf + lr))
-    du = np.array([dl[0], dl[1] - 0.1 * r, zw + 0.9 * r])
+    du = np.array([dl[0], dl[1] - 0.1 * r if damper_upper_y is None else float(damper_upper_y), zw + 0.9 * r])
     return Hardpoints(lf, lr, lbj, uf, ur, ubj, tri, tro, wc.copy(), np.array([0.0, 1.0, 0.0]), r, dl, du)
 
 
@@ -306,11 +311,13 @@ def solve_at_travel(hp: Hardpoints, travel: float) -> dict:
     return bench.solve(brentq(f, min(prev, theta), max(prev, theta), xtol=1e-14, rtol=1e-14))
 
 
-def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarray | None = None) -> dict:
+def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarray | None = None,
+                 moment: np.ndarray | None = None) -> dict:
     """Forces (N, body axes) that a LEFT double wishbone puts on the body at its mounts when the
     road pushes the tyre with `force` (N, body axes) at the contact point (default: the bench's,
-    under the wheel), at the bench solution `sol` (one travel). Returns {mount: force} for MOUNTS,
-    the knuckle's ball joints and the damper and tie rod forces (+ tension).
+    under the wheel), with a further `moment` (N*m, body axes) on the knuckle, at the bench
+    solution `sol` (one travel). Returns {mount: force} for MOUNTS, the knuckle's ball joints and
+    the damper and tie rod forces (+ tension).
 
     Rigid links and frictionless joints. The knuckle is in balance under the tyre force, the two
     ball joints and the tie rod (a two-force member, along it); each arm turns freely about its
@@ -346,6 +353,8 @@ def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarr
     a[3:6, 3:6] = _skew(ubj - lbj)
     a[3:6, 6] = np.cross(tro - lbj, nt)
     b[3:6] = -np.cross(cp - lbj, f)
+    if moment is not None:
+        b[3:6] -= np.asarray(moment, dtype=float)
     # lower arm about its axis: the knuckle pushes it with -F_lbj at lbj, the damper with d nd at dl
     a[6, 0:3] = -(ea @ _skew(lbj - hp.lca_front))
     a[6, 7] = float(ea @ np.cross(dl - hp.lca_front, nd))
@@ -373,17 +382,20 @@ def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarr
 
 
 def corner_mount_forces(table: dict, side: float, travel: float, force: np.ndarray,
-                        contact: np.ndarray | None = None) -> dict:
+                        contact: np.ndarray | None = None, moment: np.ndarray | None = None) -> dict:
     """mount_forces of a corner on a K&C table (a left-wheel table; side < 0 mirrors it) at a
-    travel (m, held inside the table) for the tyre force (N, body axes) at `contact` (design
-    frame, m; default under the wheel): {mount: (point, force)}, design frame, metres and newtons."""
+    travel (m, held inside the table) for the force (N, body axes) at `contact` (design frame, m;
+    default under the wheel) and a moment on the knuckle (N*m, body axes): {mount: (point, force)},
+    design frame, metres and newtons."""
     hp = Hardpoints.from_json(table["hardpoints_mm"])
     rows = table["rows"]
     lo, hi = rows[0]["travel_mm"] / 1000.0, rows[-1]["travel_mm"] / 1000.0
     flip = np.array([1.0, -1.0 if side < 0 else 1.0, 1.0])
     sol = solve_at_travel(hp, min(max(travel, lo), hi))
+    # a moment is an axial vector: mirrored in y it keeps its y part and turns its x and z parts
     r = mount_forces(hp, sol, np.asarray(force, dtype=float) * flip,
-                     None if contact is None else np.asarray(contact, dtype=float) * flip)
+                     None if contact is None else np.asarray(contact, dtype=float) * flip,
+                     None if moment is None else np.asarray(moment, dtype=float) * flip * flip[1])
     points = {m: getattr(hp, m) for m in MOUNTS}
     return {m: (points[m] * flip, r[m] * flip) for m in MOUNTS}
 
@@ -543,6 +555,38 @@ _POINTS = ("lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_o
 def _builtin(key: tuple) -> Hardpoints:
     y, z, radius, travel = key
     return low_bump_steer(generic_sla(np.array([0.0, y, z]), radius), travel)
+
+
+@lru_cache(maxsize=64)
+def _fitted(key: tuple) -> Hardpoints:
+    y, z, radius, travel, upper_joint_z, damper_upper_y = key
+    base = generic_sla(np.array([0.0, y, z]), radius, upper_joint_z, damper_upper_y)
+    if base.uca_outer[2] < base.lca_outer[2] + 0.05:
+        raise ValueError(f"the upper ball joint (z {base.uca_outer[2] * 1000:.0f} mm) must be at least 50 mm above "
+                         f"the lower one (z {base.lca_outer[2] * 1000:.0f} mm)")
+    hp = low_bump_steer(base, travel)
+    try:
+        _sweep(hp, travel, 5)
+    except ValueError as e:
+        raise ValueError(f"the double wishbone does not move through +-{travel * 1000:.0f} mm of travel with "
+                         f"upper_joint_z={upper_joint_z}, damper_upper_y={damper_upper_y} m ({e})") from e
+    return hp
+
+
+def fitted_hardpoints(wheel_center: np.ndarray, radius: float, travel: float, *, upper_joint_z: float | None = None,
+                      damper_upper_y: float | None = None) -> Hardpoints:
+    """builtin_hardpoints with the upper arm at the ball-joint height upper_joint_z and the
+    damper's body mount at the side position damper_upper_y (m, design frame, the left wheel's y;
+    None keeps the generic place), its tie rod placed again for the least bump steer. Raises
+    ValueError when the linkage does not move through +-travel."""
+    if upper_joint_z is None and damper_upper_y is None:
+        return builtin_hardpoints(wheel_center, radius, travel)
+    x, y, z = (float(v) for v in wheel_center)
+    hp = _fitted((y, z, float(radius), float(travel), None if upper_joint_z is None else float(upper_joint_z),
+                  None if damper_upper_y is None else float(damper_upper_y)))
+    shift = np.array([x, 0.0, 0.0])
+    moved = {k: getattr(hp, k) + shift for k in _POINTS + ("damper_lower", "damper_upper") if getattr(hp, k) is not None}
+    return dataclasses.replace(hp, axle=np.array(hp.axle), **moved)
 
 
 def builtin_hardpoints(wheel_center: np.ndarray, radius: float, travel: float) -> Hardpoints:
