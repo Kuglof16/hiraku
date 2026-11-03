@@ -23,14 +23,18 @@ def check(case, expected, got, passed, unit="mm"):
             "tolerance_rel": 0.02, "pass": passed, "source": f"{case} (shape example)"}
 
 
-def tool(name, title, domain, base, tests, checks, formulas=(), origin="builtin", usable=True):
-    return {"name": name, "title": title, "domain": domain, "base": base, "tests": list(tests), "origin": origin,
-            "usable": usable, "checks": checks, "formulas": list(formulas)}
+def tool(name, title, domain, base, tests, checks, formulas=(), origin="builtin", usable=True, applies_to=()):
+    out = {"name": name, "title": title, "domain": domain, "base": base, "tests": list(tests), "origin": origin,
+           "usable": usable, "checks": checks, "formulas": list(formulas)}
+    if applies_to:
+        out["applies_to"] = list(applies_to)
+    return out
 
 
 SHELF_TOOLS = [
     tool("frame_static", "フレームの静的", "strength", "K1", ["R1"],
-         [check("simply supported beam", 1.25, 1.25, True), check("cantilever", 4.0, 4.04, True)], ["frame_static.rail_bending"]),
+         [check("simply supported beam", 1.25, 1.25, True), check("cantilever", 4.0, 4.04, True)], ["frame_static.rail_bending"],
+         applies_to=["ladder_4w", "space_frame_utv"]),
     tool("step_climb", "段差越え", "powertrain", "K1", ["P1"], [check("rigid wheel", 0.5, 0.5, True, "1")], ["step_climb.wheel_force_rigid"]),
     tool("tilt", "転倒の角度", "handling", "K2", ["R4"], [check("box on a table", 30.0, 30.1, True, "deg"), check("two masses", 25.0, None, False, "deg")],
          usable=False),
@@ -41,6 +45,9 @@ FORMULAS = [
     {"formula_id": "step_climb.wheel_force_rigid", "title": "剛い輪が段の角に当たったときの力の比", "domain": "powertrain",
      "expression": "F/W = d / (r - h)", "inputs": {}, "outputs": {}, "assumptions": [], "source": "statics (shape example)"},
 ]
+# the generators' titles for the kinds of design (designgen.ARCHETYPES); space_frame_utv is left out
+# so that a kind without a title shows as its key
+ARCHETYPES = {"ladder_4w": "はしご形フレームの 4 輪車 (形の例)", "care_bed": "介護ベッド"}
 RUN_TOOLS = [
     tool("rollbar", "ロールバー", "crash", "K1", ["C3"], [check("portal frame", 2.0, 2.01, True)], ["rollbar.portal_sway"], origin="claude"),
     tool("roof_crush", "屋根の潰れ", "crash", "K1", ["C4"], [check("plate", 3.0, 3.9, False)], origin="claude", usable=False),
@@ -79,7 +86,7 @@ class ShelfBrowserTest(unittest.TestCase):
 
         def load():
             cls.release.wait(20)
-            return {"tools": SHELF_TOOLS, "formulas": FORMULAS}
+            return {"tools": SHELF_TOOLS, "formulas": FORMULAS, "archetypes": ARCHETYPES}
 
         cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False, shelf=Shelf(load))
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
@@ -166,6 +173,18 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertNotIn("使えない", row["rb"])
         self.assertIn("Claude が作った", row["rc"])
         self.assertIn("使えない", row["rc"])
+
+        # the kinds of design a tool can analyse (applies_to): one line, the generator's title up to " (",
+        # a kind without a title as its key; no line for a tool without applies_to (any design)
+        applies = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('#view-shelf .sh-tool')].map((r) => {
+            const a = r.querySelector('.sh-applies');
+            return [r.dataset.tool, a && { text: a.textContent, kinds: [...a.querySelectorAll('.sh-arch')].map((s) => [s.dataset.kind, s.textContent, s.title]) }];
+        }))""")
+        self.assertEqual(applies["frame_static"]["text"], "使える設計: はしご形フレームの 4 輪車・space_frame_utv")
+        self.assertEqual(applies["frame_static"]["kinds"], [["ladder_4w", "はしご形フレームの 4 輪車", "はしご形フレームの 4 輪車 (形の例)"],
+                                                            ["space_frame_utv", "space_frame_utv", ""]])
+        for name in ("step_climb", "tilt", "rollbar", "roof_crush"):
+            self.assertIsNone(applies[name], name)
 
         # from the bases
         page.click('#view-shelf .sh-mode button[data-mode="base"]')
