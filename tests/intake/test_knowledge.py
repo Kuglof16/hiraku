@@ -20,17 +20,20 @@ class BuiltinTest(unittest.TestCase):
         self.docs = load_builtin()
         self.rules = knowledge.all_rules(self.docs)
 
-    def test_nine_categories_one_document_each(self):
+    def test_ten_categories_one_document_each(self):
         self.assertEqual([r["rules"][0]["category"] for r in self.docs], list(CATEGORIES))
-        self.assertEqual(len(self.rules), 18)
-        self.assertEqual(len({r["rule_id"] for r in self.rules}), 18)
+        self.assertEqual(len(self.rules), 27)  # 18 formulas and 9 system checks
+        self.assertEqual(len({r["rule_id"] for r in self.rules}), 27)
         for rec in self.docs:
             self.assertEqual(rec["doc"]["origin"], "builtin")
 
     def test_every_check_is_valid_and_uses_known_names(self):
         for r in self.rules:
             with self.subTest(rule=r["rule_id"]):
-                self.assertEqual(facts.unknown_names(expression.names(r["check"])), [])
+                if r["category"] == "system":  # a function of hiraku.intake.systems (tests/intake/test_systems.py)
+                    self.assertTrue(knowledge.systems.is_system_check(r["check"]))
+                else:
+                    self.assertEqual(facts.unknown_names(expression.names(r["check"])), [])
                 self.assertEqual(r["origin"], "builtin")
                 self.assertNotIn("check_by", r)  # the formula came with the data: nobody turned a sentence into it
 

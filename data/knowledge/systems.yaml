@@ -1,0 +1,84 @@
+# Built-in rules: systems (系). A product that has these properties needs these systems, and each is joined
+# end to end (hiraku.intake.systems follows part.connects_to). `check: system:<name>` is a function of that
+# module, not an expression; `when` is a yes/no expression over the product's flags (1 = set) that says whether the
+# rule applies (no flag, no rule). The rules say what the design must contain at least; how well it works is for
+# the analyses.
+# trust: 1 primary source, 2 secondary source, 3 assumption. Every rule here is HIRAKU's minimum (3); the
+# standards named in `basis` are what the minimum is modelled on, recalled and "not checked in this repository".
+doc_id: KN-SY
+title: 系の決まり
+category: system
+rules:
+  - id: SY-01
+    text: 走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる
+    check: system:drive_chain
+    when: self_propelled == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive,
+      are reached from the motor or engine by links that carry torque); not taken from a standard
+  - id: SY-02
+    text: 人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる
+    check: system:steer_chain
+    when: ride == 1 and self_propelled == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road
+      vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository
+  - id: SY-03
+    text: 走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる
+    check: system:brake_chain
+    when: self_propelled == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is
+      regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in
+      this repository
+  - id: SY-04
+    text: 人が乗る製品は、座席が骨組みにつながる
+    check: system:seat_attach
+    when: ride == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)
+  - id: SY-05
+    text: 人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる
+    check: system:restraint
+    when: ride == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant
+      restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway
+      vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)
+  - id: SY-06
+    text: 人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる
+    check: system:rops
+    when: ride == 1 and outdoor == 1 and rough == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that
+      it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway
+      vehicles (recalled; not checked in this repository)
+  - id: SY-07
+    text: 公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう
+    check: system:lighting
+    when: public_road == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's
+      道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)
+  - id: SY-08
+    text: 電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる
+    check: system:power_chain
+    when: battery == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)
+  - id: SY-09
+    text: 電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある
+    check: system:disconnect
+    when: battery == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain).
+      Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)

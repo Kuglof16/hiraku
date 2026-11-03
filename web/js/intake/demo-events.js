@@ -805,6 +805,114 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway vehicles (recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -930,7 +1038,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -994,7 +1102,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 13,
+   "seq": 14,
    "ts": "2026-11-03T10:00:11.000+09:00",
    "t": 11.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -1044,7 +1152,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 14,
+   "seq": 15,
    "ts": "2026-11-03T10:00:12.000+09:00",
    "t": 12.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -1354,10 +1462,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": false,
@@ -1377,10 +1486,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": false,
@@ -1400,10 +1510,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": true,
@@ -1423,10 +1534,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": true,
@@ -2168,7 +2280,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 15,
+   "seq": 16,
    "ts": "2026-11-03T10:00:14.000+09:00",
    "t": 14.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -2216,7 +2328,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 16,
+   "seq": 17,
    "ts": "2026-11-03T10:00:14.100+09:00",
    "t": 14.1,
    "run_id": "20261103-100000-offroad-4w",
@@ -2264,7 +2376,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 17,
+   "seq": 18,
    "ts": "2026-11-03T10:00:14.200+09:00",
    "t": 14.2,
    "run_id": "20261103-100000-offroad-4w",
@@ -2324,7 +2436,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 18,
+   "seq": 19,
    "ts": "2026-11-03T10:00:14.300+09:00",
    "t": 14.3,
    "run_id": "20261103-100000-offroad-4w",
@@ -2384,7 +2496,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 19,
+   "seq": 20,
    "ts": "2026-11-03T10:00:14.400+09:00",
    "t": 14.4,
    "run_id": "20261103-100000-offroad-4w",
@@ -2404,7 +2516,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 20,
+   "seq": 21,
    "ts": "2026-11-03T10:00:14.500+09:00",
    "t": 14.5,
    "run_id": "20261103-100000-offroad-4w",
@@ -2432,7 +2544,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 21,
+   "seq": 22,
    "ts": "2026-11-03T10:00:14.600+09:00",
    "t": 14.6,
    "run_id": "20261103-100000-offroad-4w",
@@ -2492,7 +2604,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 22,
+   "seq": 23,
    "ts": "2026-11-03T10:00:14.700+09:00",
    "t": 14.7,
    "run_id": "20261103-100000-offroad-4w",
@@ -2557,7 +2669,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
+   "seq": 24,
    "ts": "2026-11-03T10:00:14.800+09:00",
    "t": 14.8,
    "run_id": "20261103-100000-offroad-4w",
@@ -2578,7 +2690,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
+   "seq": 25,
    "ts": "2026-11-03T10:00:14.900+09:00",
    "t": 14.9,
    "run_id": "20261103-100000-offroad-4w",
@@ -2614,7 +2726,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
+   "seq": 26,
    "ts": "2026-11-03T10:00:15.000+09:00",
    "t": 15.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -2669,7 +2781,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
+   "seq": 27,
    "ts": "2026-11-03T10:00:15.100+09:00",
    "t": 15.1,
    "run_id": "20261103-100000-offroad-4w",
@@ -2689,7 +2801,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
+   "seq": 28,
    "ts": "2026-11-03T10:00:15.200+09:00",
    "t": 15.2,
    "run_id": "20261103-100000-offroad-4w",
@@ -2709,7 +2821,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
+   "seq": 29,
    "ts": "2026-11-03T10:00:15.300+09:00",
    "t": 15.3,
    "run_id": "20261103-100000-offroad-4w",
@@ -2762,7 +2874,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
+   "seq": 30,
    "ts": "2026-11-03T10:00:15.400+09:00",
    "t": 15.4,
    "run_id": "20261103-100000-offroad-4w",
@@ -2803,7 +2915,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
+   "seq": 31,
    "ts": "2026-11-03T10:00:15.500+09:00",
    "t": 15.5,
    "run_id": "20261103-100000-offroad-4w",
@@ -2826,7 +2938,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
+   "seq": 32,
    "ts": "2026-11-03T10:00:15.600+09:00",
    "t": 15.6,
    "run_id": "20261103-100000-offroad-4w",
@@ -2849,7 +2961,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
+   "seq": 33,
    "ts": "2026-11-03T10:00:15.700+09:00",
    "t": 15.7,
    "run_id": "20261103-100000-offroad-4w",
@@ -2869,7 +2981,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
+   "seq": 34,
    "ts": "2026-11-03T10:00:15.800+09:00",
    "t": 15.8,
    "run_id": "20261103-100000-offroad-4w",
@@ -2878,6 +2990,292 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0019",
+    "design_version": 1,
+    "rule_id": "SY-01",
+    "targets": [
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "motor",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:RL",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:RR",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "SY-02",
+    "targets": [
+     "support:FL",
+     "support:FR"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:FL",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:FR",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "SY-03",
+    "targets": [
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [
+     {
+      "part_id": "design",
+      "values": {
+       "inputs": 0.0
+      },
+      "message": "制動の入力がありません (kind が brake_pedal・brake_lever・brake_controller のどれかの部品)。足して、制動する輪まで brake の鎖でつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "SY-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "restraints": 0.0
+      },
+      "message": "座席 seat_R に拘束 (シートベルトなど。system が restraint の部品) がありません。足して、座席と骨組みにつないでください"
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "restraints": 0.0
+      },
+      "message": "座席 seat_L に拘束 (シートベルトなど。system が restraint の部品) がありません。足して、座席と骨組みにつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "SY-06",
+    "targets": [],
+    "hits": [
+     {
+      "part_id": "design",
+      "values": {
+       "rops": 0.0
+      },
+      "message": "乗員を囲む転倒保護の枠 (ROPS。system が rops の部品) がありません。足して、骨組みにつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "SY-07",
+    "targets": [],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "battery",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "motor",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [
+     {
+      "part_id": "battery",
+      "values": {
+       "protectors": 0.0
+      },
+      "message": "電池 battery の電力を切る部品 (kind が fuse・switch・contactor・breaker のどれか) がありません。足して、電池の power の鎖に入れてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -2917,15 +3315,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0029",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -3517,6 +3915,114 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway vehicles (recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-care-bed",
@@ -3709,7 +4215,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-care-bed",
@@ -4429,6 +4935,114 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway vehicles (recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-electric-guitar",
@@ -4511,7 +5125,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-electric-guitar",
@@ -5140,6 +5754,114 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway vehicles (recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-serving-robot",
@@ -5378,7 +6100,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-serving-robot",
@@ -6415,6 +7137,114 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated (UN Regulation No. 79 is the one recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated (UN Regulation No. 13-H and Japan's 道路運送車両の保安基準 are the ones recalled); not checked in this repository"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Occupant restraints are required of road vehicles by Japan's 道路運送車両の保安基準 and of recreational off-highway vehicles by ANSI/ROHVA 1 (both recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 asks for one on recreational off-highway vehicles (recalled; not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (recalled; article numbers and counts per side not checked in this repository)"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electric propulsion safety is covered by ISO 6469-3 (recalled; not checked in this repository)"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -6444,7 +7274,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:11.000+09:00",
    "t": 11.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -6494,7 +7324,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 13,
+   "seq": 14,
    "ts": "2026-11-03T10:00:12.000+09:00",
    "t": 12.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -6804,10 +7634,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": false,
@@ -6827,10 +7658,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": false,
@@ -6850,10 +7682,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": true,
@@ -6873,10 +7706,11 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone"
       },
       "actuation": {
        "drive": true,
@@ -7618,7 +8452,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 14,
+   "seq": 15,
    "ts": "2026-11-03T10:00:14.000+09:00",
    "t": 14.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7666,7 +8500,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 15,
+   "seq": 16,
    "ts": "2026-11-03T10:00:14.100+09:00",
    "t": 14.1,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7714,7 +8548,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 16,
+   "seq": 17,
    "ts": "2026-11-03T10:00:14.200+09:00",
    "t": 14.2,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7774,7 +8608,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 17,
+   "seq": 18,
    "ts": "2026-11-03T10:00:14.300+09:00",
    "t": 14.3,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7834,7 +8668,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 18,
+   "seq": 19,
    "ts": "2026-11-03T10:00:14.400+09:00",
    "t": 14.4,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7854,7 +8688,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 19,
+   "seq": 20,
    "ts": "2026-11-03T10:00:14.500+09:00",
    "t": 14.5,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7882,7 +8716,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 20,
+   "seq": 21,
    "ts": "2026-11-03T10:00:14.600+09:00",
    "t": 14.6,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7942,7 +8776,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 21,
+   "seq": 22,
    "ts": "2026-11-03T10:00:14.700+09:00",
    "t": 14.7,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8007,7 +8841,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 22,
+   "seq": 23,
    "ts": "2026-11-03T10:00:14.800+09:00",
    "t": 14.8,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8028,7 +8862,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
+   "seq": 24,
    "ts": "2026-11-03T10:00:14.900+09:00",
    "t": 14.9,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8064,7 +8898,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
+   "seq": 25,
    "ts": "2026-11-03T10:00:15.000+09:00",
    "t": 15.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8119,7 +8953,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
+   "seq": 26,
    "ts": "2026-11-03T10:00:15.100+09:00",
    "t": 15.1,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8139,7 +8973,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
+   "seq": 27,
    "ts": "2026-11-03T10:00:15.200+09:00",
    "t": 15.2,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8159,7 +8993,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
+   "seq": 28,
    "ts": "2026-11-03T10:00:15.300+09:00",
    "t": 15.3,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8212,7 +9046,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
+   "seq": 29,
    "ts": "2026-11-03T10:00:15.400+09:00",
    "t": 15.4,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8253,7 +9087,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
+   "seq": 30,
    "ts": "2026-11-03T10:00:15.500+09:00",
    "t": 15.5,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8276,7 +9110,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
+   "seq": 31,
    "ts": "2026-11-03T10:00:15.600+09:00",
    "t": 15.6,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8299,7 +9133,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
+   "seq": 32,
    "ts": "2026-11-03T10:00:15.700+09:00",
    "t": 15.7,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8319,7 +9153,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
+   "seq": 33,
    "ts": "2026-11-03T10:00:15.800+09:00",
    "t": 15.8,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8328,6 +9162,292 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0019",
+    "design_version": 1,
+    "rule_id": "SY-01",
+    "targets": [
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "motor",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:RL",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:RR",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "SY-02",
+    "targets": [
+     "support:FL",
+     "support:FR"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:FL",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "support:FR",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "SY-03",
+    "targets": [
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [
+     {
+      "part_id": "design",
+      "values": {
+       "inputs": 0.0
+      },
+      "message": "制動の入力がありません (kind が brake_pedal・brake_lever・brake_controller のどれかの部品)。足して、制動する輪まで brake の鎖でつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "SY-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "restraints": 0.0
+      },
+      "message": "座席 seat_R に拘束 (シートベルトなど。system が restraint の部品) がありません。足して、座席と骨組みにつないでください"
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "restraints": 0.0
+      },
+      "message": "座席 seat_L に拘束 (シートベルトなど。system が restraint の部品) がありません。足して、座席と骨組みにつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "SY-06",
+    "targets": [],
+    "hits": [
+     {
+      "part_id": "design",
+      "values": {
+       "rops": 0.0
+      },
+      "message": "乗員を囲む転倒保護の枠 (ROPS。system が rops の部品) がありません。足して、骨組みにつないでください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "SY-07",
+    "targets": [],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "battery",
+      "missing": [
+       "connects_to"
+      ]
+     },
+     {
+      "part_id": "motor",
+      "missing": [
+       "connects_to"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [
+     {
+      "part_id": "battery",
+      "values": {
+       "protectors": 0.0
+      },
+      "message": "電池 battery の電力を切る部品 (kind が fuse・switch・contactor・breaker のどれか) がありません。足して、電池の power の鎖に入れてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -8367,15 +9487,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0029",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
