@@ -250,8 +250,8 @@ window.PROMO_LAYOUT = {
         "_note": "the tick or cross of the tile"
       },
       "pet": {
-        "w": 96,
-        "h": 96,
+        "w": 84,
+        "h": 84,
         "right": 12,
         "bottom": 12,
         "feature": {
@@ -347,8 +347,8 @@ window.PROMO_LAYOUT = {
         "_note": "the tick or cross of the tile"
       },
       "pet": {
-        "w": 96,
-        "h": 96,
+        "w": 84,
+        "h": 84,
         "right": 12,
         "bottom": 12,
         "feature": {
@@ -820,14 +820,14 @@ window.PROMO_LAYOUT = {
       "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247"
     },
     "tests": [
-      "step_break",
       "tilt_over",
       "step_stuck",
+      "step_break",
       "battery_hot",
       "parts_clash",
       "wind"
     ],
-    "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile",
+    "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -882,12 +882,12 @@ window.PROMO_LAYOUT = {
     },
     "times": {
       "lead_s": 0.3,
-      "turn_to_s": 6.5,
-      "zoom_s": 6.5,
-      "zoom_to_s": 8.5,
+      "turn_to_s": 5.5,
+      "zoom_s": 5.5,
+      "zoom_to_s": 7.5,
       "swap_s": 11.0,
       "swap_to_s": 13.0,
-      "_note": "the vehicle turns with the stress colours during sentences 1-2 (0.30-4.22, 4.57-8.89 s); it moves in on the highest element as sentence 2 says 突き止める; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (9.24-15.28 s) and stay while it says それが CAE です"
+      "_note": "the vehicle turns with the stress colours during sentences 1-2 (the maker's recorded voice, from the cut's start: 0.30-3.76, 4.11-8.05 s); it moves in on the highest element during sentence 2 (突き止める) and is in by 7.5 s, before sentence 2 ends; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (8.40-14.42 s) and stay while it says それが CAE です"
     },
     "turn_deg": 90,
     "zoom": {
@@ -1829,6 +1829,18 @@ window.PROMO_LAYOUT = {
       }
     ],
     "allow_overlap": [
+      {
+        "cut": "n07",
+        "a": "n07.view",
+        "b": "n07.label",
+        "why": "the before / after label sits inside the view's top left on purpose (n07.label)"
+      },
+      {
+        "cut": "n16",
+        "a": "n16.view",
+        "b": "n16.seek",
+        "why": "the seek bar sits over the view's lower edge on purpose (n16.seek)"
+      },
       {
         "cut": "n18",
         "a": "n18.light",
