@@ -378,6 +378,58 @@
       "_note": "rows: first question appears, then one per row_step; answer_lag: Claude's answer after its question (all three by 2.3 s, inside sentence 1). check: HIRAKU's hand value of row 1 (sentence 2 starts at 3.53 s), one row per check_step; the analysis, the difference and the tick follow by cae_lag, diff_lag, tick_lag (last tick at 5.75 s). src: the source lines. From 6.0 s to 8.3 s the screen holds still"
     }
   },
+  "n09": {
+    "duration_s": 5.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n09) from the intake department's real run (Claude reads the request). 5.6 s is N09's slot in narration draft 6. Only the off-road vehicle, no other products",
+    "request": { "x": 96, "y": 96, "w": 1728, "h": 120, "title_px": 22, "text_px": 30, "_note": "the maker's request in their own words, one or two lines" },
+    "view": { "x": 96, "y": 240, "w": 1100, "h": 646, "_note": "the vehicle in 3D; bottom 886" },
+    "chips": { "x": 1220, "y": 240, "w": 604, "h": 646, "text_px": 30, "row_gap": 16, "_note": "the seven domains and assembly, one chip a row; a chip lights when Claude picks it, with its reason in one short line (text_px x 0.7, at least min_text_px)" },
+    "times": { "lead_s": 0.3, "request_s": 0.3, "chips_from_s": 2.2, "chip_step_s": 0.35,
+               "_note": "the request is there from the start; the chips light one at a time from chips_from_s, in the order of the record, as the voice says 必要な解析を選びます (the maker's recording runs 0.30-5.33 s); with eight chips the last lights at 4.65 s" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n11": {
+    "duration_s": 14.6,
+    "_note": "drawn by the screens department (web cut.html?cut=n11) from a scripted run: how HIRAKU works, not Claude making a mistake. 14.6 s is N11's slot in narration draft 6",
+    "memo": { "x": 96, "y": 96, "w": 560, "h": 790, "title_px": 30, "text_px": 24, "_note": "the hand calculation memo (the prediction), written line by line" },
+    "log": { "x": 680, "y": 96, "w": 1144, "h": 360, "title_px": 30, "text_px": 24, "_note": "the run's log: the analysis called without a prediction is stopped (hooks), then runs once the prediction is written" },
+    "result": { "x": 680, "y": 480, "w": 1144, "h": 406, "title_px": 30, "text_px": 24, "_note": "the analysis result in 3D or a value. In the record (scripted run 20261103-223035) the unit mistake (62 mm meant as 62 cm) went into the hand calculation (the prediction, 40.6 deg); the analysis used the design's load height (31.7 deg) and is right. The screen shows the 62 mm in the settings and never calls the analysis wrong" },
+    "times": { "lead_s": 0.3, "plausible_s": 1.5, "memo_s": 4.9, "stop_s": 9.6, "run_s": 11.6,
+               "_note": "the maker's recording: sentence 1 0.30-4.56 s (the settings card with the mistaken 62 mm shows from plausible_s), sentence 2 4.91-9.20 s (the memo is written from memo_s), sentence 3 9.55-12.81 s (the call without a prediction is stopped at stop_s; after the prediction it runs from run_s)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n12": {
+    "duration_s": 9.2,
+    "_note": "drawn by the screens department (web cut.html?cut=n12) from the same scripted run as N11: the comparison catches the unit mistake in the settings. 9.2 s is N12's slot in narration draft 6. Numbers come from the record",
+    "table": { "x": 96, "y": 96, "w": 1728, "h": 560, "title_px": 30, "text_px": 28, "value_px": 56, "_note": "the comparison: the prediction (hand calculation) and the analysis side by side, their difference; red while they disagree (40.6 / 31.7 deg, -22.0 %), green once fixed (33.6 / 31.7 deg, -5.6 %). Numbers from the record" },
+    "cause": { "x": 96, "y": 680, "w": 1728, "h": 206, "title_px": 30, "text_px": 28, "_note": "the recorded cause in one line: the prediction took the load height 62 mm where 62 cm was meant; fixed, the comparison again" },
+    "times": { "lead_s": 0.3, "mismatch_s": 1.0, "cause_s": 5.2, "fixed_s": 7.6,
+               "_note": "the maker's recording: sentence 1 0.30-4.82 s (the mismatch is red from mismatch_s), sentence 2 5.17-8.62 s (the cause from cause_s, the fixed comparison green from fixed_s)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n13": {
+    "duration_s": 12.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n13) from the experiment department's real Claude run (Claude writes a tool and checks it against known answers). 12.0 s is N13's slot in narration draft 6",
+    "want": { "x": 96, "y": 96, "w": 1728, "h": 96, "text_px": 30, "_note": "what the maker wants, one line" },
+    "shelf": { "x": 96, "y": 216, "w": 1100, "h": 670, "title_px": 26, "text_px": 22, "_note": "the shelf of tool cards, or the analysis that uses the new tool; the missing tool is a dotted card until Claude writes it" },
+    "code": { "x": 1220, "y": 216, "w": 604, "h": 300, "text_px": 18, "_note": "a glimpse of the code Claude writes (small, a few lines; not to be read)" },
+    "check": { "x": 1220, "y": 540, "w": 604, "h": 346, "title_px": 26, "text_px": 24, "_note": "the known-answer checks of the new tool (with their sources), ticked one by one" },
+    "times": { "lead_s": 0.3, "gap_s": 4.0, "write_s": 4.6, "check_s": 7.6, "shelf_s": 10.4,
+               "_note": "the maker's recording: sentence 1 0.30-3.63 s (what the maker wants), sentence 2 3.98-7.18 s (the missing tool from gap_s, Claude writes from write_s), sentence 3 7.53-11.00 s (the checks from check_s, the tool is used from shelf_s)" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n14": {
+    "duration_s": 9.7,
+    "_note": "drawn by the screens department (web cut.html?cut=n14) from the intake department's real run (knowledge imported, a rule check, a hearing question). 9.7 s is N14's slot in narration draft 6",
+    "knowledge": { "x": 96, "y": 96, "w": 700, "h": 790, "title_px": 30, "text_px": 24, "_note": "the list of rules: the basic constraints, then the dropped file's rules added as rows" },
+    "view": { "x": 820, "y": 96, "w": 1004, "h": 560, "fill": 0.8, "_note": "the part the new rule catches, in 3D; fill: the vehicle fills this share of the view along the side it meets first (width or height, whichever fits the box), centred" },
+    "ask": { "x": 820, "y": 680, "w": 1004, "h": 206, "text_px": 28, "_note": "HIRAKU's question back to the maker, as a speech bubble" },
+    "times": { "lead_s": 0.3, "drop_s": 2.2, "rule_s": 3.6, "hit_s": 5.0, "ask_s": 6.8,
+               "_note": "the maker's recording: sentence 1 0.30-6.34 s (the file is dropped at drop_s, its rules join the list at rule_s, one catches a part at hit_s), sentence 2 6.69-8.88 s (the question from ask_s)" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
   "n17": {
     "duration_s": 8.8,
     "_note": "drawn by the screens department (web cut.html?cut=n17): the one-page report. 8.8 s is N17's slot in narration draft 6 (2:36.1-2:44.9)",
@@ -402,17 +454,24 @@
                "_note": "four cards in a row (4 x card_w + 3 x gap_px = w) in the order of a run: the areas, the tools, hand calculation set against analysis, fixed and passed. Each is a rule on top, a label, one figure with its unit and a line or two that says what it means; a small arrow (arrow_px) sits on the rule in each gap. Bottom 516 + 300 = 816" },
     "stamp": { "x": 96, "y": 858, "w": 1728, "h": 32, "size_px": 19,
                "_note": "when the figures were counted, the git ref and the run, right-aligned, small; bottom 890, above the subtitle band" },
+    "lanes": { "x": 96, "y": 118, "w": 1728, "h": 690, "top": 1, "pitch_px": 86, "dot_r_px": 4.5, "line_px": 2,
+               "main_line_px": 3, "curve_dx_px": 48, "halo_px": 14, "alpha": 0.3, "dim_alpha": 0.2, "dim_dur_s": 0.45,
+               "_note": "the commit graph from git, faint behind the figures: one lane per Claude Code session (the lead on top, then the departments; graph.lanes of n17b.data.js), lane i's centre at top + (i + 0.5) x pitch_px inside this box (8 lanes, 1-689). A commit is a dot at its author time on a linear axis from the first commit (x 0) to the last (x w); a merge into main is a curve from department lane i, curve_dx_px x sqrt(i) before the merge, up to the lead's lane. No lane names or dates. The text in front has a halo of the night colour (halo_px) so no line runs through a letter. The whole graph is drawn at alpha and dims to dim_alpha over dim_dur_s from times.dim_s, with the amount, so the cards stay the place to read" },
+    "flow": { "ease": [0.3, 0, 0.35, 1], "step_s": 0.05, "dot_dur_s": 0.3, "merge_dur_s": 0.35, "in_dur_s": 0.4,
+              "_note": "the graph grows from the left with the amount's count: a clip over the graph opens from x 0 at times.lanes_s to x w at times.lanes_to_s (ease), sampled every step_s into keyframes; the graph comes in over in_dur_s from times.lanes_s; a dot fades in over dot_dur_s and a merge curve draws over merge_dur_s when the clip reaches them. The page holds no lane motion after times.lanes_to_s + merge_dur_s" },
     "count": { "amount_dur_s": 1.3, "card_dur_s": 0.9, "in_dur_s": 0.4, "ease": [0.12, 0.6, 0.2, 1], "steps": 32,
                "_note": "each figure counts up over its dur_s and stops on the counted value: steps whole numbers (value x ease(j / steps), rounded down; fewer when the value is smaller), one after another at even times, so every frame shows a whole number. in_dur_s: how long a card or caption takes to come in" },
     "times": {
       "amount_s": 0.3,
+      "lanes_s": 0.3,
+      "lanes_to_s": 1.9,
       "amount_count_s": 0.35,
       "amount_sub_s": 1.0,
       "dim_s": 2.2,
       "cards_s": 2.35,
       "card_step_s": 0.4,
       "stamp_s": 4.5,
-      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
+      "_note": "amount: comes in with 構想は 10 万行 (0.30-1.93 s); the lines count up from amount_count_s and stop at amount_count_s + count.amount_dur_s = 1.65 s; the commits, days and tests come in at amount_sub_s. lanes: the faint commit graph behind comes in at lanes_s and grows from the left to lanes_to_s, about as the lines count up, and is still by lanes_to_s + flow.merge_dur_s = 2.25 s; from dim_s it dims with the amount. cards: with その道を、Claude Code が拓きました (2.28-5.01 s) the heading and the four cards come in card_step_s apart from cards_s (2.35, 2.75, 3.15, 3.55 s), each counting up over count.card_dur_s, the last stopping at 4.45 s. stamp: the counted-at line at 4.5 s. From 4.9 s to the end the picture holds still"
     }
   },
   "n18": {
@@ -548,8 +607,8 @@
       "n09": {
         "message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)",
         "limits": {
-          "label": 7,
-          "why": "the seven domains light up"
+          "label": 8,
+          "why": "the seven domains and assembly light up (the same eight as the N04 / N15 grid)"
         }
       },
       "n10": {
@@ -571,7 +630,11 @@
         }
       },
       "n13": {
-        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う"
+        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う",
+        "limits": {
+          "label": 4,
+          "why": "the three known-answer checks and the new tool's name; the shelf's other cards go without names"
+        }
       },
       "n14": {
         "message": "渡したノウハウが、設計のチェックの規則になる"
@@ -596,7 +659,7 @@
           "label": 7,
           "number": 5,
           "moving": 4,
-          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once"
+          "why": "two beats, one per sentence of the voice: the amount (one figure, with the commits, the days and the tests on one line under it) and, under one heading, four cards of depth in the order of a run, each a label and one figure; the cards come in one after another, so up to four things move at once. The commit graph behind (data-kind note: not a counted label, graph or number; its dots and curves are parts of it) is one moving thing; it grows during sentence 1, when only the amount moves, and its dim overlaps only the heading and the first card, so at most four move at once (2.4 s: the amount and the graph dimming, the heading, the first card)"
         }
       },
       "n18": {
@@ -609,6 +672,11 @@
       "n00": [0.6, 1.2, 1.8, 2.5, 3.5, 4.5, 6.5, 8.0],
       "n03": [0.5, 2.0, 4.5],
       "n04": [0.5, 1.5, 3.5],
+      "n09": [0.3, 2.2, 3.6, 4.65, 5.5],
+      "n11": [0.3, 1.5, 4.9, 9.6, 11.6, 14.4],
+      "n12": [0.3, 1.0, 5.2, 7.6, 9.0],
+      "n13": [0.3, 4.0, 4.6, 7.6, 10.0, 10.4, 11.8],
+      "n14": [0.3, 2.2, 3.6, 5.0, 6.8, 9.6],
       "n06": [1.0, 4.0, 11.0],
       "n07": [0.5, 7.5, 12.0, 15.0],
       "n17": [0.5, 6.0, 8.5],
