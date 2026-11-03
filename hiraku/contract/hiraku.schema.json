@@ -443,6 +443,13 @@
                   "exclusiveMinimum": 0
                 }
               }
+            },
+            "hardpoints_mm": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/vec3"
+              },
+              "description": "Suspension pickup points of this support in design coordinates (mm), written by the code that builds the design (the K2 team's hardpoint keys, e.g. upper and lower arm inner pivots, tie rod inner point, damper_upper, damper_lower). The solvers and the screen read them from here, so there is one source."
             }
           }
         },
@@ -1267,7 +1274,7 @@
       }
     },
     "vector": {
-      "description": "An arrow to draw: a reaction, grip force or applied load.",
+      "description": "An arrow to draw: a reaction, grip force, applied load, wind, inertia, or the force the body receives at a suspension pickup (joint: at is '<support id>.<hardpoint key>').",
       "type": "object",
       "required": [
         "kind",
@@ -1282,7 +1289,8 @@
             "grip",
             "load",
             "wind",
-            "inertia"
+            "inertia",
+            "joint"
           ]
         },
         "at": {
