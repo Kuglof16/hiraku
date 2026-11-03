@@ -90,11 +90,16 @@ quantity = _q
 
 
 def min_frame_yield(design: Record) -> tuple[float, list[str], bool]:
-    """Smallest yield stress among the materials the members use (the safe side).
+    """Smallest yield stress among the materials the frame's members use (the safe side). A member
+    that belongs to another part of the design (a roll bar: part = that part's id) is that part's,
+    judged by its own test (R4), and left out; without such parts every member is the frame's.
 
     Returns (yield MPa, material names, all verified).
     """
-    used = {m["material"] for m in design.get("members", [])}
+    parts = {p["id"] for p in design.get("parts", [])}
+    members = design.get("members", [])
+    frame = [m for m in members if m.get("part") not in parts] or members
+    used = {m["material"] for m in frame}
     if not used:
         raise CatalogError("the design has no members, so the frame yield stress is unknown")
     missing = used - set(design.get("materials", {}))
