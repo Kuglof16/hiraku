@@ -94,7 +94,7 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n10", "n15",
+                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08", "n08b", "n09", "n10", "n11", "n12", "n13", "n14", "n15",
                                 "n16", "n17", "n17b", "n18", "labels", "story", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})

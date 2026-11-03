@@ -392,6 +392,25 @@ class CheckRun(unittest.TestCase):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
 
+    def test_round_limit_still_judges_the_latest_version(self):
+        # HK4: the round limit only ends revisions; the latest version is still judged (red is judged)
+        def stopped(state):
+            ev = self._finish(sample_events(), "stopped", "round_limit", state)
+            ev[0]["data"]["round_limit"] = 0  # reached with the one version
+            if state == "red":
+                ev = self._finish(self._red(ev), "stopped", "round_limit", "red")
+            return ev
+        self.assertIn("HK4_no_stop_before_judged", self.rules(stopped("pending")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red"), "warn"))
+
+    def test_comparison_where_picks_the_result(self):
+        ev = sample_events()
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_L0"  # the sample's result is at rail_L0
+        self.assertNotIn("comparison.values", self.rules(ev))
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_R1"
+        self.assertFlags(ev, "comparison.values")
+
     def test_stopped_without_stop_code_is_a_warning(self):
         ev = self._finish(sample_events(), "stopped", state="pending")
         self.assertIn("run.stop_code", self.rules(ev, "warn"))
@@ -597,10 +616,11 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(ev, "verdict.criterion")
 
     @staticmethod
-    def _shell_after_green(ev, hot_spot, element=None, then=None):
-        """A frame_shell analysis of R1 (ana-0002) after the sample's green tile, with the weld toe's
-        hot-spot stress and the element maximum; then an optional judgement.updated state after it."""
-        at = next(n for n, e in enumerate(ev) if e["kind"] == "judgement.updated") + 1
+    def _shell_after_green(ev, hot_spot, element=None, then=None, after="judgement.updated"):
+        """A frame_shell analysis of R1 (ana-0002) after the sample's green tile (or after the first
+        event of kind `after`), with the weld toe's hot-spot stress and the element maximum; then an
+        optional judgement.updated state after it."""
+        at = next(n for n, e in enumerate(ev) if e["kind"] == after) + 1
         started, finished = copy.deepcopy(by_kind(ev, "analysis.started")), copy.deepcopy(by_kind(ev, "analysis.finished"))
         for e in (started, finished):
             e["data"].update(analysis_id="ana-0002", tool="frame_shell")
@@ -628,29 +648,84 @@ class CheckRun(unittest.TestCase):
         # frame_shell is judged on the hot spot, not on its element maximum (contract, 判定に使う量)
         self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 100.0, element=300.0)))
 
-    def test_an_open_mismatch_holds_a_green_tile_unless_its_cause_is_safe_side(self):
-        def mismatch(cause=None):
-            ev = sample_events()
-            a = by_kind(ev, "analysis.finished")["data"]
-            a["results"].append({"quantity": "max_stress_corner", "value": 200.0, "unit": "MPa"})
-            c = copy.deepcopy(by_kind(ev, "comparison.recorded"))
+    @staticmethod
+    def _stages(ev, **stages):
+        """tool.checked for each named tool with its stage (tool_spec.stage), before the design."""
+        spec0 = json.loads((contract.EXAMPLES_DIR / "tool_spec.json").read_text(encoding="utf-8"))
+        for k, (name, stage) in enumerate(stages.items()):
+            ev.insert(1 + k, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "tool.checked",
+                              "agent": "system", "data": dict(copy.deepcopy(spec0), name=name, stage=stage)})
+        return renumber(ev)
+
+    def test_h5_heavier_tools_wait_for_the_lighter_load_cases(self):
+        # frame_shell (stage 3) after frame_static's R1 (stage 1) passed: allowed
+        ev = self._stages(self._shell_after_green(sample_events(), 100.0), frame_static=1, frame_shell=3)
+        self.assertNotIn("HK5_light_first", self.rules(ev))
+        # started before R1 had its verdict: HK5 denies it
+        early = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
+                             frame_static=1, frame_shell=3)
+        self.assertFlags(early, "HK5_light_first")
+        # tools of one stage may run side by side, and without stages every tool is stage 1
+        self.assertNotIn("HK5_light_first", self.rules(self._stages(
+            self._shell_after_green(sample_events(), 100.0, after="analysis.finished"), frame_static=1, frame_shell=1)))
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_after_green(sample_events(), 100.0,
+                                                                                after="analysis.finished")))
+
+    @staticmethod
+    def _compare_again(ev, n, analyzed, cause=None):
+        """After the sample's green tile: frame_static again (ana-000n, max_stress = analyzed) and its
+        comparison with the sample's prediction (cmp-000n), with an optional cause of it."""
+        at = next(k for k, e in enumerate(ev) if e["kind"] == "agent.stopped")
+        started, finished = copy.deepcopy(by_kind(ev, "analysis.started")), copy.deepcopy(by_kind(ev, "analysis.finished"))
+        c = copy.deepcopy(by_kind(ev, "comparison.recorded"))
+        aid, cid = f"ana-{n:04d}", f"cmp-{n:04d}"
+        started["data"]["analysis_id"] = aid
+        finished["data"].update(analysis_id=aid, results=[{"quantity": "max_stress", "value": analyzed, "unit": "MPa"}])
+        finished["data"].pop("fields", None)
+        pv, tol = c["data"]["predicted"]["value"], c["data"]["tolerance_rel"]
+        rel = (analyzed - pv) / abs(pv)
+        c["data"].update(comparison_id=cid, analysis_id=aid, analyzed={"value": analyzed, "unit": "MPa"},
+                         diff_abs=analyzed - pv, diff_rel=rel, status="match" if abs(rel) <= tol else "mismatch")
+        new = [started, finished, c]
+        if cause is not None:
+            new.append({"seq": 0, "ts": c["ts"], "t": c["t"], "run_id": RUN_ID, "kind": "cause.recorded",
+                        "agent": c["agent"], "data": dict({"cause_id": f"cause-{n - 1:04d}", "comparison_id": cid,
+                                                           "hypothesis": "the joint is stiffer than the beam model",
+                                                           "evidence": "local stress at the weld", "resolved": False,
+                                                           "resolved_by": None}, **cause)})
+        for e in new:
+            e["t"], e["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        ev[at:at] = new
+        return renumber(ev)
+
+    def test_a_stand_in_quantity_decides_when_the_judged_one_is_near_zero(self):
+        def near_zero(stand_in_matches):
+            ev = self._compare_again(sample_events(), 2, 150.0)  # a later mismatch of max_stress, no cause
+            crit = ev[0]["data"]["load_cases"][0]["criterion"]
+            crit.update(limit={"value": 1e9, "unit": "MPa"}, stand_in_quantity="stress_range")  # 150 < 1e-6 x 1e9
+            fin = next(e for e in ev if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0002")
+            c = copy.deepcopy(next(e for e in ev if e["kind"] == "comparison.recorded"
+                                   and e["data"]["comparison_id"] == "cmp-0002"))
             pv = c["data"]["predicted"]["value"]
-            c["data"].update(comparison_id="cmp-0002", quantity="max_stress_corner", status="mismatch",
-                             analyzed={"value": 200.0, "unit": "MPa"}, diff_abs=200.0 - pv, diff_rel=(200.0 - pv) / abs(pv))
-            at = next(n for n, e in enumerate(ev) if e["kind"] == "judgement.updated")
-            new = [c]
-            if cause is not None:
-                k = {"seq": 0, "ts": c["ts"], "t": c["t"], "run_id": RUN_ID, "kind": "cause.recorded",
-                     "agent": c["agent"], "data": dict({"cause_id": "cause-0001", "comparison_id": "cmp-0002",
-                                                        "hypothesis": "corner stress concentration",
-                                                        "evidence": "element max at the corner", "resolved": False,
-                                                        "resolved_by": None}, **cause)}
-                new.append(k)
-            ev[at:at] = new
+            got = pv if stand_in_matches else 2 * pv
+            fin["data"]["results"].append({"quantity": "stress_range", "value": got, "unit": "MPa"})
+            c["data"].update(comparison_id="cmp-0003", quantity="stress_range", analyzed={"value": got, "unit": "MPa"},
+                             diff_abs=got - pv, diff_rel=(got - pv) / abs(pv),
+                             status="match" if stand_in_matches else "mismatch")
+            ev.insert(ev.index(next(e for e in ev if e["kind"] == "agent.stopped")), c)
             return renumber(ev)
-        self.assertIn("judgement.state", self.rules(mismatch()))
-        self.assertIn("judgement.state", self.rules(mismatch({"safe_side": False})))
-        self.assertNotIn("judgement.state", self.rules(mismatch({"safe_side": True, "safe_side_reason": "on the safe side"})))
+        self.assertNotIn("judgement.state", self.rules(near_zero(True)))  # the stand-in matches
+        self.assertIn("judgement.state", self.rules(near_zero(False)))
+
+    def test_the_latest_comparison_of_the_judged_quantity_holds_a_green_tile(self):
+        # the limit is 156.7 MPa: 150 MPa is within it, but 21 % off the prediction (a mismatch)
+        self.assertIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0)))
+        self.assertIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0, {"safe_side": False})))
+        safe = {"safe_side": True, "safe_side_reason": "the prediction is on the safe side"}
+        self.assertNotIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0, safe)))
+        # a later match of the same load case and quantity replaces the open mismatch (contract 5e016ee)
+        ev = self._compare_again(self._compare_again(sample_events(), 2, 150.0), 3, 125.0)
+        self.assertNotIn("judgement.state", self.rules(ev))
 
     def test_comparison_quantity_is_the_result_compared(self):
         def compared(name, value=None):

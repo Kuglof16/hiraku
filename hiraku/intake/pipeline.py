@@ -76,7 +76,7 @@ def intake(
     slug: what the requirements file calls the product (default: `product`, else a name made of the sentence).
     """
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
-                           exclude=exclude)
+                           exclude=exclude, product=product)
     slug = slug or product or slug_for(want)  # slug: the file's name for the product when no file of its own lends values
     own: dict[str, Record] = {}
     if product and product in product_files():

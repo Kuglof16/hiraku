@@ -157,10 +157,10 @@ class CheckAllTest(unittest.TestCase):
         rules = knowledge.all_rules(knowledge.load_builtin())
         checks = rulecheck.check_all(rules, mini_design(), requirements(Q15=100, Q19=40))
         s = rulecheck.summarize(checks)
-        self.assertEqual(s["rules"], 28)
+        self.assertEqual(s["rules"], 29)
         self.assertEqual(s["hits"], sum(len(c["hits"]) for c in checks))
         line = rulecheck.summary_line(checks, rules)
-        self.assertIn("28 規則", line)
+        self.assertIn("29 規則", line)
         self.assertIn("AS-01", line)
 
 

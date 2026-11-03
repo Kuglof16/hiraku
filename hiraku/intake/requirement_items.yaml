@@ -258,6 +258,52 @@ items:
     applies_if: ride and self_propelled
     ask: default
 
+  - key: Q66
+    name: 手の操作部に掛かる力
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 300
+      unit: N
+      trust: 3
+      basis: >-
+        assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table "Steering control effort
+        requirements" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a
+        design load is the assumption)
+
+  - key: Q67
+    name: 手の操作部の握る点の動きの上限 (Q66 の力で)
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 5
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: the range where the feel and the position of the control do not change; no source
+
+  - key: Q68
+    name: 足の操作部に掛かる力
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 500
+      unit: N
+      trust: 1
+      basis: >-
+        UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check
+
+  - key: Q69
+    name: 足の操作部の踏む面の支えの動きの上限 (Q68 の力で)
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 5
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: small against the control's travel; no source
+
   - key: Q70
     name: 公道を走るか
     applies_if: ride and self_propelled
@@ -286,6 +332,52 @@ items:
     ask: confirm
     question: 電池の電圧は (60 V を超えると高電圧の扱いが要ります)。
 
+  - key: Q75
+    name: 乗員と部品に掛かる横の加速度
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 0.7
+      unit: g
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), "0.70 g or greater", p. 69024 (reasoning p. 68993); read
+        2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger
+
+  - key: Q76
+    name: 乗員と部品に掛かる前後の加速度
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 0.9
+      unit: g
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read
+        2026-11-03. The vehicle's own peak counts instead when it is larger
+
+  - key: Q77
+    name: 乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 725
+      unit: N
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03
+
+  - key: Q78
+    name: Q77 の力を除いたあとの点 R の永久の横の変形の上限
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 25
+      unit: mm
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03
+
   - key: Q80
     name: 材料と接合
     applies_if: always
@@ -302,6 +394,42 @@ items:
     name: 出荷の形
     applies_if: assembly
     ask: default
+
+  - key: Q86
+    name: 乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 500
+      unit: kg
+      trust: 3
+      basis: >-
+        assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026),
+        3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder
+
+  - key: Q87
+    name: 泥や石を放す踏面の範囲 (車軸の真上から前へ)
+    applies_if: ride and outdoor and self_propelled
+    ask: default
+    default:
+      value: 30
+      unit: deg
+      trust: 3
+      basis: >-
+        道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule
+        for other traffic, borrowed: applying it to the occupants is an assumption
+
+  - key: Q88
+    name: 泥や石を放す踏面の範囲 (車軸の真上から後ろへ)
+    applies_if: ride and outdoor and self_propelled
+    ask: default
+    default:
+      value: 50
+      unit: deg
+      trust: 3
+      basis: >-
+        the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond
+        this arc counts too (assumption)
 
   - key: Q90
     name: 悪路の走行距離

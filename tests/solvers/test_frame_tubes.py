@@ -38,6 +38,15 @@ class KnownAnswersTest(unittest.TestCase):
         self.assertEqual(contract.errors("tool_spec", spec), [])
         self.assertTrue(spec["usable"])
         self.assertTrue(tool.needs_mesh)
+        # applies_to and stage: always in describe(); in spec() when the contract's tool_spec has the fields
+        desc = tool.describe()
+        self.assertEqual(desc["applies_to"], ["space_frame_utv"])
+        self.assertEqual(desc["stage"], 3)
+        fields = contract.schema()["$defs"]["tool_spec"]["properties"]
+        self.assertEqual("applies_to" in spec, "applies_to" in fields)
+        self.assertEqual("stage" in spec, "stage" in fields)
+        if "applies_to" in spec:
+            self.assertEqual(spec["applies_to"], ["space_frame_utv"])
 
 
 class SpaceFrameK0Test(unittest.TestCase):
@@ -71,9 +80,15 @@ class SpaceFrameK0Test(unittest.TestCase):
 
     def test_a_ladder_is_refused_with_a_reason(self):
         lad = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
-        rec = FrameTubes().run(lad, {"load_case_id": "R1t", "params": {}}, PRED, COARSE)
+        tool = FrameTubes()
+        why = tool.applies(lad)
+        self.assertIn("立体フレーム (space_frame_utv) の設計に使います", why)
+        self.assertIn("frame_shell を使ってください", why)
+        rec = tool.run(lad, {"load_case_id": "R1t", "params": {}}, PRED, COARSE)
         self.assertEqual(rec["status"], "failed")
-        self.assertIn("no frame node", rec["error"])
+        self.assertEqual(rec["error"], why)
+        self.assertLess(rec["wall_time_s"], 10.0)  # refused before any meshing
+        self.assertIsNone(tool.applies(self.d))
 
 
 @SLOW

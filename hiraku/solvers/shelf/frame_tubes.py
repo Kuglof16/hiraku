@@ -157,11 +157,49 @@ class FrameTubes(BuiltinTool):
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
     needs_mesh = True
+    applies_to = ["space_frame_utv"]  # the kinds of design (hiraku.designgen ARCHETYPES keys) the tool is for
+    stage = 3  # contract tool_spec.stage: shell and solid finite elements
 
     def known_answers(self) -> list[Record]:
         return tube_known_answers()
 
+    def describe(self) -> Record:
+        return dict(super().describe(), applies_to=list(self.applies_to), stage=self.stage)
+
+    def spec(self) -> Record:
+        """The tool_spec; applies_to and stage only when the contract's tool_spec has those fields (it allows no
+        others)."""
+        from hiraku import contract
+
+        out = super().spec()
+        fields = contract.schema().get("$defs", {}).get("tool_spec", {}).get("properties", {})
+        if "applies_to" in fields:
+            out["applies_to"] = list(self.applies_to)
+        if "stage" in fields:
+            out["stage"] = self.stage
+        return out
+
+    def applies(self, design: Record) -> str | None:
+        """None for a design this tool is for: every support on a double wishbone (a K&C table with hardpoints)
+        whose six body-side pickups are frame nodes, as space_frame_utv builds them; else why not, saying what
+        the tool is for and what to use instead."""
+        nodes = [np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])]
+        missing = []
+        for s in design.get("supports", []):
+            hp = (s.get("suspension") or {}).get("hardpoints_mm") or {}
+            for k in tubes.MOUNT_KEYS:
+                if k not in hp or not any(float(np.linalg.norm(p - np.asarray(hp[k], float))) < 1e-6 for p in nodes):
+                    missing.append(f"{s.get('id')}.{k}")
+        if not design.get("supports") or missing:
+            where = f" (not at a frame node: {', '.join(missing[:4])}{', ...' if len(missing) > 4 else ''})" if missing else ""
+            return ("frame_tubes は立体フレーム (space_frame_utv) の設計に使います。この設計のサスペンションの取付点はフレームの"
+                    f"節にありません{where}。梯子フレームなら frame_shell を使ってください")
+        return None
+
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
+        why = self.applies(design)
+        if why:
+            raise LoadCaseError(why)
         design = on_board(design, load_case)
         g = g_factor(load_case)
         size = run_param(params, ELEMENT_SIZE)
@@ -319,7 +357,6 @@ def tube_frames(design: Record, r: dict, series) -> Record:
 
 T_JOINT_P_N = 100.0
 T_SIZE_MM = 10.0
-T_TOL = 0.10  # tie against shared nodes at the same read points (measured: see tube_known_answers)
 
 
 def t_joint_design() -> Record:
@@ -405,14 +442,20 @@ def tube_known_answers() -> list[Record]:
     case = (f"T joint of rect tubes (40x80x2.3 through tube held at both ends, 40x40x2.3 branch square on its side "
             f"wall), {T_JOINT_P_N:g} N down at the branch's end, {T_SIZE_MM:g} mm elements")
     fs, sol, hs = t_joint_tubes()
-    ref = t_joint_k1()
-    for side in ("host", "branch"):
-        a = tubes.hot_spot_max([h for h in hs if h["side"] == side])
-        b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
-        out.append(check_record(case, f"max_hot_spot_stress ({side} side)", abs(b["value"]),
-                                abs(a["value"]) if a else None, "MPa", T_TOL,
-                                "k1_shell.stress.hot_spots on the same joint meshed with shared nodes (frame_shell's rule "
-                                "and mesh); a cross-check of the tie model, not a closed form"))
+    for size, tol, what in ((T_SIZE_MM, 1e-4, "at this size every ring node falls on a host node, so the joint is "
+                                              "shared nodes as k1_shell's: a check of the read-out rule on the same mesh"),
+                            (5.0, 0.03, "at 5 mm 10 of the ring's 48 nodes are tied: a cross-check of the tie, not a "
+                                        "closed form")):
+        c = case if size == T_SIZE_MM else case.replace(f"{T_SIZE_MM:g} mm elements", f"{size:g} mm elements")
+        h_t = hs if size == T_SIZE_MM else t_joint_tubes(size)[2]
+        ref = t_joint_k1(size)
+        for side in ("host", "branch"):
+            a = tubes.hot_spot_max([h for h in h_t if h["side"] == side])
+            b = tubes.hot_spot_max([h for h in ref if h["side"] == side])
+            out.append(check_record(c, f"max_hot_spot_stress ({side} side)", abs(b["value"]),
+                                    abs(a["value"]) if a else None, "MPa", tol,
+                                    "k1_shell.stress.hot_spots on the same joint meshed with shared nodes (frame_shell's "
+                                    "rule and mesh); " + what))
     got, exp, s = branch_bending(fs, sol)
     out.append(check_record(case, f"branch top wall outer axial stress at s = {s:.0f} mm", exp, got, "MPa", 0.03,
                             "beam theory M c / I (I of the shell's mid-line section)"))

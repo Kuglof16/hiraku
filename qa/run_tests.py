@@ -1,11 +1,17 @@
 """Run the whole test suite in parallel processes: the same tests as `python -m unittest`.
 
-    python -m qa.run_tests [--jobs N] [--timeout S]
+    python -m qa.run_tests [--jobs N] [--timeout S] [--no-wait]
     HIRAKU_SLOW_TESTS=1 python -m qa.run_tests        # with the slow tests too
+
+One full suite runs on the PC at a time: a run first takes a machine-wide lock
+(an OS lock on hiraku-run-tests/suite.lock in the system temp folder, freed when
+its process ends), and while another run holds it, it waits and prints
+"waiting for <pid> (<worktree>, since hh:mm)". --no-wait runs at once without
+the lock (for emergencies; it warns about the overlap and uses 8 processes).
 
 Finds the tests the way `python -m unittest` does (discovery from the repository
 root), splits them by test class and runs each class with unittest in a process
-of its own, N at a time (default: the number of CPUs minus 2, at most 24). The
+of its own, N at a time (default: the number of CPUs minus 4, at least 8). The
 slowest classes of the last run (runs/test_times.json, kept locally) start
 first; without that file, the scripted runs, the K2 vehicle and the shell
 solver start first. The environment is passed on as it is.
@@ -111,6 +117,50 @@ def _take_lock(jobs: int) -> None:
     except OSError:
         return
     atexit.register(path.unlink, missing_ok=True)
+
+
+QUEUE_FILE = "suite.lock"  # in LOCK_DIR: one full suite at a time, an OS lock on its first byte
+QUEUE_INFO = "suite.json"  # in LOCK_DIR: who holds the lock (pid, root, since)
+POLL_S = 5.0
+
+
+def _lock_byte(f) -> bool:
+    """Take the OS lock on the file's first byte without waiting; False when another process holds it."""
+    try:
+        if os.name == "nt":
+            import msvcrt
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def take_queue(jobs: int, wait: bool = True, say=print):
+    """The machine-wide suite lock: the open lock file (keep it open while the suite runs; the OS frees
+    the lock when the process ends), or None when another run holds it and wait is False."""
+    LOCK_DIR.mkdir(exist_ok=True)
+    f = open(LOCK_DIR / QUEUE_FILE, "a+b")
+    shown = None
+    while not _lock_byte(f):
+        if not wait:
+            f.close()
+            return None
+        try:
+            holder = json.loads((LOCK_DIR / QUEUE_INFO).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            holder = {}
+        if holder.get("pid") != shown:
+            shown = holder.get("pid")
+            say(f"waiting for {holder.get('pid', '?')} ({holder.get('root', '?')}, since {holder.get('started', '?')})",
+                flush=True)
+        time.sleep(POLL_S)
+    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs,
+                                                   "started": time.strftime("%H:%M")}), encoding="utf-8")
+    return f
 
 
 def _overlap(rec: dict) -> str:
@@ -227,15 +277,29 @@ def _verdict(r: dict) -> str:
     return f"FAILED ({', '.join(counts)})" if counts else "OK"
 
 
+def _utf8_out() -> None:
+    """stdout and stderr in utf-8: failure texts hold characters the console's code page (cp932) lacks."""
+    for stream in (sys.stdout, sys.stderr):
+        if callable(getattr(stream, "reconfigure", None)):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["--worker"]:
         return worker(Path(argv[1]), argv[2:])
+    _utf8_out()
     ap = argparse.ArgumentParser(prog="python -m qa.run_tests", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--jobs", "-j", type=int, default=max(1, min(24, (os.cpu_count() or 4) - 2)),
-                    help="processes at a time (default: CPUs - 2, at most 24)")
+    ap.add_argument("--jobs", "-j", type=int, default=None,
+                    help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
     ap.add_argument("--timeout", type=float, default=1800.0, help="seconds one class may take (default 1800)")
+    ap.add_argument("--no-wait", action="store_true",
+                    help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
     args = ap.parse_args(argv)
+    if args.jobs is None:
+        args.jobs = 8 if args.no_wait else max(8, (os.cpu_count() or 8) - 4)
+    # kept open for the whole run: the lock is held while this file is open (the OS frees it at exit)
+    queue = None if args.no_wait else take_queue(args.jobs, say=lambda *a, **k: print(*a, file=sys.stderr, **k))
 
     start = time.perf_counter()
     before = _others()

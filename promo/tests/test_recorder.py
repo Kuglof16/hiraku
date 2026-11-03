@@ -180,6 +180,53 @@ class RecorderInBrowser(unittest.TestCase):
         for f in ("575", "1000", "3000"):
             self.assertAlmostEqual(r[f], 0, delta=0.3, msg=f)
 
+    HALF_LSB = 0.5 / 32768  # below this a sample is 0 in the 16-bit export
+
+    EDGE_TAKE_JS = """async (cutWhileSounding) => {
+      // raw preset (every stage an identity) so the export is the take itself:
+      // 0.3 s of room tone, 1 s of tone, then room tone to the stop, or the
+      // tone to the stop
+      const D = window.HirakuDSP;
+      const s = D.cloneSettings(D.PRESETS.raw);
+      s.out.normalize = false;
+      const fs = 44100, n = Math.round(1.8 * fs), x = new Float32Array(n);
+      let seed = 1;
+      const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5) * 0.002;
+      const toneEnd = cutWhileSounding ? n : Math.round(1.3 * fs);
+      for (let i = 0; i < n; i++) {
+        x[i] = noise();
+        if (i >= 0.3 * fs && i < toneEnd) x[i] += 0.3 * Math.sin(2 * Math.PI * 440 * i / fs);
+      }
+      const r = await D.processTake(x, fs, s);
+      const y = r.samples, ms = (t) => Math.round(t * fs / 1000);
+      const maxAbs = (a, b) => { let m = 0; for (let i = a; i < Math.min(b, y.length); i++) m = Math.max(m, Math.abs(y[i])); return m; };
+      const quarters = [0, 1, 2, 3].map((k) => maxAbs(y.length - ms(150) + k * ms(37.5), y.length - ms(150) + (k + 1) * ms(37.5)));
+      return { len: y.length, first: y[0], last: y[y.length - 1], start: r.trim.start, end: r.trim.end,
+               head: maxAbs(0, ms(1)), quarters, fade: D.EDGE, mid: maxAbs(ms(500), ms(600)),
+               srcEnd: n / fs };
+    }"""
+
+    def test_edges_fade_after_the_last_word(self):
+        r = self.page.evaluate(self.EDGE_TAKE_JS, False)
+        self.assertEqual(r["first"], 0)
+        self.assertLess(abs(r["last"]), self.HALF_LSB)
+        self.assertLess(r["head"], 0.002 * 0.05)  # the first ms is still near the start of the fade-in
+        # the export runs to the last word + hold + fade-out (1.3 + 0.02 + 0.15 s)
+        self.assertAlmostEqual(r["end"], 1.3 + r["fade"]["hold"] + r["fade"]["fadeOut"], delta=0.011)
+        # the fade-out falls through its four quarters
+        q = r["quarters"]
+        self.assertTrue(all(a >= b for a, b in zip(q, q[1:])), q)
+        self.assertGreater(r["mid"], 0.29)  # the voice itself is untouched
+
+    def test_edges_stop_before_the_take_stops(self):
+        r = self.page.evaluate(self.EDGE_TAKE_JS, True)
+        self.assertLess(abs(r["last"]), self.HALF_LSB)
+        # nothing of the render's tail or the stop: the export ends stopGuard before the take does
+        self.assertAlmostEqual(r["end"], r["srcEnd"] - r["fade"]["stopGuard"], delta=0.001)
+        q = r["quarters"]
+        self.assertGreater(q[0], 0.2)  # the fade-out moved onto the still-sounding tone
+        self.assertTrue(all(a >= b for a, b in zip(q, q[1:])), q)
+
     def test_old_settings_get_the_low_cut(self):
         s = self.page.evaluate("() => window.HirakuDSP.completeSettings({hp: {on: true, freq: 80}})")
         self.assertEqual(s["hum"], {"on": True, "cut": 100, "mains": 50, "harmonics": 10})

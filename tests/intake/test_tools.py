@@ -102,12 +102,26 @@ class PickDomainsToolTest(ToolsTestCase):
                    flags={"self_propelled": True, "liquid": True, "near_people": True, "standing": True},
                    speed_class="walk", reasons={"aero": "運ぶ飲み物がこぼれるかを見る"}, shown_names={"aero": "液体のこぼれ"})
         by = {p["domain"]: p for p in got["picks"]}
-        self.assertEqual(by["aero"]["reason"], "運ぶ飲み物がこぼれるかを見る")
+        self.assertTrue(by["aero"]["reason"].startswith("運ぶ飲み物がこぼれるかを見る"))  # kept; the code may add what cannot be run yet
         self.assertEqual(by["aero"]["shown_name"], "液体のこぼれ")
         self.assertIn("aero", [p["domain"] for p in got["picks"]])
         self.assertNotIn("aero", got["reasons_missing"])
         self.assertIn("crash", got["reasons_missing"])
         self.assertIn("next", got)
+
+    def test_the_same_pick_is_recorded_once_and_a_change_is_recorded_again(self):
+        if not ev.known(ev.DOMAINS_PICKED):
+            self.skipTest("the contract has no domains.picked")
+        ctx = make_ctx(self.root)
+        args = dict(want="机", flags={"standing": True, "cargo": True}, speed_class="static")
+        first = call("pick_domains", ctx, **args)
+        again = call("pick_domains", ctx, **args)
+        self.assertTrue(first["recorded"] and again["recorded"])
+        self.assertNotIn("unchanged", first)
+        self.assertIn("同じ", again["unchanged"])
+        self.assertEqual(self.kinds(ctx).count(ev.DOMAINS_PICKED), 1)
+        call("pick_domains", ctx, **{**args, "flags": {"standing": True, "cargo": True, "near_people": True}})
+        self.assertEqual(self.kinds(ctx).count(ev.DOMAINS_PICKED), 2)  # the flags changed
 
     def test_it_records_when_the_contract_has_the_kind(self):
         ctx = make_ctx(self.root)
@@ -159,6 +173,25 @@ class AskUserToolTest(ToolsTestCase):
         by = {r["key"]: r for r in got["answers"]}
         self.assertEqual(by["Q40"]["value"], 1700)  # the call's answers win over the file's
         self.assertEqual(by["Q03"]["source"], "hearing")  # from the file
+
+    def test_asking_again_records_the_questions_and_the_empty_answers_once(self):
+        if not (ev.known(ev.HEARING_ASKED) and ev.known(ev.HEARING_ANSWERED)):
+            self.skipTest("the contract has no hearing events")
+        ctx = make_ctx(self.root, product="care-bed")
+        count = lambda: (self.kinds(ctx).count(ev.HEARING_ASKED), self.kinds(ctx).count(ev.HEARING_ANSWERED))  # noqa: E731
+        first = call("ask_user", ctx)  # the defaults join the run's requirements: only Q30 and Q40 are still open
+        self.assertNotIn("unchanged", first)
+        self.assertEqual(count(), (1, 1))
+        second = call("ask_user", ctx)  # asks the two that are left: a change
+        self.assertNotIn("unchanged", second)
+        self.assertEqual(count(), (2, 2))
+        third = call("ask_user", ctx)  # the same two questions and the same (empty) answers: nothing new
+        self.assertIn(ev.HEARING_ASKED, third["unchanged"])
+        self.assertIn(ev.HEARING_ANSWERED, third["unchanged"])
+        self.assertEqual(count(), (2, 2))
+        done = call("ask_user", ctx, answers={"Q30": "driver", "Q40": 1700})
+        self.assertNotIn(ev.HEARING_ANSWERED, done.get("unchanged", ""))  # an answer is new
+        self.assertEqual(count()[1], 3)
 
     def test_the_answers_file_may_be_named_by_its_file_name_or_the_product(self):
         for i, name in enumerate(("care-bed.answers.yaml", "care-bed", "data/requirements/products/care-bed.answers.yaml")):
