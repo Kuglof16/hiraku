@@ -4071,10 +4071,9 @@
       }
     },
     "tool_input.revise_design": {
-      "description": "Agent-facing MCP tool for the designer only. hiraku.designgen rebuilds the design from the changed variables; the store makes the next version with parent_version and change_reason.",
+      "description": "Agent-facing MCP tool for the designer only. hiraku.designgen rebuilds the design from the changed variables and generator choices (changes, choices, or both); the store makes the next version with parent_version and change_reason.",
       "type": "object",
       "required": [
-        "changes",
         "reason"
       ],
       "additionalProperties": false,
@@ -4090,8 +4089,32 @@
         "reason": {
           "type": "string",
           "description": "which test failed and what the change does about it"
+        },
+        "choices": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "generator choice name -> chosen value (as in propose_design.choices; the choices a design's generator offers are in get_context design_choices)",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
         }
-      }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "changes"
+          ]
+        },
+        {
+          "required": [
+            "choices"
+          ]
+        }
+      ]
     },
     "scene_object": {
       "description": "Something in the test scene that is not the vehicle: a step, a road profile, a slope, the tilt table, a cone, a gate, a wall. Positions in mm in the road frame of the test (x along the road, z up), the vehicle starting at its design origin.",
