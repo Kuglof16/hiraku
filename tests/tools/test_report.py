@@ -34,6 +34,35 @@ class VerdictLineTest(unittest.TestCase):
         self.assertEqual(verdict_line(ok), "S5 tip_slope_angle 50 deg > 43.31 deg (余裕 15 %)")
 
 
+class PersonsChoiceTest(RunCase, unittest.TestCase):
+    """Run 17: only AS-01 was asked (ask_user rule_hits) and answered; the report must not say the person chose
+    for HU-02 or U1-04 too."""
+
+    def test_only_answered_rules_may_carry_the_persons_choice(self):
+        from unittest import mock
+
+        from hiraku.tools import report
+
+        with mock.patch.object(report, "answered_rules", return_value={"AS-01"}):
+            ok = ("規則の当たり HU-02 (seat_R・seat_L)、AS-01 と U1-04 (battery) は、設計の変数が無いため直せていません "
+                  "(AS-01 は ask_user で人が「設計を直す」を選択)。")
+            self.assertEqual(report.unanswered_choices(self.ctx, [ok]), [])
+            wide = "HU-02・AS-01・U1-04 は、人が「設計を直す」を選びました。"
+            self.assertEqual(report.unanswered_choices(self.ctx, [wide]), ["HU-02", "U1-04"])
+            self.assertEqual(report.unanswered_choices(self.ctx, ["規則U1-04は人の判断で外した"]), ["U1-04"])
+            self.assertEqual(report.unanswered_choices(self.ctx, ["U1-04 はまだ聞いていない"]), [])
+
+    def test_write_report_refuses_the_claim(self):
+        from unittest import mock
+
+        from hiraku.tools import report
+        from hiraku.tools.functions import write_report
+
+        with mock.patch.object(report, "answered_rules", return_value=set()):
+            with self.assertRaisesRegex(ToolError, "HU-02"):
+                write_report(self.ctx, {"summary": "HU-02 は人が設計を直すを選んだ", "next": []}, "lead")
+
+
 class ReportTest(RunCase, unittest.TestCase):
     frame_factor = (1.5, 1.8, 1.03)  # R1: rail_step_bending mismatches, then the rail joint is judged safe side
 

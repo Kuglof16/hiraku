@@ -77,6 +77,7 @@ description: まとめ役が依頼を受ける手順。分野を選ぶ → 足�
 
 - `ask_user(rule_hits=[{rule_id, parts, text, choices?}], wait_seconds=...)` で聞く。`text` は人に向けた 1 文 (規則・当たった部品・なぜ大事か)。`choices` は `revise_design` (設計を直す) と `drop_rule` (この規則をこの実行では外す)、書かなければ両方。質問は画面に出て、記録 (hearing.asked の rule_questions) に残る
 - 文で「聞きます」と言うだけで、`ask_user` を呼ばずに済ませない。呼んでいないのに「聞いた」と報告に書かない
+- 人が選んだと書けるのは、答え (`rule_answers`) のある規則だけ。同じ部品の別の規則や、あとで当たった規則に、その答えを広げない (`write_report` が断る)
 - 答えは `ask_user` の答え (hearing.answered の rule_answers) で届く。待つ間も、その規則に関わらない荷重条件は役に進めてもらい、その当たりの直しは設計役に渡さない
 - `drop_rule` なら `rule_check(disable=[規則の番号])` で当て直す。`revise_design` なら設計役に、規則の番号と部品を付けて渡す。時間が切れて答えが無いまま終えるときは、`write_report` の `next` に規則の番号を付けて「ask_user で聞いたが答えが無い」と書く
 
