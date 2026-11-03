@@ -39,6 +39,12 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - 動画用の要件の台本の運転は、2 回回すとバイトまで同じ (`--twice` で確かめた)。前は modal の道具の固有値計算 (scipy の `eigsh`) が乱数の始めのベクトルから解き、振動数が 1e-10 ほど違い、モードの形の向きが変わっていた。いまは始めのベクトルを固定し、モードの形の向きをそろえている。`--rel` は、乱数を使う道具がまた入ったときのためのもの
 - 基準の運転は `runs/baseline/<要件の名前>/`、`--check` と `--twice` の運転は `runs/compare/` に残る (`--baseline`・`--out` で変えられる)
 
+重い比べ (台本の運転をもう 1 回まるごと回す) は、main に入れる前に毎回回す `python -m unittest` には入れない。`HIRAKU_SLOW_TESTS=1` のときだけ `test_real_runs` が動画用の要件をもう 1 回回して比べる (全部の試験が 1 分半ほど延びる)。回すのは次のとき:
+
+- 台本の運転の通り道 (`hiraku/solvers/`・`hiraku/agent/`・`hiraku/store/`・`hiraku/tools/`・`hiraku/catalog/`・`data/catalog/`・`data/requirements/`) を変える取り込みのあと、取り込んだ main で 1 回。同じ回にいくつかの部署を取り込むなら、最後の 1 回だけでよい
+- 動画や `showcase/` に使う運転を記録する前に 1 回
+- コマンドはどちらか: `python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml`、または `HIRAKU_SLOW_TESTS=1 python -m unittest tests.verification.test_real_runs`
+
 ## 照合の考え方
 
 - 正解は閉じた式と手計算。`known_answers.py` の式は `tests/verification/test_known_answers.py` で別の道筋 (sympy で梁の微分方程式を解く、Kirsch の応力関数から応力を出して穴の縁と遠方の条件を確かめる、剛性法、差分、数値積分、Bredt のせん断流のモーメントと仕事) からもう一度出して確かめている

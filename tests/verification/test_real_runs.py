@@ -1,8 +1,9 @@
 """qa.check_run on real run records.
 
 1. The scripted run from the command line (`python -m hiraku run <requirements>
-   --scripted --runs <tmp>`, no API key), once the solvers are in. The video
-   requirements are run twice and the two runs compared byte for byte (qa.compare_runs).
+   --scripted --runs <tmp>`, no API key), once the solvers are in. With
+   HIRAKU_SLOW_TESTS=1 the video requirements are run a second time and the two
+   runs compared byte for byte (qa.compare_runs).
 2. The scripted plan driven with the design dept's fake solvers
    (tests/tools/fakes.py), so the store's output is checked before the real
    solvers land: a run that ends done, one stopped by a mismatch, one stopped
@@ -30,6 +31,7 @@ from ._solvers import tool_or_skip
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = sorted((ROOT / "data" / "requirements").glob("*.yaml"))
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # tests that add whole scripted runs
 
 
 def _errors(run: Path, recompute: bool = True) -> list[str]:
@@ -57,9 +59,9 @@ class ScriptedRunCommand(unittest.TestCase):
                 raise unittest.SkipTest(f"scripted run cannot start yet: {proc.stderr.strip()[-300:]}")
             folders = sorted(p for p in out.iterdir() if p.is_dir()) if out.is_dir() else []
             cls.runs[req.name] = (folders[0] if len(folders) == 1 else None, proc)
-        cls.again = None  # a second run of the video requirements, for determinism
+        cls.again = None  # a second run of the video requirements, for determinism (HIRAKU_SLOW_TESTS=1)
         video = ROOT / "data" / "requirements" / "offroad-4w-video.yaml"
-        if video.name in cls.runs and cls.runs[video.name][0] is not None:
+        if SLOW and video.name in cls.runs and cls.runs[video.name][0] is not None:
             try:
                 cls.again = compare_runs.scripted_run(video, Path(cls._tmp.name) / "again")
             except RuntimeError as e:
@@ -99,7 +101,11 @@ class ScriptedRunCommand(unittest.TestCase):
 
     def test_scripted_run_gives_the_same_records_twice(self):
         # Byte for byte apart from times, run id and cost (the modal tool starts its eigen
-        # solver from a fixed vector and signs its mode shapes).
+        # solver from a fixed vector and signs its mode shapes). One more scripted run, so
+        # only with HIRAKU_SLOW_TESTS=1 (qa/README.md says when).
+        if not SLOW:
+            self.skipTest("a second scripted run: set HIRAKU_SLOW_TESTS=1, or run "
+                          "python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml")
         if self.again is None:
             self.skipTest("no run of offroad-4w-video.yaml to repeat")
         self.assertNotIsInstance(self.again, RuntimeError, str(self.again))
