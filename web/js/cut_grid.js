@@ -7,8 +7,8 @@
 //
 // N04: one version (?version=, else the run's last), a version on the way. The crash
 // and NVH tiles are lit at times.crash_s / nvh_s while they are red; from
-// times.assembly_s the grid gives way to the assembly's box (n16.view, filled by
-// another page part later).
+// times.assembly_s the grid gives way to the assembly's box (n16.view), where the newest
+// assembly record's steps go in one after another to the end of the cut (assembly.js).
 // N15: the run's versions in order (up to ?version=), one after the other between
 // times.rounds_from_s and times.all_green_s; the last one from all_green_s to the end.
 // Nothing is coloured by hand: a last version that is not all green stays as it is.
@@ -18,6 +18,7 @@ import { clearOfBand, gridRects, rateLabel, squeeze } from "./compose.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { DOMAIN_JA, esc, fmt, quantityName, unitLabel } from "./labels.js";
 import { abscissa, channelsOf, extent, motionOf, xSeriesOf } from "./series.js";
+import { AssemblyStage, assemblyRecord } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 
 const $ = (id) => document.getElementById(id);
@@ -260,6 +261,19 @@ export class CutGrid {
       this.asmBox.dataset.box = "n04.assembly";
       Object.assign(this.asmBox.style, { left: `${V.x}px`, top: `${V.y}px`, width: `${V.w}px`, height: `${V.h}px`, background: this.colors.panel, border: `${st.border_px}px solid ${this.colors.rule}`, borderRadius: `${st.radius_px}px` });
       this.stage.append(this.asmBox);
+      // the assembly fast-forward (the drawing of A7 and N16): every step of the newest record
+      const rec = assemblyRecord(this.s);
+      if (rec) {
+        const canvas = document.createElement("canvas");
+        Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
+        this.asmBox.append(canvas);
+        const view = new Workbench3D(null, "zu", { renderer: this.renderer });
+        const stage = new AssemblyStage(view);
+        stage.setRecord(rec);
+        view.resize(V.w, V.h);
+        stage.fit(1.04, VIEWS.default);
+        this.asm = { canvas, view, stage, n: rec.steps.length, w: V.w, h: V.h };
+      }
     }
   }
 
@@ -479,8 +493,12 @@ export class CutGrid {
   resize(scale) {
     this.scale = scale;
     const areas = this.tiles.flatMap((t) => t.layers.map((l) => l.area).filter(Boolean));
-    const w = Math.max(1, ...areas.map((a) => a.w));
-    const h = Math.max(1, ...areas.map((a) => a.h));
+    const w = Math.max(1, this.asm?.w ?? 1, ...areas.map((a) => a.w));
+    const h = Math.max(1, this.asm?.h ?? 1, ...areas.map((a) => a.h));
+    if (this.asm) {
+      this.asm.canvas.width = Math.round(this.asm.w * scale);
+      this.asm.canvas.height = Math.round(this.asm.h * scale);
+    }
     this.renderer.setSize(Math.ceil(w * scale), Math.ceil(h * scale), false);
     for (const t of this.tiles) {
       for (const l of t.layers) {
@@ -497,6 +515,13 @@ export class CutGrid {
     // N04 gives way to the assembly's box at assembly_s
     const gridShown = this.name !== "n04" || t < T.assembly_s;
     if (this.asmBox) this.asmBox.style.visibility = gridShown ? "hidden" : "visible";
+    if (this.asm && !gridShown) {
+      // the whole order from assembly_s to the end of the cut
+      const a = this.asm;
+      a.stage.pose((a.n * (t - T.assembly_s)) / Math.max(1e-9, sp.duration_s - T.assembly_s));
+      a.stage.lineResolution(a.w, a.h);
+      a.view.renderInto(a.canvas.getContext("2d"), a.canvas.width, a.canvas.height, this.scale);
+    }
     this.header.style.visibility = gridShown ? "visible" : "hidden";
     const k = this.versionAt(t);
     const v = this.versions[k];
