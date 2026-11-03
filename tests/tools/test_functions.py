@@ -1097,6 +1097,21 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         self.assertEqual(entry["tool"], "made_r1")
         self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
 
+    def test_a_load_cases_own_builder_step_comes_before_its_tests(self):
+        """R8: one step serves R8-free and R8-push; R8-stress has its own (PLANS keyed by the load case id)."""
+        from hiraku.catalog.build import recipe_for
+        from hiraku.tools import plan
+
+        for_test = {"tool": "frame_static", "say": "the test's", "predictions": []}
+        for_case = {"tool": "frame_static", "say": "the load case's own", "predictions": []}
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        with mock.patch.object(plan, "plan_of", return_value=own),                 mock.patch.object(plan, "external_builders", return_value=({}, {}, {"R1": for_test, "R1-step100": for_case})):
+            steps = {s["load_case"]: s for s in plan.compose_plan(self.ctx)["steps"]}
+        self.assertEqual(steps["R1-step100"]["say"], "the load case's own")
+        lc = {"load_case_id": "R1-step250", "test_id": "R1"}
+        self.assertIs(recipe_for({"R1": for_test, "R1-step100": for_case}, lc), for_test)  # another case: the test's
+        self.assertIsNone(recipe_for({}, lc))
+
     def test_role_facing_text_points_at_the_section_not_at_python(self):
         from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role
 
