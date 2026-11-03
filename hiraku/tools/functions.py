@@ -734,6 +734,35 @@ def revised_after_cause(ctx: RunContext, pred: Record, ana: Record) -> bool:
     return first_cause is not None and pred_seq is not None and first_cause < pred_seq
 
 
+def _per_place(ctx: RunContext, ana: Record, pred: Record, crit: Record | None, judged: str | None,
+               where: str | None, result_quantity: str | None) -> tuple[Record, str | None, str]:
+    """docs/contract.md 場所ごとの予測 (contract 3b17139): (the prediction to compare, the place, the result
+    name to pick). A prediction named <quantity>.<place> of the judged quantity is compared with the result at
+    that place. A whole prediction of the judged quantity is compared with the prediction of the place where
+    the analysis's failing end is (same version and load case, the newest), when there is one."""
+    name = result_quantity or pred["quantity"]
+    if crit is None or result_quantity:
+        return pred, where, name
+    quantities = {crit["quantity"], judged}
+    base, _, place = pred["quantity"].partition(".")
+    if place and base in quantities:  # the result named <q>.<place>, else <q> at that place
+        named = any(r["quantity"] == pred["quantity"] for r in ana.get("results", []))
+        return pred, place, pred["quantity"] if named else base
+    if where is not None or pred["quantity"] not in quantities:
+        return pred, where, name
+    hits = [r for r in ana.get("results", []) if r["quantity"] == judged and r.get("unit") == crit["limit"]["unit"]]
+    worst = failing_end(hits, crit["op"]) if hits else None
+    if worst is None or not worst.get("where"):
+        return pred, where, name
+    want = f"{judged}.{worst['where']}"
+    own = [p for p in ctx.store.records("prediction", pred["design_version"])
+           if p["load_case_id"] == pred["load_case_id"] and p["quantity"] in (want, f"{crit['quantity']}.{worst['where']}")
+           and (p["prediction_id"] in ana["prediction_ids"] or revised_after_cause(ctx, p, ana))]
+    if not own:
+        return pred, where, name
+    return own[-1], worst["where"], judged
+
+
 def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Compare a prediction with an analysis result. A match against a load case
     with a criterion also makes the verdict and updates the domain's judgement.
@@ -768,12 +797,14 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         )
     lc = ctx.load_case(pred["load_case_id"])
     crit = lc.get("criterion")
-    res = _pick_result(ana, args.get("result_quantity") or pred["quantity"], crit, pred["quantity"], where)
     # the result a verdict may come from (docs/contract.md 判定に使う量: frame_shell judges max_stress on
     # max_hot_spot_stress, never on its element max_stress)
     judged = judged_quantity(ctx, ana["tool"], crit["quantity"]) if crit else None
+    pred, where, name = _per_place(ctx, ana, pred, crit, judged, where, args.get("result_quantity"))
+    res = _pick_result(ana, name, crit, pred["quantity"].partition(".")[0], where)
+    base = pred["quantity"].partition(".")[0]  # a per-place prediction's quantity without its place
     for_verdict = bool(crit) and (res["quantity"] == judged
-                                  or (judged == crit["quantity"] and pred["quantity"] == crit["quantity"]))
+                                  or (judged == crit["quantity"] and base == crit["quantity"]))
     if for_verdict and where is not None:  # a verdict only on the failing end over all places, never on one chosen
         worst = failing_end([r for r in ana["results"] if r["quantity"] == res["quantity"]
                              and r["unit"] == res["unit"]], crit["op"])
