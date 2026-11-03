@@ -1,0 +1,61 @@
+{
+  "mesh_id": "mesh-0001",
+  "design_version": 1,
+  "element_type": "shell",
+  "formulation": "MITC4",
+  "element_size_mm": 10.0,
+  "nodes_mm": [
+    [
+      0,
+      330,
+      340
+    ],
+    [
+      10,
+      330,
+      340
+    ],
+    [
+      20,
+      330,
+      340
+    ],
+    [
+      0,
+      330,
+      350
+    ],
+    [
+      10,
+      330,
+      350
+    ],
+    [
+      20,
+      330,
+      350
+    ]
+  ],
+  "elements": [
+    [
+      0,
+      1,
+      4,
+      3
+    ],
+    [
+      1,
+      2,
+      5,
+      4
+    ]
+  ],
+  "element_member": [
+    "rail_L_FA",
+    "rail_L_FA"
+  ],
+  "member_thickness_mm": {
+    "rail_L_FA": 2.3
+  },
+  "notes": "shape example: two elements of the left rail's outer wall"
+}
