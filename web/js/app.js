@@ -8,12 +8,13 @@
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
 //                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DOMAINS, DOMAIN_JA, DRIVER_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVER_JA, PICK_DEMO_ID, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -32,6 +33,9 @@ import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, v
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
+const DEV = params.get("dev") === "1";
+const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
@@ -280,7 +284,7 @@ async function draftStart(mode) {
   draft.confirm = false;
   await draftCall("走らせています…", async () => {
     const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
-    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
   });
 }
 
@@ -459,11 +463,13 @@ function renderTop(s) {
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
+    `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
     // a run this screen started can be stopped while it goes
     (ui.stoppable && ui.stoppable === s.runId && s.status === "running"
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
-      : `<a class="launch-link" href="?list=1" title="台本か Claude で、新しく走らせる">▶ その場で走らせる</a>`);
+      : DEV
+        ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
+        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
 function renderChips(s, lcId) {
@@ -1467,14 +1473,31 @@ async function showRunList(message = "", runs = null) {
       message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
     }
   }
+  listRuns = runs;
+  box.classList.toggle("plain", !DEV);
+  // what drove the run (project.driver); nothing for older records without it
+  const drvOf = (r) => (DRIVER_JA[r.driver] ? ` <span class="drv" data-driver="${esc(r.driver)}">${DRIVER_JA[r.driver]}</span>` : "");
+  if (!DEV) {
+    // for people: the want, done or going, and one verb; the run ids and the contract sample under ?dev=1
+    const row = (r) => {
+      const href = `?run=${encodeURIComponent(r.run_id)}`;
+      return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want || "(依頼の文なし)")}${drvOf(r)}</td><td>${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
+    };
+    const table = (title, list) => (list.length ? `<h3>${title}</h3><table>${list.map(row).join("")}</table>` : "");
+    box.innerHTML =
+      `<h2>HIRAKU でできること</h2><p class="lead">作りたいものを書くと、Claude が確かめる解析を選び、計算して、設計を直します。</p>` +
+      `${message ? `<p class="err">${esc(message)}</p>` : ""}<div id="launch"></div>` +
+      table("保存した記録", runs.filter((r) => r.saved)) +
+      table("この PC で実行した記録", runs.filter((r) => !r.saved && !r.sample));
+    renderLaunch();
+    return;
+  }
   const row = (r) => {
     const st = r.sample ? "形の見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
-    const href = `?run=${encodeURIComponent(r.run_id)}`;
+    const href = withDev(`?run=${encodeURIComponent(r.run_id)}`);
     const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
     const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
-    // what drove the run (project.driver); nothing for older records without it
-    const drv = DRIVER_JA[r.driver] ? ` <span class="drv" data-driver="${esc(r.driver)}">${DRIVER_JA[r.driver]}</span>` : "";
-    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drv}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+    return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drvOf(r)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
   };
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
@@ -1492,6 +1515,7 @@ async function showRunList(message = "", runs = null) {
 // has the API key (the screen never asks for it), and only after its cost limit
 // was shown and confirmed.
 let launchConfirm = null; // the requirements file waiting for the Claude confirmation
+let listRuns = []; // /api/runs as the run list last showed it (the recommendation picks from it)
 
 async function renderLaunch(message = "") {
   const box = $("launch");
@@ -1500,7 +1524,10 @@ async function renderLaunch(message = "") {
   try {
     info = await (await fetch("/api/launch", { cache: "no-store" })).json();
   } catch (e) {
-    box.innerHTML = "";
+    info = { available: false };
+  }
+  if (!DEV) {
+    box.innerHTML = plainLaunch(info, message);
     return;
   }
   if (info.available === false) {
@@ -1516,18 +1543,18 @@ async function renderLaunch(message = "") {
     .join("");
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(rid)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
+  const running = busy ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
   // without the key in the server's window, only scripted runs and replays are there (the key is never asked for)
   const keyless = info.claude_ready
     ? ""
-    : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  const fresh = `<p><a class="new-request" href="?new=1">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+    : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは決まった手順の再現と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
+  const fresh = `<p><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
   box.innerHTML =
     demoSection(info, busy) +
     `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
-// 台本で / Claude で走らせる for one requirements file r ({file, cost_limit_usd, round_limit}).
+// 決まった手順で再現 / Claude で走らせる (?dev=1) for one requirements file r ({file, cost_limit_usd, round_limit}).
 // ask: what launchConfirm holds while this row's Claude confirmation is open. A Claude run
 // needs the key in the server's window, and the cost limit is shown and confirmed first.
 // r.modes (when the demo runs list the file): only those buttons. r.estimate_usd (a demo row):
@@ -1553,7 +1580,7 @@ function runButtons(info, r, ask, busy) {
     claude = `<button data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>Claude で走らせる (${label})</button>${overNote}`;
   }
   const scripted = modes.includes("scripted")
-    ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>`
+    ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>決まった手順で再現 (Claude なし)</button>`
     : "";
   return `<div class="lbtns">${scripted}${claude}</div>`;
 }
@@ -1585,12 +1612,119 @@ function demoSection(info, busy) {
     } else {
       left = `<div class="rid">${esc(d.want)} (products/${esc(d.product)}.yaml)</div>`;
       right =
-        `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">A1 で依頼する</a>` +
+        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">A1 で依頼する</a>` +
         `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
     }
     return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}</div>${right}</div>`;
   });
   return `<h3>デモの実行</h3><div class="demo-runs">${rows.join("")}</div>`;
+}
+
+// ---- the run list for people (no ?dev=1) --------------------------------------
+// One line per row saying what it lets you do, one verb per button: 見る (replay a record),
+// 再現する (the scripted run, no Claude), 実行する (a Claude run, after its confirmation),
+// 試す (A1 with the request written in). The files, cut numbers, cost lines and why a button
+// cannot be pressed are inside each row's くわしく, or under ?dev=1.
+const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」
+const KEYLESS_JA = "Claude で実行するには、API キーを設定して HIRAKU を起動し直してください。";
+const usdShort = (v) => (Number.isInteger(v) ? `$${v}` : fmtUsd(v));
+
+// The cost limits of the demo rows a Claude run can start from (a run stops at its file's limit), as a range.
+function claudeLimitRange(info) {
+  const lims = (info.demo_runs ?? [])
+    .filter((d) => d.file && !d.error && (d.modes ?? []).includes("claude") && typeof d.cost_limit_usd === "number")
+    .map((d) => d.cost_limit_usd);
+  if (!lims.length) return "";
+  const lo = Math.min(...lims);
+  const hi = Math.max(...lims);
+  return lo === hi ? `1 回 ${usdShort(lo)} まで` : `1 回 ${usdShort(lo)}〜${String(usdShort(hi)).slice(1)} まで`;
+}
+
+// おすすめ: the server's default saved run (else the newest saved one) as a replay; with no saved run,
+// the scripted run of the demo row PICK_DEMO_ID. Nothing when neither is there.
+function pickHtml(info, busy) {
+  const saved = listRuns.filter((r) => r.saved && r.finished);
+  const run = saved.find((r) => r.default) ?? saved[0];
+  const head = `<span class="tag">おすすめ</span>`;
+  if (run)
+    return (
+      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます (無料・すぐ)` +
+      `${run.want ? `<div class="sub">依頼: ${esc(run.want)}</div>` : ""}</div><a class="go" href="?run=${encodeURIComponent(run.run_id)}">見る</a></div>`
+    );
+  const d = (info.demo_runs ?? []).find((r) => r.id === PICK_DEMO_ID && r.file && !r.error && (r.modes ?? []).includes("scripted"));
+  if (!d) return "";
+  return (
+    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します (無料・Claude なし)` +
+    `${d.want ? `<div class="sub">依頼: ${esc(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
+  );
+}
+
+// The ways to run, once above the rows (the verbs on the buttons below), and the one line without the key.
+function waysHtml(info) {
+  const range = claudeLimitRange(info);
+  const claude = info.available === false ? "" : `<li><span class="vb claude">実行する</span>Claude で新しく実行する (Anthropic の API キーが要ります${range ? `・${range}` : ""})</li>`;
+  const scripted = info.available === false ? "" : `<li><span class="vb">再現する</span>決まった手順で再現する (無料・Claude なし)</li>`;
+  const keyless = info.available === false || info.claude_ready ? "" : `<p class="keyless">${KEYLESS_JA}<a class="readme" href="${README_RUN}" target="_blank" rel="noopener">README の「動かし方」</a></p>`;
+  return `<ul class="ways"><li><span class="vb">見る</span>記録を再生する (無料・すぐ)</li>${scripted}${claude}</ul>${keyless}`;
+}
+
+// What ?dev=1 shows for a demo row, inside its くわしく.
+function demoDetail(d) {
+  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+  const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
+  const lines = [`<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>`];
+  if (d.shows) lines.push(`<div class="shows">${esc(d.shows)}</div>`);
+  if (d.error) lines.push(`<div class="err">使えない: ${esc(d.error)}</div>`);
+  if (d.file) {
+    lines.push(`<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}${overLimit(d) ? " (見込みが上限を超えるので、上限で止まる)" : ""}</div>`);
+    lines.push(`<div class="rid">${esc(d.file)}</div>`);
+  } else if (d.product) lines.push(`<div class="rid">${esc(d.want ?? "")} (products/${esc(d.product)}.yaml)</div>`);
+  return lines.join("");
+}
+
+// 再現する / 実行する for a demo file row; the Claude confirmation shows the cost limit before anything starts.
+function plainButtons(info, d, busy) {
+  const modes = d.modes ?? ["scripted", "claude"];
+  const ask = `demo:${d.id}`;
+  const file = esc(d.file);
+  const scripted = modes.includes("scripted") ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>再現する</button>` : "";
+  let claude = "";
+  if (!modes.includes("claude")) claude = "";
+  else if (!info.claude_ready) claude = `<button class="claude" disabled>実行する</button>`;
+  else if (launchConfirm === ask) {
+    const est = typeof d.estimate_usd === "number" ? `見込みは ${fmtUsd(d.estimate_usd)}、` : "";
+    const over = overLimit(d) ? "見込みが上限を超えるので、途中で止まります。" : "";
+    claude =
+      `<span class="confirm">Claude で実行します。${est}費用の上限は ${fmtUsd(d.cost_limit_usd)} で、そこで止まります。${over}実行しますか？</span>` +
+      `<button class="go claude" data-launch="claude" data-req="${file}">実行する</button><button data-launch-cancel="1">やめる</button>`;
+  } else claude = `<button class="claude" data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>実行する</button>`;
+  return `<div class="lbtns">${scripted}${claude}</div>`;
+}
+
+function plainLaunch(info, message) {
+  const busy = !!info.running;
+  const pick = pickHtml(info, busy);
+  if (info.available === false) return pick + waysHtml(info);
+  const rid = info.running?.run_id ?? "";
+  const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
+  const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
+  const rows = info.demo_runs_error
+    ? [`<p class="err">デモの一覧を読めませんでした</p>`]
+    : (info.demo_runs ?? []).map((d) => {
+        const line = DEMO_LINE_JA[d.id] ?? (d.title || d.id);
+        let btns;
+        if (d.error) btns = `<div class="lbtns"><span class="why">いまは使えません</span></div>`;
+        else if (d.file) btns = plainButtons(info, d, busy);
+        else btns = `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">試す</a></div>`;
+        return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${esc(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
+      });
+  const fresh =
+    `<div class="lreq fresh"><div class="dline">自分で頼む — 作りたいものを文で書いて、はじめから頼みます</div>` +
+    `<div class="lbtns"><a class="new-request" href="?new=1">書く</a></div></div>`;
+  return (
+    pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
+    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}${fresh}</div>`
+  );
 }
 
 async function launch(file, mode) {
@@ -1600,7 +1734,7 @@ async function launch(file, mode) {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
     if (!res.ok) throw new Error(out.error ?? String(res.status));
-    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
   } catch (e) {
     renderLaunch(`走らせられなかった: ${e.message ?? e}`);
   }
