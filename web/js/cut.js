@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
+import { CutN04, CutN15 } from "./cut_grid.js";
 import { esc, fmt, quantityName, resultText, unitLabel } from "./labels.js";
 import { abscissa, channelsOf, extent, lerpAt, motionOf, nearestAt, xSeriesOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
@@ -687,7 +688,8 @@ class CutN02 {
   }
 }
 
-const CUTS = { n05: Cut, n01: CutN01, n02: CutN02 };
+// N04 and N15 (the grid of all domains and assembly) are in cut_grid.js.
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15 };
 
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;
