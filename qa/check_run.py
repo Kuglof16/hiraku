@@ -63,8 +63,7 @@ their basis. What it looks at:
   nodes, no node twice in an element, one element_member per element and a
   thickness for each; warnings for nodes in no element and members not in the
   design. A field that names a mesh: the mesh was created before the analysis
-  record (analyze may make it after analysis.started, before the tool runs), is
-  of the analysis' version, and per_element / per_mesh_node have one
+  started, is of the analysis' version, and per_element / per_mesh_node have one
   value per element / node
 - --recompute: each prediction value is reproduced by K0 from its formula and
   inputs (needs hiraku.solvers.formula_registry())
@@ -729,7 +728,7 @@ class RunChecker:
     def check_meshes(self) -> None:
         """A version's shell mesh (one per version): elements name nodes it has, each element
         has its member, each member its thickness; and the fields that name a mesh give one
-        value per element or node of a mesh of their version, created before the analysis record."""
+        value per element or node of a mesh of their version, created before the analysis ran."""
         per_version: dict[int, str] = {}
         for mid, (i, m) in self.recs["mesh"].items():
             w = self.where_of[i]
@@ -766,7 +765,7 @@ class RunChecker:
             if strangers:
                 self.warn("mesh.members", w, f"{mid}: {', '.join(strangers[:5])} not in design v{v}")
         for aid, (i, a) in self.recs["analysis"].items():
-            w = self.where_of[i]  # analyze may make the mesh after analysis.started, before the tool runs
+            w, ran = self.where_of[i], self.started.get(aid, i)
             for k, f in enumerate(a.get("fields") or []):
                 if not isinstance(f, dict) or "mesh_id" not in f:
                     continue
@@ -775,8 +774,8 @@ class RunChecker:
                 if rec is None:
                     self.error("field.mesh", w, f"{tag} names {mid}, which was never created")
                     continue
-                if rec[0] > i:
-                    self.error("field.mesh", w, f"{tag} names {mid}, created after the analysis ({self.where_of[rec[0]]})")
+                if rec[0] > ran:
+                    self.error("field.mesh", w, f"{tag} names {mid}, created after the analysis started ({self.where_of[rec[0]]})")
                 m = rec[1]
                 if m.get("design_version") != a.get("design_version"):
                     self.error("field.mesh", w, f"{tag} names {mid} of version {m.get('design_version')} "

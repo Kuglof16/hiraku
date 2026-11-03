@@ -864,8 +864,6 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._mesh(field={"kind": "displacement", "unit": "mm", "per_mesh_node": [0.1] * 5}), "field.mesh")
         self.assertFlags(self._mesh(field={"per_element": [80.0, 95.5], "mesh_id": "mesh-0002"}), "field.mesh")
         self.assertFlags(self._mesh(field={"per_element": [80.0, 95.5]}, after="analysis.finished"), "field.mesh")
-        # analyze makes the version's mesh after analysis.started, before the tool runs
-        self.assertEqual(self.rules(self._mesh(field={"per_element": [80.0, 95.5]}, after="analysis.started")), set())
 
     def test_series_axis_and_values(self):
         def with_series(series):
