@@ -9,8 +9,11 @@ investigate a cause: it writes one only for a mismatch its plan names
 (expected_mismatch, with the cause written in the plan and its source); any
 other mismatch stops the run. Likewise the safe-side judgement of a
 mismatch is the plan's; record_cause still checks the direction of the
-numbers. When a judgement comes out red, the plan's next `revise` entry is
-the designer's revise_design, and every step runs again on the new version.
+numbers. The steps of a version run stage by stage (HK5, light first: the
+stage of each step's tool, shelf.tool_stage, layout and rules first); when a
+load case of a stage comes out red, the plan's next `revise` entry is the
+designer's revise_design before the next stage, and the new version starts
+again from stage 0.
 """
 
 from __future__ import annotations
@@ -23,14 +26,15 @@ from hiraku import contract
 from hiraku.agent import inbox
 from hiraku.contract import layout
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
-from hiraku.catalog import REPO_ROOT
+from hiraku.catalog import REPO_ROOT, is_beyond
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, rule_check, write_report)
-from hiraku.tools.judge import verdict_line
+from hiraku.tools.judge import latest_verdicts, verdict_line
 from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
+from hiraku.tools.shelf import STAGE_NAMES_JA, tool_stage
 
 Record = dict[str, Any]
 
@@ -119,8 +123,9 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
     _check_stop(ctx)
+    denial = rules.check_call(ctx, "analyze", args)
     if _deny(ctx, agent, "analyze", args):
-        raise Stop(f"a hook rule stopped analyze on {lc['load_case_id']}")
+        raise Stop(f"a hook rule ({denial.rule}) stopped analyze on {lc['load_case_id']}: {denial.reason}")
     ana = analyze(ctx, args, agent)
     if ana["status"] != "ok":
         _say(ctx, agent, lc, f"解析が失敗しました: {ana.get('error', '')}")
@@ -185,6 +190,30 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         _say(ctx, agent, lc, expected.get("stop") or "この先の予測は台本にありません。ここで止めます")
         raise Stop(f"the plan has no next prediction after {hit['comparison_id']}")
     _run_step(ctx, lc, agent, tool, retry)
+
+
+def stage_groups(ctx: RunContext, steps: list[Record]) -> list[tuple[int, list[Record]]]:
+    """The steps grouped by stage, lowest first (HK5). A step's stage is its tool's (shelf.tool_stage),
+    and never lower than that of an earlier step of a load case feeding it, so upstream goes first;
+    within a stage the steps keep their order (compose_plan: upstream first)."""
+    keyed: list[tuple[int, Record]] = []
+    for step in steps:
+        ups = {u["load_case_id"] for u in ctx.upstream_of(step["load_case"])}
+        k = max([tool_stage(ctx, step["tool"])] + [kk for kk, st in keyed if st["load_case"] in ups])
+        keyed.append((k, step))
+    return [(k, [st for kk, st in keyed if kk == k]) for k in sorted({kk for kk, _ in keyed})]
+
+
+def stage_reds(ctx: RunContext, group: list[Record]) -> list[Record]:
+    """The failing verdicts of this version for the load cases of one stage's steps; cases past the
+    limit (catalog.is_beyond) are meant to fail and do not count."""
+    ids = {st["load_case"] for st in group}
+    return [v for lc_id, v in latest_verdicts(ctx, ctx.version).items()
+            if lc_id in ids and not v["pass"] and not is_beyond(ctx.load_case(lc_id))]
+
+
+def _stage_ja(n: int) -> str:
+    return f"段 {n} ({STAGE_NAMES_JA.get(n, '?')})"
 
 
 def _red_tiles(ctx: RunContext) -> list[Record]:
@@ -314,27 +343,65 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **NO_MODEL})
             started.append(agent)
 
+    def revise(text: str) -> None:
+        _check_stop(ctx)
+        rev = revisions.pop(0)
+        start("designer")
+        s.emit("agent.said", agent="designer", text=rev.get("say") or text)
+        try:
+            out = revise_design(ctx, {"changes": rev["changes"], "reason": rev["reason"]}, "designer")
+        except ToolError as e:
+            s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+            raise Stop(f"revise_design refused: {e}") from None
+        s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、段 0 から全部の荷重条件をやり直します")
+
+    def can_revise() -> bool:
+        return bool(revisions) and ctx.version - 1 < ctx.project["round_limit"]
+
+    held_back: tuple[int, list[Record]] | None = None
     try:
         _check_stop(ctx)  # pressed while the tools were checked or the first version was built
         while True:
-            for step in plan["steps"]:
+            revised, held_back = False, None
+            for stage, group in stage_groups(ctx, plan["steps"]):
                 _check_stop(ctx)
-                lc = ctx.load_case(step["load_case"])
-                agent = ctx.owner(lc["load_case_id"])
-                start(agent, lc["domain"] if agent.startswith("cae.") else None)
-                if not showed_hk1:
-                    _deny(ctx, agent, "analyze", {"tool": step["tool"], "load_case_id": lc["load_case_id"],
-                                                  "prediction_ids": []})
-                    showed_hk1 = True
-                try:
-                    _run_step(ctx, lc, agent, step["tool"], step)
-                except (ToolError, ScriptError) as e:
-                    _say(ctx, agent, lc, f"止まりました: {e}")
-                    raise Stop(str(e)) from None
-                if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
-                    _drop_knowledge(ctx, drop)
-                    _answer_drop(ctx, drop)
-                    dropped = True
+                s.emit("agent.said", agent="lead", text=f"版 {ctx.version}、{_stage_ja(stage)}の荷重条件を確かめます: "
+                       + "、".join(dict.fromkeys(st["load_case"] for st in group)))
+                for step in group:
+                    _check_stop(ctx)
+                    lc = ctx.load_case(step["load_case"])
+                    agent = ctx.owner(lc["load_case_id"])
+                    start(agent, lc["domain"] if agent.startswith("cae.") else None)
+                    if not showed_hk1:
+                        _deny(ctx, agent, "analyze", {"tool": step["tool"], "load_case_id": lc["load_case_id"],
+                                                      "prediction_ids": []})
+                        showed_hk1 = True
+                    try:
+                        _run_step(ctx, lc, agent, step["tool"], step)
+                    except (ToolError, ScriptError) as e:
+                        _say(ctx, agent, lc, f"止まりました: {e}")
+                        raise Stop(str(e)) from None
+                    if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
+                        _drop_knowledge(ctx, drop)
+                        _answer_drop(ctx, drop)
+                        dropped = True
+                reds = stage_reds(ctx, group)
+                if not reds:
+                    continue
+                named = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in reds)
+                if can_revise():
+                    s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。"
+                                                            f"重い段に進む前に、設計役が直します")
+                    names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
+                    revise(f"{names}が赤なので、設計を直します")
+                    revised = True
+                    break
+                held_back = (stage, reds)
+                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。設計を直す手が"
+                                                        f"残っていないので、重い段には進みません (HK5)")
+                break
+            if revised:
+                continue
             _check_stop(ctx)  # what was put in the inbox during the last step
             if plan.get("rule_check"):  # the knowledge rules on this version's parts
                 who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
@@ -343,20 +410,12 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 checked = _check_rules(ctx, who)
                 if checked and plan.get("ask_on_hits") and not asked:
                     asked = _ask_on_hits(ctx, checked)
-            reds = _red_tiles(ctx)
-            if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
+            if held_back is not None:
                 break
-            _check_stop(ctx)
-            rev = revisions.pop(0)
-            start("designer")
-            names = "、".join(contract.DOMAIN_NAMES_JA[j["domain"]] for j in reds)
-            s.emit("agent.said", agent="designer", text=rev.get("say") or f"{names}が赤なので、設計を直します")
-            try:
-                out = revise_design(ctx, {"changes": rev["changes"], "reason": rev["reason"]}, "designer")
-            except ToolError as e:
-                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
-                raise Stop(f"revise_design refused: {e}") from None
-            s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、全部の荷重条件をやり直します")
+            reds = _red_tiles(ctx)
+            if not reds or not can_revise():
+                break
+            revise(f"{'、'.join(contract.DOMAIN_NAMES_JA[j['domain']] for j in reds)}が赤なので、設計を直します")
     except StopRequested:
         s.emit("agent.said", agent="lead", text="止めるボタンが押されたので、ここで止めます")
         status, reason, code = "stopped", STOPPED_BY_BUTTON, "user_stop"
@@ -365,6 +424,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     except KeyboardInterrupt:
         status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
+    if status == "done" and held_back is not None:  # HK5: a red stage and no revision left
+        stage, reds = held_back
+        used_up = ctx.version - 1 >= ctx.project["round_limit"]
+        names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
+        why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
+               else "台本に設計の直しが残っていません")
+        status, code = "stopped", "round_limit" if used_up else "not_judged"
+        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。軽い段の赤が残るので、"
+                  f"それより重い段の荷重条件は確かめていません (HK5)")
     if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []
