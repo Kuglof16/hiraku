@@ -394,6 +394,8 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
   border-radius: 12px;
   padding: 8px 12px 8px;
 }
+/* a graph without a motion (series against x): left, clear of the contour legend */
+.viewport:not(.has-anim) .graph { right: auto; left: 12px; }
 .gr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; }
 .gr-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .gr-chips button { font-size: 12px; border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
