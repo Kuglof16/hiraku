@@ -103,7 +103,10 @@ class RunningGearTest(unittest.TestCase):
         from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
         s = Suspension("kc_table", 20.0, 1.2, 150.0, "builtin:double_wishbone")
         sup = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s)
-        self.assertEqual(sup, V1["supports"])
+        # ladder_4w.build adds the hard points K2 lays out (write_hardpoints) after the wheels are placed
+        bare = [dict(x, suspension={k: v for k, v in x["suspension"].items() if k != "hardpoints_mm"})
+                for x in V1["supports"]]
+        self.assertEqual(sup, bare)
         self.assertEqual([corner_name(x, sup) for x in sup], ["前左", "前右", "後左", "後右"])
         awd = four_wheels(1700.0, 1100.0, 300.0, 200.0, s, s, drive="all")
         self.assertTrue(all(x["actuation"]["drive"] for x in awd))

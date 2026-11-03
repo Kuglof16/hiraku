@@ -226,7 +226,8 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                          [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
                           ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
                           ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
-                          ("P1-step250-beyond", "step_climb_dynamic")])
+                          ("P1-step250-beyond", "step_climb_dynamic"),
+                          ("P1-step330-beyond", "step_climb_dynamic")])  # higher than the wheel: moving only
         refs, chain = [], []
         for step in plan["steps"]:
             node = step

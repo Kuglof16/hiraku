@@ -139,7 +139,7 @@ def _k0(formula_id: str, output: str, inputs: Record) -> float:
 
 def _summary(design: Record, on: str) -> tuple[Record, Record]:
     """The design summary and the loading's part of it (mass, CG)."""
-    from hiraku.tools.summary import design_summary
+    from hiraku.catalog.summary import design_summary
     s = design_summary(design)
     return s, s["loadings"][on]
 
@@ -364,6 +364,13 @@ def tilt_inputs(design: Record, load_case: Record) -> Record:
             "m_s": q(veh.m_s, "kg"), "h_s": q((float(veh.cg_s[2]) - ground) * 1000.0, "mm"),
             "k": q(sum(c.k_w for c in sprung) / max(len(sprung), 1) / 1000.0, "N/mm"),
             "n": q(len({round(float(c.pos[0]), 6) for c in veh.corners}), "1")}
+
+
+def tilt_inputs_as_built(design: Record, load_case: Record) -> Record:
+    """tilt_inputs with the cargo where the design has it (params cargo_cg_above_deck, the
+    requirement Q41, left out): the inputs of a prediction made again after Q41 was found wrong."""
+    params = {k: v for k, v in (load_case.get("params") or {}).items() if k != "cargo_cg_above_deck"}
+    return tilt_inputs(design, dict(load_case, params=params))
 
 
 def wind_inputs(design: Record, load_case: Record) -> Record:

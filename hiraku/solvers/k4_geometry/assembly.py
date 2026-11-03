@@ -320,7 +320,12 @@ def _step(design: dict, bs: dict[str, Body], unit: list[Body], d_in: str, moves:
         text = f"{sid} の角の組 ({what}) を{text_in(moves)}、{text_of(plain, names)}"
     else:
         text = f"{names.get(pid, pid)}を{text_in(moves)}、{text_of(plain, names)}"
-    return step, {"fastenings": plain, "path_mm": path_in(_centre(unit), moves), "text": text}
+    extra = {"fastenings": plain, "path_mm": path_in(_centre(unit), moves), "text": text}
+    if attach:
+        extra["group_parts"] = sorted(i.split(":", 1)[1] for i in ids)
+    if hands["in_way"]:
+        extra["tool_blocked_by"] = [b.split(":", 1)[1] for b in hands["in_way"]]
+    return step, extra
 
 
 def _clear_of(unit: list[Body], moves: list[tuple[str, float]], extent: np.ndarray) -> list[tuple[str, float]]:

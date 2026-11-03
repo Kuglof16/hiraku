@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from hiraku import contract
+from hiraku.contract.protocols import ToolError
 from hiraku.intake.domains import summary_line
 from hiraku.intake.tools import TOOLS
-from hiraku.tools.context import ToolError
 
 Record = dict[str, Any]
 

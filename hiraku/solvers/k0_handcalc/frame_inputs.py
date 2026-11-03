@@ -16,6 +16,12 @@ joint_wall_inputs() shares the wheels' twisting moments among the cross
 members along a torsion chain of the ladder's symmetric half, with the
 joints' wall rotation from frame_static.joint_wall_bending, for that
 formula at the joint where the wall's bending is largest.
+
+portal_frame_inputs() reads a roll bar (members rollbar_post_L/R and
+rollbar_top, optionally rollbar_foot_L/R outriggers) as a portal frame for
+frame_static.portal_frame_side / _rear / _top: post and beam lengths, second
+moments, plastic moments, and the feet's rotation from the outriggers and the
+rail they stand on.
 """
 
 from __future__ import annotations
@@ -192,7 +198,10 @@ def ladder_twist_inputs(design: dict, loading: str | None = None) -> dict:
     nodes = node_table(design)
     props = member_props(design)
     rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6]
-    cross = [mp for mp in props.values() if abs(mp["a"][1] + mp["b"][1]) < 1e-6 and abs(mp["a"][1]) > 1e-6]
+    z_rail = float(rails[0]["a"][2]) if rails else 0.0
+    # cross members join the two rails at the rails' height (a roll bar's top beam is not one)
+    cross = [mp for mp in props.values() if abs(mp["a"][1] + mp["b"][1]) < 1e-6 and abs(mp["a"][1]) > 1e-6
+             and abs(mp["a"][2] - z_rail) < 1e-6 and abs(mp["b"][2] - z_rail) < 1e-6]
     if not rails or not cross:
         raise DesignError("the twist hand calculation needs a ladder frame: rails along x and cross members joining them")
     sup = design.get("supports", [])
@@ -466,4 +475,132 @@ def end_cross_member_inputs(design: dict, loading: str | None = None) -> dict:
         "supports": [s["id"] for s in rear] + [s["id"] for s in front],
         "end_cross_member": end["member"]["id"],
         "joint_cross_member": joint["member"]["id"],
+    }
+
+
+ROLLBAR_POSTS = ("rollbar_post_L", "rollbar_post_R")
+ROLLBAR_TOP = "rollbar_top"
+
+
+def plastic_modulus(section: dict) -> tuple[float, float]:
+    """Plastic section moduli (mm^3) for bending about the section's local z axis (depth h, as Iz) and local y
+    axis (depth b, as Iy): round tube (d^3 - (d - 2t)^3) / 6 both ways; rect tube (b h^2 - (b - 2t)(h - 2t)^2) / 4
+    and (h b^2 - (h - 2t)(b - 2t)^2) / 4 (sharp corners)."""
+    d = section.get("dims_mm", {})
+    if section.get("shape") == "round_tube":
+        D, t = float(d["d"]), float(d["t"])
+        z = (D**3 - (D - 2.0 * t) ** 3) / 6.0
+        return z, z
+    if section.get("shape") == "rect_tube":
+        b, h, t = float(d["b"]), float(d["h"]), float(d["t"])
+        return (b * h**2 - (b - 2 * t) * (h - 2 * t) ** 2) / 4.0, (h * b**2 - (h - 2 * t) * (b - 2 * t) ** 2) / 4.0
+    raise DesignError(f"the portal frame inputs need round_tube or rect_tube sections, got {section.get('shape')!r}")
+
+
+def plastic_torque(section: dict, tau_y: float) -> float:
+    """Plastic torque (N*mm) of a thin closed tube, 2 A_m t tau_y (Bredt with the shear at yield all round)."""
+    d = section.get("dims_mm", {})
+    if section.get("shape") == "round_tube":
+        D, t = float(d["d"]), float(d["t"])
+        return 2.0 * np.pi * (D - t) ** 2 / 4.0 * t * tau_y
+    if section.get("shape") == "rect_tube":
+        b, h, t = float(d["b"]), float(d["h"]), float(d["t"])
+        return 2.0 * (b - t) * (h - t) * t * tau_y
+    raise DesignError(f"the portal frame inputs need round_tube or rect_tube sections, got {section.get('shape')!r}")
+
+
+def portal_frame_inputs(design: dict) -> dict:
+    """Quantities for frame_static.portal_frame_side, _rear and _top from a roll bar (all but E_in, f and F,
+    which the load case gives).
+
+    The posts rollbar_post_L/R stand from a foot node up to the top corners, joined by rollbar_top. A post's
+    foot is either a rail node or the outboard end of an outrigger rollbar_foot_<side> from a rail node. Section
+    axes as K1: a vertical post's local y is along x, so the portal's sideways (in-plane) bending uses Iy and
+    the bending along the vehicle Iz; the top beam's in-plane (vertical) bending uses Iz; the outrigger (along
+    y) bends vertically on Iz and twists on J; the rail (along x) twists on J and bends vertically on Iz.
+
+    Feet (assumptions): the outrigger a cantilever from the rail node (rotation M L_o / (E I) for the side
+    moment, M L_o / (G J) for the moment along the vehicle); the rail held against twist and vertical
+    rotation at its next nodes either side (L_a, L_b), so the side moment twists it with G J (1/L_a + 1/L_b)
+    and the moment along the vehicle bends it with 4 E I (1/L_a + 1/L_b). theta_f = 1e6 x the two
+    flexibilities in series. Plastic moment at a foot: the smallest of the post's, the outrigger's (bending
+    or torsion) and the rail's (2 x, the rail on both sides of the node). The posts are taken alike; the
+    left one is read."""
+    nodes = node_table(design)
+    props = member_props(design)
+    missing = [m for m in (*ROLLBAR_POSTS, ROLLBAR_TOP) if m not in props]
+    if missing:
+        raise DesignError(f"no roll bar in the design: members {', '.join(missing)} are missing")
+    post, top = props[ROLLBAR_POSTS[0]], props[ROLLBAR_TOP]
+    pm = post["member"]
+    corners = {top["member"]["node_a"], top["member"]["node_b"]}
+    foot = pm["node_a"] if pm["node_b"] in corners else pm["node_b"]
+    mat = post["material"]
+    E, fy = float(mat["E_MPa"]), float(mat["yield_MPa"])
+    sp, sb = (design["sections"][x["member"]["section"]] for x in (post, top))
+    zp_post_z, zp_post_y = plastic_modulus(sp)
+    Mp_post_side, Mp_post_rear = zp_post_y * fy, zp_post_z * fy
+    Mp_top = plastic_modulus(sb)[0] * float(top["material"]["yield_MPa"])
+
+    out_mp = next((mp for mid, mp in props.items() if mid.startswith("rollbar_foot_")
+                   and foot in (mp["member"]["node_a"], mp["member"]["node_b"])), None)
+    c_side = c_rear = 0.0
+    caps_side, caps_rear = [Mp_post_side], [Mp_post_rear]
+    breakdown: dict = {}
+    rail_node = foot
+    if out_mp is not None:
+        om = out_mp["member"]
+        rail_node = om["node_a"] if om["node_b"] == foot else om["node_b"]
+        omat = out_mp["material"]
+        Eo, fyo = float(omat["E_MPa"]), float(omat["yield_MPa"])
+        Go = Eo / (2.0 * (1.0 + float(omat["nu"])))
+        osec = design["sections"][om["section"]]
+        Lo = out_mp["length"]
+        c_o_side = Lo / (Eo * out_mp["section"]["Iz"])
+        c_o_rear = Lo / (Go * out_mp["section"]["J"])
+        c_side += c_o_side
+        c_rear += c_o_rear
+        caps_side.append(plastic_modulus(osec)[0] * fyo)
+        caps_rear.append(plastic_torque(osec, fyo / np.sqrt(3.0)))
+        breakdown.update(outrigger=om["id"], outrigger_length_mm=Lo, theta_outrigger_side_per_kNm=1e6 * c_o_side,
+                         theta_outrigger_rear_per_kNm=1e6 * c_o_rear)
+    p = nodes[rail_node]
+    rails = [mp for mp in props.values() if rail_node in (mp["member"]["node_a"], mp["member"]["node_b"])
+             and abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
+             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and abs(mp["a"][1] - p[1]) < 1e-6]
+    if len(rails) == 2:
+        rmat = rails[0]["material"]
+        Er, fyr = float(rmat["E_MPa"]), float(rmat["yield_MPa"])
+        Gr = Er / (2.0 * (1.0 + float(rmat["nu"])))
+        rsec = design["sections"][rails[0]["member"]["section"]]
+        inv = sum(1.0 / r["length"] for r in rails)
+        c_r_side = 1.0 / (Gr * rails[0]["section"]["J"] * inv)
+        c_r_rear = 1.0 / (4.0 * Er * rails[0]["section"]["Iz"] * inv)
+        c_side += c_r_side
+        c_rear += c_r_rear
+        caps_side.append(2.0 * plastic_torque(rsec, fyr / np.sqrt(3.0)))
+        caps_rear.append(2.0 * plastic_modulus(rsec)[0] * fyr)
+        breakdown.update(rail_node=rail_node, rail_members=[r["member"]["id"] for r in rails],
+                         rail_lengths_mm=[r["length"] for r in rails], theta_rail_side_per_kNm=1e6 * c_r_side,
+                         theta_rail_rear_per_kNm=1e6 * c_r_rear)
+    else:  # the foot is not on a rail running on both sides: taken as fixed there
+        breakdown.update(rail_node=None, note="the foot's node has no rail on both sides; taken as fixed there")
+
+    pp = post["section"]
+    q = quantity
+    common = {"E": q(E, "MPa"), "h": q(post["length"], "mm")}
+    M_pt = min(Mp_post_side, Mp_top)
+    return {
+        "side": {**common, "w": q(top["length"], "mm"), "I_c": q(pp["Iy"], "mm^4"), "I_b": q(top["section"]["Iz"], "mm^4"),
+                 "theta_f": q(1e6 * c_side, "rad"), "M_pf": q(min(caps_side), "N*mm"), "M_pt": q(M_pt, "N*mm")},
+        "rear": {**common, "I_c": q(pp["Iz"], "mm^4"), "theta_f": q(1e6 * c_rear, "rad"),
+                 "M_pf": q(min(caps_rear), "N*mm")},
+        "top": {**common, "w": q(top["length"], "mm"), "I_c": q(pp["Iy"], "mm^4"), "I_b": q(top["section"]["Iz"], "mm^4"),
+                "I_min": q(min(pp["Iy"], pp["Iz"]), "mm^4"), "A_c": q(pp["A"], "mm^2"),
+                "theta_f": q(1e6 * c_side, "rad"), "M_pb": q(Mp_top, "N*mm"), "M_pt": q(M_pt, "N*mm"),
+                "f_y": q(fy, "MPa")},
+        "members": {"posts": list(ROLLBAR_POSTS), "top": ROLLBAR_TOP, "foot_node": foot},
+        "foot": breakdown,
+        "plastic_moments_Nmm": {"post_side": Mp_post_side, "post_rear": Mp_post_rear, "top": Mp_top,
+                                "foot_side": min(caps_side), "foot_rear": min(caps_rear)},
     }

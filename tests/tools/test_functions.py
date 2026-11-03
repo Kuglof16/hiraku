@@ -2,7 +2,7 @@ import importlib
 import unittest
 from unittest import mock
 
-from hiraku.tools import ToolError, rules
+from hiraku.tools import ToolError, check_shelf, rules
 from hiraku.tools.functions import analyze, compare, get_context, list_formulas, list_tools, record_cause, record_prediction
 from hiraku.tools.judge import compute_judgement
 from tests.tools.helpers import RunCase
@@ -354,6 +354,15 @@ class MeshTest(RunCase, unittest.TestCase):
         self.assertIn("member m1 has no wall", ana["error"])
         self.assertEqual(self.tools["step_climb"].runs, [])
         self.assertNotIn("mesh.created", self.kinds())
+
+
+class CheckCacheTest(RunCase, unittest.TestCase):
+    def test_checks_from_the_tests_cache_are_said(self):
+        self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
+        check_shelf(self.ctx)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("道具 step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
+        self.assertFalse(any("frame_static の照合" in t for t in said))
 
 
 class UnusableToolTest(RunCase, unittest.TestCase):

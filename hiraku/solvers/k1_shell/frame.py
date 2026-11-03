@@ -35,6 +35,10 @@ mesh of the tube walls:
   on every mass, so the loads are self-balanced. Six restraints (3-2-1 on
   single nodes of three support joints) only stop rigid-body motion; their
   reactions over the weight are reported as residual_ratio.
+- the mesh has weld strips (mesh.build_mesh, weld_strips=True by default) and
+  the result carries the structural hot-spot stresses along the joints' weld
+  lines (stress.hot_spots; the elements inside the wheel mounts are not
+  read): hot_spots, and hot_spot_max the one of largest size.
 """
 
 from __future__ import annotations
@@ -50,7 +54,7 @@ from ..k0_handcalc.vehicle import DesignError, mass_summary, node_table, resulta
 from ..k1_frame.analyze import BALANCE_TOL, _split, rigid_fit
 from .mesh import ELEMENT_SIZE_MM, ShellMesh, build_mesh
 from .solve import ShellModel, StaticSolver, dofs_of, spread_load
-from .stress import ShellStress, element_stresses
+from .stress import ShellStress, element_stresses, hot_spots
 
 WALLS = {(0, 0, 1): "upper", (0, 0, -1): "lower", (0, 1, 0): "left (+y)", (0, -1, 0): "right (-y)",
          (1, 0, 0): "front (+x)", (-1, 0, 0): "rear (-x)"}
@@ -83,12 +87,12 @@ class ShellFrame:
     _solver: StaticSolver | None = None
 
     @classmethod
-    def build(cls, design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> "ShellFrame":
+    def build(cls, design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> "ShellFrame":
         t0 = time.perf_counter()
         nodes = node_table(design)
         sup = design.get("supports", [])
         support_node = {}
-        mesh = build_mesh(design, element_size_mm)
+        mesh = build_mesh(design, element_size_mm, weld_strips)
         for s in sup:
             fn = s.get("frame_node")
             if not fn:
@@ -202,13 +206,13 @@ def check_balance(design: dict, summ: dict, ground: dict, g_factor: float, inert
 def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
                   step_supports: list[str] | None = None, ground_forces: dict | None = None,
                   inertia_N: np.ndarray | None = None, frame: ShellFrame | None = None,
-                  element_size_mm: float = ELEMENT_SIZE_MM) -> dict:
+                  element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> dict:
     """Solve the shell frame (see the module notes). Arguments as k1_frame.analyze; `frame`
-    reuses a built and factorised ShellFrame of the same design."""
+    reuses a built and factorised ShellFrame of the same design; weld_strips as mesh.build_mesh."""
     t0 = time.perf_counter()
     summ = mass_summary(design)
     items = summ["items"]
-    fr = frame or ShellFrame.build(design, element_size_mm)
+    fr = frame or ShellFrame.build(design, element_size_mm, weld_strips)
     ms, model = fr.mesh, fr.model
     ground, statics, source = _ground(design, summ, g_factor, step_mm, step_supports, ground_forces)
     off = check_balance(design, summ, ground, g_factor, inertia_N)
@@ -305,6 +309,8 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     safety = {m: (float(mat_of[m]["yield_MPa"]) / v if v > 0 else math.inf) for m, (v, _) in member_max.items()}
     ex_idx = np.nonzero(fr.excluded)[0]
     excluded_max = (float(vm["max"][ex_idx].max()), int(ex_idx[np.argmax(vm["max"][ex_idx])])) if len(ex_idx) else None
+    hs = hot_spots(ms, st, fr.excluded)
+    hs_max = max(hs, key=lambda h: abs(h["value"])) if hs else None
 
     u = U.reshape(-1, 6)[:, :3]
     pts, disps = [], []
@@ -349,6 +355,8 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "safety": safety,
         "excluded": fr.excluded,
         "excluded_max": excluded_max,
+        "hot_spots": hs,
+        "hot_spot_max": hs_max,
         "displacements": disp,
         "worst_node": worst_node,
         "worst_node_member": node_member.get(worst_node, worst),

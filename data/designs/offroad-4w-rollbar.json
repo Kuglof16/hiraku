@@ -1,0 +1,1459 @@
+{
+  "design_version": 1,
+  "parent_version": null,
+  "name": "offroad-4w v1 with a roll bar",
+  "change_reason": "the demo vehicle with a roll bar behind the seats (variables rollbar_*, their defaults)",
+  "variables": {
+    "wheelbase": {
+      "value": 1700.0,
+      "unit": "mm"
+    },
+    "track": {
+      "value": 1100.0,
+      "unit": "mm"
+    },
+    "wheel_radius": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "wheel_width": {
+      "value": 200.0,
+      "unit": "mm"
+    },
+    "rail_spacing": {
+      "value": 700.0,
+      "unit": "mm"
+    },
+    "rail_height": {
+      "value": 380.0,
+      "unit": "mm"
+    },
+    "front_overhang": {
+      "value": 400.0,
+      "unit": "mm"
+    },
+    "rear_overhang": {
+      "value": 400.0,
+      "unit": "mm"
+    },
+    "max_speed": {
+      "value": 40.0,
+      "unit": "km/h"
+    },
+    "occupants": {
+      "value": 2.0,
+      "unit": "1"
+    },
+    "occupant_mass": {
+      "value": 76.6,
+      "unit": "kg"
+    },
+    "cargo_mass": {
+      "value": 150.0,
+      "unit": "kg"
+    },
+    "motor_peak_power": {
+      "value": 10.0,
+      "unit": "kW"
+    },
+    "motor_peak_torque": {
+      "value": 50.0,
+      "unit": "N*m"
+    },
+    "motor_max_speed": {
+      "value": 6000.0,
+      "unit": "rpm"
+    },
+    "gear_ratio": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "drivetrain_efficiency": {
+      "value": 0.95,
+      "unit": "1"
+    },
+    "motor_efficiency": {
+      "value": 0.88,
+      "unit": "1"
+    },
+    "controller_efficiency": {
+      "value": 0.96,
+      "unit": "1"
+    },
+    "regen_efficiency": {
+      "value": 0.5,
+      "unit": "1"
+    },
+    "aux_power": {
+      "value": 150.0,
+      "unit": "W"
+    },
+    "battery_voltage": {
+      "value": 51.2,
+      "unit": "V"
+    },
+    "battery_capacity": {
+      "value": 100.0,
+      "unit": "Ah"
+    },
+    "battery_resistance": {
+      "value": 0.02,
+      "unit": "ohm"
+    },
+    "mass_factor": {
+      "value": 1.05,
+      "unit": "1"
+    },
+    "rolling_resistance": {
+      "value": 0.03,
+      "unit": "1"
+    },
+    "battery_heat_capacity": {
+      "value": 50000.0,
+      "unit": "J/K"
+    },
+    "battery_thermal_resistance": {
+      "value": 0.25,
+      "unit": "K/W"
+    },
+    "motor_heat_capacity": {
+      "value": 11000.0,
+      "unit": "J/K"
+    },
+    "motor_thermal_resistance": {
+      "value": 0.06,
+      "unit": "K/W"
+    },
+    "controller_heat_capacity": {
+      "value": 3600.0,
+      "unit": "J/K"
+    },
+    "controller_thermal_resistance": {
+      "value": 0.1,
+      "unit": "K/W"
+    },
+    "drag_coefficient": {
+      "value": 0.8,
+      "unit": "1"
+    },
+    "frontal_area": {
+      "value": 1.6,
+      "unit": "m^2"
+    },
+    "side_force_coefficient": {
+      "value": 1.0,
+      "unit": "1"
+    },
+    "side_area": {
+      "value": 2.4,
+      "unit": "m^2"
+    },
+    "centre_of_pressure_height": {
+      "value": 800.0,
+      "unit": "mm"
+    },
+    "air_density": {
+      "value": 1.225,
+      "unit": "kg/m^3"
+    },
+    "front_cornering_stiffness": {
+      "value": 25000.0,
+      "unit": "N/rad"
+    },
+    "rear_cornering_stiffness": {
+      "value": 30000.0,
+      "unit": "N/rad"
+    },
+    "max_steer_angle": {
+      "value": 30.0,
+      "unit": "deg"
+    },
+    "bumper_stiffness": {
+      "value": 100.0,
+      "unit": "N/mm"
+    },
+    "bumper_stroke": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "crush_stiffness": {
+      "value": 600.0,
+      "unit": "N/mm"
+    },
+    "fatigue_fat_class": {
+      "value": 71.0,
+      "unit": "MPa"
+    },
+    "fatigue_slope": {
+      "value": 3.0,
+      "unit": "1"
+    },
+    "fatigue_knee_cycles": {
+      "value": 10000000.0,
+      "unit": "1"
+    },
+    "fatigue_slope_after_knee": {
+      "value": 22.0,
+      "unit": "1"
+    },
+    "tyre_stiffness": {
+      "value": 150.0,
+      "unit": "N/mm"
+    },
+    "rail_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "rail_h": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "rail_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
+    "cross_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "cross_h": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "cross_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
+    "seat_x": {
+      "value": -725.0,
+      "unit": "mm"
+    },
+    "seat_y": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "steering_x": {
+      "value": -250.0,
+      "unit": "mm"
+    },
+    "battery_x": {
+      "value": -725.0,
+      "unit": "mm"
+    },
+    "front_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+    },
+    "rear_spring_rate": {
+      "value": 20.0,
+      "unit": "N/mm"
+    },
+    "suspension_travel": {
+      "value": 150.0,
+      "unit": "mm"
+    },
+    "cargo_height": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "battery_max_temperature": {
+      "value": 55.0,
+      "unit": "degC"
+    },
+    "controller_max_temperature": {
+      "value": 85.0,
+      "unit": "degC"
+    },
+    "motor_max_temperature": {
+      "value": 155.0,
+      "unit": "degC"
+    },
+    "tyre_damping_ratio": {
+      "value": 0.05,
+      "unit": "1"
+    },
+    "tyre_slip_stiffness_coeff": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "bump_stop_factor": {
+      "value": 10.0,
+      "unit": "1"
+    },
+    "rollbar": {
+      "value": 1.0,
+      "unit": "1"
+    },
+    "rollbar_height": {
+      "value": 1100.0,
+      "unit": "mm"
+    },
+    "rollbar_width": {
+      "value": 1200.0,
+      "unit": "mm"
+    },
+    "rollbar_offset": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "rollbar_square": {
+      "value": 0.0,
+      "unit": "1"
+    },
+    "rollbar_d": {
+      "value": 42.7,
+      "unit": "mm"
+    },
+    "rollbar_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "rollbar_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
+    "tyre_relaxation_length": {
+      "value": 300.0,
+      "unit": "mm"
+    },
+    "wheel_inertia": {
+      "value": 0.63,
+      "unit": "kg*m^2"
+    }
+  },
+  "supports": [
+    {
+      "id": "FL",
+      "kind": "wheel",
+      "position_mm": [
+        0.0,
+        550.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "kc_table",
+        "stiffness_N_per_mm": 20.0,
+        "damping_Ns_per_mm": 1.2,
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone",
+        "hardpoints_mm": {
+          "lca_front": [
+            120.0,
+            196.0,
+            180.0
+          ],
+          "lca_rear": [
+            -120.0,
+            196.0,
+            180.0
+          ],
+          "lca_outer": [
+            0.0,
+            490.00000000000006,
+            180.0
+          ],
+          "uca_front": [
+            100.0,
+            266.8,
+            420.0
+          ],
+          "uca_rear": [
+            -100.0,
+            266.8,
+            420.0
+          ],
+          "uca_outer": [
+            0.0,
+            460.00000000000006,
+            435.0
+          ],
+          "tie_inner": [
+            -120.0,
+            234.16946130672684,
+            277.15846945514807
+          ],
+          "tie_outer": [
+            -120.0,
+            475.00000000000006,
+            285.0
+          ],
+          "wheel_center": [
+            0.0,
+            550.0,
+            300.0
+          ]
+        }
+      },
+      "actuation": {
+        "drive": false,
+        "brake": true,
+        "steer": true
+      },
+      "frame_node": "LA"
+    },
+    {
+      "id": "FR",
+      "kind": "wheel",
+      "position_mm": [
+        0.0,
+        -550.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "kc_table",
+        "stiffness_N_per_mm": 20.0,
+        "damping_Ns_per_mm": 1.2,
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone",
+        "hardpoints_mm": {
+          "lca_front": [
+            120.0,
+            -196.0,
+            180.0
+          ],
+          "lca_rear": [
+            -120.0,
+            -196.0,
+            180.0
+          ],
+          "lca_outer": [
+            0.0,
+            -490.00000000000006,
+            180.0
+          ],
+          "uca_front": [
+            100.0,
+            -266.8,
+            420.0
+          ],
+          "uca_rear": [
+            -100.0,
+            -266.8,
+            420.0
+          ],
+          "uca_outer": [
+            0.0,
+            -460.00000000000006,
+            435.0
+          ],
+          "tie_inner": [
+            -120.0,
+            -234.16946130672684,
+            277.15846945514807
+          ],
+          "tie_outer": [
+            -120.0,
+            -475.00000000000006,
+            285.0
+          ],
+          "wheel_center": [
+            0.0,
+            -550.0,
+            300.0
+          ]
+        }
+      },
+      "actuation": {
+        "drive": false,
+        "brake": true,
+        "steer": true
+      },
+      "frame_node": "RA"
+    },
+    {
+      "id": "RL",
+      "kind": "wheel",
+      "position_mm": [
+        -1700.0,
+        550.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "kc_table",
+        "stiffness_N_per_mm": 20.0,
+        "damping_Ns_per_mm": 1.2,
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone",
+        "hardpoints_mm": {
+          "lca_front": [
+            -1580.0,
+            196.0,
+            180.0
+          ],
+          "lca_rear": [
+            -1819.9999999999998,
+            196.0,
+            180.0
+          ],
+          "lca_outer": [
+            -1700.0,
+            490.00000000000006,
+            180.0
+          ],
+          "uca_front": [
+            -1599.9999999999998,
+            266.8,
+            420.0
+          ],
+          "uca_rear": [
+            -1800.0,
+            266.8,
+            420.0
+          ],
+          "uca_outer": [
+            -1700.0,
+            460.00000000000006,
+            435.0
+          ],
+          "tie_inner": [
+            -1819.9999999999998,
+            234.16946130672684,
+            277.15846945514807
+          ],
+          "tie_outer": [
+            -1819.9999999999998,
+            475.00000000000006,
+            285.0
+          ],
+          "wheel_center": [
+            -1700.0,
+            550.0,
+            300.0
+          ]
+        }
+      },
+      "actuation": {
+        "drive": true,
+        "brake": true,
+        "steer": false
+      },
+      "frame_node": "LB"
+    },
+    {
+      "id": "RR",
+      "kind": "wheel",
+      "position_mm": [
+        -1700.0,
+        -550.0,
+        300.0
+      ],
+      "radius_mm": 300.0,
+      "width_mm": 200.0,
+      "suspension": {
+        "type": "kc_table",
+        "stiffness_N_per_mm": 20.0,
+        "damping_Ns_per_mm": 1.2,
+        "travel_mm": 150.0,
+        "kc_table": "builtin:double_wishbone",
+        "hardpoints_mm": {
+          "lca_front": [
+            -1580.0,
+            -196.0,
+            180.0
+          ],
+          "lca_rear": [
+            -1819.9999999999998,
+            -196.0,
+            180.0
+          ],
+          "lca_outer": [
+            -1700.0,
+            -490.00000000000006,
+            180.0
+          ],
+          "uca_front": [
+            -1599.9999999999998,
+            -266.8,
+            420.0
+          ],
+          "uca_rear": [
+            -1800.0,
+            -266.8,
+            420.0
+          ],
+          "uca_outer": [
+            -1700.0,
+            -460.00000000000006,
+            435.0
+          ],
+          "tie_inner": [
+            -1819.9999999999998,
+            -234.16946130672684,
+            277.15846945514807
+          ],
+          "tie_outer": [
+            -1819.9999999999998,
+            -475.00000000000006,
+            285.0
+          ],
+          "wheel_center": [
+            -1700.0,
+            -550.0,
+            300.0
+          ]
+        }
+      },
+      "actuation": {
+        "drive": true,
+        "brake": true,
+        "steer": false
+      },
+      "frame_node": "RB"
+    }
+  ],
+  "parts": [
+    {
+      "id": "battery",
+      "name": "電池 (LiFePO4 51.2 V 100 Ah)",
+      "kind": "battery",
+      "box": {
+        "center_mm": [
+          -725.0,
+          0.0,
+          330.0
+        ],
+        "size_mm": [
+          500.0,
+          600.0,
+          200.0
+        ]
+      },
+      "mass_kg": 50.0,
+      "carried_by": [
+        "LS1",
+        "RS1",
+        "LS2",
+        "RS2"
+      ]
+    },
+    {
+      "id": "motor",
+      "name": "モーターと減速機",
+      "kind": "motor",
+      "box": {
+        "center_mm": [
+          -1550.0,
+          0.0,
+          310.0
+        ],
+        "size_mm": [
+          250.0,
+          300.0,
+          220.0
+        ]
+      },
+      "mass_kg": 25.0,
+      "carried_by": [
+        "LB",
+        "RB"
+      ]
+    },
+    {
+      "id": "controller",
+      "name": "モーターの制御器",
+      "kind": "controller",
+      "box": {
+        "center_mm": [
+          -1110.0,
+          0.0,
+          300.0
+        ],
+        "size_mm": [
+          250.0,
+          200.0,
+          80.0
+        ]
+      },
+      "mass_kg": 4.0,
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ]
+    },
+    {
+      "id": "aux",
+      "name": "配線と 12 V の補機",
+      "kind": "electrical",
+      "box": {
+        "center_mm": [
+          -300.0,
+          0.0,
+          300.0
+        ],
+        "size_mm": [
+          300.0,
+          300.0,
+          100.0
+        ]
+      },
+      "mass_kg": 6.0,
+      "carried_by": [
+        "LA",
+        "RA",
+        "LS1",
+        "RS1"
+      ]
+    },
+    {
+      "id": "floor_front",
+      "name": "足元の床",
+      "kind": "body",
+      "box": {
+        "center_mm": [
+          -225.0,
+          0.0,
+          440.0
+        ],
+        "size_mm": [
+          450.0,
+          600.0,
+          20.0
+        ]
+      },
+      "mass_kg": 6.0,
+      "carried_by": [
+        "LA",
+        "RA",
+        "LS1",
+        "RS1"
+      ]
+    },
+    {
+      "id": "floor",
+      "name": "座席の下の床",
+      "kind": "body",
+      "box": {
+        "center_mm": [
+          -725.0,
+          0.0,
+          440.0
+        ],
+        "size_mm": [
+          550.0,
+          1100.0,
+          20.0
+        ]
+      },
+      "mass_kg": 8.0,
+      "carried_by": [
+        "LS1",
+        "RS1",
+        "LS2",
+        "RS2"
+      ]
+    },
+    {
+      "id": "deck",
+      "name": "荷台の床",
+      "kind": "body",
+      "box": {
+        "center_mm": [
+          -1625.0,
+          0.0,
+          440.0
+        ],
+        "size_mm": [
+          950.0,
+          880.0,
+          20.0
+        ]
+      },
+      "mass_kg": 18.0,
+      "carried_by": [
+        "LS2",
+        "RS2",
+        "LB",
+        "RB",
+        "LE",
+        "RE"
+      ]
+    },
+    {
+      "id": "front_body",
+      "name": "前の外板とバンパー",
+      "kind": "body",
+      "box": {
+        "center_mm": [
+          220.0,
+          0.0,
+          570.0
+        ],
+        "size_mm": [
+          360.0,
+          600.0,
+          280.0
+        ]
+      },
+      "mass_kg": 15.0,
+      "carried_by": [
+        "LF",
+        "RF",
+        "LA",
+        "RA"
+      ]
+    },
+    {
+      "id": "steering",
+      "name": "ハンドルとペダル",
+      "kind": "steering",
+      "box": {
+        "center_mm": [
+          -250.0,
+          -200.0,
+          750.0
+        ],
+        "size_mm": [
+          300.0,
+          200.0,
+          500.0
+        ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+        "RA",
+        "RS1"
+      ]
+    },
+    {
+      "id": "seat_R",
+      "name": "運転席",
+      "kind": "seat",
+      "box": {
+        "center_mm": [
+          -725.0,
+          -300.0,
+          580.0
+        ],
+        "size_mm": [
+          500.0,
+          500.0,
+          260.0
+        ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+        "RS1",
+        "RS2"
+      ]
+    },
+    {
+      "id": "seat_L",
+      "name": "助手席",
+      "kind": "seat",
+      "box": {
+        "center_mm": [
+          -725.0,
+          300.0,
+          580.0
+        ],
+        "size_mm": [
+          500.0,
+          500.0,
+          260.0
+        ]
+      },
+      "mass_kg": 12.0,
+      "carried_by": [
+        "LS1",
+        "LS2"
+      ]
+    },
+    {
+      "id": "occupant_R",
+      "name": "運転者 (体重は強さの不利側)",
+      "kind": "occupant",
+      "box": {
+        "center_mm": [
+          -780.0,
+          -300.0,
+          970.0
+        ],
+        "size_mm": [
+          450.0,
+          450.0,
+          520.0
+        ]
+      },
+      "mass_kg": 76.6,
+      "carried_by": [
+        "RS1",
+        "RS2"
+      ]
+    },
+    {
+      "id": "occupant_L",
+      "name": "同乗者 (体重は強さの不利側)",
+      "kind": "occupant",
+      "box": {
+        "center_mm": [
+          -780.0,
+          300.0,
+          970.0
+        ],
+        "size_mm": [
+          450.0,
+          450.0,
+          520.0
+        ]
+      },
+      "mass_kg": 76.6,
+      "carried_by": [
+        "LS1",
+        "LS2"
+      ]
+    },
+    {
+      "id": "cargo",
+      "name": "荷",
+      "kind": "cargo",
+      "box": {
+        "center_mm": [
+          -1625.0,
+          0.0,
+          600.0
+        ],
+        "size_mm": [
+          900.0,
+          880.0,
+          300.0
+        ]
+      },
+      "mass_kg": 150.0,
+      "carried_by": [
+        "LS2",
+        "RS2",
+        "LB",
+        "RB",
+        "LE",
+        "RE"
+      ]
+    },
+    {
+      "id": "wheel_FL",
+      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+        "center_mm": [
+          0.0,
+          550.0,
+          300.0
+        ],
+        "size_mm": [
+          600.0,
+          200.0,
+          600.0
+        ]
+      },
+      "mass_kg": 14.0
+    },
+    {
+      "id": "susp_FL",
+      "name": "前左のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+        "center_mm": [
+          0.0,
+          410.0,
+          330.0
+        ],
+        "size_mm": [
+          250.0,
+          120.0,
+          200.0
+        ]
+      },
+      "mass_kg": 8.0
+    },
+    {
+      "id": "wheel_FR",
+      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+        "center_mm": [
+          0.0,
+          -550.0,
+          300.0
+        ],
+        "size_mm": [
+          600.0,
+          200.0,
+          600.0
+        ]
+      },
+      "mass_kg": 14.0
+    },
+    {
+      "id": "susp_FR",
+      "name": "前右のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+        "center_mm": [
+          0.0,
+          -410.0,
+          330.0
+        ],
+        "size_mm": [
+          250.0,
+          120.0,
+          200.0
+        ]
+      },
+      "mass_kg": 8.0
+    },
+    {
+      "id": "wheel_RL",
+      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          550.0,
+          300.0
+        ],
+        "size_mm": [
+          600.0,
+          200.0,
+          600.0
+        ]
+      },
+      "mass_kg": 14.0
+    },
+    {
+      "id": "susp_RL",
+      "name": "後左のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          410.0,
+          330.0
+        ],
+        "size_mm": [
+          250.0,
+          120.0,
+          200.0
+        ]
+      },
+      "mass_kg": 8.0
+    },
+    {
+      "id": "wheel_RR",
+      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "kind": "wheel",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          -550.0,
+          300.0
+        ],
+        "size_mm": [
+          600.0,
+          200.0,
+          600.0
+        ]
+      },
+      "mass_kg": 14.0
+    },
+    {
+      "id": "susp_RR",
+      "name": "後右のサスペンション (アーム・ナックル・ダンパー)",
+      "kind": "suspension",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          -410.0,
+          330.0
+        ],
+        "size_mm": [
+          250.0,
+          120.0,
+          200.0
+        ]
+      },
+      "mass_kg": 8.0
+    }
+  ],
+  "nodes": [
+    {
+      "id": "LF",
+      "xyz_mm": [
+        400.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LA",
+      "xyz_mm": [
+        0.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LS1",
+      "xyz_mm": [
+        -450.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LS2",
+      "xyz_mm": [
+        -1000.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LB",
+      "xyz_mm": [
+        -1700.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LE",
+      "xyz_mm": [
+        -2100.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RF",
+      "xyz_mm": [
+        400.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RA",
+      "xyz_mm": [
+        0.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RS1",
+      "xyz_mm": [
+        -450.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RS2",
+      "xyz_mm": [
+        -1000.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RB",
+      "xyz_mm": [
+        -1700.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RE",
+      "xyz_mm": [
+        -2100.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LH",
+      "xyz_mm": [
+        -1080.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LHO",
+      "xyz_mm": [
+        -1080.0,
+        600.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LHT",
+      "xyz_mm": [
+        -1080.0,
+        600.0,
+        1810.0
+      ]
+    },
+    {
+      "id": "RH",
+      "xyz_mm": [
+        -1080.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RHO",
+      "xyz_mm": [
+        -1080.0,
+        -600.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RHT",
+      "xyz_mm": [
+        -1080.0,
+        -600.0,
+        1810.0
+      ]
+    }
+  ],
+  "members": [
+    {
+      "id": "rail_L_FA",
+      "node_a": "LF",
+      "node_b": "LA",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_AS1",
+      "node_a": "LA",
+      "node_b": "LS1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_S1S2",
+      "node_a": "LS1",
+      "node_b": "LS2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_S2H",
+      "node_a": "LS2",
+      "node_b": "LH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_HB",
+      "node_a": "LH",
+      "node_b": "LB",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_BE",
+      "node_a": "LB",
+      "node_b": "LE",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_FA",
+      "node_a": "RF",
+      "node_b": "RA",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_AS1",
+      "node_a": "RA",
+      "node_b": "RS1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_S1S2",
+      "node_a": "RS1",
+      "node_b": "RS2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_S2H",
+      "node_a": "RS2",
+      "node_b": "RH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_HB",
+      "node_a": "RH",
+      "node_b": "RB",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_BE",
+      "node_a": "RB",
+      "node_b": "RE",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_F",
+      "node_a": "LF",
+      "node_b": "RF",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_A",
+      "node_a": "LA",
+      "node_b": "RA",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_S1",
+      "node_a": "LS1",
+      "node_b": "RS1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_S2",
+      "node_a": "LS2",
+      "node_b": "RS2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_B",
+      "node_a": "LB",
+      "node_b": "RB",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "cross_E",
+      "node_a": "LE",
+      "node_b": "RE",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rollbar_foot_L",
+      "node_a": "LH",
+      "node_b": "LHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rollbar_post_L",
+      "node_a": "LHO",
+      "node_b": "LHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "frame"
+    },
+    {
+      "id": "rollbar_foot_R",
+      "node_a": "RH",
+      "node_b": "RHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rollbar_post_R",
+      "node_a": "RHO",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "frame"
+    },
+    {
+      "id": "rollbar_top",
+      "node_a": "LHT",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "frame"
+    }
+  ],
+  "sections": {
+    "rt40x80x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+        "b": 40.0,
+        "h": 80.0,
+        "t": 2.3
+      }
+    },
+    "rt40x40x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+        "b": 40.0,
+        "h": 40.0,
+        "t": 2.3
+      }
+    },
+    "ct42.7x2.3": {
+      "shape": "round_tube",
+      "dims_mm": {
+        "d": 42.7,
+        "t": 2.3
+      }
+    }
+  },
+  "materials": {
+    "stkr400": {
+      "name": "JIS G 3466 STKR400 (square and rectangular steel tube for general structure)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+    },
+    "stkm13a": {
+      "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 215.0,
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+    }
+  }
+}

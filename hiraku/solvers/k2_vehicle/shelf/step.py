@@ -101,7 +101,8 @@ class StepClimbTool(K2Tool):
     push of run 1 did not lift the stepping wheels, e.g. the driven wheels spun first; the
     *_wheel_* values are then those of the steepest push reached, not of a lift-off),
     climbed (1, run 2; where says
-    "grip" or "torque" when it did not), peak_wheel_force (N, run 2, where),
+    "grip" or "torque" when it did not), climbable (1: run 1 or run 2 got the stepping wheels
+    onto the step), peak_wheel_force (N, run 2, where),
     peak_vertical_wheel_force (N, run 2), climb_time (s, run 2).
     series, vectors and scene all come from run 1: the series run from the standstill
     against the step until 1.5 s after the lift-off (the torque of the lift-off held), the
@@ -249,7 +250,9 @@ class StepClimbTool(K2Tool):
                 slipping = any(abs(sim.om[i] * veh.corners[i].radius - sim.forward_speed()) > 0.2 for i in driven)
                 reason = "grip" if slipping or motor is None else "torque"
                 break
+        # climbable: either run gets the stepping wheels onto the step (K0's step_climb.climb_limit)
         res += [_res("climbed", 1.0 if t_climb is not None else 0.0, "1", reason),
+                _res("climbable", 1.0 if t_climb is not None or crawl["lifted"] else 0.0, "1"),
                 _res("peak_wheel_force", peak, "N", peak_id), _res("peak_vertical_wheel_force", peak_z, "N")]
         if t_climb is not None:
             res.append(_res("climb_time", t_climb, "s"))
