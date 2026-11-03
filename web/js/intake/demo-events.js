@@ -1159,7 +1159,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 4 件、答えが無いまま 3 件",
    "data": {
     "answers": [
      {
@@ -1178,6 +1178,24 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      },
      {
       "key": "Q34",
@@ -12828,6 +12846,24 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption (no public basis found)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      }
     ],
     "domain_picks": [],
@@ -13524,7 +13560,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)",
    "data": {
     "answers": [
      {
@@ -13543,6 +13579,24 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
+      "value": 600,
+      "unit": "mm"
      }
     ]
    }
