@@ -16,7 +16,8 @@ from hiraku.solvers.k0_handcalc.vehicle import mass_summary, member_props
 from hiraku.solvers.k4_geometry import AIST, interferences, occupant_clearance, occupant_spaces, sweep
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# the demo vehicle with the roll bar switched off (it is on by default)
+V1 = ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
 RB = json.loads((ROOT / "data" / "designs" / "offroad-4w-rollbar.json").read_text(encoding="utf-8"))
 FORMULAS = solvers.formula_registry()
 SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"
@@ -42,11 +43,22 @@ def out(formula, **inputs):
 
 
 class RollbarDesignTest(unittest.TestCase):
-    def test_default_has_no_roll_bar_and_writes_none_of_its_variables(self):
-        d = ladder_4w.build()
+    def test_switched_off_has_no_roll_bar(self):
+        d = V1
         self.assertFalse(any(m["id"].startswith("rollbar") for m in d["members"]))
-        self.assertFalse(any(k.startswith("rollbar") for k in d["variables"]))
+        self.assertFalse(any(p["kind"] == "rollbar" for p in d["parts"]))
+        self.assertEqual(d["variables"]["rollbar"]["value"], 0.0)
         self.assertEqual(set(d["materials"]), {"stkr400"})
+
+    def test_default_has_the_roll_bar(self):
+        d = ladder_4w.build()
+        self.assertEqual({m["id"] for m in d["members"] if m["id"].startswith("rollbar")}, ROLLBAR_MEMBERS)
+        self.assertEqual({m["part"] for m in d["members"] if m["id"] in ROLLBAR_MEMBERS}, {"rollbar"})
+        part = next(p for p in d["parts"] if p["id"] == "rollbar")
+        self.assertEqual((part["kind"], part["mass_kg"]), ("rollbar", 0.0))
+        old = json.loads(json.dumps(V1))  # a design from before the roll bar was on by default: no variable, no members
+        old["variables"] = {k: v for k, v in old["variables"].items() if not k.startswith("rollbar")}
+        self.assertEqual(ladder_4w.values_of(old)["rollbar"]["value"], 0.0)
 
     def test_the_demo_file_is_its_script(self):
         built = ladder_4w.build({"rollbar": q(1, "1")}, name=RB["name"], reason=RB["change_reason"])
@@ -72,7 +84,7 @@ class RollbarDesignTest(unittest.TestCase):
         self.assertEqual(ROLLBAR_MEMBERS, {m for m in ids if m.startswith("rollbar")})
         self.assertEqual(RB["materials"]["stkm13a"]["yield_MPa"], 215.0)
         # the parts are where v1 has them: the roll bar does not move them or their fixing nodes
-        self.assertEqual(RB["parts"], V1["parts"])
+        self.assertEqual([p for p in RB["parts"] if p["id"] != "rollbar"], V1["parts"])  # and its own part of 0 kg
 
     def test_revised_variables_move_it(self):
         v2 = designgen.regenerate(RB, {"rollbar_offset": q(150, "mm"), "rollbar_height": q(1000, "mm"),

@@ -19,6 +19,13 @@ edge (the version's mesh record is made at the default, so another size is
 solved but not drawn on it); mesh_check "half" also solves at half that size
 and reports how much the hot spot and the element peak change (the hot spot
 should hold, the peak at the sharp corner grows).
+
+With K2's mount force series upstream (frame_static.upstream_mount_series),
+the shell is solved again at each instant on the same factorisation: the
+element stresses go into field.frames on the version's mesh (when it is the
+mesh solved here) and per member, and the largest hot spot and element
+stress at each instant into series. The judged results stay those of the
+upstream's vectors.
 """
 
 from __future__ import annotations
@@ -34,8 +41,8 @@ from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from . import scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
-from .frame_static import (JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, front_supports, g_factor,
-                           upstream_ground_forces)
+from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
+                           front_supports, g_factor, upstream_ground_forces, upstream_mount_series)
 
 WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
                "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
@@ -60,6 +67,8 @@ LABEL_MEMBER = "シェルの von Mises (部材ごとの最大)"
 LABEL_HOT_SPOT = "構造的ホットスポット応力 (溶接線に直角、部材ごとの絶対値の最大)"
 LABEL_BEAM = "梁の von Mises (部材ごとの最大、シェルと同じ地面の力)"
 LABEL_DISP = "シェルの変位 (輪のつなぎ目の剛体の動きを除く)"
+LABEL_FRAMES = "シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと)"
+LABEL_FRAMES_MEMBER = "シェルの von Mises (部材ごとの最大、上流の取付点の力の時刻ごと)"
 SOURCES = {
     "given": "ground forces from the upstream analysis {lc}",
     "K0 step": "ground forces from K0 rigid-body statics (support_loads, step {step:g} mm on {sup})",
@@ -95,7 +104,8 @@ HOT_SPOT_ASSUMPTION = (
     "溶接線に直角な成分を線まで直線で外挿した値 ({fa:g} σ({a:g}t) {fb:+g} σ({b:g}t))。外と内の面の両方を読む。足跡の角から"
     "溶接線に沿って {skip:g} t より近い所 (角の正方形) と、取付の区画の要素は読まない。出典: A. F. Hobbacher, Recommendations "
     "for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (このリポジトリでは確かめていない)。"
-    "ガセットの脚の溶接線は読んでいない")
+    "ガセットの脚の溶接線は読んでいない。IIW ではこれは疲労のための構造応力で、ここでは静的な強さの判定に、溶接の止端の構造応力 "
+    "(膜と曲げ) を使う。局所の降伏を許さない、安全側の扱い")
 PEAK_ASSUMPTION = ("max_stress はつなぎ目の鋭い入隅の角の要素の値で、シェルではそこで応力が特異になるため、要素を細かくすると"
                    "大きくなる。参考として残し、判定には使わない")
 MASS_ASSUMPTION = ("質量の二重数えを避けるため、シェルの要素が持つ部品 (板として入れたガセットと、通す形にした節の "
@@ -332,6 +342,46 @@ def same_mesh(res: dict, mesh: Record) -> str | None:
     return None
 
 
+def shell_frames(design: Record, res: dict, series, mesh: Record | None) -> Record:
+    """frame_shell's outputs over the instants of upstream_mount_series, solved on res's factorised frame:
+    field.frames per element (on `mesh`, when given: the mesh solved here) and per member, series of the
+    largest hot spot and element stress, their largest instants as results, and an effect."""
+    lc_id, ana_id, instants = series
+    members = {m["id"] for m in design["members"]}
+    per_element, per_member, peak, hot, hot_at = [], [], [], [], []
+    for inst in instants:
+        r = analyze_shell(design, frame=res["frame"], mount_loads=inst["mount_loads"],
+                          gravity_mps2=inst["gravity_mps2"], inertia_N=inst["inertia_N"])
+        if mesh is not None:  # whole MPa: tens of instants of every element (about 6 MB for the demo frame)
+            per_element.append([int(round(float(v))) for v in r["von_mises"]["max"]])
+        per_member.append({m: round(v, 2) for m, (v, _) in r["member_max"].items() if m in members})
+        peak.append(r["member_max"][r["worst_member"]][0])
+        top = r.get("hot_spot_max")
+        hot.append(abs(top["value"]) if top else 0.0)
+        hot_at.append(f"joint {top['joint']} ({top['member']})" if top else "")
+    t = [inst["t_s"] for inst in instants]
+    src = {"source_analysis_id": ana_id} if ana_id else {}
+    fields = [{"kind": "stress", "label": LABEL_FRAMES_MEMBER, "unit": "MPa",
+               "frames": {"t_s": t, "per_member": per_member, "max": [round(v, 2) for v in peak], **src}}]
+    if mesh is not None:
+        fields.insert(0, {"kind": "stress", "label": LABEL_FRAMES, "unit": "MPa", "mesh_id": mesh["mesh_id"],
+                          "surface": "max", "frames": {"t_s": t, "per_element": per_element,
+                                                       "max": [round(max(v), 2) for v in per_element], **src}})
+    k, j = int(np.argmax(hot)), int(np.argmax(peak))
+    return {
+        "fields": fields,
+        "series": [{"channel": "max_hot_spot_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in hot]},
+                   {"channel": "max_stress", "unit": "MPa", "t_s": t, "values": [round(v, 3) for v in peak]}],
+        "results": [result("max_hot_spot_stress_over_time", hot[k], "MPa", f"{hot_at[k]} at t {t[k]:.3f} s"),
+                    result("max_stress_over_time", peak[j], "MPa", f"t {t[j]:.3f} s")],
+        "effects": [{"name": (f"shell solved at {len(t)} instants of {lc_id}'s mount forces (t {t[0]:.3f} to "
+                              f"{t[-1]:.3f} s, one factorisation): largest hot spot {hot[k]:.1f} MPa at "
+                              f"{hot_at[k]}, t {t[k]:.3f} s; largest element stress {peak[j]:.1f} MPa at t "
+                              f"{t[j]:.3f} s"), "value": hot[k], "unit": "MPa"}],
+        "assumptions": [FRAMES_ASSUMPTION.format(lc=lc_id)],
+    }
+
+
 def mesh_change(out: Record, res: dict, fine: dict) -> None:
     """Add the half-size solve's hot spot and element peak to out (results, effects)."""
     a, b = res["mesh"].element_size_mm, fine["mesh"].element_size_mm
@@ -427,6 +477,9 @@ class FrameShell(BuiltinTool):
                 out["fields"] += mesh_fields(res, mesh)
         if why:
             out["effects"].append({"name": why})
+        series = upstream_mount_series(params.get("upstream_analyses"), design)
+        if series:
+            add_frames(out, shell_frames(design, res, series, mesh if mesh is not None and why is None else None))
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out

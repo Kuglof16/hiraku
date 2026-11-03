@@ -26,8 +26,10 @@ SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"  # the long demo runs (as HIRA
 
 
 def demo_design() -> dict:
-    with DEMO.open(encoding="utf-8") as f:
-        return json.load(f)
+    """The demo vehicle's ladder frame without the roll bar (on by default; the roll bar's shell: test_rollbar)."""
+    from hiraku.designgen import ladder_4w
+
+    return ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
 
 
 def report(rows) -> None:

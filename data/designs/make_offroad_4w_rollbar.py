@@ -2,11 +2,12 @@
 
 Run from the repository root:  python data/designs/make_offroad_4w_rollbar.py
 
-hiraku.designgen.ladder_4w with its default variables except rollbar 1: the
-roll bar takes its own variables' defaults (rollbar_height, rollbar_width,
-rollbar_offset, a round tube rollbar_d x rollbar_t), and build_rollbar places
-it behind the seats from the frame and the seats. Used by the roll-over (R4)
-runs.
+hiraku.designgen.ladder_4w with rollbar 1: the roll bar takes its own
+variables' defaults (rollbar_height, rollbar_width, rollbar_offset, a round tube
+rollbar_d x rollbar_t), and build_rollbar places it behind the seats from the
+frame and the seats. Used by the roll-over (R4) runs. The roll bar is on by
+default now, so this is the same vehicle as offroad-4w-v1.json (only its name
+and change reason differ); the file stays for the runs that name it.
 """
 
 from __future__ import annotations

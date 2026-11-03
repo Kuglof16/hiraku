@@ -161,13 +161,13 @@ class DesignGenTest(unittest.TestCase):
             designgen.regenerate(V1, {"wheel_inertia": {"value": 1.0, "unit": "kg*m^2"}})
 
     def test_motor_mass_follows_its_rating(self):
-        def motor(**ch):
-            return next(p for p in GEN.build(ch)["parts"] if p["id"] == "motor")["mass_kg"]
-        self.assertEqual(motor(), 25.0)
+        def motor(**ch):  # the drive: motor, reducer and driveshafts (kit/drivetrain.py splits the v1 25 kg)
+            return sum(p["mass_kg"] for p in GEN.build(ch)["parts"] if p["kind"] in ("motor", "reducer", "driveshaft"))
+        self.assertAlmostEqual(motor(), 25.0, places=9)
         self.assertAlmostEqual(motor(motor_peak_power={"value": 12, "unit": "kW"}), 30.0)
         self.assertAlmostEqual(motor(motor_peak_torque={"value": 75, "unit": "N*m"}), 37.5)
         self.assertAlmostEqual(motor(motor_peak_power={"value": 12, "unit": "kW"}, motor_peak_torque={"value": 75, "unit": "N*m"}), 37.5)
-        self.assertEqual(motor(motor_peak_power={"value": 8, "unit": "kW"}), 25.0)  # the torque keeps it at 50 N*m
+        self.assertAlmostEqual(motor(motor_peak_power={"value": 8, "unit": "kW"}), 25.0)  # the torque keeps it at 50 N*m
 
     def test_battery_follows_its_capacity(self):
         d = GEN.build({"battery_capacity": {"value": 150, "unit": "Ah"}})
