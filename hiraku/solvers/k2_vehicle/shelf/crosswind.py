@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from ..checks import _check
+from ..checks import CHECK_WIND, _check
 from ..drive import RHO_AIR, Aero, SpeedController, controls, start_rolling
 from ..model import box_design, build_vehicle
 from ..record import Recorder
@@ -80,8 +80,8 @@ class CrosswindTool(K2Tool):
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="crosswind check, rigid")
         veh = build_vehicle(d)
         aero = Aero.of(veh, RHO_AIR, 0.0, 1.0)
-        got = wind_ramp(veh, aero, True)["v_crit"]
-        got_r = wind_ramp(veh, aero, False)["v_crit"]
+        got = wind_ramp(veh, aero, True, **CHECK_WIND)["v_crit"]
+        got_r = wind_ramp(veh, aero, False, **CHECK_WIND)["v_crit"]
         w = veh.m_total * G0
         expected = math.sqrt(w * 1.2 / (RHO_AIR * 1.0 * veh.side_area * veh.side_cp[2]))
         src = "moment about the downwind contact line: 1/2 rho C_y A v^2 h_cp = W t / 2"
