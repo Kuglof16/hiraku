@@ -128,9 +128,8 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
         step = {"order": i + 1, "part": pid, "direction": d_in, "depends_on": touching,
                 "no_interference": True, "tool_clearance": tool_ok, "hand_reach": reach_ok,
                 "note": f"face {reach:.0f} mm in from the outside of what is built"}
-        if in_way:  # the part goes in, but the tool's opening in front of it is taken
-            step["blocked_by"] = [b.split(":", 1)[1] for b in in_way]
-            step["note"] += f"; the tool's opening is taken by {', '.join(step['blocked_by'])}"
+        if in_way:  # the part goes in, but the tool's opening in front of it is taken (blocked_by is for parts that cannot go in)
+            step["note"] += f"; the tool's opening is taken by {', '.join(b.split(':', 1)[1] for b in in_way)}"
         moves = _clear_of(part, asm["routes"][k], extent)
         fast = part_fastenings(design, pid, bs)
         extra = {"fastenings": fast, "path_mm": path_in(part.obb.center, moves),

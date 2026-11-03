@@ -71,8 +71,8 @@ class DemoGeometryTest(unittest.TestCase):
         cramped = [s for s in steps(DESIGN) if s["no_interference"] and not s["tool_clearance"]]
         self.assertTrue(cramped)
         for s in cramped:
-            self.assertTrue(s["blocked_by"], s["part"])
-            self.assertIn("tool's opening", s["note"])
+            self.assertNotIn("blocked_by", s)  # that field is for a part that cannot go in at all
+            self.assertIn("the tool's opening is taken by ", s["note"])
 
     def test_people(self):
         f = fit(DESIGN)
