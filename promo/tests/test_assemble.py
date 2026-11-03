@@ -110,7 +110,7 @@ class Table(unittest.TestCase):
         self.assertEqual(joins["N17b"], ("light", 0.6))
         self.assertEqual(joins["N10"], ("dissolve", 0.25))
         looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
-        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b", "N18"])  # the dark cuts (N08: the plain CAE tool on night)
+        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b"])  # the dark cuts (N08: the plain CAE tool on night; N18 ends on paper)
         # the numbered labels lie over N01-N04, each from the start of its own cut
         for seg in data["segments"]:
             for ov in seg.get("overlay", []):
