@@ -283,10 +283,8 @@ def front_view_ic(hp: Hardpoints) -> np.ndarray | None:
     return p1 + t * d1
 
 
-def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings | None = None) -> dict:
-    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg); with
-    bushings, every row also has the compliance (deg per kN at the contact point, deg per kN m
-    about z)."""
+def _sweep(hp: Hardpoints, travel: float, n: int) -> tuple[np.ndarray, list[dict]]:
+    """The bench solutions at n travels evenly over +-travel (m), and those travels."""
     bench = DoubleWishboneBench(hp)
     z0 = float(hp.wheel_center[2])
     # Map lower-arm angle to travel: march outward from design in small steps.
@@ -310,7 +308,6 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
     tz = tz[order]
     th = np.array(thetas)[order]
     grid = np.linspace(-travel, travel, n)
-    rows = []
     bench._phi, bench._psi = 0.0, 0.0
     sols = []
     for z in grid:
@@ -320,6 +317,15 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
         lo, hi = theta - 0.01, theta + 0.01
         theta = brentq(f, lo, hi, xtol=1e-14, rtol=1e-14)
         sols.append(bench.solve(theta))
+    return grid, sols
+
+
+def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings | None = None) -> dict:
+    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg); with
+    bushings, every row also has the compliance (deg per kN at the contact point, deg per kN m
+    about z)."""
+    grid, sols = _sweep(hp, travel, n)
+    rows = []
     wc0 = hp.wheel_center
     cp = np.array([s["contact"] for s in sols])
     dy_dz = np.gradient(cp[:, 1], cp[:, 2])
@@ -356,23 +362,56 @@ COMPLIANCE_UNIT = {k: ("deg_per_kNm" if k.endswith("_mz") else "deg_per_kN") for
 
 def low_bump_steer(hp: Hardpoints, travel: float, n: int = 7) -> Hardpoints:
     """hp with the tie rod's inner joint moved (in y and z) to where the toe follows the travel
-    least: the largest |toe - toe at design| over an n-row table of +-travel is minimised
+    least: the largest |toe - toe at design| at n travels over +-travel is minimised
     (Nelder-Mead from the given point). Aiming at no bump steer is K2's own choice for the
-    generic layout (assumed; no source read in this repository)."""
-    def moved(p) -> Hardpoints:
-        return dataclasses.replace(hp, tie_inner=np.array([float(hp.tie_inner[0]), float(p[0]), float(p[1])]))
+    generic layout (assumed; no source read in this repository).
+
+    The arms' motion does not depend on the tie rod, so it is solved once (at the given
+    layout's lower-arm angle for each travel); for a trial inner point only the knuckle's turn
+    psi about the kingpin axis is solved, in closed form: with v(psi) the tie rod's outer point
+    from the lower ball joint (Rodrigues about the axis u), |lbj + v(psi) - inner|^2 = l^2 is
+    A cos psi + B sin psi + C = 0."""
+    bench = DoubleWishboneBench(hp)
+    poses = []
+    for s in _sweep(hp, travel, n)[1]:
+        lbj, ubj = s["lbj"], s["ubj"]
+        r0 = bench._knuckle(lbj, ubj, 0.0)
+        u = _unit(ubj - lbj)
+        poses.append((lbj, u, r0 @ (hp.tie_outer - hp.lca_outer), r0 @ hp.axle))
+    centre = n // 2
+
+    def toe_at(pose, inner: np.ndarray, length2: float) -> float:
+        lbj, u, v0, a0 = pose
+        d = lbj - inner
+        du, uv = float(d @ u), float(u @ v0)
+        a = 2.0 * (float(d @ v0) - du * uv)
+        b = 2.0 * float(d @ np.cross(u, v0))
+        c = float(d @ d) + float(v0 @ v0) - length2 + 2.0 * du * uv
+        rr = math.hypot(a, b)
+        if rr < abs(c):
+            raise ValueError("the tie rod does not reach")
+        base = math.atan2(b, a)
+        off = math.acos(-c / rr)
+        psi = min((base + off, base - off), key=lambda p: abs(math.remainder(p, 2.0 * math.pi)))
+        psi = math.remainder(psi, 2.0 * math.pi)
+        ax = a0 * math.cos(psi) + np.cross(u, a0) * math.sin(psi) + u * float(u @ a0) * (1.0 - math.cos(psi))
+        return math.atan2(float(ax[0]), float(ax[1]))
+
+    def inner_of(p) -> np.ndarray:
+        return np.array([float(hp.tie_inner[0]), float(p[0]), float(p[1])])
 
     def worst(p) -> float:
+        inner = inner_of(p)
+        length2 = float(np.sum((hp.tie_outer - inner) ** 2))
         try:
-            rows = build_table(moved(p), travel, n)["rows"]
+            toes = [toe_at(pose, inner, length2) for pose in poses]
         except ValueError:
-            return 1e3  # the loop does not close there
-        toe = [r["toe_deg"] for r in rows]
-        return max(abs(t - toe[n // 2]) for t in toe)
+            return 1e3
+        return max(abs(t - toes[centre]) for t in toes)
 
     res = minimize(worst, [float(hp.tie_inner[1]), float(hp.tie_inner[2])], method="Nelder-Mead",
-                   options={"xatol": 1e-4, "fatol": 1e-4, "maxiter": 200})
-    return moved(res.x)
+                   options={"xatol": 1e-5, "fatol": 1e-7, "maxiter": 400})
+    return dataclasses.replace(hp, tie_inner=inner_of(res.x))
 
 
 _POINTS = ("lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_outer", "tie_inner", "tie_outer",
