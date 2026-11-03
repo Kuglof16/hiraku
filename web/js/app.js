@@ -306,7 +306,7 @@ function renderDraft() {
         : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
     body = `<b>要件がそろいました</b>${scripted}${claude}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
-  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、既定値のまま進めてください</span>`;
+  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、標準の値のまま進めてください</span>`;
   else
     body =
       (draft.demoTitle
