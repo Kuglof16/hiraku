@@ -118,6 +118,10 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
         made.problems.append(out.get("error", "道具が走りませんでした"))
         return made
     spec, checks = out.get("spec"), out.get("checks")
+    described = out.get("describe")
+    if described is not None and not isinstance(described, dict):
+        made.problems.append("describe() は dict を返してください (load case params と predicts。棚の道具と同じ形)")
+        described = None
     if not isinstance(spec, dict) or not isinstance(checks, list):
         made.problems.append("spec() は tool_spec の dict を、check() は tool_check の list を返してください")
         return made
@@ -149,7 +153,7 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
     made.spec = spec
     made.usable = spec["usable"]
     if made.usable:
-        made.tool = SandboxedTool(code, spec, run_timeout_s)
+        made.tool = SandboxedTool(code, spec, run_timeout_s, described)
     return made
 
 
@@ -157,14 +161,25 @@ class SandboxedTool:
     """A tool made during a run (hiraku.contract.protocols.AnalysisTool): spec() and check()
     give what make_tool found; run() runs the code in its own process."""
 
-    def __init__(self, code: str, spec: Record, run_timeout_s: float = RUN_TIMEOUT_S):
+    def __init__(self, code: str, spec: Record, run_timeout_s: float = RUN_TIMEOUT_S, described: Record | None = None):
         self.code = code
         self._spec = spec
         self.name = spec["name"]
         self.run_timeout_s = run_timeout_s
+        self._described = described
 
     def spec(self) -> Record:
         return json.loads(json.dumps(self._spec))
+
+    def describe(self) -> Record:
+        """What the tool's describe() gave when make_tool checked it (its load case params and predicts), with its
+        name, title, domain, tests and formulas from the spec; predicts [] when the code has no describe()."""
+        out = {k: self._spec.get(k) for k in ("name", "title", "domain", "tests", "formulas") if k in self._spec}
+        out.update({"params": [], "predicts": []})
+        if self._described:
+            out.update(json.loads(json.dumps(self._described)))
+            out["name"] = self.name
+        return out
 
     def check(self) -> list[Record]:
         return self.spec()["checks"]

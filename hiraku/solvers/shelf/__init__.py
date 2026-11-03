@@ -9,11 +9,12 @@ from .frame_shell import FrameShell
 from .frame_static import FrameStatic
 from .frame_tubes import FrameTubes
 from .k3_tools import DriveEnergy, Thermal
+from .load_path import LoadPath
 from .modal import Modal
 from .step_climb import StepClimb
 
 BUILTIN_TOOLS = (FrameStatic, FrameShell, FrameTubes, StepClimb, DriveEnergy, Thermal, Crash, Modal, Fatigue, Assembly,
-                 BedStatic, ActuatorLinkage, UseFatigue, ActuatorDuty)
+                 BedStatic, ActuatorLinkage, UseFatigue, ActuatorDuty, LoadPath)
 
 __all__ = ["BUILTIN_TOOLS", "ActuatorDuty", "ActuatorLinkage", "Assembly", "BedStatic", "Crash", "DriveEnergy", "Fatigue",
-           "FrameShell", "FrameStatic", "FrameTubes", "Modal", "StepClimb", "Thermal", "UseFatigue"]
+           "FrameShell", "FrameStatic", "FrameTubes", "LoadPath", "Modal", "StepClimb", "Thermal", "UseFatigue"]
