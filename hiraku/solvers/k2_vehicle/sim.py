@@ -16,8 +16,9 @@ speeds first, then positions with the new speeds.
 
 Wheel spin and the tyre deflection states are separate first-order states.
 Brakes and rolling resistance are Coulomb torques applied implicitly (a held
-wheel stays exactly at zero spin). The tyre's tangential force and its
-deflection state are the corner's force law (tyre.py).
+wheel stays exactly at zero spin). The tyre's tangential force, its aligning
+moment and its deflection state are the corner's force law (tyre.py; a Magic
+Formula 6.1 tyre for every wheel).
 
 One step: corner kinematics -> road contacts -> per corner (wheel axis, normal
 contact, slip in the tyre frame, tyre force, wheel spin, generalised forces)
@@ -140,6 +141,7 @@ class Sim:
         self.toe0 = [c.path.toe0 if c.path is not None else 0.0 for c in cs]
         self.s_lo = [c.path.s_lo if c.path is not None else -1.0 for c in cs]
         self.s_hi = [c.path.s_hi if c.path is not None else 1.0 for c in cs]
+        self.comp = [c.path.comp.tolist() if c.path is not None and c.path.comp is not None else None for c in cs]
         pos = {i: k for k, i in enumerate(self.dofidx)}
         self.pairs = []
         for i, c in enumerate(cs):
@@ -178,11 +180,13 @@ class Sim:
         self.om = [0.0] * n
         self.dx = [0.0] * n
         self.dy = [0.0] * n
+        self.ct = [0.0] * n  # toe and camber from the compliance (rad), from the forces of the step before
+        self.cc = [0.0] * n
         self.out = {}
         defl = [c.static_load / c.k_z for c in veh.corners]
         self.p[2] -= sum(defl) / n
 
-    _STATE = ("t", "p", "q", "v", "w", "s", "sd", "om", "dx", "dy")
+    _STATE = ("t", "p", "q", "v", "w", "s", "sd", "om", "dx", "dy", "ct", "cc")
 
     def state(self) -> dict:
         return {k: (list(getattr(self, k)) if isinstance(getattr(self, k), list) else getattr(self, k)) for k in self._STATE}
@@ -197,7 +201,8 @@ class Sim:
     # ------------------------------------------------------------- geometry
     def _path(self, i: int, s: float):
         """Body-frame wheel centre, its first and second travel derivatives, the
-        knuckle rotation per travel (x and z), camber and toe of corner i."""
+        knuckle rotation per travel (x and z), camber and toe of corner i (on a K&C
+        table, with the compliance's toe and camber of the forces of the step before)."""
         hx, hy, hz = self.hard[i]
         if not self.dof[i]:
             return hx, hy, hz, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.camber0[i], self.toe0[i]
@@ -221,7 +226,7 @@ class Sim:
         (x, x1, x2), (y, y1, y2), (z, z1, z2), (cb, cb1, _), (te, te1, _) = vals
         side = self.side[i]
         return (hx + x, hy + sd_ * y, hz + z, x1, sd_ * y1, z1, x2, sd_ * y2, z2,
-                -side * cb1, -side * te1, self.camber0[i] + cb, self.toe0[i] + te)
+                -side * cb1, -side * te1, self.camber0[i] + cb + self.cc[i], self.toe0[i] + te + self.ct[i])
 
     def _kinematics(self, rot):
         """Per corner: (path values, wheel-centre position and velocity in world axes), and the centres."""
@@ -271,11 +276,13 @@ class Sim:
         o_n = [None] * n
         o_slide = [False] * n
         o_spring = [0.0] * n
+        o_mz = [0.0] * n
+        o_gamma = [0.0] * n
         keep = [None] * n
         om_new = [0.0] * n
         for i in range(n):
             (rows[i], qs[i], o_spring[i], om_new[i], keep[i], o_ntot[i], o_fx[i], o_fy[i], o_f[i], o_p[i], o_n[i],
-             o_slide[i]) = self._corner(i, geo[i], contacts[i], rot, W, ctl, h)
+             o_slide[i], o_mz[i], o_gamma[i]) = self._corner(i, geo[i], contacts[i], rot, W, ctl, h)
 
         rhs6, sm, jj = self._body_forces(rows, rot, ext)
         mm, rhs = self._mass_matrix(geo, rot, sm, jj, rhs6, qs)
@@ -283,10 +290,11 @@ class Sim:
         self._integrate(sol, gx, gy, gz, h)
         self.om = om_new
         self._relax_tyres(geo, keep, o_ntot, rot, h)
+        self._comply(keep, o_fx, o_fy, o_mz, rot)
         self.t += h
 
-        self.out = {"ntot": o_ntot, "fx": o_fx, "fy": o_fy, "f": o_f, "p": o_p, "n": o_n, "sliding": o_slide,
-                    "spring": o_spring, "steer": list(ctl.steer), "centres": centres,
+        self.out = {"ntot": o_ntot, "fx": o_fx, "fy": o_fy, "mz": o_mz, "gamma": o_gamma, "f": o_f, "p": o_p,
+                    "n": o_n, "sliding": o_slide, "spring": o_spring, "steer": list(ctl.steer), "centres": centres,
                     "camber": [geo[i][0][11] for i in range(n)], "toe": [geo[i][0][12] for i in range(n)],
                     "acc": (sol[0] + gx, sol[1] + gy, sol[2] + gz)}
 
@@ -298,21 +306,27 @@ class Sim:
         ax, ay, az = self._wheel_axis(i, rot, ctl.steer[i], camber, toe)
         (fnx, fny, fnz, ntot, pex, pey, pez, nex, ney, nez, mnx, mny, mnz) = self._normal(
             i, contacts, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az)
-        (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re) = self._slip(
+        (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re, arl) = self._slip(
             i, W, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az, pex, pey, pez, nex, ney, nez)
-        vroll = abs(self.om[i]) * re
-        fl, ft_, sliding, lim = self.tyres[i].force(self.dx[i], self.dy[i], vsl, vst, vroll, ntot)
+        om = self.om[i]
+        vroll = abs(om) * re
+        vcx = vsl - om * arl  # forward speed of the contact centre (the spin's part taken out)
+        sa = ax * nex + ay * ney + az * nez
+        gamma = math.asin(-1.0 if sa < -1.0 else (1.0 if sa > 1.0 else sa))  # inclination to the road, ISO
+        fl, ft_, mz, sliding, lim = self.tyres[i].force(self.dx[i], self.dy[i], vsl, vst, vroll, vcx, gamma, ntot)
         ftx = fl * lx + ft_ * tx
         fty = fl * ly + ft_ * ty
         ftz = fl * lz + ft_ * tz
         fx_ = fnx + ftx
         fy_ = fny + fty
         fz_ = fnz + ftz
+        # the aligning moment acts about the road normal, on the wheel
+        mnx, mny, mnz = mnx + mz * nex, mny + mz * ney, mnz + mz * nez
         on, mbx, mby, mbz = self._spin(i, ctl, h, ax, ay, az, rhx, rhy, rhz, ftx, fty, ftz, mnx, mny, mnz, ntot, re)
         row, qsi, spring = self._generalised(i, rot, g, fx_, fy_, fz_, mbx, mby, mbz, rhx, rhy, rhz)
-        keep = (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim)
+        keep = (lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim, arl)
         return (row, qsi, spring, on, keep, ntot, fl, ft_, (fx_, fy_, fz_), (pex, pey, pez), (nex, ney, nez),
-                sliding)
+                sliding, mz, gamma)
 
     def _wheel_axis(self, i, rot, steer, camber, toe):
         """Spin axis of corner i in world axes from the steer angle and the path's camber and toe."""
@@ -378,7 +392,7 @@ class Sim:
     def _slip(self, i, W, Cx, Cy, Cz, Vx, Vy, Vz, ax, ay, az, pex, pey, pez, nex, ney, nez):
         """Tyre frame (l along the heading, t across, both in the contact plane), the contact
         point from the wheel centre, the spin's velocity per rad/s there, the slip velocities
-        along l and t, and the effective rolling radius."""
+        along l and t, the effective rolling radius, and the spin's velocity per rad/s along l."""
         Wx, Wy, Wz = W
         lx = ay * nez - az * ney
         ly = az * nex - ax * nez
@@ -401,7 +415,8 @@ class Sim:
         vsl = vsx_ * lx + vsy_ * ly + vsz_ * lz
         vst = vsx_ * tx + vsy_ * ty + vsz_ * tz
         re = math.sqrt(rhx * rhx + rhy * rhy + rhz * rhz)
-        return lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re
+        arl = arx * lx + ary * ly + arz * lz
+        return lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, vsl, vst, re, arl
 
     def _spin(self, i, ctl, h, ax, ay, az, rhx, rhy, rhz, ftx, fty, ftz, mnx, mny, mnz, ntot, re):
         """New wheel spin (implicit Coulomb torque of the brake and the rolling resistance) and the
@@ -614,7 +629,7 @@ class Sim:
                 continue
             g = geo[i][0]
             cx, cy, cz, dcx, dcy, dcz = g[0], g[1], g[2], g[3], g[4], g[5]
-            lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim = keep[i]
+            lx, ly, lz, tx, ty, tz, rhx, rhy, rhz, arx, ary, arz, re, lim, arl = keep[i]
             sdi = self.sd[i]
             bx = wy * cz - wz * cy + dcx * sdi
             by = wz * cx - wx * cz + dcy * sdi
@@ -625,9 +640,39 @@ class Sim:
             vsz_ = vz + r20 * bx + r21 * by + r22 * bz + (Wx * rhy - Wy * rhx) + on * arz
             vsl = vsx_ * lx + vsy_ * ly + vsz_ * lz
             vst = vsx_ * tx + vsy_ * ty + vsz_ * tz
-            new_dx[i], new_dy[i] = self.tyres[i].relax(self.dx[i], self.dy[i], vsl, vst, abs(on) * re, lim, h)
+            new_dx[i], new_dy[i] = self.tyres[i].relax(self.dx[i], self.dy[i], vsl, vst, abs(on) * re,
+                                                       vsl - on * arl, lim, h)
         self.dx = new_dx
         self.dy = new_dy
+
+    def _comply(self, keep, fl, ft, mz, rot):
+        """Toe and camber of the K&C compliance for the next step: the table's compliance at the
+        travel times this step's tyre force at the contact (body x, y) and aligning moment. The
+        tables are for a left wheel, so a right wheel's Fy and Mz go in mirrored."""
+        for i in range(self.n):
+            rows = self.comp[i]
+            if rows is None or keep[i] is None:
+                continue
+            lo, hi = self.s_lo[i], self.s_hi[i]
+            s = self.s[i]
+            sc = lo if s < lo else (hi if s > hi else s)
+            vals = []
+            for row in rows:
+                v = row[0]
+                for ck in row[1:]:
+                    v = v * sc + ck
+                vals.append(v)
+            lx, ly, lz, tx, ty, tz = keep[i][:6]
+            lbx, lby, _ = _to_body(rot, lx, ly, lz)
+            tbx, tby, _ = _to_body(rot, tx, ty, tz)
+            fx = fl[i] * lbx + ft[i] * tbx
+            fy = fl[i] * lby + ft[i] * tby
+            m = mz[i]
+            if self.side[i] < 0:
+                fy, m = -fy, -m
+            # COMPLIANCE_KEYS: toe and camber per fx, per fy, per mz
+            self.ct[i] = vals[0] * fx + vals[2] * fy + vals[4] * m
+            self.cc[i] = vals[1] * fx + vals[3] * fy + vals[5] * m
 
     def _psum(self, rows: list) -> list:
         """Column sums of the per-corner rows: each mirror pair (L + R) first, then the pairs

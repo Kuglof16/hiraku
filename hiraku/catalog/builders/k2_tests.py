@@ -394,6 +394,19 @@ def park_inputs(design: Record, load_case: Record) -> Record:
     return {"h": _height(veh, ground)}
 
 
+def lock_inputs(design: Record, load_case: Record) -> Record:
+    """mu of a locked wheel: the K2 tyre (Magic Formula, peak mu = the load case's mu) at
+    slip -1, sum |Fx| / sum Fz over the wheels at their static loads."""
+    from hiraku.solvers.k2_vehicle.drive import on_board
+    from hiraku.solvers.k2_vehicle.model import build_vehicle
+    from hiraku.solvers.k2_vehicle.units import si
+    lp = load_case.get("params", {})
+    veh = build_vehicle(on_board(design, lp.get("loading")), {"mu": si(lp["mu"], "1")})
+    wheels = [c for c in veh.corners if c.mf is not None]
+    mu = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in wheels) / sum(c.static_load for c in wheels)
+    return {"mu": q(mu, "1")}
+
+
 def slope_inputs(design: Record, load_case: Record) -> Record:
     """a_y = tan(side_slope) in g (the slope taken as a lateral acceleration); h; e, the CG's
     offset toward the downhill side."""
@@ -464,7 +477,26 @@ PLANS: dict[str, Record] = {
            "predictions": [{
                "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",
                "assumptions": ["全輪が摩擦の限りで減速する", "空走の時間は荷重条件の reaction_time"],
-               "inputs": {"v": "lc.speed", "mu": "lc.mu", "t_r": "lc.reaction_time"}}]},
+               "inputs": {"v": "lc.speed", "mu": "lc.mu", "t_r": "lc.reaction_time"}}],
+           # Run on the demo vehicle (two_cargo, 35 km/h, mu 0.6) with the Magic Formula tyre: K0 8.03 m,
+           # K2 10.75 m (+33.9 %); K0 with the locked-wheel mu 0.442 of lock_inputs: 10.90 m (K2 -1.4 %).
+           # The braking tool's own check (locked wheels from 40 km/h) agrees with that closed form to -1.5 %.
+           "expected_mismatch": {
+               "quantity": "stopping_distance",
+               "source": "the K2 department's run on the demo vehicle with the Magic Formula tyre (two_cargo, "
+                         "35 km/h, mu 0.6) and the braking tool's locked-wheel own check, 2026-11-03",
+               "cause": "ブレーキは全輪をロックする (ABS なし)。ロックした輪はすべり率 -1 で滑り、タイヤの式 "
+                        "(Magic Formula) ではそのときの摩擦が頂点の μ より小さい (デモの車で μ 0.6 に対して約 0.44)。"
+                        "式は頂点の μ で減速するとみている",
+               "fix": "ロックした輪の μ (タイヤの式のすべり率 -1 の値) で予測し直す",
+               "retry": {
+                   "say": "ロックした輪の摩擦で、止まるまでの距離を予測し直します",
+                   "predictions": [{
+                       "quantity": "stopping_distance", "formula_id": "braking.stopping_distance", "output": "s",
+                       "assumptions": ["全輪がロックして滑る (すべり率 -1 のタイヤの摩擦)",
+                                       "空走の時間は荷重条件の reaction_time"],
+                       "inputs": {"v": "lc.speed", "mu": "from.mu", "t_r": "lc.reaction_time"},
+                       "inputs_from": lock_inputs}]}}},
     "S4b": {"tool": "braking", "say": "坂に止めておくのに要る摩擦を、坂の力と輪の荷重の釣り合いで先に見積もります",
             "predictions": [{
                 "quantity": "parking_friction_demand", "formula_id": "braking.parking_friction", "output": "mu_all",
