@@ -111,12 +111,55 @@ class KcBench(unittest.TestCase):
         self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
         loads = [v for v in rec["vectors"] if v["kind"] == "joint"]
         self.assertEqual({v["at"].split(".")[1] for v in loads}, set(kinematics.MOUNTS))
+        self.assertEqual(len(loads), 4 * len(kinematics.MOUNTS))
         # per corner the loads on the body add up to that wheel's road force (reaction + grip)
+        # and its unsprung weight (15 kg), less its inertia (small in the slow push: within 2 %)
         for cid in ("FL", "RR"):
             got = np.sum([v["vector_N"] for v in loads if v["at"].startswith(cid + ".")], axis=0)
             road = np.sum([v["vector_N"] for v in rec["vectors"] if v.get("at") == cid and v["kind"] in ("reaction", "grip")],
                           axis=0)
-            np.testing.assert_allclose(got, road, atol=1e-6 * max(1.0, float(np.linalg.norm(road))))
+            np.testing.assert_allclose(got, road + [0.0, 0.0, -15.0 * 9.80665], atol=0.02 * np.linalg.norm(road))
+        # the time series: every mount of every corner on one time base, closer around the lift-off
+        ser = {s["channel"]: s for s in rec["series"]}
+        names = [f"mount_{a}.{c}.{m}" for a in "xyz" for c in ("FL", "FR", "RL", "RR") for m in kinematics.MOUNTS]
+        self.assertTrue(all(n in ser for n in names))
+        t = ser[names[0]]["t_s"]
+        self.assertTrue(20 <= len(t) <= 80, len(t))
+        self.assertTrue(all(ser[n]["t_s"] == t and ser[n]["unit"] == "N" for n in names))
+        for n in ("sprung_accel_x", "sprung_ang_vel_y", "inertia_force_z", "inertia_moment_y", "sprung_pitch",
+                  "sprung_cg_z"):
+            self.assertEqual(ser[n]["t_s"], t, n)
+        gaps = np.diff(t)
+        self.assertLess(gaps.min(), gaps.max() / 5.0)
+
+    def test_the_mount_forces_balance_the_knuckle_load(self):
+        # statics: the forces on the body at the mounts carry the knuckle's whole load, its moment
+        # included, for a left and a mirrored right corner
+        veh = build_vehicle(box_design(susp="kc_table", wheel_mass=15.0))
+        for c in (veh.corners[0], veh.corners[1]):
+            f, x = np.array([-900.0, 400.0 * c.side, 3000.0]), np.array([c.pos[0] + 0.01, c.pos[1], c.pos[2]])
+            mom = np.array([30.0, -120.0, 15.0 * c.side])
+            got = kinematics.corner_mount_forces(c.table, c.side, 0.02, f, x, mom)
+            np.testing.assert_allclose(sum(v for _, v in got.values()), f, atol=1e-6)
+            np.testing.assert_allclose(sum(np.cross(p, v) for p, v in got.values()), np.cross(x, f) + mom, atol=1e-6)
+
+    def test_the_body_loads_balance_through_the_push(self):
+        # the mount forces, the drive reactions on the body, its weight and its d'Alembert force
+        # and moment balance at every kept instant (the knuckles carry the unsprung mass)
+        from hiraku.solvers.k2_vehicle.shelf.step import corner_mounts, step_push
+        veh = build_vehicle(box_design(susp="kc_table", wheel_mass=15.0))
+        front = [i for i, c in enumerate(veh.corners) if c.steer]
+        r = step_push(veh, 0.1, front, rec_hz=25.0)
+        self.assertGreater(len(r["states"]), 50)
+        for st in r["states"][::10]:
+            force, moment = st["weight"] + st["inertia_force"], st["inertia_moment"].copy()
+            for i in range(len(veh.corners)):
+                for p, f in corner_mounts(veh, st, i).values():
+                    force, moment = force + f, moment + np.cross(p - st["cg"], f)
+                moment = moment + st["corners"][i]["body_torque"]
+            w = float(np.linalg.norm(st["weight"]))
+            self.assertLess(np.linalg.norm(force) / w, 1e-9)
+            self.assertLess(np.linalg.norm(moment) / w, 1e-9)  # m
 
     def test_the_mount_points_come_from_the_design(self):
         # the design's suspension.hardpoints_mm: K2 builds its tables from them, and hardpoints_of

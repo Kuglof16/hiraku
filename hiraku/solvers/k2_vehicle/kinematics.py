@@ -306,11 +306,13 @@ def solve_at_travel(hp: Hardpoints, travel: float) -> dict:
     return bench.solve(brentq(f, min(prev, theta), max(prev, theta), xtol=1e-14, rtol=1e-14))
 
 
-def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarray | None = None) -> dict:
+def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarray | None = None,
+                 moment: np.ndarray | None = None) -> dict:
     """Forces (N, body axes) that a LEFT double wishbone puts on the body at its mounts when the
     road pushes the tyre with `force` (N, body axes) at the contact point (default: the bench's,
-    under the wheel), at the bench solution `sol` (one travel). Returns {mount: force} for MOUNTS,
-    the knuckle's ball joints and the damper and tie rod forces (+ tension).
+    under the wheel), with a further `moment` (N*m, body axes) on the knuckle, at the bench
+    solution `sol` (one travel). Returns {mount: force} for MOUNTS, the knuckle's ball joints and
+    the damper and tie rod forces (+ tension).
 
     Rigid links and frictionless joints. The knuckle is in balance under the tyre force, the two
     ball joints and the tie rod (a two-force member, along it); each arm turns freely about its
@@ -346,6 +348,8 @@ def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarr
     a[3:6, 3:6] = _skew(ubj - lbj)
     a[3:6, 6] = np.cross(tro - lbj, nt)
     b[3:6] = -np.cross(cp - lbj, f)
+    if moment is not None:
+        b[3:6] -= np.asarray(moment, dtype=float)
     # lower arm about its axis: the knuckle pushes it with -F_lbj at lbj, the damper with d nd at dl
     a[6, 0:3] = -(ea @ _skew(lbj - hp.lca_front))
     a[6, 7] = float(ea @ np.cross(dl - hp.lca_front, nd))
@@ -373,17 +377,20 @@ def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarr
 
 
 def corner_mount_forces(table: dict, side: float, travel: float, force: np.ndarray,
-                        contact: np.ndarray | None = None) -> dict:
+                        contact: np.ndarray | None = None, moment: np.ndarray | None = None) -> dict:
     """mount_forces of a corner on a K&C table (a left-wheel table; side < 0 mirrors it) at a
-    travel (m, held inside the table) for the tyre force (N, body axes) at `contact` (design
-    frame, m; default under the wheel): {mount: (point, force)}, design frame, metres and newtons."""
+    travel (m, held inside the table) for the force (N, body axes) at `contact` (design frame, m;
+    default under the wheel) and a moment on the knuckle (N*m, body axes): {mount: (point, force)},
+    design frame, metres and newtons."""
     hp = Hardpoints.from_json(table["hardpoints_mm"])
     rows = table["rows"]
     lo, hi = rows[0]["travel_mm"] / 1000.0, rows[-1]["travel_mm"] / 1000.0
     flip = np.array([1.0, -1.0 if side < 0 else 1.0, 1.0])
     sol = solve_at_travel(hp, min(max(travel, lo), hi))
+    # a moment is an axial vector: mirrored in y it keeps its y part and turns its x and z parts
     r = mount_forces(hp, sol, np.asarray(force, dtype=float) * flip,
-                     None if contact is None else np.asarray(contact, dtype=float) * flip)
+                     None if contact is None else np.asarray(contact, dtype=float) * flip,
+                     None if moment is None else np.asarray(moment, dtype=float) * flip * flip[1])
     points = {m: getattr(hp, m) for m in MOUNTS}
     return {m: (points[m] * flip, r[m] * flip) for m in MOUNTS}
 
