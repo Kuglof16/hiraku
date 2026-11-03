@@ -11,7 +11,10 @@ Frame stations along x (x forward, origin under the front axle): F front end,
 A front axle, S1 and S2 the cross members at the front and back of the seats
 (seat_x +- 275 mm), B rear axle, E rear end. Dimensions, masses and the other
 variables' defaults are design choices (assumptions) unless a comment gives a
-source; the defaults build data/designs/offroad-4w-v1.json.
+source; the defaults build data/designs/offroad-4w-v1.json. With rollbar = 1 a
+roll bar stands behind the seats (build_rollbar): the rails are split at a
+node H between S2 and B, outriggers carry the posts' feet out to the
+rollbar_width, and a top beam joins the posts (data/designs/offroad-4w-rollbar.json).
 
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
@@ -29,7 +32,7 @@ from typing import Any
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
-from hiraku.designgen.kit.sections import rect_tube
+from hiraku.designgen.kit.sections import rect_tube, round_tube
 
 Record = dict[str, Any]
 
@@ -168,10 +171,33 @@ VARIABLES: dict[str, Var] = {
                                  "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
                                  "model's members are unchanged; 0: they end on the rail's side"),
+    # roll bar (ROPS): a portal hoop behind the seats, two posts and a top beam (build_rollbar places it from
+    # the frame and the seats). Written into design.variables only when one of them differs from its default,
+    # so a design without a roll bar is the same as before these variables existed. The sizes and defaults are
+    # design choices (assumptions, no source).
+    "rollbar": Var("1", 0.0, 0.0, 1.0, "1: a roll bar (portal hoop) behind the seats, standing on the rails at a node "
+                   "rollbar_offset behind the seat's rear cross member S2, on outriggers out to rollbar_width; 0: none"),
+    "rollbar_height": Var("mm", 1100.0, 900.0, 1400.0, "top beam centre line above the seat cushion top (the seats' "
+                          "box top); assumption: the default puts the tube above the seated head of a young male 95th "
+                          "percentile (AIST I1 sitting height; the gap is k4_geometry.rollbar.occupant_clearance's)"),
+    "rollbar_width": Var("mm", 1200.0, 700.0, 1400.0, "post centre to centre across (at least rail_spacing; wider than "
+                         "the rails, outriggers of the cross member section carry the posts' feet out from the rails); "
+                         "assumption: the default puts the posts outside the shoulders (AIST D2) of both occupants"),
+    "rollbar_offset": Var("mm", 80.0, 40.0, 400.0, "the posts' centre line this far behind the seat's rear cross member "
+                          "S2 (the rails are split at a node there; it must stay 100 mm ahead of the rear axle station)"),
+    "rollbar_square": Var("1", 0.0, 0.0, 1.0, "0: round tube rollbar_d x rollbar_t of STKM13A; 1: square tube rollbar_b "
+                          "x rollbar_b x rollbar_t of STKR400 (the materials are assumptions)"),
+    "rollbar_d": Var("mm", 42.7, 25.0, 76.3, "round tube outside diameter (rollbar_square = 0)"),
+    "rollbar_b": Var("mm", 40.0, 25.0, 80.0, "square tube width (rollbar_square = 1)"),
+    "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
-SWITCHES = ("cross_members_through",)  # 0 or 1
-# Reinforcement variables, written into design.variables only when one of their group differs from its default.
-OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
+SWITCHES = ("cross_members_through", "rollbar", "rollbar_square")  # 0 or 1
+ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
+                "rollbar_t")
+ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
+# Optional variables, written into design.variables only when one of their group differs from its default.
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",),
+            "rollbar": ROLLBAR_VARS}
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
@@ -418,8 +444,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         for st in tee:
             for side in "LR":
                 lay.parts.append(frame.through_part(f"{side}{st}", f"cross_{st}", rho))
+    materials = {"stkr400": material}
+    if v["rollbar"] == 1:
+        key = build_rollbar(frame, lay, v, cross)
+        materials.setdefault(key, json.loads(MATERIALS.read_text(encoding="utf-8"))[key])
 
-    written = {k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
+    written ={k for names in OPTIONAL.values() if any(v[n] != VARIABLES[n].default for n in names) for k in names}
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in _V1_ORDER}
     variables.update({k: _q(v[k], var.unit) for k, var in VARIABLES.items()
                       if k not in variables and (k in written or not any(k in g for g in OPTIONAL.values()))})
@@ -434,5 +464,52 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "supports": supports,
         "parts": lay.parts,
         **frame.part(),
-        "materials": {"stkr400": material},
+        "materials": materials,
     }
+
+
+ROLLBAR_STATION = "H"  # the rail nodes LH, RH under the roll bar; LHO, RHO the outriggers' ends; LHT, RHT the top corners
+
+
+def build_rollbar(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str) -> str:
+    """Add the roll bar to the frame from the variables, and return its material key.
+
+    Placed from what is there: x = the seat's rear cross member S2 minus rollbar_offset (the two rails
+    are split at a node there); feet at the rail centre height, out to y = +-rollbar_width/2 on outriggers
+    of foot_section (none when the width is the rail spacing); posts straight up to the top beam, its centre
+    line rollbar_height above the seats' box top. Members rollbar_foot_<L|R>, rollbar_post_<L|R>, rollbar_top.
+    The parts are placed before this, so their carried_by nodes do not change."""
+    s2, b = lay.station_x("S2"), lay.station_x("B")
+    x = s2 - v["rollbar_offset"]
+    if x - b < MIN_STATION_GAP_MM:
+        raise DesignGenError(f"the roll bar at x = {x:g} mm is closer than {MIN_STATION_GAP_MM:g} mm to the rear axle "
+                             f"station B ({b:g} mm); make rollbar_offset smaller")
+    half = v["rollbar_width"] / 2.0
+    rail_y, rail_z = v["rail_spacing"] / 2.0, v["rail_height"]
+    if half < rail_y - 1e-9:
+        raise DesignGenError(f"rollbar_width ({v['rollbar_width']:g} mm) must be at least rail_spacing "
+                             f"({v['rail_spacing']:g} mm): the posts stand on the rails or outboard of them")
+    seat_top = max(lay.top_of(p["id"]) for p in lay.parts if p["kind"] == "seat")
+    z_top = seat_top + v["rollbar_height"]
+    if v["rollbar_square"] == 1:
+        sec = frame.section(*rect_tube(v["rollbar_b"], v["rollbar_b"], v["rollbar_t"]))
+        size = v["rollbar_b"]
+    else:
+        sec = frame.section(*round_tube(v["rollbar_d"], v["rollbar_t"]))
+        size = v["rollbar_d"]
+    if 2.0 * v["rollbar_t"] >= size:
+        raise DesignGenError(f"rollbar_t ({v['rollbar_t']:g} mm) must be less than half of the tube size ({size:g} mm)")
+    mat = ROLLBAR_MATERIALS[v["rollbar_square"]]
+    h = ROLLBAR_STATION
+    corners = {}
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        rail = f"rail_{side}_S2B"
+        foot = frame.split(rail, f"{side}{h}", [x, sy * rail_y, rail_z], (f"rail_{side}_S2{h}", f"rail_{side}_{h}B"))
+        if half > rail_y + 1e-9:
+            tip = frame.node(f"{side}{h}O", [x, sy * half, rail_z])
+            frame.member(f"rollbar_foot_{side}", foot, tip, foot_section)
+            foot = tip
+        corners[side] = frame.node(f"{side}{h}T", [x, sy * half, z_top])
+        frame.member(f"rollbar_post_{side}", foot, corners[side], sec, mat)
+    frame.member("rollbar_top", corners["L"], corners["R"], sec, mat)
+    return mat

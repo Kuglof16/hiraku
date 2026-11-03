@@ -1,6 +1,6 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly.
+H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN).
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
 predict). A prediction's inputs_from works out by code the values its from.<name>
@@ -545,10 +545,97 @@ H5_PLAN = {
 }
 
 
+# ---------------------------------------------------------------- R4 roll-over protective structure (ROPS)
+
+# The loads are those of the OECD static test of tractor roll-over protective structures, borrowed for this
+# vehicle (the code is for tractors of at least 600 kg unballasted, section 2.1; this is not a certification):
+# source: OECD Standard Code for the Official Testing of Protective Structures on Agricultural and Forestry
+# Tractors (Static Test), Code 4, February 2026 edition, read from
+# https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf on 2026-11-03:
+# 3.5.2.1 longitudinal loading E_IL1 = 1.4 M, 3.5.3.1 side loading E_IS = 1.75 M, 3.6 crushing F = 20 M (M the
+# reference mass, kg; E in J, F in N), 3.5.2 the longitudinal load on the uppermost transverse member at one
+# sixth of the width of the top inwards from the outside corner, 3.5.3 the side load at the upper extremity,
+# 3.6.1 the crushing force across the rear uppermost members with its resultant in the median plane, 3.5.2.2 and
+# 3.5.3.2 the loading stopped when the structure infringes on the clearance zone.
+R4_CODE4 = {"rear": 1.4, "side": 1.75, "crush": 20.0}  # J/kg, J/kg, N/kg
+# Reference mass: 500 kg, the mass for which the catalog's values (side 875 J, rear 700 J, from above 10 kN) are
+# the Code 4 formulas (875 / 1.75 = 700 / 1.4 = 10 000 / 20 = 500). Not the demo vehicle's mass; Code 4 sets M
+# from the tractor (an assumption of this catalog, kept as given).
+R4_REFERENCE_MASS_KG = 500.0
+# Code 4 3.5.2: one sixth of the top's width in from the outside corner. Here the width is taken as the posts'
+# centre-to-centre span (assumption: Code 4 measures it to the outside of the structure).
+R4_REAR_FRACTION = 1.0 / 6.0
+# A tool's crushed roll bar against the hand calculation's bilinear portal: the deflection at the required energy
+# is long on the plastic plateau and sensitive to the collapse load (the hinges form one by one, not together),
+# and the clearance is a difference of that deflection and the gap: 25 % (assumption).
+R4_TOL = 0.25
+
+# No PLAN: the tool that loads the roll bar and judges it is not on the shelf (HIRAKU's Claude writes it in the run).
+# K0 formulas for its prediction, inputs from hiraku.solvers.k0_handcalc.frame_inputs.portal_frame_inputs(design)
+# (its "side", "rear" and "top" dicts are every input but these from the load case):
+#   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top), H_c, k
+#   frame_static.portal_frame_rear  E_in = lc.rear_energy, f = lc.rear_fraction -> delta_E (along the vehicle), P_c
+#   frame_static.portal_frame_top   F = lc.crush_force               -> delta (down at mid-span), F_c (collapse)
+# and the occupant space: hiraku.solvers.k4_geometry.occupant_clearance(design, displacements=...) with the roll
+# bar's top nodes (LHT, RHT; designgen.ladder_4w.build_rollbar) moved by those deflections.
+
+
+def r4_rops(spec: Record, req: Record, design: Record) -> Record:
+    """R4: the side, rear and crushing loads of OECD Code 4 (borrowed), on the roll bar; the occupants' space
+    must stay clear. A catalog param side_energy, rear_energy, crush_force or rear_fraction wins over the value
+    from the code and the reference mass. Q64 (ROPS) and Q31 (the body sizes the space is made for) are listed
+    when the requirements have them; Q64 saying there is none is an error."""
+    from hiraku.solvers.k0_handcalc import units
+
+    load, keys = loading(req, design)
+    q64 = entry(req, "Q64")
+    if q64 is not None and str(q64.get("value")).strip().lower() in ("なし", "no", "none", "false", "0"):
+        raise BuildError(f"requirement Q64 says there is no roll-over protective structure ({q64.get('value')!r}); "
+                         "R4 does not apply")
+    given = spec.get("params", {})
+
+    def param(name: str, unit: str, default: float) -> float:
+        if name not in given:
+            return default
+        try:
+            return units.to_unit(given[name], unit, name)
+        except ValueError as e:
+            raise BuildError(f"catalog params of {spec['id']}: {e}") from None
+
+    M = R4_REFERENCE_MASS_KG
+    side = param("side_energy", "J", R4_CODE4["side"] * M)
+    rear = param("rear_energy", "J", R4_CODE4["rear"] * M)
+    crush = param("crush_force", "N", R4_CODE4["crush"] * M)
+    frac = param("rear_fraction", "1", R4_REAR_FRACTION)
+    if not 0.0 <= frac <= 0.5 or min(side, rear, crush) <= 0:
+        raise BuildError(f"{spec['id']}: the energies and the force must be positive and rear_fraction within 0..0.5")
+    req_keys = (["Q64"] if q64 is not None else []) + (["Q31"] if entry(req, "Q31") else [])
+    return {
+        "load_case_id": "R4-rops",
+        "test_id": "R4",
+        "domain": spec["domain"],
+        "title": (f"横転の保護枠: 横から {side:g} J・後ろから {rear:g} J を吸わせ、上から {crush / 1000:g} kN で押す "
+                  f"(OECD Code 4 の静的試験を借りる、{LOADING_JA[load]})"),
+        "params": {"side_energy": q(side, "J"), "rear_energy": q(rear, "J"), "crush_force": q(crush, "N"),
+                   "rear_fraction": q(frac, "1"), "loading": load},
+        "requirement_keys": req_keys + keys,
+        "criterion": {"quantity": "rops_occupant_clearance", "op": ">=", "limit": q(0.0, "mm"),
+                      "basis": ("R4 (OECD Code 4, 3.5.2.2, 3.5.3.2 and 3.8, borrowed): the roll bar, deflected by "
+                                "each loading, must not enter the occupants' space; the smallest gap over the loadings "
+                                "between the roll bar's members and the space of k4_geometry.occupant_spaces (the "
+                                "occupant box, widened to AIST D2 and raised to AIST I1 of a young male 95th "
+                                "percentile) stays at 0 mm or more. The code's second condition (the clearance zone "
+                                "left unprotected under the ground plane) is not in this quantity"),
+                      "requirement_keys": req_keys},
+        "tolerance_rel": tolerance(spec, R4_TOL),
+    }
+
+
 BUILDERS = {
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
+    "R4": r4_rops,
     "P4": p4_drive_energy,
     "T1": t1_thermal,
     "T2": t2_thermal,

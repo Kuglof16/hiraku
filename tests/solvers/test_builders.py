@@ -197,5 +197,66 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
 
 
+class RopsBuilderTest(unittest.TestCase):
+    """R4: no tool on the shelf and no plan (HIRAKU's Claude makes the tool in the run); the load case alone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rb = json.loads((ROOT / "data" / "designs" / "offroad-4w-rollbar.json").read_text(encoding="utf-8"))
+        cls.lc = BUILDERS["R4"](CATALOG.test("R4"), REQ, cls.rb)
+
+    def test_load_case_fits_the_contract(self):
+        contract.validate("load_case", self.lc)
+        self.assertEqual(self.lc["load_case_id"], "R4-rops")
+        self.assertEqual(self.lc["domain"], CATALOG.test("R4")["domain"])
+
+    def test_values_are_code_4_at_the_reference_mass(self):
+        from hiraku.catalog.builders.analysis import R4_CODE4, R4_REFERENCE_MASS_KG
+
+        p = self.lc["params"]
+        self.assertEqual((p["side_energy"], p["rear_energy"], p["crush_force"]),
+                         ({"value": 875.0, "unit": "J"}, {"value": 700.0, "unit": "J"}, {"value": 10000.0, "unit": "N"}))
+        self.assertEqual(p["side_energy"]["value"], R4_CODE4["side"] * R4_REFERENCE_MASS_KG)
+        self.assertAlmostEqual(p["rear_fraction"]["value"], 1 / 6)
+        self.assertEqual(p["loading"], "two_cargo")
+        given = dict(CATALOG.test("R4"), params={"crush_force": {"value": 12, "unit": "kN"}})
+        self.assertEqual(BUILDERS["R4"](given, REQ, self.rb)["params"]["crush_force"], {"value": 12000.0, "unit": "N"})
+
+    def test_criterion_is_the_occupant_space(self):
+        c = self.lc["criterion"]
+        self.assertEqual((c["quantity"], c["op"], c["limit"]), ("rops_occupant_clearance", ">=", {"value": 0.0, "unit": "mm"}))
+        self.assertIn("Code 4", c["basis"])
+        self.assertIn("Q31", self.lc["requirement_keys"])
+
+    def test_requirement_keys_from_the_catalog_entry(self):
+        self.assertNotIn("Q64", self.lc["requirement_keys"])  # the demo file has no Q64 yet
+        req = copy.deepcopy(REQ)
+        req["requirements"].append({"key": "Q64", "name": "ROPS", "value": "あり", "source": "default", "trust": 1,
+                                    "basis": "assumption (test)"})
+        lc = BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+        self.assertEqual(lc["requirement_keys"][:2], ["Q64", "Q31"])
+        self.assertEqual(lc["criterion"]["requirement_keys"], ["Q64", "Q31"])
+        req["requirements"][-1]["value"] = "なし"
+        with self.assertRaisesRegex(BuildError, "Q64"):
+            BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
+
+    def test_no_plan_and_no_shelf_tool(self):
+        self.assertNotIn("R4", PLANS)
+        self.assertFalse([t for t in TOOLS.values() if "R4" in t.tests])
+
+    def test_hand_formulas_named_for_the_prediction_evaluate(self):
+        """The formulas the builder's comment names, with frame_inputs and the load case's params."""
+        from hiraku.solvers.k0_handcalc.frame_inputs import portal_frame_inputs
+
+        pi = portal_frame_inputs(self.rb)
+        p = self.lc["params"]
+        side = FORMULAS.evaluate("frame_static.portal_frame_side", {**pi["side"], "E_in": p["side_energy"]})
+        rear = FORMULAS.evaluate("frame_static.portal_frame_rear", {**pi["rear"], "E_in": p["rear_energy"],
+                                                                     "f": p["rear_fraction"]})
+        top = FORMULAS.evaluate("frame_static.portal_frame_top", {**pi["top"], "F": p["crush_force"]})
+        for r in (side, rear, top):
+            self.assertTrue(all(v["value"] == v["value"] for v in r["outputs"].values()))
+
+
 if __name__ == "__main__":
     unittest.main()
