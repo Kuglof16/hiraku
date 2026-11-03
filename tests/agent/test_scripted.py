@@ -1,7 +1,8 @@
 import copy
 import unittest
+from unittest import mock
 
-from hiraku.agent.scripted import ScriptError, load_plan, resolve, run_scripted
+from hiraku.agent.scripted import ScriptError, _reader, load_plan, resolve, run_scripted
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
@@ -281,6 +282,54 @@ class ScriptedUnusableToolTest(RunCase, unittest.TestCase):
     def test_hk2_stops_the_script(self):
         self.assertEqual(run_scripted(self.ctx), "stopped")
         self.assertEqual(denied_rules(self.ctx), ["HK1_prediction_first", "HK3_cause_before_continue", "HK2_tool_usable"])
+        self.assert_events_fit()
+
+
+class PlanOfARequirementsFileTest(unittest.TestCase):
+    BASE = {"show_hk1": True, "revise": ["r"], "steps": [{"load_case": "P1-step100", "tool": "step_climb", "say": "a"},
+                                                         {"load_case": "R1-step100", "tool": "frame_static", "say": "b"}]}
+
+    def plans(self, data):
+        return mock.patch("hiraku.agent.scripted.read_data", return_value=data)
+
+    def test_a_file_entry_extends_the_products_plan(self):
+        own = {"extends": "offroad-4w", "rule_check": True,
+               "steps": [{"load_case": "R1-step100", "tool": "frame_static", "say": "B"},
+                         {"load_case": "R1-step100", "tool": "frame_shell", "say": "C"}]}
+        with self.plans({"offroad-4w": self.BASE, "offroad-4w-n14": own}):
+            plan = load_plan("offroad-4w", "offroad-4w-n14")
+            self.assertEqual(load_plan("offroad-4w", "offroad-4w-video"), self.BASE)  # no entry: the product's
+        self.assertEqual([s["say"] for s in plan["steps"]], ["a", "B", "C"])  # replaced in place, then the new one
+        self.assertEqual((plan["show_hk1"], plan["revise"], plan["rule_check"]), (True, ["r"], True))
+        self.assertNotIn("extends", plan)
+
+    def test_inputs_from_by_name_reads_only_the_builders(self):
+        from hiraku.catalog.builders import k2_tests
+
+        self.assertIs(_reader("k2_tests.tilt_inputs"), k2_tests.tilt_inputs)
+        for bad in ("os.system", "tilt_inputs", "k2_tests.no_such_reader", "../x.y"):
+            with self.subTest(name=bad), self.assertRaises(ScriptError):
+                _reader(bad)
+
+
+class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
+    def test_a_dropped_file_becomes_rules_that_are_checked_on_the_parts(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        plan.update(knowledge_drop={"after": "P1-step100", "file": "tests/intake/fixtures/bending-notes.md",
+                                    "text": "板金のメモを渡します"}, rule_check=True)
+        run_scripted(self.ctx, plan)
+        kinds = self.kinds()
+        dropped = [e for e in self.ctx.store.events()
+                   if e["kind"] == "knowledge.imported" and e["data"]["doc"]["origin"] == "dropped"]
+        self.assertEqual([e["data"]["doc"]["filename"] for e in dropped], ["bending-notes.md"])
+        self.assertTrue((self.ctx.store.path / "knowledge" / "bending-notes.md").is_file())
+        self.assertEqual(list((self.ctx.store.path / "inbox").iterdir()), [])
+        self.assertIn("板金のメモを渡します", [e.get("text") for e in self.ctx.store.events() if e["kind"] == "user.said"])
+        # the rules are checked after the file became rules, once per version
+        first_check = kinds.index("rule_check.recorded")
+        self.assertLess(kinds.index("knowledge.imported", kinds.index("user.said")), first_check)
+        checked = {r["rule_id"] for r in self.ctx.store.records("rule_check")}
+        self.assertTrue(any(rid.startswith(dropped[0]["data"]["doc"]["doc_id"]) for rid in checked))
         self.assert_events_fit()
 
 

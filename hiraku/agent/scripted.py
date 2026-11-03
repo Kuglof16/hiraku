@@ -16,13 +16,16 @@ the designer's revise_design, and every step runs again on the new version.
 from __future__ import annotations
 
 import copy
+import importlib
+import json
 import re
 from typing import Any
 
 from hiraku import contract
 from hiraku.agent import inbox
+from hiraku.contract import layout
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
-from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
+from hiraku.catalog import CATALOG_DIR, REPO_ROOT, beyond_plans, external_builders, is_beyond, loading_of, read_data
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, trusted_analysis, write_report)
@@ -39,9 +42,42 @@ class ScriptError(RuntimeError):
     pass
 
 
-def load_plan(product: str) -> Record:
-    """The product's plan in data/catalog/scripted.yaml (no steps when it has none)."""
-    return read_data(CATALOG_DIR / "scripted.yaml").get(product) or {"steps": []}
+def load_plan(product: str, requirements: str | None = None) -> Record:
+    """The plan in data/catalog/scripted.yaml: the requirements file's own entry (its file name
+    without .yaml) when there is one, else the product's (no steps when neither has one).
+
+    A file's entry with `extends: <entry>` is that entry's plan with the file's keys over it;
+    a step of the file replaces the step of the same load case and tool in place, and its
+    other steps follow."""
+    data = read_data(CATALOG_DIR / "scripted.yaml")
+    own = data.get(requirements) if requirements else None
+    if own is None:
+        return data.get(product) or {"steps": []}
+    base = copy.deepcopy(data.get(own["extends"]) or {"steps": []}) if own.get("extends") else {"steps": []}
+    mine = {k: v for k, v in own.items() if k != "extends"}
+    theirs = list(mine.get("steps") or [])
+    key = {(s["load_case"], s["tool"]): s for s in theirs}
+    steps = [key.pop((s["load_case"], s["tool"]), s) for s in base.get("steps") or []]
+    steps += [s for s in theirs if (s["load_case"], s["tool"]) in key]
+    return {**base, **mine, "steps": steps}
+
+
+def plan_of(ctx: RunContext) -> Record:
+    """This run's plan: its requirements file's entry, else its product's (load_plan)."""
+    path = getattr(ctx, "requirements_path", None)
+    return load_plan(ctx.project["product"], path.stem if path else None)
+
+
+def _reader(name: str) -> Any:
+    """A plan's inputs_from written by name in scripted.yaml: "<module>.<function>" of
+    hiraku.catalog.builders (the builders' readers of formula inputs off a design)."""
+    module, _, func = name.rpartition(".")
+    if not module or not re.fullmatch(r"[a-z0-9_]+", module):
+        raise ScriptError(f"inputs_from {name!r}: write <module>.<function> of hiraku.catalog.builders")
+    try:
+        return getattr(importlib.import_module(f"hiraku.catalog.builders.{module}"), func)
+    except (ImportError, AttributeError) as e:
+        raise ScriptError(f"inputs_from {name!r} is not in hiraku.catalog.builders: {e}") from None
 
 
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
@@ -50,7 +86,7 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     the load cases nobody gave a step for. A product step whose load case this run did not
     build (another step height, say) is left out: its causes were written for that load case.
     So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
-    out = copy.deepcopy(plan if plan is not None else load_plan(ctx.project["product"]))
+    out = copy.deepcopy(plan if plan is not None else plan_of(ctx))
     # each step its own copy: steps may share parts through YAML aliases
     built = [copy.deepcopy(s) for s in out["steps"] if ctx.has_load_case(s["load_case"])]
     out["steps"] = [s for s in built if s["tool"] in ctx.tools]
@@ -189,8 +225,9 @@ def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> li
     for p in specs:
         given = None
         if p.get("inputs_from"):  # the builder's reader of this formula's inputs off the design
+            reader = _reader(p["inputs_from"]) if isinstance(p["inputs_from"], str) else p["inputs_from"]
             try:
-                given = p["inputs_from"](ctx.store.design(), lc)
+                given = reader(ctx.store.design(), lc)
             except (KeyError, ValueError, TypeError) as e:
                 raise ScriptError(f"inputs_from of {p['formula_id']} cannot read this design: {e}") from None
         args = {
@@ -292,6 +329,35 @@ def _red_tiles(ctx: RunContext) -> list[Record]:
     return [j for j in ctx.store.judgements() if j["design_version"] == ctx.version and j["state"] == "red"]
 
 
+def _drop_knowledge(ctx: RunContext, drop: Record) -> None:
+    """What the screen's server does when a person drops a file on A5: the file in knowledge/,
+    then a request inbox/<n>-knowledge.json (hiraku.agent.inbox reads it at the next look)."""
+    src = REPO_ROOT / drop["file"]
+    name = drop.get("name") or src.name
+    folder = ctx.store.path / layout.KNOWLEDGE_DIR
+    folder.mkdir(exist_ok=True)
+    (folder / name).write_bytes(src.read_bytes())
+    box = ctx.store.path / layout.INBOX_DIR
+    box.mkdir(exist_ok=True)
+    n = max((int(m.group(1)) for p in box.iterdir() if (m := inbox.NAME_RE.match(p.name))), default=0) + 1
+    body = {"kind": "knowledge", "file": name, **({"text": drop["text"]} if drop.get("text") else {})}
+    tmp = box / f"{n}-knowledge.json.tmp"
+    tmp.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(box / f"{n}-knowledge.json")
+
+
+def _check_rules(ctx: RunContext, agent: str) -> None:
+    """The intake's rule_check on this version's parts (rule_check.recorded), said in one line."""
+    from hiraku.intake.tools import TOOLS
+
+    try:
+        out = TOOLS["rule_check"]["function"](ctx, {}, agent)
+    except ToolError as e:
+        ctx.store.emit("agent.said", agent=agent, text=f"規則を当てられませんでした: {e}")
+        return
+    ctx.store.emit("agent.said", agent=agent, text=out["text"])
+
+
 def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """Run the plan to the end. Returns the final status (done / stopped / failed).
 
@@ -313,7 +379,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
-        first = (plan if plan is not None else load_plan(ctx.project["product"])).get("propose") or {}
+        first = (plan if plan is not None else plan_of(ctx)).get("propose") or {}
         s.emit("agent.started", agent="designer", data={"agent_id": "designer"})
         s.emit("agent.said", agent="designer", text=first.get("say") or "要件から、最初の版を作ります")
         kinds = archetypes(ctx) or [{"name": ""}]
@@ -340,6 +406,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
+    drop, dropped = plan.get("knowledge_drop"), False
     status, reason, code, interrupted = "done", None, "done", False
 
     def start(agent: str, domain: str | None = None) -> None:
@@ -364,6 +431,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 except (ToolError, ScriptError) as e:
                     _say(ctx, agent, lc, f"止まりました: {e}")
                     raise Stop(str(e)) from None
+                if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
+                    _drop_knowledge(ctx, drop)
+                    dropped = True
+            _check_stop(ctx)  # what was put in the inbox during the last step
+            if plan.get("rule_check"):  # the knowledge rules on this version's parts
+                who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
+                if who != "lead":
+                    start(who)
+                _check_rules(ctx, who)
             reds = _red_tiles(ctx)
             if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
                 break

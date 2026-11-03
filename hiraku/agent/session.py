@@ -94,7 +94,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
         fields = dict(project_fields(catalog, req, []), agents=first_design_agents(catalog))
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
-                     designgen=designgen if designgen is not None else load_designgen(), requirements_file=req)
+                     designgen=designgen if designgen is not None else load_designgen(), requirements_file=req,
+                     requirements_path=Path(requirements_path))
     for e in intake_events:
         store.emit(e["kind"], agent=e.get("agent"), text=e.get("text"), data=e["data"])
     if skipped:
