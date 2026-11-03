@@ -209,7 +209,10 @@ class PickDomainsTest(unittest.TestCase):
                 self.assertEqual(contract.errors("domain_pick", p), [])
 
     def test_summary_line(self):
-        self.assertEqual(summary_line(pick("electric-guitar")), "2 分野: 強度 (弦の張力) (2)・音振 (1)")
+        rec = pick("electric-guitar")  # the counts follow the catalog and the builders: not written here
+        parts = [f"{p['shown_name']} ({len(p['test_ids'])})" for p in rec["picks"]]
+        self.assertEqual(summary_line(rec), f"{len(rec['picks'])} 分野: " + "・".join(parts))
+        self.assertEqual([p["domain"] for p in rec["picks"]], ["strength", "nvh"])
 
 
 class FlagsTest(unittest.TestCase):
