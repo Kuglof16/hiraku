@@ -65,6 +65,7 @@ CONTENT_TYPES = {
 
 _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
+KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
 
 
 def events_path(runs_dir: Path, run_id: str, saved_dir: Path | None = None) -> Path | None:
@@ -273,9 +274,16 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = 0
-        raw = self.rfile.read(min(max(length, 0), 10000))
         route = urlsplit(self.path).path
-        if route not in ("/api/launch", "/api/launch/stop") or not self.launcher:
+        # a dropped knowledge file carries its text; the other bodies are small
+        raw = self.rfile.read(min(max(length, 0), KNOWLEDGE_MAX_BYTES if route == "/api/launch/knowledge" else 10000))
+        left = min(max(length, 0), 64 * 1024 * 1024) - len(raw)
+        while left > 0:  # the rest of a body too big to take is read and dropped
+            chunk = self.rfile.read(min(left, 65536))
+            if not chunk:
+                break
+            left -= len(chunk)
+        if route not in ("/api/launch", "/api/launch/stop", "/api/launch/hearing", "/api/launch/knowledge") or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         # Only this server's own page may start a run: another web page could
@@ -297,6 +305,9 @@ class Handler(BaseHTTPRequestHandler):
         if not (self.headers.get("Content-Type") or "").startswith("application/json"):
             self._send_json({"error": "send JSON"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
             return
+        if len(raw) < length:
+            self._send_json({"error": f"the body is over {len(raw) // 1000} kB"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
         try:
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
@@ -307,6 +318,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == "/api/launch/stop":
                 self._send_json(self.launcher.stop(body.get("run_id")))
+            elif route == "/api/launch/hearing":
+                self._send_json(self.launcher.answer(body.get("run_id"), body.get("answer")))
+            elif route == "/api/launch/knowledge":
+                self._send_json(self.launcher.knowledge(body.get("run_id"), body.get("name"), body.get("text")))
             else:
                 self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
         except LaunchError as e:

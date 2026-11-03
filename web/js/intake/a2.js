@@ -52,9 +52,24 @@ function requirementRow(r) {
     h("td", { class: "trust" }, h("span", { class: `in-dot t${r.trust}`, title: ["", "一次の資料", "二次の資料", "仮定 (確かめていない)"][r.trust] }, r.trust)));
 }
 
+/** Send the answers; a refusal (the host's promise rejects with the reason) is shown under the buttons. */
+async function submit(api, ui, body) {
+  ui.error = "";
+  ui.sending = true;
+  ui.rerender();
+  try {
+    await api.answerHearing(body);
+  } catch (e) {
+    ui.error = e?.message || String(e);
+  }
+  ui.sending = false;
+  ui.rerender();
+}
+
 export function renderA2(el, m, api, ui) {
   const rows = hearingRows(m);
   const asking = rows.some((r) => r.state === "asking");
+  const canSend = asking && !!api.answerHearing && !ui.sending;
   const must = rows.filter((r) => r.ask === "must" && !r.answer);
   const bySource = (s) => m.requirements.filter((r) => r.source === s).length;
   fill(el,
@@ -65,11 +80,12 @@ export function renderA2(el, m, api, ui) {
           : h("p", { class: "in-empty" }, m.requirements.length ? "足りない要件はありません。要件のファイルのまま進みます" : "要件はまだありません")),
       rows.length
         ? h("div", { class: "in-composer" },
-            h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えること", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !asking || !api.answerHearing }),
+            h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えること", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),
+            ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした: ${ui.error}`) : null,
             h("div", { class: "in-actions" },
-              h("button", { class: "in-btn", disabled: !asking || !api.answerHearing, onclick: () => api.answerHearing({ answers: {}, note: ui.note || "", useDefaults: true }) }, "既定値のまま進める"),
-              h("button", { class: "in-btn primary", disabled: !asking || !api.answerHearing,
-                onclick: () => api.answerHearing({ answers: ui.answers, note: ui.note || "", useDefaults: true }) }, "答えて進める")))
+              h("button", { class: "in-btn", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "既定値のまま進める"),
+              h("button", { class: "in-btn primary", disabled: !canSend,
+                onclick: () => submit(api, ui, { answers: ui.answers, note: ui.note || "", useDefaults: true }) }, ui.sending ? "送っています…" : "答えて進める")))
         : null,
       m.hearing.answered?.note ? h("p", { class: "in-foot" }, `ほかに伝えたこと: ${m.hearing.answered.note}`) : null,
       must.length ? h("p", { class: "in-warn" }, `必須の ${must.map((q) => q.req_key).join("・")} に答えが無いので、先へ進めません`) : null),

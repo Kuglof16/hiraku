@@ -22,8 +22,7 @@ class PipelineTest(unittest.TestCase):
         keys = {r["key"] for r in got.requirements_file["requirements"]}
         self.assertTrue({"Q40", "Q50", "Q54", "Q60", "Q62"} <= keys)  # the answers, and the product's own values as defaults
         kinds = [e["kind"] for e in got.events]
-        self.assertEqual(kinds[:3], [ev.DOMAINS_PICKED, ev.HEARING_ASKED, ev.HEARING_ANSWERED])
-        self.assertEqual(kinds.count(ev.KNOWLEDGE_IMPORTED), 9)
+        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 9 + [ev.HEARING_ASKED, ev.HEARING_ANSWERED])  # the contract's order
 
     def test_a_required_question_without_an_answer_is_not_ready(self):
         req = load_product("care-bed")

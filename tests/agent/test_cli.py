@@ -9,7 +9,8 @@ from unittest import mock
 
 from hiraku.__main__ import main
 from hiraku.agent.scripted import run_scripted
-from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER, start_run
+from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER, intake_events_for, start_run
+from hiraku.catalog import load_requirements
 from hiraku.contract import layout
 from tests.tools import fakes
 from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS, RunCase
@@ -34,6 +35,17 @@ class RunCommandTest(RunCase, unittest.TestCase):
         with mock.patch("hiraku.agent.session.start_run", return_value=self.ctx), redirect_stdout(out):
             code = main(["run", str(REQUIREMENTS), "--scripted", "--runs", str(self.root)])
         return code, out.getvalue()
+
+    def test_the_intake_events_go_to_the_start_of_the_run(self):
+        with mock.patch("hiraku.agent.session.start_run", return_value=self.ctx) as start, redirect_stdout(io.StringIO()):
+            main(["run", str(REQUIREMENTS), "--scripted", "--runs", str(self.root)])
+            main(["run", str(REQUIREMENTS), "--scripted", "--runs", str(self.root), "--no-intake"])
+        given, left_out = (c.kwargs["intake_events"] for c in start.call_args_list)
+        kinds = [e["kind"] for e in given]
+        self.assertEqual(kinds[0], "domains.picked")
+        self.assertIn("hearing.answered", kinds)
+        self.assertIn("knowledge.imported", kinds)
+        self.assertIsNone(left_out)
 
     def test_end_shows_run_id_status_and_cost(self):
         code, out = self.run_cli()
@@ -125,6 +137,21 @@ class StartInterruptTest(unittest.TestCase):
             self.assertEqual(ctx.project["stop_reason"], STOPPED_BY_BUTTON)
             self.assertFalse((ctx.store.path / layout.STOP_REQUEST_FILE).exists())
             self.assertNotIn("analysis.started", [e["kind"] for e in ctx.store.events()])
+
+    def test_intake_events_follow_run_started(self):
+        req = load_requirements(REQUIREMENTS)
+        given = intake_events_for(req)
+        with tempfile.TemporaryDirectory() as tmp:
+            design = Path(tmp) / "design.json"
+            design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+            ctx = start_run(REQUIREMENTS, design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
+                            tools=fakes.shelf(), intake_events=given)
+            events = ctx.store.events()
+            self.assertEqual([e["kind"] for e in events[:len(given) + 1]], ["run.started"] + [e["kind"] for e in given])
+            self.assertEqual([e["data"] for e in events[1:len(given) + 1]], [e["data"] for e in given])
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(main(["check", str(ctx.store.path)]), 0, out.getvalue())
 
 
 class CheckCommandTest(RunCase, unittest.TestCase):

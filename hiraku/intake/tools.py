@@ -21,7 +21,7 @@ from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
-from hiraku.intake.domains import ANALYSIS_DOMAINS, IntakeError, pick_domains, reasons_missing
+from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
 from hiraku.intake.products import PRODUCTS_DIR, load_product, product_files
 from hiraku.tools.context import ToolError
@@ -214,8 +214,15 @@ def _read_dropped(ctx: Any, args: Record) -> tuple[str, str]:
     base = (Path(store.path) / layout.KNOWLEDGE_DIR).resolve()
     p = (Path(store.path) / rel).resolve()
     if not p.is_relative_to(base) or not p.is_file():
-        raise IntakeError(f"path は実行のフォルダの knowledge/ の中のファイルだけです ({rel!r})")
-    return p.name, p.read_text(encoding="utf-8-sig")
+        raise IntakeError(f"path は実行のフォルダの {layout.KNOWLEDGE_DIR}/ の中のファイルだけです ({rel!r})")
+    raw = p.read_bytes()
+    try:
+        return p.name, raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            return p.name, raw.decode("cp932")  # a CSV saved by Excel in Japan
+        except UnicodeDecodeError:
+            raise IntakeError(f"{p.name} を文字として読めません (UTF-8 か Shift_JIS で保存してください)") from None
 
 
 @_guard
@@ -275,11 +282,16 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     ids = (lambda: store.next_id("rule_check")) if persist else None
     checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
     if persist:
+        through_store = ev.store_records(store, "rule_check")  # the store writes rchk-NNNN.json and emits the event
         for c in checks:
-            if ev.store_records(store, "rule_check"):  # the store writes the file and emits the event
-                store.add_record("rule_check", c, design_version=version, agent="packager")
-            elif (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
-                problems.append(p)  # the store does not know the kind yet: the event alone (no file)
+            if through_store:
+                try:
+                    store.add_record("rule_check", c, design_version=version, agent="packager")
+                    continue
+                except KeyError:  # the store's table changed shape: the event alone from here on
+                    through_store = False
+            if (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
+                problems.append(p)
                 break
     else:
         problems.append(f"event kind {ev.RULE_CHECK_RECORDED} is not in the contract yet")
@@ -298,14 +310,32 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
 
 
 # ------------------------------------------------------------------------------------- the definitions
+# The input of each tool is the contract's tool_input.<name> (hiraku.contract: the lead owns the shapes);
+# only the description Claude reads and the function live here.
 
 _FLAG_LINES = "\n".join(f"- {name} ({sym}): {q}" for name, (sym, q) in FLAGS.items())
 _SPEED_LINES = "\n".join(f"- {name} ({sym}): {m}" for name, (sym, m) in SPEED_CLASSES.items())
 
 
-def _map_of_text(keys: tuple[str, ...], description: str) -> Record:
-    return {"type": "object", "description": description, "propertyNames": {"enum": list(keys)},
-            "additionalProperties": {"type": "string"}}
+def _inline_refs(node: Any, defs: Record) -> Any:
+    """Replace every {"$ref": "#/$defs/x"} with a copy of defs[x], so the schema stands alone."""
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            rest = {k: v for k, v in node.items() if k != "$ref"}
+            return {**_inline_refs(defs[ref.removeprefix("#/$defs/")], defs), **_inline_refs(rest, defs)}
+        return {k: _inline_refs(v, defs) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_inline_refs(v, defs) for v in node]
+    return node
+
+
+def contract_input(name: str) -> Record:
+    """The input schema of a tool from the contract, with its $refs inlined and its def description dropped."""
+    defs = contract.schema()["$defs"]
+    schema = _inline_refs(defs[f"tool_input.{name}"], defs)
+    schema.pop("description", None)
+    return schema
 
 
 TOOLS: dict[str, Record] = {
@@ -317,20 +347,7 @@ TOOLS: dict[str, Record] = {
             "(たとえば配膳ロボの空力は「液体のこぼれ」)。理由が足りない分野はコードの仮の理由が付くので、結果の reasons_missing "
             "を見て付け足す。人が札を外したときは exclude。\n製品の性質:\n" + _FLAG_LINES + "\n速さの域 speed_class:\n" + _SPEED_LINES
         ),
-        "input_schema": {
-            "type": "object", "additionalProperties": False, "required": ["want", "flags"],
-            "properties": {
-                "want": {"type": "string", "description": "人が作りたいものを言った文、そのまま"},
-                "flags": {"type": "object", "propertyNames": {"enum": list(FLAGS)}, "additionalProperties": {"type": "boolean"},
-                          "description": "製品の性質。立てるものだけ true で渡す"},
-                "speed_class": {"enum": list(SPEED_CLASSES), "description": "速さの域"},
-                "flag_reasons": _map_of_text(tuple(FLAGS), "フラグ → 立てた (立てなかった) 理由。A1 のチップの説明になる"),
-                "reasons": _map_of_text(ANALYSIS_DOMAINS, "分野 → この製品でその分野を使う理由 (1 文)"),
-                "shown_names": _map_of_text(ANALYSIS_DOMAINS, "分野 → 画面に出す呼び名 (読み替えるときだけ)"),
-                "exclude": {"type": "array", "items": {"enum": list(ANALYSIS_DOMAINS)}, "uniqueItems": True,
-                            "description": "人が外した分野"},
-            },
-        },
+        "input_schema": contract_input("pick_domains"),
         "function": pick_domains_tool,
     },
     "ask_user": {
@@ -342,24 +359,7 @@ TOOLS: dict[str, Record] = {
             "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
             "答えが来るか時間が切れるまで待つ)。"
         ),
-        "input_schema": {
-            "type": "object", "additionalProperties": False,
-            "properties": {
-                "answers": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"},
-                            "description": "人の答え。値か {value, unit?, trust?, basis?}"},
-                "note": {"type": "string", "description": "「ほかに伝えること」の文"},
-                "wait_seconds": {"type": "number", "minimum": 0, "maximum": 900,
-                                 "description": "答えが無いとき、画面の人の答えを最大この秒数だけ待つ。0 (既定) なら待たず、確認の質問は既定値で進む"},
-                "answers_file": {"type": "string", "description": "答えのファイル (data/requirements/products/ の中)"},
-                "wording": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"}, "additionalProperties": {"type": "string"},
-                            "description": "質問の言い換え {番号: 文}"},
-                "choices": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"},
-                            "additionalProperties": {"type": "array", "items": {"type": "object", "required": ["label", "value"],
-                                                                                 "properties": {"label": {"type": "string"},
-                                                                                                "value": {}, "unit": {"type": "string"}}}},
-                            "description": "選択肢の言い換え {番号: [{label, value, unit?}]}"},
-            },
-        },
+        "input_schema": contract_input("ask_user"),
         "function": ask_user_tool,
     },
     "import_knowledge": {
@@ -368,23 +368,10 @@ TOOLS: dict[str, Record] = {
             "(または実行のフォルダの knowledge/ の中の path)。「A は B 以上」のような文はコードが式にする。式にできなかった文は "
             "結果の needs_formula に番号 (c3 など) つきで返る: それぞれ、1 つの部品について はい / いいえ で答える式 check "
             "(結果の facts の名前だけ。要件は req_Q15、設計の変数は var_<名前>) を書いて formulas={番号: {check, kinds?, category?}} "
-            "に入れ、同じ filename と text でもう一度呼ぶ。規則にならない文は skip={番号: 理由}。式の計算はコードがする。"
-            "kinds は対象の部品の種類 (battery, seat, body など。frame は骨組み、support は接地点)。"
+            "に入れ、同じ filename と text (path で渡したなら同じ path) でもう一度呼ぶ。規則にならない文は skip={番号: 理由}。"
+            "式の計算はコードがする。kinds は対象の部品の種類 (battery, seat, body など。frame は骨組み、support は接地点)。"
         ),
-        "input_schema": {
-            "type": "object", "additionalProperties": False,
-            "properties": {
-                "filename": {"type": "string"},
-                "text": {"type": "string", "description": "ファイルの中身"},
-                "path": {"type": "string", "description": "実行のフォルダの knowledge/ の中のファイル"},
-                "formulas": {"type": "object", "propertyNames": {"pattern": "^c[0-9]+$"},
-                             "additionalProperties": {"type": "object", "additionalProperties": False, "required": ["check"],
-                                                      "properties": {"check": {"type": "string"},
-                                                                     "kinds": {"type": "array", "items": {"type": "string"}},
-                                                                     "category": {"enum": list(knowledge.CATEGORIES)}}}},
-                "skip": {"type": "object", "propertyNames": {"pattern": "^c[0-9]+$"}, "additionalProperties": {"type": "string"}},
-            },
-        },
+        "input_schema": contract_input("import_knowledge"),
         "function": import_knowledge_tool,
     },
     "rule_check": {
@@ -393,15 +380,9 @@ TOOLS: dict[str, Record] = {
             "結果は、当たった (規則に合わない) 部品、式に要る値が設計に無くて判定できなかった規則、数。disable は使わない規則の番号。"
             "規則が増えたとき、設計を直したあとにもう一度呼ぶ。"
         ),
-        "input_schema": {
-            "type": "object", "additionalProperties": False,
-            "properties": {
-                "design_version": {"type": "integer", "minimum": 1, "description": "当てる設計の版 (無ければ最新)"},
-                "disable": {"type": "array", "items": {"type": "string"}, "uniqueItems": True, "description": "使わない規則の番号"},
-            },
-        },
+        "input_schema": contract_input("rule_check"),
         "function": rule_check_tool,
     },
 }
 
-assert all(t in contract.MCP_TOOLS_LATER or t == "rule_check" for t in TOOLS)
+assert all(t in contract.MCP_TOOLS_LATER for t in TOOLS)

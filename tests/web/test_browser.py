@@ -18,6 +18,7 @@ from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.domains_fixture import domain_events
 from tests.web.k2_fixture import tilt_events
+from tests.web.mesh_fixture import mesh_events
 from tests.web.safe_side_fixture import safe_side_events
 
 try:
@@ -566,6 +567,184 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["elements"], len(mesh["elements"]))
         self.assertEqual(len(got["lines"]), 1)
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
+        page.close()
+
+    def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
+        """On a run this screen started and still going, a file given to A5 lands in the run's
+        knowledge/ with a request in its inbox/ (the run turns it into events), and A5 says so."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        run_id = "20261103-120000-offroad-4w-fake"
+        # the sample run under this run's id, without its run.finished: still going
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()][:-1]
+        for e in events:
+            e["run_id"] = run_id
+        events[0]["data"]["run_id"] = run_id
+        going = tmp / "going.jsonl"
+        going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20)
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            lau.start("offroad-4w.yaml", "scripted")
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/?run={run_id}&tab=A5")
+            page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+            page.wait_for_selector(".stop-btn")  # the screen knows the run is its own
+            note = tmp / "曲げの決まり.md"
+            note.write_text("曲げの内側の半径は板厚以上\n", encoding="utf-8")
+            page.set_input_files("#view-intake .in-drop input[type=file]", str(note))
+            page.wait_for_function("document.getElementById('view-intake').textContent.includes('渡しました')")
+            run = tmp / "runs" / run_id
+            self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_bytes(), note.read_bytes())  # kept as given
+            self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            if lau.proc and lau.proc.poll() is None:
+                lau.proc.kill()
+                lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
+    def test_intake_screens_in_their_tabs(self):
+        """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;
+        a replay is read-only (the hearing's buttons are off) and a rewind redraws them."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
+              for n in ("domains_picked", "hearing_asked", "hearing_answered", "knowledge_imported")}
+        base = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0}
+        intake = [
+            {"kind": "domains.picked", "agent": "lead", "data": ex["domains_picked"]},
+            {"kind": "hearing.asked", "agent": "lead", "data": ex["hearing_asked"]},
+            {"kind": "hearing.answered", "agent": "lead", "data": ex["hearing_answered"]},
+            {"kind": "knowledge.imported", "agent": "lead", "data": ex["knowledge_imported"]},
+        ]
+        t0 = events[0]["t"]
+        events = events[:1] + [{**base, "t": t0 + 0.1 * (i + 1), **ev} for i, ev in enumerate(intake)] + events[1:]
+        for i, e in enumerate(events):
+            e["seq"] = i
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        read = """() => { const v = document.getElementById("view-intake");
+          const pane = [...v.querySelectorAll(".in-pane")].find((p) => !p.hidden);
+          return { shown: !v.hidden, bench: !document.getElementById("view-bench").hidden, screen: pane?.dataset.screen ?? null,
+                   text: pane?.textContent ?? "", on: document.querySelector(".tab.on")?.dataset.tab,
+                   answer: [...(pane?.querySelectorAll("button") ?? [])].filter((b) => /進める/.test(b.textContent)).map((b) => b.disabled) }; }"""
+        def tab(key):
+            page.click(f'.tab[data-tab="{key}"]')
+            page.wait_for_function(f"document.querySelector('.tab.on')?.dataset.tab === '{key}'")
+            return page.evaluate(read)
+
+        a1 = tab("A1")
+        a2 = tab("A2")
+        a5 = tab("A5")
+        self.assertEqual(errors, [])
+        self.assertEqual((a1["shown"], a1["bench"], a1["screen"], a1["on"]), (True, False, "A1", "A1"))
+        self.assertIn(ex["domains_picked"]["picks"][0]["shown_name"], a1["text"])
+        self.assertEqual((a2["screen"], a2["on"]), ("A2", "A2"))
+        self.assertIn(ex["hearing_asked"]["questions"][0]["text"], a2["text"])
+        self.assertTrue(a2["answer"] and all(a2["answer"]))  # a replay cannot answer
+        self.assertEqual(a5["screen"], "A5")
+        self.assertIn(ex["knowledge_imported"]["rules"][0]["text"], a5["text"])
+        page.evaluate("async () => { await window.hiraku.seek(0); }")  # back before the knowledge came
+        page.wait_for_function(f"!document.querySelector('#view-intake .in-pane[data-screen=A5]').textContent.includes({json.dumps(ex['knowledge_imported']['rules'][0]['text'])})")
+        self.assertEqual(tab("bench")["shown"], False)
+        self.assertEqual(errors, [])
+        page.close()
+
+    @unittest.skipUnless("x" in contract.schema()["$defs"]["series"]["properties"], "contract without series against x")
+    def test_series_against_another_quantity_are_charted(self):
+        """Series with x (a K&C bench) give a graph without a motion: one chart per channel
+        and abscissa, the axis named from x.quantity and x.unit, and no time cursor."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        travel = [float(v) for v in range(-60, 61, 10)]
+        force = [float(v) for v in range(0, 2001, 250)]
+        # shape example: straight lines through made-up slopes, not a result
+        ana["series"] = [
+            {"channel": f"camber.{w}", "unit": "deg", "x": {"quantity": "wheel_travel", "unit": "mm", "values": travel}, "values": [k * v for v in travel]}
+            for w, k in (("FL", -0.02), ("FR", 0.02))
+        ] + [{"channel": "toe.FL", "unit": "deg", "x": {"quantity": "lateral_force", "unit": "N", "values": force}, "values": [1e-4 * v for v in force]}]
+        for e in events:
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        read = """() => ({ toggle: !!document.querySelector('#toggles button[data-toggle="graph"]'), shown: !document.getElementById("graph").hidden,
+                   chips: [...document.querySelectorAll("#graph .gr-chips button")].map((b) => [b.textContent, b.classList.contains("on")]),
+                   unit: document.querySelector("#graph .gr-unit")?.textContent ?? null, lines: document.querySelectorAll("#graph polyline").length,
+                   cursor: document.querySelectorAll("#graph .cur").length })"""
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        first = page.evaluate(read)
+        self.assertEqual(errors, [])
+        self.assertTrue(first["toggle"])
+        self.assertTrue(first["shown"])
+        self.assertEqual(first["chips"], [["camber", True], ["toe", False]])
+        self.assertEqual(first["unit"], "[°]・wheel_travel [mm]")
+        self.assertEqual(first["lines"], 2)
+        self.assertEqual(first["cursor"], 0)
+        page.click("#graph .gr-chips button:text-is('toe')")
+        page.wait_for_function("document.querySelector('#graph .gr-unit')?.textContent.includes('lateral_force')")
+        second = page.evaluate(read)
+        self.assertEqual(second["unit"], "[°]・lateral_force [N]")
+        self.assertEqual(second["lines"], 1)
+        self.assertEqual(errors, [])
+        page.close()
+
+    @unittest.skipUnless("mesh.created" in contract.EVENT_KINDS, "contract without meshes")
+    def test_mesh_fields_draw_the_shell(self):
+        """A field on a shell mesh (about 20 000 nodes and quads) draws the mesh in place of
+        the beams, one colour per element; the legend switches between the beams and the
+        mesh's surfaces, and a displacement on the mesh nodes moves the mesh."""
+        events, mesh = mesh_events()
+        for e in events:
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        state = """() => { const b = window.hiraku.bench; const o = Object.values(b.shellObjs)[0];
+          const col = o.faces.geometry.getAttribute("color").array;
+          const colours = new Set(); for (let i = 0; i < col.length; i += 3 * 6) colours.add(`${col[i]},${col[i + 1]},${col[i + 2]}`);
+          return { shell: o.group.visible, beams: b.model.visible, corners: o.vNode.length, colours: colours.size,
+                   surface: b.keys.contour?.field.surface ?? null, kind: b.keys.contour?.kind ?? null,
+                   variants: [...document.querySelectorAll("#legend .variants button")].map((x) => [x.textContent, x.classList.contains("on")]) }; }"""
+        first = page.evaluate(state)
+        self.assertEqual(errors, [])
+        self.assertTrue(first["shell"])
+        self.assertFalse(first["beams"])
+        self.assertEqual(first["corners"], 6 * len(mesh["elements"]))
+        self.assertGreater(first["colours"], 3)
+        self.assertEqual(first["surface"], "max")
+        self.assertEqual(first["variants"], [["梁", False], ["メッシュ・外面", False], ["メッシュ・中面", False], ["メッシュ・内面", False], ["メッシュ・外面と内面の大きい方", True]])
+        page.click("#legend .variants button:text-is('梁')")
+        page.wait_for_function("window.hiraku.bench.model.visible")
+        beams = page.evaluate(state)
+        self.assertEqual((beams["shell"], beams["beams"]), (False, True))
+        page.click("#legend .variants button:text-is('メッシュ・内面')")
+        page.wait_for_function("window.hiraku.bench.keys.contour?.field.surface === 'bottom'")
+        self.assertTrue(page.evaluate(state)["shell"])
+        page.click("#legend .kinds:not(.variants) button:text-is('変位')")
+        page.wait_for_function("window.hiraku.bench.keys.contour?.kind === 'displacement'")
+        moved = page.evaluate(
+            """() => { const b = window.hiraku.bench; const o = b.modeShape.shell;
+              b.animate(0.25, false);
+              const p = o.faces.geometry.getAttribute("position").array; let d = 0;
+              for (let i = 0; i < p.length; i += 1) d = Math.max(d, Math.abs(p[i] - o.rest[i]));
+              b.animate(0, false);
+              const q = o.faces.geometry.getAttribute("position").array; let back = 0;
+              for (let i = 0; i < q.length; i += 1) back = Math.max(back, Math.abs(q[i] - o.rest[i]));
+              return { d, back }; }"""
+        )
+        self.assertGreater(moved["d"], 1.0)
+        self.assertLess(moved["back"], 1e-6)
+        self.assertEqual(errors, [])
         page.close()
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")

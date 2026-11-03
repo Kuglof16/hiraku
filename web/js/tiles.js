@@ -8,7 +8,7 @@
 import { DOMAINS, DOMAIN_JA, esc, fmt, fmtVU, unitLabel } from "./labels.js";
 import { colorOf } from "./colormap.js";
 import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
-import { channelsOf, chartGroups, wheelName } from "./series.js";
+import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 
 const W = 300;
@@ -131,22 +131,27 @@ function partValueTags(design, view, ct) {
     .join("");
 }
 
+// The first chart group of an analysis' series (against time, else against another quantity).
 function sparkline(ana) {
-  const ch = channelsOf(ana);
+  const timed = channelsOf(ana);
+  const ch = timed.size ? timed : xSeriesOf(ana);
   const g = chartGroups(ch)[0];
   if (!g) return "";
   const series = g.channels.slice(0, 6).map((n) => ch.get(n));
-  const t0 = Math.min(...series.map((s) => s.t_s[0]));
-  const t1 = Math.max(...series.map((s) => s.t_s.at(-1)));
-  const lo = Math.min(...series.map((s) => Math.min(...s.values)));
-  const hi = Math.max(...series.map((s) => Math.max(...s.values)));
+  const xs = series.map((s) => extent(abscissa(s)));
+  const ys = series.map((s) => extent(s.values));
+  const t0 = Math.min(...xs.map((e) => e[0]));
+  const t1 = Math.max(...xs.map((e) => e[1]));
+  const lo = Math.min(...ys.map((e) => e[0]));
+  const hi = Math.max(...ys.map((e) => e[1]));
   const X = (t) => 30 + ((t - t0) / (t1 - t0 || 1)) * (SPARK.w - 36);
   const Y = (v) => SPARK.h - 6 - ((v - lo) / (hi - lo || 1)) * (SPARK.h - 16);
   const lines = series
     .map((s, i) => {
-      const step = Math.max(1, Math.ceil(s.t_s.length / 150));
+      const a = abscissa(s);
+      const step = Math.max(1, Math.ceil(a.length / 150));
       const pts = [];
-      for (let k = 0; k < s.t_s.length; k += step) pts.push(`${X(s.t_s[k]).toFixed(1)},${Y(s.values[k]).toFixed(1)}`);
+      for (let k = 0; k < a.length; k += step) pts.push(`${X(a[k]).toFixed(1)},${Y(s.values[k]).toFixed(1)}`);
       return `<polyline points="${pts.join(" ")}" fill="none" stroke="${LINE_COLORS[i % LINE_COLORS.length]}" stroke-width="1.8"/>`;
     })
     .join("");
@@ -165,7 +170,7 @@ function sparkline(ana) {
 
 function tileSvg(s, domain, design, info) {
   const { ana, loadCase } = info;
-  const field = fieldsOf(ana)[0];
+  const field = fieldsOf(ana, { mesh: false })[0];
   const ct = field ? contourOf(ana, field, loadCase?.criterion) : null;
   const interfering = new Set((ana?.interferences ?? []).flatMap((x) => [x.a, x.b]));
   const view = sideView(design);
@@ -242,7 +247,7 @@ export class TileBoard {
     // Keep what a mode shape needs to swing its lines each frame.
     for (const d of DOMAINS) {
       const info = design ? domainAnalysis(s, d, v) : null;
-      const field = info?.ana ? fieldsOf(info.ana)[0] : null;
+      const field = info?.ana ? fieldsOf(info.ana, { mesh: false })[0] : null;
       if (!field || field.kind !== "mode_shape") continue;
       const ct = contourOf(info.ana, field, info.loadCase?.criterion);
       if (!ct?.modes) continue;

@@ -7,7 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?tab=grid       open on the all-domains grid instead of the workbench
+//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens)
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
@@ -16,8 +16,9 @@ import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, contourOf, fieldsOf } from "./fields.js";
-import { motionOf, motionSpan, nearestAt, wheelName } from "./series.js";
+import { FIELD_JA, contourOf, fieldsOf, preferredField, variantName, variantOf } from "./fields.js";
+import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
+import { mountIntake } from "./intake/index.js";
 import { lookFromParams } from "./look.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
@@ -33,9 +34,12 @@ const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
 const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
 
+const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
+const TABS = ["bench", "grid", ...INTAKE_TABS];
+
 const ui = {
   pinnedLc: null,
-  pinnedTab: params.get("tab") === "grid" ? "grid" : params.get("tab") === "bench" ? "bench" : null,
+  pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
@@ -43,6 +47,7 @@ const ui = {
   anim: { key: null, local: false, playing: false, tau: 0 },
   graphGroup: null,
   fieldKind: null, // contour field picked in the legend (null: the first one)
+  fieldVariant: null, // among the fields of that kind: the beams, or a mesh and its surface (fields.js variantOf)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
 };
@@ -137,7 +142,67 @@ function selectedLc(s) {
 
 function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
+  if (INTAKE_TABS.includes(s.focus.screen)) return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
+}
+
+// ---- the intake screens (A1, A2, A5) ------------------------------------------
+// Mounted on first show. They draw from the events applied so far (the replay's
+// playhead, or the live run); listeners hear when that changes (a rewind too).
+const intakeListeners = new Set();
+let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
+let intake = null;
+const intakeApi = {
+  events: () => player.events.slice(0, player.applied),
+  onEvent(fn) {
+    intakeListeners.add(fn);
+    return () => intakeListeners.delete(fn);
+  },
+  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
+  // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
+  get answerHearing() {
+    return ownRunGoing() ? answerHearing : undefined;
+  },
+  get dropFile() {
+    return ownRunGoing() ? dropFile : undefined;
+  },
+};
+
+function ownRunGoing() {
+  const s = player.state;
+  return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+}
+
+async function postLaunch(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: player.state.runId, ...body }) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+const answerHearing = (body) => postLaunch("/api/launch/hearing", { answer: body });
+
+// A5 shows the returned line next to the file.
+async function dropFile(name, text) {
+  try {
+    const got = await postLaunch("/api/launch/knowledge", { name, text });
+    return `渡しました (knowledge/${got.file})。実行が読んで規則にします`;
+  } catch (e) {
+    return `渡せませんでした: ${e.message}`;
+  }
+}
+
+function renderIntake(tab) {
+  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (intake.screen !== tab) intake.show(tab);
+  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  if (now !== intakeApplied) {
+    intakeApplied = now;
+    const last = player.events[player.applied - 1] ?? null;
+    for (const fn of intakeListeners) fn(last);
+  }
 }
 
 function renderTop(s) {
@@ -307,13 +372,20 @@ function renderChain(s, chain) {
   }
 }
 
-// The contour of the shown analysis: the field the viewer picked (ui.fieldKind)
-// or the first of stress, damage, temperature, mode shape, displacement.
-function buildContour(chain) {
+// The contour of the shown analysis: the field the viewer picked (ui.fieldKind, then
+// ui.fieldVariant among the fields of that kind: the beams, or a shell mesh and its
+// surface), else the first of stress, damage, temperature, mode shape, displacement,
+// on a mesh when there is one.
+function buildContour(s, chain) {
   const fields = fieldsOf(chain.shown);
-  const field = fields.find((f) => f.kind === ui.fieldKind) ?? fields[0];
-  const ct = field ? contourOf(chain.shown, field, chain.loadCase?.criterion) : null;
-  return ct ? { ...ct, kinds: fields.map((f) => f.kind) } : null;
+  const kind = fields.some((f) => f.kind === ui.fieldKind) ? ui.fieldKind : fields[0]?.kind;
+  const sameKind = fields.filter((f) => f.kind === kind);
+  const drawable = sameKind.filter((f) => !f.mesh_id || s.meshes[f.mesh_id]);
+  const field = drawable.find((f) => variantOf(f) === ui.fieldVariant) ?? preferredField(drawable, s.meshes);
+  const ct = field ? contourOf(chain.shown, field, chain.loadCase?.criterion, s.meshes) : null;
+  if (!ct) return null;
+  const variants = drawable.map((f) => ({ key: variantOf(f), name: variantName(f, drawable), on: f === field }));
+  return { ...ct, kinds: [...new Set(fields.map((f) => f.kind))], variants };
 }
 
 function renderLegend(ct) {
@@ -332,7 +404,10 @@ function renderLegend(ct) {
   }
   rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const over = ct.limitKnown ? `<div class="lim"><span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>` : "";
-  const chips = ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "";
+  const chips =
+    (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
+    (ct.variants.length > 1 ? `<div class="kinds variants">${ct.variants.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>` : "");
+  const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
     : `${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
@@ -341,13 +416,14 @@ function renderLegend(ct) {
     `<div class="ttl">${title}</div>` +
     `<div class="bar">${rows.join("")}</div>` +
     over +
-    `<div class="src">${esc(ct.analysisId)}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
+    `<div class="src">${esc(ct.analysisId)}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : "・上端 = 最大値"}</div>`;
 }
 
 // A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
 
-function renderToggles(motion, lc) {
+// graphs: the analysis has series to chart without a motion (series against x).
+function renderToggles(motion, lc, graphs = false) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
@@ -358,7 +434,7 @@ function renderToggles(motion, lc) {
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
-    (motion ? btn("graph", "グラフ", t.graph) : "");
+    (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
 }
 
 // ---- the test's motion (series) -------------------------------------------
@@ -384,14 +460,26 @@ const chart = new SeriesChart($("graph"), (key) => {
 });
 let shownMotion = null; // { motion, ana, tau } of the last frame, for the bar's handlers
 
+// The channels the graph offers for an analysis: the motion's (against time) and the
+// series against another quantity, one Map per analysis (the chart redraws on a new one).
+let graphMemo = { ana: null, channels: null };
+function graphChannels(ana, motion) {
+  if (ana !== graphMemo.ana) graphMemo = { ana, channels: new Map([...(motion?.channels ?? []), ...xSeriesOf(ana)]) };
+  return graphMemo.channels;
+}
+
 function renderMotion(s, chain, motion) {
   const bar = $("animbar");
   viewport.classList.toggle("has-anim", !!motion);
   if (!motion) {
     bar.hidden = true;
-    $("graph").hidden = true;
     $("limitnote").hidden = true;
     shownMotion = null;
+    // series against another quantity (a K&C bench) are charted without a motion
+    const channels = chain.shown?.status === "ok" ? graphChannels(chain.shown, null) : null;
+    const graph = $("graph");
+    graph.hidden = !channels?.size || !ui.toggles.graph;
+    if (!graph.hidden) ui.graphGroup = chart.set(channels, ui.graphGroup);
     return;
   }
   const ana = chain.shown;
@@ -431,7 +519,7 @@ function renderMotion(s, chain, motion) {
   graph.hidden = !ui.toggles.graph;
   if (!graph.hidden) {
     const marks = motion.liftT !== null ? [{ t: motion.liftT, label: "浮いた" }] : [];
-    ui.graphGroup = chart.set(motion, ui.graphGroup, marks);
+    ui.graphGroup = chart.set(graphChannels(ana, motion), ui.graphGroup, marks);
     chart.cursor(tau);
   }
 }
@@ -561,19 +649,22 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion, chain.loadCase);
+    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0);
+    const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
-    $("main").classList.toggle("wide", tab === "grid"); // A6 uses the whole width
+    $("view-intake").hidden = !intakeTab;
+    $("main").classList.toggle("wide", tab === "grid" || intakeTab); // A6 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     if (tab === "grid") renderGrid(s);
+    if (intakeTab) renderIntake(tab);
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
     bench.setScene(chain.loadCase, chain.shown);
-    const ct = buildContour(chain);
+    const ct = buildContour(s, chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
     renderLegend(contour);
@@ -681,9 +772,10 @@ $("tests").addEventListener("click", (ev) => {
   drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-field]");
+  const b = ev.target.closest("button[data-field], button[data-variant]");
   if (!b) return;
-  ui.fieldKind = b.dataset.field;
+  if (b.dataset.field) ui.fieldKind = b.dataset.field;
+  else ui.fieldVariant = b.dataset.variant;
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {
