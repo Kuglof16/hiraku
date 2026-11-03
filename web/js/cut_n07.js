@@ -5,7 +5,7 @@
 // "補強の後" and the stress's name and unit: the difference is shown by the colours and
 // the shape, not by naming the analyses. One tag, one colour bar (its two ends) and one
 // number (the largest value of the state shown), as the story's limits ask; the
-// notes under them are small. The tag is large (N07_STYLE), and with the version after it
+// notes under them are small. The tag is large (label.of_view_h), and with the version after it
 // says in green "✓ 直った" when the records judge that version a pass on the load case (its
 // verdicts, else the domain's judgement of the version); otherwise nothing is added. Positions, sizes, colours, the length and the
 // times come from layout.json n07; a missing key is named on the page.
@@ -30,15 +30,11 @@ const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
 
-// Not in layout.json (written here until the promo department gives a key for it): the
-// tag's text size as a share of the view's height (at least label.size_px).
-export const N07_STYLE = { label_of_view_h: 0.08 };
-
 const N07_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
   "legend.x", "legend.y", "legend.w", "legend.h", "legend.title_px", "legend.text_px",
-  "label.x", "label.y", "label.size_px",
+  "label.x", "label.y", "label.size_px", "label.of_view_h",
   "times.lead_s", "times.turn_to_s", "times.zoom_s", "times.zoom_to_s", "times.swap_s", "times.swap_to_s",
   "turn_deg", "zoom.fill",
   "colors.bg", "colors.panel", "colors.rule",
@@ -231,7 +227,7 @@ export class CutN07 {
     el.className = "n07-label";
     el.dataset.box = "n07.label";
     el.dataset.kind = "label";
-    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * N07_STYLE.label_of_view_h));
+    const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * sp.label.of_view_h));
     Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${px}px` });
     this.stage.append(el);
     this.label = el;

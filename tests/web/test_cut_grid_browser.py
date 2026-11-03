@@ -1,6 +1,6 @@
 """The N04 and N15 cut pages (cut.html?cut=n04 / n15) in a headless browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The run is the A6 fixture (tests.web.domains_fixture: seven domains and assembly over two
 versions, with judgement.updated), here also with a third version; with HIRAKU_WEB_DEV_RUNS
 the newest run there is opened too. The layout values are the promo department's for
@@ -33,7 +33,9 @@ def grid_layout():
     grid = {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}
     tile = {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10},
             "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}
-    common = {"header": header, "grid": grid, "tests": list(TESTS), "tile": tile}
+    feature = {"x": 96, "y": 160, "w": 852, "h": 726}
+    lst = {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}
+    common = {"header": header, "grid": grid, "feature": feature, "list": lst, "tests": list(TESTS), "tile": tile}
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
@@ -42,26 +44,24 @@ def grid_layout():
         "n04": {"duration_s": 4.0, **copy.deepcopy(common), "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
                 "colors": dict(COLORS), "overlay": dict(OVERLAY)},
         "n15": {"duration_s": 5.1, **copy.deepcopy(common), "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}},
-        "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1152, "h": 48},
-                "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
+        "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48},
+                "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
                 "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": dict(COLORS)},
     }
 
 
-def feature_rects(g, n):
-    """As cut_n03.js featureRects: the large box [x, y, w, h] over the first ceil(cols / 2)
-    columns and all rows, and n - 1 small ones filling the columns left, row by row."""
-    W = g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
-    H = g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
-    bc = min(g["cols"] - 1, -(-g["cols"] // 2))
-    big = [g["x"], g["y"], bc * g["tile_w"] + (bc - 1) * g["gap_x"], H]
-    cols = max(1, g["cols"] - bc)
-    rows = max(1, -(-(n - 1) // cols))
-    left = g["x"] + big[2] + g["gap_x"]
-    w = (W - big[2] - g["gap_x"] - (cols - 1) * g["gap_x"]) / cols
-    h = (H - (rows - 1) * g["gap_y"]) / rows
-    small = [[math.floor(left + (i % cols) * (w + g["gap_x"]) + 0.5), math.floor(g["y"] + (i // cols) * (h + g["gap_y"]) + 0.5), int(w), int(h)] for i in range(n - 1)]
-    return big, small
+def list_rects(L):
+    """The slots [x, y, w, h] of a layout list {x, y, w, h, cols, rows, gap_x, gap_y}, row by
+    row from the left: (w - (cols - 1) gap_x) / cols x (h - (rows - 1) gap_y) / rows each
+    (as cut_n03.js listRects)."""
+    w = (L["w"] - (L["cols"] - 1) * L["gap_x"]) / L["cols"]
+    h = (L["h"] - (L["rows"] - 1) * L["gap_y"]) / L["rows"]
+    return [[math.floor(L["x"] + c * (w + L["gap_x"]) + 0.5), math.floor(L["y"] + r * (h + L["gap_y"]) + 0.5), int(w), int(h)]
+            for r in range(L["rows"]) for c in range(L["cols"])]
+
+
+def box_of(b):
+    return [b["x"], b["y"], b["w"], b["h"]]
 
 
 def renumber(events):
@@ -142,7 +142,7 @@ READ = """async (t) => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class GridCutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -207,13 +207,12 @@ class GridCutTest(unittest.TestCase):
 
     def check_grid(self, got, layout, name):
         spec = layout[name]
-        g = spec["grid"]
         self.assertIsNone(got["err"])
         self.assertEqual([t["key"] for t in got["tiles"]], [f"{name}.tile.{k}" for k in spec["tests"]])
-        # one tile large, the others as a small list in the grid's box (featureRects)
+        # one tile in the feature box, the others in the list's slots in order
         featured = [t for t in got["tiles"] if t["featured"]]
         self.assertEqual(len(featured), 1)
-        big, small = feature_rects(g, len(spec["tests"]))
+        big, small = box_of(spec["feature"]), list_rects(spec["list"])
         rest = iter(small)
         for t in got["tiles"]:
             r = big if t["featured"] else next(rest)

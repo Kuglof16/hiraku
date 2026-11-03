@@ -16,8 +16,9 @@ mesh's nodes and elements:
 
 The limits (5, 30 deg, 150 deg) are shape-example limits, not taken from a solver's
 manual. The members of the smaller section have 3 mm walls in the mesh (2 mm in the
-design), so the thickness view has two colours. The setup's masses are computed from the mesh (element area x wall thickness
-x density) and from the design (member length x section area x density).
+design), so the thickness view has two colours. The setup's checks use the contract's names:
+model_mass from the mesh (element area x wall thickness x density) and mass_difference, the
+model's mass against the design's (member length x section area x density), in %.
 """
 
 import copy
@@ -226,16 +227,18 @@ def quality_events(target=8000):
         {"label": "横の力とねじり (形の見本)", "origin_mm": nodes[design["members"][0]["node_b"]], "vector_N": [0.0, 800.0, 0.0],
          "moment_Nmm": [0.0, 0.0, 250000.0]},
     ]
-    total = [sum(l["vector_N"][k] for l in loads) for k in range(3)]
+    # checks under the contract's names (docs/contract.md): the model's mass and its difference
+    # from the design's (%), both computed here; the residuals and free rigid-body modes need a
+    # solve, so this shape example leaves them out
+    mm, dm = model_mass_kg(mesh, design), design_mass_kg(design, set(members))
     ana["setup"] = {
         "mesh_id": mesh["mesh_id"],
         "constraints": fixed,
         "loads": loads,
         "inertia_relief": False,
         "checks": {
-            "model_mass": {"value": round(model_mass_kg(mesh, design), 4), "unit": "kg"},
-            "design_mass": {"value": round(design_mass_kg(design, set(members)), 4), "unit": "kg"},
-            "applied_load_total": {"value": round(_norm(total), 4), "unit": "N"},
+            "model_mass": {"value": round(mm, 4), "unit": "kg"},
+            "mass_difference": {"value": round(100.0 * (mm - dm) / dm, 4), "unit": "%"},
         },
     }
     return events, mesh, ana, {"squashed": sq, "hole_edges": hole_edges}
