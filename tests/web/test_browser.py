@@ -127,7 +127,7 @@ def n05_layout():
             "duration_s": 7.0,
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
             "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
-            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}},
+            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}, "verdict": {"of_label": 2}},
             "times": {"lead_s": 0.3},
             "overlay": {"color": "#c8402a", "opacity": 0.22},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},

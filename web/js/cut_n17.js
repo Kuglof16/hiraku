@@ -11,7 +11,7 @@
 //
 // The story (layout.json story): the next step is the one place to read. Its block is the
 // cut's one tag and holds one change (the report's first next), its sentence large (as
-// large as fits the page's width on one line, up to N17_STYLE.change_of_title x title_px)
+// large as fits the page's width on one line, up to page.change_of_title x title_px)
 // and its reason at the story's body text size; from light_s everything else on the page
 // is drawn pale (layout.json n17.dim_opacity). Before / after figures of the change are not
 // shown: the report's next holds only the change and its reason in words, and the
@@ -22,9 +22,6 @@ import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
 import { DOMAIN_JA, esc, fmt, quantityName } from "./labels.js";
 
-// Not in layout.json (written here until the promo department gives a key for it): the
-// largest size of the change's sentence (a multiple of page.title_px).
-export const N17_STYLE = { change_of_title: 1.5 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,7 +29,7 @@ const $ = (id) => document.getElementById(id);
 const N17_KEYS = [
   "duration_s",
   "dim_opacity",
-  "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px",
+  "page.x", "page.y", "page.w", "page.h", "page.title_px", "page.text_px", "page.change_of_title",
   "times.lead_s", "times.light_s",
   "colors.bg", "colors.panel", "colors.rule",
 ];
@@ -182,7 +179,7 @@ export class CutN17 {
   nextHtml() {
     const next = this.report.next ?? [];
     const n = next[0];
-    const big = Math.round(this.spec.page.title_px * N17_STYLE.change_of_title);
+    const big = Math.round(this.spec.page.title_px * this.spec.page.change_of_title);
     const rows = n
       ? `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b><span class="n17-change" style="font-size:${big}px">${esc(n.change)}</span><small>${esc(n.reason)}</small></li>`
       : `<li class="none">報告に「次」が書かれていない</li>`;

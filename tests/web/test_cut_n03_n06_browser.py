@@ -23,7 +23,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.test_browser import ENABLED, sync_playwright
-from tests.web.test_cut_grid_browser import feature_rects
+from tests.web.test_cut_grid_browser import box_of, list_rects
 
 BAND_Y = 910
 COLORS = {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}
@@ -44,13 +44,15 @@ def n03_n06_layout():
         "n03": {
             "duration_s": 5.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
-            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22},
+            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2},
             "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9},
             "colors": dict(COLORS),
         },
         "n06": {
             "duration_s": 11.7,
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
+            "feature": {"x": 96, "y": 96, "w": 1104, "h": 790},
+            "list": {"x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24},
             "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
             "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}},
             "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55},
@@ -379,7 +381,6 @@ class CutN03N06Test(unittest.TestCase):
 
     def check_n06(self, shots, layout, recorded):
         sp = layout["n06"]
-        g = sp["grid"]
         T = sp["times"]
         for t, got in shots.items():
             self.check_common(got, layout)
@@ -392,8 +393,8 @@ class CutN03N06Test(unittest.TestCase):
                 self.assertAlmostEqual(x["p"], max(0.0, min(1.0, (t - start) / T["tile_in_s"])), places=6, msg=(t, x["box"]))
                 self.assertIsNone(x["outside"], x["box"])
                 if t >= start + T["tile_in_s"]:
-                    # the list: one small slot per tile beside the large box (featureRects)
-                    r = feature_rects(g, len(sp["tests"]) + 1)[1][i]
+                    # the list: one slot per tile, row by row (layout.json n06.list)
+                    r = list_rects(sp["list"])[i]
                     self.assertEqual([round(v) for v in x["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], x["box"])
                     self.assertLessEqual(x["rect"][3], BAND_Y, x["box"])
                     for b in got["boxes"]:
@@ -414,6 +415,8 @@ class CutN03N06Test(unittest.TestCase):
             self.assertEqual(shown, [] if k is None else [f"n06.big.{sp['tests'][k]}"], t)
             if k is not None:
                 big = next(b for b in got["bigs"] if b["shown"])
+                f = box_of(sp["feature"])
+                self.assertEqual([round(v) for v in big["rect"]], [f[0], f[1], f[0] + f[2], f[1] + f[3]], t)
                 small = got["tiles"][k]
                 self.assertGreater((big["rect"][2] - big["rect"][0]) * (big["rect"][3] - big["rect"][1]),
                                    4 * (small["rect"][2] - small["rect"][0]) * (small["rect"][3] - small["rect"][1]), t)

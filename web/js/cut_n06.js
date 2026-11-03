@@ -1,6 +1,6 @@
 // N06 (cut.html?cut=n06&run=<id>): designs that do not work, side by side.
 //
-// One tile per key of layout.json n06.tests, in the layout's grid. A test tile plays the
+// One tile per key of layout.json n06.tests. A test tile plays the
 // record of its test's load case past the limit (its id ends in -beyond), from the time
 // the tile lands to the end of the cut. Where the limit is passed is drawn in the same red
 // as N01 / N02: a wheel that leaves the road (its ring, and the pose at the end in
@@ -13,8 +13,8 @@
 // name only when there is nothing to say); no number is shown.
 //
 // One at a time, large (the story: one representative large, the rest a small list): the
-// tiles come in one after another as a small list (featureRects: the grid's last columns),
-// and each takes its turn in the large box (the grid's first columns), in the layout's order
+// tiles come in one after another as a small list (layout.json n06.list, row by row), and
+// each takes its turn in the large box (n06.feature), in the layout's order
 // — the message is "作ってみると、うまくいかない", every failure in turn, so none is the
 // representative of the others. The cut from times.tiles_s to its end is shared equally by
 // the turns; in its turn the record plays in the large box (from tile_in_s after the turn
@@ -30,13 +30,13 @@ import { contourOf, fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { featureRects, requireKeys, storyOf } from "./cut_n03.js";
+import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 
 export const N06_KEYS = [
   "duration_s",
-  "grid.x", "grid.y", "grid.cols", "grid.rows", "grid.tile_w", "grid.tile_h", "grid.gap_x", "grid.gap_y",
+  ...FEATURE_KEYS,
   "tests",
   "tile.border_px", "tile.radius_px", "tile.label.x", "tile.label.y", "tile.label.size_px",
   "times.tiles_s", "times.tile_in_s", "times.tile_stagger_s",
@@ -198,7 +198,9 @@ export class CutN06 {
     const T = sp.times;
     const n = sp.tests.length;
     // the large box and one small slot per tile
-    const fr = featureRects(sp.grid, n + 1);
+    const slots = listRects(sp.list);
+    if (n > slots.length) throw new Error(`layout.json の n06.tests は ${n} 枚、list は ${slots.length} 枠`);
+    const fr = { big: sp.feature, small: slots };
     this.big = fr.big;
     const turn = (sp.duration_s - T.tiles_s) / Math.max(1, n);
     const box = (cls, key, r) => {
@@ -234,11 +236,11 @@ export class CutN06 {
       }
       tile.miss = words.length > 0;
       small.el.dataset.miss = tile.miss ? "1" : "0";
-      // the large box's tag: as much larger as the box is taller than a grid tile
+      // the large box's tag: as much larger as the box is taller than a list slot
       const L = st.label;
       const px = Math.max(L.size_px, this.story.bodyPx);
       small.label = this.labelTile(small, def ? def.name : key, words, px);
-      big.label = this.labelTile(big, def ? def.name : key, words, Math.round(px * (fr.big.h / sp.grid.tile_h)));
+      big.label = this.labelTile(big, def ? def.name : key, words, Math.round(px * (fr.big.h / slots[0].h)));
       for (const pane of [small, big]) {
         if (!def) this.note(pane, `この札の中身はまだ決めていない (${key})`);
         else if (def.assembly) {

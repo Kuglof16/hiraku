@@ -92,7 +92,7 @@ def n17_layout():
         "n17": {
             "duration_s": 8.7,
             "dim_opacity": 0.3,
-            "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22},
+            "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "change_of_title": 1.5},
             "times": {"lead_s": 0.3, "light_s": 5.8},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
         },
