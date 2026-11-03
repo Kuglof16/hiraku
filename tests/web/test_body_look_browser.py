@@ -37,9 +37,10 @@ EXPECTED_FINISH = {
     "side_panel_R": "body_paint",
     "bulkhead": "body_paint",
     "front_body": "body_paint",
-    "floor": "tread_plate",  # a5052, bare: still the diamond plate
-    "floor_front": "tread_plate",
-    "deck": "tread_plate",
+    # the diamond plate: the pattern stays whatever the material and finish (look.js MATERIAL_OF, 4)
+    "floor": "tread_plate",  # a5052, bare: still the aluminium diamond plate
+    "floor_front": "painted_steel",  # ss400, painted (TREAD_SET): painted plate, the paint's colour
+    "deck": "tread_plate_steel",  # ss400, no finish (TREAD_SET): the steel diamond plate
     "seat_R_back": "vinyl",
     "seat_R_cushion": "vinyl",
     "seat_L_back": "vinyl",
@@ -51,6 +52,23 @@ EXPECTED_FINISH = {
     # the dash cross member, so the fixture no longer adds a stay part under it)
     "rollbar": "painted_steel",
 }
+# floor_front and deck are set here, so the expectation does not hang on what data/designs
+# gives them (the analysis department's designs give them ss400, painted, since ea47a32)
+TREAD_SET = {"floor_front": ("ss400", "painted"), "deck": ("ss400", None)}
+TREAD_IDS = ("floor", "floor_front", "deck")
+
+
+def tread_design():
+    """body_design() with floor_front and deck given TREAD_SET's material and finish."""
+    design = body_design()
+    for p in design["parts"]:
+        if p["id"] in TREAD_SET:
+            p["material"], finish = TREAD_SET[p["id"]]
+            if finish:
+                p["finish"] = finish
+            else:
+                p.pop("finish", None)
+    return design
 
 # web/js/shapes.js ROUND: the corner radius is 0.35 of the thinnest side, at most 40 mm
 def round_radius(size):
@@ -66,7 +84,7 @@ LOOK_OF = """async (events) => {
   for (const [id, o] of Object.entries(b.partObjs)) {
     const meshes = [];
     o.group.traverse((x) => { if (x.isMesh && !x.isLineSegments2 && !x.material.userData.sub && x.layers.mask & 1) meshes.push(x); });
-    parts[id] = meshes.map((x) => ({ finish: x.material.userData.finish ?? null, type: x.material.type, color: "#" + x.material.color.getHexString(),
+    parts[id] = meshes.map((x) => ({ finish: x.material.userData.finish ?? null, normal: x.material.userData.normal ?? null, type: x.material.type, color: "#" + x.material.color.getHexString(),
                                      clearcoat: x.material.clearcoat ?? null, round: x.geometry.userData.round_mm ?? null, verts: x.geometry.attributes.position.count }));
   }
   const members = {};
@@ -143,13 +161,21 @@ class BodyLookBrowserTest(unittest.TestCase):
         return got
 
     def test_parts_take_the_finish_of_their_kind_and_id(self):
-        design = body_design()
+        design = tread_design()
         got = self.look_of("real", design)
         parts = got["parts"]
         for pid, finish in EXPECTED_FINISH.items():
             self.assertTrue(parts[pid], pid)
             self.assertEqual({m["finish"] for m in parts[pid]}, {finish}, pid)
         colour = lambda pid: {m["color"] for m in parts[pid]}
+        # the floors and the deck: the diamond plate's pattern on every one; the material and the
+        # finish give the colour (aluminium plate, steel plate, the paint's own colour)
+        for pid in TREAD_IDS:
+            self.assertEqual({m["normal"] for m in parts[pid]}, {"plate"}, pid)
+        self.assertEqual(colour("floor"), {"#a9aeb3"})  # look.js FINISH.tread_plate
+        self.assertEqual(colour("deck"), {"#7e8388"})  # FINISH.tread_plate_steel
+        self.assertEqual(colour("floor_front"), {"#3d4840"})  # FINISH.painted_steel: the paint's colour
+        self.assertEqual(len(set().union(*(colour(p) for p in TREAD_IDS))), 3)
         # one body colour on every panel; a thin clearcoat
         panels = ["hood", "fender_FL", "fender_FR", "side_panel_L", "side_panel_R", "bulkhead"]
         self.assertEqual(len(set().union(*(colour(p) for p in panels))), 1)
@@ -203,7 +229,15 @@ class BodyLookBrowserTest(unittest.TestCase):
             ({"id": "hood", "kind": "body", "material": "spcc", "finish": "powder_coat"}, {"finish": "powder_coat", "color": "#40535f"}),
             ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "bare"}, {"finish": "bare_steel"}),
             ({"id": "bracket_x", "kind": "bracket", "material": "a5052", "finish": "bare"}, {"finish": "aluminium"}),
-            ({"id": "floor", "kind": "body", "material": "a5052", "finish": "bare"}, {"finish": "tread_plate"}),
+            ({"id": "floor", "kind": "body", "material": "a5052", "finish": "bare"}, {"finish": "tread_plate", "normal": "plate"}),
+            # the diamond plate keeps its pattern; the material and finish decide colour and metal
+            ({"id": "floor", "kind": "body", "material": "ss400"}, {"finish": "tread_plate_steel", "normal": "plate"}),
+            ({"id": "floor", "kind": "body", "material": "a5052"}, {"finish": "tread_plate", "normal": "plate"}),
+            ({"id": "deck", "kind": "body", "material": "ss400", "finish": "bare"}, {"finish": "tread_plate_steel", "normal": "plate"}),
+            ({"id": "floor_front", "kind": "body", "material": "ss400", "finish": "painted"}, {"finish": "painted_steel", "normal": "plate"}),
+            ({"id": "step_L", "kind": "body", "material": "ss400", "finish": "galvanized"}, {"finish": "galvanized", "normal": "plate"}),
+            ({"id": "deck", "kind": "body", "material": "ss400", "finish": "powder_coat"}, {"finish": "powder_coat", "normal": "plate"}),
+            ({"id": "deck", "kind": "body", "finish": "bare"}, {"finish": "tread_plate_steel", "normal": "plate"}),
             ({"id": "bracket_x", "kind": "bracket", "finish": "bare"}, {"finish": "bare_steel"}),
             ({"id": "bracket_x", "kind": "bracket", "material": "a5052", "finish": "anodized"}, {"finish": "anodized"}),
             ({"id": "bracket_x", "kind": "bracket", "material": "ss400", "finish": "galvanized"}, {"finish": "galvanized"}),
@@ -217,13 +251,16 @@ class BodyLookBrowserTest(unittest.TestCase):
             # neither, or a key that is not there: kind and id
             ({"id": "seat_R_back", "kind": "seat"}, {"finish": "vinyl"}),
             ({"id": "hood", "kind": "body", "material": "no_such_key"}, {"finish": "body_paint"}),
-            ({"id": "deck", "kind": "body"}, {"finish": "tread_plate"}),
+            ({"id": "deck", "kind": "body"}, {"finish": "tread_plate", "normal": "plate"}),
         ]
         page, errors = self.open("real")
         got = page.evaluate(
             """async ([cases, materials]) => {
               const { partEntry, PART_FINISHES } = await import("./js/look.js");
-              return { finishes: PART_FINISHES, entries: cases.map((p) => { const e = partEntry(p, materials); return e.color ? { finish: e.finish, color: e.color } : { finish: e.finish }; }) };
+              return { finishes: PART_FINISHES, entries: cases.map((p) => {
+                const e = partEntry(p, materials);
+                return { finish: e.finish, ...(e.color ? { color: e.color } : {}), ...(e.normal ? { normal: e.normal } : {}) };
+              }) };
             }""",
             [[c[0] for c in cases], body_design()["materials"]],
         )
