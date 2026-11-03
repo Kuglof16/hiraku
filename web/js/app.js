@@ -361,7 +361,7 @@ function renderIntake(tab) {
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
     $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
-    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab });
+    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
@@ -372,6 +372,73 @@ function renderIntake(tab) {
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// A rule hit pointed at in A2 (its part ids; [] when the person leaves it): the workbench
+// lights them (Workbench3D.setRuleFocus), and since A2 hides the workbench, a small 3D view
+// (the peek) shows the same lit design in the corner of the intake screen while something is
+// pointed at. Ids with nothing in the 3D (and a design not made yet) show no peek.
+let ruleFocus = [];
+let rulePeek = null; // { el, cap, host, bench, key }
+const PEEK_W = 440;
+const PEEK_H = 300;
+function onRuleFocus(ids) {
+  ruleFocus = Array.isArray(ids) ? ids.filter((x) => typeof x === "string") : [];
+  bench.setRuleFocus(ruleFocus);
+  cmpView?.bench.setRuleFocus(ruleFocus);
+}
+
+function drawRulePeek(s, shown) {
+  const design = shown ? s.designs[s.currentVersion] ?? null : null;
+  if (!ruleFocus.length || !design) {
+    if (rulePeek) rulePeek.el.hidden = true;
+    return;
+  }
+  if (!rulePeek) {
+    const el = document.createElement("div");
+    el.className = "rule-peek";
+    el.id = "rule-peek";
+    el.innerHTML = `<div class="rule-peek-cap"></div><div class="rule-peek-gl"></div>`;
+    stage.append(el);
+    const host = el.querySelector(".rule-peek-gl");
+    rulePeek = { el, cap: el.firstChild, host, bench: new Workbench3D(host, look, { quality }), key: null, size: "" };
+    window.hiraku.peekBench = rulePeek.bench;
+  }
+  const p = rulePeek;
+  const b = p.bench;
+  b.setDesign(design);
+  const lit = b.setRuleFocus(ruleFocus);
+  p.el.hidden = lit.length === 0;
+  if (p.el.hidden) return;
+  // the lower right corner of the intake screen (in stage pixels)
+  const sr = stage.getBoundingClientRect();
+  const vr = $("view-intake").getBoundingClientRect();
+  p.el.style.left = `${(vr.right - sr.left) / stageScale - PEEK_W - 14}px`;
+  p.el.style.top = `${(vr.bottom - sr.top) / stageScale - PEEK_H - 44}px`; // above the screen's last line (A2's note)
+  const w = p.host.clientWidth;
+  const h = p.host.clientHeight;
+  const size = `${w}x${h}x${stageScale}`;
+  if (size !== p.size && w > 0 && h > 0) {
+    p.size = size;
+    b.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    p.key = null;
+  }
+  const key = `${design.design_version}|${lit.join(",")}`;
+  if (key !== p.key) {
+    p.key = key;
+    b.fitPoints(b.contentPoints(), VIEWS.default, 1.08);
+    const said = (id) => {
+      if (id === "design") return "設計の全体";
+      if (id.startsWith("support:")) return `接地点 ${id.slice(8)}`;
+      const part = (design.parts ?? []).find((x) => x.id === id);
+      return part ? String(part.name ?? id).replace(/\s*[（(].*$/, "") || id : id;
+    };
+    p.cap.textContent = `規則の当たり: ${lit.map(said).join("・")}`;
+    p.el.dataset.lit = lit.join(",");
+  }
+  b.setToggles({ ...ui.toggles, names: false, arrows: false, contour: false });
+  b.animate(player.playhead, false);
+  b.render();
 }
 
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
@@ -1148,6 +1215,7 @@ function draw() {
   }
   else if (tab === "grid") board.tick(player.playhead);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 
 let lastTs = null;
