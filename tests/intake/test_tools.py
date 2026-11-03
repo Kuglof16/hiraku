@@ -1,12 +1,14 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from hiraku import contract
+from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake.tools import TOOLS
 from hiraku.store import RunStore
-from hiraku.tools.context import RunContext, ToolError
+from hiraku.tools.context import RunContext
 from tests.intake.designs import mini_design
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -59,6 +61,33 @@ class DefinitionsTest(unittest.TestCase):
         for name, t in TOOLS.items():
             with self.subTest(tool=name):
                 jsonschema.Draft202012Validator.check_schema(t["input_schema"])
+
+    def test_the_input_schemas_are_the_contracts(self):
+        from hiraku.intake.tools import contract_input
+
+        defs = contract.schema()["$defs"]
+        for name, t in TOOLS.items():
+            with self.subTest(tool=name):
+                self.assertIn(f"tool_input.{name}", defs)
+                self.assertEqual(t["input_schema"], contract_input(name))
+                self.assertNotIn("$ref", json.dumps(t["input_schema"]))  # inlined: the schema stands alone
+                self.assertNotIn("description", {k for k in t["input_schema"] if k == "description"})
+
+    def test_what_the_tools_take_is_checked_by_the_schema(self):
+        import jsonschema
+
+        ok = {"pick_domains": {"want": "机", "flags": {"standing": True}},
+              "ask_user": {"answers": {"Q40": 30}, "wait_seconds": 5},
+              "import_knowledge": {"filename": "a.md", "text": "質量は 23 kg 以下", "formulas": {"c1": {"check": "mass_kg <= 23"}}},
+              "rule_check": {"design_version": 1, "disable": ["AS-01"]}}
+        bad = {"pick_domains": {"want": "机"},  # flags are required
+               "ask_user": {"wait_seconds": 9999},
+               "import_knowledge": {"formulas": {"x": {"check": "a"}}},  # not a sentence number
+               "rule_check": {"design_version": 0}}
+        for name, args in ok.items():
+            self.assertEqual(list(jsonschema.Draft202012Validator(TOOLS[name]["input_schema"]).iter_errors(args)), [], name)
+        for name, args in bad.items():
+            self.assertTrue(list(jsonschema.Draft202012Validator(TOOLS[name]["input_schema"]).iter_errors(args)), name)
 
     def test_the_flag_questions_are_in_the_pick_description(self):
         d = TOOLS["pick_domains"]["description"]
@@ -197,6 +226,31 @@ class ImportKnowledgeToolTest(ToolsTestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(ToolError):
                     call("import_knowledge", ctx, path=bad)
+
+    def test_the_same_path_twice_is_the_same_document_named_after_the_file(self):
+        ctx = make_ctx(self.root)
+        folder = Path(ctx.store.path) / "knowledge"
+        folder.mkdir()
+        (folder / "notes.md").write_text(self.md(), encoding="utf-8")
+        first = call("import_knowledge", ctx, path="knowledge/notes.md")
+        second = call("import_knowledge", ctx, path="knowledge/notes.md", skip={"c3": "x"},
+                      formulas={"c5": {"check": "bottom_z_mm >= 100", "kinds": ["battery"]}})
+        self.assertEqual((first["doc_id"], second["doc_id"]), ("U1", "U1"))
+        self.assertEqual(second["needs_formula"], [])
+        if ev.known(ev.KNOWLEDGE_IMPORTED):
+            docs = [e["data"]["doc"] for e in ctx.store.events() if e["kind"] == ev.KNOWLEDGE_IMPORTED and e["data"]["doc"]["origin"] == "dropped"]
+            self.assertEqual([d["filename"] for d in docs], ["notes.md", "notes.md"])  # the file's name, not the path
+
+    def test_a_shift_jis_file_is_read(self):
+        ctx = make_ctx(self.root)
+        folder = Path(ctx.store.path) / "knowledge"
+        folder.mkdir()
+        (folder / "excel.csv").write_bytes("規則,式,分類\n座面の幅は 400 mm 以上,size_y_mm >= 400,人\n".encode("cp932"))
+        got = call("import_knowledge", ctx, path="knowledge/excel.csv")
+        self.assertEqual([r["text"] for r in got["rules"]], ["座面の幅は 400 mm 以上"])
+        (folder / "binary.bin").write_bytes(b"\xff\xfe\x00\x80\x81")
+        with self.assertRaises(ToolError):
+            call("import_knowledge", ctx, path="knowledge/binary.bin")
 
     def test_nothing_to_read(self):
         with self.assertRaises(ToolError):

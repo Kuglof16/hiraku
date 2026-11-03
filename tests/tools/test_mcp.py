@@ -4,7 +4,7 @@ import unittest
 
 from hiraku import contract
 from hiraku.tools import Attribution
-from hiraku.tools.mcp import INPUT_SCHEMAS, build_server, make_handler
+from hiraku.tools.mcp import HANDLERS, INPUT_SCHEMAS, build_server, make_handler
 from hiraku.tools.functions import FUNCTIONS, RUN_TOOLS
 from tests.tools.helpers import RunCase
 
@@ -20,7 +20,8 @@ def has_ref(node):
 class SchemaTest(unittest.TestCase):
     def test_every_run_tool_has_a_standalone_schema(self):
         self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design", "propose_design",
-                                              "make_tool", "check_tool", "write_report"})
+                                              "make_tool", "check_tool", "write_report",
+                                              "pick_domains", "ask_user", "import_knowledge", "rule_check"})
         self.assertEqual(set(INPUT_SCHEMAS), set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
             with self.subTest(name=name):
@@ -63,6 +64,22 @@ class HandlerTest(RunCase, unittest.TestCase):
         self.assertNotIn("vectors", got)
         stored = self.ctx.store.get("analysis", got["analysis_id"])
         self.assertIn("vectors", stored)  # the run keeps the whole record for the screen
+
+    def test_rule_check_writes_its_records_through_the_store(self):
+        h = make_handler(self.ctx, self.attribution, "rule_check", HANDLERS["rule_check"])
+        out = asyncio.run(h({}))
+        self.assertNotIn("is_error", out)
+        self.assertTrue(json.loads(out["content"][0]["text"])["recorded"])
+        checks = self.ctx.store.records("rule_check", 1)
+        self.assertEqual(checks[0]["rule_check_id"], "rchk-0001")
+        self.assertEqual(self.kinds().count("rule_check.recorded"), len(checks))
+        self.assert_events_fit()
+
+    def test_an_intake_error_comes_back_as_is_error(self):
+        h = make_handler(self.ctx, self.attribution, "rule_check", HANDLERS["rule_check"])
+        out = asyncio.run(h({"disable": ["no-such-rule"]}))
+        self.assertTrue(out["is_error"])
+        self.assertIn("no-such-rule", out["content"][0]["text"])
 
     def test_revise_design_is_the_designers_only(self):
         args = {"changes": {"track": {"value": 1150.0, "unit": "mm"}}, "reason": "x"}

@@ -30,9 +30,12 @@ def _cmd_run(a: argparse.Namespace) -> int:
     from hiraku.tools import SolversMissing
 
     try:
-        slug = load_requirements(a.requirements)["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
-        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug)
-    except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:
+        req = load_requirements(a.requirements)
+        slug = req["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
+        done = json.loads(a.intake_events.read_text(encoding="utf-8")) if a.intake_events else None
+        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug,
+                        intake=not a.no_intake, intake_events=done)
+    except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:  # json errors are ValueErrors
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:  # start_run has marked the folder stopped, if it was made
@@ -106,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     run.add_argument("--budget", type=float, help="cost limit in USD (default: cost_limit_usd of the requirements)")
     run.add_argument("--max-turns", type=int, default=200)
+    run.add_argument("--no-intake", action="store_true",
+                     help="leave out the intake events at the start (domains picked, hearing, built-in knowledge)")
+    run.add_argument("--intake-events", type=Path,
+                     help="JSON list of the intake steps' events already done (the pipeline's, for a requirements file "
+                          "it wrote): emitted as they are instead of running the intake again")
     run.set_defaults(fn=_cmd_run)
 
     check = sub.add_parser("check", help="check a run folder's events.jsonl against the contract")

@@ -11,6 +11,7 @@ from hiraku.solvers.k2_vehicle.drive import on_board
 from hiraku.solvers.k2_vehicle.model import box_design, build_vehicle
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
+from tests.solvers.k2.slow import SLOW
 
 
 def q(v, u):
@@ -70,7 +71,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic"])
+                                 "step_climb_dynamic", "kc_bench"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -121,7 +122,7 @@ class Declarations(unittest.TestCase):
             desc = tool.describe()
             declared = {p["name"]: p for p in desc["params"]}
             self.assertTrue(desc["predicts"], name)
-            self.assertEqual(tool.spec()["formulas"], desc["formulas"])
+            self.assertEqual(tool.formula_ids(), desc["formulas"])  # spec() also runs every check: the protocol tests
             for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     f = formulas[pair["formula_id"]]
@@ -202,6 +203,7 @@ class KcChannels(unittest.TestCase):
         self.assertEqual(fl, fr)
 
 
+@SLOW
 class OwnChecks(unittest.TestCase):
     def test_every_tool_passes_its_known_answers(self):
         for name, tool in TOOLS.items():
@@ -210,6 +212,7 @@ class OwnChecks(unittest.TestCase):
                     self.assertTrue(c["pass"], f"{name}: {c['case']}: expected {c['expected']} got {c['got']}")
 
 
+@SLOW
 class Runs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -315,7 +318,11 @@ class Runs(unittest.TestCase):
     def test_braking_close_to_the_friction_limit(self):
         r = self.res("braking")
         v = 35.0 / 3.6
-        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * 0.6 * 9.80665), delta=0.05 * r["braking_distance"])
+        # the wheels lock: the Magic Formula tyre slides at kappa = -1, below its peak mu 0.6
+        veh = build_vehicle(on_board(demo_design(), "two_cargo"), {"mu": 0.6})
+        mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / veh.m_total / 9.80665
+        self.assertLess(mu_lock, 0.6)
+        self.assertAlmostEqual(r["braking_distance"], v * v / (2 * mu_lock * 9.80665), delta=0.05 * r["braking_distance"])
         self.assertEqual(r["min_rear_wheel_load"], r["min_wheel_load"])  # load moves forward: a rear wheel is lightest
         self.assertGreater(r["max_pitch"], 0.0)  # nose down
 

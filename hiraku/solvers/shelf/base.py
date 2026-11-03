@@ -181,6 +181,24 @@ def on_board(design: Record, load_case: Record) -> Record:
         raise LoadCaseError(str(e)) from None
 
 
+def mesh_of(design: Record, params: dict) -> tuple[Record | None, str | None]:
+    """The version's shell mesh passed in params["mesh"] (tools with needs_mesh), or None and why
+    it is not used: none passed (known-answer checks, unit tests), or made from another design. Its elements
+    belong to the design's members or to its gusset parts."""
+    mesh = (params or {}).get("mesh")
+    if mesh is None:
+        return None, None
+    version = int(design.get("design_version", 1))
+    if int(mesh.get("design_version", -1)) != version:
+        return None, f"mesh {mesh.get('mesh_id')} is of design version {mesh.get('design_version')}, not {version}; not drawn"
+    members = {m["id"] for m in design.get("members", [])}
+    members |= {p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset"}  # plates meshed with the frame
+    stray = sorted(set(mesh.get("element_member", [])) - members)
+    if stray:
+        return None, f"mesh {mesh.get('mesh_id')} has elements of {', '.join(stray[:3])}, not members of this design; not drawn"
+    return mesh, None
+
+
 def result(quantity: str, value: float, unit: str, where: str | None = None) -> Record:
     r = {"quantity": quantity, "value": float(value), "unit": unit}
     if where:

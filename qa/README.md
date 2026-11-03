@@ -8,6 +8,7 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `frame2d.py` | 平面の骨組みの剛性法。閉じた式の無い骨組みで K1 と比べる二つ目の意見。`hiraku.solvers` とはコードを共有しない |
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
+| `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる) |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方
@@ -15,7 +16,8 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 venv の Python で、リポジトリの一番上から。
 
 ```
-python -m unittest                                   # 全部の試験 (skip は理由つきで出る: -v)
+python -m qa.run_tests                               # 全部の試験を並べて回す (main に入れる前はこれ)
+python -m unittest                                   # 全部の試験を 1 つのプロセスで (skip は理由つきで出る: -v)
 python -m qa.check_run runs/<run_id>                 # 1 回の実行の記録を点検
 python -m qa.check_run --all --recompute             # runs/ の全部。予測を K0 で計算し直す
 python -m qa.check_run runs/<run_id> --effects       # hooks が止めた所とその次の記録、食い違いと原因、合否の出どころ
@@ -28,16 +30,28 @@ python -m qa.judge_scan --ref main                   # 公開する前に main �
 
 ```
 python -m qa.compare_runs --make-baseline data/requirements/offroad-4w-video.yaml   # 直す前に 1 回
-python -m qa.compare_runs --check data/requirements/offroad-4w-video.yaml --rel 1e-6  # 直したあと
-python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml --rel 1e-6  # 2 回回して比べる (決定的か)
+python -m qa.compare_runs --check data/requirements/offroad-4w-video.yaml            # 直したあと
+python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml            # 2 回回して比べる (決定的か)
 python -m qa.compare_runs runs/<run_a> runs/<run_b>                                  # 2 つのフォルダを比べる
 ```
 
 - 比べないもの: 時刻 (event の `ts`・`t`、`created_at`・`wall_time_s`)、`run_id` (文の中の run id と実行のフォルダも)、費用 `cost_usd`
 - 違えば、ファイル (記録は ID の名前)・`events.jsonl` の行・欄の道を出して終了コード 1。比べられないとき (基準の運転が無い、など) は 2
 - `--rel` が無ければ 1 バイトでも違えば違い (キーの順・空白・数の書き方も)。`--rel 1e-6` は数 (文の中の数も) の相対差 1e-6 までと、向きが逆なだけのモードの形 (`mode_shape`) を同じとみて、その数を最後の行に出す
-- `--rel` が要る理由: modal の道具は PyNite の固有値計算 (scipy の `eigsh`) を使い、始めのベクトルが毎回 OS の乱数で決まる。そのため、振動数は 1e-10 ほど違い、モードの形は向きが変わることがある。ほかの記録は 2 回の運転でバイトまで同じ
+- 動画用の要件の台本の運転は、2 回回すとバイトまで同じ (`--twice` で確かめた)。前は modal の道具の固有値計算 (scipy の `eigsh`) が乱数の始めのベクトルから解き、振動数が 1e-10 ほど違い、モードの形の向きが変わっていた。いまは始めのベクトルを固定し、モードの形の向きをそろえている。`--rel` は、乱数を使う道具がまた入ったときのためのもの
 - 基準の運転は `runs/baseline/<要件の名前>/`、`--check` と `--twice` の運転は `runs/compare/` に残る (`--baseline`・`--out` で変えられる)
+
+重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
+
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転
+- 動画用の要件をもう 1 回回して、バイトで比べる
+- `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く (`MeshFieldRecord`)
+
+`HIRAKU_SLOW_TESTS=1` で回すのは次のとき:
+
+- 台本の運転の通り道 (`hiraku/solvers/`・`hiraku/agent/`・`hiraku/store/`・`hiraku/tools/`・`hiraku/catalog/`・`data/catalog/`・`data/requirements/`) を変える取り込みのあと、取り込んだ main で 1 回。同じ回にいくつかの部署を取り込むなら、最後の 1 回だけでよい
+- 動画や `showcase/` に使う運転を記録する前に 1 回
+- コマンドはどちらか: `python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml`、または `HIRAKU_SLOW_TESTS=1 python -m unittest tests.verification.test_real_runs`
 
 ## 照合の考え方
 
@@ -50,7 +64,7 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 - 形: `project.json`・`events.jsonl` の各行・記録のファイルが schema に合う。`seq` が抜けなく続き、時刻が戻らない
 - ファイルと event: 記録のファイル 1 つに同じ中身の event が 1 つある。記録を直すときは同じ ID の event を出し直し、変えてよい欄は契約で決まったものだけ
-- 実行の設定: `project.json` は `run.started` のまま (変えてよい欄を除く)。設計役が版 1 を作る実行では、版 1 のあとの `project.updated` が荷重条件・選んだ分野・役を出し直す。`stop.request` は実行が終われば残らない。`tools/` には、実行の中で作った道具の試みごとに `<名前>-<n>.py` と `.check.json` がそろう
+- 実行の設定: `project.json` は `run.started` のまま (変えてよい欄を除く)。設計役が版 1 を作る実行では、版 1 のあとの `project.updated` が荷重条件・選んだ分野・役を出し直す。`stop.request`・ヒアリングのファイル・`inbox/` の頼みは実行が終われば残らない (残れば注意)。`knowledge/` には `knowledge.imported` が名指すファイルだけがある。`tools/` には、実行の中で作った道具の試みごとに `<名前>-<n>.py` と `.check.json` がそろう
 - 報告: `report.json` は最後の `report.written` と同じ。報告は選んだ分野をすべて持ち、状態と合否の ID はその時のタイルと同じ、食い違いはその版の食い違いの照合で、差と原因は記録と同じ (判定のある荷重条件の食い違いを落としていれば注意)
 - HK1〜HK4: 解析の前に同じ版・同じ荷重条件の予測がある / 照合に通った道具だけを使う / 食い違いに原因が書かれるまで、その分野の解析と照合は進まない / 選んだ分野が判定されるまで done で終わらない (判定されたとは、合否の基準のある荷重条件のすべてに最後の版の合否があること。赤のタイルでも、ほかの試験に合否が無ければ終わっていない)
 - 実行の終わり: `stop_code` は status と合う (`done` ⇔ `done`、`error` ⇔ `failed`)。`not_judged` は判定の無い荷重条件が残っているときだけ、`round_limit` は設計の直しを上限まで使ったときだけ
@@ -58,6 +72,11 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - 合否の出どころ: 一致した照合からなら値は解析。説明された安全側の食い違いからなら、原因が `safe_side` と理由を持ち、予測が基準に対して不利な側 (`<=` なら解析以上、`>=` なら解析以下) にあって、値は予測。合否と余裕は計算し直し、基準は荷重条件から取る
 - 分野のタイル: 落ちた合否があれば赤 (判定の無い荷重条件が残っていても)。無くて判定の無い荷重条件があれば pending、全部合格なら緑。赤の数は並べた合否と合う
 - 組み立てと干渉: 手順の番号が 1 から抜けなく、先に入るべき部品が先にある。干渉の数と最も深い重なりが一覧と合う
+- 時系列: 横軸 (`t_s` か `x`) の点の数が値の数と同じ
+- 規則の照合 (`rule_check`): その版の設計のあと。`pass` は当たり (`hits`) が無いときだけ真。当たりと当てられなかった部品は対象 (`targets`) の中にあり、両方には入らない。規則はその前の `knowledge.imported` で入っている (実行に 1 つでもあれば)。設計に無い対象は注意
+- メッシュ (`mesh`): 版ごとに 1 つ、その版の設計のあと。要素の節の番号は節の数の中、1 つの要素に同じ節が 2 度無い、`element_member` は要素の数だけあり、その部材の厚さがある (どの要素にも使われない節と、設計に無い部材は注意)。メッシュを名指しする field は、解析が始まる前に作られた同じ版のメッシュを指し、`per_element`・`per_mesh_node` の数が要素・節の数と同じ
+- メッシュの品質: ソルバーとは別のコード (`qa/mesh_quality.py`) で、要素ごとに縦横比 (いちばん長い辺 / 短い辺)・角の最小と最大・反り (対角線で分けた 2 つの三角の面の角)・ヤコビアン比 (角ごとの外積の、最小 / 最大)・面積を測り、自由縁・重なった節・つながりの組・向きの食い違い (2 要素だけが持つ辺を同じ向きに回る。3 枚以上が会う継ぎ目の辺は数えない) を数える。誤りにするのは、面積や辺が 0 の要素と折れ返った要素 (ヤコビアン比 0 以下)、`quality` の中の食い違い (`worst`・`over_limit` が `per_element` と合わない、限度を越えた要素があるのに verdict が ok、数の合わない `per_element`)、verdict が fail のメッシュに描いた ok の解析。ソルバーの `worst` や topology の数が別に測った値と違うとき、重なった節、向きの食い違いは注意 (定義が少し違ってよいため)
+- 記録の種類と event の対応は契約の `layout.RECORD_EVENT` を引く (check_run に写し書きしない)
 - `--recompute`: 予測の値を K0 の式と記録された入力からもう一度計算する
 
 ## judge_scan が見ること

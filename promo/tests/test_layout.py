@@ -52,7 +52,8 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n05", "n08b", "n18", "check"})
+                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08b", "n10", "n15",
+                                "n16", "n17", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -72,6 +73,63 @@ class SharedShape(unittest.TestCase):
             self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
         self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
         self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_n03_n06_n07_n17_for_the_screens_department(self):
+        # drawn by the screens department from these values (narration draft 6)
+        r = self.rules
+        band, safe = r["subtitle_band"]["y"], r["safe"]
+        right_edge = safe["x"] + safe["w"]
+        boxes = [r["n03"]["view"], r["n03"]["popup"], r["n07"]["view"], r["n07"]["legend"], r["n17"]["page"]]
+        for b in boxes:
+            self.assertLessEqual(b["y"] + b["h"], band)
+            self.assertLessEqual(b["x"] + b["w"], right_edge)
+            self.assertGreaterEqual(b["x"], safe["x"])
+        self.assertLessEqual(r["n03"]["view"]["x"] + r["n03"]["view"]["w"], r["n03"]["popup"]["x"])
+        self.assertLessEqual(r["n07"]["view"]["x"] + r["n07"]["view"]["w"], r["n07"]["legend"]["x"])
+        g = r["n06"]["grid"]
+        self.assertEqual(g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"], right_edge)
+        self.assertLessEqual(g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"], band)
+        self.assertEqual(len(r["n06"]["tests"]), g["cols"] * g["rows"])
+        t = r["n06"]["times"]
+        self.assertLess(t["tiles_s"] + 5 * t["tile_stagger_s"] + t["tile_in_s"], 5.93)  # within sentences 1-2
+        t7 = r["n07"]["times"]
+        self.assertLess(t7["zoom_to_s"], t7["swap_s"])
+        self.assertLess(t7["swap_to_s"], r["n07"]["duration_s"])
+        self.assertEqual((r["n00"]["duration_s"], r["n03"]["duration_s"], r["n06"]["duration_s"],
+                          r["n07"]["duration_s"], r["n17"]["duration_s"]), (8.6, 5.0, 11.7, 15.3, 8.8))
+        sizes = [r["n03"]["popup"]["title_px"], r["n03"]["popup"]["text_px"], r["n07"]["legend"]["text_px"],
+                 r["n07"]["label"]["size_px"], r["n17"]["page"]["text_px"], r["n06"]["tile"]["label"]["size_px"]]
+        self.assertGreaterEqual(min(sizes), r["min_text_px"])
+
+    def test_n04_n15_n16_for_the_screens_department(self):
+        # drawn by the screens department from these values; N04 and N15 share one grid
+        r = self.rules
+        band, safe = r["subtitle_band"]["y"], r["safe"]
+        for cut in ("n04", "n15"):
+            n = r[cut]
+            g = n["grid"]
+            right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+            bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+            self.assertLessEqual(bottom, band, cut)
+            self.assertEqual(right, safe["x"] + safe["w"], cut)
+            self.assertLessEqual(n["header"]["y"] + n["header"]["h"], g["y"], cut)
+            self.assertEqual(len(n["tests"]), g["cols"] * g["rows"], cut)
+            self.assertGreaterEqual(min(n["tile"]["label"]["size_px"], n["header"]["size_px"]), r["min_text_px"])
+        for k in ("header", "grid", "tests", "tile"):
+            self.assertEqual(r["n04"][k], r["n15"][k], k)
+        self.assertEqual((r["n04"]["duration_s"], r["n15"]["duration_s"], r["n16"]["duration_s"]), (4.0, 5.1, 6.3))
+        n = r["n16"]
+        v, s, st = n["view"], n["seek"], n["steps"]
+        self.assertLessEqual(v["y"] + v["h"], band)
+        self.assertLessEqual(st["y"] + st["h"], band)
+        self.assertLessEqual(v["x"] + v["w"], st["x"])  # side by side
+        self.assertGreaterEqual(s["x"], v["x"])
+        self.assertLessEqual(s["x"] + s["w"], v["x"] + v["w"])
+        self.assertLessEqual(s["y"] + s["h"], v["y"] + v["h"])  # over the view's lower edge
+        self.assertGreaterEqual(min(st["title_px"], st["text_px"]), r["min_text_px"])
+        t = n["times"]
+        self.assertLess(t["steps_to_s"], t["scrub_s"])
+        self.assertLess(t["scrub_to_s"], n["duration_s"])
 
     def test_n02_boxes_stay_above_the_band(self):
         # N02 is drawn by the screens department from these values
@@ -104,10 +162,12 @@ class SharedShape(unittest.TestCase):
         n = self.rules["n05"]
         d = n["door"]
         # a double door behind the vehicle: it cracks, holds, then swings wide
-        self.assertEqual(set(d) - {"_note"}, {
+        self.assertEqual({k for k in d if not k.startswith("_")}, {
             "crack_dur_s", "crack_deg", "crack_ease", "hold_dur_s", "open_dur_s", "angle_deg",
             "perspective_px", "ease", "seam_w_px", "seam_glow_w_px", "spill_dur_s",
-            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle"})
+            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle",
+            "crack_overshoot_deg", "settle_dur_s", "latch_dur_s", "latch_deg", "thickness_px",
+            "dolly_px", "dolly_ease", "bolt"})
         self.assertEqual(len(d["ease"]), 4)
         self.assertEqual(len(d["crack_ease"]), 4)
         self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 180)
@@ -140,6 +200,50 @@ class SharedShape(unittest.TestCase):
         self.assertTrue([x for x in at if t["door_open_s"] < x < t["burst_s"]])
         self.assertTrue([x for x in at if x > t["tag_s"]])
 
+    def test_n05_door_weight_and_light(self):
+        n = self.rules["n05"]
+        d, t = n["door"], n["times"]
+        # the bolt goes and the leaves jolt while the door is still shut
+        self.assertLess(t["latch_s"] + d["latch_dur_s"], t["door_open_s"] + 1e-9)
+        self.assertLess(d["latch_deg"], d["crack_deg"])
+        # the crack runs past and settles back inside the pause
+        self.assertLess(d["crack_overshoot_deg"], d["crack_deg"])
+        self.assertLessEqual(d["settle_dur_s"], d["hold_dur_s"])
+        # the view moves in, but stays in front of the eye
+        self.assertLess(d["dolly_px"], d["perspective_px"])
+        self.assertEqual(len(d["dolly_ease"]), 4)
+        self.assertEqual(set(d["bolt"]), {"w_px", "h_px", "reach_px", "travel_px", "gap_px"})
+        self.assertGreater(d["bolt"]["travel_px"], d["bolt"]["reach_px"])   # it clears the seam
+        # the flood of light does not burn the screen white
+        self.assertLess(n["bloom"]["peak_alpha"], 0.5)
+        self.assertLess(n["rays"]["peak_alpha"], 0.5)
+        # shafts, motes and the flood are gone by 2.0 s: after that ?layer=fg
+        # holds only the name and the tiles' glows
+        for k in ("rays", "dust"):
+            self.assertLessEqual(t["burst_s"] + n[k]["out_dur_s"], 2.0, k)
+        self.assertLessEqual(t["burst_s"] + n["bloom"]["fall_dur_s"], 2.0)
+        self.assertGreater(n["rays"]["count"], 0)
+        self.assertGreater(n["dust"]["count"], 0)
+
+    def test_n05_mesh_and_tile_fx(self):
+        n = self.rules["n05"]
+        d, t, m = n["door"], n["times"], n["hero_mesh"]
+        # the mesh shows while the door is shut and the vehicle has come apart
+        # (its last element gone) by the time the leaves are out
+        self.assertLess(t["mesh_in_s"] + m["in_dur_s"], t["mesh_out_s"])
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        last = t["mesh_out_s"] + m["spread_dur_s"] + m["jitter_dur_s"] + m["el_dur_s"]
+        self.assertLessEqual(last, swing + d["hero_fade_dur_s"] + 1e-9)
+        self.assertLessEqual(swing + d["hero_fade_dur_s"], t["burst_s"])
+        self.assertTrue(0 < m["end_scale"] < 1)
+        self.assertTrue(0 <= m["jitter"] < 0.5)          # nodes do not cross
+        self.assertGreater(m["size_px"], 10)
+        # trails stay within one flight; the wipe and its afterglow end inside the cut
+        fx = n["tile_fx"]
+        self.assertLess(fx["ghosts"] * fx["ghost_lag_s"], t["tile_in_s"])
+        w = n["name_wipe"]
+        self.assertLess(t["name_s"] + w["wipe_dur_s"] + w["afterglow_dur_s"], n["duration_s"])
+
     def test_n05_page_door_and_vehicle(self):
         html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
         self.assertIn('class="door"', html)
@@ -156,6 +260,15 @@ class SharedShape(unittest.TestCase):
         self.assertIn("src", self.rules["n05"]["hero"])
         # the door is behind the vehicle (earlier in the page)
         self.assertLess(html.index('class="door"'), html.index('class="hero"'))
+        # v4: thick leaves, a bolt, the view moving in, shafts and motes, the
+        # mesh over the picture, the tiles' trails (not .bg-only) and the wipe
+        for part in ('class="door-cam"', 'class="edge"', 'class="bolt"', 'svg class="rays"',
+                     'svg class="dust"', "meshedPicture", 'operator="in"', 'class="tile-fx"',
+                     'class="bloom"', 'class="name-sweep"'):
+            self.assertIn(part, html)
+        # nothing moves by the wall clock or unseeded randomness
+        for banned in ("Math.random", "Date.now", "requestAnimationFrame", "performance.now"):
+            self.assertNotIn(banned, html)
 
     def test_units_in_names(self):
         def walk(obj, path):
@@ -187,6 +300,100 @@ class SharedShape(unittest.TestCase):
     def test_bgm_reads_the_same_times(self):
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n05", "burst"), self.rules["n05"]["times"]["burst_s"])
         self.assertEqual(bgm.screen_time(bgm.SCREENS, "n18", "open"), self.rules["n18"]["times"]["open_s"])
+
+
+def n10_data() -> dict:
+    """The DATA block of n10.html (plain JSON between 'const DATA = ' and '};')."""
+    html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
+    m = re.search(r"const DATA = (\{.*?\n  \});", html, re.S)
+    return json.loads(m.group(1))
+
+
+def n10_diffs(row: dict) -> list[float]:
+    """(analysis - answer) / answer in %, as HIRAKU compares a prediction with an analysis."""
+    return [100 * (row["cae"]["v"] - c) / c for c in row["claude"]]
+
+
+class N10(unittest.TestCase):
+    """N10: Claude's answers without tools beside HIRAKU's values."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+        self.n = self.rules["n10"]
+        self.html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
+
+    def test_duration_matches_the_page(self):
+        m = re.search(r'data-duration="([0-9.]+)"', self.html)
+        self.assertEqual(float(m.group(1)), self.n["duration_s"])
+        self.assertEqual(self.n["duration_s"], 8.3)
+
+    def test_boxes_stay_above_the_band(self):
+        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
+        t, n = self.n["table"], self.n
+        bottom = t["y"] + t["head_h"] + t["head_gap_px"] + 3 * t["row_h"] + 2 * t["row_gap_px"]
+        self.assertLessEqual(bottom, n["src"]["y"])
+        self.assertLessEqual(n["src"]["y"] + 2 * 1.5 * n["src"]["size_px"], band)  # two lines
+        self.assertLessEqual(n["title"]["y"] + 1.4 * n["title"]["size_px"], t["y"])
+        for b in (t, n["src"]):
+            self.assertGreaterEqual(b["x"], safe["x"])
+            self.assertLessEqual(b["x"] + b["w"], stage["w"] - safe["x"])
+        cols = {k: v for k, v in n["cols"].items() if not k.startswith("_")}
+        self.assertEqual(sum(cols.values()), t["w"])
+        sizes = [v for k, v in n["text"].items() if not k.startswith("_")]
+        self.assertGreaterEqual(min(sizes + [n["src"]["size_px"], n["title"]["size_px"]]), self.rules["min_text_px"])
+
+    def test_times_follow_the_voice(self):
+        t = self.n["times"]
+        for k, v in t.items():
+            if not k.startswith("_"):
+                self.assertTrue(k.endswith("_s"), k)
+        # all three answers are in during sentence 1 (0.30-3.18 s)
+        last_answer = t["rows_s"] + 2 * t["row_step_s"] + t["answer_lag_s"]
+        self.assertLess(last_answer, 3.18)
+        # HIRAKU's values and the ticks come during sentence 2 (3.53-7.62 s)
+        self.assertGreaterEqual(t["check_s"], 3.53)
+        last_tick = t["check_s"] + 2 * t["check_step_s"] + t["tick_lag_s"]
+        self.assertLess(last_tick, 7.62)
+        # the full picture holds still for at least the last second
+        self.assertLessEqual(max(last_tick, t["src_s"]) + 0.5 + 1.0, self.n["duration_s"])
+        self.assertTrue(self.rules["check"]["times"]["n10"])
+
+    def test_page_names_and_words(self):
+        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
+        for name in re.findall(r'data-box="([^"$]+)"', self.html):
+            self.assertTrue(name.startswith("n10."), name)
+        self.assertIn("CAE ツールで確かめる", self.html)
+        self.assertIn("ツールなしの Claude", self.html)
+        self.assertNotIn("ハルシネーション", self.html)
+        self.assertNotIn("道具", self.html)
+        for banned in ("requestAnimationFrame", "Date.now", "Math.random"):
+            self.assertNotIn(banned, self.html)
+
+    def test_data_is_the_record(self):
+        d = n10_data()
+        self.assertEqual(d["asked"], 3)
+        rows = {r["key"]: r for r in d["rows"]}
+        self.assertEqual(list(rows), ["step", "tilt", "stress"])
+        self.assertEqual(rows["step"]["claude"], [1090, 1090, 1090])
+        self.assertEqual([h["v"] for h in rows["step"]["hand"]], [1092.9])
+        self.assertEqual((rows["step"]["cae"]["v"], rows["step"]["cae"]["by"]), (1103.7, "K1"))
+        self.assertEqual(rows["tilt"]["claude"], [39, 38, 39])
+        self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
+        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
+        # only one of the three runs gave a figure for the stress
+        self.assertEqual(rows["stress"]["claude"], [61])
+        self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
+        self.assertEqual((rows["stress"]["cae"]["v"], rows["stress"]["cae"]["by"]), (61.15, "K1"))
+
+    def test_differences(self):
+        rows = {r["key"]: r for r in n10_data()["rows"]}
+        self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
+        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
+        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 0.2459, places=3)
+        # the widths HIRAKU allows for these quantities in the video run's comparisons
+        self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
+        for r in rows.values():
+            self.assertTrue(all(abs(x) <= r["tol_pct"] for x in n10_diffs(r)), r["key"])
 
 
 class Judging(unittest.TestCase):
@@ -365,6 +572,55 @@ class InBrowser(unittest.TestCase):
             for b in cells[i + 1:]:
                 self.assertIsNone(lc.intersection(a, b))
 
+    def test_n05_effects_follow_the_rules(self):
+        # the landing glows sit on the tiles' cells, the mesh's last element is
+        # gone in time, and the seeded parts come out the same on every load
+        from promo import export
+
+        script = """() => {
+          const u = document.querySelector('.stage').getBoundingClientRect().width / 1920;
+          const box = (el) => ({ x: el.offsetLeft / u, y: el.offsetTop / u, w: el.offsetWidth / u, h: el.offsetHeight / u });
+          const ks = [...document.querySelectorAll('.cells polygon')]
+            .map((p) => parseFloat(p.style.getPropertyValue('--k')));
+          return {
+            land: [...document.querySelectorAll('.land')].map(box),
+            ghosts: document.querySelectorAll('.ghost').length,
+            cells: window.promoLayout.gridCells(window.promoLayout.cutRules.grid),
+            ks: [Math.min(...ks), Math.max(...ks)], tris: ks.length,
+            wire: document.querySelectorAll('.wire polygon').length,
+            rays: document.querySelector('svg.rays').innerHTML,
+            dust: document.querySelector('svg.dust').innerHTML,
+            meshed: document.querySelector('.hero').classList.contains('meshed'),
+          };
+        }"""
+        got = []
+        for _ in range(2):
+            cap = export.Capture(lc.SCREENS / "n05.html", scale=0.25, layer="fg")
+            try:
+                cap.page.evaluate("t => window.__export.seek(t)", 4.5)
+                got.append(cap.page.evaluate(script))
+            finally:
+                cap.close()
+        a, b = got
+        n = lc.load_layout()["n05"]
+        d, t, m = n["door"], n["times"], n["hero_mesh"]
+        self.assertTrue(a["meshed"])
+        self.assertEqual(len(a["land"]), len(a["cells"]))
+        self.assertEqual(a["ghosts"], len(a["cells"]) * n["tile_fx"]["ghosts"])
+        for land, cell in zip(a["land"], a["cells"]):
+            for k in "xywh":
+                self.assertAlmostEqual(land[k], cell[k], delta=0.6)
+        self.assertGreater(a["tris"], 100)
+        self.assertEqual(a["wire"], a["tris"])
+        self.assertGreaterEqual(a["ks"][0], t["mesh_out_s"] - 1e-3)
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertLessEqual(a["ks"][1] + m["el_dur_s"], swing + d["hero_fade_dur_s"] + 1e-3)
+        self.assertEqual(a["rays"].count("<polygon"), n["rays"]["count"])
+        self.assertEqual(a["dust"].count("<circle"), n["dust"]["count"])
+        self.assertEqual(a["rays"], b["rays"])
+        self.assertEqual(a["dust"], b["dust"])
+        self.assertEqual(a["ks"], b["ks"])
+
     def test_variable_forms(self):
         # layout.js turns each kind of value into its CSS form
         from promo import export
@@ -418,6 +674,50 @@ class InBrowser(unittest.TestCase):
         self.assertLessEqual(got["value"]["right"], got["bars"]["right"])
         self.assertLess(got["value"]["h"], 1.5 * rules["bars"]["value_size_px"])  # one line
         self.assertEqual(got["times"]["t-right"], 4.8)
+
+    def test_n10_figures_on_screen(self):
+        from promo import export
+
+        cap = export.Capture(lc.SCREENS / "n10.html", scale=0.5)
+        try:
+            cap.page.evaluate("t => window.__export.seek(t)", 8.3)
+            got = cap.page.evaluate("""() => {
+              const text = (s) => {
+                const el = document.querySelector(`[data-box="${s}"] .in`);
+                const parts = [...el.querySelectorAll(".v, .note")].map((e) => e.textContent.trim());
+                return parts.length ? parts.join(" | ") : el.textContent.trim();
+              };
+              const out = {};
+              for (const k of ["step", "tilt", "stress"])
+                for (const c of ["claude", "hand", "cae", "diff", "tick"]) out[`${k}.${c}`] = text(`n10.row.${k}.${c}`);
+              return out;
+            }""")
+            early = cap.page.evaluate("""async () => { await window.__export.seek(3.3);
+              return [...document.querySelectorAll('.tick .in')].map((e) => getComputedStyle(e).opacity); }""")
+        finally:
+            cap.close()
+        self.assertEqual(got["step.claude"], "約 1,090N | 3 回とも")
+        self.assertEqual(got["tilt.claude"], "約 39°・38°・39° | 3 回の答え")
+        self.assertEqual(got["stress.claude"], "約 61MPa | 数字を出したのは 3 回のうち 1 回")
+        self.assertEqual(got["stress.hand"], "40.0MPa | 単純はり | 77.09MPa | つなぎ目、安全側")
+        self.assertEqual(got["step.cae"], "1,103.7N | K1 の解析")
+        # the differences shown are the ones computed from DATA
+        rows = {r["key"]: r for r in n10_data()["rows"]}
+        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+0.2%")):
+            self.assertEqual(got[f"{k}.diff"], want)
+            worst = max(n10_diffs(rows[k]), key=abs)
+            self.assertIn(f"{abs(worst):.1f}", want)
+            self.assertEqual(got[f"{k}.tick"], "✓")
+        # no tick before sentence 2
+        self.assertEqual(early, ["0", "0", "0"])
+
+    def test_n10_has_no_problems(self):
+        layout = lc.load_layout()
+        with tempfile.TemporaryDirectory() as d:
+            res = lc.check_screen(lc.SCREENS / "n10.html", Path(d), layout, None)
+        probs = [p for f in res["frames"] for p in f["problems"]]
+        self.assertEqual(probs, [], json.dumps(probs, ensure_ascii=False))
+        self.assertEqual(res["errors"], [])
 
     def test_cuts_have_no_problems(self):
         layout = lc.load_layout()

@@ -300,11 +300,72 @@ def bredt_torsion(T: float, L: float, G: float, b: float, h: float, t: float) ->
     theta' = T (sum ds / t) / (4 A_m^2 G) and J = 4 A_m^2 / (sum ds / t), with
     sum ds / t = 2 (b_m + h_m) / t for one wall thickness. A square tube does not warp,
     so a clamped end does not change its twist.
+
+    The walls also twist as thin strips at the same rate, a stiffness in parallel with
+    the cell (what a shell model of the walls keeps): a strip of width s and thickness t
+    has the Prandtl stress function phi = t^2 / 4 - y^2 across its thickness
+    (laplacian -2, zero on both faces), so J_open = 2 * integral of phi = s t^3 / 3,
+    leaving out the strip's ends. With both, theta' = T / (G (J + J_open)), and the cell
+    carries T J / (J + J_open), so the membrane shear is that share of tau. The "_walls"
+    values are these.
     """
     s = box_midline(b, h, t)
-    J = 4 * s["A_m"] ** 2 * t / (2 * (s["b_m"] + s["h_m"]))
+    perimeter = 2 * (s["b_m"] + s["h_m"])
+    J = 4 * s["A_m"] ** 2 * t / perimeter
+    J_open = perimeter * t**3 / 3
     q = T / (2 * s["A_m"])
-    return {"shear_flow": q, "shear_stress": q / t, "J": J, "twist_rate": T / (G * J), "twist": T * L / (G * J)}
+    share = J / (J + J_open)
+    return {"shear_flow": q, "shear_stress": q / t, "J": J, "twist_rate": T / (G * J), "twist": T * L / (G * J),
+            "J_open": J_open, "twist_rate_walls": T / (G * (J + J_open)), "shear_stress_walls": share * q / t}
+
+
+# --- element quality [geom] -----------------------------------------------------------------
+# Single elements whose measures follow from their shape (qa.mesh_quality must give them), and
+# bad ones a mesh check must catch. Points in mm.
+
+def rectangle_quad(a: float, b: float) -> list[list[float]]:
+    """a x b rectangle, counter-clockwise seen from +z: aspect a/b (a >= b), every angle 90 deg,
+    jacobian ratio 1, warp 0, area a b."""
+    return [[0, 0, 0], [a, 0, 0], [a, b, 0], [0, b, 0]]
+
+
+def rhombus_quad(s: float, alpha_deg: float) -> list[list[float]]:
+    """Rhombus of side s with corner angle alpha at node 0: angles alpha and 180 - alpha, aspect 1,
+    jacobian ratio 1 (a parallelogram), area s^2 sin(alpha)."""
+    c, d = math.cos(math.radians(alpha_deg)), math.sin(math.radians(alpha_deg))
+    return [[0, 0, 0], [s, 0, 0], [s + s * c, s * d, 0], [s * c, s * d, 0]]
+
+
+def folded_quad(theta_deg: float) -> list[list[float]]:
+    """Square of diagonal 2 folded along its diagonal 0-2 (on the x axis) by theta: the two
+    triangles of that diagonal meet at theta, so warp is at least theta."""
+    t = math.radians(theta_deg)
+    return [[-1, 0, 0], [0, -1, 0], [1, 0, 0], [0, math.cos(t), math.sin(t)]]
+
+
+BAD_ELEMENTS = {
+    # node 3 moved onto node 0: a quad collapsed into a triangle (an edge of length 0)
+    "collapsed_quad": [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 0, 0]],
+    # nodes 2 and 3 swapped: the edges cross (a bow-tie); two corners turn the other way
+    "bowtie_quad": [[0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0]],
+    # node 2 pulled in past the diagonal 1-3: a re-entrant (arrow-head) quad
+    "reentrant_quad": [[0, 0, 0], [10, 0, 0], [2, 2, 0], [0, 10, 0]],
+}
+
+
+def unit_hex(size: float = 1.0) -> list[list[float]]:
+    """Cube: 0-3 the bottom counter-clockwise seen from above, node i + 4 above node i. Every
+    corner jacobian is size^3, the volume size^3."""
+    s = size
+    bottom = [[0, 0, 0], [s, 0, 0], [s, s, 0], [0, s, 0]]
+    return bottom + [[x, y, s] for x, y, _ in bottom]
+
+
+def inverted_hex(size: float = 1.0) -> list[list[float]]:
+    """The cube with its top and bottom faces swapped: inside out, every corner jacobian and the
+    volume are -size^3."""
+    h = unit_hex(size)
+    return h[4:] + h[:4]
 
 
 # --- units [SI] --------------------------------------------------------------------------

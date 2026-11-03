@@ -18,7 +18,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 | 部署 | 書くところ |
 |---|---|
 | 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`showcase/` (見本の実行)、`README.md`、`CLAUDE.md`、`LICENSE`、`requirements.txt`、`.gitignore`、`hiraku/__init__.py`、`tests/__init__.py` |
-| 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP の道具)、`hiraku/store/` (runs の読み書き)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
+| 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP の道具)、`hiraku/store/` (runs の読み書き)、`hiraku/export/` (結果の書き出し: CSV・VTK・報告)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
 | 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`tests/solvers/` |
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier の照合は `qa/rapier/`、Node はここだけ) |
@@ -26,6 +26,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 | 受付部 | `hiraku/intake/` (分野を選ぶ・ヒアリング・ナレッジの規則)、`data/requirements/products/` (デモ以外の製品の要件)、`data/knowledge/` (最初から入っている規則)、`web/js/intake/` (A1・A2・A5 の画面)、`tests/intake/` |
 
 機械で引く表は `hiraku/contract/layout.py` の `OWNERS` (`owner_of(path)`)。
+
+パッケージの層 (下の層は上の層を import しない。`tests/contract/test_layers.py` が見る): `contract` < `solvers` < `designgen` < `store` < `catalog` < `intake` < `tools` < `agent` < `webserve`・`__main__`。上の層の関数が要るときは、上の層から渡してもらう (引数か登録)
 
 ## 座標と単位
 
@@ -62,9 +64,14 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - `FormulaRegistry` — `list_formulas()` と `evaluate(formula_id, inputs)`。K0 の式の台帳
 - `AnalysisTool` — `spec()`・`check()`・`run(design, load_case, predictions, params)`。`run` は `analysis_id` の無い `analysis` を返し、ID は store が付ける。設計が悪くても例外にせず `status: "failed"` と、何が悪く何を変えればよいかを `error` に書く
 - 上流の荷重条件の結果 (P1 の輪の力 → R1 など) は `params["upstream_analyses"] = {荷重条件の ID: 照合で一致した analysis}` で `run` に渡る。上流の `analysis_id` を `inputs_from` に足すのは呼ぶ側 (設計部)
-- 組み立ての順番と干渉は `analysis` の `assembly` (手順ごとの `assembly_step`) と `interferences` に入れる (`effects` に混ぜない)。手順には任意で、留め方 `fastenings` (何に・ボルト/溶接/載せる/ピン)、入れる道筋 `path_mm` (折れ線、最後が付いた位置)、手順の 1 文 `text` (コードで組む) を付ける
+- 組み立ての順番と干渉は `analysis` の `assembly` (手順ごとの `assembly_step`) と `interferences` に入れる (`effects` に混ぜない)。手順には任意で、留め方 `fastenings` (何に・ボルト/溶接/載せる/ピン)、入れる道筋 `path_mm` (折れ線、最後が付いた位置)、手順の 1 文 `text` (コードで組む) を付ける。先に組んだ小さな組 (サスの角など) を付ける手順は、`part` に組の名前 (例 `corner:FL`) と `group_parts` (組の中の部品)。手と工具の邪魔は `tool_blocked_by` (入れられるが手が入りにくい)、`blocked_by` は入れられない理由
 - 板 (シェル) のメッシュ: 版ごとに、コードが設計からフレームのメッシュ (管の壁と板の中面) を作り、`mesh` の記録 (`v<NNN>/meshes/mesh-NNNN.json`、event `mesh.created`) にする。節は `nodes_mm`、要素は節の番号 3 つか 4 つ (`elements`)、要素ごとにどの部材か (`element_member`)、部材の厚さ (`member_thickness_mm`)。解析の結果は field に `mesh_id` と、要素ごとの値 `per_element` か節ごとの値 `per_mesh_node` (変位とモードの形は vec3) を入れ、シェルの応力は `surface` (`top`・`mid`・`bottom`・`max`) を付ける。梁 (K1) の `per_member` と同じ analysis に並べてよい
-- メッシュを作るのは解析部の `hiraku.solvers.frame_mesh(design)` (入口は任意の 1 つ、`OPTIONAL_SOLVER_ENTRY_POINTS`。mesh_id の無い mesh を返す)。記録するのは `analyze`: 道具が `needs_mesh` (無ければ False) なら、その版の mesh が無いときだけ 1 回作って `mesh.created` を出し、道具の `run` に `params["mesh"]` で渡す。道具は同じ設計から作った mesh かを確かめ、field の `mesh_id` に書く。渡されないとき (照合・単体の試験) は mesh の field を出さず results だけ返す
+- 時間とともに変わる field: field の任意の欄 `frames` (`t_s` と、時刻ごとの `per_element` (mesh_id と一緒に) か `per_member`、時刻ごとの最大 `max`、荷重の出どころの `source_analysis_id`)。例: K2 の段差の動きの各瞬間の取付点の力で、フレームを解き直した応力。全部の歩を残さず、選んだ時刻だけ (数十) を残す。画面は再生の時刻にいちばん近い時刻の値で塗る
+- pre 処理の中身: analysis の任意の欄 `setup` に、その荷重条件でモデルに入れたものを書く。`constraints` (メッシュの節の番号と止めた自由度)、`loads` (力の点・向き・大きさ、分けたときは `spread_to` に節と重み)、`inertia_relief`、`checks` (解く前の点検の値: 釣り合いの残り・モデルの質量・設計の質量など、quantity)。接続要素 (剛な結び・ばね・tie) は mesh の側に持つ (形は共通の核と一緒に決める)
+- メッシュの品質 (pre 処理の点検): mesh の任意の欄 `quality` に、解く前にコードが測った値を入れる。`metrics` (縦横比・反り・ゆがみ・角度・ヤコビアン比など。名前 → `worst`・`p95`・`limit`・`over_limit`・`worst_element`)、任意で `per_element` (画面で色に塗る)、`topology` (自由縁・重なった節・つながっていない組・裏返った法線・負の体積)、`verdict` (`ok`・`warn`・`fail`。fail ならソルバーは解かない)。限度はソルバーの目安で、出典が無ければ仮定と書く
+- メッシュを作るのは解析部の `hiraku.solvers.frame_mesh(design)` (入口は任意の 1 つ、`OPTIONAL_SOLVER_ENTRY_POINTS`。mesh_id の無い mesh を返す)。記録するのは `analyze`: 道具が `needs_mesh` (無ければ False) なら、その版の mesh が無いときだけ 1 回作って `mesh.created` を出し (mesh は解析の入力なので、その解析の `analysis.started` より前に出す)、道具の `run` に `params["mesh"]` で渡す。道具は同じ設計から作った mesh かを確かめ、field の `mesh_id` に書く。渡されないとき (照合・単体の試験) は mesh の field を出さず results だけ返す
+- サスの取付点は、設計の `support.suspension.hardpoints_mm` (取付点の名前 → vec3、mm) に、設計を作るコードが書く。K2 の関数・梁とシェル・画面は、ここから読む (出どころを 1 つにする)。取付点ごとの力は、analysis の `vectors` に `kind: "joint"` (`at` は `<支持の id>.<取付点の名前>`、`origin_mm` は取付点、`vector_N` は車体が受ける力) で出す。サスのタワーはフレームの部材、金具の板は部品 (kind `bracket`) で持つ
+- 接地する所 (`support`) は任意で `tire` (`coefficients`: `data/tyres/` のタイヤの係数のファイル、`relaxation_length_mm`) を持ち、サスペンションは任意で `bushings` (腕の内側のブッシュの半径方向・軸方向とタイロッドの剛性 N/mm、K&C の C) を持つ。無い値は解く側が仮定して analysis の `assumptions` に書く
 - `series` は時間 (`t_s`) か、ほかの量 (`x`: `{quantity, unit, values}`。K&C の台のストロークや横力) のどちらか 1 つを横軸に持つ
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
@@ -72,6 +79,10 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`・`error`)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
 - 実行を外から止めるとき (画面の止めるボタン) は、実行のフォルダに `stop.request` (`layout.STOP_REQUEST_FILE`) を置く。実行の側はそれを見て、記録を整えて `stopped`・`stop_code` `user_stop` で終わる
 - `events.jsonl` に書くのは実行のプロセスだけ (書き手が 1 つなので `seq` が抜けない)。画面のサーバーから走っている実行に伝えるもの (Claude に伝える文、ナレッジのファイルを落とした、など) は、実行のフォルダの `inbox/` (`layout.INBOX_DIR`) に 1 件 1 ファイルの JSON (`<番号>-<種類>.json`、中身は `{"kind": ..., "text": ..., "file": ...}`) で置く。落としたファイルそのものは `knowledge/<filename>` に置く。実行の側がそれを読み、`user.said` や `knowledge.imported` などの event を自分で出して、読んだファイルを消す。ヒアリングの答えは今までどおり `hearing.answer.json`
+  - 置き方: 1 件 1 ファイルの `inbox/<n>-<kind>.json`。`n` は整数で、画面のサーバーは inbox にある一番大きい `n` + 1 を付け、実行は `n` の順に読む (読んだファイルは消すので、空になれば同じ `n` がまた使われる)。書きかけを読まないよう `<n>-<kind>.json.tmp` に書いてから名前を変え、実行は `.json` で終わるものだけを読む。中身は `{"kind", "text", "file"}` で、使わない欄は省き、`kind` はファイル名の `<kind>` と同じ
+  - `message` (`text`): 実行は `user.said` (agent `user`) を出す。Claude の実行ではまとめ役に渡し (次の道具のあと・番を終えようとしたとき (HK4 の回数に数えない)・役が動いている間に番が終わっていれば新しい番)、台本の運転では渡さないと `agent.said` (system) で言う
+  - `knowledge` (`file`、任意で `text`): ファイルは先に `knowledge/<file>` に置く (名前は画面のサーバーが整え、`knowledge/` の直下だけ)。`text` があればまず `user.said`。実行がコードで `import_knowledge` (path) を呼んで `knowledge.imported` を出し、式が要る文があれば Claude の実行ではまとめ役に渡して、同じ path に式を付けてもう一度呼ぶ (`doc_id` は同じ)
+  - 読めないもの (JSON でない・知らない kind・欄が無い・ファイルが無い) は `agent.said` (system) で理由を言って消す。読むのは `stop.request` と同じ所 (Claude の実行は 1 秒ごと、台本の運転は手順の切れ目と `analyze` の前)。実行が終わったあとに置かれたものは読まれずに残る
 - 設計役が最初の版を作る実行 (要件に `design_file` が無い) では、版 1 ができたあと `project.updated` (data は project 全体) で荷重条件・選んだ分野・役を出し直す
 - 報告は `report` の記録と `report.written` の event。数はコードが記録から入れ、Claude は `summary` と `next` だけを書く (文の中の数が記録と合わなければ道具が断る)
 - 実行の中で Claude が作った道具 (N13) は、実行のフォルダの `tools/` に試みごとのコード (`<name>-<n>.py`) と照合の記録 (`.check.json`) を残す。試みは通らなくても `tool.checked` (usable false) で記録に出す。道具は別のプロセスで、使える import を絞り、空のフォルダ・API キー無し・時間の上限つきで走る。悪意のあるコードを完全に閉じ込める仕組みではなく、間違いへの守り

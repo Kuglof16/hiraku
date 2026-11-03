@@ -152,13 +152,28 @@ class BuildersTest(unittest.TestCase):
                 else:
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
 
-    def test_r3_misses_on_the_unsafe_side_and_ends_without_a_verdict(self):
-        plan = PLANS["R3"]
-        self.assertNotIn("retry", plan["expected_mismatch"])
-        self.assertNotIn("safe_side", plan["expected_mismatch"])
-        self.assertTrue(plan["expected_mismatch"]["end"])  # the cause is recorded and the run goes on
-        damage = {r["quantity"]: r["value"] for r in self.runs["R3"]["results"]}["fatigue_damage"]
-        self.assertGreater(damage, 0.0)  # the analysis is what the hand value falls short of
+    def test_r3_predicts_the_end_cross_member(self):
+        """The hand calculation looks at the weld the fatigue tool finds worst: the overhang's end cross member."""
+        from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+
+        self.assertNotIn("expected_mismatch", PLANS["R3"])
+        worst = next(r for r in self.runs["R3"]["results"] if r["quantity"] == "fatigue_damage")
+        self.assertEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
+
+    def test_r3_plan_on_version_2(self):
+        """Wider track (the wheels further outboard of the rails): still within the tolerance."""
+        from hiraku import designgen
+
+        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -200, "unit": "mm"}})
+        lc = BUILDERS["R3"](spec("R3"), REQ, v2)
+        got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
+        preds = {}
+        for p in PLANS["R3"]["predictions"]:
+            extra = p["inputs_from"](v2, lc)
+            out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
+            preds[p["quantity"]] = out["outputs"][p["output"]]
+        hand = preds["fatigue_damage"]["value"]
+        self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
@@ -176,6 +191,25 @@ class BuildersTest(unittest.TestCase):
         req = copy.deepcopy(REQ)
         req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q65"]
         self.assertEqual(BUILDERS["C1"](CATALOG.test("C1"), req, DESIGN)["params"]["speed"]["value"], 40.0)  # Q50
+
+    def test_t1_past_the_limit(self):
+        """The ambient where the hand calculation puts the battery 5 K over its limit: the analysis is over it too."""
+        lc = BUILDERS["T1"](dict(spec("T1"), variant="beyond"), REQ, DESIGN)
+        self.assertTrue(lc["load_case_id"].endswith("-beyond") and lc["title"].startswith("限界の外"))
+        self.assertNotIn("Q19", lc["requirement_keys"])
+        rec = tool_for("T1").run(DESIGN, lc, PRED, {})
+        got = {r["quantity"]: r["value"] for r in rec["results"]}["temp_battery_max"]
+        self.assertGreater(got, lc["criterion"]["limit"]["value"])
+        p = PLANS["T1"]["predictions"][0]
+        hand = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, DESIGN, lc, {}) for k, ref in p["inputs"].items()})
+        self.assertAlmostEqual(hand["outputs"][p["output"]]["value"], lc["criterion"]["limit"]["value"] + 5.0, places=6)
+
+    def test_climb_limit(self):
+        out = lambda h: {k: v["value"] for k, v in FORMULAS.evaluate(  # noqa: E731
+            "step_climb.climb_limit", {"r": {"value": 300.0, "unit": "mm"}, "h": {"value": h, "unit": "mm"}})["outputs"].items()}
+        self.assertEqual((out(250.0)["climbable"], out(250.0)["step_margin"]), (1.0, 50.0))
+        self.assertEqual((out(330.0)["climbable"], out(330.0)["step_margin"], out(330.0)["max_step"]), (0.0, -30.0, 300.0))
+        self.assertEqual(out(300.0)["climbable"], 0.0)  # at the axle's height the corner pushes level
 
     def test_catalog_tolerance_wins(self):
         spec = dict(CATALOG.test("C1"), tolerance_rel=0.07)

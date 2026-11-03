@@ -19,6 +19,7 @@ from typing import Any, Callable
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from hiraku import contract
+from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.functions import CONTEXT_SECTIONS, FUNCTIONS, RUN_TOOLS
@@ -129,6 +130,14 @@ DESCRIPTIONS = {
     ),
 }
 
+# The intake department's tools (pick_domains, ask_user, import_knowledge, rule_check) bring their
+# own description, input schema and function (hiraku.intake.tools.TOOLS).
+HANDLERS: dict[str, Callable] = dict(FUNCTIONS)
+for _name, _t in INTAKE_TOOLS.items():
+    INPUT_SCHEMAS[_name] = _t["input_schema"]
+    DESCRIPTIONS[_name] = _t["description"]
+    HANDLERS[_name] = _t["function"]
+
 
 def _text(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False)
@@ -164,6 +173,6 @@ def make_handler(ctx: RunContext, attribution: Attribution, name: str, fn: Calla
 def build_server(ctx: RunContext, attribution: Attribution, names: tuple[str, ...] = RUN_TOOLS):
     tools = []
     for name in names:
-        handler = make_handler(ctx, attribution, name, FUNCTIONS[name])
+        handler = make_handler(ctx, attribution, name, HANDLERS[name])
         tools.append(tool(name, DESCRIPTIONS[name], INPUT_SCHEMAS[name])(handler))
     return create_sdk_mcp_server(name=contract.MCP_SERVER, version="0.1.0", tools=tools)

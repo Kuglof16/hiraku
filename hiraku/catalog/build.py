@@ -54,7 +54,10 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
     from the requirements; a design that disagrees would be judged under a
     load nobody asked for.
     """
-    on = parts_on_board(design, loading)
+    try:
+        on = parts_on_board(design, loading)
+    except ValueError as e:  # occupant parts, but fewer than the loading names
+        raise CatalogError(f"the design does not carry the requirements' load: {e}") from None
     people = [p for p in on if p["kind"] == "occupant"]
     cargo = [p for p in on if p["kind"] == "cargo"]
     problems = []
@@ -111,6 +114,10 @@ BEYOND_TITLE = "限界の外"
 # P1 and R1 past the limit: a step of this height. HIRAKU's choice for the video (an assumption,
 # no outside source); on the demo vehicle it puts the R1 frame stress past its limit.
 BEYOND_STEP_MM = 250.0
+# P1 past the limit also at a step no rigid wheel climbs: higher than the front wheel radius
+# (the corner's push is level from h = r up: step_climb.climb_limit). 1.1 r is HIRAKU's choice
+# for the video (an assumption, no outside source).
+WALL_STEP_RATIO = 1.1
 
 
 def is_beyond(load_case: Record) -> bool:
@@ -127,11 +134,12 @@ def _step(spec: Record, req: Record) -> tuple[float, str, str]:
     return BEYOND_STEP_MM, BEYOND_SUFFIX, f"{BEYOND_TITLE}: "
 
 
-def _p1_step(spec: Record, req: Record, design: Record) -> Record:
+def _p1_step(spec: Record, req: Record, design: Record) -> Record | list[Record]:
+    """P1 at Q15; past the limit, at BEYOND_STEP_MM and at a wall (_p1_wall)."""
     h, suffix, prefix = _step(spec, req)
     loading, keys = _loading(req, design)
     speed = spec["params"]["speed"]
-    return {
+    lc = {
         "load_case_id": f"P1-step{h:g}{suffix}",
         "test_id": "P1",
         "domain": spec["domain"],
@@ -142,6 +150,36 @@ def _p1_step(spec: Record, req: Record, design: Record) -> Record:
             "loading": loading,
         },
         "requirement_keys": ["Q15", *keys],
+        "tolerance_rel": spec["tolerance_rel"],
+    }
+    return [lc, _p1_wall(spec, design, loading, keys)] if suffix else lc
+
+
+def _p1_wall(spec: Record, design: Record, loading: str, keys: list[str]) -> Record:
+    """P1 past the limit at a step higher than the front wheel radius (WALL_STEP_RATIO r): judged on
+    climbable (1 = climbs, by the push or at speed: step_climb_dynamic's result, predicted by
+    step_climb.climb_limit), which the case is meant to fail."""
+    from hiraku.catalog.summary import design_summary
+
+    r = design_summary(design).get("front_wheel_radius", {}).get("value")
+    if not r:
+        raise CatalogError("the design has no wheels, so a step higher than the wheel cannot be set")
+    h = round(WALL_STEP_RATIO * r)
+    speed = spec["params"]["speed"]
+    return {
+        "load_case_id": f"P1-step{h:g}{BEYOND_SUFFIX}",
+        "test_id": "P1",
+        "domain": spec["domain"],
+        "title": f"{BEYOND_TITLE}: 車輪の半径 {r:g} mm より高い段差 {h:g} mm を{LOADING_JA[loading]}で越える",
+        "params": {"step_height": _q(h, "mm"), "speed": _q(speed["value"], speed["unit"]), "loading": loading},
+        "requirement_keys": list(keys),
+        "criterion": {
+            "quantity": "climbable",
+            "op": ">=",
+            "limit": _q(1, "1"),
+            "basis": f"the vehicle climbs the step (1 climbs, 0 does not); the step is {WALL_STEP_RATIO:g} times "
+                     f"the front wheel radius (an assumption for the case past the limit)",
+        },
         "tolerance_rel": spec["tolerance_rel"],
     }
 
@@ -232,38 +270,49 @@ def feeds_map() -> dict[str, list[str]]:
     return out
 
 
-def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: bool) -> Record:
+def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: bool) -> list[Record]:
+    """The test's load case, or its cases past the limit (a builder may give more than one)."""
     build = builder_for(catalog, tid)
     if build is None:
         raise CatalogError(f"test {tid} has {NO_BUILDER}")
     spec = dict(catalog.test(tid), variant=BEYOND) if beyond else catalog.test(tid)
-    lc = build(spec, req, design)
-    if beyond and not (is_beyond(lc) and lc["title"].startswith(BEYOND_TITLE)):
-        raise CatalogError(f"the case past the limit of {tid} ({lc['load_case_id']}) must have an id ending "
-                           f"{BEYOND_SUFFIX} and a title starting {BEYOND_TITLE}")
-    return lc
+    got = build(spec, req, design)
+    cases = got if isinstance(got, list) else [got]
+    for lc in cases:
+        if beyond and not (is_beyond(lc) and lc["title"].startswith(BEYOND_TITLE)):
+            raise CatalogError(f"the case past the limit of {tid} ({lc['load_case_id']}) must have an id ending "
+                               f"{BEYOND_SUFFIX} and a title starting {BEYOND_TITLE}")
+    return cases
+
+
+def _feeds(up: Record, down: Record) -> bool:
+    """Feeds join load cases of the same kind: past the limit to past the limit, and of the same
+    step height when both have one."""
+    a, b = up.get("params", {}).get("step_height"), down.get("params", {}).get("step_height")
+    return is_beyond(up) == is_beyond(down) and (a is None or b is None or a == b)
 
 
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
                      skipped: list[tuple[str, str]] | None = None, beyond: list[str] = ()) -> list[Record]:
-    """One load case per test, then one past the limit for each test in `beyond` (the
-    catalog spec with variant "beyond"). A test without a builder, or whose builder cannot
-    build from these requirements and this design (CatalogError, or the
+    """One load case per test, then the ones past the limit for each test in `beyond` (the
+    catalog spec with variant "beyond"; P1 gives two). A test without a builder, or whose
+    builder cannot build from these requirements and this design (CatalogError, or the
     builders' BuildError: both ValueError), raises; with `skipped` given it is
     left out and (test id, reason) is appended there. Feeds join load cases of
-    the same kind: a case past the limit feeds the downstream case past the limit."""
+    the same kind (_feeds): a case past the limit feeds the downstream case past the limit
+    of the same step."""
     out = []
     for tid, past in [(t, False) for t in test_ids] + [(t, True) for t in beyond]:
         try:
-            out.append(_build_one(catalog, req, design, tid, past))
+            out.extend(_build_one(catalog, req, design, tid, past))
         except ValueError as e:
             if skipped is None:
                 raise
             skipped.append((tid, f"{BEYOND_TITLE}: {e}" if past else str(e)))
-    by_test = {(lc["test_id"], is_beyond(lc)): lc["load_case_id"] for lc in out}
     feeds_of = feeds_map()
     for lc in out:
-        feeds = [by_test[t, is_beyond(lc)] for t in feeds_of.get(lc["test_id"], []) if (t, is_beyond(lc)) in by_test]
+        feeds = [d["load_case_id"] for t in feeds_of.get(lc["test_id"], []) for d in out
+                 if d["test_id"] == t and _feeds(lc, d)]
         if feeds:
             lc["feeds"] = feeds
     return out

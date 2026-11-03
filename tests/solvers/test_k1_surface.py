@@ -1,9 +1,11 @@
+import json
 import math
 import unittest
+from pathlib import Path
 
 import numpy as np
 
-from hiraku import contract
+from hiraku import contract, solvers
 from hiraku.solvers.k1_frame import build
 from hiraku.solvers.k1_frame.surface import LABEL, surface_field, wall_von_mises
 from hiraku.solvers.shelf import fixtures
@@ -84,10 +86,45 @@ class SurfaceFieldTest(unittest.TestCase):
                 "elements": [[0, 1, 2, 3], [4, 7, 6, 5]], "element_member": ["m", "m"], "member_thickness_mm": {"m": T}}
         f = surface_field(fm, mesh)
         self.assertEqual((f["mesh_id"], f["label"], len(f["per_element"])), ("mesh-0001", LABEL, 2))
-        self.assertAlmostEqual(f["per_element"][0], P * (L - 5.0) * (H / 2.0) / IZ, places=6)
+        self.assertAlmostEqual(f["per_element"][0], P * (L - 5.0) * (H / 2.0) / IZ, delta=5e-4)  # rounded to 0.001 MPa
         self.assertAlmostEqual(f["per_element"][0], f["per_element"][1], places=9)
-        if "mesh_id" in contract.schema()["$defs"]["field"]["properties"]:
-            contract.validate("field", f)
+        contract.validate("field", f)
+
+
+class FrameStaticOnTheMeshTest(unittest.TestCase):
+    """frame_static draws the beam stress on the version's shell mesh when it is passed (needs_mesh)."""
+
+    @classmethod
+    def setUpClass(cls):
+        root = Path(__file__).resolve().parents[2]
+        cls.design = json.loads((root / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        cls.mesh = dict(solvers.frame_mesh(cls.design), mesh_id="mesh-0001")
+        cls.tool = {t.name: t for t in solvers.builtin_tools()}["frame_static"]
+        cls.lc = {"load_case_id": "R1-step100", "test_id": "R1", "domain": "strength", "title": "R1",
+                  "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
+
+    def test_field_on_the_mesh(self):
+        self.assertTrue(self.tool.needs_mesh)
+        rec = self.tool.run(self.design, self.lc, [{"prediction_id": "pred-0001"}], {"mesh": self.mesh})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        f = next(f for f in rec["fields"] if f.get("mesh_id") == "mesh-0001")
+        self.assertEqual((f["label"], len(f["per_element"])), (LABEL, len(self.mesh["elements"])))
+        per_member = next(f for f in rec["fields"] if "per_member" in f)["per_member"]
+        painted = {}
+        for m, v in zip(self.mesh["element_member"], f["per_element"]):
+            painted[m] = max(painted.get(m, 0.0), v)
+        for m, v in painted.items():  # element centres are not at the corners, where the beam stress is largest
+            self.assertLessEqual(v, per_member[m] * (1 + 1e-6), m)
+        worst = max(per_member, key=per_member.get)
+        self.assertGreater(painted[worst], 0.5 * per_member[worst])
+        contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
+
+    def test_mesh_of_another_version_is_not_drawn(self):
+        rec = self.tool.run(self.design, self.lc, [{"prediction_id": "pred-0001"}],
+                            {"mesh": dict(self.mesh, design_version=2)})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertFalse(any("mesh_id" in f for f in rec["fields"]))
+        self.assertTrue(any("not drawn" in e["name"] for e in rec["effects"]))
 
 
 if __name__ == "__main__":

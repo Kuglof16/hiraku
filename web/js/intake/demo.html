@@ -43,7 +43,8 @@ let shown = all.length;
 const api = {
   events: () => all.slice(0, shown),
   onEvent: () => () => {},
-  answerHearing: () => {
+  answerHearing: async () => {
+    if (params.get("refuse")) throw new Error("Q40 の単位 lbf は使えません"); // ?refuse=1 shows how a refusal looks
     const i = all.findIndex((e) => e.kind === "hearing.answered");
     if (i >= 0) { shown = Math.max(shown, i + 1); sync(); }
   },

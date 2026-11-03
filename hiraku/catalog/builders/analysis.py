@@ -75,11 +75,19 @@ C1_PLAN = {
 # the lowest mode of the frame model may be pitch or roll, which sit near the
 # bounce when the springs are at the axles: 15 %.
 N1_TOL = 0.15
+# The frame's lowest mode is kept this far above the wheels' turning rate at top speed: HIRAKU's assumption
+# for the video, not checked as a general rule. The criterion is on the frequency, not on the gap: the gap's
+# relative error is the frequency's times f / (f - f_wheel), about 2.3 on the demo vehicle.
+N1_MARGIN = 0.20
 
 
 def n1_modal(spec: Record, req: Record, design: Record) -> Record:
+    import math as _m
+
     load, keys = loading(req, design)
     v = number(req, "Q50", "km/h")
+    r = float(n1_calc(design, {})["driven_wheel_radius"]["value"])
+    f_wheel = (v / 3.6) / (2.0 * _m.pi * r / 1000.0)
     return {
         "load_case_id": f"N1-{v:g}kmh",
         "test_id": "N1",
@@ -87,7 +95,11 @@ def n1_modal(spec: Record, req: Record, design: Record) -> Record:
         "title": f"固有振動数と、{v:g} km/h での車輪とモーターの回る速さ ({LOADING_JA[load]})",
         "params": {"speed": q(v, "km/h"), "loading": load},
         "requirement_keys": ["Q50", *keys],
-        # no criterion: no requirement sets a frequency limit
+        "criterion": {"quantity": "first_frame_mode", "op": ">=", "limit": q((1.0 + N1_MARGIN) * f_wheel, "Hz"),
+                      "basis": (f"フレームのいちばん低い固有振動数を、Q50 {v:g} km/h での車輪の回転 ({f_wheel:.2f} Hz) より "
+                                f"{N1_MARGIN:.0%} 上に離す (幅は HIRAKU の仮定で、一般の目安としては確かめていない。"
+                                f"路面の凹凸の加振は入れていない)"),
+                      "requirement_keys": ["Q50"]},
         "tolerance_rel": tolerance(spec, N1_TOL),
     }
 
@@ -99,10 +111,27 @@ def n1_calc(design: Record, load_case: Record) -> Record:
             "driven_wheel_radius": q(sum(s["radius_mm"] for s in driven) / len(driven), "mm")}
 
 
+def n1_twist(design: Record, load_case: Record) -> Record:
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import ladder_twist_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        return ladder_twist_inputs(design, loading=loading_of(load_case))["inputs"]
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no ladder frame for the twist hand calculation: {e}") from None
+
+
+_TWIST = ("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
 N1_PLAN = {
     "tool": "modal",
-    "say": "車全体が 4 本のばねの上で上下に揺れるとみて最初の揺れの振動数を、車輪とモーターの回る速さも先に出します",
+    "say": ("車全体が 4 本のばねの上で上下に揺れる振動数と、はしご形のフレームが左右のレールを逆に動かしてねじれる "
+            "振動数を、車輪とモーターの回る速さとともに先に出します"),
     "predictions": [
+        {"quantity": "first_frame_mode", "formula_id": "modal.ladder_twist_mode", "output": "f",
+         "assumptions": ["フレームのいちばん低い揺れは、はしご形のねじれ (左右のレールが逆に動く)",
+                         "ねじれの角は前後に直線とみる (レイリー法。高めに出る)", "部品の重さは載せている節に等分"],
+         "inputs": {k: f"from.{k}" for k in _TWIST}, "inputs_from": n1_twist},
         {"quantity": "first_body_mode", "formula_id": "modal.spring_mass", "output": "f",
          "assumptions": ["車全体が 4 本のばねの上で上下に揺れるとみる", "タイヤは硬いとみる (フレームのモデルと同じ)"],
          "inputs": {"k": "from.spring_rate_total", "m": "load.mass"}, "inputs_from": n1_calc},
@@ -141,25 +170,13 @@ def r3_fatigue(spec: Record, req: Record, design: Record) -> Record:
     }
 
 
-def r3_calc(design: Record, load_case: Record) -> Record:
-    """The quarter car under the wheel of the rail joint the static stress is taken at: its static
-    load, unsprung mass, spring, damping ratio, and the road class's roughness."""
+def _quarter_car(design: Record, summ: Record, loads: Record, sid: str) -> tuple[float, float, float, float]:
+    """(static load N, unsprung mass kg, wheel rate N/mm, damping ratio) of the quarter car at a support."""
     import math as _m
 
-    from hiraku.solvers.k0_handcalc.frame_inputs import rail_joint_inputs
     from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
-    from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, support_loads
-    from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
 
-    loading_name = loading_of(load_case)
-    try:
-        sid = rail_joint_inputs(design, loading=loading_name)["support"]
-    except (DesignError, KeyError, ValueError) as e:
-        raise BuildError(f"no rail joint for the hand calculation: {e}") from None
-    on = on_board(design, loading_name)
-    summ = mass_summary(on)
-    W = float(support_loads(on, summary=summ)["supports"][sid]["force_N"][2])
+    W = float(loads[sid]["force_N"][2])
     m_u = sum(it.mass_kg for it in summ["items"] if it.carrier == "support" and it.carried_by[0] == sid)
     s = next(x for x in design["supports"] if x["id"] == sid)
     k = float(s["suspension"].get("stiffness_N_per_mm") or 0.0)
@@ -167,45 +184,71 @@ def r3_calc(design: Record, load_case: Record) -> Record:
     m_s = W / STANDARD_GRAVITY - m_u
     if k <= 0 or m_s <= 0:
         raise BuildError(f"support {sid} has no spring or carries no sprung mass")
-    zeta = c * 1e3 / (2.0 * _m.sqrt(k * 1e3 * m_s))
-    return {"W": q(W, "N"), "m_u": q(m_u, "kg"), "k_s": q(k, "N/mm"), "zeta": q(zeta, "1"),
-            "G_d": q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")}
+    return W, m_u, k, c * 1e3 / (2.0 * _m.sqrt(k * 1e3 * m_s))
 
 
-_JOINT = {k: f"load.rail_joint.{k}" for k in ("M_oh", "z", "e", "L1", "L_c", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c")}
+def r3_calc(design: Record, load_case: Record) -> Record:
+    """The rear overhang and its end cross member (frame_inputs.end_cross_member_inputs), the front and
+    rear quarter cars (static load, unsprung mass, spring, damping ratio of the left wheels), the
+    wheelbase and the road class's roughness."""
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, support_loads
+    from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
+
+    loading_name = loading_of(load_case)
+    try:
+        ec = end_cross_member_inputs(design, loading=loading_name)
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no rear overhang with an end cross member for the hand calculation: {e}") from None
+    on = on_board(design, loading_name)
+    summ = mass_summary(on)
+    loads = support_loads(on, summary=summ)["supports"]
+    rear_a, _, front_a, _ = ec["supports"]
+    out = dict(ec["inputs"])
+    for tag, sid in (("f", front_a), ("r", rear_a)):
+        W, m_u, k, zeta = _quarter_car(design, summ, loads, sid)
+        out.update({f"W_{tag}": q(W, "N"), f"m_u{tag}": q(m_u, "kg"), f"k_s{tag}": q(k, "N/mm"), f"zeta_{tag}": q(zeta, "1")})
+    x = {s["id"]: float(s["position_mm"][0]) for s in design["supports"]}
+    out["L"] = q(abs(x[front_a] - x[rear_a]), "mm")
+    out["G_d"] = q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")
+    return out
+
+
+_END = {k: f"from.{k}" for k in ("e", "a", "w", "L1", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c", "b_j", "h_j", "t_j",
+                                 "misfit_rear", "misfit_front")}
+_END_ASSUME = ["輪はレールより外にあり、輪の力はレールをそのずれの分ねじる",
+               "左右そろった分は、後ろの継ぎ手で 1 回だけモーメントを分ける",
+               "左右逆向きの分は、はしご全体が反りのあるねじり (薄肉のはり) でねじれ、張り出しがその率のまま続こうとするのを"
+               "端の横の部材が止める"]
+_WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右の後輪"), ("front_a", "sigma_fa", "左の前輪"),
+           ("front_b", "sigma_fb", "右の前輪"))
+# Why the end cross member (the analysis department's check of the demo vehicle, 2026-11-03): the fatigue tool's
+# worst weld is at cross_E, and its stress per kN at each wheel (K1 with inertia relief) splits into the wheel
+# patterns as warp 7.7, roll 3.7, heave 2.4 and pitch 2.1 MPa of spread (9.1 in all, class C at 40 km/h): left
+# and right differ, not the body's heave and pitch. The wheels stand 200 mm outboard of the rails, so their
+# forces twist the rails, and cross_E holds the overhang's rails by bending. The earlier plan (one quarter car
+# at the rail joint) gave 0.0003 against 0.080. This plan gives 0.057 against 0.080 (version 1) and 0.120
+# against 0.117 (version 2, track 1220 mm); per kN on one wheel the symmetric part is within 1 %, the rear
+# antisymmetric part 21 % low and the front one 58 % high.
 R3_PLAN = {
     "tool": "fatigue",
-    "say": "止まっているときに一番応力の大きいレールの継ぎ手を、その下の輪 1 つの 1/4 車が悪路で受ける力のゆれで揺らすとみて、疲労の損傷を先に見積もります",
+    "say": ("輪はレールより外にあるので、輪の力はレールをねじり、後ろの張り出しの端の横の部材を曲げます。4 輪それぞれ 1 kN "
+            "あたりのその応力を出し、4 輪の 1/4 車が悪路で受ける力のゆれから、疲労の損傷を先に見積もります"),
     "predictions": [
-        {"quantity": "weld_stress_at_rest", "formula_id": "frame_static.rail_joint_stress", "output": "sigma",
-         "assumptions": ["止まっているとき (段差の力 F は 0)", "継ぎ手の前のレールの先の端は動かないとみる"],
-         "inputs": {**_JOINT, "F": {"value": 0.0, "unit": "N"}, "W": "from.W"}, "inputs_from": r3_calc},
-        {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_quarter_car", "output": "D",
-         "assumptions": ["継ぎ手の応力は、その下の輪の力に比例してゆれる", "ほかの輪と車体のピッチは入れない",
-                         "繰り返しはレイリー分布 (狭い帯域)"],
-         "inputs": {"sigma_w": "pred.weld_stress_at_rest", "W": "from.W", "m_u": "from.m_u", "k_s": "from.k_s",
-                    "zeta": "from.zeta", "k_t": "design.var.tyre_stiffness", "G_d": "from.G_d", "v": "lc.speed",
-                    "d": "lc.distance", "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
+        *({"quantity": f"end_cross_member_stress_per_kN_{tag}", "formula_id": "frame_static.end_cross_member_stress",
+           "output": out, "assumptions": [f"{name}に 1 kN", *_END_ASSUME], "inputs": _END, "inputs_from": r3_calc}
+          for tag, out, name in _WHEELS),
+        {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
+         "assumptions": ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
+                         "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)"],
+         "inputs": {**{out: f"pred.end_cross_member_stress_per_kN_{tag}" for tag, out, _ in _WHEELS},
+                    **{k: f"from.{k}" for k in ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")},
+                    "k_t": "design.var.tyre_stiffness", "v": "lc.speed", "d": "lc.distance",
+                    "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
                     "N_knee": "design.var.fatigue_knee_cycles", "m2": "design.var.fatigue_slope_after_knee"},
          "inputs_from": r3_calc},
     ],
-    # Run on the demo vehicle: the hand calculation gives 0.0003, the fatigue tool 0.080. The hand
-    # value is on the unsafe side, so there is no safe-side verdict and no retry: the cause is
-    # recorded and R3 ends without a verdict (end), the run going on to the next step.
-    "expected_mismatch": {
-        "quantity": "fatigue_damage",
-        "source": ("the analysis department's check of the demo vehicle (fatigue.road_damage_quarter_car 0.0003 against "
-                   "the fatigue tool 0.080 at cross_E), 2026-11-03"),
-        "cause": ("手計算は、止まっているときに一番応力の大きいレールの継ぎ手 (後輪 RL の上、22 MPa) を、その下の輪 1 つの "
-                  "1/4 車の力のゆれ (静的な荷重の 22 %) で揺らした。解析で一番傷むのは後ろの端のクロスメンバー (cross_E) の"
-                  "溶接で、後輪より後ろに張り出した荷台と荷が、4 輪の力で車体が上下・ピッチするたびにそこを曲げる。応力の幅は"
-                  "手計算の約 2.6 倍 (等価な幅 39.8 と 15.4 MPa) で、手計算の幅は大半が S-N 線図の折れ点 (41.5 MPa) より"
-                  "下に落ちて損傷にほとんど数えられないため、損傷は約 270 倍違う (0.080 と 0.0003)"),
-        "fix": ("後ろの張り出しを、車体の上下とピッチ (2 自由度) と 4 輪の力で曲げる手計算に作り直す。手計算は危ない側に"
-                "外れているので、安全側の判断には使えない"),
-        "end": True,
-        "end_say": "手計算が危ない側に外れたので、R3 の合否はここでは出しません。原因を記録して、判定の無いまま次へ進みます",
-    },
 }
 
 # ---------------------------------------------------------------- P4, T1, T2 on the forest loop
@@ -313,9 +356,31 @@ P4_PLAN = {
 }
 
 
-def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
+T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculated part temperature is this far over its limit
+
+
+def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
+    """thermal.loop_steady_temperature with the plan's inputs (_LOOP_INPUTS) for this load case."""
+    from hiraku.solvers import formula_registry
+    from hiraku.tools.summary import design_summary
+
+    vals = {}
+    for name, ref in _LOOP_INPUTS.items():
+        head, _, rest = ref.partition(".")
+        if head == "load":
+            vals[name] = design_summary(design)["loadings"][load_case["params"]["loading"]][rest]
+        elif head == "lc":
+            vals[name] = load_case["params"][rest]
+        else:  # design.var.<name>
+            vals[name] = design["variables"][rest.split(".", 1)[1]]
+    return formula_registry().evaluate("thermal.loop_steady_temperature", vals)["outputs"][output]["value"]
+
+
+def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str, output: str):
     """T1 / T2: the loop at the hot end of Q19; the limit is the part's own (a design variable
-    with its source in hiraku.designgen); without it, no criterion."""
+    with its source in hiraku.designgen); without it, no criterion. Variant "beyond": the ambient
+    where the hand calculation puts the part T_BEYOND_K over its limit (the loop's losses lift the
+    part the same amount above any ambient)."""
     def build(spec: Record, req: Record, design: Record) -> Record:
         load, keys = loading(req, design)
         params, loop_keys = _loop(spec, req, "Q54")
@@ -335,13 +400,25 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str):
             out["criterion"] = {"quantity": quantity, "op": op, "limit": q(limit, "degC"),
                                 "basis": f"{test_id}: the design variable {limit_var} (the part's limit; its source is "
                                          f"in the design generator), against the lumped temperature of the part"}
+        if spec.get("variant") == "beyond":
+            if limit is None:
+                raise BuildError(f"{test_id} has no case past the limit without the design variable {limit_var}")
+            rise = _hand_temperature(design, out, output) - t_amb
+            hot = limit - rise + T_BEYOND_K
+            out.update({
+                "load_case_id": f"{test_id}-{hot:.0f}C-beyond",
+                "title": (f"限界の外: 気温 {hot:.1f} ℃ (仮定。{what}の温度が手計算で限界 {limit:g} ℃ を {T_BEYOND_K:g} K 超える"
+                          f"気温) で林道の周回を {d:g} km 走ったときの{what}の温度 ({LOADING_JA[load]})"),
+                "params": {**out["params"], "ambient_temperature": q(hot, "degC")},
+                "requirement_keys": [k for k in out["requirement_keys"] if k != "Q19"],
+            })
         return out
     build.__name__ = f"{test_id.lower()}_thermal"
     return build
 
 
-t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=")
-t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<")
+t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=", "T_battery")
+t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<", "T_controller")
 
 _LOOP_INPUTS = {
     "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",

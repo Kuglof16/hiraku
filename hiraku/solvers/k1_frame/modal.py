@@ -27,6 +27,7 @@ from .model import FrameModel, build, to_design
 
 MASS_CASE = "mass"
 V0_SEED = 0  # seed of the eigen solver's start vector
+FRAME_DAMPING = 0.02  # damping ratio of the frame's own modes in the frequency response: assumed, not checked
 
 
 def solve_modal(model, num_modes: int) -> None:
@@ -56,6 +57,26 @@ def signed(u: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {n: -v for n, v in u.items()} if first < 0 else u
 
 
+def frequency_response(fm: FrameModel, in_node: str, out_nodes: list[str], zetas, freqs) -> np.ndarray:
+    """Dynamic amplification (1) of the vertical motion at out_nodes (their mean) under a vertical force
+    at in_node, by superposing the mass-normalised modes solve_modal left in the model (lowest first,
+    damping ratio zetas[i] each), divided by the same sum at 0 Hz."""
+    f = np.asarray(fm.model.frequencies, float)
+    order = np.argsort(f)
+    W = 2 * math.pi * np.asarray(freqs, float)
+    H = np.zeros(len(W), complex)
+    for zeta, i in zip(zetas, order):
+        combo = f"Mode {i + 1}"
+        w = 2 * math.pi * f[i]
+        phi_in = fm.model.nodes[in_node].DY[combo]  # PyNite Y is the design's z (up)
+        phi_out = float(np.mean([fm.model.nodes[n].DY[combo] for n in out_nodes]))
+        H += phi_in * phi_out / (w * w - W * W + 2j * zeta * w * W)
+    static = abs(sum(fm.model.nodes[in_node].DY[f"Mode {i + 1}"]
+                     * float(np.mean([fm.model.nodes[n].DY[f"Mode {i + 1}"] for n in out_nodes])) / (2 * math.pi * f[i]) ** 2
+                     for i in order[:len(zetas)]))
+    return np.abs(H) / static if static > 0 else np.abs(H)
+
+
 def add_masses(fm: FrameModel, items: list[MassItem]) -> None:
     fm.model.add_member_self_weight("FY", -1.0, MASS_CASE)  # members: consistent mass from density
     for it in items:
@@ -71,7 +92,7 @@ def modes(design: dict, n_modes: int = 10) -> dict:
     summ = mass_summary(design)
     fm = build(design)
     add_masses(fm, summ["items"])
-    fm.restrain_on_wheels()
+    fm.restrain_on_wheels(in_plane_at_frame=True)  # holds below the frame would sway the twist modes
     fm.model.add_load_combo(MASS_CASE, {MASS_CASE: 1.0})
     n_free = 6 * len(fm.model.nodes)
     k = max(1, min(n_modes, n_free - 2))

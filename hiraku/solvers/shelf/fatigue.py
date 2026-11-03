@@ -181,7 +181,8 @@ class Fatigue(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R3"]
-    formulas = ["fatigue.road_damage_quarter_car", "fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance",
+    formulas = ["fatigue.road_damage_four_wheels", "frame_static.end_cross_member_stress",
+                "fatigue.road_damage_quarter_car", "fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance",
                 "modal.quarter_car", "frame_static.rail_joint_stress"]
     load_case_params = (
         Param("distance", "km", "life to check: the distance the damage is scaled to (e.g. requirement key Q90)",
@@ -194,6 +195,10 @@ class Fatigue(BuiltinTool):
         LOADING,
     )
     predicts = (
+        Predicts("fatigue_damage", "fatigue.road_damage_four_wheels", "D",
+                 "sigma_ra .. sigma_fb from frame_static.end_cross_member_stress with the inputs of "
+                 "hiraku.solvers.k0_handcalc.frame_inputs.end_cross_member_inputs(design, loading=...): the end cross "
+                 "member of the rear overhang, for a ladder frame whose wheels stand outboard of the rails"),
         Predicts("fatigue_damage", "fatigue.road_damage_quarter_car", "D",
                  "sigma_w from frame_static.rail_joint_stress at rest (F = 0, W = the joint's wheel load); one quarter "
                  "car on the road class of the load case"),
@@ -308,12 +313,35 @@ class Fatigue(BuiltinTool):
             key = (sid, "z") if up is not None else sid
             series.append({"channel": f"wheel_load.{sid}", "unit": "N", "t_s": [float(x) for x in t[::step]],
                            "values": [float(x) for x in F[key][::step]]})
+        series += sn_series(fat, m, n_knee, m2, scaled, member)
         fields = [{"kind": "damage", "label": f"Miner damage over {target / 1000:g} km (largest weld point)", "unit": "1",
                    "per_member": per_member}]
         out = {"results": results, "fields": fields, "series": series, "effects": effects}
         if road is not None:
             out["scene"] = [road]
         return out
+
+
+SN_POINTS = 61
+SPECTRUM_POINTS = 200
+
+
+def sn_series(fat: float, m: float, n_knee: float, m2: float, cycles: list, member: str) -> list[Record]:
+    """The S-N curve (stress range against cycles to failure) and the stress ranges counted at the worst
+    point over the distance, largest first, against the cycles that reach at least that range."""
+    s_knee = fat * (2e6 / n_knee) ** (1.0 / m)
+    N = np.logspace(4.0, 10.0, SN_POINTS)
+    S = np.where(N < n_knee, fat * (2e6 / N) ** (1.0 / m), s_knee * (n_knee / N) ** (1.0 / m2))
+    out = [{"channel": "sn_curve", "unit": "MPa", "values": [round(float(s), 4) for s in S],
+            "x": {"quantity": "cycles_to_failure", "unit": "1", "values": [round(float(n), 1) for n in N]}}]
+    kept = sorted(((r, c) for r, _, c in cycles if r > 0), reverse=True)
+    if kept:
+        ranges = np.array([r for r, _ in kept])
+        total = np.cumsum([c for _, c in kept])
+        pick = np.unique(np.linspace(0, len(kept) - 1, min(SPECTRUM_POINTS, len(kept))).astype(int))
+        out.append({"channel": f"stress_ranges.{member}", "unit": "MPa", "values": [round(float(x), 4) for x in ranges[pick]],
+                    "x": {"quantity": "cycles", "unit": "1", "values": [round(float(x), 1) for x in total[pick]]}})
+    return out
 
 
 def _rev(series):

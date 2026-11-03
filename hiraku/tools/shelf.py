@@ -79,4 +79,7 @@ def check_shelf(ctx: RunContext) -> dict[str, Record]:
         ok = "使えます" if spec["usable"] else "使えません (答えの分かっている例に通らない)"
         ctx.store.emit("tool.checked", agent="system", domain=spec["domain"],
                        text=f"道具 {name} を確かめました: {ok}", data=spec)
+        if getattr(tool, "checks_from_cache", False):  # the tests' disk cache (HIRAKU_CHECK_CACHE=1), never a real run
+            ctx.store.emit("agent.said", agent="system",
+                           text=f"道具 {name} の照合は、試験のために覚えておいた前の結果を使いました")
     return ctx.specs

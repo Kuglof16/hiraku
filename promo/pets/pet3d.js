@@ -6,24 +6,26 @@
 //   const pet = window.HirakuPets.create(THREE, { role: "cae.crash" });
 //   scene.add(pet.group);
 //   pet.update(t, "idle", camera);   // pose depends only on t and the state
-//   pet.contour(t, "working");       // { load, loadCase, max, min } for a legend
+//   pet.contour(t, "working");       // { quantity, max, min, info } for a legend
 //
-// Body: a low-poly finite-element style mesh. An icosphere (coarse: 1
-// subdivision, 42 nodes / 80 elements; fine: 2 subdivisions, 92 / 180) is
-// welded into nodes and triangle elements, every node except the top one is
-// moved a little with a seeded random generator (same seed -> same body every
-// time), and every element is shaded with its own face normal (flat facets).
+// v3: every role has its own body, drawn the way a result of that analysis
+// looks in a post-processor (BODIES below): a flow body with streamlines for
+// aero, a stress wave for crash, a mode shape for NVH, and so on. The eyes,
+// the antenna with the role colour, the legs, the arms and the prop are
+// shared, so the ten pets stay one family.
+// v4: lead is the v2 body again (triangles, stress from the limb loads);
+// packager is an assembly drawing without a contour; handling, powertrain
+// (combustion) and crash are new bodies; designer has no dimension lines;
+// the strength arrow sits outside the surface.
+// v5: designer is a CAD model (one colour, fillet tangent edges, parameter
+// lines; no contour); packager is one tightly fitted unit in two colours;
+// handling is a multibody model (chassis, wishbones, knuckles, wheels,
+// joints, spring-dampers); strength is a plate with a hole pulled from both
+// sides (stress concentration at the hole edge).
 //
-// Contour: a nodal "relative stress" computed from the loads on the pet
-// (body weight carried by the two leg roots, the prop weight as a moment at
-// the right arm root, the left arm's own weight, and a self-weight membrane
-// term that is zero at the top). Each load is applied at the node nearest its
-// root and decays with distance. The values are normalised so that the
-// largest nodal value of the settled load case is 1.0. The fragment shader
-// interpolates the nodal value linearly inside each triangle and cuts it into
-// BANDS steps, so band borders (iso-lines) run across the elements, as in the
-// banded contour plots of a CAE post-processor. This is a toy model to place
-// the colours by where the forces act; it is not a solved field.
+// Every value shown in a contour is computed here from where things act on the
+// body (loads, flow direction, heat source, crush, mode shape...). These are
+// small toy models chosen to place the colours; none of them is a solved field.
 //
 // Colours: the contour bands (BANDS = 10, STOPS blue -> red) are the same as
 // web/js/colormap.js; the CAE domain colours --d-*, --paper, --night,
@@ -60,9 +62,25 @@
     { id: "cae.thermal", name: "熱", color: "#e0682a", prop: "thermometer", propName: "温度計" },
   ];
 
+  // One body per role: what analysis picture it is and what the colour shows.
+  // quantity null = no contour on that body (and no legend).
+  const BODIES = {
+    "lead": { kind: "fe-sphere", quantity: "相対の応力 (自重と手足)", analysis: "三角の要素の丸い体 (v2 の体)。節点の荷重から計算した応力" },
+    "designer": { kind: "cad-model", quantity: null, analysis: "CAD のモデル。落ち着いた単色の面、フィレットの面の境の稜線、平らな面の薄いパラメータの線" },
+    "packager": { kind: "assembly", quantity: null, analysis: "ひとまとまりの組み立て品。台・ケース・ふたがぴったり合わさり、色は 2 色、ふたのねじ 4 本" },
+    "cae.handling": { kind: "multibody", quantity: "ばねの力 (相対)", analysis: "マルチボディの機構。車体の剛体に上下のアーム・ナックル・車輪がジョイントでつながり、ばねとダンパー。重心の座標の軸と横加速度の矢印" },
+    "cae.powertrain": { kind: "combustion", quantity: "燃焼の温度 (相対)", analysis: "エンジンの燃焼室。点火プラグから広がる火炎面の温度、下はピストン、脇に電池のセル" },
+    "cae.aero": { kind: "flow", quantity: "速さ (相対)", analysis: "流体でできたしずく形の体と流線 (CFD の速度)" },
+    "cae.crash": { kind: "impact-wave", quantity: "衝撃の応力 (相対)", analysis: "前の面に当たった所から広がる応力の波、小さなへこみ、衝撃の輪、減速度の線" },
+    "cae.strength": { kind: "stress-concentration", quantity: "応力集中 (公称からの上がり分)", analysis: "穴のある板の体を両側から引っぱる。穴の上下のふちに応力が集中する" },
+    "cae.nvh": { kind: "mode-shape", quantity: "変位 (相対)", analysis: "固有モードで揺れる網目と、変形前の形の薄い線" },
+    "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
+  };
+
   const STATES = ["idle", "report", "pass", "mismatch", "working"];
 
-  // icosphere subdivision per mesh level (three.js IcosahedronGeometry detail)
+  // icosphere subdivision per mesh level for the stress body (three.js
+  // IcosahedronGeometry detail)
   const DETAIL = { coarse: 1, fine: 2 };
 
   // Layout in pet units (ground at y = 0, body centre at y = BODY_Y).
@@ -114,6 +132,11 @@
     const k = Math.floor((((t % 4.4) + 4.4) % 4.4) / 0.32);
     return Math.min(1, k / 10);
   }
+  // Smooth progress of the working cycle: 0 -> 1 in 3.2 s, hold, repeat 4.4 s.
+  function ramp(t) {
+    const x = Math.min(1, (((t % 4.4) + 4.4) % 4.4) / 3.2);
+    return x * x * (3 - 2 * x);
+  }
 
   // ---- deterministic helpers -------------------------------------------
 
@@ -140,10 +163,28 @@
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const TAU = Math.PI * 2;
 
+  // erfc, Abramowitz & Stegun 7.1.26 (|error| < 1.5e-7)
+  function erfc(x) {
+    const s = x < 0 ? -1 : 1;
+    const z = Math.abs(x);
+    const k = 1 / (1 + 0.3275911 * z);
+    const y = k * (0.254829592 + k * (-0.284496736 + k * (1.421413741 + k * (-1.453152027 + k * 1.061405429))));
+    const erf = 1 - y * Math.exp(-z * z);
+    return 1 - s * erf;
+  }
+
   // Body surface point for a unit direction (slightly egg shaped, wider low).
-  function shapePoint(THREE, d) {
-    const k = 1 + SHAPE.egg * -d.y;
+  function shapePoint(THREE, d, egg) {
+    const k = 1 + (egg ?? SHAPE.egg) * -d.y;
     return new THREE.Vector3(d.x * SHAPE.sx * k, d.y * SHAPE.sy, d.z * SHAPE.sz * k);
+  }
+  // Superellipsoid: scale a unit direction onto |x|^n + |y|^n + |z|^n = 1.
+  function superDir(d, n) {
+    const s = Math.pow(Math.pow(Math.abs(d.x), n) + Math.pow(Math.abs(d.y), n) + Math.pow(Math.abs(d.z), n), -1 / n);
+    return d.clone().multiplyScalar(s);
+  }
+  function latDir(THREE, lat, phi) {
+    return new THREE.Vector3(Math.cos(lat) * Math.sin(phi), Math.sin(lat), Math.cos(lat) * Math.cos(phi));
   }
 
   // Raw nodal stress at body point p for a list of loads
@@ -166,7 +207,7 @@
   function stressFields(pts, roots, propMass) {
     const nearest = (r) => pts.reduce((b, p) => (p.distanceTo(r) < b.distanceTo(r) ? p : b), pts[0]);
     const at = {};
-    for (const k of Object.keys(roots)) at[k] = nearest(roots[k]);
+    for (const k of Object.keys(roots)) if (roots[k].isVector3) at[k] = nearest(roots[k]);
     const armR = (propMass * roots.armLenR) / LOAD.lever;
     const armL = (LOAD.armWeight * roots.armLenL) / LOAD.lever;
     const settled = [
@@ -226,6 +267,282 @@
     return out;
   }
 
+  // ---- meshes made of nodes and elements ---------------------------------
+
+  // Surface of revolution: prof[0] and prof[m] are the poles, the rings in
+  // between have nu nodes. map(p, phi) -> Vector3. visU(i) / visV(j) say
+  // whether the meridian i / ring j is drawn as a line.
+  function revolve(THREE, prof, nu, map, visU, visV) {
+    visU = visU || (() => true);
+    visV = visV || (() => true);
+    const m = prof.length - 1;
+    const pts = [map(prof[0], 0)];
+    const par = [[0, 0]];
+    for (let j = 1; j < m; j++) {
+      for (let i = 0; i < nu; i++) {
+        pts.push(map(prof[j], (TAU * i) / nu));
+        par.push([i, j]);
+      }
+    }
+    pts.push(map(prof[m], 0));
+    par.push([0, m]);
+    const id = (i, j) => 1 + (j - 1) * nu + (((i % nu) + nu) % nu);
+    const vu = (i) => visU(((i % nu) + nu) % nu);
+    const N = pts.length - 1;
+    const elems = [];
+    for (let i = 0; i < nu; i++) {
+      elems.push({ n: [0, id(i, 1), id(i + 1, 1)], vis: [vu(i), visV(1), vu(i + 1)] });
+      for (let j = 1; j < m - 1; j++) {
+        elems.push({ n: [id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j + 1)], vis: [visV(j), vu(i + 1), visV(j + 1), vu(i)] });
+      }
+      elems.push({ n: [id(i, m - 1), id(i + 1, m - 1), N], vis: [visV(m - 1), vu(i + 1), vu(i)] });
+    }
+    return { pts, elems, par, nu, m };
+  }
+
+  // Box surface with quad elements, centred at the origin; half sizes h,
+  // divisions n = [nx, ny, nz].
+  function boxGrid(THREE, h, n) {
+    const map = new Map();
+    const pts = [];
+    const node = (p) => {
+      const key = p.map((v) => Math.round(v * 1e4)).join(",");
+      let i = map.get(key);
+      if (i === undefined) {
+        i = pts.length;
+        map.set(key, i);
+        pts.push(new THREE.Vector3(p[0], p[1], p[2]));
+      }
+      return i;
+    };
+    const elems = [];
+    for (let a = 0; a < 3; a++) {
+      const b = (a + 1) % 3, c = (a + 2) % 3;
+      for (const s of [-1, 1]) {
+        const id = (i, j) => {
+          const p = [0, 0, 0];
+          p[a] = s * h[a];
+          p[b] = -h[b] + (2 * h[b] * i) / n[b];
+          p[c] = -h[c] + (2 * h[c] * j) / n[c];
+          return node(p);
+        };
+        for (let i = 0; i < n[b]; i++) for (let j = 0; j < n[c]; j++) elems.push({ n: [id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j + 1)] });
+      }
+    }
+    return { pts, elems };
+  }
+
+  // Unique element edges (not the quad diagonals): [[i, j], ...]
+  function elemEdges(elems) {
+    const seen = new Set();
+    const out = [];
+    for (const e of elems) {
+      const n = e.n || e;
+      for (let k = 0; k < n.length; k++) {
+        const a = n[k], b = n[(k + 1) % n.length];
+        const key = a < b ? a + ":" + b : b + ":" + a;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push([a, b]);
+        }
+      }
+    }
+    return out;
+  }
+
+  // A finite-element style surface: nodes + tri / quad elements, drawn with
+  // per-node values (aVal) and element edges from barycentrics (aBary). A quad
+  // is two triangles whose shared diagonal is never drawn; an element edge
+  // flagged invisible is not drawn either.
+  // o.keepWinding: the elements are already wound outward (bodies with a
+  // hole, where "away from the centre" is not outward). An element may carry
+  // w = [weight per element edge] (0 none, 0.5 parameter line, 1 edge line)
+  // for the CAD material; it goes to aEdgeW (per triangle, the edge opposite
+  // each corner).
+  function feMesh(THREE, pts0, elems, o) {
+    o = Object.assign({ smooth: false, center: null, keepWinding: false }, o || {});
+    const center = o.center || new THREE.Vector3();
+    const tris = [];
+    for (const e of elems) {
+      const n = e.n, vis = e.vis || [true, true, true, true], w = e.w || [0, 0, 0, 0];
+      if (n.length === 3) tris.push({ n: [n[0], n[1], n[2]], hide: [!vis[1], !vis[2], !vis[0]], w: [w[1], w[2], w[0]] });
+      else {
+        tris.push({ n: [n[0], n[1], n[2]], hide: [!vis[1], true, !vis[0]], w: [w[1], 0, w[0]] });
+        tris.push({ n: [n[0], n[2], n[3]], hide: [!vis[2], !vis[3], true], w: [w[2], w[3], 0] });
+      }
+    }
+    // outward winding, decided once on the reference shape
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), cr = new THREE.Vector3(), cen = new THREE.Vector3();
+    for (const T of o.keepWinding ? [] : tris) {
+      const a = pts0[T.n[0]], b = pts0[T.n[1]], c = pts0[T.n[2]];
+      cr.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a));
+      cen.copy(a).add(b).add(c).multiplyScalar(1 / 3).sub(center);
+      if (cr.dot(cen) < 0) {
+        [T.n[1], T.n[2]] = [T.n[2], T.n[1]];
+        [T.hide[1], T.hide[2]] = [T.hide[2], T.hide[1]];
+        [T.w[1], T.w[2]] = [T.w[2], T.w[1]];
+      }
+    }
+    const nT = tris.length, nN = pts0.length;
+    const pos = new Float32Array(nT * 9), nor = new Float32Array(nT * 9), bar = new Float32Array(nT * 9), val = new Float32Array(nT * 3);
+    const ew = new Float32Array(nT * 9);
+    tris.forEach((T, i) => {
+      for (let k = 0; k < 3; k++) for (let j = 0; j < 3; j++) {
+        bar[i * 9 + k * 3 + j] = j === k || T.hide[j] ? 1 : 0;
+        ew[i * 9 + k * 3 + j] = T.w[j];
+      }
+    });
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+    geom.setAttribute("aBary", new THREE.BufferAttribute(bar, 3));
+    geom.setAttribute("aEdgeW", new THREE.BufferAttribute(ew, 3));
+    geom.setAttribute("aVal", new THREE.BufferAttribute(val, 1));
+    const hp = new Float32Array(nN * 3);
+    const hullGeom = new THREE.BufferGeometry();
+    hullGeom.setAttribute("position", new THREE.BufferAttribute(hp, 3));
+    hullGeom.setIndex(tris.flatMap((T) => T.n));
+
+    const pts = pts0.map((p) => p.clone());
+    const nn = pts0.map(() => new THREE.Vector3());
+    const fn = tris.map(() => new THREE.Vector3());
+    // NN: optional exact node normals (used for smooth shading)
+    function setNodes(P, NN) {
+      for (let i = 0; i < nN; i++) {
+        pts[i].copy(P[i]);
+        hp[i * 3] = P[i].x; hp[i * 3 + 1] = P[i].y; hp[i * 3 + 2] = P[i].z;
+        nn[i].set(0, 0, 0);
+      }
+      tris.forEach((T, i) => {
+        const a = pts[T.n[0]], b = pts[T.n[1]], c = pts[T.n[2]];
+        fn[i].crossVectors(ab.subVectors(b, a), ac.subVectors(c, a));
+        for (const k of T.n) nn[k].add(fn[i]);
+        fn[i].normalize();
+      });
+      for (const v of nn) v.normalize();
+      if (NN) for (let i = 0; i < nN; i++) nn[i].copy(NN[i]);
+      tris.forEach((T, i) => {
+        for (let k = 0; k < 3; k++) {
+          const p = pts[T.n[k]], q = o.smooth ? nn[T.n[k]] : fn[i];
+          pos[i * 9 + k * 3] = p.x; pos[i * 9 + k * 3 + 1] = p.y; pos[i * 9 + k * 3 + 2] = p.z;
+          nor[i * 9 + k * 3] = q.x; nor[i * 9 + k * 3 + 1] = q.y; nor[i * 9 + k * 3 + 2] = q.z;
+        }
+      });
+      geom.attributes.position.needsUpdate = true;
+      geom.attributes.normal.needsUpdate = true;
+      hullGeom.attributes.position.needsUpdate = true;
+      hullGeom.computeVertexNormals();
+      geom.computeBoundingSphere();
+      hullGeom.computeBoundingSphere();
+    }
+    function setValues(v) {
+      tris.forEach((T, i) => {
+        for (let k = 0; k < 3; k++) val[i * 3 + k] = v[T.n[k]];
+      });
+      geom.attributes.aVal.needsUpdate = true;
+    }
+    // Point on the surface along dir from origin (outermost hit).
+    const ray = new THREE.Ray();
+    const hit = new THREE.Vector3();
+    function surface(dir, origin) {
+      ray.set(origin ? origin.clone() : new THREE.Vector3(), dir.clone().normalize());
+      let best = null;
+      tris.forEach((T, i) => {
+        if (ray.intersectTriangle(pts[T.n[0]], pts[T.n[1]], pts[T.n[2]], false, hit)) {
+          const d = hit.distanceTo(ray.origin);
+          if (!best || d > best.d) best = { d, point: hit.clone(), normal: fn[i].clone() };
+        }
+      });
+      return best;
+    }
+    setNodes(pts0, o.normals);
+    return { geom, hullGeom, pts, nn, tris, setNodes, setValues, surface, nodeCount: nN, elemCount: elems.length, edges: elemEdges(elems) };
+  }
+
+  // Rounded box (a CAD block with constant-radius fillets on every edge).
+  // The cube [-N/2, N/2]^3 grid has, per axis, nf divisions across each
+  // fillet and nm across the flat part. place(H, r) puts every node on the
+  // box of half sizes H with fillet radius r: inner = clamp(p, -(H - r),
+  // H - r), point = inner + r n, n = normalize(p - inner) (exact normal).
+  // Element edges carry weights for the CAD material: the tangent edges of
+  // the fillets (where a flat face meets a fillet) = 1, iso-parameter lines
+  // of the flat faces at the param indices = 0.5, every other edge = 0.
+  function roundedBox(THREE, nf, nm, paramAt) {
+    const N = 2 * nf + nm;
+    const map = new Map();
+    const grid = [];
+    const node = (g) => {
+      const key = g.join(",");
+      let i = map.get(key);
+      if (i === undefined) {
+        i = grid.length;
+        map.set(key, i);
+        grid.push(g);
+      }
+      return i;
+    };
+    const tangent = (k) => k === nf || k === nf + nm;
+    const flat = (k) => k > nf && k < nf + nm;
+    const inFlat = (m) => m >= nf && m + 1 <= nf + nm;
+    // edge at constant index k, running over m..m+1 of the other axis
+    const weight = (k, m) => (tangent(k) ? 1 : flat(k) && inFlat(m) && paramAt.includes(k - nf) ? 0.5 : 0);
+    const elems = [];
+    for (let a = 0; a < 3; a++) {
+      const b = (a + 1) % 3, c = (a + 2) % 3;
+      for (const s of [0, N]) {
+        const id = (i, j) => {
+          const g = [0, 0, 0];
+          g[a] = s; g[b] = i; g[c] = j;
+          return node(g);
+        };
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+          elems.push({
+            n: [id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j + 1)],
+            w: [weight(j, i), weight(i + 1, j), weight(j + 1, i), weight(i, j)],
+          });
+        }
+      }
+    }
+    const coord = (i, h, r) => (i <= nf ? -h + (r * i) / nf : i >= nf + nm ? h - (r * (N - i)) / nf : -(h - r) + (2 * (h - r) * (i - nf)) / nm);
+    function place(H, r) {
+      const h = [H.x, H.y, H.z];
+      const P = [], NN = [];
+      for (const g of grid) {
+        const p = g.map((i, k) => coord(i, h[k], r));
+        const inner = p.map((v, k) => clamp(v, -(h[k] - r), h[k] - r));
+        const n = new THREE.Vector3(p[0] - inner[0], p[1] - inner[1], p[2] - inner[2]).normalize();
+        NN.push(n);
+        P.push(new THREE.Vector3(inner[0], inner[1], inner[2]).addScaledVector(n, r));
+      }
+      return { P, N: NN };
+    }
+    return { elems, place, count: grid.length };
+  }
+
+  // Point on any closed mesh along dir from origin (outermost hit), in the
+  // geometry's own coordinates shifted by offset.
+  function geomSurface(THREE, geom, offset) {
+    const pos = geom.attributes.position, idx = geom.index;
+    const n = idx ? idx.count : pos.count;
+    const off = offset || new THREE.Vector3();
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), hit = new THREE.Vector3();
+    const ray = new THREE.Ray();
+    const at = (k, v) => v.fromBufferAttribute(pos, idx ? idx.getX(k) : k).add(off);
+    return (dir, origin) => {
+      ray.set(origin ? origin.clone() : new THREE.Vector3(), dir.clone().normalize());
+      let best = null;
+      for (let k = 0; k < n; k += 3) {
+        at(k, a); at(k + 1, b); at(k + 2, c);
+        if (ray.intersectTriangle(a, b, c, false, hit)) {
+          const d = hit.distanceTo(ray.origin);
+          if (!best || d > best.d) best = { d, point: hit.clone(), normal: new THREE.Vector3().crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize() };
+        }
+      }
+      if (best && best.normal.dot(ray.direction) < 0) best.normal.negate();
+      return best;
+    };
+  }
+
   // ---- materials --------------------------------------------------------
 
   function hullMaterial(THREE, width, color) {
@@ -241,46 +558,55 @@
     return m;
   }
 
-  function bodyMaterial(THREE, U) {
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0 });
+  // Banded contour (BANDS steps of the nodal value interpolated inside each
+  // triangle), element edges, optional iso-lines on the band borders.
+  function contourMaterial(THREE, U, o) {
+    o = Object.assign({ line: 1, always: false, iso: 0, self: 0.5, rough: 0.62, metal: 0, opacity: 1, lineColor: C.ink }, o || {});
+    const m = new THREE.MeshStandardMaterial({ roughness: o.rough, metalness: o.metal, transparent: o.opacity < 1, opacity: o.opacity });
+    const L = {
+      uLineW: { value: o.line },
+      uIso: { value: o.iso },
+      uSelf: { value: o.self },
+      uLineCol: { value: new THREE.Color(o.lineColor) },
+    };
+    m.userData.hk = { L, line: o.line, always: o.always };
     m.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, U);
-      // nodal value per vertex; the varying is interpolated linearly inside
-      // each triangle, then cut into BANDS steps per fragment
+      Object.assign(sh.uniforms, { uPal: U.uPal, uRimColor: U.uRimColor, uRim: U.uRim, uLinePx: U.uLinePx }, L);
       sh.vertexShader =
-        "attribute float aSettled;\nattribute float aMismatch;\nattribute vec3 aBary;\n" +
-        "uniform float uLoad;\nuniform float uMis;\nvarying float vStress;\nvarying vec3 vBary;\n" +
-        sh.vertexShader.replace(
-          "#include <begin_vertex>",
-          "#include <begin_vertex>\n  vStress = mix(uLoad * aSettled, aMismatch, uMis);\n  vBary = aBary;"
-        );
+        "attribute float aVal;\nattribute vec3 aBary;\nvarying float vVal;\nvarying vec3 vBary;\n" +
+        sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vVal = aVal;\n  vBary = aBary;");
       sh.fragmentShader =
         [
           `uniform vec3 uPal[${BANDS}];`,
-          "uniform vec3 uInk;",
+          "uniform vec3 uLineCol;",
           "uniform vec3 uRimColor;",
           "uniform float uRim;",
           "uniform float uSelf;",
           "uniform float uLinePx;",
-          "uniform float uEdges;",
-          "varying float vStress;",
+          "uniform float uLineW;",
+          "uniform float uIso;",
+          "varying float vVal;",
           "varying vec3 vBary;",
         ].join("\n") + "\n" +
         sh.fragmentShader
           .replace(
             "#include <color_fragment>",
             `#include <color_fragment>
-  float hkB = clamp(vStress, 0.0, 0.99999) * ${BANDS}.0;
+  float hkB = clamp(vVal, 0.0, 0.99999) * ${BANDS}.0;
   int hkI = int(floor(hkB));
   int hkJ = min(hkI + 1, ${BANDS - 1});
-  float hkW = fwidth(hkB);
+  float hkW = max(fwidth(hkB), 1e-5);
   float hkT = smoothstep(1.0 - hkW, 1.0, fract(hkB));
   diffuseColor.rgb = mix(uPal[hkI], uPal[hkJ], hkI < ${BANDS - 1} ? hkT : 0.0);
   vec3 hkBand = diffuseColor.rgb;
   vec3 hkD = vBary / max(fwidth(vBary), vec3(1e-5));
   float hkM = min(min(hkD.x, hkD.y), hkD.z);
-  float hkLine = (1.0 - smoothstep(uLinePx * 0.5 - 0.6, uLinePx * 0.5 + 0.6, hkM)) * uEdges;
-  diffuseColor.rgb = mix(diffuseColor.rgb, uInk, hkLine);`
+  float hkLine = (1.0 - smoothstep(uLinePx * 0.5 - 0.6, uLinePx * 0.5 + 0.6, hkM)) * uLineW;
+  float hkF = fract(hkB);
+  float hkE = min(hkF, 1.0 - hkF) / hkW;
+  float hkIso = (1.0 - smoothstep(0.5, 1.5, hkE)) * uIso * step(0.5, hkB) * step(hkB, ${BANDS - 0.5});
+  hkLine = max(hkLine, hkIso * 0.8);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uLineCol, hkLine);`
           )
           .replace(
             "#include <opaque_fragment>",
@@ -291,114 +617,133 @@
   #include <opaque_fragment>`
           );
     };
+    m.customProgramCacheKey = () => "hk-contour";
     return m;
   }
 
-  // ---- builders -----------------------------------------------------------
-
-  function buildBody(THREE, opts, seed, U, roots, propMass) {
-    const detail = DETAIL[opts.mesh] ?? DETAIL.coarse;
-    const ico = new THREE.IcosahedronGeometry(1, detail);
-    // put one vertex of the icosahedron on +y so the antenna grows from a node
-    ico.rotateX(-Math.atan2((1 + Math.sqrt(5)) / 2, 1));
-    const w = weld(ico.attributes.position.array);
-    ico.dispose();
-
-    // edge length of the subdivided icosahedron on the unit sphere
-    const edge = 1.0515 / (detail + 1);
-    const rnd = mulberry32(seed);
-    const pts = [];
-    for (const n of w.nodes) {
-      const d = new THREE.Vector3(n[0], n[1], n[2]).normalize();
-      if (d.y > 0.9999) {
-        pts.push(shapePoint(THREE, d));
-        continue;
-      }
-      const r = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1);
-      r.addScaledVector(d, -r.dot(d)).multiplyScalar(0.16 * edge);
-      const radial = 1 + (rnd() - 0.5) * 0.03;
-      const dj = d.clone().add(r).normalize();
-      pts.push(shapePoint(THREE, dj).multiplyScalar(radial));
-    }
-    const field = stressFields(pts, roots, propMass);
-
-    // indexed, smooth normals: used for the outline hull and the node dots
-    const smooth = new THREE.BufferGeometry();
-    smooth.setAttribute("position", new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.x, p.y, p.z]), 3));
-    smooth.setIndex(w.tris.flat());
-    smooth.computeVertexNormals();
-    const sn = smooth.attributes.normal;
-
-    // non-indexed faces: one face normal per element (flat facets),
-    // barycentrics for the edge lines, and the two nodal fields
-    const nTri = w.tris.length;
-    const pos = new Float32Array(nTri * 9);
-    const nor = new Float32Array(nTri * 9);
-    const bar = new Float32Array(nTri * 9);
-    const fs = new Float32Array(nTri * 3);
-    const fm = new Float32Array(nTri * 3);
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3();
-    const v = new THREE.Vector3();
-    w.tris.forEach((tri, i) => {
-      a.copy(pts[tri[0]]); b.copy(pts[tri[1]]); c.copy(pts[tri[2]]);
-      fn.subVectors(c, b).cross(v.subVectors(a, b)).normalize();
-      for (let k = 0; k < 3; k++) {
-        const id = tri[k];
-        const p = pts[id];
-        pos.set([p.x, p.y, p.z], i * 9 + k * 3);
-        nor.set([fn.x, fn.y, fn.z], i * 9 + k * 3);
-        bar.set([k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0], i * 9 + k * 3);
-        fs[i * 3 + k] = field.settled[id];
-        fm[i * 3 + k] = field.mismatch[id];
-      }
-    });
-    const faces = new THREE.BufferGeometry();
-    faces.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    faces.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
-    faces.setAttribute("aBary", new THREE.BufferAttribute(bar, 3));
-    faces.setAttribute("aSettled", new THREE.BufferAttribute(fs, 1));
-    faces.setAttribute("aMismatch", new THREE.BufferAttribute(fm, 1));
-
-    // point on the faceted surface along a direction from the centre
-    const ray = new THREE.Ray();
-    function surface(dir) {
-      ray.set(new THREE.Vector3(), dir.clone().normalize());
-      const hit = new THREE.Vector3();
-      for (const tri of w.tris) {
-        if (ray.intersectTriangle(pts[tri[0]], pts[tri[1]], pts[tri[2]], false, hit)) {
-          const n = new THREE.Vector3().subVectors(pts[tri[2]], pts[tri[1]]).cross(new THREE.Vector3().subVectors(pts[tri[0]], pts[tri[1]])).normalize();
-          return { point: hit, normal: n };
-        }
-      }
-      return { point: shapePoint(THREE, dir.clone().normalize()), normal: dir.clone().normalize() };
-    }
-
-    const group = new THREE.Group();
-    const body = new THREE.Mesh(faces, bodyMaterial(THREE, U));
-    body.castShadow = true;
-    group.add(body);
-
-    const hull = new THREE.Mesh(smooth, null);
-    group.add(hull);
-
-    const dotR = opts.mesh === "fine" ? 0.028 : 0.034;
-    const dotGeom = new THREE.SphereGeometry(dotR, 8, 6);
-    const nodes = new THREE.InstancedMesh(dotGeom, null, pts.length);
-    const m4 = new THREE.Matrix4();
-    pts.forEach((p, i) => {
-      v.set(sn.getX(i), sn.getY(i), sn.getZ(i));
-      m4.makeTranslation(p.x + v.x * 0.006, p.y + v.y * 0.006, p.z + v.z * 0.006);
-      nodes.setMatrixAt(i, m4);
-    });
-    group.add(nodes);
-
-    const top = pts.reduce((best, p) => (p.y > best.y ? p : best), pts[0]);
-    return {
-      group, body, hull, nodes, surface, top: top.clone(),
-      counts: { nodes: pts.length, elements: nTri },
-      field: { nodes: pts.map((p) => [p.x, p.y, p.z]), settled: field.settled, mismatch: field.mismatch, loads: field.loads, mismatchLoads: field.mismatchLoads },
+  // A CAD view: one calm colour, smooth lighting, and lines drawn from the
+  // element edge weights (aEdgeW): weight 1 = an edge line (fillet tangent
+  // edges) in uEdgeCol, weight 0.5 = a faint iso-parameter line in uParamCol.
+  // No contour bands.
+  function cadMaterial(THREE, U, o) {
+    o = Object.assign({ color: 0x8b93a5, rough: 0.42, metal: 0.08, edge: C.ink, param: 0x2a3a52, paramA: 0.4 }, o || {});
+    const m = new THREE.MeshStandardMaterial({ color: o.color, roughness: o.rough, metalness: o.metal });
+    const L = { uEdgeCol: { value: new THREE.Color(o.edge) }, uParamCol: { value: new THREE.Color(o.param) }, uParamA: { value: o.paramA } };
+    m.userData.cad = L;
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, { uLinePx: U.uLinePx, uRimColor: U.uRimColor, uRim: U.uRim }, L);
+      sh.vertexShader =
+        "attribute vec3 aBary;\nattribute vec3 aEdgeW;\nvarying vec3 vBary;\nvarying vec3 vEdgeW;\n" +
+        sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vBary = aBary;\n  vEdgeW = aEdgeW;");
+      sh.fragmentShader =
+        "uniform vec3 uEdgeCol;\nuniform vec3 uParamCol;\nuniform float uParamA;\nuniform float uLinePx;\nuniform vec3 uRimColor;\nuniform float uRim;\nvarying vec3 vBary;\nvarying vec3 vEdgeW;\n" +
+        sh.fragmentShader
+          .replace(
+            "#include <color_fragment>",
+            `#include <color_fragment>
+  vec3 cdD = vBary / max(fwidth(vBary), vec3(1e-5));
+  vec3 cdE = 1.0 - smoothstep(vec3(uLinePx * 0.55 - 0.6), vec3(uLinePx * 0.55 + 0.6), cdD);
+  vec3 cdP = 1.0 - smoothstep(vec3(uLinePx * 0.3 - 0.5), vec3(uLinePx * 0.3 + 0.5), cdD);
+  vec3 cdKe = step(vec3(0.75), vEdgeW);
+  vec3 cdKp = step(vec3(0.25), vEdgeW) * (1.0 - cdKe);
+  float cdEdge = max(max(cdE.x * cdKe.x, cdE.y * cdKe.y), cdE.z * cdKe.z);
+  float cdPar = max(max(cdP.x * cdKp.x, cdP.y * cdKp.y), cdP.z * cdKp.z);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uParamCol, cdPar * uParamA);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uEdgeCol, cdEdge);`
+          )
+          .replace(
+            "#include <opaque_fragment>",
+            `float cdFr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+  outgoingLight += uRimColor * uRim * 0.6 * cdFr * (1.0 - cdEdge);
+  outgoingLight = mix(outgoingLight, uEdgeCol, cdEdge * 0.85);
+  #include <opaque_fragment>`
+          );
     };
+    m.customProgramCacheKey = () => "hk-cad";
+    return m;
   }
+
+  // Moving dashes along tubes (streamlines, current, rising heat, a track).
+  // The dash phase is s * uDens - t * uSpeed; colour = contour band of aVal.
+  // aWake = 1 marks a region whose dashes run backwards when uSep = 1.
+  function flowMaterial(THREE, U, o) {
+    o = Object.assign({ speed: 1, dens: 2.2, duty: 0.55 }, o || {});
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const L = { uSpeed: { value: o.speed }, uDens: { value: o.dens }, uDuty: { value: o.duty }, uSep: { value: 0 }, uGain: { value: 1 } };
+    m.userData.flow = L;
+    m.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, { uPal: U.uPal, uT: U.uT }, L);
+      sh.vertexShader =
+        "attribute float aS;\nattribute float aVal;\nattribute float aWake;\nvarying float vS;\nvarying float vVal;\nvarying float vWake;\n" +
+        sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vS = aS;\n  vVal = aVal;\n  vWake = aWake;");
+      sh.fragmentShader =
+        [
+          `uniform vec3 uPal[${BANDS}];`,
+          "uniform float uT;",
+          "uniform float uSpeed;",
+          "uniform float uDens;",
+          "uniform float uDuty;",
+          "uniform float uSep;",
+          "uniform float uGain;",
+          "varying float vS;",
+          "varying float vVal;",
+          "varying float vWake;",
+        ].join("\n") + "\n" +
+        sh.fragmentShader.replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+  float hkPh = vS * uDens - uT * uSpeed * (1.0 - 2.0 * uSep * vWake);
+  float hkF = fract(hkPh);
+  if (hkF > uDuty) discard;
+  int hkI = int(floor(clamp(vVal * uGain, 0.0, 0.99999) * ${BANDS}.0));
+  diffuseColor.rgb = mix(uPal[hkI], vec3(1.0), 0.55 * smoothstep(0.45 * uDuty, uDuty, hkF));`
+        );
+    };
+    m.customProgramCacheKey = () => "hk-flow";
+    return m;
+  }
+
+  // Merge tubes along paths [{ pts: [Vector3], vals: [number], wake(p) }]
+  // into one geometry with aS (arc length), aVal and aWake per vertex.
+  function tubes(THREE, paths, radius, radial) {
+    const P = [], N = [], S = [], V = [], W = [], I = [];
+    let base = 0;
+    for (const path of paths) {
+      const curve = new THREE.CatmullRomCurve3(path.pts, false, "centripetal");
+      const segs = Math.max(12, path.pts.length * 4);
+      const g = new THREE.TubeGeometry(curve, segs, radius, radial || 5, false);
+      const len = curve.getLength();
+      const cum = [0];
+      for (let i = 1; i < path.pts.length; i++) cum.push(cum[i - 1] + path.pts[i].distanceTo(path.pts[i - 1]));
+      const tot = cum[cum.length - 1];
+      const pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
+      for (let i = 0; i < pos.count; i++) {
+        P.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+        N.push(nor.getX(i), nor.getY(i), nor.getZ(i));
+        const f = uv.getX(i);
+        S.push(f * len + (path.s0 || 0));
+        const target = f * tot;
+        let k = 0;
+        while (k < cum.length - 2 && cum[k + 1] < target) k++;
+        const w = cum[k + 1] > cum[k] ? clamp((target - cum[k]) / (cum[k + 1] - cum[k]), 0, 1) : 0;
+        V.push(path.vals[k] + (path.vals[k + 1] - path.vals[k]) * w);
+        W.push(path.wake ? path.wake(pos.getX(i), pos.getY(i), pos.getZ(i)) : 0);
+      }
+      for (const ix of g.index.array) I.push(ix + base);
+      base += pos.count;
+      g.dispose();
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+    out.setAttribute("normal", new THREE.Float32BufferAttribute(N, 3));
+    out.setAttribute("aS", new THREE.Float32BufferAttribute(S, 1));
+    out.setAttribute("aVal", new THREE.Float32BufferAttribute(V, 1));
+    out.setAttribute("aWake", new THREE.Float32BufferAttribute(W, 1));
+    out.setIndex(I);
+    return out;
+  }
+
+  // ---- small builders -----------------------------------------------------
 
   function addHull(THREE, mesh, width, hulls) {
     const h = new THREE.Mesh(smoothCopy(THREE, mesh.geometry), null);
@@ -419,9 +764,1172 @@
     return m;
   }
 
+  function rodBetween(THREE, p0, p1, r, mat, radial) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, p0.distanceTo(p1), radial ?? 8), mat);
+    m.position.copy(p0).add(p1).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p1.clone().sub(p0).normalize());
+    return m;
+  }
+
   function std(THREE, color, rough, metal) {
     return new THREE.MeshStandardMaterial({ color, roughness: rough ?? 0.55, metalness: metal ?? 0 });
   }
+
+  // fe mesh + material + outline hull into a parent
+  function addFe(ctx, parent, fe, matOpts, hullW) {
+    const { THREE } = ctx;
+    const mat = contourMaterial(THREE, ctx.U, matOpts);
+    ctx.contourMats.push(mat);
+    const mesh = new THREE.Mesh(fe.geom, mat);
+    mesh.castShadow = true;
+    mesh.frustumCulled = false;
+    parent.add(mesh);
+    const hull = new THREE.Mesh(fe.hullGeom, null);
+    hull.userData.hullWidth = hullW ?? 0.035;
+    hull.frustumCulled = false;
+    parent.add(hull);
+    ctx.hulls.push(hull);
+    return mesh;
+  }
+
+  // Node dots (shown on the meshed bodies when the pet is drawn large).
+  function addDots(ctx, parent, fe, r) {
+    const { THREE } = ctx;
+    const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(r, 8, 6), ctx.M.ink, fe.nodeCount);
+    const m4 = new THREE.Matrix4();
+    fe.pts.forEach((p, i) => {
+      const n = fe.nn[i];
+      m4.makeTranslation(p.x + n.x * 0.006, p.y + n.y * 0.006, p.z + n.z * 0.006);
+      dots.setMatrixAt(i, m4);
+    });
+    parent.add(dots);
+    ctx.dots.push(dots);
+    return dots;
+  }
+
+  const stats = (a) => ({ max: Math.max(...a), min: Math.min(...a) });
+
+  // ---- bodies ---------------------------------------------------------------
+  // Each builder returns { group, anchor (eyes), antennaAnchor, top,
+  // surface(dir), deforms, counts, caption, update(t, state), contour(t, state) }
+  // in body coordinates (body centre at the origin).
+
+  // Nodes of a jittered icosphere (three.js IcosahedronGeometry, one vertex on
+  // +y so the antenna grows from a node), each placed on the body by place(d).
+  // The jitter is seeded by the role id, as in v2.
+  function icoNodes(ctx, place) {
+    const { THREE, opts } = ctx;
+    const detail = DETAIL[opts.mesh] ?? DETAIL.coarse;
+    const ico = new THREE.IcosahedronGeometry(1, detail);
+    ico.rotateX(-Math.atan2((1 + Math.sqrt(5)) / 2, 1));
+    const w = weld(ico.attributes.position.array);
+    ico.dispose();
+    // edge length of the subdivided icosahedron on the unit sphere
+    const edge = 1.0515 / (detail + 1);
+    const rnd = mulberry32(ctx.seed);
+    const pts = [];
+    for (const n of w.nodes) {
+      const d = new THREE.Vector3(n[0], n[1], n[2]).normalize();
+      if (d.y > 0.9999) {
+        pts.push(place(d));
+        continue;
+      }
+      const r = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1);
+      r.addScaledVector(d, -r.dot(d)).multiplyScalar(0.16 * edge);
+      const radial = 1 + (rnd() - 0.5) * 0.03;
+      pts.push(place(d.clone().add(r).normalize()).multiplyScalar(radial));
+    }
+    return { pts, tris: w.tris };
+  }
+
+  // A triangle-element body whose stress comes from the limb loads (the v2
+  // model, stressFields): settled = both legs share the weight, the prop arm
+  // root carries the prop; mismatch = the weight on the left leg; working
+  // steps the load up in increments.
+  function stressBody(ctx, pts, tris) {
+    const { THREE, opts } = ctx;
+    const fe = feMesh(THREE, pts, tris.map((t) => ({ n: t })));
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 1, self: 0.5 });
+    addDots(ctx, group, fe, opts.mesh === "fine" ? 0.028 : 0.034);
+    const field = stressFields(pts, ctx.roots, ctx.propMass);
+    const vals = (t, s) => (s === "mismatch" ? field.mismatch : field.settled.map((v) => v * loadFactor(t, s)));
+    const top = pts.reduce((b, p) => (p.y > b.y ? p : b), pts[0]);
+    return {
+      fe, group, surface: (d) => fe.surface(d), top: top.clone(),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      field: { nodes: pts.map((p) => [p.x, p.y, p.z]), settled: field.settled, mismatch: field.mismatch, loads: field.loads, mismatchLoads: field.mismatchLoads },
+      update(t, s) { fe.setValues(vals(t, s)); },
+      contour(t, s) {
+        const load = loadFactor(t, s);
+        const lines = [s === "mismatch" ? "荷重: 体重が左足に偏る (食い違い)" : `荷重 ${Math.round(load * 100)} %` + (s === "working" ? " (増分)" : "")];
+        return Object.assign(stats(vals(t, s)), { load, loadCase: s === "mismatch" ? "mismatch" : "settled", info: lines });
+      },
+    };
+  }
+
+  // lead: the v2 body. A round, slightly egg shaped body of triangle
+  // elements; stress from the weight on the legs and the prop on the arm.
+  function bodyLead(ctx) {
+    const { THREE } = ctx;
+    const N = icoNodes(ctx, (d) => shapePoint(THREE, d));
+    const B = stressBody(ctx, N.pts, N.tris);
+    B.caption = `節点 ${B.counts.nodes} · 要素 ${B.counts.elements} (三角) · 手足の荷重から計算`;
+    const base = B.contour;
+    B.contour = (t, s) => {
+      const c = base(t, s);
+      c.info = c.info.concat(["足 2 本が体重を分け、右腕が小道具を持つ"]);
+      return c;
+    };
+    return B;
+  }
+
+  // strength: stress concentration at a hole. The body is a thick plate
+  // (rounded outline, a superellipse with n = 5, filleted front and back
+  // edges) with a round hole through it below the face, meshed as an O-grid
+  // of quad elements around the hole (rings closer near the hole). It is
+  // pulled from both sides along x (tension sigma, arrows outside the body
+  // pointing away from it).
+  // Value: the Kirsch solution for a round hole of radius a in a wide plate
+  // under tension (r, theta from the hole centre, theta from the load axis):
+  //   s_rr = 1/2 (1 - q) + 1/2 (1 - 4q + 3q^2) cos 2th
+  //   s_tt = 1/2 (1 + q) - 1/2 (1 + 3q^2) cos 2th
+  //   t_rt = -1/2 (1 + 2q - 3q^2) sin 2th,     q = a^2 / r^2 (per sigma)
+  // von Mises s_vm = sqrt(s_rr^2 - s_rr s_tt + s_tt^2 + 3 t_rt^2), and the
+  // colour is the rise over the nominal stress, v = L (s_vm - 1) / (Kt - 1)
+  // with Kt = 3 (the edge value at theta = 90 deg), clipped at 0: 1.0 at the
+  // top and bottom edges of the hole, 0 far from it. L = the load factor.
+  // Mismatch: a crack runs up from the top edge of the hole; its tip adds
+  // 1.0 exp(-(d / 0.08)^2).
+  function bodyStrength(ctx) {
+    const { THREE } = ctx;
+    const W = 0.95, HH = 0.92, D = 0.6, NSE = 5, F = 0.1;
+    const HC = { x: 0, y: -0.48 }, A = 0.24, KT = 3;
+    const nt = ctx.fine ? 48 : 32, nr = ctx.fine ? 10 : 6, nf = 2, nz = ctx.fine ? 6 : 4, nh = ctx.fine ? 6 : 4;
+    const se = (x, y) => Math.pow(Math.abs(x / (W - F)), NSE) + Math.pow(Math.abs(y / (HH - F)), NSE);
+    // where the ray from the hole centre at angle th meets the outline of the
+    // flat face (the fillet starts there), and the outline normal
+    const outlineAt = (th) => {
+      const c = Math.cos(th), s = Math.sin(th);
+      let lo = 0, hi = 3;
+      for (let i = 0; i < 50; i++) {
+        const m = (lo + hi) / 2;
+        if (se(HC.x + c * m, HC.y + s * m) > 1) hi = m;
+        else lo = m;
+      }
+      const x = HC.x + c * lo, y = HC.y + s * lo;
+      const gx = Math.sign(x) * Math.pow(Math.abs(x / (W - F)), NSE - 1) / (W - F);
+      const gy = Math.sign(y) * Math.pow(Math.abs(y / (HH - F)), NSE - 1) / (HH - F);
+      const g = Math.hypot(gx, gy) || 1;
+      return { x, y, nx: gx / g, ny: gy / g };
+    };
+    // one closed loop of nodes per angle: front face (hole edge -> outline),
+    // front fillet, side wall, back fillet, back face (outline -> hole edge),
+    // hole wall (back -> front)
+    const loop = (th) => {
+      const O = outlineAt(th);
+      const ex = HC.x + A * Math.cos(th), ey = HC.y + A * Math.sin(th);
+      const P = [];
+      const face = (j, z) => {
+        const g = Math.pow(j / nr, 1.9);
+        return [ex + (O.x - ex) * g, ey + (O.y - ey) * g, z];
+      };
+      const fil = (k, sz) => {
+        const f = ((k / nf) * Math.PI) / 2;
+        return [O.x + F * Math.sin(f) * O.nx, O.y + F * Math.sin(f) * O.ny, sz * (D - F + F * Math.cos(f))];
+      };
+      for (let j = 0; j <= nr; j++) P.push(face(j, D));
+      for (let k = 1; k <= nf; k++) P.push(fil(k, 1));
+      for (let m = 1; m <= nz; m++) P.push([O.x + F * O.nx, O.y + F * O.ny, D - F - (2 * (D - F) * m) / nz]);
+      for (let k = nf - 1; k >= 0; k--) P.push(fil(k, -1));
+      for (let j = nr - 1; j >= 0; j--) P.push(face(j, -D));
+      for (let m = 1; m < nh; m++) P.push([ex, ey, -D + (2 * D * m) / nh]);
+      return P;
+    };
+    const cols = Array.from({ length: nt }, (_, i) => loop((TAU * i) / nt));
+    const Lk = cols[0].length;
+    const pts = cols.flat().map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+    const id = (i, k) => (((i % nt) + nt) % nt) * Lk + (((k % Lk) + Lk) % Lk);
+    const elems = [];
+    // wound outward: front face (radial, then around) gives +z
+    for (let i = 0; i < nt; i++) for (let k = 0; k < Lk; k++) elems.push({ n: [id(i, k), id(i, k + 1), id(i + 1, k + 1), id(i + 1, k)] });
+    const fe = feMesh(THREE, pts, elems, { keepWinding: true });
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.6, self: 0.5 });
+
+    const kirsch = (r, th) => {
+      const q = (A * A) / (r * r), q2 = q * q, c2 = Math.cos(2 * th), s2 = Math.sin(2 * th);
+      const srr = 0.5 * (1 - q) + 0.5 * (1 - 4 * q + 3 * q2) * c2;
+      const stt = 0.5 * (1 + q) - 0.5 * (1 + 3 * q2) * c2;
+      const trt = -0.5 * (1 + 2 * q - 3 * q2) * s2;
+      return Math.sqrt(srr * srr - srr * stt + stt * stt + 3 * trt * trt);
+    };
+    const base = pts.map((p) => {
+      const dx = p.x - HC.x, dy = p.y - HC.y;
+      const r = Math.max(A, Math.hypot(dx, dy));
+      return Math.max(0, (kirsch(r, Math.atan2(dy, dx)) - 1) / (KT - 1));
+    });
+    const TIP = new THREE.Vector2(HC.x, HC.y + A + 0.1);
+    const crackAdd = pts.map((p) => 1.0 * Math.exp(-((Math.hypot(p.x - TIP.x, p.y - TIP.y) / 0.08) ** 2)));
+    const vals = (t, s) => {
+      const L = loadFactor(t, s);
+      return s === "mismatch" ? base.map((v, i) => v + crackAdd[i]) : base.map((v) => v * L);
+    };
+
+    // tension arrows outside both sides, pointing away (two per side, above
+    // the arms); the tail stays GAP off the side wall
+    const red = new THREE.MeshBasicMaterial({ color: C.miss });
+    const GAP = 0.05, ALEN = 0.45, CONE = 0.17;
+    const arrows = [];
+    const arrowObjs = [];
+    for (const sx of [-1, 1]) {
+      for (const y of [0.42, 0.1]) {
+        const xs = (W - F) * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(y / (HH - F)), NSE)), 1 / NSE) + F;
+        const tail = new THREE.Vector3(sx * (xs + GAP), y, 0);
+        const dir = new THREE.Vector3(sx, 0, 0);
+        const g = new THREE.Group();
+        g.position.copy(tail);
+        g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 10), red);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.075, CONE, 14), red);
+        g.add(rod, cone);
+        group.add(g);
+        arrowObjs.push({ rod, cone });
+        arrows.push({ tail: tail.clone(), dir, length: ALEN });
+      }
+    }
+    const setArrows = (L) => {
+      const len = 0.2 + (ALEN - 0.2) * L;
+      for (const a of arrowObjs) {
+        a.rod.scale.y = len - CONE * 0.9;
+        a.rod.position.y = (len - CONE * 0.9) / 2;
+        a.cone.position.y = len - CONE / 2;
+      }
+    };
+    // the crack (mismatch), drawn on the front and the back face
+    const crack = new THREE.Group();
+    for (const z of [D + 0.004, -D - 0.004]) {
+      const pp = [[0, 0], [0.02, 0.035], [-0.01, 0.07], [0.01, 0.1]].map(([dx, dy]) => new THREE.Vector3(HC.x + dx, HC.y + A + dy, z));
+      crack.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pp), 16, 0.013, 5, false), ctx.M.ink));
+    }
+    group.add(crack);
+    const nodesXYZ = pts.map((p) => [p.x, p.y, p.z]);
+    return {
+      group, surface: (d) => fe.surface(d), top: new THREE.Vector3(0, HH, 0),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} (四角) · 矢印 = 両側から引っぱる荷重`,
+      field: { nodes: nodesXYZ, settled: base, mismatch: base.map((v, i) => v + crackAdd[i]), hole: { center: [HC.x, HC.y], radius: A, depth: D }, kt: KT },
+      arrows,
+      update(t, s) {
+        fe.setValues(vals(t, s));
+        setArrows(s === "mismatch" ? 1 : loadFactor(t, s));
+        crack.visible = s === "mismatch";
+      },
+      contour(t, s) {
+        const L = loadFactor(t, s);
+        const info = [
+          s === "mismatch" ? "穴のふちから亀裂が伸びた (食い違い)" : `引っぱる荷重 ${Math.round(L * 100)} %` + (s === "working" ? " (増分)" : ""),
+          "穴の上下のふちに集中 (公称の 3 倍 = 1.0)",
+        ];
+        return Object.assign(stats(vals(t, s)), { info });
+      },
+    };
+  }
+
+  // aero: a teardrop of translucent fluid; surface streamlines run from the
+  // nose to the tail and streamlines of the flow around a sphere pass by.
+  // Speed on the surface: U sin(theta) (theta = angle between the surface
+  // normal and the flow) times a blockage factor 1 + 0.5 (r / r_max)^2, so it
+  // is 1.5 U at the widest section as on a sphere and recovers toward U on
+  // the tail. Normalised by 1.5 U (the free stream is 0.67).
+  function bodyAero(ctx) {
+    const { THREE } = ctx;
+    // built in flow coordinates (flow axis z, nose at +z); toBody turns the
+    // axis to body +x so the teardrop points at the prop side and the tail
+    // sticks out to the left, readable from the front
+    const A = 0.98, LT = 1.5, RX = 0.86, RY = 0.93;
+    const toBody = (p) => new THREE.Vector3(p.z, p.y, -p.x);
+    const rad = (z) => (z >= 0 ? Math.sqrt(Math.max(0, 1 - (z / A) ** 2)) : Math.pow(Math.max(0, Math.cos((Math.PI / 2) * (-z / LT))), 1.6));
+    const slope = (z) => (rad(z + 1e-3) - rad(z - 1e-3)) / 2e-3;
+    const speed = (z) => (z >= A - 1e-4 ? 0 : (1 + 0.5 * rad(z) ** 2) / 1.5 / Math.sqrt(1 + slope(Math.min(z, A - 2e-3)) ** 2));
+    const nv = ctx.fine ? 20 : 14, nu = ctx.fine ? 24 : 16;
+    const prof = Array.from({ length: nv + 1 }, (_, j) => {
+      const v = j / nv;
+      return v <= 0.5 ? -LT * (1 - 2 * v) : A * Math.sin(Math.PI * (v - 0.5));
+    });
+    const mapF = (z, phi) => new THREE.Vector3(RX * rad(z) * Math.cos(phi), RY * rad(z) * Math.sin(phi), z);
+    const map = (z, phi) => toBody(mapF(z, phi));
+    const R = revolve(THREE, prof, nu, map);
+    const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.3, self: 0.42, rough: 0.12, opacity: 0.72 }, 0.03);
+    // pale core inside the translucent fluid (hides the outline shell)
+    const core = new THREE.Mesh(fe.geom, std(THREE, C.paper, 0.8));
+    core.scale.setScalar(0.9);
+    core.frustumCulled = false;
+    group.add(core);
+
+    // flow axis coordinate of a body point = body x
+    const baseVals = R.pts.map((p) => speed(p.x));
+    // separated wake behind the shoulder (mismatch): low, uneven speed
+    const sepVals = (t) => R.pts.map((p, i) => (p.x < -0.05 ? 0.12 + 0.07 * (0.5 + 0.5 * Math.sin(3 * Math.atan2(p.y, -p.z) + 2.4 * t + 4 * p.x)) : baseVals[i]));
+
+    // surface streamlines (meridians, half a step off the element edges)
+    const paths = [];
+    const nLines = 12;
+    for (let k = 0; k < nLines; k++) {
+      const phi = (TAU * (k + 0.5)) / nLines;
+      const pts = [], vals = [];
+      for (let j = nv - 1; j >= 1; j--) {
+        const z = prof[j];
+        const p = mapF(z, phi);
+        const c = new THREE.Vector3(0, 0, z >= 0 ? 0 : z);
+        pts.push(toBody(p.clone().add(p.clone().sub(c).normalize().multiplyScalar(0.025))));
+        vals.push(speed(z));
+      }
+      paths.push({ pts, vals, wake: (x) => (x < -0.05 ? 1 : 0), s0: k * 0.37 });
+    }
+    // streamlines around: Stokes stream function of flow past a sphere of
+    // radius a, psi = U rho^2 (1 - a^3 / R^3) / 2; each line keeps its far
+    // radius rho_inf. Speed from the same potential flow.
+    const a = 0.93;
+    const rhoAt = (rinf, z) => {
+      let lo = Math.sqrt(Math.max(0, a * a - z * z)) + 1e-4, hi = rinf + 2;
+      for (let i = 0; i < 48; i++) {
+        const m = (lo + hi) / 2;
+        const f = m * m * (1 - a ** 3 / Math.pow(m * m + z * z, 1.5)) - rinf * rinf;
+        if (f > 0) hi = m;
+        else lo = m;
+      }
+      return (lo + hi) / 2;
+    };
+    const flowSpeed = (rho, z) => {
+      const Rr = Math.hypot(rho, z), c = z / Rr, s = rho / Rr, k = (a / Rr) ** 3;
+      return Math.hypot(c * (1 - k), s * (1 + k / 2)) / 1.5;
+    };
+    // [far radius, azimuth in degrees]; azimuth 90 = up, 180 = the face side
+    const around = [[0.62, 60], [0.62, 125], [0.95, 90], [0.85, 215], [0.75, 330], [1.2, 20], [1.2, 152]];
+    around.forEach(([rinf, deg], k) => {
+      const phi = (deg * Math.PI) / 180;
+      const pts = [], vals = [];
+      for (let z = 1.55; z >= -1.85; z -= 0.1) {
+        const rho = rhoAt(rinf, z);
+        pts.push(toBody(new THREE.Vector3(rho * Math.cos(phi), rho * Math.sin(phi) * RY, z)));
+        vals.push(flowSpeed(rho, z));
+      }
+      paths.push({ pts, vals, wake: (x) => (x < -0.4 ? 1 : 0), s0: k * 0.53 });
+    });
+    const flowMat = flowMaterial(THREE, ctx.U, { speed: 0.7, dens: 2.4, duty: 0.55 });
+    ctx.flowMats.push(flowMat);
+    const lines = new THREE.Mesh(tubes(THREE, paths, 0.026, 5), flowMat);
+    lines.frustumCulled = false;
+    group.add(lines);
+
+    const top = R.pts.reduce((b, p) => (p.y > b.y ? p : b), R.pts[0]);
+    const spd = { idle: 0.7, report: 0.7, pass: 0.9, mismatch: 0.6, working: 2.0 };
+    const vals = (t, s) => (s === "mismatch" ? sepVals(t) : baseVals);
+    return {
+      group, surface: (d) => fe.surface(d), top: top.clone(),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `流線 ${paths.length} 本 · 面の節点 ${fe.nodeCount}`,
+      update(t, s) {
+        fe.setValues(vals(t, s));
+        flowMat.userData.flow.uSpeed.value = spd[s];
+        flowMat.userData.flow.uSep.value = s === "mismatch" ? 1 : 0;
+      },
+      contour(t, s) {
+        const info = s === "mismatch" ? ["流れ: 肩の後ろではく離 (食い違い)", "後ろでは流れが逆に回る"] : ["流れ: 前から一様 (ポテンシャル流れ)", s === "working" ? "流れの線が速い (解析中)" : "鼻先は止まり、肩でいちばん速い"];
+        return Object.assign(stats(vals(t, s)), { info });
+      },
+    };
+  }
+
+  // crash: the body is not crushed. A rounded-box shell of quad elements is
+  // hit on the bottom front edge (well below the face); a stress wave runs out from the
+  // impact point over the shell, a small dent stays there, shock rings leave
+  // the point and a deceleration pulse is plotted beside the feet.
+  // Stress at a node, d = distance to the impact point, tau = time since the
+  // impact: residual 0.3 exp(-(d / 0.25)^2) + wave a exp(-((d - c tau) / w)^2)
+  // exp(-d / 3) + a second, weaker wave 0.5 s later (0.4 a), w = 0.22,
+  // c = 1.1 per s (1.6 when working). Values above 1.0 are red.
+  function bodyCrash(ctx) {
+    const { THREE } = ctx;
+    const nu = ctx.fine ? 32 : 24, nv = ctx.fine ? 16 : 12;
+    const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
+    const R = revolve(THREE, prof, nu, (lat, phi) => {
+      const q = superDir(latDir(THREE, lat, phi), 4);
+      return new THREE.Vector3(q.x * 0.97, q.y * 0.92, q.z * 0.92);
+    });
+    const P0 = R.pts;
+    const fe = feMesh(THREE, P0, R.elems);
+    const N0 = fe.nn.map((v) => v.clone());
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.8, self: 0.5 });
+    // impact points: straight on the lower front, or the front right corner
+    // (offset impact, mismatch)
+    const IMPACT = {
+      centre: fe.surface(new THREE.Vector3(0, -0.74, 0.68)),
+      offset: fe.surface(new THREE.Vector3(0.66, -0.55, 0.52)),
+    };
+    const DENT = { depth: 0.055, radius: 0.3 };
+    const W_WAVE = 0.22;
+    const cWave = (s) => (s === "working" ? 1.6 : 1.1);
+    const cycle = (s) => (s === "working" ? 1.6 : 2.6);
+    const tauOf = (t, s) => (((t % cycle(s)) + cycle(s)) % cycle(s));
+    const ampOf = (t, s) => (s === "working" ? 0.75 + 0.35 * ramp(t) : 0.85);
+    const shapes = {};
+    const shapeFor = (key) => {
+      if (shapes[key]) return shapes[key];
+      const I = IMPACT[key].point;
+      const d = P0.map((p) => p.distanceTo(I));
+      const P = P0.map((p, i) => {
+        const f = Math.max(0, 1 - (d[i] / DENT.radius) ** 2);
+        return p.clone().addScaledVector(N0[i], -DENT.depth * f * f);
+      });
+      shapes[key] = { I, n: IMPACT[key].normal.clone().normalize(), d, P };
+      return shapes[key];
+    };
+    const keyOf = (s) => (s === "mismatch" ? "offset" : "centre");
+    const vals = (t, s) => {
+      const S = shapeFor(keyOf(s));
+      const tau = tauOf(t, s), a = ampOf(t, s);
+      const c = cWave(s);
+      const wave = (d, tt) => (tt < 0 ? 0 : Math.exp(-(((d - c * tt) / W_WAVE) ** 2)) * Math.exp(-d / 3));
+      return S.d.map((d) => 0.3 * Math.exp(-((d / 0.25) ** 2)) + a * wave(d, tau) + 0.4 * a * wave(d, tau - 0.5));
+    };
+    // shock rings: three ripples running out from the impact point
+    const ringMats = [];
+    const rings = [0, 1, 2].map(() => {
+      const m = new THREE.MeshBasicMaterial({ color: C.ink, transparent: true, opacity: 0.8, depthWrite: false });
+      ctx.inkMats.push({ mat: m, paper: C.ink, night: C.onNightSoft });
+      ringMats.push(m);
+      const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 6, 48), m);
+      group.add(r);
+      return r;
+    });
+    // deceleration pulse beside the left foot (stays on the ground)
+    const ground = new THREE.Group();
+    const X0 = -1.42, X1 = -0.74, Y0 = 0.06, Y1 = 0.46, ZP = 0.62, TP = 0.9;
+    const axisMat = new THREE.MeshBasicMaterial({ color: C.ink });
+    ctx.inkMats.push({ mat: axisMat, paper: C.ink, night: C.onNightSoft });
+    ground.add(rodBetween(THREE, new THREE.Vector3(X0, Y0, ZP), new THREE.Vector3(X1 + 0.04, Y0, ZP), 0.009, axisMat, 6));
+    ground.add(rodBetween(THREE, new THREE.Vector3(X0, Y0, ZP), new THREE.Vector3(X0, Y1 + 0.03, ZP), 0.009, axisMat, 6));
+    // pulse: g = sin(pi tau / 0.7)^2 (1 + 0.15 sin(14 tau)) for tau < 0.7, then 0
+    const pulse = (tau) => (tau < 0.7 ? Math.sin((Math.PI * tau) / 0.7) ** 2 * (1 + 0.15 * Math.sin(14 * tau)) : 0);
+    const gMax = Math.max(...Array.from({ length: 141 }, (_, i) => pulse(i * 0.005)));
+    const plotPt = (tau) => new THREE.Vector3(X0 + 0.015 + (Math.min(tau, TP) / TP) * (X1 - X0 - 0.03), Y0 + 0.02 + (pulse(Math.min(tau, TP)) / gMax) * (Y1 - Y0 - 0.04), ZP);
+    const curve = Array.from({ length: 46 }, (_, i) => plotPt((i / 45) * TP));
+    const curveMat = new THREE.MeshBasicMaterial({ color: C.miss });
+    ground.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve), 90, 0.014, 6, false), curveMat));
+    const nowDot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 10), axisMat);
+    ground.add(nowDot);
+    let lastKey = null;
+    return {
+      group, ground, top: P0[P0.length - 1].clone(),
+      surface: (d) => fe.surface(d),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `殻の要素 ${fe.elemCount} · 輪 = 衝撃 · 左下 = 減速度`,
+      update(t, s) {
+        const key = keyOf(s);
+        const S = shapeFor(key);
+        if (key !== lastKey) {
+          fe.setNodes(S.P);
+          lastKey = key;
+        }
+        fe.setValues(vals(t, s));
+        const tau = tauOf(t, s);
+        const rate = s === "working" ? 1.4 : 0.8;
+        rings.forEach((r, k) => {
+          const f = (((t * rate + k / 3) % 1) + 1) % 1;
+          const rad = 0.06 + 0.38 * f;
+          r.position.copy(S.I).addScaledVector(S.n, 0.05 + 0.12 * f);
+          r.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), S.n);
+          r.scale.set(rad, rad, rad);
+          ringMats[k].opacity = 0.9 * (1 - f);
+        });
+        nowDot.position.copy(plotPt(tau));
+      },
+      contour(t, s) {
+        const tau = tauOf(t, s);
+        const info = [s === "mismatch" ? "右の角に当たった (オフセット、食い違い)" : "前の下に当たった (正面)", `当たってから ${tau.toFixed(2)} 秒 · 応力の波が広がる` + (s === "working" ? " (くり返し)" : "")];
+        return Object.assign(stats(vals(t, s)), { info });
+      },
+    };
+  }
+
+  // nvh: an eigenmode. The mesh moves with an exaggerated mode shape
+  // w = A Y(n) cos(omega t) along the normal; the undeformed mesh stays as
+  // faint lines. Displacement = |w| / A_max.
+  function bodyNvh(ctx) {
+    const { THREE } = ctx;
+    const ico = new THREE.IcosahedronGeometry(1, ctx.fine ? 3 : 2);
+    ico.rotateX(-Math.atan2((1 + Math.sqrt(5)) / 2, 1));
+    const w = weld(ico.attributes.position.array);
+    ico.dispose();
+    const dirs = w.nodes.map((n) => new THREE.Vector3(n[0], n[1], n[2]).normalize());
+    const P0 = dirs.map((d) => shapePoint(THREE, d));
+    const MODES = {
+      // (2,2)-like: wider <-> taller, seen from the front
+      a: (d) => d.x * d.x - d.y * d.y,
+      // (3,3)-like: three lobes around the view axis
+      b: (d) => d.x * (d.x * d.x - 3 * d.y * d.y),
+    };
+    const shape = {};
+    for (const k of Object.keys(MODES)) {
+      const raw = dirs.map(MODES[k]);
+      const m = Math.max(...raw.map(Math.abs));
+      shape[k] = raw.map((v) => v / m);
+    }
+    const AMAX = 0.17;
+    const motion = (t, s) => {
+      if (s === "working") return { mode: "a", amp: 0.05 + 0.12 * ramp(t), f: 1.25 };
+      if (s === "mismatch") return { mode: "b", amp: 0.11, f: 0.8 };
+      return { mode: "a", amp: s === "pass" ? 0.11 : 0.1, f: 0.62 };
+    };
+    const solve = (t, s) => {
+      const mo = motion(t, s);
+      const c = Math.cos(TAU * mo.f * t);
+      const Y = shape[mo.mode];
+      return {
+        P: P0.map((p, i) => p.clone().addScaledVector(dirs[i], mo.amp * Y[i] * c)),
+        // colour: displacement amplitude of the mode at each node
+        v: Y.map((y) => (Math.abs(y) * mo.amp) / AMAX),
+        mo,
+      };
+    };
+    const fe = feMesh(THREE, P0, w.tris.map((t) => ({ n: t })));
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.6, self: 0.5, opacity: 0.86 });
+    // undeformed shape: faint lines
+    const lp = [];
+    for (const [i, j] of fe.edges) lp.push(P0[i].x, P0[i].y, P0[i].z, P0[j].x, P0[j].y, P0[j].z);
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute("position", new THREE.Float32BufferAttribute(lp, 3));
+    const ghostMat = new THREE.LineBasicMaterial({ color: C.ink, transparent: true, opacity: 0.55, depthWrite: false });
+    ctx.inkMats.push({ mat: ghostMat, paper: C.ink, night: C.onNightSoft });
+    const ghost = new THREE.LineSegments(lg, ghostMat);
+    ghost.scale.setScalar(1.004);
+    group.add(ghost);
+    const topIdx = P0.reduce((b, p, i) => (p.y > P0[b].y ? i : b), 0);
+    const body = {
+      group, deforms: true, top: P0[topIdx].clone(),
+      surface: (d) => fe.surface(d),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} · 薄い線 = 変形前`,
+      update(t, s) {
+        const r = solve(t, s);
+        fe.setNodes(r.P);
+        fe.setValues(r.v);
+        body.top.copy(r.P[topIdx]);
+      },
+      contour(t, s) {
+        const r = solve(t, s);
+        const info = [s === "mismatch" ? "別のモード (3 つの山) が出た (食い違い)" : "2 次のモード (横長 ⇄ 縦長)", `振幅 ${(r.mo.amp / AMAX).toFixed(2)} · ${r.mo.f.toFixed(2)} 回/秒 (誇張)`];
+        return Object.assign(stats(r.v), { info });
+      },
+    };
+    return body;
+  }
+
+  // thermal: heated from below. Steady: a fin with convection,
+  // T = cosh(mL (1 - s)) / cosh(mL), s = height fraction from the bottom.
+  // Working: transient heating, T = erfc(s / (2 sqrt(kt))). Band borders are
+  // drawn as isotherms; heat lines rise around the body.
+  function bodyThermal(ctx) {
+    const { THREE } = ctx;
+    const nu = ctx.fine ? 24 : 16, nv = ctx.fine ? 16 : 12;
+    const prof = Array.from({ length: nv + 1 }, (_, j) => -Math.PI / 2 + (Math.PI * j) / nv);
+    const R = revolve(THREE, prof, nu, (lat, phi) => {
+      const p = shapePoint(THREE, latDir(THREE, lat, phi), 0.16);
+      p.y = Math.max(p.y, -0.86) * 1.0;
+      return p;
+    });
+    const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.22, iso: 1, self: 0.5, rough: 0.5 });
+    const ys = R.pts.map((p) => p.y);
+    const y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sOf = (y) => (y - y0) / (y1 - y0);
+    const ML = 1.3;
+    const steady = (s) => Math.cosh(ML * (1 - s)) / Math.cosh(ML);
+    const HOT = new THREE.Vector3(0.82, 0.05, 0.42);
+    const temp = (p, t, st) => {
+      const s = sOf(p.y);
+      if (st === "working") return erfc(s / (2 * Math.sqrt(0.012 + 0.5 * ramp(t))));
+      let T = steady(s);
+      if (st === "mismatch") T += 0.75 * Math.exp(-p.distanceToSquared(HOT) / 0.12);
+      return T;
+    };
+    const vals = (t, s) => R.pts.map((p) => temp(p, t, s));
+    // rising heat lines around the body (air cooling as it rises)
+    const starts = [[-1.12, -0.35, 0.15, 1.6], [1.12, 0.42, -0.15, 1.15], [-0.62, 0.72, -0.5, 1.35], [0.58, 0.8, -0.55, 1.3], [0.0, 1.0, -0.72, 1.05]];
+    const paths = starts.map(([x0, ys0, z0, len], k) => {
+      const pts = [], v = [];
+      const n = 16;
+      for (let i = 0; i <= n; i++) {
+        const f = i / n;
+        pts.push(new THREE.Vector3(x0 + 0.07 * Math.sin(f * 9 + k * 1.7), ys0 + f * len, z0 + 0.04 * Math.cos(f * 7 + k)));
+        v.push(0.78 - 0.5 * f);
+      }
+      return { pts, vals: v, s0: k * 0.41 };
+    });
+    const flowMat = flowMaterial(THREE, ctx.U, { speed: 0.55, dens: 2.0, duty: 0.6 });
+    ctx.flowMats.push(flowMat);
+    const lines = new THREE.Mesh(tubes(THREE, paths, 0.02, 5), flowMat);
+    lines.frustumCulled = false;
+    group.add(lines);
+    return {
+      group, surface: (d) => fe.surface(d), top: R.pts[R.pts.length - 1].clone(),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `節点 ${fe.nodeCount} · 要素 ${fe.elemCount} · 線 = 等温線`,
+      update(t, s) {
+        fe.setValues(vals(t, s));
+        const f = flowMat.userData.flow;
+        f.uSpeed.value = s === "working" ? 1.1 : 0.55;
+        f.uGain.value = s === "working" ? 0.35 + 0.65 * ramp(t) : 1;
+      },
+      contour(t, s) {
+        const info = s === "working" ? [`下から温まっている ${Math.round(ramp(t) * 100)} %`, "非定常の熱伝導 (erfc)"] : s === "mismatch" ? ["右の脇に熱だまり (食い違い)", "下から加熱・まわりへ放熱"] : ["下から加熱・まわりへ放熱 (定常)", "線 = 等温線"];
+        return Object.assign(stats(vals(t, s)), { info });
+      },
+    };
+  }
+
+  // powertrain: an engine combustion chamber with a battery cell pack beside
+  // it. The upper body is the gas in the cylinder (domed head, straight
+  // liner); the lower body is the piston with ring grooves. A spark plug on
+  // the head lights a flame that spreads through the gas, like the
+  // temperature of a combustion CFD run. Progress at a node,
+  // c = (1 - tanh((d - rf (1 + wrinkle)) / 0.08)) / 2 (d = distance to the
+  // plug, rf = flame radius growing over the burn), T = Tu + (Tb - Tu) c with
+  // Tu = 0.1 and Tb = 0.82 + 0.16 (1 - d / dmax) (gas burnt early is hotter).
+  // Mismatch adds an auto-ignition hot spot in the end gas (knock).
+  function bodyPowertrain(ctx) {
+    const { THREE, role } = ctx;
+    const RC = 0.86, DZ = 0.93, F = 0.18;
+    const YT = 0.9, YD = 0.76, YP = -0.3, YB = -0.86;
+    // profile from the head centre (top pole) down to the piston crown centre
+    const prof = [];
+    const capN = 4, filN = 3, sideN = ctx.fine ? 8 : 6;
+    // domed head: y = YD + (YT - YD) (1 - (r / (RC - F))^2)
+    for (let k = 0; k <= capN; k++) {
+      const r = ((RC - F) * k) / capN;
+      prof.push({ r, y: YD + (YT - YD) * (1 - (r / (RC - F)) ** 2) });
+    }
+    for (let k = 1; k <= filN; k++) { const a = (Math.PI / 2) * (k / filN); prof.push({ r: RC - F + F * Math.sin(a), y: YD - F + F * Math.cos(a) }); }
+    for (let k = 1; k < sideN; k++) prof.push({ r: RC, y: YD - F - ((YD - F - YP) * k) / sideN });
+    prof.push({ r: RC, y: YP });
+    for (let k = 1; k <= 3; k++) prof.push({ r: RC * (1 - k / 3), y: YP });
+    prof.reverse(); // bottom pole first, as revolve expects
+    const nu = ctx.fine ? 28 : 20;
+    const map = (p, phi) => new THREE.Vector3(p.r * Math.sin(phi), p.y, p.r * Math.cos(phi) * DZ);
+    const R = revolve(THREE, prof, nu, map);
+    const fe = feMesh(THREE, R.pts, R.elems, { smooth: true });
+    const group = new THREE.Group();
+    addFe(ctx, group, fe, { line: 0.3, iso: 1, self: 0.5, rough: 0.45 });
+    // piston below the gas: skirt, ring grooves, pin boss
+    const metal = ctx.M.metal;
+    const piston = new THREE.Mesh(new THREE.CylinderGeometry(RC * 0.975, RC * 0.975, YP - YB - 0.015, nu * 2), metal);
+    piston.scale.z = DZ;
+    piston.position.y = (YP + YB) / 2 - 0.0075;
+    piston.castShadow = true;
+    piston.userData.body = true;
+    group.add(piston);
+    addHull(THREE, piston, 0.035, ctx.hulls);
+    const grooveMat = ctx.M.ink;
+    for (const y of [YP - 0.08, YP - 0.15, YP - 0.22]) {
+      const g = new THREE.Mesh(new THREE.TorusGeometry(RC * 0.978, 0.013, 6, nu * 2), grooveMat);
+      g.rotation.x = Math.PI / 2;
+      g.scale.y = DZ;
+      g.position.y = y;
+      group.add(g);
+    }
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 20), ctx.M.inkSoft);
+    boss.rotation.x = Math.PI / 2;
+    boss.position.set(0, -0.6, RC * 0.975 * DZ + 0.005);
+    group.add(boss);
+    // spark plug on the head, off the centre (the antenna is on the centre)
+    const PX = -0.34, PZ = 0.16;
+    const headY = (x, z) => {
+      const r = Math.hypot(x, z / DZ);
+      return YD + (YT - YD) * (1 - (r / (RC - F)) ** 2);
+    };
+    const plugY = headY(PX, PZ);
+    const plug = new THREE.Group();
+    plug.position.set(PX, plugY, PZ);
+    group.add(plug);
+    const hex = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 6), metal);
+    hex.position.y = 0.035;
+    plug.add(hex);
+    addHull(THREE, hex, 0.014, ctx.hulls);
+    const ins = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.16, 16), ctx.M.paper);
+    ins.position.y = 0.15;
+    plug.add(ins);
+    addHull(THREE, ins, 0.014, ctx.hulls);
+    const capT = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.05, 12), ctx.M.ink);
+    capT.position.y = 0.255;
+    plug.add(capT);
+    // battery cells strapped on the left of the piston (hybrid)
+    const cellMat = std(THREE, C.paper, 0.6);
+    const band = std(THREE, role.color, 0.45);
+    const cells = new THREE.Group();
+    group.add(cells);
+    [0.2, -0.06].forEach((z) => {
+      const x = -RC - 0.1;
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.42, 20), cellMat);
+      c.position.set(x, (YP + YB) / 2 - 0.03, z);
+      c.castShadow = true;
+      cells.add(c);
+      addHull(THREE, c, 0.016, ctx.hulls);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.102, 0.102, 0.1, 20), band);
+      b.position.copy(c.position);
+      cells.add(b);
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 12), metal);
+      tip.position.set(x, c.position.y + 0.23, z);
+      cells.add(tip);
+    });
+    const bus = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.34), ctx.M.ink);
+    bus.position.set(-RC - 0.1, (YP + YB) / 2 - 0.03 + 0.255, 0.07);
+    cells.add(bus);
+
+    // flame
+    const P0 = new THREE.Vector3(PX, plugY - 0.02, PZ);
+    const dist = R.pts.map((p) => p.distanceTo(P0));
+    const dmax = Math.max(...dist);
+    const wr = R.pts.map((p) => {
+      const v = p.clone().sub(P0);
+      const phi = Math.atan2(v.z, v.x), th = Math.atan2(v.y, Math.hypot(v.x, v.z));
+      return 0.1 * Math.sin(5 * phi + 1.3) * Math.sin(3 * th + 0.7);
+    });
+    const KNOCK = new THREE.Vector3(0.66, -0.12, 0.42);
+    const cycle = (s) => (s === "working" ? { P: 1.6, burn: 1.1 } : { P: 3.0, burn: 2.0 });
+    const progress = (t, s) => {
+      const c = cycle(s);
+      const tau = ((t % c.P) + c.P) % c.P;
+      return Math.min(1, tau / c.burn);
+    };
+    const vals = (t, s) => {
+      const rf = 1.12 * dmax * progress(t, s);
+      return R.pts.map((p, i) => {
+        const c = 0.5 * (1 - Math.tanh((dist[i] - rf * (1 + wr[i])) / 0.08));
+        const Tb = 0.82 + 0.16 * (1 - dist[i] / dmax);
+        let T = 0.1 + (Tb - 0.1) * c;
+        if (s === "mismatch") T += 1.0 * Math.exp(-p.distanceToSquared(KNOCK) / 0.06);
+        return T;
+      });
+    };
+    const sparkMat = new THREE.MeshBasicMaterial({ color: C.s[3] });
+    const spark = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 1), sparkMat);
+    spark.position.copy(P0).add(new THREE.Vector3(0, 0.005, 0));
+    group.add(spark);
+    return {
+      group, surface: (d) => fe.surface(d), top: new THREE.Vector3(0, YT, 0),
+      counts: { nodes: fe.nodeCount, elements: fe.elemCount },
+      caption: `節点 ${fe.nodeCount} · 線 = 等温線 · ピストンと電池のセル`,
+      update(t, s) {
+        fe.setValues(vals(t, s));
+        const p = progress(t, s);
+        spark.visible = p < 0.25;
+      },
+      contour(t, s) {
+        const p = progress(t, s);
+        const info = [`火炎が燃焼室の ${Math.round(Math.min(1, p * 1.12) * 100)} % まで広がった` + (s === "working" ? " (速い回転)" : ""), s === "mismatch" ? "奥で自己着火 (ノッキング、食い違い)" : "点火プラグから火炎面が広がる"];
+        return Object.assign(stats(vals(t, s)), { info });
+      },
+    };
+  }
+
+  // Mix two 0xRRGGBB colours, f = share of b.
+  function mixHex(a, b, f) {
+    const ch = (x, s) => (x >> s) & 255;
+    const m = (s) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * f);
+    return (m(16) << 16) | (m(8) << 8) | m(0);
+  }
+  const hexNum = (h) => parseInt(h.slice(1), 16);
+
+  // designer: a CAD model, not an analysis result. A block with a fillet of
+  // radius r on every edge (roundedBox), in one calm colour (grey blue:
+  // --ink-faint with 30 % of --s1), lit smoothly; the tangent edges of the
+  // fillets are drawn as edge lines and the flat faces carry faint
+  // iso-parameter lines (thirds), as a CAD viewer shows a part. No contour,
+  // no mesh lines, no legend. The design parameter is the fillet radius
+  // r = 0.30. Working: r is being changed (0.30 +- 0.12, 4.4 s); mismatch:
+  // r is off the design value (0.10) and the edge lines turn red.
+  function bodyDesigner(ctx) {
+    const { THREE } = ctx;
+    const HALF = new THREE.Vector3(0.96, 0.92, 0.84);
+    const R0 = 0.3;
+    const RB = roundedBox(THREE, 3, 6, [2, 4]);
+    const first = RB.place(HALF, R0);
+    const fe = feMesh(THREE, first.P, RB.elems, { smooth: true, normals: first.N });
+    const group = new THREE.Group();
+    const mat = cadMaterial(THREE, ctx.U, { color: mixHex(C.inkFaint, C.s[0], 0.3), rough: 0.38, metal: 0.1 });
+    const mesh = new THREE.Mesh(fe.geom, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    mesh.userData.body = true;
+    group.add(mesh);
+    const hull = new THREE.Mesh(fe.hullGeom, null);
+    hull.userData.hullWidth = 0.035;
+    hull.frustumCulled = false;
+    group.add(hull);
+    ctx.hulls.push(hull);
+    const edgeCol = mat.userData.cad.uEdgeCol.value;
+    const radius = (t, s) => (s === "working" ? R0 + 0.12 * Math.sin((TAU * t) / 4.4) : s === "mismatch" ? 0.1 : R0);
+    let last = R0;
+    return {
+      group, deforms: true, top: new THREE.Vector3(0, HALF.y, 0),
+      surface: (d) => fe.surface(d),
+      counts: { faces: 26, nodes: fe.nodeCount },
+      caption: "CAD のモデル · 面 26 (平面 6・フィレット 12・角 8) · 線 = 面の境とパラメータの線",
+      update(t, s) {
+        const r = radius(t, s);
+        if (r !== last) {
+          const p = RB.place(HALF, r);
+          fe.setNodes(p.P, p.N);
+          last = r;
+        }
+        edgeCol.setHex(s === "mismatch" ? C.miss : C.ink);
+      },
+      contour(t, s) {
+        const r = radius(t, s);
+        const info = [`フィレットの半径 r = ${r.toFixed(2)}` + (s === "working" ? " (動かしている)" : ""), s === "mismatch" ? "r が設計の値 0.30 からずれた (食い違い)" : "色は面の色 (コンターではない)"];
+        return { info };
+      },
+    };
+  }
+
+  // packager: one assembled unit, no contour. Three parts with one rounded
+  // outline stacked so that they fit (seams 0.006): a base plate and a lid
+  // in one colour (--s4 mixed half with --paper) and the case between them
+  // in the role colour mixed half with --paper (two colours, plus the metal
+  // of the screws). Four cap screws in a square on the lid.
+  // Working: the screws are driven (two turns) and the lid seats, its gap
+  // closing from 0.05 to the seam. Mismatch: the lid sits shifted and tilted
+  // and one screw is red and tilted.
+  function bodyPackager(ctx) {
+    const { THREE, role } = ctx;
+    const SEAM = 0.006;
+    const sand = mixHex(C.s[3], C.paper, 0.5);
+    const lilac = mixHex(hexNum(role.color), C.paper, 0.5);
+    // extruded rounded rectangle, half sizes hx / hz, corner radius rc,
+    // height h, rounded (bevelled) edges; centred at the origin, axis y
+    const slab = (hx, hz, rc, h, bevel) => {
+      const s = new THREE.Shape();
+      const x = hx - bevel, z = hz - bevel, r = rc - bevel;
+      s.moveTo(-x + r, -z);
+      s.lineTo(x - r, -z);
+      s.absarc(x - r, -z + r, r, -Math.PI / 2, 0, false);
+      s.lineTo(x, z - r);
+      s.absarc(x - r, z - r, r, 0, Math.PI / 2, false);
+      s.lineTo(-x + r, z);
+      s.absarc(-x + r, z - r, r, Math.PI / 2, Math.PI, false);
+      s.lineTo(-x, -z + r);
+      s.absarc(-x + r, -z + r, r, Math.PI, 1.5 * Math.PI, false);
+      const g = new THREE.ExtrudeGeometry(s, { depth: h - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 });
+      g.rotateX(-Math.PI / 2);
+      g.translate(0, bevel - h / 2, 0);
+      g.computeVertexNormals();
+      return g;
+    };
+    const Y0 = -0.93, Y1 = -0.77, Y2 = 0.5, Y3 = 0.86;
+    const parts = [
+      { name: "base", g: slab(1.0, 0.9, 0.36, Y1 - Y0, 0.03), y: (Y0 + Y1) / 2, color: sand },
+      { name: "case", g: slab(0.92, 0.82, 0.3, Y2 - Y1 - SEAM, 0.035), y: (Y1 + SEAM + Y2) / 2, color: lilac },
+      { name: "lid", g: slab(0.92, 0.82, 0.3, Y3 - Y2 - SEAM, 0.05), y: (Y2 + SEAM + Y3) / 2, color: sand },
+    ];
+    const group = new THREE.Group();
+    for (const p of parts) {
+      p.obj = new THREE.Group();
+      p.obj.position.y = p.y;
+      group.add(p.obj);
+      const mesh = new THREE.Mesh(p.g, std(THREE, p.color, 0.5, 0.04));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.body = true;
+      p.obj.add(mesh);
+      addHull(THREE, mesh, 0.03, ctx.hulls);
+    }
+    const [, kase, lid] = parts;
+    const lidH = Y3 - Y2 - SEAM;
+    // cap screws: head on the lid, hex socket on top
+    const metal = ctx.M.metal;
+    const red = std(THREE, C.miss, 0.45);
+    const screws = [[-0.6, 0.5], [0.6, 0.5], [-0.6, -0.5], [0.6, -0.5]].map(([x, z]) => {
+      const g = new THREE.Group();
+      g.position.set(x, lidH / 2, z);
+      lid.obj.add(g);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 24), metal);
+      head.position.y = 0.025;
+      head.castShadow = true;
+      g.add(head);
+      addHull(THREE, head, 0.012, ctx.hulls);
+      const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.012, 6), ctx.M.ink);
+      socket.position.y = 0.051;
+      g.add(socket);
+      return { g, head };
+    });
+    const gapOf = (t, s) => (s === "working" ? 0.05 * (1 - ramp(t)) : 0);
+    const place = (t, s) => {
+      const mis = s === "mismatch";
+      lid.obj.position.set(mis ? 0.07 : 0, lid.y + gapOf(t, s) + (mis ? 0.035 : 0), 0);
+      lid.obj.rotation.set(0, 0, mis ? -0.07 : 0);
+      screws.forEach((k, i) => {
+        k.g.rotation.set(0, s === "working" ? -TAU * 2 * ramp(t) + i : i, mis && i === 1 ? -0.35 : 0);
+        k.head.material = mis && i === 1 ? red : metal;
+      });
+    };
+    place(0, "idle");
+    const caseAt = new THREE.Vector3(0, kase.y, 0);
+    return {
+      group, antennaAnchor: lid.obj, top: new THREE.Vector3(0, lidH / 2, 0),
+      surface: geomSurface(THREE, kase.g, caseAt),
+      parts: parts.map((p) => ({ name: p.name, color: "#" + p.color.toString(16).padStart(6, "0") })),
+      counts: { parts: 3, screws: 4 },
+      caption: "部品 3 (台・ケース・ふた) · ねじ 4 · ぴったり組んだ組み立て品 (色 = 部品)",
+      update(t, s) { place(t, s); },
+      contour(t, s) {
+        const info = [s === "working" ? `ねじを締めている · ふたの隙間 ${gapOf(t, s).toFixed(2)}` : s === "mismatch" ? "ふたがずれて入らない (食い違い)" : "部品がぴったり合わさっている", "色は部品ごと (コンターではない)"];
+        return { info };
+      },
+    };
+  }
+
+  // handling: a multibody (mechanism) model of the car. The body is the
+  // chassis, one rigid body (rounded box). On each side a double wishbone:
+  // upper and lower A-arms on revolute joints at the chassis (short
+  // cylinders along the car), ball joints (spheres) at the knuckle, the
+  // knuckle carrying the wheel on its spindle, and a coil spring around a
+  // damper from the lower arm to the chassis. Each rigid body has its own
+  // calm colour; the springs take the band colour of their force (the
+  // contour of this role). On the front of the chassis a small x / y / z
+  // triad at the height of the centre of gravity and a red arrow for the
+  // lateral acceleration.
+  // Lateral acceleration a(t): idle = 0.45 sin(2 pi t / 3.2); working = a
+  // double lane change (4.4 s, peak 1); mismatch = a steady corner
+  // beyond the limit, 1.3 + 0.06 sin(2 pi t / 1.6). The chassis rolls 0.1 a toward the outside of the corner
+  // (torso roll); the wheels and knuckles stay on the ground and the links
+  // follow their joints. Spring force (relative) F = 0.5 - 0.35 a sx
+  // (sx = +1 on the prop side), 0.5 = the static share; when F < 0.12 the
+  // inner wheel lifts by 0.1 (0.12 - F) / 0.06 (up to 0.1).
+  function bodyHandling(ctx) {
+    const { THREE } = ctx;
+    const HALF = new THREE.Vector3(0.66, 0.92, 0.8);
+    const RB = roundedBox(THREE, 3, 4, []);
+    const first = RB.place(HALF, 0.3);
+    const fe = feMesh(THREE, first.P, RB.elems, { smooth: true, normals: first.N });
+    const group = new THREE.Group();
+    const chassis = new THREE.Mesh(fe.geom, std(THREE, mixHex(C.s[2], C.paper, 0.5), 0.5, 0.04));
+    chassis.castShadow = true;
+    chassis.receiveShadow = true;
+    chassis.frustumCulled = false;
+    chassis.userData.body = true;
+    group.add(chassis);
+    const hull = new THREE.Mesh(fe.hullGeom, null);
+    hull.userData.hullWidth = 0.035;
+    hull.frustumCulled = false;
+    group.add(hull);
+    ctx.hulls.push(hull);
+
+    const bump = (u, a, b) => {
+      const v = (u - a) / (b - a);
+      return v < 0 || v > 1 ? 0 : 1 - 2 * v;
+    };
+    const dlcA = (u) => bump(u, 0, 0.25) - bump(u, 0.45, 0.7);
+    const accel = (t, s) => {
+      const u = (((t % 4.4) + 4.4) % 4.4) / 4.4;
+      if (s === "working") return dlcA(u);
+      // mismatch: a steady corner beyond the limit, the inner wheel lifts
+      if (s === "mismatch") return 1.3 + 0.06 * Math.sin((TAU * t) / 1.6);
+      return 0.45 * Math.sin((TAU * t) / 3.2);
+    };
+    const ROLL = 0.1;
+    const force = (a, sx) => Math.max(0, 0.5 - 0.35 * a * sx);
+    const lift = (F) => 0.1 * clamp((0.12 - F) / 0.06, 0, 1);
+
+    // CG triad and lateral acceleration arrow on the front of the chassis
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const O = V(0, -0.42, HALF.z + 0.012);
+    const triad = new THREE.Group();
+    triad.position.copy(O);
+    group.add(triad);
+    const axisCol = [C.s[4], C.pass, C.s[0]];
+    [V(1, 0, 0), V(0, 1, 0), V(0, 0, 1)].forEach((d, k) => {
+      const m = new THREE.MeshBasicMaterial({ color: axisCol[k] });
+      triad.add(rodBetween(THREE, V(0, 0, 0), d.clone().multiplyScalar(0.17), 0.016, m, 8));
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.08, 12), m);
+      tip.position.copy(d).multiplyScalar(0.2);
+      tip.quaternion.setFromUnitVectors(V(0, 1, 0), d);
+      triad.add(tip);
+    });
+    const cgDot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 10), ctx.M.ink);
+    triad.add(cgDot);
+    const red = new THREE.MeshBasicMaterial({ color: C.miss });
+    const ay = new THREE.Group();
+    ay.position.set(0, -0.66, HALF.z + 0.05);
+    group.add(ay);
+    const ayRod = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 1, 10), red);
+    ayRod.rotation.z = -Math.PI / 2;
+    const ayHead = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 14), red);
+    ayHead.rotation.z = -Math.PI / 2;
+    ay.add(ayRod, ayHead);
+
+    // suspension (in the frame of the feet: not rolled with the chassis)
+    const susp = new THREE.Group();
+    const Z0 = -0.2;
+    const armMat = std(THREE, mixHex(C.s[0], C.paper, 0.2), 0.45, 0.1);
+    const knuckleMat = std(THREE, mixHex(C.s[3], C.paper, 0.35), 0.5, 0.05);
+    const tyreMat = std(THREE, C.inkSoft, 0.8);
+    const damperMat = std(THREE, C.inkSoft, 0.4, 0.3);
+    const jointMat = ctx.M.ink;
+    const metal = ctx.M.metal;
+    // outline shell as a child, so it follows a link that moves
+    const childHull = (m, w) => {
+      const h = new THREE.Mesh(smoothCopy(THREE, m.geometry), null);
+      h.userData.hullWidth = w;
+      m.add(h);
+      ctx.hulls.push(h);
+    };
+    const unitRod = (r, mat, radial) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, radial || 10), mat);
+      m.castShadow = true;
+      susp.add(m);
+      return m;
+    };
+    const Y = V(0, 1, 0);
+    const spanRod = (m, a, b) => {
+      const d = b.clone().sub(a);
+      m.position.copy(a).addScaledVector(d, 0.5);
+      m.scale.set(1, Math.max(1e-3, d.length()), 1);
+      m.quaternion.setFromUnitVectors(Y, d.normalize());
+    };
+    // coil spring of unit length along y (6 turns)
+    const coil = [];
+    for (let i = 0; i <= 120; i++) {
+      const u = i / 120;
+      coil.push(V(0.055 * Math.cos(TAU * 6 * u), u, 0.055 * Math.sin(TAU * 6 * u)));
+    }
+    const coilGeom = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 240, 0.013, 5, false);
+    const sides = [-1, 1].map((sx) => {
+      const S = { sx };
+      // chassis points (body coordinates)
+      S.lowIn = [V(sx * 0.64, -0.8, Z0 + 0.16), V(sx * 0.64, -0.8, Z0 - 0.16)];
+      S.upIn = [V(sx * 0.67, -0.3, Z0 + 0.16), V(sx * 0.67, -0.3, Z0 - 0.16)];
+      S.mount = V(sx * 0.71, 0.08, Z0);
+      // knuckle side (feet frame), before the lift
+      S.wheel = V(sx * 1.29, 0.39, Z0);
+      S.lowBall = V(sx * 1.1, 0.3, Z0);
+      S.upBall = V(sx * 1.06, 0.84, Z0);
+      S.lowArm = [unitRod(0.036, armMat), unitRod(0.036, armMat)];
+      S.upArm = [unitRod(0.03, armMat), unitRod(0.03, armMat)];
+      S.revs = [0, 1, 2, 3].map(() => unitRod(0.05, jointMat, 14));
+      S.balls = [0, 1, 2, 3].map(() => {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), jointMat);
+        susp.add(b);
+        return b;
+      });
+      S.knuckle = unitRod(0.05, knuckleMat, 12);
+      childHull(S.knuckle, 0.012);
+      for (const m of [...S.lowArm, ...S.upArm]) childHull(m, 0.01);
+      S.spindle = unitRod(0.03, knuckleMat, 10);
+      S.tyre = new THREE.Group();
+      susp.add(S.tyre);
+      const tyre = new THREE.Mesh(new THREE.CylinderGeometry(0.39, 0.39, 0.19, 40), tyreMat);
+      tyre.rotation.z = Math.PI / 2;
+      tyre.castShadow = true;
+      S.tyre.add(tyre);
+      addHull(THREE, tyre, 0.02, ctx.hulls);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 32), metal);
+      rim.rotation.z = Math.PI / 2;
+      rim.position.x = sx * 0.098;
+      S.tyre.add(rim);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16), jointMat);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.x = sx * 0.11;
+      S.tyre.add(hub);
+      S.springMat = std(THREE, BAND_COLORS[5], 0.4, 0.1);
+      S.spring = new THREE.Mesh(coilGeom, S.springMat);
+      S.spring.castShadow = true;
+      susp.add(S.spring);
+      S.damper = unitRod(0.032, damperMat, 12);
+      S.rod = unitRod(0.013, metal, 8);
+      return S;
+    });
+    let lastA = 0, lastS = "idle";
+    const lerpV = (a, b, f) => a.clone().lerp(b, f);
+    return {
+      group, hopGroup: susp, top: V(0, HALF.y, 0),
+      surface: (d) => fe.surface(d),
+      shoulders: { R: V(0.62, -0.25, 0.27), L: V(-0.62, -0.27, 0.24) },
+      counts: { bodies: 9, joints: 10 },
+      caption: "剛体 9 · ジョイント 10 · ばねとダンパー 2",
+      roll(t, s) { return ROLL * accel(t, s); },
+      update(t, s) {
+        const a = accel(t, s);
+        lastA = a;
+        lastS = s;
+        const L = 0.25 + 0.45 * Math.min(1.35, Math.abs(a));
+        ay.scale.x = a >= 0 ? 1 : -1;
+        ayRod.scale.y = L - 0.14;
+        ayRod.position.x = (L - 0.14) / 2;
+        ayHead.position.x = L - 0.08;
+        ay.visible = Math.abs(a) > 0.03;
+        for (const S of sides) {
+          const F = force(a, S.sx);
+          const k = Math.min(BANDS - 1, Math.floor(clamp(F, 0, 0.99999) * BANDS));
+          S.springMat.color.set(BAND_COLORS[k]);
+        }
+      },
+      // after the torso has moved: links between the chassis joints (toFeet
+      // maps body coordinates to the feet frame) and the knuckle joints
+      after(toFeet) {
+        for (const S of sides) {
+          const up = V(0, lift(force(lastA, S.sx)), 0);
+          const wheel = S.wheel.clone().add(up), lowBall = S.lowBall.clone().add(up), upBall = S.upBall.clone().add(up);
+          const lowIn = S.lowIn.map(toFeet), upIn = S.upIn.map(toFeet), mount = toFeet(S.mount);
+          const zAx = toFeet(V(0, 0, 1)).sub(toFeet(V(0, 0, 0))).normalize();
+          for (let i = 0; i < 2; i++) {
+            spanRod(S.lowArm[i], lowIn[i], lowBall);
+            spanRod(S.upArm[i], upIn[i], upBall);
+          }
+          [lowIn[0], lowIn[1], upIn[0], upIn[1]].forEach((p, i) => spanRod(S.revs[i], p.clone().addScaledVector(zAx, -0.04), p.clone().addScaledVector(zAx, 0.04)));
+          const low = lerpV(lowIn[0].clone().lerp(lowIn[1], 0.5), lowBall, 0.62);
+          [lowBall, upBall, low, mount].forEach((p, i) => S.balls[i].position.copy(p));
+          spanRod(S.knuckle, lowBall, upBall);
+          const mid = lowBall.clone().lerp(upBall, 0.25);
+          spanRod(S.spindle, mid, wheel);
+          S.tyre.position.copy(wheel);
+          // spring and damper from the lower arm to the chassis mount
+          const d = mount.clone().sub(low);
+          S.spring.position.copy(low);
+          S.spring.scale.set(1, d.length(), 1);
+          S.spring.quaternion.setFromUnitVectors(Y, d.clone().normalize());
+          spanRod(S.damper, low, lerpV(low, mount, 0.55));
+          spanRod(S.rod, low, mount);
+        }
+      },
+      contour(t, s) {
+        const a = accel(t, s);
+        const v = [force(a, -1), force(a, 1)];
+        const info = [s === "working" ? "ダブルレーンチェンジ (解析中)" : s === "mismatch" ? "曲がりすぎて内側の車輪が浮いた (食い違い)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} · ロール ${(ROLL * a).toFixed(3)} rad · 0.5 = 静止の荷重`];
+        return Object.assign(stats(v), { info });
+      },
+    };
+  }
+
+  const BUILDERS = {
+    "fe-sphere": bodyLead,
+    "cad-model": bodyDesigner,
+    "assembly": bodyPackager,
+    "multibody": bodyHandling,
+    "combustion": bodyPowertrain,
+    "flow": bodyAero,
+    "impact-wave": bodyCrash,
+    "stress-concentration": bodyStrength,
+    "mode-shape": bodyNvh,
+    "heat": bodyThermal,
+  };
 
   // Each prop is built around its grip at the origin, about 0.6 units tall.
   function buildProp(THREE, role, M, hulls, live) {
@@ -678,18 +2186,15 @@
   function create(THREE, opts) {
     opts = Object.assign({ role: "lead", mesh: "coarse", edges: true, nodes: true, theme: "paper" }, opts || {});
     const role = ROLES.find((r) => r.id === opts.role) || ROLES[0];
+    const spec = BODIES[role.id];
     const seed = hashString(role.id);
 
     const U = {
       uPal: { value: BAND_COLORS.map((h) => new THREE.Color(h)) },
-      uInk: { value: new THREE.Color(C.ink) },
       uRimColor: { value: new THREE.Color(C.glow) },
       uRim: { value: 0.2 },
-      uSelf: { value: 0.5 },
-      uLoad: { value: 1 },
-      uMis: { value: 0 },
       uLinePx: { value: 1.5 },
-      uEdges: { value: opts.edges ? 1 : 0 },
+      uT: { value: 0 },
     };
 
     const M = {
@@ -720,12 +2225,12 @@
     torso.add(core);
 
     // limb roots in body coordinates (centre of the body at the origin);
-    // the loads of the contour act here
+    // the loads of the stress contours act here
     const legTop = (sx) => new THREE.Vector3(sx * 0.34, PIVOT_Y + 0.22, 0.05);
     const toBody = (p) => p.clone().sub(new THREE.Vector3(0, BODY_Y, 0));
-    const shoulderR = shapePoint(THREE, new THREE.Vector3(0.9, -0.28, 0.3).normalize()).multiplyScalar(0.95);
+    let shoulderR = shapePoint(THREE, new THREE.Vector3(0.9, -0.28, 0.3).normalize()).multiplyScalar(0.95);
     const handR = new THREE.Vector3(1.2, -0.52, 0.36);
-    const shoulderL = shapePoint(THREE, new THREE.Vector3(-0.92, -0.3, 0.25).normalize()).multiplyScalar(0.95);
+    let shoulderL = shapePoint(THREE, new THREE.Vector3(-0.92, -0.3, 0.25).normalize()).multiplyScalar(0.95);
     const handL = new THREE.Vector3(-1.1, -0.6, 0.28);
     // "R" is the prop side (+x) and "L" the other side (-x), as for the arms
     const roots = {
@@ -737,12 +2242,24 @@
       armLenL: shoulderL.distanceTo(handL),
     };
 
-    const B = buildBody(THREE, opts, seed, U, roots, PROP_MASS[role.prop] ?? 0.3);
+    const ctx = {
+      THREE, U, M, opts, role, seed, roots, hulls,
+      fine: opts.mesh === "fine",
+      propMass: PROP_MASS[role.prop] ?? 0.3,
+      contourMats: [], flowMats: [], inkMats: [], dots: [],
+    };
+    const B = BUILDERS[spec.kind](ctx);
     core.add(B.group);
-    B.hull.userData.hullWidth = 0.035;
-    hulls.push(B.hull);
-    B.nodes.material = M.ink;
-    B.nodes.visible = !!opts.nodes;
+    if (B.ground) root.add(B.ground);
+    // parts that stand on the feet and do not roll or lean with the torso
+    if (B.hopGroup) hop.add(B.hopGroup);
+    for (const d of ctx.dots) d.visible = !!opts.nodes;
+    const anchor = B.anchor || B.group;
+    const antAnchor = B.antennaAnchor || anchor;
+    if (B.shoulders) {
+      shoulderR = B.shoulders.R;
+      shoulderL = B.shoulders.L;
+    }
 
     // legs and feet (stay on the ground)
     const legs = new THREE.Group();
@@ -760,19 +2277,13 @@
       legs.add(foot);
     }
 
-    // eyes
+    // eyes, sitting on the body surface (re-placed each frame on bodies that
+    // change shape)
     const eyes = [];
     for (const sx of [-1, 1]) {
-      const d = new THREE.Vector3(sx * 0.28, 0.17, 0.95).normalize();
-      const p = shapePoint(THREE, d);
-      // sit the eye on the flat element it lands on, half turned to that facet
-      const s = B.surface(p);
-      const nrm = new THREE.Vector3(p.x / (SHAPE.sx * SHAPE.sx), p.y / (SHAPE.sy * SHAPE.sy), p.z / (SHAPE.sz * SHAPE.sz)).normalize();
-      nrm.lerp(s.normal, 0.5).normalize();
+      const dir = new THREE.Vector3(sx * 0.28, 0.17, 0.95).normalize();
       const eye = new THREE.Group();
-      eye.position.copy(s.point).addScaledVector(nrm, 0.02);
-      eye.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nrm);
-      core.add(eye);
+      anchor.add(eye);
       const lid = new THREE.Group();
       eye.add(lid);
       const white = new THREE.Mesh(new THREE.SphereGeometry(0.19, 32, 20), M.white);
@@ -792,13 +2303,23 @@
       const shine = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
       shine.position.set(-0.03, 0.04, 0.112);
       pupil.add(shine);
-      eyes.push({ lid, pupil, side: sx });
+      eyes.push({ eye, lid, pupil, side: sx, dir });
+    }
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    function placeFace() {
+      for (const e of eyes) {
+        const s = B.surface(e.dir);
+        if (!s) continue;
+        const nrm = e.dir.clone().lerp(s.normal, 0.5).normalize();
+        e.eye.position.copy(s.point).addScaledVector(nrm, 0.02);
+        e.eye.quaternion.setFromUnitVectors(zAxis, nrm);
+      }
+      antenna.position.copy(B.top);
     }
 
-    // antenna from the top node, tip node in the role colour
+    // antenna from the top of the body, tip in the role colour
     const antenna = new THREE.Group();
-    antenna.position.copy(B.top);
-    core.add(antenna);
+    antAnchor.add(antenna);
     const curve = new THREE.QuadraticBezierCurve3(
       new THREE.Vector3(0, -0.04, 0), new THREE.Vector3(-0.03, 0.3, 0), new THREE.Vector3(0.1, 0.56, 0)
     );
@@ -811,6 +2332,7 @@
     tip.castShadow = true;
     antenna.add(tip);
     addHull(THREE, tip, 0.03, hulls);
+    placeFace();
 
     // arm on +x (the prop hand) holding the prop low, and a short arm on -x
     const armR = capsuleBetween(THREE, shoulderR, handR, 0.06, M.limb, 2, 6);
@@ -864,6 +2386,7 @@
           h.material = m;
         }
       }
+      for (const im of ctx.inkMats) im.mat.color.setHex(night ? im.night : im.paper);
       M.limb.color.setHex(night ? 0x2a2925 : C.ink);
       U.uRim.value = night ? 0.85 : 0.3;
       blob.material.opacity = night ? 0.55 : 0.3;
@@ -875,6 +2398,10 @@
 
     function update(t, state, camera) {
       state = STATES.includes(state) ? state : "idle";
+      U.uT.value = t;
+      B.update(t, state);
+      if (B.deforms || B.anchor) placeFace();
+
       // idle base motion: bob, breathe, antenna sway, blink
       const bob = 0.025 * Math.sin((TAU * t) / 2.6);
       const breathe = Math.sin((TAU * t) / 2.6 + 0.6);
@@ -890,7 +2417,8 @@
       }
       hop.position.y = hopY;
       torso.position.y = PIVOT_Y + (state === "pass" ? 0 : bob);
-      torso.rotation.set(lean, 0, tilt);
+      // bodies that lean by themselves (handling rolls in the corner)
+      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
       const sy = 1 + 0.018 * breathe - squash;
       const sxz = 1 - 0.012 * breathe + squash * 0.6;
       torso.scale.set(sxz, sy, sxz);
@@ -907,9 +2435,6 @@
         e.pupil.position.set(lookX - e.side * 0.008, lookY, 0);
       }
 
-      // contour: load factor (working steps it up), mismatch load case
-      U.uLoad.value = loadFactor(t, state);
-      U.uMis.value = state === "mismatch" ? 1 : 0;
       tipMat.emissiveIntensity = state === "working" ? 0.25 + 0.25 * Math.sin(TAU * t * 1.2) : 0;
 
       check.visible = state === "pass";
@@ -925,6 +2450,12 @@
 
       const s = 1.55 * (1 - hopY * 1.1);
       blob.scale.set(s * 1.25, s, 1);
+
+      // links between the moved torso and the feet frame (handling)
+      if (B.after) {
+        root.updateMatrixWorld(true);
+        B.after((p) => B.hopGroup.worldToLocal(B.group.localToWorld(p.clone())));
+      }
 
       if (live.sock) {
         live.sock.rotation.y = 0.18 * Math.sin((TAU * t) / 1.3);
@@ -946,8 +2477,12 @@
     let showEdges = !!opts.edges, showNodes = !!opts.nodes, px = 50;
     function applyScale() {
       U.uLinePx.value = clamp(px * 0.024, 0.8, 2.4);
-      U.uEdges.value = showEdges ? clamp((px - 6) / 24, 0.3, 1) : 0;
-      B.nodes.visible = showNodes && px >= 20;
+      const k = clamp((px - 6) / 24, 0.3, 1);
+      for (const m of ctx.contourMats) {
+        const hk = m.userData.hk;
+        hk.L.uLineW.value = hk.always || showEdges ? hk.line * k : 0;
+      }
+      for (const d of ctx.dots) d.visible = showNodes && px >= 20;
     }
     function setPixelScale(pxPerUnit) {
       px = pxPerUnit;
@@ -968,20 +2503,23 @@
       });
     }
 
-    // What the contour shows at (t, state): load factor, load case, and the
-    // largest nodal value (1.0 for the settled case by construction).
+    // What the contour shows at (t, state): quantity name, largest and
+    // smallest nodal value, and lines for the legend.
     function contour(t, state) {
       state = STATES.includes(state) ? state : "idle";
-      const load = loadFactor(t, state);
-      const mis = state === "mismatch";
-      const vals = mis ? B.field.mismatch : B.field.settled.map((v) => v * load);
-      return { load, loadCase: mis ? "mismatch" : "settled", max: Math.max(...vals), min: Math.min(...vals) };
+      return Object.assign({ quantity: spec.quantity }, B.contour(t, state));
     }
 
     applyScale();
     update(0, "idle");
-    return { group: root, role, counts: B.counts, field: B.field, update, contour, setPixelScale, setOptions, dispose };
+    return {
+      group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null },
+      counts: B.counts, field: B.field || null,
+      // strength: the tension arrows in body coordinates (frame = the body group)
+      arrows: B.arrows ? B.arrows.map((a) => Object.assign({ frame: B.group }, a)) : null,
+      update, contour, setPixelScale, setOptions, dispose,
+    };
   }
 
-  window.HirakuPets = { ROLES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create };
+  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create };
 })();

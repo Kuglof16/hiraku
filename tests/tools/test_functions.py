@@ -1,6 +1,8 @@
+import importlib
 import unittest
+from unittest import mock
 
-from hiraku.tools import ToolError, rules
+from hiraku.tools import ToolError, check_shelf, rules
 from hiraku.tools.functions import analyze, compare, get_context, list_formulas, list_tools, record_cause, record_prediction
 from hiraku.tools.judge import compute_judgement
 from tests.tools.helpers import RunCase
@@ -292,6 +294,75 @@ class SafeSideTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError) as cm:
             record_cause(self.ctx, self.args(cmp, safe_side=True, safe_side_reason="larger is safer"))
         self.assertIn("基準は なし", str(cm.exception))
+
+
+class MeshTest(RunCase, unittest.TestCase):
+    """A tool with needs_mesh gets the version's shell mesh in params["mesh"], made once and recorded."""
+
+    def setUp(self):
+        super().setUp()
+        # the module analyze imports (sys.modules), even after a test has re-imported the package
+        self.solvers = importlib.import_module("hiraku.solvers")
+
+    @staticmethod
+    def mesh_of(design):
+        return {"design_version": 99, "element_type": "shell", "nodes_mm": [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
+                "elements": [[0, 1, 2]], "element_member": ["m1"], "member_thickness_mm": {"m1": 2.0}}
+
+    def analyze_p1(self):
+        load, force = self.predict_p1()
+        return analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
+                                  "prediction_ids": [force["prediction_id"]]})
+
+    def test_made_once_per_version_and_passed_to_the_tool(self):
+        self.tools["step_climb"].needs_mesh = True
+        made = []
+
+        def frame_mesh(design):
+            made.append(design["design_version"])
+            return self.mesh_of(design)
+
+        with mock.patch.object(self.solvers,"frame_mesh", frame_mesh, create=True):
+            self.analyze_p1()
+            self.analyze_p1()
+        self.assertEqual(made, [1])
+        meshes = self.ctx.store.records("mesh", 1)
+        self.assertEqual([(m["mesh_id"], m["design_version"]) for m in meshes], [("mesh-0001", 1)])
+        self.assertEqual([r[3]["mesh"]["mesh_id"] for r in self.tools["step_climb"].runs], ["mesh-0001"] * 2)
+        self.assertEqual(self.kinds().count("mesh.created"), 1)
+        kinds = self.kinds()  # the mesh is an input: recorded before the analysis that uses it starts
+        self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
+        self.assert_events_fit()
+
+    def test_a_tool_without_needs_mesh_gets_none(self):
+        with mock.patch.object(self.solvers,"frame_mesh", mock.Mock(side_effect=AssertionError), create=True):
+            self.analyze_p1()
+        self.assertNotIn("mesh", self.tools["step_climb"].runs[0][3])
+        self.assertNotIn("mesh.created", self.kinds())
+
+    def test_no_mesher_or_a_mesher_error_is_a_failed_analysis(self):
+        self.tools["step_climb"].needs_mesh = True
+        with mock.patch.dict(self.solvers.__dict__):
+            self.solvers.__dict__.pop("frame_mesh", None)
+            ana = self.analyze_p1()
+        self.assertEqual(ana["status"], "failed")
+        self.assertIn("frame_mesh", ana["error"])
+        with mock.patch.object(self.solvers,"frame_mesh", mock.Mock(side_effect=ValueError("member m1 has no wall")),
+                               create=True):
+            ana = self.analyze_p1()
+        self.assertEqual(ana["status"], "failed")
+        self.assertIn("member m1 has no wall", ana["error"])
+        self.assertEqual(self.tools["step_climb"].runs, [])
+        self.assertNotIn("mesh.created", self.kinds())
+
+
+class CheckCacheTest(RunCase, unittest.TestCase):
+    def test_checks_from_the_tests_cache_are_said(self):
+        self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
+        check_shelf(self.ctx)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertIn("道具 step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
+        self.assertFalse(any("frame_static の照合" in t for t in said))
 
 
 class UnusableToolTest(RunCase, unittest.TestCase):

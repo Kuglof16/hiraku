@@ -55,6 +55,24 @@ def _step_climb() -> list[Formula]:
             requires=[below],
             symbols=s,
         ),
+        Formula(
+            formula_id="step_climb.climb_limit",
+            title="剛い輪が越えられる段の高さ (輪の半径まで)",
+            domain="powertrain",
+            expression="climbable = 1 if h < r else 0; step_margin = r - h; max_step = r",
+            inputs={k: inputs[k] for k in ("r", "h")},
+            outputs={
+                "climbable": ("1", "1 when a rigid wheel can be lifted onto the step, 0 when it cannot",
+                              sp.Piecewise((1, sp.StrictLessThan(h, r)), (0, True))),
+                "step_margin": ("mm", "how far the step stays below the wheel centre (negative: too high)", r - h),
+                "max_step": ("mm", "the highest step a rigid wheel can climb (its radius)", r),
+            },
+            assumptions=["rigid wheel and rigid step corner",
+                         "at h >= r the corner meets the wheel at or above its centre, so the corner's push on the wheel "
+                         "has no upward part and no push at the axle lifts it; a tyre that deflects is not counted"],
+            source=source,
+            symbols={k: s[k] for k in ("r", "h")},
+        ),
         _pushed_wheel_load(),
         Formula(
             formula_id="step_climb.self_climb",
@@ -357,6 +375,7 @@ def _frame_static() -> list[Formula]:
     ))
     out.append(_rail_step_bending())
     out.append(_rail_joint_stress())
+    out.append(_end_cross_member_stress())
     return out
 
 
@@ -445,6 +464,87 @@ def _rail_joint_stress() -> Formula:
     )
 
 
+def _end_cross(v: dict) -> dict:
+    """Stress at a corner of the end cross member of a ladder's rear overhang for 1 kN up at each wheel.
+
+    The wheel stands e outboard of its rail, so its force twists the rail at the rear joint by e F.
+    Both rear wheels up (symmetric): opposite twists on the two rails, shared at the joint (one step
+    of moment distribution) between the overhang (the rail behind in torsion, then the end cross
+    member bent in single curvature, 2 E I / w), the cross member at the joint (2 E I / w) and the
+    rail ahead (G J / L1, far end held). Left up and right down (antisymmetric): the ladder twists;
+    the overhang carries the twist rate on over its length (misfit, from the warping torsion of the
+    whole ladder), which the end cross member resists in double curvature (6 E I / w) in series with
+    the rails' torsion behind the joint and their opposite bending as cantilevers.
+    """
+    r = _tube(v["b"], v["h"], v["t"])
+    c = _tube(v["b_c"], v["h_c"], v["t_c"])
+    j = _tube(v["b_j"], v["h_j"], v["t_j"])
+    E, G = v["E"], v["E"] / (2.0 * (1.0 + v["nu"]))
+    w, a = v["w"], v["a"]
+    k_over = 1.0 / (a / (G * r["J"]) + w / (2.0 * E * c["I_v"]))
+    k_joint = 2.0 * E * j["I_v"] / w
+    k_fwd = G * r["J"] / v["L1"]
+    M_sym = 1000.0 * v["e"] * k_over / (k_over + k_joint + k_fwd) / 2.0  # one wheel: half the symmetric pair
+    flex = w / (6.0 * E * c["I_v"]) + a / (G * r["J"]) + 4.0 * a**3 / (3.0 * E * r["I_v"] * w**2)
+    M_r = v["misfit_rear"] / flex / 2.0  # one wheel: half the antisymmetric pair
+    M_f = v["misfit_front"] / flex / 2.0
+    z = (v["h_c"] / 2.0) / c["I_v"]
+    return {"sigma_ra": (M_sym + M_r) * z, "sigma_rb": (M_sym - M_r) * z, "sigma_fa": -M_f * z, "sigma_fb": M_f * z,
+            "M_sym": M_sym, "M_anti_rear": M_r, "M_anti_front": M_f}
+
+
+def _end_cross_member_stress() -> Formula:
+    mm = lambda d: {"unit": "mm", "description": d, "min": 0}  # noqa: E731
+    per_kN = "stress at the corner of the end cross member where the rear wheels' effects add, for 1 kN up at"
+    return Formula(
+        formula_id="frame_static.end_cross_member_stress",
+        title="後ろの張り出しの端の横の部材の応力 (輪 1 つに 1 kN、輪のずれのねじりとはしごのねじれ)",
+        domain="strength",
+        expression="symmetric: M = 1000 e k_o/(k_o + k_j + k_f) / 2, k_o = 1/(a/(G J) + w/(2 E I_c)), k_j = 2 E I_j/w, "
+                   "k_f = G J/L1; antisymmetric: M = misfit / (w/(6 E I_c) + a/(G J) + 4 a^3/(3 E I w^2)) / 2; "
+                   "sigma = M (h_c/2)/I_c",
+        inputs={
+            "e": mm("sideways offset of the wheel centre outboard of the rail centre"),
+            "a": mm("length of the rail behind the rear joint (the overhang)"),
+            "w": mm("distance between the rail centres (length of the cross members)"),
+            "L1": mm("length of the rail piece ahead of the rear joint"),
+            "E": {"unit": "MPa", "description": "Young's modulus", "min": 0},
+            "nu": {"unit": "1", "description": "Poisson's ratio", "min": 0, "max": 0.5},
+            "b": mm("rail tube width"), "h": mm("rail tube height"), "t": mm("rail wall"),
+            "b_c": mm("end cross member width"), "h_c": mm("end cross member height"), "t_c": mm("end cross member wall"),
+            "b_j": mm("cross member at the joint, width"), "h_j": mm("its height"), "t_j": mm("its wall"),
+            "misfit_rear": {"unit": "rad", "description": "twist the overhang carries on over its length for 1 kN up at "
+                                                          "the left and down at the right rear wheel (end_cross_member_inputs)",
+                            "min": 0},
+            "misfit_front": {"unit": "rad", "description": "the same for the front wheels", "min": 0},
+        },
+        outputs={
+            "sigma_ra": ("MPa", per_kN + " rear wheel a (the left one)", None),
+            "sigma_rb": ("MPa", per_kN + " rear wheel b (the right one)", None),
+            "sigma_fa": ("MPa", per_kN + " front wheel a (left, same track as rear a)", None),
+            "sigma_fb": ("MPa", per_kN + " front wheel b", None),
+            "M_sym": ("N*mm", "end cross member moment from 1 kN on one rear wheel, symmetric half", None),
+            "M_anti_rear": ("N*mm", "the same, antisymmetric half", None),
+            "M_anti_front": ("N*mm", "end cross member moment from 1 kN on one front wheel (antisymmetric half)", None),
+        },
+        assumptions=[
+            "the wheel's force reaches the rail at the rear joint with the twist of its sideways offset e",
+            "symmetric half: one step of moment distribution at the joint (far end of the rail ahead held)",
+            "antisymmetric half: the ladder twists as a thin-walled beam (warping torsion) and the roll inertia "
+            "along it takes the roll moment (inertia relief); the overhang carries the twist rate at the joint on",
+            "the weights' own bending of the overhang rails is not counted (it does not bend the end cross member)",
+            "thin-walled rectangular tubes (Bredt torsion), sharp corners",
+        ],
+        source="beam statics, moment distribution at one joint (Hardy Cross), Bredt's torsion formula and the "
+               "warping torsion of thin-walled beams (Vlasov) applied to a ladder frame (textbook structures)",
+        requires=[(lambda v: all(2 * v[t] < min(v[b], v[h]) for b, h, t in (("b", "h", "t"), ("b_c", "h_c", "t_c"),
+                                                                             ("b_j", "h_j", "t_j"))),
+                   "wall thickness must be less than half of the tube width and height"),
+                  (lambda v: v["a"] > 0 and v["w"] > 0 and v["L1"] > 0, "a, w and L1 must be positive")],
+        fn=_end_cross,
+    )
+
+
 def _rail_step_moments(v: dict) -> dict:
     """Moment along one rail: uniform half weight between the axle supports, minus the
     hogging end moments of the step push (front, at the wheel centre) and the
@@ -501,8 +601,9 @@ def _rail_step_bending() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    from . import library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_nvh
+    from . import (library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_joint,
+                   library_kc, library_nvh)
 
-    return (_step_climb() + _mass_props() + _frame_static() + library_dynamics.all_formulas()
+    return (_step_climb() + _mass_props() + _frame_static() + library_joint.all_formulas() + library_dynamics.all_formulas()
             + library_energy.all_formulas() + library_crash.all_formulas() + library_nvh.all_formulas()
-            + library_fatigue.all_formulas() + library_geometry.all_formulas())
+            + library_fatigue.all_formulas() + library_geometry.all_formulas() + library_kc.all_formulas())

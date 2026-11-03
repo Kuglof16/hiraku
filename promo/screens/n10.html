@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N10 Checked by CAE tools</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n10"></script>
+<style>
+  /* N10: three questions put to Claude without tools, its answers, and
+     HIRAKU's hand calculation and analysis (CAE tool) beside them, with the
+     difference and a tick. Figures come from DATA; the differences are
+     computed here. Placement and times: layout.json n10 (CSS variables from
+     layout.js; --t-* from n10.times). */
+  .title {
+    position: absolute;
+    left: var(--title-x);
+    top: var(--title-y);
+    margin: 0;
+    font: 700 var(--title-size-px) / 1.4 var(--font-ja);
+    letter-spacing: 0.02em;
+    animation: fade-in 0.5s ease-out both;
+    animation-delay: var(--t-title);
+  }
+
+  .table {
+    position: absolute;
+    left: var(--table-x);
+    top: var(--table-y);
+    width: var(--table-w);
+  }
+  .head, .row {
+    display: grid;
+    /* the tick column takes what is left inside the row's border
+       (cols.tick less the two border widths), so nothing sticks out */
+    grid-template-columns: var(--cols-q) var(--cols-claude) var(--cols-hand) var(--cols-cae) var(--cols-diff) minmax(0, 1fr);
+  }
+  .head {
+    height: var(--table-head-h);
+    margin-bottom: var(--table-head-gap-px);
+    border-bottom: var(--table-border-px) solid var(--ink);
+    animation: fade-in 0.4s ease-out both;
+    animation-delay: var(--t-head);
+  }
+  .head > div {
+    padding: 0 var(--table-pad-px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: calc(8 * var(--u));
+    font: 700 var(--text-head-px) / 1.3 var(--font-ja);
+  }
+  .head small {
+    display: block;
+    font: 500 var(--text-head-small-px) / 1.3 var(--font-latin);
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+  }
+
+  .row {
+    height: var(--table-row-h);
+    margin-top: var(--table-row-gap-px);
+    background: var(--tile-bg);
+    border: var(--table-border-px) solid var(--tile-border);
+    border-radius: var(--table-radius-px);
+    animation: fade-in 0.45s ease-out both;
+    animation-delay: calc(var(--t-rows) + var(--i) * var(--t-row-step));
+  }
+  .head + .row { margin-top: 0; }
+  .cell {
+    position: relative;
+    padding: 0 var(--table-pad-px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cell + .cell { border-left: calc(1 * var(--u)) solid rgba(27, 26, 23, 0.14); }
+  .cell.hk { background: rgba(231, 179, 106, 0.10); }
+
+  .q b { font: 700 var(--text-q-px) / 1.4 var(--font-ja); }
+  .q span { font: 500 var(--text-q-sub-px) / 1.35 var(--font-ja); color: var(--ink-soft); margin-top: calc(4 * var(--u)); }
+
+  .v {
+    font: 500 var(--text-value-px) / 1.15 var(--font-latin);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .v.small { font-size: var(--text-value-small-px); }
+  .v .unit { font-size: 0.7em; margin-left: 0.15em; }
+  .note {
+    font: 500 var(--text-note-px) / 1.35 var(--font-ja);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .entry + .entry { margin-top: calc(8 * var(--u)); }
+
+  /* one cell's content: its value (comes in) and the "?" it replaces (goes out) */
+  .in {
+    animation: fade-up 0.35s ease-out both;
+    animation-delay: var(--at);
+  }
+  .claude .in { --at: calc(var(--t-rows) + var(--i) * var(--t-row-step) + var(--t-answer-lag)); }
+  .hand .in   { --at: calc(var(--t-check) + var(--i) * var(--t-check-step)); }
+  .cae .in    { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-cae-lag)); }
+  .diff .in   { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-diff-lag)); }
+  .tick .in   { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-tick-lag)); }
+  .wait {
+    position: absolute;
+    left: var(--table-pad-px);
+    top: 50%;
+    transform: translateY(-50%);
+    font: 400 var(--text-value-small-px) / 1 var(--font-latin);
+    color: var(--ink-faint);
+    animation: fade-out 0.2s ease-in both;
+    animation-delay: var(--at);
+  }
+  .hand .wait { --at: calc(var(--t-check) + var(--i) * var(--t-check-step)); }
+  .cae .wait  { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-cae-lag)); }
+  .diff .wait { --at: calc(var(--t-check) + var(--i) * var(--t-check-step) + var(--t-diff-lag)); }
+
+  .diff .v { font-size: var(--text-diff-px); }
+  .tick { align-items: center; padding: 0; }
+  .tick .in {
+    font: 700 var(--text-tick-px) / 1 var(--font-latin);
+    color: var(--pass);
+    animation-name: pop;
+    animation-duration: 0.3s;
+  }
+
+  .src {
+    position: absolute;
+    left: var(--src-x);
+    top: var(--src-y);
+    width: var(--src-w);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font: 400 var(--src-size-px) / 1.5 var(--font-ja);
+    color: var(--ink-soft);
+    animation: fade-in 0.5s ease-out both;
+    animation-delay: var(--t-src);
+  }
+
+  @keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(calc(10 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.4); }
+    to   { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body data-duration="8.3">
+<div class="stage paper-grid">
+  <div class="safe">
+    <h1 class="title" data-box="n10.title">CAE ツールで確かめる</h1>
+    <div class="table" data-box="n10.table">
+      <div class="head" data-box="n10.head">
+        <div>問い</div>
+        <div>ツールなしの Claude</div>
+        <div class="hk"><small>HIRAKU</small>手計算</div>
+        <div class="hk"><small>HIRAKU</small>解析 (CAE ツール)</div>
+        <div>差</div>
+        <div></div>
+      </div>
+    </div>
+    <ul class="src" data-box="n10.src"></ul>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Claude's answers: the promo department's N10 record (answer_*.json,
+  // tilt_answer_*.json, stress_answer_*.json). Claude Opus 5.5 through
+  // Claude Code's `claude -p` with no tools (--tools ""), asked three times
+  // per question on 2026-11-03. Step force: about 1,090 N all three times.
+  // Tilt angle: about 39, 38 and 39 deg. Frame stress: only one of the three
+  // runs gave a figure (about 61 MPa); the other two gave none.
+  // HIRAKU's values: the video run 20261103-041110-offroad-4w-scripted,
+  // version 1 (hand calculation; analysis by team K1 or K2), as listed in the
+  // same record. Stress has two hand values (simple beam 40.0 MPa, joint
+  // 77.09 MPa on the safe side); the analysis (K1) is the one compared.
+  // The block between "const DATA = " and "};" is plain JSON
+  // (promo/tests/test_layout.py reads it).
+  const DATA = {
+    "asked": 3,
+    "rows": [
+      { "key": "step", "q": "段差 100 mm", "sub": "前輪 1 輪の水平の力", "unit": "N",
+        "claude": [1090, 1090, 1090],
+        "hand": [{ "v": 1092.9, "dp": 1 }],
+        "cae": { "v": 1103.7, "dp": 1, "by": "K1" }, "tol_pct": 10 },
+      { "key": "tilt", "q": "傾斜台", "sub": "上の輪が浮く角度", "unit": "°",
+        "claude": [39, 38, 39],
+        "hand": [{ "v": 39.85, "dp": 2 }],
+        "cae": { "v": 38.27, "dp": 2, "by": "K2" }, "tol_pct": 10 },
+      { "key": "stress", "q": "段差 100 mm", "sub": "フレームの最大応力", "unit": "MPa",
+        "claude": [61],
+        "hand": [{ "v": 40.0, "dp": 1, "note": "単純はり" }, { "v": 77.09, "dp": 2, "note": "つなぎ目、安全側" }],
+        "cae": { "v": 61.15, "dp": 2, "by": "K1" }, "tol_pct": 15 }
+    ]
+  };
+  // tol_pct: the width HIRAKU itself allows when it compares a prediction with
+  // an analysis of the same quantity (tolerance_rel of the video run's
+  // comparisons: front_wheel_force 0.10, tilt_angle 0.10, max_stress 0.15;
+  // set in data/catalog/tests.yaml). Each answer is treated as a prediction.
+
+  // (analysis - answer) / answer in %, as HIRAKU's compare (over the prediction).
+  const diffs = (r) => r.claude.map((c) => (100 * (r.cae.v - c)) / c);
+  // The answer farthest from the analysis (signed).
+  const worst = (r) => diffs(r).reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
+  const ok = (r) => diffs(r).every((d) => Math.abs(d) <= r.tol_pct);
+
+  const num = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  const unit = (u) => (u === "°" ? `<span class="deg">°</span>` : `<span class="unit">${u}</span>`);
+  const val = (v, dp, u, cls = "") => `<div class="v${cls}">${num(v, dp)}${unit(u)}</div>`;
+  const signed = (d) => `${d < 0 ? "−" : "+"}${Math.abs(d).toFixed(1)}`;
+  const distinct = (xs) => [...new Set(xs)];
+
+  function claudeCell(r) {
+    const n = r.claude.length;
+    let v, note;
+    if (distinct(r.claude).length === 1) {
+      v = `約 ${num(r.claude[0], 0)}${unit(r.unit)}`;
+      note = n === DATA.asked ? `${n} 回とも` : `数字を出したのは ${DATA.asked} 回のうち ${n} 回`;
+    } else {
+      v = `約 ${r.claude.map((c) => num(c, 0) + unit(r.unit)).join("・")}`;
+      note = `${n} 回の答え`;
+    }
+    return `<div class="in"><div class="v">${v}</div><div class="note">${note}</div></div>`;
+  }
+
+  function handCell(r) {
+    const small = r.hand.length > 1 ? " small" : "";
+    return `<div class="in">${r.hand.map((h) => `<div class="entry">${val(h.v, h.dp, r.unit, small)}` +
+      (h.note ? `<div class="note">${h.note}</div>` : "") + `</div>`).join("")}</div>`;
+  }
+
+  function diffCell(r) {
+    const note = distinct(r.claude).length > 1 ? `<div class="note">${r.claude.length} 回で最大</div>` : "";
+    return `<div class="in"><div class="v">${signed(worst(r))}<span class="unit">%</span></div>${note}</div>`;
+  }
+
+  const wait = `<div class="wait">?</div>`;
+  document.querySelector(".table").insertAdjacentHTML("beforeend", DATA.rows.map((r, i) => `
+    <div class="row" style="--i:${i}" data-box="n10.row.${r.key}">
+      <div class="cell q" data-box="n10.row.${r.key}.q"><b>${r.q}</b><span>${r.sub}</span></div>
+      <div class="cell claude" style="--i:${i}" data-box="n10.row.${r.key}.claude">${claudeCell(r)}</div>
+      <div class="cell hand hk" style="--i:${i}" data-box="n10.row.${r.key}.hand">${wait}${handCell(r)}</div>
+      <div class="cell cae hk" style="--i:${i}" data-box="n10.row.${r.key}.cae">${wait}
+        <div class="in">${val(r.cae.v, r.cae.dp, r.unit)}<div class="note">${r.cae.by} の解析</div></div></div>
+      <div class="cell diff" style="--i:${i}" data-box="n10.row.${r.key}.diff">${wait}${diffCell(r)}</div>
+      <div class="cell tick" style="--i:${i}" data-box="n10.row.${r.key}.tick">${ok(r) ? `<div class="in">✓</div>` : ""}</div>
+    </div>`).join(""));
+
+  document.querySelector(".src").innerHTML = [
+    `ツールなしの Claude (Opus 5.5、Claude Code の claude -p、ツールなし) に 2026-11-03 に聞いた答え。HIRAKU の値は動画用の運転の版 1`,
+    `差 = (解析 − Claude の答え) ÷ Claude の答え。HIRAKU が予測と解析の照合で許す幅 (上から ${DATA.rows.map((r) => r.tol_pct + " %").join("・")}) に入れば ✓`,
+  ].map((s) => `<li>${s}</li>`).join("");
+
+  window.n10 = { DATA, diffs, worst, ok };
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>
