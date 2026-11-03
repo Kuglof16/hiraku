@@ -6,16 +6,19 @@
 // gravity, so nothing here assumes Rapier's y-up habit. Scenario fields:
 //   dt, steps, gravity [x,y,z], solver_iterations (optional), record_every (optional)
 //   boxes: [{center, half_extents, friction}]                fixed colliders (ground, steps)
-//   bodies: [{id, mass, inertia [Ixx,Iyy,Izz], position, rotation [x,y,z,w],
-//             linvel, angvel, box {half_extents, friction} | null}]
+//   bodies: [{id, mass, inertia [Ixx,Iyy,Izz], inertia_frame [x,y,z,w] (optional: the principal
+//             axes in the body frame), position, rotation [x,y,z,w], linvel, angvel,
+//             box {half_extents, friction} | null}]
 //   forces: [{body, force [x,y,z], point [x,y,z] (world), from_step, to_step}]
 //   force_series: {body_id: [[[fx,fy,fz],[px,py,pz]], ...] one entry per step}
-// Forces are cleared and re-applied before every step.
+//   torque_series: {body_id: [[tx,ty,tz], ...] one world torque per step}
+// Forces and torques are cleared and re-applied before every step.
 
 import RAPIER from "@dimforge/rapier3d-compat";
 
 const vec = (a) => ({ x: a[0], y: a[1], z: a[2] });
 const arr = (v) => [v.x, v.y, v.z];
+const quat = (q) => ({ x: q[0], y: q[1], z: q[2], w: q[3] });
 
 async function readStdin() {
   const chunks = [];
@@ -43,7 +46,7 @@ function run(sc) {
       .setLinvel(...(b.linvel ?? [0, 0, 0]))
       .setAngvel(vec(b.angvel ?? [0, 0, 0]))
       .setCanSleep(false)
-      .setAdditionalMassProperties(b.mass, vec([0, 0, 0]), vec(b.inertia), { x: 0, y: 0, z: 0, w: 1 });
+      .setAdditionalMassProperties(b.mass, vec([0, 0, 0]), vec(b.inertia), quat(b.inertia_frame ?? [0, 0, 0, 1]));
     const body = world.createRigidBody(desc);
     if (b.box) {
       // density 0: mass and inertia come only from the values above
@@ -80,6 +83,9 @@ function run(sc) {
     }
     for (const [id, series] of Object.entries(sc.force_series ?? {})) {
       for (const [force, point] of series[step] ?? []) bodies[id].addForceAtPoint(vec(force), vec(point), true);
+    }
+    for (const [id, series] of Object.entries(sc.torque_series ?? {})) {
+      if (series[step]) bodies[id].addTorque(vec(series[step]), true);
     }
     world.step();
     if ((step + 1) % every === 0) record(step + 1);

@@ -121,3 +121,73 @@ class RapierTilt(unittest.TestCase):
                                                   "tire_mu": {"value": 2.0, "unit": "1"}}))
         k2_deg = math.degrees(tilt_sweep(veh, left_up=True, **CHECK_TILT)["tip_angle"])
         self.assertAlmostEqual(k2_deg, self.rapier_deg, delta=0.15)
+
+
+def quat_xyzw(R) -> list[float]:
+    """Unit quaternion [x, y, z, w] of a rotation matrix."""
+    import numpy as np
+    m = np.asarray(R, float)
+    w = math.sqrt(max(0.0, 1 + m[0, 0] + m[1, 1] + m[2, 2])) / 2
+    x = math.copysign(math.sqrt(max(0.0, 1 + m[0, 0] - m[1, 1] - m[2, 2])) / 2, m[2, 1] - m[1, 2])
+    y = math.copysign(math.sqrt(max(0.0, 1 - m[0, 0] + m[1, 1] - m[2, 2])) / 2, m[0, 2] - m[2, 0])
+    z = math.copysign(math.sqrt(max(0.0, 1 - m[0, 0] - m[1, 1] + m[2, 2])) / 2, m[1, 0] - m[0, 1])
+    return [x, y, z, w]
+
+
+class RapierStepReplay(unittest.TestCase):
+    """K2's step push (hiraku.solvers.k2_vehicle.shelf.step.step_body_log): the forces and moments
+    K2 put on the sprung body at each step, replayed on a Rapier rigid body with K2's mass, inertia,
+    gravity and start state, one sub-step per step (Rapier's semi-implicit Euler, as K2's). The
+    loads are open-loop (computed from K2's states), so this checks the rigid-body integration and
+    where the forces act, not the tyres or springs."""
+
+    RECORD = 10
+
+    @classmethod
+    def setUpClass(cls):
+        import numpy as np
+        reason = rapier.unavailable()
+        if reason:
+            raise unittest.SkipTest(f"Rapier check needs Node and the package: {reason}")
+        try:
+            from hiraku.solvers.k2_vehicle.model import box_design
+            from hiraku.solvers.k2_vehicle.shelf.step import step_body_log
+        except ImportError as e:
+            raise unittest.SkipTest(f"needs K2's step_body_log: {e}")
+        cls.log = log = step_body_log(box_design(susp="kc_table", wheel_mass=15.0), 100.0, after_s=0.3)
+        vals, vecs = np.linalg.eigh(np.array(log["inertia_kg_m2"]))
+        if np.linalg.det(vecs) < 0:
+            vecs[:, 2] *= -1
+        s = log["start"]
+        w, x, y, z = s["quat"]
+        out = rapier.run({
+            "dt": log["dt"], "steps": log["n_steps"], "gravity": log["gravity_m_s2"], "solver_iterations": 1,
+            "record_every": cls.RECORD,
+            "bodies": [{"id": "body", "mass": log["mass_kg"], "inertia": vals.tolist(), "inertia_frame": quat_xyzw(vecs),
+                        "position": s["cg_m"], "rotation": [x, y, z, w], "linvel": s["v_m_s"],
+                        "angvel": s["omega_rad_s"], "box": None}],
+            "force_series": {"body": [st["forces"] for st in log["steps"]]},
+            "torque_series": {"body": [np.sum(st["moments"], axis=0).tolist() for st in log["steps"]]},
+        }, timeout=600)
+        cls.rapier = out["bodies"]["body"]
+
+    def pairs(self):
+        """(Rapier record, K2 step) after the same number of steps."""
+        for j in range(1, len(self.rapier["position"])):
+            k = j * self.RECORD - 1
+            if k < len(self.log["steps"]):
+                yield j, self.log["steps"][k]
+
+    def test_centre_of_gravity_and_attitude_follow_k2(self):
+        import numpy as np
+        dp = da = 0.0
+        for j, st in self.pairs():
+            dp = max(dp, float(np.linalg.norm(np.array(self.rapier["position"][j]) - st["cg_m"])))
+            qx, qy, qz, qw = self.rapier["rotation"][j]
+            dot = abs(qw * st["quat"][0] + qx * st["quat"][1] + qy * st["quat"][2] + qz * st["quat"][3])
+            da = max(da, math.degrees(2 * math.acos(min(1.0, dot))))
+        k2 = self.log["steps"]
+        moved = float(np.linalg.norm(np.array(k2[-1]["cg_m"]) - self.log["start"]["cg_m"]))
+        self.assertGreater(moved, 0.05)  # the body did climb
+        self.assertLess(dp, 1e-3, f"centre of gravity off by up to {dp * 1000:.3f} mm over a {moved:.3f} m move")
+        self.assertLess(da, 0.05, f"attitude off by up to {da:.4f} deg")
