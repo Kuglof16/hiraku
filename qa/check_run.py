@@ -1433,10 +1433,18 @@ class RunChecker:
         last = max(self.designs)
         latest = self.latest_judgements(last)
         unjudged = self._unjudged() or {}
+        # HK4 / HK5's dead end (docs/contract.md): revisions used up with a lower stage red, the heavier stages are
+        # not run and the run ends round_limit; the domains waiting behind it may stay unjudged (the stop
+        # reason says so)
+        behind_red = ending == "round_limit" and any(j.get("state") == "red" for j in latest.values())
         for pick in self.project.get("domain_picks", []):
             dom = pick.get("domain")
             j = latest.get(dom)
-            if dom in unjudged:
+            if (dom in unjudged or j is None or j.get("state") == "pending") and behind_red:
+                if "低い段の赤" not in str(self.project.get("stop_reason") or ""):
+                    self.warn("HK4_no_stop_before_judged", w, f"round_limit with {dom} not judged behind a red, but the "
+                                                              f"stop reason does not say a lower stage's red is left")
+            elif dom in unjudged:
                 self.error("HK4_no_stop_before_judged", w,
                            f"{ending} while {dom} has no verdict for {', '.join(unjudged[dom])} in version {last}")
             elif j is None or j.get("state") == "pending":

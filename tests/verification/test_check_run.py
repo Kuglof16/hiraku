@@ -424,6 +424,22 @@ class CheckRun(unittest.TestCase):
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red")))
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red"), "warn"))
 
+    def test_round_limit_may_leave_cases_behind_a_lower_stage_red(self):
+        # HK4 / HK5's dead end: revisions used up with a red left, the heavier cases are not run (contract)
+        def stopped(reason):
+            ev = self._unjudged_case(self._red(sample_events()))  # R1 red, R3-qa without a verdict
+            ev = self._finish(ev, "stopped", "round_limit", "red")
+            ev[0]["data"]["round_limit"] = 0
+            ev[0]["data"]["stop_reason"] = reason
+            by_kind(ev, "run.finished")["data"]["stop_reason"] = reason
+            return ev
+        said = stopped("R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
+        silent = stopped("R1 が赤のまま直しの回数を使い切った")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(silent))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(silent, "warn"))
+
     def test_comparison_where_picks_the_result(self):
         ev = sample_events()
         by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_L0"  # the sample's result is at rail_L0
