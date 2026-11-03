@@ -20,8 +20,9 @@ HK1 = "HK1_prediction_first"
 HK2 = "HK2_tool_usable"
 HK3 = "HK3_cause_before_continue"
 HK4 = "HK4_no_stop_before_judged"
+HK5 = "HK5_light_first"  # the contract's rule (tool stages, layout first); its check comes next
 
-assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4}
+assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4, HK5}
 
 
 @dataclass

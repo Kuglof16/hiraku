@@ -19,7 +19,7 @@ from hiraku.solvers.k4_geometry import occupant_clearance, occupant_spaces
 from tests.solvers.test_builders import requirements
 
 ROOT = Path(__file__).resolve().parents[2]
-RB = json.loads((ROOT / "data" / "designs" / "offroad-4w-rollbar.json").read_text(encoding="utf-8"))
+RB = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))  # roll bar on by default
 FORMULAS = solvers.formula_registry()
 FID = "frame_static.rops_occupant_clearance"
 E, I, H, W, D = 205000.0, 6.0e4, 1400.0, 1200.0, 40.0  # MPa, mm^4, post length, span, tube diameter
