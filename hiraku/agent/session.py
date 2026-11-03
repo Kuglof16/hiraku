@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from hiraku import contract
 from hiraku.catalog import REPO_ROOT, build_tests, load_catalog, load_requirements, project_fields, read_data, skipped_text
 from hiraku.contract import layout
 from hiraku.contract.protocols import AnalysisTool, FormulaRegistry
@@ -61,7 +62,7 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
               designgen: Any = None, intake: bool = False, intake_events: list[Record] | None = None,
-              **store_kw: Any) -> RunContext:
+              driver: str | None = None, **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
@@ -112,6 +113,11 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     else:
         load_cases, skipped = [], None
         fields = dict(project_fields(catalog, req, []), agents=first_design_agents(catalog))
+    if driver is not None:  # project.driver: scripted, agent_sdk or claude_code_plugin
+        fields = dict(fields, driver=driver)
+    if intake and req.get("tests"):  # the intake picks from the flags; the file's tests decide the domains
+        intake_events = [dict(e, data=picks_for_file_tests(e["data"], req["tests"], load_cases, fields, catalog))
+                         if e["kind"] == "domains.picked" else e for e in intake_events]
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req,
@@ -123,13 +129,58 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     try:
         if design is not None:
             store.write_design(design)
-        check_shelf(ctx)
+        check_shelf(ctx, run_test_ids(req, load_cases))
         if design is not None:
             init_judgements(ctx)
     except KeyboardInterrupt:  # the tool checks take a while; do not leave the folder "running"
         store.finish("stopped", stop_reason=STOPPED_BY_USER, stop_code="user_stop")
         raise
     return ctx
+
+
+def picks_for_file_tests(picked: Record, tests: list[str], load_cases: list[Record], fields: Record,
+                         catalog: Any) -> Record:
+    """The intake's domains.picked data (hiraku.intake picks every domain the flags allow) narrowed
+    to the domains of the requirements file's tests: the same domains as project.domain_picks (the
+    load cases' judged domains; before version 1, the tests' own domains), each with the file's
+    tests of that domain; the intake's other picks go to `off` with the reason."""
+    if load_cases:
+        domains = [p["domain"] for p in fields["domain_picks"]]
+        run_tests = list(dict.fromkeys(lc["test_id"] for lc in load_cases))
+    else:
+        have = {catalog.test(t)["domain"] for t in tests}
+        domains = [d for d in contract.DOMAINS if d in have and d != "assembly"]
+        run_tests = list(tests)
+    by_domain = {d: [t for t in run_tests if catalog.test(t)["domain"] == d] for d in contract.DOMAINS}
+    theirs = {p["domain"]: p for p in picked["picks"]}
+    reasons = {p["domain"]: p["reason"] for p in fields["domain_picks"]}
+    listed = "・".join(tests)
+    picks = []
+    for d in domains:
+        names = "・".join(f"{t} {catalog.test(t)['title']}" for t in by_domain[d])
+        picks.append({"domain": d, "shown_name": (theirs.get(d) or {}).get("shown_name") or contract.DOMAIN_NAMES_JA[d],
+                      "reason": reasons.get(d) or f"要件のファイルが試験 {names} を選んだ", "test_ids": by_domain[d]})
+    off = [o for o in picked["off"] if o["domain"] not in domains] + [
+        {"domain": d, "reason": f"要件のファイルの試験 ({'・'.join(by_domain[d])}) に、この分野の合否の基準が無い"
+         if by_domain[d] else f"要件のファイルの試験 ({listed}) に、この分野の試験が無い"}
+        for d in theirs if d not in domains]
+    off.sort(key=lambda o: contract.DOMAINS.index(o["domain"]))
+    return {**picked, "picks": picks, "off": off, "assembly_test_ids": by_domain["assembly"]}
+
+
+def run_test_ids(req: Record, load_cases: list[Record]) -> list[str] | None:
+    """The tests a run can use, for the tool checks (check_shelf): its load cases' tests; before the
+    first version, the requirements file's tests and the tests that feed them (P1 for R1); None
+    when they are not fixed yet (no load cases and no `tests` in the file: every tool is checked)."""
+    if load_cases:
+        return list(dict.fromkeys(lc["test_id"] for lc in load_cases))
+    if not req.get("tests"):
+        return None
+    from hiraku.catalog.build import feeds_map
+
+    tests = list(req["tests"])
+    ups = [up for up, downs in feeds_map().items() if up not in tests and any(d in tests for d in downs)]
+    return ups + tests
 
 
 def first_design_agents(catalog: Any) -> list[Record]:

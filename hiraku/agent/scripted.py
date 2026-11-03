@@ -31,11 +31,13 @@ from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, rule_check, trusted_analysis, write_report)
 from hiraku.tools.judge import verdict_line
+from hiraku.tools.report import scripted_next
 from hiraku.tools.summary import design_summary
 
 Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
+NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
 REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
 
 
@@ -191,7 +193,8 @@ def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None =
         if kind == "section":
             return {"value": design["sections"][key]["dims_mm"][field], "unit": "mm"}
     if head == "pred":
-        return [p for p in ctx.store.records("prediction", ctx.version) if p["quantity"] == rest][-1]
+        return [p for p in ctx.store.records("prediction", ctx.version)
+                if p["quantity"] == rest and p["load_case_id"] == load_case["load_case_id"]][-1]
     if head == "ana":
         lc_id, quantity = rest.rsplit(".", 1)
         return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id, load_case))["results"]
@@ -444,11 +447,11 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     its defaults.
     """
     s = ctx.store
-    s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
+    s.emit("agent.started", agent="lead", data={"agent_id": "lead", **NO_MODEL})
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
         first = (plan if plan is not None else plan_of(ctx)).get("propose") or {}
-        s.emit("agent.started", agent="designer", data={"agent_id": "designer"})
+        s.emit("agent.started", agent="designer", data={"agent_id": "designer", **NO_MODEL})
         s.emit("agent.said", agent="designer", text=first.get("say") or "要件から、最初の版を作ります")
         kinds = archetypes(ctx) or [{"name": ""}]
         try:
@@ -479,7 +482,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
 
     def start(agent: str, domain: str | None = None) -> None:
         if agent not in started:
-            s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
+            s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **NO_MODEL})
             started.append(agent)
 
     try:
@@ -535,7 +538,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
 
     if status == "done" and not rules.stop_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
-        write_report(ctx, {"summary": rep.get("summary") or REPORT_SUMMARY, "next": list(rep.get("next") or [])}, "lead")
+        nxt, computed = list(rep.get("next") or []), []
+        if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
+            nxt, computed = scripted_next(ctx)
+        write_report(ctx, {"summary": rep.get("summary") or REPORT_SUMMARY, "next": nxt}, "lead", computed=computed)
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
     s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})

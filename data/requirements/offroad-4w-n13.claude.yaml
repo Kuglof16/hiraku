@@ -1,0 +1,219 @@
+# Requirements for the video scene N13 (a tool made in the run): the video run's flags and
+# requirement values with one more wish, to protect the people in a roll-over, and the demo
+# design with a roll bar (data/designs/offroad-4w-rollbar.json). R4 has no tool on the shelf
+# and no scripted step on purpose: Claude writes the tool during the run (make_tool). So this
+# file is for a run with Claude only (*.claude.yaml); its scripted run stops not judged.
+# Shape: hiraku.contract "requirements_file". Sources are written in `basis`.
+# "not checked in this repository" = the value is taken from the cited page,
+# and that page has not been read again for this repository.
+# "assumption" = an engineering assumption with no public source (trust 3).
+# trust and "not checked" are different things: trust is the kind of source
+# (1 primary, 2 secondary, 3 assumption); "not checked" says whether the value
+# has been read again against that source.
+
+want: 林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)。横転しても、乗っている人を守りたい
+product: offroad-4w
+speed_class: vehicle
+flags:
+  ride: true            # 乗: people ride on it
+  lean: true            # 預: people sit on the seat
+  self_propelled: true  # 走
+  outdoor: true         # 外
+  rough: true           # 悪: unpaved forest roads
+  public_road: false    # 公: Q70 is a required question; this file assumes private land only (not asked)
+  battery: true         # 池
+  electric: true        # 電
+  pinch: true           # 挟: suspension gaps
+  cargo: true           # 荷
+  standing: true        # 置
+  vibration: true       # 振: wheels and motor rotate
+  continuous: true      # 続
+  assembly: true        # 組
+requirements:
+  - key: Q11
+    name: 路面の摩擦係数 (砂利)
+    value: 0.6
+    unit: "1"
+    source: default
+    trust: 3
+    basis: assumption (gravel; no public value found)
+  - key: Q12
+    name: 路面の粗さ (ISO 8608 のクラス)
+    value: C
+    source: default
+    trust: 3
+    basis: >-
+      assumption: the forest road taken as ISO 8608 class C. ISO 8608 covers unpaved roads too
+      (https://www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the
+      table in https://link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)
+  - key: Q13
+    name: 縦の坂 (止まって発進できる一番急な坂)
+    value: 14
+    unit: "%"
+    source: default
+    trust: 1
+    basis: >-
+      林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch,
+      https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf
+      (not checked in this repository). The sustained 12 % is the forest loop's grade_high in
+      data/catalog/tests.yaml (P4, T1, T2)
+  - key: Q14
+    name: 横の傾き
+    value: 15
+    unit: deg
+    source: default
+    trust: 3
+    basis: assumption (no basis found)
+  - key: Q15
+    name: 段差
+    value: 100
+    unit: mm
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q18
+    name: 横風 (瞬間)
+    value: 30
+    unit: m/s
+    source: default
+    trust: 1
+    basis: 気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)
+  - key: Q19
+    name: 気温 (範囲の高い端)
+    value: 40
+    unit: degC
+    source: default
+    trust: 3
+    basis: assumption (the hot end of a -10 to 40 degC range of use)
+  - key: Q30
+    name: 人数と荷重の組 (見る組)
+    value: two_cargo
+    source: user
+    trust: 1
+    basis: request (2 人乗り、積載 150 kg)
+    note: MVP は two_cargo (2 人 + 荷) だけを見る。empty・driver・two はまだ見ない。乗員と荷は設計の部品 (kind occupant / cargo)
+  - key: Q31
+    name: 体格の範囲
+    value: 若年女性 5 % 〜 若年男性 95 %
+    source: default
+    trust: 1
+    basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+  - key: Q33
+    name: 体重 (強さの不利側)
+    value: 76.6
+    unit: kg
+    source: default
+    trust: 1
+    basis: >-
+      AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル,
+      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)
+  - key: Q40
+    name: 積載
+    value: 150
+    unit: kg
+    source: user
+    trust: 1
+    basis: request
+    note: 乗員とは別の荷として扱う (聞いていない)
+  - key: Q41
+    name: 荷の重心の高さ (荷台の床から)
+    value: 150
+    unit: mm
+    source: default
+    trust: 1
+    basis: >-
+      the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm
+      (data/designs/offroad-4w-v1.json, parts cargo and deck)
+  - key: Q50
+    name: 最高速度
+    value: 40
+    unit: km/h
+    source: user
+    trust: 1
+    basis: request
+  - key: Q51
+    name: 0 → 最高速度 (Q50) の時間
+    value: 6
+    unit: s
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q52
+    name: 停止距離
+    value: 14
+    unit: m
+    source: default
+    trust: 3
+    basis: >-
+      assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https://www.mlit.go.jp/jidosha/content/S171.pdf;
+      the table is for vehicles of 25 km/h or less and others, not for this vehicle's class
+      (not checked in this repository)
+  - key: Q53
+    name: 止まっていられる坂
+    value: 20
+    unit: "%"
+    source: default
+    trust: 3
+    basis: >-
+      assumption: borrowed from 細目告示 第171条 第5項, https://www.mlit.go.jp/jidosha/content/S171.pdf; the table
+      is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)
+  - key: Q54
+    name: 航続
+    value: 20
+    unit: km
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q60
+    name: 倒れない角度 (Q30 の組で)
+    value: 24
+    unit: deg
+    source: default
+    trust: 1
+    basis: >-
+      fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020);
+      the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only)
+      (not checked in this repository)
+  - key: Q61
+    name: 安全率 (降伏に対して)
+    value: 1.5
+    unit: "1"
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q65
+    name: 衝突の速さ
+    value: 40
+    unit: km/h
+    source: default
+    trust: 3
+    basis: assumption (the top speed, Q50)
+  - key: Q70
+    name: 公道を走るか
+    value: 私有地 (林道) だけ
+    source: default
+    trust: 3
+    basis: assumption of this fixed file; Q70 is a required question and was not asked
+  - key: Q82
+    name: 出荷の形
+    value: 完成車
+    source: default
+    trust: 3
+    basis: assumption
+  - key: Q90
+    name: 悪路の走行距離 (疲労)
+    value: 5000
+    unit: km
+    source: default
+    trust: 3
+    basis: assumption (no public basis found)
+  - key: Q64
+    name: 横転したときの保護枠 (ROPS)
+    value: つける
+    source: user
+    trust: 1
+    basis: request (横転しても、乗っている人を守りたい)
+tests: [R4]
+design_file: data/designs/offroad-4w-rollbar.json
+round_limit: 1
+cost_limit_usd: 5.0

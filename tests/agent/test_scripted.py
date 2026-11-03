@@ -80,7 +80,9 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertGreater(r1[0]["diff_rel"], 0.15)
         self.assertLess(r1[1]["diff_rel"], -0.15)
         causes = [cause_of(self.ctx, c) for c in r1]
-        self.assertEqual([c["resolved"] for c in causes], [False, False])
+        # the safe-side verdict settles the earlier cause of the same quantity; the safe-side cause itself stays open
+        self.assertEqual([c["resolved"] for c in causes], [True, False])
+        self.assertEqual(causes[0]["resolved_by"], r1[1]["comparison_id"])
         self.assertIn("張り出し", causes[0]["cause"])
         self.assertIn("rail_joint_stress", causes[0]["fix"])
         self.assertNotIn("safe_side", causes[0])
@@ -219,6 +221,19 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(ScriptError):
                     resolve(self.ctx, bad, lc)
+
+    def test_pred_ref_reads_the_load_case_being_run(self):
+        p1 = self.ctx.load_case("P1-step100")
+        load, _ = self.predict_p1()
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        # a newer prediction of the same quantity for another load case does not count for P1
+        self.ctx.load_cases.append(dict(p1, load_case_id="P1-step250-beyond"))
+        other = self.ctx.store.add_record("prediction", dict(load, prediction_id=self.ctx.store.next_id("prediction"),
+                                                             load_case_id="P1-step250-beyond", value=load["value"] * 2),
+                                          design_version=self.ctx.version, agent="cae.strength", domain="strength")
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", self.ctx.load_case("P1-step250-beyond"))["value"],
+                         other["value"])
 
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")

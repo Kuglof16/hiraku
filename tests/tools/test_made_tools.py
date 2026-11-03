@@ -58,10 +58,29 @@ class MadeToolTest(RunCase, unittest.TestCase):
         out = make_tool(self.ctx, {"code": "import os\nos.remove('x')\n"}, "cae.strength")
         self.assertFalse(out["usable"])
         self.assertIn("import os", " ".join(out["problems"]))
-        self.assertEqual(self.checked(), [])  # never ran, so nothing was checked
+        # never ran, so no spec: still recorded, with a minimal spec that fits the contract
+        (attempt,) = self.checked()
+        self.assertEqual((attempt["data"]["name"], attempt["data"]["usable"], attempt["domain"]),
+                         ("unnamed", False, "strength"))
+        self.assert_events_fit()
         self.assertTrue(make_tool(self.ctx, {"code": GOOD, "reason": "R5 has no tool"}, "cae.strength")["usable"])
         (kept,) = (self.ctx.store.path / layout.TOOLS_DIR).glob("cantilever_tip-*.check.json")
         self.assertEqual(json.loads(kept.read_text(encoding="utf-8"))["reason"], "R5 has no tool")
+
+    def test_a_spec_that_does_not_fit_the_contract_is_recorded_but_never_shelved(self):
+        from types import SimpleNamespace
+
+        bad = {"name": "Bad Name", "title": "x", "domain": "strength", "base": "K9", "tests": ["R5"],
+               "origin": "claude", "usable": True, "checks": []}
+        made = SimpleNamespace(name="Bad Name", spec=bad, usable=True, checks=[], problems=[], printed="", tool=object())
+        self.ctx.made_tools = SimpleNamespace(make=lambda code, taken, reason: made)
+        out = make_tool(self.ctx, {"code": GOOD}, "cae.strength")
+        self.assertFalse(out["usable"])
+        self.assertNotIn("Bad Name", self.ctx.tools)
+        (attempt,) = self.checked()
+        self.assertEqual((attempt["data"]["name"], attempt["data"]["base"], attempt["data"]["usable"]),
+                         ("unnamed", "K0", False))
+        self.assert_events_fit()
 
 
 if __name__ == "__main__":
