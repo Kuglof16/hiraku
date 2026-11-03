@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +60,33 @@ class DefinitionsTest(unittest.TestCase):
         for name, t in TOOLS.items():
             with self.subTest(tool=name):
                 jsonschema.Draft202012Validator.check_schema(t["input_schema"])
+
+    def test_the_input_schemas_are_the_contracts(self):
+        from hiraku.intake.tools import contract_input
+
+        defs = contract.schema()["$defs"]
+        for name, t in TOOLS.items():
+            with self.subTest(tool=name):
+                self.assertIn(f"tool_input.{name}", defs)
+                self.assertEqual(t["input_schema"], contract_input(name))
+                self.assertNotIn("$ref", json.dumps(t["input_schema"]))  # inlined: the schema stands alone
+                self.assertNotIn("description", {k for k in t["input_schema"] if k == "description"})
+
+    def test_what_the_tools_take_is_checked_by_the_schema(self):
+        import jsonschema
+
+        ok = {"pick_domains": {"want": "机", "flags": {"standing": True}},
+              "ask_user": {"answers": {"Q40": 30}, "wait_seconds": 5},
+              "import_knowledge": {"filename": "a.md", "text": "質量は 23 kg 以下", "formulas": {"c1": {"check": "mass_kg <= 23"}}},
+              "rule_check": {"design_version": 1, "disable": ["AS-01"]}}
+        bad = {"pick_domains": {"want": "机"},  # flags are required
+               "ask_user": {"wait_seconds": 9999},
+               "import_knowledge": {"formulas": {"x": {"check": "a"}}},  # not a sentence number
+               "rule_check": {"design_version": 0}}
+        for name, args in ok.items():
+            self.assertEqual(list(jsonschema.Draft202012Validator(TOOLS[name]["input_schema"]).iter_errors(args)), [], name)
+        for name, args in bad.items():
+            self.assertTrue(list(jsonschema.Draft202012Validator(TOOLS[name]["input_schema"]).iter_errors(args)), name)
 
     def test_the_flag_questions_are_in_the_pick_description(self):
         d = TOOLS["pick_domains"]["description"]
