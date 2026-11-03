@@ -38,10 +38,22 @@ from typing import Any, Callable
 from hiraku.contract import layout
 from hiraku.contract.layout import EVENTS_FILE, INBOX_DIR, KNOWLEDGE_DIR, PROJECT_FILE, RUN_ID_RE, STOP_REQUEST_FILE
 
-# Present while a claude_code_plugin run's MCP server owns the run. The contract names it
-# layout.PLUGIN_LOCK_FILE (lead's change); until that reaches this branch the same name is used here.
-PLUGIN_LOCK_FILE = getattr(layout, "PLUGIN_LOCK_FILE", "plugin.lock")
+# A claude_code_plugin run is held by a Claude Code session while its MCP server keeps touching
+# plugin.alive: younger than PLUGIN_ALIVE_S seconds. The contract names both in layout
+# (PLUGIN_ALIVE_FILE, PLUGIN_ALIVE_S, lead's change); until that reaches this branch the same
+# values are used here. (plugin.lock is only a short lock around the plugin state, not this.)
+PLUGIN_ALIVE_FILE = getattr(layout, "PLUGIN_ALIVE_FILE", "plugin.alive")
+PLUGIN_ALIVE_S = getattr(layout, "PLUGIN_ALIVE_S", 10.0)
 PLUGIN_DRIVER = "claude_code_plugin"
+
+
+def plugin_alive(run_dir: Path, now: float | None = None) -> bool:
+    """A Claude Code session serves this plugin run: its plugin.alive was touched within PLUGIN_ALIVE_S."""
+    try:
+        age = (time.time() if now is None else now) - (run_dir / PLUGIN_ALIVE_FILE).stat().st_mtime
+    except OSError:
+        return False
+    return age < PLUGIN_ALIVE_S
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = REPO_DIR / "data" / "requirements"
@@ -361,8 +373,8 @@ class Launcher:
         """The folder of a run that is going, for the screen to put things in (the hearing's
         answer, a dropped file): the run started here while it runs, or any run in the runs
         folder whose project.json says running (a run started elsewhere, such as from a
-        Claude Code session with the plugin). A claude_code_plugin run also needs its
-        plugin.lock: without it no session holds the run, so nothing would read the inbox."""
+        Claude Code session with the plugin). A claude_code_plugin run also needs a fresh
+        plugin.alive: without it no session holds the run, so nothing would read the inbox."""
         if not isinstance(run_id, str) or not RUN_ID_RE.match(run_id):
             raise LaunchError(400, "run_id must be the id of a run in the runs folder")
         run_dir = self.runs_dir / run_id
@@ -377,8 +389,8 @@ class Launcher:
         status = project.get("status") if isinstance(project, dict) else None
         if status != "running":
             raise LaunchError(409, f"run {run_id} is not running (status {status}); it no longer reads what is put in its folder")
-        if project.get("driver") == PLUGIN_DRIVER and not (run_dir / PLUGIN_LOCK_FILE).is_file():
-            raise LaunchError(409, f"run {run_id} is a {PLUGIN_DRIVER} run without {PLUGIN_LOCK_FILE}: no Claude Code session holds it now")
+        if project.get("driver") == PLUGIN_DRIVER and not plugin_alive(run_dir):
+            raise LaunchError(409, f"run {run_id} is a {PLUGIN_DRIVER} run whose {PLUGIN_ALIVE_FILE} is missing or older than {PLUGIN_ALIVE_S:g} s: no Claude Code session holds it now")
         return run_dir
 
     def answer(self, run_id: Any, body: Any) -> dict[str, Any]:
