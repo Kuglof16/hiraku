@@ -1,10 +1,10 @@
-"""Connections on the fe core: rigid and distributing links (7), springs (10)."""
+"""Connections on the fe core: rigid and distributing links (7), shell to solid (8), springs (10)."""
 
 import unittest
 
 import numpy as np
 
-from hiraku.solvers.fe import FEModel, StaticSolver, precheck, resultant
+from hiraku.solvers.fe import FEModel, StaticSolver, checks, precheck, resultant
 from hiraku.solvers.fe.connect import Spring, distributing_link, rbe3_forces, rigid_link
 from hiraku.solvers.fe.shell import MITC4
 from hiraku.solvers.k1_shell.checks import grid
@@ -95,6 +95,17 @@ class LinkTest(unittest.TestCase):
         self.assertGreater(out["rbe3"][0], 1e-4 * np.abs(out["rbe3"][2][:3]).max())  # the footprint deforms
         self.assertGreater(out["rbe3"][1], out["rbe2"][1])  # more flexible: more energy under the same load
         self.stats = out
+
+
+class ShellSolidTest(unittest.TestCase):
+    def test_cantilever_half_solid_half_shell(self):
+        r = checks.shell_solid_cantilever()
+        self.assertAlmostEqual(r["mixed"], r["all_solid"], delta=0.01 * r["all_solid"])
+        self.assertAlmostEqual(r["mixed"], r["all_shell"], delta=0.02 * r["all_shell"])
+        self.assertAlmostEqual(r["mixed"], r["beam"], delta=0.03 * r["beam"])
+        self.assertLess(r["mixed_equilibrium"], 1e-8)
+        self.assertLess(r["mixed_rigid"]["energy_ratio"], 1e-12)
+        self.assertLess(r["mixed_rigid"]["constraint_residual"], 1e-12)
 
 
 class SpringTest(unittest.TestCase):

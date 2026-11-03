@@ -121,6 +121,84 @@ class Spring(ElementGroup):
         return np.einsum("eij,ej->ei", self.frames, fb)
 
 
+# ------------------------------------------------------------------ shell to solid
+
+
+def shell_node_normals(conn: np.ndarray, nodes: np.ndarray) -> np.ndarray:
+    """Unit normal at every node (N, 3): the mean of the normals of the shell elements around it
+    (zero for nodes without shells)."""
+    X = nodes[conn]
+    n = np.cross(X[:, 2] - X[:, 0], X[:, 3] - X[:, 1])
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    acc = np.zeros((len(nodes), 3))
+    for k in range(conn.shape[1]):
+        np.add.at(acc, conn[:, k], n)
+    nrm = np.linalg.norm(acc, axis=1)
+    return np.where(nrm[:, None] > 0, acc / np.where(nrm > 0, nrm, 1.0)[:, None], 0.0)
+
+
+def shell_to_solid(shell_nodes, normals: np.ndarray, nodes: np.ndarray, solid_nodes, thickness,
+                   tol: float = 1e-6, name: str = "shell-solid") -> Constraint:
+    """Couple shell nodes on a solid face to the solid nodes through the shell's thickness.
+
+    For a shell node s with unit normal n, the solid nodes j on the line x_s + z n with |z| <= t/2 (+ tol)
+    are found. The shell node is made dependent on them by the least-squares fit of a straight, rigid
+    normal line to their displacements, u_j ~ u_s + theta x (z_j n):
+        v = P sum_j (z_j - zbar) u_j / sum_j (z_j - zbar)^2   (P = I - n n^T),
+        u_s = mean_j u_j - zbar v,   theta_perp = n x v,
+    i.e. the shell's rotation is the difference of the solid's displacements across the thickness. The
+    rotation about n (drilling) is left to the shell. The solid nodes are not tied to each other, so the
+    face is not stiffened (a distributing coupling, as the shell-to-solid couplings of general FE codes are
+    commonly described; derived here, no program's documentation checked). Needs at least two solid nodes
+    at different z on each line.
+    """
+    shell_nodes = [int(s) for s in np.atleast_1d(shell_nodes)]
+    solid_nodes = np.asarray(solid_nodes, int)
+    ts = np.broadcast_to(np.asarray(thickness, float), (len(shell_nodes),))
+    eqs = []
+    touched = set(shell_nodes)
+    size = float(np.ptp(nodes[solid_nodes], axis=0).max()) or 1.0
+    for s, t in zip(shell_nodes, ts):
+        n = normals[s] / np.linalg.norm(normals[s])
+        d = nodes[solid_nodes] - nodes[s]
+        z = d @ n
+        off = np.linalg.norm(d - z[:, None] * n[None, :], axis=1)
+        sel = np.nonzero((off <= tol * size) & (np.abs(z) <= t / 2 + tol * size))[0]
+        if len(sel) < 2 or np.ptp(z[sel]) <= tol * size:
+            raise ValueError(f"shell node {s}: fewer than two solid nodes across its thickness on the solid face")
+        js = solid_nodes[sel]
+        zj = z[sel]
+        zbar = zj.mean()
+        Szz = np.sum((zj - zbar) ** 2)
+        P = np.eye(3) - np.outer(n, n)
+        # v = sum_j a_j P u_j with a_j = (z_j - zbar) / Szz;  u_s = sum_j (1/m) u_j - zbar v
+        a = (zj - zbar) / Szz
+        m = len(js)
+        for k in range(3):
+            terms = [(s, k, 1.0)]
+            for j, aj in zip(js, a):
+                for l in range(3):
+                    c = (1.0 / m if l == k else 0.0) - zbar * aj * P[k, l]
+                    if c != 0.0:
+                        terms.append((int(j), l, -c))
+            eqs.append(Equation(terms, prefer=(s, k), source=name))
+        # theta . e = (n x v) . e = v . (e x n) for the two directions e across n
+        e1 = np.cross(n, [1.0, 0.0, 0.0])
+        if np.linalg.norm(e1) < 0.5:
+            e1 = np.cross(n, [0.0, 1.0, 0.0])
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(n, e1)
+        for e in (e1, e2):
+            w = P @ np.cross(e, n)  # v . (e x n) = sum_j a_j (P (e x n)) . u_j
+            terms = [(s, 3 + k, e[k]) for k in range(3) if e[k] != 0.0]
+            for j, aj in zip(js, a):
+                terms += [(int(j), l, -aj * w[l]) for l in range(3) if w[l] != 0.0]
+            big = int(np.argmax(np.abs(e)))
+            eqs.append(Equation(terms, prefer=(s, 3 + big), source=name))
+        touched.update(int(j) for j in js)
+    return Constraint(name, eqs, needs_rotation=tuple(shell_nodes), nodes=tuple(sorted(touched)))
+
+
 # ------------------------------------------------------------------ RBE3
 
 

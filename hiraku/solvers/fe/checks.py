@@ -189,6 +189,79 @@ def lame_cylinder(n_r: int = 4, n_t: int = 4, a: float = 50.0, b: float = 100.0,
             "equilibrium": equilibrium(sol)["residual"]}
 
 
+# ------------------------------------------------------------------ 8. shell + solid cantilever
+
+
+def shell_solid_cantilever(L: float = 200.0, L_solid: float = 80.0, b: float = 20.0, t: float = 4.0,
+                           P: float = 100.0, n_w: int = 2, size: float = 5.0) -> dict:
+    """A strip b x t (bending about its thin direction), clamped at x = 0, tip load P (-z) at x = L.
+
+    mixed: HEX20 from 0 to L_solid (n_w bricks across b, one through t), MITC4 on the mid-plane from L_solid to
+    L, the shell's root edge coupled to the solid's end face by shell_to_solid. all-shell: MITC4 from 0 to L
+    (root edge clamped in all six DOFs). all-solid: HEX20 from 0 to L. Root of the solids: all translations
+    of the face held. Tip load: equal shares along the shell's tip edge (half at the corners), a uniform
+    traction on the solid's tip face. Beam: Timoshenko P L^3 / (3 E I) + P L / (k G b t), k from Cowper.
+    """
+    from .connect import shell_node_normals, shell_to_solid
+    from .shell import MITC4
+
+    def shell_strip(x0, x1, nx, ny):
+        xs, ys = np.linspace(x0, x1, nx + 1), np.linspace(-b / 2, b / 2, ny + 1)
+        X, Y = np.meshgrid(xs, ys, indexing="ij")
+        idx = np.arange(X.size).reshape(nx + 1, ny + 1)
+        q = np.stack([idx[:-1, :-1], idx[1:, :-1], idx[1:, 1:], idx[:-1, 1:]], axis=-1).reshape(-1, 4)
+        return np.c_[X.ravel(), Y.ravel(), np.zeros(X.size)], q, idx
+
+    def tip_edge_load(F, ids):
+        w = np.ones(len(ids))
+        w[[0, -1]] = 0.5
+        F[ids, 2] -= P * w / w.sum()
+
+    ny = 2 * n_w  # shell nodes at every solid face node across the width (corners and mid-edges)
+    out = {}
+    # all-shell
+    xyz, q, idx = shell_strip(0.0, L, int(round(L / size)), ny)
+    m = FEModel(xyz)
+    m.add(MITC4(q, t, E_ST, NU_ST))
+    m.fix(idx[0], "all")
+    F = np.zeros((len(xyz), 6))
+    tip_edge_load(F, idx[-1])
+    sol = StaticSolver(m).solve(F)
+    out["all_shell"] = float(-sol.displacements[idx[-1], 2].mean())
+    # all-solid
+    xs = np.linspace(0, L, int(round(L / (2 * size))) + 1)
+    hm = fm.merge([fm.grid_block(xs, np.linspace(-b / 2, b / 2, n_w + 1), [-t / 2, t / 2], 2)])
+    m = FEModel(hm.nodes)
+    m.add(Hex20(hm.conn, E_ST, NU_ST))
+    m.fix(hm.nodes_where(lambda x, y, z: x < 1e-9), "xyz")
+    F = surface_load(hm.nodes, hm.faces_where(lambda x, y, z: np.abs(x - L) < 1e-9), (0, 0, -P / (b * t)))
+    sol = StaticSolver(m).solve(F)
+    out["all_solid"] = float(-sol.displacements[hm.nodes_where(lambda x, y, z: np.abs(x - L) < 1e-9), 2].mean())
+    # mixed
+    xs = np.linspace(0, L_solid, int(round(L_solid / (2 * size))) + 1)
+    hm = fm.merge([fm.grid_block(xs, np.linspace(-b / 2, b / 2, n_w + 1), [-t / 2, t / 2], 2)])
+    sxyz, q, idx = shell_strip(L_solid, L, int(round((L - L_solid) / size)), ny)
+    m = FEModel(hm.nodes)
+    sh_ids = m.add_nodes(sxyz)
+    m.add(Hex20(hm.conn, E_ST, NU_ST))
+    shell = m.add(MITC4(sh_ids[q], t, E_ST, NU_ST))
+    m.fix(hm.nodes_where(lambda x, y, z: x < 1e-9), "xyz")
+    face = hm.nodes_where(lambda x, y, z: np.abs(x - L_solid) < 1e-9)
+    normals = shell_node_normals(shell.conn, m.nodes)
+    root = sh_ids[idx[0]]
+    m.add(shell_to_solid(root, normals, m.nodes, face, t))
+    F = np.zeros((len(m.nodes), 6))
+    tip_edge_load(F, sh_ids[idx[-1]])
+    sol = StaticSolver(m).solve(F)
+    out["mixed"] = float(-sol.displacements[sh_ids[idx[-1]], 2].mean())
+    out["mixed_equilibrium"] = equilibrium(sol)["residual"]
+    out["mixed_rigid"] = rigid_body_energy(m)
+    I = b * t**3 / 12.0
+    k = 10 * (1 + NU_ST) / (12 + 11 * NU_ST)
+    out["beam"] = P * L**3 / (3 * E_ST * I) + P * L / (k * G_ST * b * t)
+    return out
+
+
 # ------------------------------------------------------------------ 4. plate with a hole, 3D
 
 
