@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, failing_end, init_judgements, judged_quantity, make_verdict,
+from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
                                 prediction_is_unfavourable, unfavourable_side, update_judgement)
 from hiraku.tools.summary import design_summary
 
@@ -69,7 +69,7 @@ def _compact_analysis(a: Record) -> Record:
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
                     "design_variables", "archetypes", "joint_wall_inputs", "formula_inputs")
-DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
+DEFAULT_CONTEXT_SECTIONS = ()  # no sections asked: context_overview (counts and ids), every section by name
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
 
@@ -189,16 +189,91 @@ def design_changes(ctx: RunContext) -> Record | None:
                      f"design_summary・formula_inputs をこの版でもう一度読む")}
 
 
+RECORD_KINDS = ("prediction", "analysis", "comparison", "cause", "verdict")
+# what each section holds, for the small default answer (no sections asked)
+SECTION_HINTS = {
+    "requirements": "要件の全部 (requirement_keys で絞れる)",
+    "load_cases": "荷重条件の中身: params・criterion・tolerance_rel・feeds・担当の役 (domain か load_case_id で絞れる)",
+    "judgements": "分野ごとの判定の札",
+    "records": "予測・解析・照合・原因・合否の記録 (record_kinds と load_case_id で絞れる)",
+    "design_summary": "手計算の入力になる設計の値",
+    "design": "設計の要約 (design_part・offset・limit で中身を少しずつ)",
+    "design_variables": "設計役が変えられる変数 (範囲と今の値)",
+    "archetypes": "設計の型 (archetype で 1 つに絞れる)",
+    "joint_wall_inputs": "つなぎ目の壁の曲げの式の入力 (load_case_id が要る)",
+    "formula_inputs": "荷重条件ごとの式の入力 (load_case_id か domain で絞れる)",
+}
+
+
+def _load_cases_wanted(ctx: RunContext, args: Record) -> list[Record]:
+    """The run's load cases, only the domain's or the one load case when args name them."""
+    out = list(ctx.load_cases)
+    if args.get("load_case_id"):
+        out = [ctx.load_case(args["load_case_id"])]
+    if args.get("domain"):
+        out = [lc for lc in out if lc["domain"] == args["domain"]]
+    return out
+
+
+def _records_section(ctx: RunContext, args: Record) -> Record:
+    """The run's records, only the kinds in record_kinds and those of load_case_id when given (a
+    comparison's and a cause's load case is their prediction's)."""
+    s = ctx.store
+    kinds = list(args.get("record_kinds") or RECORD_KINDS)
+    bad = [k for k in kinds if k not in RECORD_KINDS]
+    if bad:
+        raise ToolError(f"record_kinds は {', '.join(RECORD_KINDS)} のどれかです: {', '.join(bad)}")
+    lc_id = args.get("load_case_id")
+    if lc_id:
+        ctx.load_case(lc_id)  # an unknown id is refused with its sentence
+
+    def of_case(rec: Record) -> bool:
+        if not lc_id:
+            return True
+        if "load_case_id" in rec:
+            return rec["load_case_id"] == lc_id
+        cmp = rec if "prediction_id" in rec else s.get("comparison", rec.get("comparison_id", ""))
+        pred = ctx.prediction((cmp or {}).get("prediction_id", ""))
+        return bool(pred) and pred["load_case_id"] == lc_id
+
+    shape = {"prediction": ("predictions", _compact_prediction), "analysis": ("analyses", _compact_analysis),
+             "comparison": ("comparisons", None), "cause": ("causes", None), "verdict": ("verdicts", None)}
+    out: Record = {}
+    for k in kinds:
+        key, fn = shape[k]
+        out[key] = [fn(x) if fn else x for x in s.records(k) if of_case(x)]
+    return out
+
+
+def context_overview(ctx: RunContext) -> Record:
+    """get_context's default answer: counts and ids of what each section holds, with the sections named.
+    Every call goes into the caller's context; the sections are asked for by name."""
+    s = ctx.store
+    return {
+        "requirements": {"count": len(ctx.project["requirements"])},
+        "load_cases": [{"load_case_id": lc["load_case_id"], "domain": lc["domain"], "owner": ctx.owner(lc["load_case_id"]),
+                        "stage": load_case_stage(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
+                       for lc in ctx.load_cases],
+        "judgements": {j["domain"]: j["state"] for j in s.judgements()} if ctx.version else {},
+        "records": {k: len(s.records(k)) for k in RECORD_KINDS},
+        "sections_available": dict(SECTION_HINTS),
+    }
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
-    """The run so far: always the run, design version, picked domains and open mismatches;
-    `sections` adds parts (default: requirements, load_cases with the role that owns each,
-    judgements, records). design_summary (inputs for hand calculations), design (an overview of the
-    record; with design_part, offset and limit one page of a part of it), design_variables (what the designer may change), joint_wall_inputs (the joint wall
-    formula's inputs for `load_case_id`) and formula_inputs (every planned formula's inputs worked out
-    by code, for `load_case_id` or all load cases) come only when asked."""
+    """The run so far: always the run, design version, picked domains and open mismatches. Without
+    `sections`, an overview (context_overview: counts and ids, the sections named); `sections` adds
+    parts: requirements (requirement_keys filter), load_cases with the role that owns each (domain or
+    load_case_id filter), judgements, records (record_kinds and load_case_id filters), design_summary
+    (inputs for hand calculations), design (an overview of the record; with design_part, offset and
+    limit one page of a part of it), design_variables (what the designer may change), archetypes
+    (archetype filter), joint_wall_inputs (the joint wall formula's inputs for `load_case_id`) and
+    formula_inputs (every planned formula's inputs worked out by code, for `load_case_id`, a domain's
+    or all load cases)."""
     p = ctx.project
     s = ctx.store
-    wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
+    args = args or {}
+    wanted = args.get("sections") or DEFAULT_CONTEXT_SECTIONS
     out: Record = {
         "run_id": p["run_id"],
         "want": p["want"],
@@ -214,24 +289,44 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
         "sections": list(wanted),
     }
+    if not wanted:
+        out["overview"] = context_overview(ctx)
+        return out
+    if args.get("domain") and args["domain"] not in contract.DOMAINS:
+        raise ToolError(f"domain は {', '.join(contract.DOMAINS)} のどれかです: {args['domain']!r}")
+
+    def requirements() -> list[Record]:
+        keys = args.get("requirement_keys")
+        return [r for r in p["requirements"] if not keys or r["key"] in keys]
+
+    def kinds() -> Any:
+        got = archetypes(ctx)
+        if got is not None and args.get("archetype"):
+            got = [k for k in got if k.get("name") == args["archetype"]]
+            if not got:
+                raise ToolError(f"型 {args['archetype']!r} はありません (get_context の archetypes)")
+        return got
+
+    def formula_inputs() -> Record:
+        if args.get("load_case_id") or not args.get("domain"):
+            return formula_inputs_section(ctx, args.get("load_case_id"))
+        whole = {"design_version": ctx.version, "how": FORMULA_INPUTS_HOW, "load_cases": []}
+        for lc in _load_cases_wanted(ctx, args):
+            whole["load_cases"] += formula_inputs_section(ctx, lc["load_case_id"])["load_cases"]
+        return whole
+
     parts = {
-        "requirements": lambda: p["requirements"],
+        "requirements": requirements,
         "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"]), stage=load_case_stage(ctx, lc))
-                               for lc in ctx.load_cases],  # stage: HK5, lower stages first
+                               for lc in _load_cases_wanted(ctx, args)],  # stage: HK5, lower stages first
         "judgements": lambda: s.judgements() if ctx.version else [],
-        "records": lambda: {
-            "predictions": [_compact_prediction(x) for x in s.records("prediction")],
-            "analyses": [_compact_analysis(x) for x in s.records("analysis")],
-            "comparisons": s.records("comparison"),
-            "causes": s.records("cause"),
-            "verdicts": s.records("verdict"),
-        },
+        "records": lambda: _records_section(ctx, args),
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
-        "design": lambda: _design_section(ctx, args or {}),
+        "design": lambda: _design_section(ctx, args),
         "design_variables": lambda: design_variables(ctx),
-        "archetypes": lambda: archetypes(ctx),
-        "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),
-        "formula_inputs": lambda: formula_inputs_section(ctx, (args or {}).get("load_case_id")),
+        "archetypes": kinds,
+        "joint_wall_inputs": lambda: joint_wall_inputs(ctx, args.get("load_case_id")),
+        "formula_inputs": formula_inputs,
     }
     for name in wanted:
         out[name] = parts[name]()
@@ -333,13 +428,49 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
             raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
-        return [for_role(spec)]
+        load, run = tool_params(ctx, args["tool"])
+        whole = dict(spec)
+        if load or run:
+            whole.update(params=load, run_params=run, params_how=PARAMS_HOW)
+        return [for_role(whole)]
     out = list(ctx.specs.values()) + list(lines.values())
     if args.get("domain"):
         out = [s for s in out if s.get("domain") == args["domain"]]
     if args.get("test_id"):
         out = [s for s in out if args["test_id"] in s.get("tests", [])]
-    return [s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"])) for s in out]
+    rows = []
+    for s in out:
+        row = s if "not_checked" in s else dict(_tool_line(s), stage=tool_stage(ctx, s["name"]))
+        short = _params_short(*tool_params(ctx, s["name"]))
+        rows.append(dict(row, params=short) if short else row)
+    return rows
+
+
+PARAMS_HOW = ("params は荷重条件の params で道具が読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
+              "unit の量は {value, unit} で、choices があればその中から選ぶ")
+
+
+def tool_params(ctx: RunContext, name: str) -> tuple[list[Record], list[Record]]:
+    """The tool's describe() params and run_params ({name, kind, required, meaning, unit?, default?,
+    choices?} each, from hiraku.solvers.shelf.base Param.describe); ([], []) when it does not describe itself."""
+    describe = getattr(ctx.tools.get(name), "describe", None)
+    if not callable(describe):
+        return [], []
+    try:
+        d = describe()
+    except Exception:  # a tool made in the run may describe itself badly
+        return [], []
+    pick = lambda xs: [dict(x) for x in xs or [] if isinstance(x, dict) and x.get("name")]  # noqa: E731
+    return pick(d.get("params")), pick(d.get("run_params"))
+
+
+def _params_short(load: list[Record], run: list[Record]) -> list[str]:
+    """One string per param for list_tools' one-line entries: name, then [unit] or (choice|choice);
+    analyze's run params marked run."""
+    def one(p: Record, run_param: bool) -> str:
+        tail = f" ({'|'.join(map(str, p['choices']))})" if p.get("choices") else (f" [{p['unit']}]" if p.get("unit") else "")
+        return f"{p['name']}{tail}" + (" run" if run_param else "")
+    return [one(p, False) for p in load] + [one(p, True) for p in run]
 
 
 def _unchecked_line(name: str, tool: Any, version: int = 1) -> Record:
@@ -682,8 +813,13 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         if not for_verdict and crit and res["quantity"] == judged:
             out["note"] = (f"{where} の値は、全部の場所のうち不合格に近い方の値ではないので、この照合からは合否を作りません。"
                            f"合否は where を外した照合 (全部の場所の不利な方) で作ります")
-    if cmp["status"] == "match":
-        _resolve_causes(ctx, cmp, pred, agent)
+    # contract 9017d93: with the criterion's stand_in_quantity, values both below STAND_IN_BELOW x the limit
+    # are too small to compare; the verdict still comes from the analysis, and the tile's (b) from the stand-in
+    tiny = bool(crit and crit.get("stand_in_quantity")) and \
+        max(abs(predicted), abs(analyzed)) < STAND_IN_BELOW * abs(crit["limit"]["value"])
+    if cmp["status"] == "match" or (tiny and for_verdict):
+        if cmp["status"] == "match":
+            _resolve_causes(ctx, cmp, pred, agent)
         if for_verdict and crit["limit"]["unit"] == res["unit"]:
             ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc)
             ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
@@ -816,6 +952,43 @@ def requirements_now(ctx: RunContext) -> Record:
     return base
 
 
+def claude_picks(ctx: RunContext) -> list[Record] | None:
+    """The picks of the last domains.picked (pick_domains: Claude's domains, names, reasons and tests),
+    or None when the run has none."""
+    for e in reversed(ctx.store.events()):
+        if e["kind"] == "domains.picked":
+            picks = (e.get("data") or {}).get("picks")
+            return [dict(p) for p in picks] if isinstance(picks, list) else None
+    return None
+
+
+def _has_builder(catalog: Any, test_id: str) -> bool:
+    """Whether the test has a load case builder: the intake department's has_builder when there is one,
+    else hiraku.catalog.build.builder_for. An unknown test id has none."""
+    try:
+        from hiraku.intake import has_builder  # type: ignore[attr-defined]
+    except ImportError:
+        has_builder = None
+    try:
+        if has_builder is not None:
+            try:
+                return bool(has_builder(test_id))
+            except TypeError:  # another signature than this guess: the catalog's own lookup below
+                pass
+        from hiraku.catalog.build import builder_for
+
+        return builder_for(catalog, test_id) is not None
+    except (KeyError, ValueError):
+        return False
+
+
+def _test_title(catalog: Any, test_id: str) -> str:
+    try:
+        return catalog.test(test_id)["title"]
+    except (KeyError, ValueError):
+        return ""
+
+
 def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """The designer's first version: an archetype, its choices and variables (the kit computes
     every coordinate; the requirements give the occupants, cargo and top speed). Then the load
@@ -850,14 +1023,39 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     if errs:
         raise ToolError("組んだ設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     catalog = load_catalog()
+    claude = None if req.get("tests") else claude_picks(ctx)  # a file that lists its tests decides them
+    no_builder: list[str] = []
     try:
-        load_cases, skipped = build_tests(catalog, req, design)
+        if claude is not None and any(p.get("test_ids") for p in claude):
+            from hiraku.catalog.build import build_load_cases
+
+            wanted = list(dict.fromkeys(t for p in claude for t in p.get("test_ids") or []))
+            no_builder = [t for t in wanted if not _has_builder(catalog, t)]
+            skipped = []
+            load_cases = build_load_cases(catalog, req, design, [t for t in wanted if t not in no_builder], skipped,
+                                          beyond=req.get("beyond", []))
+            if not load_cases:
+                raise ValueError("no test Claude picked could be built: "
+                                 + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
+                                 f"none of {', '.join(wanted)} has a builder")
+        else:
+            load_cases, skipped = build_tests(catalog, req, design)
     except ValueError as e:
         raise ToolError(f"この設計では試験の荷重条件を組めません: {e}") from None
     ctx.store.write_design(design, agent=agent)
     fields = project_fields(catalog, req, load_cases)
+    if claude is not None:  # Claude's picks (pick_domains) as Claude wrote them: domains, names, reasons, tests
+        from hiraku.catalog import agents_for
+
+        fields["domain_picks"] = [{k: p[k] for k in ("domain", "shown_name", "reason", "test_ids") if k in p}
+                                  for p in claude]
+        fields["agents"] = agents_for(catalog, load_cases, [p["domain"] for p in claude])
     ctx.store.update_project({k: fields[k] for k in ("domain_picks", "load_cases", "agents")}, agent=agent,
                              text=f"版 1 の試験: {'、'.join(lc['load_case_id'] for lc in load_cases)}")
+    if no_builder:
+        named = "、".join(f"{t} {_test_title(catalog, t)}" for t in no_builder)
+        ctx.store.emit("agent.said", agent="system",
+                       text=f"選んだ試験のうち {named} は、荷重条件の作り方 (builder) がまだ無いので、この実行では見ません")
     if skipped:
         ctx.store.emit("agent.said", agent="system", text=skipped_text(catalog, skipped))
     # the tools of version 1's tests that the start did not check (a run whose tests were not fixed then)
@@ -973,6 +1171,58 @@ def _made_answer(made: Any) -> Record:
             "printed": made.printed[-2000:]}
 
 
+# Words by which a known answer's source names a reference outside the tool (lower case; HIRAKU's choice).
+REFERENCE_WORDS = ("closed form", "closed-form", "textbook", "handbook", "standard", "by hand", "statics",
+                   "閉じた式", "教科書", "便覧", "規格", "手計算", "jis ", "iso ", "iso-", "iiw", "roark", "eurocode")
+
+
+def _names_reference(source: str, spec: Record) -> bool:
+    """Whether a known answer's source names a reference, once the tool's own name and formula ids are taken
+    out of it (the tool's own formula is not a source for its own answer)."""
+    text = f" {source.lower()} "
+    for own in [spec.get("name") or "", *(spec.get("formulas") or [])]:
+        if own:
+            text = text.replace(own.lower(), " ")
+    return any(w in text for w in REFERENCE_WORDS)
+
+
+def made_refusals(ctx: RunContext, made: Any) -> list[str]:
+    """This department's rule on a made tool, after the toolmaker's checks (tool_template.RULE): the spec
+    names formulas the run knows, and one known answer has a nonzero expected value whose source names a
+    reference. The sentences say what to add. [] when the code gave no spec (the toolmaker said why)."""
+    spec = made.spec if isinstance(made.spec, dict) else None
+    if spec is None:
+        return []
+    out = []
+    formulas = [f for f in spec.get("formulas") or [] if isinstance(f, str)]
+    if not formulas:
+        out.append("spec の formulas が空です。この道具の結果を予測する K0 の式の formula_id (list_formulas) を "
+                   "formulas = [...] に書いてください。判定には手計算の予測が要ります")
+    else:
+        known = {f["formula_id"] for f in ctx.formulas.list_formulas()}
+        unknown = [f for f in formulas if f not in known]
+        if unknown:
+            out.append(f"formulas の {', '.join(unknown)} は式の一覧にありません。list_formulas にある formula_id を書いてください")
+    good = [c for c in made.checks if isinstance(c.get("expected"), (int, float)) and c["expected"] != 0
+            and _names_reference(str(c.get("source") or ""), spec)]
+    if not good:
+        out.append("答えの分かっている例に、expected が 0 でなく、source が道具の外の出典 (閉じた式・教科書・規格、"
+                   "例: \"closed form sigma = F L / 4 (h / 2) / I, worked out by hand\") を名指しするものがありません。"
+                   "そういう例を known_answers に少なくとも 1 つ足してください (道具自身の式の値は出典になりません)")
+    return out
+
+
+def _apply_refusals(ctx: RunContext, made: Any) -> Any:
+    refused = made_refusals(ctx, made)
+    if refused:
+        made.problems = list(made.problems) + refused
+        made.usable = False
+        made.tool = None
+        if isinstance(made.spec, dict):
+            made.spec = dict(made.spec, usable=False)
+    return made
+
+
 def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
     """One whole tool in the shape make_tool takes, and what its parts must be (hiraku.tools.tool_template)."""
     from hiraku.tools.tool_template import tool_template
@@ -981,11 +1231,14 @@ def get_tool_template(ctx: RunContext, args: dict[str, Any] | None = None, agent
 
 
 def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
-    """Check a tool's code on its own known answers in a separate process, without shelving it."""
+    """Check a tool's code on its own known answers in a separate process, without shelving it; the answer
+    has the API a made tool may use (tool_template.allowed_api, read from the toolmaker's allow list)."""
     from hiraku.solvers import toolmaker
+    from hiraku.tools.tool_template import RULE, allowed_api
 
     code = _check_code_input("check_tool", args)
-    return _made_answer(toolmaker.make_tool(code, taken=tuple(ctx.tools)))
+    out = _made_answer(_apply_refusals(ctx, toolmaker.make_tool(code, taken=tuple(ctx.tools))))
+    return {**out, "rule": RULE, "api": allowed_api()}
 
 
 UNNAMED_TOOL = "unnamed"
@@ -1030,7 +1283,13 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
         raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
-    made = ctx.made_tools.make(code, taken=tuple(ctx.tools), reason=args.get("reason"))
+    shelf = ctx.made_tools
+    if callable(getattr(shelf, "add", None)):  # checked, then this department's rule, then kept (RunShelf.make's order)
+        made = _apply_refusals(ctx, toolmaker.make_tool(code, taken=tuple(ctx.tools)))
+        made.reason = args.get("reason")
+        shelf.add(made)
+    else:
+        made = _apply_refusals(ctx, shelf.make(code, taken=tuple(ctx.tools), reason=args.get("reason")))
     spec = attempt_spec(made, agent, list(ctx.picked))
     usable = bool(made.usable) and spec is made.spec and spec["usable"]
     ok = "使えます" if usable else "使えません (" + ("; ".join(made.problems) or "spec() の形が契約に合いません")[:300] + ")"

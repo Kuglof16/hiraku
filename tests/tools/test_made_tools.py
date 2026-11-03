@@ -10,8 +10,12 @@ import unittest
 from hiraku.contract import layout
 from hiraku.tools import ToolError, rules
 from hiraku.tools.functions import check_tool, list_tools, make_tool
-from tests.solvers.k2.test_toolmaker import GOOD, WRONG
+from tests.solvers.k2.test_toolmaker import GOOD as K2_GOOD, WRONG as K2_WRONG
 from tests.tools.helpers import RunCase
+
+# with the K0 formula that predicts its result (make_tool refuses a tool without one: functions.made_refusals)
+GOOD, WRONG = (c.replace('tests = ["R5"]', 'tests = ["R5"]\n    formulas = ["frame_static.rail_bending"]')
+               for c in (K2_GOOD, K2_WRONG))
 
 
 class MadeToolTest(RunCase, unittest.TestCase):
@@ -66,6 +70,31 @@ class MadeToolTest(RunCase, unittest.TestCase):
         self.assertTrue(make_tool(self.ctx, {"code": GOOD, "reason": "R5 has no tool"}, "cae.strength")["usable"])
         (kept,) = (self.ctx.store.path / layout.TOOLS_DIR).glob("cantilever_tip-*.check.json")
         self.assertEqual(json.loads(kept.read_text(encoding="utf-8"))["reason"], "R5 has no tool")
+
+    def test_a_made_tool_gets_the_upstream_analyses_as_a_shelf_tool_does(self):
+        """analyze passes params["upstream_analyses"] (the load case's feeds) through the made tool's own
+        process: R1 is fed by P1 here (a stand-in for the care bed's P5 -> T3)."""
+        from hiraku.tools.functions import analyze
+
+        self.assertEqual([u["load_case_id"] for u in self.ctx.upstream_of("R1-step100")], ["P1-step100"])
+        reads_upstream = GOOD.replace('''        return {"results": [result("tip_deflection", tip_deflection(F, L, 205000.0, b ** 4 / 12.0), "mm")]}''', '''\
+        ups = params.get("upstream_analyses") or {}
+        up = ups["P1-step100"]
+        got = next(r for r in up["results"] if r["quantity"] == "front_wheel_force")
+        return {"results": [result("tip_deflection", tip_deflection(F, L, 205000.0, b ** 4 / 12.0), "mm"),
+                            result("upstream_force", got["value"], got["unit"])],
+                "inputs_from": [up["analysis_id"]]}''')
+        self.assertNotEqual(reads_upstream, GOOD)
+        self.assertTrue(make_tool(self.ctx, {"code": reads_upstream, "reason": "test"}, "cae.strength")["usable"])
+        up, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": up["results"][1]["value"], "unit": "N"})
+        rec = analyze(self.ctx, {"tool": "cantilever_tip", "load_case_id": "R1-step100",
+                                 "prediction_ids": [r1["prediction_id"]]})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        force = next(r for r in up["results"] if r["quantity"] == "front_wheel_force")
+        got = next(r for r in rec["results"] if r["quantity"] == "upstream_force")
+        self.assertEqual((got["value"], got["unit"]), (force["value"], force["unit"]))
+        self.assertIn(up["analysis_id"], rec["inputs_from"])
 
     def test_a_spec_that_does_not_fit_the_contract_is_recorded_but_never_shelved(self):
         from types import SimpleNamespace

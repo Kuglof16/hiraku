@@ -20,17 +20,58 @@ class StartTest(RunCase, unittest.TestCase):
     def test_get_context(self):
         c = get_context(self.ctx, {})
         self.assertEqual(c["design_version"], 1)
+        # without sections: the small overview only (counts and ids, the sections named)
+        self.assertEqual(c["sections"], [])
+        ov = c["overview"]
+        self.assertEqual([lc["load_case_id"] for lc in ov["load_cases"]], ["P1-step100", "R1-step100"])
+        self.assertEqual({lc["owner"] for lc in ov["load_cases"]}, {"cae.strength"})
+        self.assertEqual(ov["load_cases"][0]["feeds"], ["R1-step100"])
+        self.assertEqual(ov["judgements"], {"strength": "pending"})
+        self.assertEqual(ov["records"], {"prediction": 0, "analysis": 0, "comparison": 0, "cause": 0, "verdict": 0})
+        from hiraku.tools.functions import CONTEXT_SECTIONS
+
+        self.assertEqual(set(ov["sections_available"]), set(CONTEXT_SECTIONS))
+        for big in ("requirements", "load_cases", "records", "design", "design_summary", "design_variables"):
+            self.assertNotIn(big, c)
+        c = get_context(self.ctx, {"sections": ["load_cases"]})
         self.assertEqual([lc["load_case_id"] for lc in c["load_cases"]], ["P1-step100", "R1-step100"])
         self.assertEqual({lc["owner"] for lc in c["load_cases"]}, {"cae.strength"})
-        # the large parts only on request
-        self.assertEqual(c["sections"], ["requirements", "load_cases", "judgements", "records"])
-        for big in ("design", "design_summary", "design_variables"):
-            self.assertNotIn(big, c)
         c = get_context(self.ctx, {"sections": ["design_summary"]})
         self.assertEqual(c["design_summary"]["wheelbase"], {"value": 1800.0, "unit": "mm"})
         self.assertEqual(c["design_summary"]["member_length"]["rail_L0"]["value"], 900.0)
         self.assertNotIn("load_cases", c)
         self.assertEqual(get_context(self.ctx, {"sections": ["design"]})["design"]["design_version"], 1)
+
+    def test_large_sections_are_filtered(self):
+        def ids(args):
+            return [lc["load_case_id"] for lc in get_context(self.ctx, {"sections": ["load_cases"], **args})["load_cases"]]
+
+        self.assertEqual(ids({"load_case_id": "R1-step100"}), ["R1-step100"])
+        self.assertEqual(ids({"domain": "powertrain"}), ["P1-step100"])
+        self.assertEqual(ids({"domain": "aero"}), [])
+        with self.assertRaises(ToolError):
+            get_context(self.ctx, {"sections": ["load_cases"], "domain": "nope"})
+        reqs = get_context(self.ctx, {"sections": ["requirements"], "requirement_keys": ["Q15"]})["requirements"]
+        self.assertEqual([r["key"] for r in reqs], ["Q15"])
+        ana, c1, c2 = self.run_p1()
+        rec = get_context(self.ctx, {"sections": ["records"], "record_kinds": ["comparison"]})["records"]
+        self.assertEqual(set(rec), {"comparisons"})
+        self.assertEqual(len(rec["comparisons"]), 2)
+        rec = get_context(self.ctx, {"sections": ["records"], "load_case_id": "R1-step100"})["records"]
+        self.assertEqual([len(v) for v in rec.values()], [0, 0, 0, 0, 0])
+        rec = get_context(self.ctx, {"sections": ["records"], "load_case_id": "P1-step100"})["records"]
+        self.assertEqual((len(rec["predictions"]), len(rec["analyses"]), len(rec["comparisons"])), (2, 1, 2))
+        self.assertEqual(get_context(self.ctx)["overview"]["records"]["comparison"], 2)
+        with self.assertRaises(ToolError):
+            get_context(self.ctx, {"sections": ["records"], "record_kinds": ["nope"]})
+
+    def test_the_mcp_schema_lists_the_filters(self):
+        from hiraku.tools.mcp import DESCRIPTIONS, INPUT_SCHEMAS
+
+        props = INPUT_SCHEMAS["get_context"]["properties"]
+        for k in ("sections", "load_case_id", "domain", "record_kinds", "requirement_keys", "archetype", "design_part"):
+            self.assertIn(k, props)
+        self.assertIn("overview", DESCRIPTIONS["get_context"])
 
     def test_list_filters(self):
         self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})["formulas"]],
@@ -48,6 +89,27 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(full["checks"][0]["case"], "known answer")
         with self.assertRaises(ToolError):
             list_tools(self.ctx, {"tool": "nope"})
+
+    def test_list_tools_shows_the_params(self):
+        """A tool's params (name, unit, meaning, default, choices) from its describe(): whole with tool=...,
+        short in the one-line entries (the launch tool's until: target|top_speed)."""
+        from hiraku.solvers.k2_vehicle.shelf.launch import LaunchTool
+
+        self.ctx.tools["launch"] = LaunchTool()  # describe() only; no checks run
+        self.ctx.specs["launch"] = {"name": "launch", "title": "launch", "domain": "powertrain", "base": "K2",
+                                    "tests": ["P2"], "usable": True, "checks": []}
+        (whole,) = list_tools(self.ctx, {"tool": "launch"})
+        until = next(p for p in whole["params"] if p["name"] == "until")
+        self.assertEqual(until["choices"], ["target", "top_speed"])
+        self.assertEqual(until["default"], "target")
+        self.assertIn("meaning", until)
+        speed = next(p for p in whole["params"] if p["name"] == "target_speed")
+        self.assertEqual((speed["unit"], speed["default"]), ("km/h", {"value": 40.0, "unit": "km/h"}))
+        self.assertIn("params_how", whole)
+        line = next(t for t in list_tools(self.ctx) if t["name"] == "launch")
+        self.assertIn("until (target|top_speed)", line["params"])
+        self.assertIn("target_speed [km/h]", line["params"])
+        self.assertNotIn("checks", line)
 
     def test_list_formulas_follows_the_tools_list(self):
         self.ctx.specs["frame_static"]["formulas"] = ["frame_static.rail_bending", "mass_props.front_wheel_load"]
@@ -978,3 +1040,53 @@ class UnpredictableCaseTest(RunCase, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToolParamsTest(RunCase, unittest.TestCase):
+    """list_tools shows a tool's params (from its describe()), so a role need not guess them."""
+
+    def test_params_in_the_line_and_in_the_whole_spec(self):
+        from hiraku.tools.functions import PARAMS_HOW
+
+        tool = self.tools["step_climb"]
+        tool.describe = lambda: {"params": [{"name": "step_height", "kind": "quantity", "unit": "mm", "required": True,
+                                              "meaning": "step"}],
+                                 "run_params": [{"name": "until", "kind": "string", "choices": ["climbed", "time"],
+                                                 "required": False, "meaning": "when to stop"}]}
+        (line,) = [t for t in list_tools(self.ctx) if t["name"] == "step_climb"]
+        self.assertEqual(line["params"], ["step_height [mm]", "until (climbed|time) run"])
+        (whole,) = list_tools(self.ctx, {"tool": "step_climb"})
+        self.assertEqual(whole["params"][0]["name"], "step_height")
+        self.assertEqual(whole["run_params"][0]["choices"], ["climbed", "time"])
+        self.assertEqual(whole["params_how"], PARAMS_HOW)
+        (plain,) = [t for t in list_tools(self.ctx) if t["name"] == "frame_static"]
+        self.assertNotIn("params", plain)
+
+
+class StandInQuantityTest(RunCase, unittest.TestCase):
+    """Contract 9017d93 criterion.stand_in_quantity: values of the judged quantity both below 1e-6 x the limit
+    are too small to compare; compare still makes the verdict, and the tile's (b) looks at the stand-in."""
+
+    def test_tiny_values_are_judged_and_the_stand_in_decides_b(self):
+        from hiraku.tools.judge import STAND_IN_BELOW, held_cases
+
+        ana, _, _ = self.run_p1()
+        lc = self.ctx.load_case("R1-step100")
+        lc["criterion"] = dict(lc["criterion"], stand_in_quantity="max_stress_range")
+        self.tools["frame_static"].factor = 1e-9  # the tool reads P1's force: its stress becomes tiny too
+        tiny_F = {"value": 1e-9, "unit": "N"}  # every stress far below 1e-6 x the limit
+        r1 = self.predict_r1(tiny_F)
+        a2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100", "prediction_ids": [r1["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": a2["analysis_id"]})
+        self.assertEqual(out["comparison"]["status"], "mismatch")
+        self.assertLess(out["comparison"]["analyzed"]["value"], STAND_IN_BELOW * lc["criterion"]["limit"]["value"])
+        self.assertTrue(out["verdict"]["pass"])  # (a) on the judged quantity
+        self.assertIn("R1-step100", held_cases(self.ctx, "strength", 1))  # the stand-in is not compared yet
+        # (b) comes from the stand-in's latest comparison: a match frees it, a later unexplained mismatch holds it
+        base = dict(out["comparison"], quantity="max_stress_range", predicted={"value": 10.0, "unit": "MPa"})
+        match = dict(base, comparison_id="cmp-9998", status="match", analyzed={"value": 10.2, "unit": "MPa"}, diff_rel=0.02)
+        self.ctx.store.add_record("comparison", match, design_version=1, agent="cae.strength", domain="strength")
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", 1))
+        miss = dict(base, comparison_id="cmp-9999", status="mismatch", analyzed={"value": 20.0, "unit": "MPa"}, diff_rel=1.0)
+        self.ctx.store.add_record("comparison", miss, design_version=1, agent="cae.strength", domain="strength")
+        self.assertIn("R1-step100", held_cases(self.ctx, "strength", 1))
