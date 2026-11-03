@@ -13,6 +13,12 @@ hot-spot stress along the joints' weld lines (k1_shell.stress.hot_spots, on
 the mesh's weld strips). max_stress, the largest element stress, sits at a
 sharp re-entrant corner of a joint where the shell's stress is singular, so
 it grows as the elements shrink; it is kept as a reference.
+
+Run parameters (analyze's params): element_size, the shell elements' target
+edge (the version's mesh record is made at the default, so another size is
+solved but not drawn on it); mesh_check "half" also solves at half that size
+and reports how much the hot spot and the element peak change (the hot spot
+should hold, the peak at the sharp corner grows).
 """
 
 from __future__ import annotations
@@ -23,9 +29,11 @@ from ..k1_frame import analyze as beam_analyze
 from ..k1_frame import stress_terms
 from ..k1_frame.surface import wall_von_mises
 from ..k1_shell.frame import analyze_shell, element_place, membrane_bending
+from ..k1_shell.mesh import ELEMENT_SIZE_MM
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from . import scene
-from .base import G_FACTOR, LOADING, BuiltinTool, Predicts, Record, mesh_of, on_board, param_list, param_value, result
+from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
+                   param_value, result, run_param)
 from .frame_static import (JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, front_supports, g_factor,
                            upstream_ground_forces)
 
@@ -33,6 +41,15 @@ WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_i
                "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
                "side wall's plate bending is largest; the shell's hot spot is that wall bending at a cross member's end, "
                "read at the weld line")
+# element_size: 5 mm is about half a minute for the demo frame (80,630 elements, 33 s on the development PC);
+# past 20 mm the elements are far wider than the weld strips (t to 2t) beside them. HIRAKU's choice.
+ELEMENT_SIZE_RANGE_MM = (5.0, 20.0)
+ELEMENT_SIZE = Param("element_size", "mm", "target edge of the shell elements (the version's mesh record has the default "
+                     f"size; another size is solved but not drawn on it); {ELEMENT_SIZE_RANGE_MM[0]:g} to "
+                     f"{ELEMENT_SIZE_RANGE_MM[1]:g} mm", default=ELEMENT_SIZE_MM)
+MESH_CHECK = Param("mesh_check", None, "'half': also solve with half the element size (not below "
+                   f"{ELEMENT_SIZE_RANGE_MM[0]:g} mm) and report the change of max_hot_spot_stress and max_stress",
+                   choices=("half",))
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
 LABELS = {
     "max": "シェルの von Mises (外と内の面の大きい方)",
@@ -315,6 +332,29 @@ def same_mesh(res: dict, mesh: Record) -> str | None:
     return None
 
 
+def mesh_change(out: Record, res: dict, fine: dict) -> None:
+    """Add the half-size solve's hot spot and element peak to out (results, effects)."""
+    a, b = res["mesh"].element_size_mm, fine["mesh"].element_size_mm
+    n_a, n_b = res["mesh"].n_elements, fine["mesh"].n_elements
+    p_a, p_b = res["member_max"][res["worst_member"]][0], fine["member_max"][fine["worst_member"]][0]
+    peak = (f"max_stress {p_a:.1f} -> {p_b:.1f} MPa ({p_b / p_a - 1:+.1%}; the element at the sharp corner, which grows "
+            f"as the elements shrink)")
+    out["results"].append(result("max_stress_half_size", p_b, "MPa", fine["worst_member"]))
+    top_a, top_b = res.get("hot_spot_max"), fine.get("hot_spot_max")
+    if top_a is None or top_b is None:
+        out["effects"].append({"name": f"mesh check {a:g} -> {b:g} mm ({n_a} -> {n_b} elements): no hot spot to "
+                                       f"compare; {peak}", "value": b, "unit": "mm"})
+        return
+    h_a, h_b = abs(top_a["value"]), abs(top_b["value"])
+    change = h_b / h_a - 1.0
+    out["results"] += [result("max_hot_spot_stress_half_size", h_b, "MPa", top_b["member"]),
+                       result("hot_spot_change_half_size", change, "1", top_b["member"])]
+    out["effects"].append({"name": (f"mesh check {a:g} -> {b:g} mm ({n_a} -> {n_b} elements): max_hot_spot_stress "
+                                    f"{h_a:.1f} -> {h_b:.1f} MPa ({change:+.1%}) at joint {top_a['joint']} -> "
+                                    f"{top_b['joint']}; {peak}"),
+                           "value": change, "unit": "1"})
+
+
 class FrameShell(BuiltinTool):
     name = "frame_shell"
     title = "フレームの静的 (シェル: 管の壁の板)"
@@ -330,6 +370,7 @@ class FrameShell(BuiltinTool):
         "mass_props.static_wheel_loads",
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
+    run_params = (ELEMENT_SIZE, MESH_CHECK)
     predicts = (
         Predicts("max_hot_spot_stress", "frame_static.joint_wall_bending", "sigma", WALL_INPUTS),
         Predicts("max_stress", "frame_static.rail_joint_stress", "sigma",
@@ -354,7 +395,7 @@ class FrameShell(BuiltinTool):
         frame_static: ground forces and the inertia force from an upstream
         analysis), mesh (the version's shell mesh record: the shell stresses
         and displacements are added as fields on it when it is the mesh solved
-        here)."""
+        here), and run_params."""
         design = on_board(design, load_case)
         g = g_factor(load_case)
         up = upstream_ground_forces(params.get("upstream_analyses"), design)
@@ -363,11 +404,22 @@ class FrameShell(BuiltinTool):
         if up is None and step is not None:
             sup = param_list(load_case, "step_supports") or front_supports(design)
         inertia = up[2] if up else None
-        res = analyze_shell(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
-                            ground_forces=up[1] if up else None, inertia_N=inertia)
+        size, check = run_param(params, ELEMENT_SIZE), run_param(params, MESH_CHECK)
+        lo, hi = ELEMENT_SIZE_RANGE_MM
+        if not lo <= size <= hi:
+            raise LoadCaseError(f"run parameter element_size must be {lo:g} to {hi:g} mm, got {size:g} mm")
+        if check == "half" and size / 2.0 < lo:
+            raise LoadCaseError(f"mesh_check 'half' needs element_size {2 * lo:g} mm or more (half of {size:g} mm is "
+                                f"below {lo:g} mm)")
+        solve = dict(g_factor=g, step_mm=None if up else step, step_supports=sup, ground_forces=up[1] if up else None,
+                     inertia_N=inertia)
+        res = analyze_shell(design, element_size_mm=size, **solve)
         ground = {sid: [(k, p, f) for k, p, f in gr["vectors"]] for sid, gr in res["ground"].items()}
         beam = beam_analyze(design, g_factor=g, ground_forces=ground, inertia_N=inertia)
         out = shell_outputs(design, res, beam, up[0] if up else None, None if up else step, sup)
+        if check == "half":
+            fine = analyze_shell(design, element_size_mm=size / 2.0, **solve)
+            mesh_change(out, res, fine)
         mesh, why = mesh_of(design, params)
         if mesh is not None:
             why = same_mesh(res, mesh)
