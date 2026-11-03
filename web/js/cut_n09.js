@@ -5,22 +5,31 @@
 // seven domains and assembly, one chip a row, in the fixed order of labels.js DOMAINS).
 //
 // Which product: layout.json n09._note says only the off-road vehicle, so the cut plays
-// the one run named by ?run= (its domains.picked, the newest one) and no other. The run that
+// the one run named by ?run= (its domains.picked, the newest one: a run Claude picks for holds
+// two, the catalog's first at start_run and Claude's after it) and no other. The run that
 // picks the domains holds no design (it stops after the pick), so the vehicle in the view
 // is the first design of the run named by ?design_run= (a run of the same product); without
 // one the view says it has none.
 //
 // A chip's words: the domain's name as the other cuts give it (labels.js DOMAIN_JA, as the
-// N00 chips and the N04 / N15 tiles), and on the line under it the domain in the viewers'
-// words (DOMAIN_PLAIN_JA). The tests that apply are not listed (a third line would crowd the
-// chip; the eight rows of the box leave room for two lines).
+// N00 chips and the N04 / N15 tiles), and one line under it. The eight rows of the box leave
+// room for two lines (about 63 px), so the second line is one of: the domain in the viewers'
+// words (DOMAIN_PLAIN_JA), or at a lit chip's turn Claude's reason in their place, or at a
+// pale chip's turn the plain words and the record's reason after them. The tests that apply
+// are not listed.
+//
+// Which reason: a pale chip's is the record's (why it is not looked at; labels.js
+// plainReason). A lit chip's is the pick's reason (picks[].reason, labels.js plainSentence)
+// only when it is Claude's words: the record carries flag_reasons (Claude's picker writes
+// them; the catalog's pick at start_run does not) and the reason names none of the pick's
+// tests (the sentence the code writes lists them). Assembly has no reason in the record, so
+// it keeps its plain words. Ids are out either way.
 //
 // The chips light one at a time from times.chips_from_s, every times.chip_step_s, in the
 // order of the record: the picks as listed, then the domains left off (off), then assembly.
 // A pick with tests that apply (test_ids) lights; assembly lights when the record lists
-// assembly_test_ids. A pick with no test to apply, or a domain left off, stays pale and at
-// its turn adds the record's reason to its second line (labels.js plainReason: the sentence
-// that says why, without ids). Until its turn a chip is pale.
+// assembly_test_ids. A pick with no test to apply, or a domain left off, stays pale. Until
+// its turn a chip waits with its plain words.
 //
 // Story (layout.json story.cuts.n09): label 8, the seven domains and assembly. The eight
 // names are the labels; the second lines are notes (data-kind note, text_px x 0.7, at least
@@ -31,7 +40,7 @@
 
 import * as THREE from "three";
 import { clearOfBand } from "./compose.js";
-import { DOMAINS, DOMAIN_JA, DOMAIN_PLAIN_JA, esc, plainReason } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, DOMAIN_PLAIN_JA, esc, plainReason, plainSentence } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { applyEvent, initialState } from "./state.js";
@@ -52,6 +61,12 @@ const N09_KEYS = [
 ];
 const TOP_KEYS = ["min_text_px", "stage", "subtitle_band"];
 
+// The joins a reason is cut at when it does not fit (see fitLine), in order; each returns
+// the shorter sentence, or the same one when it has no such join.
+const after = (s, sep) => (s.indexOf(sep) > 0 ? s.slice(s.indexOf(sep) + sep.length).trim() : s);
+const PALE_CUTS = [(s) => after(s, " は")];
+const LIT_CUTS = [(s) => s.replace(/かを確かめる$/, "か"), (s) => after(s, "、")];
+
 const get = (obj, path) => path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
 export function missingN09Keys(layout) {
@@ -63,13 +78,21 @@ function pickedOf(events) {
   return (events ?? []).filter((e) => e.kind === "domains.picked").at(-1)?.data ?? null;
 }
 
+// Whether a lit pick's reason is Claude's words (see the top).
+function claudesReason(picked, p) {
+  const reason = String(p.reason ?? "");
+  if (!reason.trim() || !Object.keys(picked?.flag_reasons ?? {}).length) return false;
+  const words = reason.split(/[^A-Za-z0-9-]+/);
+  return !(p.test_ids ?? []).some((id) => words.includes(id));
+}
+
 // The eight chips in the order they light (see the top): { domain, lit, reason, kind }.
 // kind: "pick" (tests apply), "none" (picked, no test to apply), "off", "assembly", "absent".
-// reason: the record's reason for a pale chip ("" when lit or when the record gives none).
+// reason: the second line at the chip's turn ("" when the record gives none to show).
 export function chipsOf(picked) {
   const out = [];
   for (const p of picked?.picks ?? []) {
-    if ((p.test_ids ?? []).length) out.push({ domain: p.domain, lit: true, kind: "pick", reason: "" });
+    if ((p.test_ids ?? []).length) out.push({ domain: p.domain, lit: true, kind: "pick", reason: claudesReason(picked, p) ? plainSentence(p.reason) : "" });
     else out.push({ domain: p.domain, lit: false, kind: "none", reason: plainReason(p.reason) });
   }
   for (const o of picked?.off ?? []) out.push({ domain: o.domain, lit: false, kind: "off", reason: plainReason(o.reason) });
@@ -166,33 +189,44 @@ export class CutN09 {
       row.dataset.domain = d;
       row.dataset.kindOf = c.kind;
       Object.assign(row.style, { top: `${i * (rowH + C.row_gap)}px`, height: `${rowH}px`, borderColor: this.spec.colors.rule, background: this.spec.colors.panel });
-      // the eight names are the story's labels (the seven domains and assembly)
+      // the eight names are the story's labels (the seven domains and assembly); the line
+      // under each is a note
       row.innerHTML =
         `<b class="name" data-kind="label" style="font-size:${namePx}px">${esc(DOMAIN_JA[d])}</b>` +
-        `<span class="line" data-kind="note" style="font-size:${linePx}px"><span class="plain">${esc(DOMAIN_PLAIN_JA[d])}</span><span class="why"></span></span>`;
+        `<span class="line" data-kind="note" style="font-size:${linePx}px">${esc(DOMAIN_PLAIN_JA[d])}</span>`;
       box.append(row);
-      this.rows[d] = { row, chip: c, line: row.querySelector(".line"), why: row.querySelector(".why") };
+      this.rows[d] = { row, chip: c, line: row.querySelector(".line") };
     });
     this.linePx = linePx;
     this.lineRoom = C.w - 2 * BORDER_PX - 2 * PAD_PX;
   }
 
-  // The second line in one line: the plain name, and on a pale chip at its turn the record's
-  // reason after it; a pixel at a time down to min_text_px; a reason that still does not fit
-  // drops its subject (the tests' names before " は"; the chip names the domain), and only then
-  // is it cut short with an ellipsis. Done at each frame (measured once the page's font is
-  // in), from the record's words each time, so the frame at t is always the same.
-  fitLine({ chip, line, why }, on) {
-    const shrink = (reason) => {
-      why.textContent = reason ? `：${reason}` : "";
+  // The second line (see the top) in one line: a pixel at a time down to min_text_px; a
+  // reason that still does not fit is cut at the joins of its sentence, one at a time (a pale
+  // chip's drops its subject, the tests' names before " は"; a lit chip's first ends at the
+  // question, "…か" without the "を確かめる" after it, then drops its cause, the words up to
+  // the first "、"), and only then is it cut short with an ellipsis. Done at each frame
+  // (measured once the page's font is in), from the record's words each time, so the frame
+  // at t is always the same.
+  fitLine({ chip, line }, on) {
+    const plain = DOMAIN_PLAIN_JA[chip.domain];
+    const text = (reason) => (!on || !reason ? plain : chip.lit ? reason : `${plain}：${reason}`);
+    const fits = (reason) => {
+      line.textContent = text(reason);
       let lp = this.linePx;
       line.style.fontSize = `${lp}px`;
       while (line.scrollWidth > this.lineRoom && lp > this.layout.min_text_px) line.style.fontSize = `${(lp -= 1)}px`;
+      return line.scrollWidth <= this.lineRoom;
     };
-    const reason = on && !chip.lit ? chip.reason : "";
-    shrink(reason);
-    const cut = reason.indexOf(" は");
-    if (line.scrollWidth > this.lineRoom && cut > 0) shrink(reason.slice(cut + 2).trim());
+    let reason = chip.reason;
+    if (fits(reason) || !on) return;
+    for (const cut of chip.lit ? LIT_CUTS : PALE_CUTS) {
+      const shorter = cut(reason);
+      if (shorter && shorter !== reason) {
+        reason = shorter;
+        if (fits(reason)) return;
+      }
+    }
   }
 
   async loadDesign() {
