@@ -8,8 +8,15 @@
 // analysis of the same load case on the allowable's band, as N01), a part over its
 // temperature limit, and for a distance limit (a stop) the stretch of road past it. The
 // assembly tile builds the version whose assembly records hold interferences (assembly.js
-// AssemblyStage) with the parts that interfere boxed in red. The tile's words say what
-// happened, read from the record's results, criteria and interferences; no number is shown.
+// AssemblyStage) with the parts that interfere boxed in red. The tile's one tag is ✕ and
+// what happened, read from the record's results, criteria and interferences (the test's
+// name only when there is nothing to say); no number is shown.
+//
+// With the story's limit on things moving at once (layout.json story), a tile moves while
+// it comes in and while its record plays, and each record plays over limits.moving x
+// times.tile_stagger_s less times.tile_in_s from its landing, then holds its end: so no more
+// than limits.moving tiles move at one time. Without a story the records play to the end
+// of the cut.
 //
 // Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS).
 
@@ -19,7 +26,7 @@ import { contourOf, fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { requireKeys } from "./cut_n03.js";
+import { requireKeys, storyOf } from "./cut_n03.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -98,6 +105,10 @@ export class CutN06 {
   constructor(layout, s) {
     this.spec = requireKeys(layout, "n06", N06_KEYS);
     this.layout = layout;
+    this.story = storyOf(layout, "n06");
+    const T = this.spec.times;
+    // how long each record plays from its landing (to the end of the cut without a limit)
+    this.play = this.story.limits ? Math.max(0, this.story.limits.moving * T.tile_stagger_s - T.tile_in_s) : null;
     this.s = s;
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -225,41 +236,39 @@ export class CutN06 {
     });
   }
 
-  // The mark at the top right, the name and what happened at the top left, short of the mark.
+  // One tag at the top left: ✕ and what happened when the records say it, else the test's name.
   labelTile(tile, name, words) {
     const sp = this.spec;
     const L = sp.tile.label;
     const box = tile.el.dataset.box;
-    if (tile.miss) {
+    const label = document.createElement("b");
+    label.dataset.box = `${box}.label`;
+    label.dataset.kind = "label";
+    Object.assign(label.style, { left: `${L.x}px`, top: `${L.y}px`, fontSize: `${Math.max(L.size_px, this.story.bodyPx)}px` });
+    if (words.length) {
       const mark = document.createElement("span");
       mark.className = "mark";
       mark.dataset.box = `${box}.mark`;
-      Object.assign(mark.style, { right: `${L.x}px`, top: `${L.y}px`, fontSize: `${L.size_px}px`, color: sp.overlay.color });
+      mark.style.color = sp.overlay.color;
       mark.textContent = "✕";
-      tile.el.append(mark);
-    }
-    const label = document.createElement("b");
-    label.dataset.box = `${box}.label`;
-    Object.assign(label.style, { left: `${L.x}px`, top: `${L.y}px`, fontSize: `${L.size_px}px` });
-    label.textContent = name;
-    if (words.length) {
       const why = document.createElement("span");
       why.className = "why";
       why.style.color = sp.overlay.color;
       why.textContent = words.join("・");
-      label.append(document.createElement("br"), why);
-    }
+      label.append(mark, " ", why);
+    } else label.textContent = name;
     tile.el.append(label);
     this.fitLabel(tile, label);
   }
 
-  // The label ends short of the mark: its text steps down a pixel at a time, not below min_text_px.
+  // The tag ends inside the tile: its text steps down a pixel at a time, not below the
+  // story's body text size (min_text_px without a story); then it wraps.
   fitLabel(tile, b) {
     const L = this.spec.tile.label;
-    const room = tile.inner.w - 2 * L.x - (tile.miss ? L.size_px + L.x : 0);
-    let px = L.size_px;
+    const room = tile.inner.w - 2 * L.x;
+    let px = parseFloat(b.style.fontSize);
     b.style.whiteSpace = "nowrap";
-    while (b.offsetWidth > room && px > this.layout.min_text_px) {
+    while (b.offsetWidth > room && px > this.story.bodyPx) {
       px -= 1;
       b.style.fontSize = `${px}px`;
     }
@@ -416,17 +425,26 @@ export class CutN06 {
       tile.el.style.transform = `scale(${A.from_scale + (1 - A.from_scale) * e})`;
       tile.el.style.visibility = p > 0 ? "visible" : "hidden";
       tile.el.dataset.p = String(p);
+      // the record plays from the landing over this.play (to the end of the cut without a limit)
+      const end = this.play === null ? sp.duration_s : tile.land + this.play;
+      const plays = !!(tile.motion || tile.asm?.stage) && t < end;
+      const moving = p > 0 && (p < 1 || plays);
+      // what moves is the tile's picture (its tag is not moving text)
+      if (moving) tile.canvas.dataset.kind = "moving";
+      else delete tile.canvas.dataset.kind;
       if (!tile.view || p <= 0) continue;
+      // a span of no length holds the record's end
+      const along = (t0, t1) => (end > tile.land ? squeeze(t, tile.land, end, t0, t1).tau : t1);
       if (tile.motion) {
         const m = tile.motion;
-        const { tau } = squeeze(t, tile.land, sp.duration_s, m.t0, m.t1);
+        const tau = along(m.t0, m.t1);
         tile.el.dataset.tau = String(tau);
         tile.view.setFrame(m.frame(tau));
       }
       if (tile.asm) {
-        // the whole order from the landing to the end of the cut
+        // the whole order from the landing over the same span
         const a = tile.asm;
-        const u = a.stage ? squeeze(t, tile.land, sp.duration_s, 0, a.n).tau : a.n;
+        const u = a.stage ? along(0, a.n) : a.n;
         tile.el.dataset.tau = String(u);
         a.stage?.pose(u);
         a.stage?.lineResolution(tile.inner.w, tile.inner.h);

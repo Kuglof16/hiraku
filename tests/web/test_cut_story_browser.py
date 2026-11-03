@@ -1,0 +1,332 @@
+"""Every cut page against the promo department's story limits (layout.json story).
+
+Each cut is opened at its check times and the page is read: how many elements of each
+data-kind (label, graph, legend, number, moving) are shown at once, against the cut's
+limits (story.defaults, overridden by story.cuts.<cut>.limits); text inside an element
+with a kind is at least limits.body_text_px, every other text at least min_text_px; and
+the page's own corner note ("上限を越えた: ...") is not shown.
+
+Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+The layout is a copy of the promo department's layout.json (the sections the cut pages
+read, without the notes) as of their story commit; the check times are its check.times,
+and for N01 / N02, which have none there, the lead time, the middle and the end. The
+records are the other cut tests' (shape examples); N01 and N02 need a run made by the
+real tools (HIRAKU_WEB_DEV_RUNS, a folder made by tests.web.dev_k2_run) and are skipped
+without one, N05 then plays the contract sample (its tiles say they have no record).
+
+With HIRAKU_STORY_SHOTS=<folder> a screenshot of each cut at each check time is written
+there (1920 x 1080; resize before reading).
+"""
+
+import copy
+import json
+import os
+import shutil
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+from hiraku.webserve.server import make_server
+from tests.web.domains_fixture import domain_events
+from tests.web.shell_fixture import shell_events
+from tests.web.test_assembly_browser import assembly_events, many_steps_events
+from tests.web.test_browser import ENABLED, sync_playwright
+from tests.web.test_cut_grid_browser import three_versions
+from tests.web.test_cut_n03_n06_browser import n03_n06_events
+from tests.web.test_cut_n17_browser import REPORT, long_report, report_events
+
+KINDS = ["label", "graph", "legend", "number", "moving"]
+
+# The promo department's layout.json (story commit), the sections the cut pages read.
+LAYOUT_JSON = r"""{
+  "stage": {"w": 1920, "h": 1080},
+  "subtitle_band": {"y": 910, "h": 170},
+  "safe": {"x": 96, "y": 60, "w": 1728, "h": 850},
+  "min_text_px": 18,
+  "colors": {"night": "#131311", "ink": "#1b1a17", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
+  "n01": {"duration_s": 4.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "pane": {"x": 1328, "y": 96, "w": 496, "h": 790}, "card": {"gap": 20, "pad": 20, "title_px": 30, "text_px": 22, "radius_px": 12, "border_px": 2}, "times": {"lead_s": 0.4, "zoom_s": 1.6}, "zoom": {"from": 1.6, "to": 1.06}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n02": {"duration_s": 7.0, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 400, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"], "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "result": {"x": 1392, "y": 96, "w": 432, "h": 790, "title_px": 30, "text_px": 20, "row_gap": 16, "rows": 2}, "times": {"lead_s": 0.3}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n03": {"duration_s": 5.0, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22}, "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n04": {"duration_s": 4.0, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n05": {"duration_s": 5.0, "grid": {"x": 96, "y": 280, "cols": 4, "rows": 3, "tile_w": 408, "tile_h": 180, "gap_x": 32, "gap_y": 26}, "tile": {"border_px": 2, "radius_px": 10, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}}, "hero": {"x": 210, "y": 60, "w": 1500, "h": 750, "src": "media/n05_hero_2x.png"}, "hero_motion": {"push_scale": 1.04, "burst_scale": 1.7, "burst_dur_s": 0.4, "ease": [0.5, 0, 0.9, 0.4]}, "ease": {"tile": [0.2, 0.9, 0.3, 1.15]}, "title": {"name": {"y": 62, "size_px": 124}, "tag": {"y": 200, "size_px": 42}}, "times": {"burst_s": 1.25, "tiles_s": 1.35, "tile_in_s": 0.6, "tile_stagger_s": 0.05, "name_s": 1.75, "tag_s": 2.3, "door_open_s": 0.55, "latch_s": 0.38, "mesh_in_s": 0.2, "mesh_out_s": 0.78}, "door": {"crack_dur_s": 0.2, "crack_deg": 12, "crack_ease": [0.25, 0, 0.3, 1], "hold_dur_s": 0.12, "open_dur_s": 0.38, "angle_deg": 105, "perspective_px": 2400, "ease": [0.45, 0, 0.8, 0.55], "seam_w_px": 4, "seam_glow_w_px": 220, "spill_dur_s": 0.9, "hero_fade_dur_s": 0.35, "hero_fade_scale": 1.1, "panel": {"inset_px": 72, "upper_h_px": 300, "gap_px": 40, "line_px": 2, "bevel_px": 16}, "handle": {"w_px": 12, "h_px": 200, "seam_gap_px": 48}, "crack_overshoot_deg": 3, "settle_dur_s": 0.1, "latch_dur_s": 0.17, "latch_deg": 0.8, "thickness_px": 24, "dolly_px": 260, "dolly_ease": [0.55, 0, 0.85, 0.5], "bolt": {"w_px": 120, "h_px": 18, "reach_px": 40, "travel_px": 72, "gap_px": 64}}, "rays": {"count": 26, "seed": 7, "width_min_deg": 0.7, "width_max_deg": 3.6, "spread_deg": 62, "length_px": 1500, "blur_px": 6, "peak_alpha": 0.32, "crack_scale": 0.12, "shimmer_min_dur_s": 0.45, "shimmer_max_dur_s": 1.1, "out_dur_s": 0.5}, "dust": {"count": 90, "seed": 11, "size_min_px": 2, "size_max_px": 7, "w": 1600, "h": 760, "drift_px": 70, "in_dur_s": 0.3, "out_dur_s": 0.7}, "bloom": {"peak_alpha": 0.3, "rise_dur_s": 0.12, "fall_dur_s": 0.55}, "hero_mesh": {"size_px": 50, "jitter": 0.28, "seed": 5, "line_px": 1.3, "in_dur_s": 0.4, "reach_px": 520, "spread_dur_s": 0.27, "jitter_dur_s": 0.04, "el_dur_s": 0.13, "end_scale": 0.15}, "tile_fx": {"ghosts": 2, "ghost_lag_s": 0.035, "ghost_alpha": 0.32, "land_dur_s": 0.5, "land_glow_px": 26}, "name_wipe": {"wipe_dur_s": 0.65, "feather_px": 180, "sweep_w_px": 300, "afterglow_dur_s": 1.3}, "fly_from": {"x": 960, "y": 470}, "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"]},
+  "n06": {"duration_s": 11.7, "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24}, "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}}, "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n07": {"duration_s": 15.3, "view": {"x": 96, "y": 96, "w": 1500, "h": 790}, "legend": {"x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20}, "label": {"x": 120, "y": 120, "size_px": 30}, "times": {"lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0}, "turn_deg": 90, "zoom": {"fill": 0.45}, "overlay": {"color": "#c8402a", "opacity": 0.22}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n15": {"duration_s": 5.1, "header": {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}, "grid": {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}, "tests": ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"], "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10}, "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}, "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1152, "h": 48}, "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12}, "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "n17": {"duration_s": 8.8, "page": {"x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22}, "times": {"lead_s": 0.3, "light_s": 5.8}, "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}},
+  "story": {
+    "defaults": {"label": 3, "graph": 1, "legend": 1, "number": 1, "moving": 3, "body_text_px": 24},
+    "cuts": {
+      "n00": {"message": "HIRAKU は、役ごとのエージェントが並んで動く (エージェントです)", "limits": {"label": 7}},
+      "n01": {"message": "越えられる段差 (100 mm) と、越えられない段差 (250 mm)", "limits": {"number": 2}},
+      "n02": {"message": "傾き・風・悪路・急ハンドル・急ブレーキの、どれで倒れるかが分かる", "limits": {"label": 5}},
+      "n03": {"message": "長く走っても熱くならず、どこまで速いかが分かる"},
+      "n04": {"message": "衝突・振動・組み立てまで、全部を 1 度に見る (まだ赤が 2 枚)", "limits": {"label": 8, "moving": 8}},
+      "n05": {"message": "HIRAKU — CAE を、すべての作り手へ拓く", "limits": {"label": 12, "moving": 12}},
+      "n06": {"message": "作ってみると、うまくいかない", "limits": {"label": 6}},
+      "n07": {"message": "つなぎ目が弱く、補強で直る (CAE が作る前に見つける)"},
+      "n08": {"message": "CAE のツールは高く、使いこなすのが難しい", "limits": {"label": 40, "moving": 12, "body_text_px": 18}},
+      "n08b": {"message": "小さな会社の CAE の導入率は 16 %", "limits": {"number": 2, "graph": 1}},
+      "n09": {"message": "作るものを伝えると、Claude が必要な解析を選ぶ (7 つの札が灯る)", "limits": {"label": 7}},
+      "n10": {"message": "AI の答えも、CAE ツールで確かめる (3 問とも ✓)", "limits": {"number": 3, "label": 3}},
+      "n11": {"message": "予測を書くまで、解析は動かない (hooks が止める)"},
+      "n12": {"message": "手計算と解析が食い違ったら、原因 (単位の間違い) を突き止める", "limits": {"number": 2}},
+      "n13": {"message": "ツールが無ければ、Claude がその場で作り、照合してから使う"},
+      "n14": {"message": "渡したノウハウが、設計のチェックの規則になる"},
+      "n15": {"message": "全部の分野が緑になるまで、設計を直す", "limits": {"label": 8, "moving": 8}},
+      "n16": {"message": "組み立ての順番まで、3D で確かめる"},
+      "n17": {"message": "結果だけでなく、次に何を変えればよいかを示す"},
+      "n17b": {"message": "部署ごとの Claude Code のセッションが、並んで作った", "limits": {"label": 8, "number": 4, "moving": 8}},
+      "n18": {"message": "解析の前に予測し、理由を説明する — HIRAKU"}
+    }
+  },
+  "check": {"times": {"n00": [0.6, 1.8, 3.5, 6.5], "n03": [0.5, 2.0, 4.5], "n04": [0.5, 1.5, 3.5], "n06": [1.0, 4.0, 11.0], "n07": [0.5, 7.5, 12.0, 15.0], "n17": [0.5, 6.0, 8.5], "n15": [0.5, 2.5, 4.8], "n16": [0.5, 3.0, 5.0, 6.2], "n05": [0, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5], "n08": [0.5, 2.0, 2.9, 4.6, 5.0, 5.8, 6.4], "n08b": [1.5, 5.2, 5.8, 7.5, 9.8], "n10": [0.6, 2.4, 4.6, 5.6, 8.3], "n18": [1.0, 3.2, 5.0, 8.5], "app": [2, 8, 15]}}
+}"""
+
+
+def story_layout():
+    return json.loads(LAYOUT_JSON)
+
+
+def limits_of(layout, cut):
+    st = layout["story"]
+    own = st["cuts"].get(cut, {}).get("limits", {})
+    return {k: own.get(k, st["defaults"][k]) for k in [*KINDS, "body_text_px"]}
+
+
+def check_times(layout, cut):
+    """The promo department's check times; for a cut without any, the lead time, the middle and the end."""
+    times = layout["check"]["times"].get(cut)
+    if times:
+        return times
+    sp = layout[cut]
+    lead = sp.get("times", {}).get("lead_s", 0.0)
+    return [lead, round(sp["duration_s"] / 2, 3), round(sp["duration_s"] - 0.05, 3)]
+
+
+# What is shown at stage time t, read in the page (its own counting, apart from the page's check).
+READ = """async (t) => {
+  await window.hiraku.seek(t);
+  const stage = document.getElementById("stage");
+  const shown = (el) => {
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const counts = {};
+  const items = {};
+  for (const el of stage.querySelectorAll("[data-kind]")) {
+    if (!shown(el)) continue;
+    const k = el.dataset.kind;
+    counts[k] = (counts[k] ?? 0) + 1;
+    (items[k] ??= []).push(el.dataset.box ?? el.className?.baseVal ?? el.className ?? el.tagName);
+  }
+  const texts = [];
+  for (const el of stage.querySelectorAll("*")) {
+    if (el.classList.contains("story-over") || el.classList.contains("err")) continue;
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    if (!shown(el)) continue;
+    texts.push({ text: el.textContent.trim().slice(0, 40), px: parseFloat(getComputedStyle(el).fontSize), kind: el.closest("[data-kind]")?.dataset.kind ?? null });
+  }
+  const note = document.querySelector(".story-over");
+  return { err: document.querySelector(".err")?.textContent ?? null, counts, items, texts,
+           note: note && shown(note) ? note.textContent : null, over: document.documentElement.dataset.storyOver ?? null,
+           page: window.hiraku.story() };
+}"""
+
+
+@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+class CutStoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        runs = cls.tmp / "runs"
+        shell, _meshes, _shells = shell_events()
+        cls.runs = {
+            "n03": "20261103-120000-story-n03n06",
+            "n04": "20261103-120000-story-grid",
+            "n15": "20261103-120000-story-grid3",
+            "n07": shell[0]["run_id"],
+            "n16": "20261103-120000-story-asm",
+            "n16_19": "20261103-120000-story-asm19",
+            "n17": "20261103-120000-story-report",
+            "n17_long": "20261103-120000-story-reportlong",
+        }
+        cls.runs["n06"] = cls.runs["n03"]
+        for key, events in (("n03", n03_n06_events()), ("n04", domain_events()), ("n15", three_versions()), ("n07", shell),
+                            ("n16", assembly_events()), ("n16_19", many_steps_events(19)),
+                            ("n17", report_events(REPORT)), ("n17_long", report_events(long_report()))):
+            (runs / cls.runs[key]).mkdir(parents=True)
+            (runs / cls.runs[key] / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        cls.layout = story_layout()
+        layout_file = cls.tmp / "layout.json"
+        layout_file.write_text(json.dumps(cls.layout, ensure_ascii=False), encoding="utf-8")
+        cls.servers = []
+        cls.base = cls.serve(runs, layout_file)
+        given = os.environ.get("HIRAKU_WEB_DEV_RUNS")
+        cls.dev = None
+        if given:
+            dev = Path(given)
+            run = sorted(p.name for p in dev.iterdir() if (p / "events.jsonl").is_file() and p.name[:1].isdigit())[-1]
+            cls.dev = (cls.serve(dev, layout_file), run)
+        cls.shots = Path(os.environ["HIRAKU_STORY_SHOTS"]) if os.environ.get("HIRAKU_STORY_SHOTS") else None
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+
+    @classmethod
+    def serve(cls, runs, layout_file):
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, layout_file=layout_file)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        cls.servers.append(server)
+        return f"http://127.0.0.1:{server.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        for s in cls.servers:
+            s.shutdown()
+            s.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def check_cut(self, cut, base, run, query="", tag=None):
+        """Open the cut and read it at each check time: no error, the counts within the
+        limits, the text sizes, no note in the corner."""
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0{query}")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        page.evaluate("window.hiraku.ready")
+        lim = limits_of(self.layout, cut)
+        seen = {}
+        for t in check_times(self.layout, cut):
+            got = page.evaluate(READ, t)
+            where = f"{cut} t={t}"
+            self.assertIsNone(got["err"], where)
+            for k, n in got["counts"].items():
+                self.assertIn(k, KINDS, (where, k))
+                self.assertLessEqual(n, lim[k], (where, k, got["items"][k]))
+            for x in got["texts"]:
+                least = lim["body_text_px"] if x["kind"] else self.layout["min_text_px"]
+                self.assertGreaterEqual(x["px"], least - 0.01, (where, x))
+            self.assertIsNone(got["note"], where)
+            self.assertEqual(got["over"], "0", where)
+            self.assertEqual(got["page"]["over"], [], where)
+            self.assertEqual(got["page"]["counts"], {k: got["counts"].get(k, 0) for k in KINDS}, where)  # the page counts as this test does
+            seen[t] = got
+            if self.shots:
+                self.shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(self.shots / f"{tag or cut}_t{t:05.2f}.png"))
+        self.assertEqual(errors, [], cut)
+        page.close()
+        return seen
+
+    def test_n01(self):
+        if not self.dev:
+            self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
+        seen = self.check_cut("n01", *self.dev)
+        got = next(iter(seen.values()))
+        # the two step heights are the two numbers, and the colour bar the one legend
+        self.assertEqual(got["counts"].get("number"), 2)
+        self.assertEqual(got["counts"].get("legend"), 1)
+        nums = [x["text"] for x in got["texts"] if x["kind"] == "number"]
+        self.assertEqual(nums, ["100 mm", "250 mm"])
+
+    def test_n02(self):
+        if not self.dev:
+            self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
+        seen = self.check_cut("n02", *self.dev)
+        for got in seen.values():
+            self.assertEqual(got["counts"].get("label"), 5)  # one tag per test
+            self.assertNotIn("number", got["counts"])
+            self.assertFalse(any(c.isdigit() for x in got["texts"] for c in x["text"]), got["texts"])
+
+    def test_n03(self):
+        seen = self.check_cut("n03", self.base, self.runs["n03"])
+        for got in seen.values():
+            self.assertEqual(got["counts"].get("graph"), 1)
+
+    def test_n04(self):
+        seen = self.check_cut("n04", self.base, self.runs["n04"], "&version=1")
+        grid = [g for t, g in seen.items() if t < self.layout["n04"]["times"]["assembly_s"]]
+        for got in grid:
+            # pictures and marks only: the one number is the header's
+            self.assertLessEqual(got["counts"].get("number", 0), 1)
+            tile_text = [x for x in got["texts"] if x["kind"] == "label"]
+            self.assertTrue(all(x["text"] in ("✓", "✕") for x in tile_text), tile_text)
+
+    def test_n05(self):
+        base, run = self.dev if self.dev else (self.base, "sample")
+        seen = self.check_cut("n05", base, run)
+        late = seen[max(seen)]
+        self.assertEqual(late["counts"].get("label"), 12)
+        self.assertNotIn("graph", late["counts"])
+
+    def test_n05_without_the_hero(self):
+        base, run = self.dev if self.dev else (self.base, "sample")
+        self.check_cut("n05", base, run, "&hero=0", tag="n05_hero0")
+
+    def test_n06(self):
+        seen = self.check_cut("n06", self.base, self.runs["n06"])
+        last = seen[max(seen)]
+        self.assertEqual(last["counts"].get("label"), 6)
+        self.assertNotIn("number", last["counts"])
+        # each record played in its turn and holds its end: nothing moves at the last check time
+        self.assertNotIn("moving", last["counts"])
+
+    def test_n07(self):
+        seen = self.check_cut("n07", self.base, self.runs["n07"])
+        for got in seen.values():
+            self.assertEqual(got["counts"].get("legend"), 1)
+            self.assertEqual(got["counts"].get("number"), 1)
+            self.assertEqual(got["counts"].get("label"), 1)
+
+    def test_n15(self):
+        seen = self.check_cut("n15", self.base, self.runs["n15"])
+        for got in seen.values():
+            self.assertEqual(got["counts"].get("number"), 1)  # the rounds
+
+    def test_n16(self):
+        for key in ("n16", "n16_19"):
+            seen = self.check_cut("n16", self.base, self.runs[key], tag=key)
+            for got in seen.values():
+                rows = [x for x in got["texts"] if x["text"][:1].isdigit() and x["kind"] is None]
+                self.assertLessEqual(len({x["text"][:2] for x in rows}), 3 * 2)  # the step numbers of three rows (and their names)
+
+    def test_n17(self):
+        light = self.layout["n17"]["times"]["light_s"]
+        for key in ("n17", "n17_long"):
+            seen = self.check_cut("n17", self.base, self.runs[key], tag=key)
+            for t, got in seen.items():
+                self.assertEqual(got["counts"].get("label"), 1, t)  # the next step
+            lit = [g for t, g in seen.items() if t >= light]
+            self.assertTrue(lit)
+
+    def test_the_corner_note_says_what_is_over(self):
+        """With limits lower than what a cut shows, the page says so in its corner."""
+        layout = copy.deepcopy(self.layout)
+        layout["story"]["cuts"]["n06"]["limits"] = {"label": 2, "why": "test"}
+        layout_file = self.tmp / "layout-low.json"
+        layout_file.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
+        base = self.serve(self.tmp / "runs", layout_file)
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        got = page.evaluate(READ, self.layout["n06"]["duration_s"] - 0.1)
+        self.assertEqual(got["over"], "1")
+        self.assertIn("上限を越えた: label 6 > 2", got["note"])
+        page.close()
+        # a story without its defaults is named
+        del layout["story"]["defaults"]["moving"]
+        layout_file.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        self.assertIn("layout.json の story.defaults に無い: moving", page.evaluate("document.querySelector('.err')?.textContent ?? ''"))
+        page.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

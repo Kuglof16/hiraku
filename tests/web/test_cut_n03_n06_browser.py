@@ -349,9 +349,11 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
-        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2
-        self.assertEqual(shots[1.0]["title"], "電池の残量と温度 (P4・T1)")
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P3)")
+        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2;
+        # one graph at a time (the battery's temperature, then the speed)
+        self.assertEqual(shots[1.0]["title"], "長く走ったときの電池の温度 (T1)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ (P3)")
+        self.assertEqual({t: len(g["now"]) for t, g in shots.items() if t >= layout["n03"]["times"]["lead_s"]}, {t: 1 for t in N03_TIMES if t >= layout["n03"]["times"]["lead_s"]})
         # the battery warms: its colour's value is the recorded temperature, rising
         self.assertLess(shots[1.0]["battery"], shots[2.0]["battery"])
         self.assertGreaterEqual(shots[1.0]["battery"], 40.0)
@@ -368,7 +370,7 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P2)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ (P2)")
         page.close()
 
     def check_n06(self, shots, layout, recorded):

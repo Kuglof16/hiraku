@@ -8,9 +8,18 @@
 // n17. A missing key is named on the page.
 //
 // times: before lead_s the page is not shown; from light_s the next step is lit.
+//
+// The story (layout.json story): the next step is the one place to read. Its block is the
+// cut's one tag, at least the story's body text size whatever the rest steps down to; from
+// light_s everything else on the page is drawn pale (N17_STYLE.dim_opacity).
 
 import { clearOfBand } from "./compose.js";
+import { storyOf } from "./cut_n03.js";
 import { DOMAIN_JA, esc, fmt, quantityName } from "./labels.js";
+
+// Not in layout.json (written here until the promo department gives a key for it): the
+// opacity of the rest of the page from light_s.
+export const N17_STYLE = { dim_opacity: 0.3 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,6 +72,7 @@ export class CutN17 {
     this.layout = layout;
     this.spec = layout.n17;
     this.minPx = layout.min_text_px;
+    this.story = storyOf(layout, "n17");
     this.report = s.report;
     if (!this.report) throw new Error("報告の記録がまだ無い (report.written)");
     this.stage = $("stage");
@@ -156,7 +166,8 @@ export class CutN17 {
     const rows = next.length
       ? next.map((n) => `<li><b>${esc(DOMAIN_JA[n.domain] ?? n.domain)}</b> ${esc(n.change)}<small>${esc(n.reason)}</small></li>`).join("")
       : `<li class="none">報告に「次」が書かれていない</li>`;
-    return `<div class="n17-next" data-box="n17.next"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
+    const px = Math.max(this.spec.page.text_px, this.story.bodyPx);
+    return `<div class="n17-next" data-box="n17.next" data-kind="label" style="font-size:${px}px"><h3>次に変えるなら</h3><ul>${rows}</ul></div>`;
   }
 
   // The text steps down a pixel at a time (title and the rest together, neither below
@@ -223,6 +234,7 @@ export class CutN17 {
     const lit = t >= T.light_s;
     this.el.querySelector(".n17-next").classList.toggle("lit", lit);
     this.el.querySelector(".n17-bar.strongest")?.classList.toggle("lit", lit);
+    for (const part of this.el.querySelectorAll(".n17-head, .n17-body")) part.style.opacity = lit ? String(N17_STYLE.dim_opacity) : "";
     document.documentElement.dataset.n17Lit = lit ? "1" : "0";
   }
 }

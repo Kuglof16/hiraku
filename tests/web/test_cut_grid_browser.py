@@ -117,8 +117,10 @@ READ = """async (t) => {
       return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", outside: el.dataset.outside ?? null,
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
-               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]') };
+               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
+               hits: layer?.dataset.hits ?? null };
     }),
+    charts: document.querySelectorAll(".grid-tile svg.chart").length,
   };
 }"""
 
@@ -200,9 +202,19 @@ class GridCutTest(unittest.TestCase):
             self.assertTrue(t["shown"], t["key"])
             self.assertTrue(t["pet"], t["key"])
             self.assertEqual(t["mark"], t["want"], t["key"])  # the mark is the run's judgement, and none without one
-            self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            if t["minText"] is not None:  # a tile with a record and no judgement holds no text
+                self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            # a picture and its mark only: no name, no figure (a tile without its record says so)
+            if "記録が無い" not in t["text"]:
+                self.assertIn(t["text"], ("", "✓", "✕"), t["key"])
+            self.assertIsNone(t["label"], t["key"])
         self.assertTrue(got["header"]["shown"])
-        self.assertEqual(got["header"]["text"], f"版 {got['version']}・繰り返し {got['version'] - 1} 回")
+        # one line with one number: N04 the tiles still red, N15 the rounds
+        if name == "n15":
+            self.assertEqual(got["header"]["text"], f"繰り返し {got['version'] - 1} 回")
+        else:
+            reds = sum(1 for t in got["tiles"] if t["want"] == "✕")
+            self.assertEqual(got["header"]["text"], f"まだ赤が {reds} 枚" if reds else "全部が緑")
 
     def test_n04_on_a_version_on_the_way(self):
         """?version=1: the grid, the header, marks from version 1's judgements (none on nvh, its
@@ -230,9 +242,12 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(hot(before), set())
         self.assertEqual(hot(early), {"crash"})  # nvh is red in V1_RED but has no judgement here
         tiles = {t["key"].split(".")[-1]: t for t in mid["tiles"]}
-        self.assertIn("干渉 1 件", tiles["assembly"]["text"])  # the fixture's battery × cross1
-        self.assertIn("23.4 Hz", tiles["nvh"]["text"])  # the mode's recorded frequency
-        self.assertGreater(tiles["thermal"]["tags"], 0)  # part temperatures as text
+        # no words or figures on the tiles: the interference, the mode's frequency and the
+        # part temperatures are in the pictures only (the story: a picture and a mark)
+        self.assertEqual(tiles["assembly"]["hits"], "1")  # the fixture's battery × cross1, boxed in red
+        self.assertNotIn("Hz", tiles["nvh"]["text"])
+        self.assertEqual(tiles["thermal"]["tags"], 0)
+        self.assertEqual(mid["charts"], 0)
         # from assembly_s: no tile, no header, the assembly box where n16.view is
         self.assertTrue(all(not t["shown"] for t in late["tiles"]))
         self.assertFalse(late["header"]["shown"])
@@ -270,8 +285,8 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(marks(shots[0.5]), {k: "✕" if k in V1_RED else "✓" for k in TESTS})
         self.assertEqual(marks(shots[2.5]), {k: "✕" if k in V2_RED else "✓" for k in TESTS})
         self.assertEqual(marks(shots[4.8]), {k: "✓" for k in TESTS})
-        self.assertIn("✓ 干渉なし", shots[4.8]["tiles"][TESTS.index("assembly")]["text"])
-        self.assertEqual(shots[4.8]["header"]["text"], "版 3・繰り返し 2 回")
+        self.assertEqual(shots[4.8]["tiles"][TESTS.index("assembly")]["hits"], "0")
+        self.assertEqual(shots[4.8]["header"]["text"], "繰り返し 2 回")
         page.close()
 
     def test_n15_last_version_not_green_stays_as_recorded(self):
