@@ -67,12 +67,12 @@ def agent_files() -> dict[str, str]:
 RUN_COMMAND_INTRO = f"""\
 HIRAKU の実行を、この会話で進めます。あなたはまとめ役です。
 
-1. MCP の道具 {plugin_tool("start_run")} を requirements_file="$ARGUMENTS" で 1 回呼びます (道具の棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
+1. MCP のツール {plugin_tool("start_run")} を requirements_file="$ARGUMENTS" で 1 回呼びます (ツールの棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
 2. 返った task が、まとめ役の最初の仕事です。下の「まとめ役の決まり」に従って進めます。
-   - HIRAKU の道具は {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
+   - HIRAKU のツールは {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
    - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
-   - 道具が断り、その理由を道具の入力で直せないとき (道具の誤り・棚に無い道具や式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
+   - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
 3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
 
 まとめ役の決まり:

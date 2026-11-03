@@ -272,7 +272,7 @@ def keep_check(folder: Path, code: str, name: str, run_id: str, spec: Record) ->
 
 
 NOT_YET = "試験がまだ決まっていないので、まだ確かめていない"
-DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、道具は版 1 の試験が決まってから、その試験に使う分だけ確かめます"
+DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、ツールは版 1 の試験が決まってから、その試験に使う分だけ確かめます"
 
 
 def defer_shelf(ctx: RunContext) -> None:
@@ -292,7 +292,7 @@ def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_chec
     left = [n for n in ctx.tools if n not in names and n not in ctx.specs]
     if left:
         ctx.store.emit("agent.said", agent="system",
-                       text=f"この実行の試験 ({'・'.join(test_ids or [])}) には使わないので確かめない道具: "
+                       text=f"この実行の試験 ({'・'.join(test_ids or [])}) には使わないので確かめないツール: "
                             + "、".join(left),
                        # the names for the screen, so it need not cut them out of the sentence
                        data={"tests": list(test_ids or []), "checked": list(names), "not_checked": list(left)})
@@ -315,8 +315,8 @@ def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_chec
         ok = "使えます" if spec["usable"] else "使えません (答えの分かっている例に通らない)"
         how = f" (ソースが同じ前の実行 {got[1]} の照合を使いました)" if got is not None else ""
         ctx.store.emit("tool.checked", agent="system", domain=spec["domain"],
-                       text=f"道具 {name} を確かめました: {ok}{how}", data=spec)
+                       text=f"ツール {name} を確かめました: {ok}{how}", data=spec)
         if getattr(tool, "checks_from_cache", False):  # the tests' disk cache (HIRAKU_CHECK_CACHE=1), never a real run
             ctx.store.emit("agent.said", agent="system",
-                           text=f"道具 {name} の照合は、試験のために覚えておいた前の結果を使いました")
+                           text=f"ツール {name} の照合は、試験のために覚えておいた前の結果を使いました")
     return ctx.specs

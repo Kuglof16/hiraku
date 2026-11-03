@@ -40,7 +40,7 @@ Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
-REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
+REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
 
 
 def scripted_summary(ctx: RunContext) -> str:
@@ -308,7 +308,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     """
     s = ctx.store
     s.emit("agent.started", agent="lead", data={"agent_id": "lead", **NO_MODEL})
-    s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
+    s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順にツールを呼びます")
     if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
         s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
         s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
@@ -339,7 +339,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if plan["missing"]:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
     if plan["unshelved"]:
-        s.emit("agent.said", agent="lead", text="道具が棚に無いので回さない手順: "
+        s.emit("agent.said", agent="lead", text="ツールが棚に無いので回さない手順: "
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
     for note in plan.get("notes") or []:  # what the plan leaves out on purpose, said in the record
         s.emit("agent.said", agent="lead", text=note)

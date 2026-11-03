@@ -334,8 +334,8 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
     return out
 
 
-PAIRS_HOW = ("predicts: 道具のどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
-             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのある道具の横に並ぶ剛体の式は、"
+PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
+             "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのあるツールの横に並ぶ剛体の式は、"
              "初めの見積もりで、解析とは食い違う)")
 
 
@@ -416,8 +416,8 @@ def _check_applies_to(ctx: RunContext, name: str) -> None:
     if kind in kinds:
         return
     what = f"この版の設計の型は {kind} です" if kind else "この版の設計は、型から作った設計ではありません (型が分からない)"
-    raise ToolError(f"道具 {name} は、設計の型 {', '.join(kinds)} のための道具です。{what}。"
-                    f"list_tools で、applies_to の無い道具か、この型を含む道具を選んでください")
+    raise ToolError(f"ツール {name} は、設計の型 {', '.join(kinds)} のためのツールです。{what}。"
+                    f"list_tools で、applies_to の無いツールか、この型を含むツールを選んでください")
 
 
 def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record]:
@@ -428,7 +428,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     if args.get("tool"):
         spec = ctx.specs.get(args["tool"]) or lines.get(args["tool"])
         if spec is None:
-            raise ToolError(f"道具 {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
+            raise ToolError(f"ツール {args['tool']!r} は棚にありません ({', '.join([*ctx.specs, *lines])})")
         load, run = tool_params(ctx, args["tool"])
         whole = dict(spec)
         if load or run:
@@ -447,7 +447,7 @@ def list_tools(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     return rows
 
 
-PARAMS_HOW = ("params は荷重条件の params で道具が読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
+PARAMS_HOW = ("params は荷重条件の params でツールが読む名前 (無ければ default)。run_params は analyze の params に入れる設定。"
               "unit の量は {value, unit} で、choices があればその中から選ぶ")
 
 
@@ -594,7 +594,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     _check_input("analyze", args)
     name = args["tool"]
     if name not in ctx.tools:
-        raise ToolError(f"道具 {name!r} は棚にありません。list_tools で道具を選んでください ({', '.join(ctx.tools)})")
+        raise ToolError(f"ツール {name!r} は棚にありません。list_tools でツールを選んでください ({', '.join(ctx.tools)})")
     lc = ctx.load_case(args["load_case_id"])
     _check_applies_to(ctx, name)
     _gate(ctx, "analyze", args, agent)
@@ -1199,7 +1199,7 @@ def write_report(ctx: RunContext, args: dict[str, Any], agent: str | None = None
 def _check_code_input(name: str, args: dict[str, Any]) -> str:
     _check_input(name, args)
     if not args["code"].strip():
-        raise ToolError(f"{name} の code が空です。道具の Python の文を書いてください")
+        raise ToolError(f"{name} の code が空です。ツールの Python の文を書いてください")
     return args["code"]
 
 
@@ -1243,7 +1243,7 @@ def made_refusals(ctx: RunContext, made: Any) -> list[str]:
     out = []
     formulas = [f for f in spec.get("formulas") or [] if isinstance(f, str)]
     if not formulas:
-        out.append("spec の formulas が空です。この道具の結果を予測する K0 の式の formula_id (list_formulas) を "
+        out.append("spec の formulas が空です。このツールの結果を予測する K0 の式の formula_id (list_formulas) を "
                    "formulas = [...] に書いてください。判定には手計算の予測が要ります")
     else:
         known = {f["formula_id"] for f in ctx.formulas.list_formulas()}
@@ -1253,9 +1253,9 @@ def made_refusals(ctx: RunContext, made: Any) -> list[str]:
     good = [c for c in made.checks if isinstance(c.get("expected"), (int, float)) and c["expected"] != 0
             and _names_reference(str(c.get("source") or ""), spec)]
     if not good:
-        out.append("答えの分かっている例に、expected が 0 でなく、source が道具の外の出典 (閉じた式・教科書・規格、"
+        out.append("答えの分かっている例に、expected が 0 でなく、source がツールの外の出典 (閉じた式・教科書・規格、"
                    "例: \"closed form sigma = F L / 4 (h / 2) / I, worked out by hand\") を名指しするものがありません。"
-                   "そういう例を known_answers に少なくとも 1 つ足してください (道具自身の式の値は出典になりません)")
+                   "そういう例を known_answers に少なくとも 1 つ足してください (ツール自身の式の値は出典になりません)")
     return out
 
 
@@ -1306,7 +1306,7 @@ def check_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) 
 
 
 UNNAMED_TOOL = "unnamed"
-UNKNOWN_TOOL_TITLE = "形の分からない道具 (spec() が契約の tool_spec に合わない)"
+UNKNOWN_TOOL_TITLE = "形の分からないツール (spec() が契約の tool_spec に合わない)"
 
 
 def attempt_spec(made: Any, agent: str, picked: list[str]) -> Record:
@@ -1344,7 +1344,7 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
     code = _check_code_input("make_tool", args)
     agent = agent or "lead"
     if agent == "designer":
-        raise ToolError("道具を作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
+        raise ToolError("ツールを作るのは CAE の役 (とまとめ役) です。設計役は設計の変数を変えます")
     if ctx.made_tools is None:
         ctx.made_tools = toolmaker.RunShelf(ctx.store.path)
     shelf = ctx.made_tools
@@ -1357,7 +1357,7 @@ def make_tool(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -
     spec = attempt_spec(made, agent, list(ctx.picked))
     usable = bool(made.usable) and spec is made.spec and spec["usable"]
     ok = "使えます" if usable else "使えません (" + ("; ".join(made.problems) or "spec() の形が契約に合いません")[:300] + ")"
-    ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"道具 {spec['name']} を作って確かめました: {ok}",
+    ctx.store.emit("tool.checked", agent=agent, domain=spec["domain"], text=f"ツール {spec['name']} を作って確かめました: {ok}",
                    data=spec)
     if usable:
         ctx.tools[made.name] = made.tool

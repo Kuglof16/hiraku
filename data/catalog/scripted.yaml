@@ -303,7 +303,7 @@ offroad-4w-n15:
   # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
   # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
   notes:
-    - この台本の運転は、Claude が作った道具を使いません。R4 (横転時の保護枠) は回していません (R4 の道具は棚に無く、Claude との運転で作ります)
+    - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
   revise:
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       changes:
