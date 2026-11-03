@@ -694,6 +694,34 @@
         "RS1",
         "LS2",
         "RS2"
+      ],
+      "system": "battery",
+      "connects_to": [
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "main_switch",
+          "via": "wire",
+          "carries": "power"
+        }
       ]
     },
     {
@@ -716,6 +744,24 @@
       "carried_by": [
         "LA",
         "LS1"
+      ],
+      "system": "battery",
+      "connects_to": [
+        {
+          "to": "LA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "controller",
+          "via": "wire",
+          "carries": "power"
+        }
       ]
     },
     {
@@ -738,6 +784,24 @@
       "carried_by": [
         "LB",
         "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+        {
+          "to": "LB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "reducer",
+          "via": "spline",
+          "carries": "torque"
+        }
       ]
     },
     {
@@ -760,6 +824,29 @@
       "carried_by": [
         "LB",
         "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+        {
+          "to": "LB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "driveshaft_RL",
+          "via": "spline",
+          "carries": "torque"
+        },
+        {
+          "to": "driveshaft_RR",
+          "via": "spline",
+          "carries": "torque"
+        }
       ]
     },
     {
@@ -778,7 +865,15 @@
           30.0
         ]
       },
-      "mass_kg": 2.6912714781325846
+      "mass_kg": 2.6912714781325846,
+      "system": "drive",
+      "connects_to": [
+        {
+          "to": "wheel_RL",
+          "via": "spline",
+          "carries": "torque"
+        }
+      ]
     },
     {
       "id": "driveshaft_RR",
@@ -796,7 +891,15 @@
           30.0
         ]
       },
-      "mass_kg": 2.6912714781325846
+      "mass_kg": 2.6912714781325846,
+      "system": "drive",
+      "connects_to": [
+        {
+          "to": "wheel_RR",
+          "via": "spline",
+          "carries": "torque"
+        }
+      ]
     },
     {
       "id": "controller",
@@ -818,6 +921,24 @@
       "carried_by": [
         "LS2",
         "RS2"
+      ],
+      "system": "control",
+      "connects_to": [
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "motor",
+          "via": "wire",
+          "carries": "power"
+        }
       ]
     },
     {
@@ -842,6 +963,34 @@
         "RA",
         "LS1",
         "RS1"
+      ],
+      "system": "electrical",
+      "connects_to": [
+        {
+          "to": "LA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "battery",
+          "via": "wire",
+          "carries": "power"
+        }
       ]
     },
     {
@@ -866,6 +1015,29 @@
         "RA",
         "LS1",
         "RS1"
+      ],
+      "system": "body",
+      "connects_to": [
+        {
+          "to": "LA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -893,6 +1065,24 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "control",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "controller",
+          "via": "wire",
+          "carries": "signal"
+        }
       ]
     },
     {
@@ -920,6 +1110,29 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "brake_master",
+          "via": "pin",
+          "carries": "brake"
+        },
+        {
+          "to": "floor_front",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -942,6 +1155,44 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "caliper_FL",
+          "via": "hose",
+          "carries": "brake"
+        },
+        {
+          "to": "caliper_FR",
+          "via": "hose",
+          "carries": "brake"
+        },
+        {
+          "to": "caliper_RL",
+          "via": "hose",
+          "carries": "brake"
+        },
+        {
+          "to": "caliper_RR",
+          "via": "hose",
+          "carries": "brake"
+        },
+        {
+          "to": "front_body",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -966,6 +1217,29 @@
         "RS1",
         "LS2",
         "RS2"
+      ],
+      "system": "body",
+      "connects_to": [
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -992,6 +1266,39 @@
         "RB",
         "LE",
         "RE"
+      ],
+      "system": "body",
+      "connects_to": [
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RB",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LE",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RE",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1016,6 +1323,29 @@
         "RF",
         "LA",
         "RA"
+      ],
+      "system": "body",
+      "connects_to": [
+        {
+          "to": "LF",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RF",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1043,6 +1373,24 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "steering_column",
+          "via": "spline",
+          "carries": "steer"
+        }
       ]
     },
     {
@@ -1070,6 +1418,24 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "steering_shaft",
+          "via": "pin",
+          "carries": "steer"
+        }
       ]
     },
     {
@@ -1097,6 +1463,24 @@
       "carried_by": [
         "RA",
         "RS1"
+      ],
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "steering_rack",
+          "via": "spline",
+          "carries": "steer"
+        }
       ]
     },
     {
@@ -1121,6 +1505,39 @@
         "RA",
         "LS1",
         "RS1"
+      ],
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "LA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RA",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "tie_rod_FL",
+          "via": "ball_joint",
+          "carries": "steer"
+        },
+        {
+          "to": "tie_rod_FR",
+          "via": "ball_joint",
+          "carries": "steer"
+        }
       ]
     },
     {
@@ -1144,7 +1561,15 @@
           90.0
         ]
       },
-      "mass_kg": 0.8803129845102374
+      "mass_kg": 0.8803129845102374,
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "knuckle_FL",
+          "via": "ball_joint",
+          "carries": "steer"
+        }
+      ]
     },
     {
       "id": "tie_rod_FR",
@@ -1167,7 +1592,15 @@
           -90.0
         ]
       },
-      "mass_kg": 0.8803129845102374
+      "mass_kg": 0.8803129845102374,
+      "system": "steering",
+      "connects_to": [
+        {
+          "to": "knuckle_FR",
+          "via": "ball_joint",
+          "carries": "steer"
+        }
+      ]
     },
     {
       "id": "seat_R",
@@ -1189,6 +1622,19 @@
       "carried_by": [
         "RS1",
         "RS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+        {
+          "to": "RS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1210,6 +1656,24 @@
       "mass_kg": 1.0,
       "carried_by": [
         "RS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+        {
+          "to": "RS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "seat_R",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "cross_S2",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1232,6 +1696,19 @@
       "carried_by": [
         "LS1",
         "LS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+        {
+          "to": "LS1",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1253,6 +1730,24 @@
       "mass_kg": 1.0,
       "carried_by": [
         "LS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+        {
+          "to": "LS2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "seat_L",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "cross_S2",
+          "via": "bolt",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1275,6 +1770,14 @@
       "carried_by": [
         "RS1",
         "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+        {
+          "to": "seat_R",
+          "via": "rest",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1297,6 +1800,14 @@
       "carried_by": [
         "LS1",
         "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+        {
+          "to": "seat_L",
+          "via": "rest",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1323,6 +1834,14 @@
         "RB",
         "LE",
         "RE"
+      ],
+      "system": "cargo",
+      "connects_to": [
+        {
+          "to": "deck",
+          "via": "rest",
+          "carries": "load"
+        }
       ]
     },
     {
@@ -1341,7 +1860,30 @@
           600.0
         ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_FL",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "FL",
+          "via": "rest",
+          "carries": "load"
+        },
+        {
+          "to": "FL",
+          "via": "rest",
+          "carries": "steer"
+        },
+        {
+          "to": "FL",
+          "via": "rest",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "susp_FL",
@@ -1359,7 +1901,20 @@
           200.0
         ]
       },
-      "mass_kg": 4.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "LA",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "FL",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "wheel_FR",
@@ -1377,7 +1932,30 @@
           600.0
         ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_FR",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "FR",
+          "via": "rest",
+          "carries": "load"
+        },
+        {
+          "to": "FR",
+          "via": "rest",
+          "carries": "steer"
+        },
+        {
+          "to": "FR",
+          "via": "rest",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "susp_FR",
@@ -1395,7 +1973,20 @@
           200.0
         ]
       },
-      "mass_kg": 4.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "RA",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "FR",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "wheel_RL",
@@ -1413,7 +2004,30 @@
           600.0
         ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_RL",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RL",
+          "via": "rest",
+          "carries": "load"
+        },
+        {
+          "to": "RL",
+          "via": "rest",
+          "carries": "torque"
+        },
+        {
+          "to": "RL",
+          "via": "rest",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "susp_RL",
@@ -1431,7 +2045,20 @@
           200.0
         ]
       },
-      "mass_kg": 3.119687015489763
+      "mass_kg": 3.119687015489763,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "LB",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "RL",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "wheel_RR",
@@ -1449,7 +2076,30 @@
           600.0
         ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_RR",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "RR",
+          "via": "rest",
+          "carries": "load"
+        },
+        {
+          "to": "RR",
+          "via": "rest",
+          "carries": "torque"
+        },
+        {
+          "to": "RR",
+          "via": "rest",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "susp_RR",
@@ -1467,7 +2117,20 @@
           200.0
         ]
       },
-      "mass_kg": 3.119687015489763
+      "mass_kg": 3.119687015489763,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "RB",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "RR",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "knuckle_FL",
@@ -1485,7 +2148,20 @@
           295.0
         ]
       },
-      "mass_kg": 2.5
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_FL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_FL",
+          "via": "bolt",
+          "carries": "steer"
+        }
+      ]
     },
     {
       "id": "knuckle_FR",
@@ -1503,7 +2179,20 @@
           295.0
         ]
       },
-      "mass_kg": 2.5
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_FR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_FR",
+          "via": "bolt",
+          "carries": "steer"
+        }
+      ]
     },
     {
       "id": "knuckle_RL",
@@ -1521,7 +2210,15 @@
           295.0
         ]
       },
-      "mass_kg": 2.5
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_RL",
+          "via": "ball_joint",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "toe_link_RL",
@@ -1544,7 +2241,20 @@
           90.0
         ]
       },
-      "mass_kg": 0.8803129845102374
+      "mass_kg": 0.8803129845102374,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_RL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "LB",
+          "via": "ball_joint",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "knuckle_RR",
@@ -1562,7 +2272,15 @@
           295.0
         ]
       },
-      "mass_kg": 2.5
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_RR",
+          "via": "ball_joint",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "toe_link_RR",
@@ -1585,7 +2303,20 @@
           -90.0
         ]
       },
-      "mass_kg": 0.8803129845102374
+      "mass_kg": 0.8803129845102374,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "knuckle_RR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "RB",
+          "via": "ball_joint",
+          "carries": "load"
+        }
+      ]
     },
     {
       "id": "caliper_FL",
@@ -1603,7 +2334,20 @@
           90.0
         ]
       },
-      "mass_kg": 1.5
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "knuckle_FL",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_FL",
+          "via": "friction",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "caliper_FR",
@@ -1621,7 +2365,20 @@
           90.0
         ]
       },
-      "mass_kg": 1.5
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "knuckle_FR",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_FR",
+          "via": "friction",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "caliper_RL",
@@ -1639,7 +2396,20 @@
           90.0
         ]
       },
-      "mass_kg": 1.5
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "knuckle_RL",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_RL",
+          "via": "friction",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "caliper_RR",
@@ -1657,7 +2427,20 @@
           90.0
         ]
       },
-      "mass_kg": 1.5
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+        {
+          "to": "knuckle_RR",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "wheel_RR",
+          "via": "friction",
+          "carries": "brake"
+        }
+      ]
     },
     {
       "id": "rollbar",
@@ -1683,6 +2466,19 @@
         "RH",
         "RHO",
         "RHT"
+      ],
+      "system": "rops",
+      "connects_to": [
+        {
+          "to": "LH",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "RH",
+          "via": "weld",
+          "carries": "load"
+        }
       ]
     }
   ],
