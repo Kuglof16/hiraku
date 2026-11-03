@@ -193,13 +193,15 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
 
 
 def stage_groups(ctx: RunContext, steps: list[Record]) -> list[tuple[int, list[Record]]]:
-    """The steps grouped by stage, lowest first (HK5). A step's stage is its tool's (shelf.tool_stage),
+    """The steps grouped by stage, lowest first (HK5). A step's stage is its tool's (shelf.tool_stage), or
+    the plan's `stage` on the step when it puts a check later (never earlier: HK5 still checks the call),
     and never lower than that of an earlier step of a load case feeding it, so upstream goes first;
     within a stage the steps keep their order (compose_plan: upstream first)."""
     keyed: list[tuple[int, Record]] = []
     for step in steps:
         ups = {u["load_case_id"] for u in ctx.upstream_of(step["load_case"])}
-        k = max([tool_stage(ctx, step["tool"])] + [kk for kk, st in keyed if st["load_case"] in ups])
+        own = tool_stage(ctx, step["tool"])
+        k = max([own, int(step.get("stage", own))] + [kk for kk, st in keyed if st["load_case"] in ups])
         keyed.append((k, step))
     return [(k, [st for kk, st in keyed if kk == k]) for k in sorted({kk for kk, _ in keyed})]
 
