@@ -212,15 +212,20 @@ def solid_column(end: str = "pinned", n_len: int = 40, L: float = 1000.0, b: flo
 
 
 def plate_buckling(a: float = 300.0, b: float = 200.0, t: float = 2.0, nx: int = 30, ny: int = 20,
-                   sigma0: float = 1.0, hard: bool = True) -> dict:
+                   sigma0: float = 1.0, hard: bool = True, kind: str = "quad", bending: str = "dkt") -> dict:
     """Simply supported plate (w = 0 on the four edges; hard: the rotation about each edge's in-plane normal
     held too, the Reissner-Mindlin support that tends to Kirchhoff's - see load_checks.ss_plate_pressure)
     compressed along x by a uniform
     stress sigma0 on the edge x = a; ux = 0 on x = 0, uy = 0 at the corner (0, 0); the edges y = 0, b are
-    free in plane so the stress is uniaxial."""
+    free in plane so the stress is uniaxial. kind 'tri' / 'mixed': shell triangles (shell_checks.mixed_groups)."""
     nodes, q = plate_shell(a, b, nx, ny)
     model = FEModel(nodes)
-    model.add(MITC4(q, t, E_ST, NU_ST))
+    if kind == "quad":
+        model.add(MITC4(q, t, E_ST, NU_ST))
+    else:
+        from .shell_checks import mixed_groups
+
+        mixed_groups(model, q, kind, t, E_ST, NU_ST, tri_where=lambda x, y: x > a / 2, bending=bending)
     x, y = nodes[:, 0], nodes[:, 1]
     edge = np.nonzero((x < 1e-9) | (x > a - 1e-9) | (y < 1e-9) | (y > b - 1e-9))[0]
     model.fix(edge, [2])

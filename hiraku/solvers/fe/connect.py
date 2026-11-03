@@ -126,9 +126,9 @@ class Spring(ElementGroup):
 
 def shell_node_normals(conn: np.ndarray, nodes: np.ndarray) -> np.ndarray:
     """Unit normal at every node (N, 3): the mean of the normals of the shell elements around it
-    (zero for nodes without shells)."""
+    (zero for nodes without shells). conn (E, 4) quads or (E, 3) triangles."""
     X = nodes[conn]
-    n = np.cross(X[:, 2] - X[:, 0], X[:, 3] - X[:, 1])
+    n = np.cross(X[:, 2] - X[:, 0], X[:, 3] - X[:, 1]) if conn.shape[1] == 4 else np.cross(X[:, 1] - X[:, 0], X[:, 2] - X[:, 0])
     n /= np.linalg.norm(n, axis=1)[:, None]
     acc = np.zeros((len(nodes), 3))
     for k in range(conn.shape[1]):
