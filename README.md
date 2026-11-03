@@ -85,6 +85,7 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 | 値 | 出典として書いたもの | 使った所 |
 |---|---|---|
 | 材料の降伏点・ヤング率・密度 (STKR400・STKM13A・SS400・6061-T6) | JIS G 3466・G 3445・G 3101 の最小の降伏点、一般の設計値、ハンドブックの値 | `data/materials/materials.json` |
+| 角パイプ・丸パイプの規格の寸法 (角 112 種・丸 128 種。単位質量を規格の式で計算し直して全行一致) | JIS G 3466 の表 5・6、JIS G 3444 の表 6 (2015 年版と改正) | `data/sections/standard_tubes.json` |
 | 電池の電圧 51.2 V (LiFePO4 16 直列 × 3.2 V) | セルの公称電圧 | `hiraku/designgen/ladder_4w.py` |
 | 部品の温度の上限 (電池 55 ℃・制御器 85 ℃・モーター 155 ℃) | EVE LF50K の仕様書、Curtis 1236 のマニュアル、IEC 60085 の F 種 | `hiraku/designgen/ladder_4w.py` |
 | 空気の密度 1.225 kg/m³ | ICAO Doc 7488 / ISO 2533 の海面の値 | `hiraku/designgen/ladder_4w.py`、`hiraku/solvers/k0_handcalc/library_dynamics.py`、`hiraku/solvers/k2_vehicle/` |
