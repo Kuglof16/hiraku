@@ -698,6 +698,25 @@ class CheckRun(unittest.TestCase):
         ev[at:at] = new
         return renumber(ev)
 
+    def test_a_stand_in_quantity_decides_when_the_judged_one_is_near_zero(self):
+        def near_zero(stand_in_matches):
+            ev = self._compare_again(sample_events(), 2, 150.0)  # a later mismatch of max_stress, no cause
+            crit = ev[0]["data"]["load_cases"][0]["criterion"]
+            crit.update(limit={"value": 1e9, "unit": "MPa"}, stand_in_quantity="stress_range")  # 150 < 1e-6 x 1e9
+            fin = next(e for e in ev if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0002")
+            c = copy.deepcopy(next(e for e in ev if e["kind"] == "comparison.recorded"
+                                   and e["data"]["comparison_id"] == "cmp-0002"))
+            pv = c["data"]["predicted"]["value"]
+            got = pv if stand_in_matches else 2 * pv
+            fin["data"]["results"].append({"quantity": "stress_range", "value": got, "unit": "MPa"})
+            c["data"].update(comparison_id="cmp-0003", quantity="stress_range", analyzed={"value": got, "unit": "MPa"},
+                             diff_abs=got - pv, diff_rel=(got - pv) / abs(pv),
+                             status="match" if stand_in_matches else "mismatch")
+            ev.insert(ev.index(next(e for e in ev if e["kind"] == "agent.stopped")), c)
+            return renumber(ev)
+        self.assertNotIn("judgement.state", self.rules(near_zero(True)))  # the stand-in matches
+        self.assertIn("judgement.state", self.rules(near_zero(False)))
+
     def test_the_latest_comparison_of_the_judged_quantity_holds_a_green_tile(self):
         # the limit is 156.7 MPa: 150 MPa is within it, but 21 % off the prediction (a mismatch)
         self.assertIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0)))
