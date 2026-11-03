@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N08b Numbers (kinetic type sample)</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js"></script>
+<script src="n08b_kt.data.js"></script>
+<style>
+  /* N08b, kinetic type sample. Two beats, one per sentence of the voice:
+     a large extruded 99 % (counted up) seen by a camera that swings round it,
+     with the meaning under it where one word (中小企業) is set in another
+     face; then the 99 tips back and is gone, the second caption comes in
+     (one word, 小さな, in the other face) and an extruded 16 % stands up
+     from the floor above it. The figures are read from n08b.html's DATA by
+     promo/kinetic_data.py (n08b_kt.data.js); rules and times are in the same
+     file. Every frame is drawn from t by the onSeek hook below (no CSS
+     animation, no wall clock, no random numbers).
+     Faces: Noto Sans JP and Noto Serif JP (SIL Open Font License 1.1),
+     the copies installed on the system; nothing is downloaded. */
+  :root {
+    --page-bg: var(--night);
+    --stage-bg: var(--night);
+    --kt-sans: "Noto Sans JP", sans-serif;
+    --kt-serif: "Noto Serif JP", serif;
+  }
+  /* the 3D view is clipped at the subtitle band (.safe's height) */
+  .clip { position: absolute; inset: 0; overflow: hidden; }
+  .view {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+  }
+  .floor {
+    position: absolute;
+    transform-style: flat;
+    background-image:
+      linear-gradient(rgba(246, 234, 208, 1) calc(1.5 * var(--u)), transparent calc(1.5 * var(--u))),
+      linear-gradient(90deg, rgba(246, 234, 208, 1) calc(1.5 * var(--u)), transparent calc(1.5 * var(--u)));
+    -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 45%, transparent 100%);
+            mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 45%, transparent 100%);
+  }
+  .world {
+    position: absolute;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transform-style: preserve-3d;
+  }
+  .num3d {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-style: preserve-3d;
+  }
+  .ly {
+    position: absolute;
+    left: 0;
+    top: 0;
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+    font-weight: 800;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    backface-visibility: hidden;
+  }
+  .ly .d { display: inline-block; text-align: right; }
+  .ly .u { font-weight: 300; margin-left: 0.06em; }
+
+  /* a caption is as wide as its words, centred on x 960 by the transform */
+  .cap {
+    position: absolute;
+    left: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    white-space: nowrap;
+    color: var(--on-night);
+  }
+  .cap .w { display: inline-block; font-family: var(--kt-sans); font-weight: 300; }
+  .cap .w.key { font-family: var(--kt-serif); font-weight: 900; color: var(--warm); }
+
+  .src {
+    position: absolute;
+    line-height: 1.6;
+    font-family: var(--kt-sans);
+    font-weight: 400;
+    color: var(--on-night-soft);
+  }
+</style>
+</head>
+<body data-duration="10">
+<div class="stage">
+  <div class="safe">
+    <div class="clip"><div class="view"><div class="world"><div class="floor"></div></div></div></div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Everything is built once at load from KT_DATA and placed at each t by
+  // draw(t) (timeline.js calls it through promo.onSeek).
+  (function () {
+    const K = window.KT_DATA, R = K.rules, V = K.values, L = window.PROMO_LAYOUT;
+    const W = L.stage.w;
+    const root = document.documentElement.style;
+    root.setProperty("--u", `min(calc(100vw / ${W}), calc(100vh / ${L.stage.h}))`);
+    for (const [k, v] of Object.entries({ "stage-w": W, "stage-h": L.stage.h, "band-y": L.subtitle_band.y,
+                                          "band-h": L.subtitle_band.h }))
+      root.setProperty(`--${k}`, `calc(${v} * var(--u))`);
+    for (const [k, v] of Object.entries(L.colors)) if (!k.startsWith("_")) root.setProperty(`--${k.replace(/_/g, "-")}`, v);
+    const px = (v) => `calc(${v} * var(--u))`;
+    const css = getComputedStyle(document.documentElement);
+    const color = (name) => (L.colors[name.replace(/-/g, "_")] || css.getPropertyValue(`--${name}`)).trim();
+
+    // --- small tools ---------------------------------------------------------
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const lin = (t, a, b) => clamp01((t - a) / (b - a));
+    function bezier(x1, y1, x2, y2) {
+      const at = (a, b, u) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3;
+      return (x) => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (at(x1, x2, m) < x) lo = m; else hi = m;
+        }
+        return at(y1, y2, (lo + hi) / 2);
+      };
+    }
+    const easeOut = bezier(0.2, 0.7, 0.2, 1);
+    const easeInOut = bezier(0.45, 0, 0.25, 1);
+    const easeIn = bezier(0.5, 0, 0.9, 0.4);
+    const countEase = bezier(0.12, 0.6, 0.2, 1);
+    const mix = (a, b, f) => {
+      const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const A = p(a), B = p(b);
+      return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * f)).join(",")})`;
+    };
+    // value shown at t by a count from 0 to v between s0 and s1 in whole steps
+    function counted(v, t, s0, s1) {
+      const n = R.count_steps;
+      const j = Math.floor(lin(t, s0, s1) * n);
+      return j >= n ? v : Math.floor(v * countEase(j / n));
+    }
+
+    // --- the two figures, extruded ---------------------------------------------
+    const N = R.num, world = document.querySelector(".world");
+    world.style.top = px(N.cy);
+    document.querySelector(".view").style.perspective = px(R.view.perspective_px);
+    document.querySelector(".view").style.perspectiveOrigin = `50% ${px(N.cy)}`;
+    const night = color("night");
+    const FIGS = {
+      sme: { v: V.manufacturing.shown, front: color("on-night"), side: color("on-night-soft") },
+      small: { v: V.cae_adoption.small.shown, front: color("warm"), side: color("warm") },
+    };
+    // a probe in the figure's face gives the width of the final digits, so the
+    // digit box does not change width while counting
+    const probe = document.createElement("span");
+    probe.className = "ly";
+    probe.style.cssText = `position:absolute;visibility:hidden;font-size:${px(N.size_px)}`;
+    document.body.appendChild(probe);
+    for (const [key, f] of Object.entries(FIGS)) {
+      const el = document.createElement("div");
+      el.className = "num3d";
+      el.dataset.box = `n08b_kt.num.${key}`;
+      el.dataset.kind = "number";
+      el.style.fontSize = px(N.size_px);
+      let html = "";
+      for (let k = N.layers - 1; k >= 0; k--) {
+        // k = 0 is the face; the others step back and darken towards the night
+        const c = k === 0 ? f.front : mix(f.side, night, 0.25 + 0.6 * (k / (N.layers - 1)));
+        html += `<div class="ly" data-k="${k}" style="color:${c};transform:translateZ(${px(-k * N.depth_px / (N.layers - 1))})">` +
+          `<span class="d"></span><span class="u" style="font-size:${N.unit_em}em">%</span></div>`;
+      }
+      el.innerHTML = html;
+      world.appendChild(el);
+      f.el = el;
+      f.layers = [...el.querySelectorAll(".ly")];
+      f.digits = [...el.querySelectorAll(".d")];
+    }
+
+    // --- captions and sources --------------------------------------------------
+    const C = R.cap, S = R.src, stage = document.querySelector(".safe");
+    const CAPS = {
+      sme: [["製造業の"], ["企業のうち"], ["中小企業", "key"]],
+      small: [["小さな", "key"], ["会社の CAE の導入率"]],
+    };
+    for (const [key, words] of Object.entries(CAPS)) {
+      const el = document.createElement("div");
+      el.className = "cap";
+      el.dataset.box = `n08b_kt.cap.${key}`;
+      el.dataset.kind = "label";
+      el.style.cssText = `top:${px(C.y)};height:${px(C.h)};font-size:${px(C.size_px)};gap:${px(C.gap_px)}`;
+      el.innerHTML = words.map(([w, k]) => `<span class="w${k ? " " + k : ""}">${w}</span>`).join("");
+      stage.appendChild(el);
+      CAPS[key] = { el, words: [...el.querySelectorAll(".w")] };
+    }
+    const m = V.manufacturing, a = V.cae_adoption;
+    const fmt = (v) => v.toLocaleString("en-US");
+    const SRCS = {
+      sme: `製造業の企業 ${fmt(m.all)} のうち中小企業 ${fmt(m.sme)} (${m.sme_pct.toFixed(1)} %)。${m.source}`,
+      small: `勤め先の CAE ツールの導入率 (製造系エンジニアの回答): ${a.small.label} ${a.small.pct.toFixed(1)} %、` +
+             `${a.large.label} ${a.large.pct.toFixed(1)} %。${a.source_short}`,
+    };
+    for (const [key, text] of Object.entries(SRCS)) {
+      const el = document.createElement("div");
+      el.className = "src";
+      el.dataset.box = `n08b_kt.src.${key}`;
+      el.dataset.kind = "note";
+      el.style.cssText = `left:${px(S.x)};top:${px(S.y)};width:${px(S.w)};height:${px(S.h)};font-size:${px(S.size_px)}`;
+      el.textContent = text;
+      stage.appendChild(el);
+      SRCS[key] = el;
+    }
+
+    // sizes that need the face loaded
+    // and the baseline (the floor the figures stand on), from the box's top
+    let baseline = 0;
+    function size() {
+      for (const f of Object.values(FIGS)) {
+        probe.innerHTML = `<span class="d">${f.v}</span><span class="u" style="font-size:${N.unit_em}em">%</span>` +
+          `<i style="display:inline-block;width:0;height:0"></i>`;
+        const d = probe.querySelector(".d").getBoundingClientRect().width;
+        const all = probe.getBoundingClientRect();
+        baseline = probe.querySelector("i").getBoundingClientRect().top - all.top;
+        for (const s of f.digits) s.style.width = `${d}px`;
+        // the box: the face's size, centred on the world's origin
+        f.el.style.width = `${all.width}px`;
+        f.el.style.height = `${all.height}px`;
+        f.el.style.left = `${-all.width / 2}px`;
+        f.el.style.top = `${-all.height / 2}px`;
+        f.el.style.transformOrigin = `50% ${baseline}px`;
+      }
+      const F = R.floor, fl = document.querySelector(".floor");
+      fl.style.width = px(F.w);
+      fl.style.height = px(F.d);
+      fl.style.backgroundSize = `${px(F.cell_px)} ${px(F.cell_px)}`;
+      fl.style.left = px(-F.w / 2);
+      // laid flat at the baseline, its lower edge (after the turn: the near edge)
+      // near_px in front of the figures
+      const y0 = baseline - parseFloat(FIGS.sme.el.style.height) / 2;
+      fl.style.top = `calc(${y0}px - ${px(F.d)})`;
+      fl.style.transformOrigin = "50% 100%";
+      fl.style.transform = `translateZ(${px(F.near_px)}) rotateX(90deg)`;
+    }
+
+    // --- the frame at t --------------------------------------------------------
+    const [B1, B2] = R.beats;
+    const deg = (v) => `${v}deg`;
+    function camera(b, t) {
+      const q = easeOut(lin(t, b.cam_s[0], b.cam_s[1]));
+      const f = b.cam_from, to = b.cam_to;
+      return { ry: f.ry_deg + (to.ry_deg - f.ry_deg) * q, rx: f.rx_deg + (to.rx_deg - f.rx_deg) * q,
+               z: f.z_px + (to.z_px - f.z_px) * q };
+    }
+    const setAlpha = (els, o) => { for (const e of els) e.style.opacity = String(o); };
+
+    const floor = document.querySelector(".floor");
+    // CSS px per design px
+    const unit = () => document.querySelector(".stage").getBoundingClientRect().width / W;
+    function draw(t) {
+      size();  // every frame: the faces may not have been ready at load
+      // the camera of the beat on the screen (the two never show at once: the
+      // first figure is gone by out_s[1], the second comes in at num_in_s)
+      const c = camera(t < B2.num_in_s - 0.5 ? B1 : B2, t);
+      world.style.transform = `translateZ(${px(c.z)}) rotateX(${deg(c.rx)}) rotateY(${deg(c.ry)})`;
+      // beat 1 (sentence 1): the 99 counts up while the camera swings round it;
+      // then it tips back onto the floor and is gone by out_s[1]
+      const on1 = lin(t, B1.num_in_s, B1.num_in_s + 0.35) * (1 - lin(t, B1.out_s[0] + 0.15, B1.out_s[1]));
+      {
+        const f = FIGS.sme;
+        const tip = easeIn(lin(t, B1.out_s[0], B1.out_s[1]));
+        f.el.style.transform = `rotateX(${deg(-84 * tip)})`;
+        const v = counted(f.v, t, B1.count_s[0], B1.count_s[1]);
+        for (const s of f.digits) s.textContent = String(v);
+        setAlpha(f.layers, on1);
+      }
+      // beat 2 (sentence 2): the 16 stands up from the floor and counts up
+      const on2 = lin(t, B2.num_in_s, B2.num_in_s + 0.25);
+      {
+        const f = FIGS.small;
+        const up = easeOut(lin(t, B2.num_in_s, B2.num_in_s + 0.7));
+        f.el.style.transform = `rotateX(${deg(84 * (1 - up))})`;
+        const v = counted(f.v, t, B2.count_s[0], B2.count_s[1]);
+        for (const s of f.digits) s.textContent = String(v);
+        setAlpha(f.layers, on2);
+      }
+      floor.style.opacity = String(R.floor.alpha * Math.max(on1, on2));
+      // captions: word by word (a short rise and a fade); beat 1's goes with its
+      // figure, beat 2's comes in at the middle and moves down as the 16 stands up
+      // the shown words are kept centred: the line slides by half the width of
+      // the words still to come
+      const words = (cap, times) => {
+        let shift = 0;
+        cap.words.forEach((w, i) => {
+          const q = easeOut(lin(t, times[i], times[i] + R.word_in_s));
+          w.style.opacity = String(q);
+          w.style.transform = `translateY(${px(24 * (1 - q))})`;
+          if (i > 0) shift += (1 - q) * (w.offsetWidth + C.gap_px * unit()) / 2;
+        });
+        return shift;
+      };
+      const s1 = words(CAPS.sme, B1.words_s);
+      CAPS.sme.el.style.transform = `translateX(-50%) translateX(${s1}px)`;
+      CAPS.sme.el.style.opacity = String(1 - lin(t, B1.out_s[0], B1.out_s[1] - 0.1));
+      const s2 = words(CAPS.small, B2.words_s);
+      const down = easeInOut(lin(t, B2.num_in_s - 0.45, B2.num_in_s + 0.05));
+      const k = C.mid_scale + (1 - C.mid_scale) * down;
+      CAPS.small.el.style.transform = `translateX(-50%) translateY(${px((N.cy - C.h / 2 - C.y) * (1 - down))}) translateX(${s2 * k}px) scale(${k})`;
+      // sources (notes): after the meaning is read
+      SRCS.sme.style.opacity = String(lin(t, B1.src_s, B1.src_s + 0.5) * (1 - lin(t, B1.out_s[0], B1.out_s[1] - 0.1)));
+      SRCS.small.style.opacity = String(lin(t, B2.src_s, B2.src_s + 0.5));
+    }
+    window.N08B_KT = { draw, FIGS, CAPS, counted };
+    window.__ktDraw = draw;
+  })();
+</script>
+<script src="timeline.js"></script>
+<script>
+  window.promo.onSeek(window.__ktDraw);
+  window.__ktDraw(0);
+</script>
+</body>
+</html>
