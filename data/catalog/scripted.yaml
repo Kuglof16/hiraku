@@ -59,13 +59,17 @@ offroad-4w:
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
         H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す
-      source: the assembly tool's H1 and H3 on the demo vehicle, before and after this change
+      source: >-
+        the demo scripted run 20261103-225321-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (226.6 mm)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 12, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
-      source: the launch tool's P3 on the demo vehicle with the layout revision, before and after this change
+      source: >-
+        the demo scripted run 20261103-225321-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.479 s against 6 s); version 3 with this change:
+        P3 ver-0012 (5.744 s)
   steps:
     - &p1_step
       load_case: P1-step100
