@@ -69,6 +69,34 @@ class NoBuilderTest(unittest.TestCase):
         with self.without_builders():
             self.assertIn("H4", pick("serving-robot")["assembly_test_ids"])
 
+    def test_a_product_with_builders_of_its_own_picks_its_tests_and_other_products_do_not(self):
+        def dispatcher(spec, req, design):  # what hiraku.catalog.builders makes for a test only some products build
+            raise AssertionError("not called")
+
+        dispatcher.general = None  # no general builder: only the products that registered one
+        own = {"care-bed": {"P5": object(), "T3": object()}}
+
+        def fake_builder_for(catalog, tid):
+            return dispatcher if tid in ("P5", "T3", "N3") else object()
+
+        with mock.patch("hiraku.intake.domains.builder_for", fake_builder_for), \
+                mock.patch("hiraku.intake.domains._product_builders", lambda: own):
+            bed = pick("care-bed", product="care-bed")
+            other = pick("care-bed", product="electric-guitar")
+            unknown = pick("care-bed")
+        ids = lambda rec: {p["domain"]: p["test_ids"] for p in rec["picks"]}  # noqa: E731
+        self.assertEqual((ids(bed)["powertrain"], ids(bed)["thermal"], ids(bed)["nvh"]), (["P5"], ["T3"], []))  # N3: nobody has it
+        for rec in (other, unknown):
+            self.assertEqual((ids(rec)["powertrain"], ids(rec)["thermal"], ids(rec)["nvh"]), ([], [], []))
+        self.assertEqual(ids(bed)["strength"], ids(other)["strength"])  # the general builders are for every product
+
+    def test_without_product_modules_it_is_the_general_builders_as_before(self):
+        with mock.patch("hiraku.intake.domains._product_builders", lambda: {}), \
+                mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: None if tid == "N3" else object()):
+            rec = pick("care-bed", product="care-bed")
+        self.assertEqual({p["domain"]: p["test_ids"] for p in rec["picks"]}["nvh"], [])
+        self.assertIn("S1", {p["domain"]: p["test_ids"] for p in rec["picks"]}["handling"])
+
     def test_the_real_catalog_picks_only_tests_that_have_a_builder(self):
         from hiraku.catalog import builder_for, load_catalog
 
