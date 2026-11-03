@@ -40,18 +40,23 @@ Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
-FIT_TIME_S = 120.0  # the driver fit's time limit when the plan gives none
+FIT_TIME_S = 900.0  # the driver fit's time limit when the plan gives none (a guard; fit_evals ends it first)
 
 
-def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None) -> tuple[dict, str]:
+def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None,
+               evals: Any = None) -> tuple[dict, str]:
     """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
     with them (hiraku.designgen.driver_fit.best_driver_place: the smallest of the H3 margins made the largest).
     Returns the changes with the fit's added (the fit's win for its variables) and the reason with the margins."""
     from hiraku import designgen
     from hiraku.designgen import driver_fit
 
+    # measured on the design with the entry's variable changes (its choices, the mounts, do not move the driver;
+    # with them every design takes longer to build). A fixed number of evaluations (`fit_evals`) makes the answer
+    # the same on every machine; the time limit only guards against a fit that does not end.
     base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
-    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S))
+    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S),
+                                       max_evals=int(evals) if evals else None)
     small = got["smallest"]
     found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
     text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
@@ -378,10 +383,16 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
         changes, reason = dict(rev.get("changes") or {}), rev["reason"]
+        choices = dict(rev.get("choices") or {})  # the generator's short ways (revise_design choices)
         if rev.get("fit") == "driver":  # the seat, steering and pedals searched by code (designgen.driver_fit)
-            changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"))
+            try:
+                changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"), rev.get("fit_evals"))
+            except ValueError as e:  # the generator refuses the entry's own changes (designgen.DesignGenError)
+                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+                raise Stop(f"revise_design refused: {e}") from None
         try:
-            out = revise_design(ctx, {"changes": changes, "reason": reason}, "designer")
+            out = revise_design(ctx, {**({"changes": changes} if changes else {}),
+                                      **({"choices": choices} if choices else {}), "reason": reason}, "designer")
         except ToolError as e:
             s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
             raise Stop(f"revise_design refused: {e}") from None
