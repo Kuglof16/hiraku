@@ -22,7 +22,8 @@ pivots are nodes at the ends of legs down from the rail (joined left to right by
 cross members, lower_cross), and brackets (parts of kind bracket) hold the upper arms'
 pivots and the tie rods' and toe links' inner ends. The footwell starts behind the front
 wheels' steering sweep, at a front bulkhead (a panel) with the dash posts and the dash
-cross member that holds the steering column (build_dash).
+cross member that holds the steering column (build_dash); bulkhead_dx brings the bulkhead (in the front
+towers' rear posts) forward where a wider track leaves the sweep farther forward.
 The driver's place comes from four variables: the seats' cushion top seat_height above the floor; the
 accelerator's pad at pedal_x with the large driver's right foot on it (kit/body.place_pedals); the
 steering wheel's centre steering_wheel_height above the seats' cushion top at steering_x less
@@ -397,6 +398,12 @@ TYRE_GAP_MM = 10.0  # the bulkhead and the footwell floor this far behind the fr
 # leg from the rear post's foot to the lower arm's rear pivot passes behind the rack's clamp (assumption: v1's
 # value, where the steering sweep puts the bulkhead)
 TOWER_MIN_DX_MM = 285.0
+# bulkhead_dx's lower end: the front towers' rear post (the bulkhead and the dash post in it) GAP_MM (kit/mounts)
+# behind the bracket of the upper arm's rear pivot, which stands on the rail beside it: v1's upper arm rear pivot
+# is 100 mm behind the axle (K2's builtin double wishbone), the bracket reaches mounts.BRACKET_HALF_X_MM (25) behind
+# it, then GAP_MM (10) and the post's half width (tower_b 30 / 2). Computed from v1's hard points in
+# tests/solvers/test_designgen_footroom.py; build() checks each design's own (_check_rear_post).
+BULKHEAD_DX_MIN_MM = 150.0
 FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driver's feet, each side
 PANEL_T_MM = 20.0  # floor and bulkhead panels' thickness (as the first floors)
 PANEL_KG_M2 = 6.0 / (0.45 * 0.6)  # the first v1's footwell floor (6 kg, 450 x 600 mm) per area: footwell and bulkhead
@@ -488,8 +495,21 @@ _DRIVER_VARS = {
                    "deg, in the seat at its rearmost seat_x, to the front axle (the footwell is behind it); whether "
                    "the pads stand on the footwell floor clear of the bulkhead is K4's (foot_support, foot_room)"),
 }
+_DRIVER_VARS["bulkhead_dx"] = Var(
+    "mm", TOWER_MIN_DX_MM, BULKHEAD_DX_MIN_MM, TOWER_MIN_DX_MM,
+    "the front towers' rear posts' centre line at least this far behind the front axle (the front bulkhead's "
+    "front face is at the posts' front face, the dash posts stand on them, the footwell floor's front edge is at "
+    "their rear face); farther back where the "
+    "front wheels' steering sweep at the rails' outer face reaches farther (TYRE_GAP_MM behind it), and the "
+    "footwell floor's front edge no farther forward than the sweep at the floor's width allows. Less than the "
+    "default moves only the front towers' rear posts forward: the lower arms' rear legs keep their rail nodes "
+    "(v1's leg passes 0.2 mm behind the rack's clamp; a post moved with it would reach the clamp). Range: from "
+    f"{BULKHEAD_DX_MIN_MM:g} mm (the post GAP_MM behind the bracket of the upper arm's rear pivot on the rail, at "
+    "v1's hard points; build() refuses a design where it is nearer) to the default (v1's, TOWER_MIN_DX_MM: farther "
+    "back only shortens the footwell). Written into design.variables only when it is not the default")
 VARIABLES = {k: x for name, var in VARIABLES.items()
              for k, x in ([(name, var)] + (list(_DRIVER_VARS.items()) if name == "battery_x" else []))}
+OPTIONAL["bulkhead_dx"] = ("bulkhead_dx",)
 # The occupants' bodies as parts (kit/body.py, hiraku.contract.loading.person_of: the parts of a person
 # share the id before the first "."): the trunk keeps the occupant's id, the limbs are <id>.<segment>_<L|R>.
 BODY_PARTS = True
@@ -583,9 +603,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
 
     sweep_r = math.hypot(r, ww / 2.0)
     x_a = lay.station_x("A")
-    bulkhead_front = min(x_a - _behind(sweep_r, track / 2.0 - rail_y - v["rail_b"] / 2.0) - TYRE_GAP_MM,
-                         x_a - TOWER_MIN_DX_MM + v["tower_b"] / 2.0)
+    sweep_front = x_a - _behind(sweep_r, track / 2.0 - rail_y - v["rail_b"] / 2.0) - TYRE_GAP_MM
+    bulkhead_front = min(sweep_front, x_a - v["bulkhead_dx"] + v["tower_b"] / 2.0)
     post_x = bulkhead_front - v["tower_b"] / 2.0
+    # the towers' posts and the lower arms' legs everywhere else as at bulkhead_dx's default
+    post_dx = x_a - (min(sweep_front, x_a - TOWER_MIN_DX_MM + v["tower_b"] / 2.0) - v["tower_b"] / 2.0)
     feet_half = seat_y + people.leg_spacing(people.BIG) + people.SIZES[people.BIG]["foot_breadth"] / 2.0
     floor_half = feet_half + FOOT_FLOOR_MARGIN_MM
     floor_front_x = min(post_x - v["tower_b"] / 2.0, x_a - _behind(sweep_r, track / 2.0 - floor_half) - TYRE_GAP_MM)
@@ -700,10 +722,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     try:
         placed = mounts.place(frame, lay, supports, {"tower": tower, "leg": lower, "lower": lower,
                                                      "dims": {"lower": {"b": v["lower_b"], "h": v["lower_b"]}}},
-                              rho, x_a - post_x, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
-                              whole=REAR_OVERHANG_RAILS)
+                              rho, post_dx, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
+                              whole=REAR_OVERHANG_RAILS,
+                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None)
     except (mounts.MountError, ValueError) as e:
         raise DesignGenError(str(e)) from None
+    _check_rear_post(supports, post_x, v["tower_b"])
     dash = build_dash(frame, lay, post_x, dash_z, rail_y, tower, rho)
     lay.part("bulkhead")["carried_by"] = dash["bulkhead_nodes"]
     rack_nodes = [lay.part(f"bracket_tie_{s['id']}")["carried_by"][0] for s in supports if s["actuation"]["steer"]]
@@ -764,6 +788,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     }
     safety.add_rollbar_part(design)
     systems.write(design)  # system and connects_to of every part, when the contract has them
+    if x_a - post_x != post_dx:
+        _check_rear_legs(design)
     return design
 
 
@@ -771,6 +797,46 @@ def _behind(radius: float, across: float) -> float:
     """How far (mm) behind a wheel's centre its steering sweep reaches at `across` mm inboard of the centre:
     the disc of the tyre box's corner radius (any steer angle; the safe side)."""
     return math.sqrt(radius * radius - across * across) if across < radius else 0.0
+
+
+def rear_post_room(supports: list[Record], post_x: float, tower_b: float) -> float:
+    """How far (mm) the front towers' rear posts' front face is behind the brackets of the front upper arms'
+    rear pivots (which stand on the rail beside the post, kit/mounts), less mounts.GAP_MM: negative, the post
+    is too near."""
+    pivots = [s["suspension"]["hardpoints_mm"]["uca_rear"][0] for s in supports
+              if s["actuation"]["steer"] and "hardpoints_mm" in s.get("suspension", {})]
+    if not pivots:
+        return math.inf
+    return min(pivots) - mounts.BRACKET_HALF_X_MM - (post_x + tower_b / 2.0) - mounts.GAP_MM
+
+
+def _check_rear_post(supports: list[Record], post_x: float, tower_b: float) -> None:
+    room = rear_post_room(supports, post_x, tower_b)
+    if room < 0.0:
+        raise DesignGenError(f"the front towers' rear posts (x = {post_x:.0f} mm) come {-room:.1f} mm too near the "
+                             f"brackets of the upper arms' rear pivots; make bulkhead_dx larger")
+
+
+def _check_rear_legs(design: Record) -> None:
+    """With the front towers' rear posts moved forward (bulkhead_dx), each front lower arm's rear leg starts
+    from its own rail node behind the post: it must not pass through the post or the rail beside it (K4's
+    member boxes, more than k4_geometry.model.TOUCH_MM into a member it shares no node with)."""
+    from hiraku.solvers.k4_geometry.model import TOUCH_MM, bodies, shape_overlap
+
+    bs = {k: b for k, b in bodies(design).items() if b.kind == "member"}
+    for side in "LR":
+        leg = bs.get(f"member:lower_leg_{side}A2")
+        if leg is None:
+            continue
+        for k, b in bs.items():
+            if b is leg or leg.nodes & b.nodes:
+                continue
+            o = shape_overlap(leg, b)
+            if o > TOUCH_MM:
+                raise DesignGenError(f"with bulkhead_dx = {design['variables']['bulkhead_dx']['value']:g} mm the front "
+                                     f"lower arm's rear leg (from its rail node behind the moved post) goes {o:.1f} mm "
+                                     f"into {k.split(':', 1)[1]}; move the post farther forward (smaller bulkhead_dx) "
+                                     f"or leave it at the default")
 
 
 def _dash_height(lay: Layout, x: float, b: float) -> float:
