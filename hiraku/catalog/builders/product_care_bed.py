@@ -469,4 +469,25 @@ def step_for(load_case: Record) -> Record | None:
     return PLANS.get(load_case["test_id"])
 
 
-__all__ = ["BUILDERS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "STEPS", "T3_PREDICTIONS", "step_for"]
+def predictions_for(load_case: Record) -> list[Record]:
+    """The K0 predictions of one care-bed load case, for the roles' formula_inputs as for the scripted steps:
+    S1's edge load, R5's deck (per rail, deck_load_per_rail) and side rail, P5's actuators, T3's duty and R3's
+    damage over the counts of use. Each has its formula, output, inputs (from./lc./pred./design.var. references)
+    and inputs_from(design, load_case), which gives the from.<name> values. [] for other load cases."""
+    step = step_for(load_case)
+    if step is not None:
+        return list(step["predictions"])
+    return list({"T3": T3_PREDICTIONS, "R3": R3_PREDICTIONS}.get(load_case["test_id"], []))
+
+
+def inputs_for(design: Record, load_case: Record) -> Record:
+    """Every from.<name> value (a quantity) of the load case's predictions (predictions_for), off the design."""
+    out: Record = {}
+    for p in predictions_for(load_case):
+        if p.get("inputs_from") is not None:
+            out.update(p["inputs_from"](design, load_case))
+    return out
+
+
+__all__ = ["BUILDERS", "PLANS", "PRODUCT", "R3_PREDICTIONS", "STEPS", "T3_PREDICTIONS", "inputs_for",
+           "predictions_for", "step_for"]
