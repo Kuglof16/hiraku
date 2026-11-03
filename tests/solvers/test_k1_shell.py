@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 import os
 import time
 import unittest
@@ -457,14 +458,22 @@ class GussetMeshTest(unittest.TestCase):
             g, _, t = p["box"]["size_mm"]
             self.assertAlmostEqual(area[sel].sum(), g * g / 2, places=9)
             self.assertEqual(ms.member_thickness_mm[gid], t)
-            np.testing.assert_allclose((area[sel][:, None] * c[sel]).sum(axis=0) / area[sel].sum(),
-                                       p["box"]["center_mm"], atol=1e-9)  # the plate's centroid is the box centre
+            q = ms.nodes[ms.elements[sel]]  # each quad's centroid from its two triangles (the legs' cuts are graded)
+            tri = [(q[:, 0], q[:, 1], q[:, 2]), (q[:, 0], q[:, 2], q[:, 3])]
+            ta = [np.linalg.norm(np.cross(b - a, c_ - a), axis=1) / 2 for a, b, c_ in tri]
+            tc = [(a + b + c_) / 3 for a, b, c_ in tri]
+            centroid = sum(w[:, None] * x for w, x in zip(ta, tc)).sum(axis=0) / sum(ta).sum()
+            np.testing.assert_allclose(centroid, p["box"]["center_mm"], atol=1e-9)  # the plate's centroid is the box centre
             up = 1.0 if gid.endswith("upper") else -1.0
             np.testing.assert_allclose(R[sel, 2] @ np.array([0, 0, 1.0]), up)  # top side away from the cross member
             nodes = set(ms.elements[sel].ravel().tolist())
             shared = nodes & tubes
-            # both legs: 2 * (2n) + 1 nodes with n = ceil(half the hypotenuse / 10) = ceil(42.4 / 10) = 5
-            self.assertEqual(len(shared), 21, gid)
+            # both legs, from the corner: the half next to it cut at t and 2t (the weld strips' lines, t = 2.3) and
+            # then into m = ceil((1 - 4t/g) * 42.4 / 10) = 4 even parts, the outer half into n = ceil(42.4 / 10) = 5
+            # (42.4 mm: half the hypotenuse); 2 * (2 + 4 + 5) + 1 nodes
+            m = math.ceil((1 - 4 * 2.3 / g) * math.hypot(g, g) / 2 / 10.0)
+            n = math.ceil(math.hypot(g, g) / 2 / 10.0)
+            self.assertEqual(len(shared), 2 * (2 + m + n) + 1, gid)
             on_leg = ms.nodes[sorted(shared)]
             self.assertTrue(np.all(np.isclose(on_leg[:, 2], p["box"]["center_mm"][2])))
 

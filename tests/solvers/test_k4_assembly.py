@@ -172,6 +172,8 @@ class CornersTest(unittest.TestCase):
         self.assertEqual(ids[fl - 2:fl], ["susp_FL", "wheel_FL"])
         self.assertIn("built off the vehicle", seq[fl - 1]["note"])
         self.assertEqual(seq[fl]["depends_on"], ["susp_FL", "wheel_FL"])
+        self.assertEqual(seq[fl]["group_parts"], ["susp_FL", "wheel_FL"])
+        self.assertNotIn("group_parts", seq[fl - 1])  # a step of the group's own build
         self.assertIn("node LA", seq[fl]["note"])
         self.assertTrue(all(s["no_interference"] for s in seq))
 
@@ -205,6 +207,7 @@ class HandsTest(unittest.TestCase):
         # what is in the way from above, the side it came in from: the 200 x 125 mm sweep meets all six
         self.assertNotIn("blocked_by", unit)  # that field is for a part that cannot go in (check_run holds to it)
         self.assertIn("the hands' way is taken by top_my, top_py, wall_mx, wall_my, wall_px, wall_py", unit["note"])
+        self.assertEqual(unit["tool_blocked_by"], ["top_my", "top_py", "wall_mx", "wall_my", "wall_px", "wall_py"])
         self.assertIn("node N is taken from every side", unit["note"])
         self.assertTrue(unit["hand_reach"])  # 80 mm down from the top of the plates
         bare = next(s for s in steps(boxed_in(walls=False)) if s["part"] == "unit")
