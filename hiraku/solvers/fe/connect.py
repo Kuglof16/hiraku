@@ -199,6 +199,103 @@ def shell_to_solid(shell_nodes, normals: np.ndarray, nodes: np.ndarray, solid_no
     return Constraint(name, eqs, needs_rotation=tuple(shell_nodes), nodes=tuple(sorted(touched)))
 
 
+# ------------------------------------------------------------------ tie (non-matching meshes)
+
+
+def project_to_faces(points: np.ndarray, faces: np.ndarray, nodes: np.ndarray, n_candidates: int = 8,
+                     tol: float = 1e-6) -> list:
+    """Closest point of each point on a set of faces (F, 4) or (F, 8) (quad4 / quad8 shape functions).
+
+    For each point the nearest faces (by centroid) are tried; on each, (xi, eta) are found by Gauss-Newton on
+    |x(xi, eta) - p|^2. A face whose solution lies inside (|xi|, |eta| <= 1 + tol) and is closest wins; if
+    none is inside, the closest clamped point. Returns [(face index, xi, eta, distance, inside)]."""
+    from scipy.spatial import cKDTree
+
+    from .solid import shape_quad4, shape_quad8
+
+    faces = np.asarray(faces, int)
+    shp = shape_quad8 if faces.shape[1] == 8 else shape_quad4
+    X = nodes[faces]
+    tree = cKDTree(X[:, :4].mean(axis=1))
+    k = min(n_candidates, len(faces))
+    out = []
+    for p in np.atleast_2d(points):
+        _, cand = tree.query(p, k=k)
+        best = None
+        for f in np.atleast_1d(cand):
+            xi = np.zeros(2)
+            for _ in range(25):
+                N, dN = shp(*xi)
+                x = N @ X[f]
+                J = dN @ X[f]  # (2, 3)
+                r = x - p
+                step = np.linalg.solve(J @ J.T, -(J @ r))
+                xi = np.clip(xi + step, -1.5, 1.5)
+                if np.abs(step).max() < 1e-12:
+                    break
+            inside = bool(np.all(np.abs(xi) <= 1 + tol))
+            xc = np.clip(xi, -1.0, 1.0)
+            N, _ = shp(*xc)
+            dist = float(np.linalg.norm(N @ X[f] - p))
+            key = (not inside, dist)
+            if best is None or key < best[0]:
+                best = (key, int(f), float(xc[0]), float(xc[1]), dist, inside)
+        out.append(best[1:])
+    return out
+
+
+def tie(slave_nodes, master_faces: np.ndarray, nodes: np.ndarray, name: str = "tie", max_gap: float | None = None,
+        rotations: bool = True) -> Constraint:
+    """Tie slave nodes to a surface of another mesh whose nodes do not match (shell faces (F, 4) or solid faces
+    (F, 8) / (F, 4)).
+
+    Each slave node is projected on the surface (project_to_faces): face, (xi, eta), the point x_p. Then
+        u_s = sum_i N_i(xi, eta) u_i  (+ theta_p x (x_s - x_p) when the master nodes have rotations,
+                                          theta_p = sum_i N_i theta_i, which keeps a rigid motion exact
+                                          across a small gap such as a faceted wall),
+        theta_s = sum_i N_i theta_i   (when both sides have rotations and rotations=True).
+    A shell edge tied to solid faces gets no rotation tie (solid nodes have none): use shell_to_solid there.
+    max_gap: refuse slave nodes farther than this from the surface (default: no limit).
+    """
+    from .solid import shape_quad4, shape_quad8
+
+    slaves = [int(s) for s in np.atleast_1d(slave_nodes)]
+    faces = np.asarray(master_faces, int)
+    proj = project_to_faces(nodes[slaves], faces, nodes)
+    shp = shape_quad8 if faces.shape[1] == 8 else shape_quad4
+    data = []
+    for s, (f, xi, eta, dist, inside) in zip(slaves, proj):
+        if max_gap is not None and dist > max_gap:
+            raise ValueError(f"tie: slave node {s} is {dist:.3g} from the surface (more than {max_gap:g})")
+        N, _ = shp(xi, eta)
+        ids = faces[f]
+        xp = N @ nodes[ids]
+        data.append((s, ids, N, nodes[s] - xp, dist, inside))
+    masters = sorted({int(i) for _, ids, *_ in data for i in ids})
+
+    def make(counts):
+        eqs = []
+        for s, ids, N, d, _, _ in data:
+            m_rot = all(counts[i] == 6 for i in ids)
+            Sd = skew(d)
+            for k in range(3):
+                terms = [(s, k, 1.0)] + [(int(i), k, -float(n)) for i, n in zip(ids, N) if n != 0.0]
+                if m_rot and np.any(d != 0.0):
+                    terms += [(int(i), 3 + l, float(n) * Sd[k, l]) for i, n in zip(ids, N) for l in range(3)
+                              if n != 0.0 and Sd[k, l] != 0.0]
+                eqs.append(Equation(terms, prefer=(s, k), source=name))
+            if rotations and m_rot and counts[s] == 6:
+                for k in range(3):
+                    terms = [(s, 3 + k, 1.0)] + [(int(i), 3 + k, -float(n)) for i, n in zip(ids, N) if n != 0.0]
+                    eqs.append(Equation(terms, prefer=(s, 3 + k), source=name))
+        return eqs
+
+    c = Constraint(name, nodes=tuple(slaves + masters), maker=make)
+    c.projection = [{"slave": s, "face": int(f), "xi": xi, "eta": eta, "gap": dist, "inside": inside}
+                    for s, (f, xi, eta, dist, inside) in zip(slaves, proj)]
+    return c
+
+
 # ------------------------------------------------------------------ RBE3
 
 

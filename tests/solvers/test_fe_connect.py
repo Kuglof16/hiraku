@@ -9,6 +9,7 @@ from hiraku.solvers.fe.connect import Spring, distributing_link, rbe3_forces, ri
 from hiraku.solvers.fe.shell import MITC4
 from hiraku.solvers.k1_shell.checks import grid
 from hiraku.solvers.k1_shell.solve import spread_load
+from tests.solvers.k2.slow import SLOW
 
 E, NU = 205000.0, 0.3
 
@@ -106,6 +107,60 @@ class ShellSolidTest(unittest.TestCase):
         self.assertLess(r["mixed_equilibrium"], 1e-8)
         self.assertLess(r["mixed_rigid"]["energy_ratio"], 1e-12)
         self.assertLess(r["mixed_rigid"]["constraint_residual"], 1e-12)
+
+
+class TieTest(unittest.TestCase):
+    def test_projection_onto_quad8_face(self):
+        from hiraku.solvers.fe.connect import project_to_faces
+        from hiraku.solvers.fe.solid import shape_quad8
+        nodes = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 1], [0, 10, 0], [5, 0, 0.2], [10, 5, 0.4], [5, 10, 0.3],
+                          [0, 5, -0.2]], float)
+        N, _ = shape_quad8(0.3, -0.6)
+        p = N @ nodes + np.array([0.0, 0.0, 0.0])
+        f, xi, eta, dist, inside = project_to_faces(p[None, :], np.arange(8)[None, :], nodes)[0]
+        self.assertTrue(inside)
+        self.assertAlmostEqual(xi, 0.3, places=9)
+        self.assertAlmostEqual(eta, -0.6, places=9)
+        self.assertLess(dist, 1e-9)
+
+    def test_rect_t_tied_vs_shared_nodes(self):
+        a = checks.rect_t_joint(5.0, tied=False)
+        b = checks.rect_t_joint(5.0, tied=True)
+        da, db = np.linalg.norm(a["tip"]), np.linalg.norm(b["tip"])
+        self.assertAlmostEqual(db, da, delta=0.06 * da)
+        self.assertAlmostEqual(b["vm_max_near_joint"], a["vm_max_near_joint"], delta=0.10 * a["vm_max_near_joint"])
+        self.assertLess(b["equilibrium"], 1e-8)
+        r = precheck.rigid_body_energy(b["model"])
+        self.assertLess(r["energy_ratio"], 1e-12)
+        self.assertLess(r["constraint_residual"], 1e-12)
+
+    def test_oblique_round_t_solves(self):
+        for ang in (60.0, 45.0):
+            r16 = checks.oblique_round_t(ang, 16)
+            r32 = checks.oblique_round_t(ang, 32)
+            self.assertTrue(r16["all_inside"] and r32["all_inside"])
+            self.assertLess(r32["equilibrium"], 1e-8)
+            d16, d32 = -r16["tip"][2], -r32["tip"][2]
+            self.assertGreater(d32, d16)  # finer is more flexible (the joint's local flexibility)
+            self.assertLess((d32 - d16) / d32, 0.15)
+            self.assertLess(precheck.rigid_body_energy(r32["model"])["constraint_residual"], 1e-12)
+
+
+@SLOW
+class SlowTieTest(unittest.TestCase):
+    def test_tied_t_converges_to_shared(self):
+        diffs = []
+        for size in (10.0, 5.0, 2.5):
+            a = checks.rect_t_joint(size, tied=False)
+            b = checks.rect_t_joint(size, tied=True)
+            diffs.append(abs(np.linalg.norm(b["tip"]) / np.linalg.norm(a["tip"]) - 1))
+        self.assertGreater(diffs[0], diffs[1])
+        self.assertGreater(diffs[1], diffs[2])
+
+    def test_oblique_round_t_converges(self):
+        for ang in (60.0, 45.0):
+            tips = [-checks.oblique_round_t(ang, n)["tip"][2] for n in (16, 32, 64)]
+            self.assertGreater(abs(tips[1] - tips[0]), abs(tips[2] - tips[1]))
 
 
 class SpringTest(unittest.TestCase):

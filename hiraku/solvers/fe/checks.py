@@ -262,6 +262,156 @@ def shell_solid_cantilever(L: float = 200.0, L_solid: float = 80.0, b: float = 2
     return out
 
 
+# ------------------------------------------------------------------ 9. tied T joints
+
+
+STEEL = {"name": "steel for checks", "E_MPa": E_ST, "nu": NU_ST, "density_kg_m3": 7850.0}
+
+
+def _design(nodes: dict, members: list, sections: dict) -> dict:
+    return {"design_version": 1, "name": "t joint", "variables": {}, "supports": [], "parts": [],
+            "nodes": [{"id": k, "xyz_mm": list(map(float, v))} for k, v in nodes.items()],
+            "members": [{"id": m, "node_a": a, "node_b": b, "section": s, "material": "st"} for m, a, b, s in members],
+            "sections": sections, "materials": {"st": STEEL}}
+
+
+def rect_t_joint(size: float = 10.0, tied: bool = True, L: float = 400.0, Lb: float = 300.0,
+                 host=(40.0, 80.0, 2.3), branch=(30.0, 30.0, 2.0), P=(0.0, 0.0, -1000.0), radius: float = 60.0) -> dict:
+    """A rect tube along x (b x h x t: b across in y, h vertical) clamped at both ends (all DOFs of the end
+    rings) with a square branch along +y at mid-length; load P at a node on the branch axis at its tip, tied
+    to the tip ring by a rigid link.
+
+    tied=False: k1_shell.build_mesh's T joint (the branch's end ring shares the host wall's nodes).
+    tied=True: the two tubes meshed apart (k1_shell.build_mesh of each alone; the host has no grid lines
+    through the branch) and the branch's end ring tied to the host's wall faces.
+    Returns the tip displacement and the largest von Mises (outer or inner surface) of the elements whose
+    centres are within `radius` of the point where the branch axis meets the host wall."""
+    from ..k1_shell.mesh import build_mesh
+    from ..k1_shell.solve import ShellModel
+    from .connect import rigid_link, tie
+    from .shell import from_shell_model, shell_stresses
+
+    bh, hh, th = host
+    bb, hb, tb = branch
+    wall = (bh - th) / 2.0
+    secs = {"h": {"shape": "rect_tube", "dims_mm": {"b": bh, "h": hh, "t": th}},
+            "b": {"shape": "rect_tube", "dims_mm": {"b": bb, "h": hb, "t": tb}}}
+    joint = np.array([L / 2, wall, 0.0])
+    tip_xyz = np.array([L / 2, wall + Lb, 0.0])
+    if not tied:
+        d = _design({"A": (0, 0, 0), "M": (L / 2, 0, 0), "B": (L, 0, 0), "C": tip_xyz},
+                    [("h1", "A", "M", "h"), ("h2", "M", "B", "h"), ("br", "M", "C", "b")], secs)
+        ms = build_mesh(d, size)
+        if ms.joint_kinds.get("M") != "T":
+            raise ValueError("expected a shared-node T joint")
+        model, g = from_shell_model(ShellModel.from_mesh(ms, d))
+        ends = [ms.end_rings[("h1", "a")], ms.end_rings[("h2", "b")]]
+        tip_ring = ms.end_rings[("br", "b")]
+        groups = [g]
+    else:
+        dh = _design({"A": (0, 0, 0), "B": (L, 0, 0)}, [("h", "A", "B", "h")], secs)
+        db = _design({"P": joint, "C": tip_xyz}, [("br", "P", "C", "b")], secs)
+        mh, mb = build_mesh(dh, size), build_mesh(db, size)
+        smh, smb = ShellModel.from_mesh(mh, dh), ShellModel.from_mesh(mb, db)
+        model, gh = from_shell_model(smh)
+        off = len(model.nodes)
+        model.add_nodes(smb.nodes)
+        from .shell import MITC4
+        gb = model.add(MITC4(smb.elements + off, smb.thickness, smb.E, smb.nu, smb.rho))
+        model.rotation_nodes.update(range(len(model.nodes)))
+        ends = [mh.end_rings[("h", "a")], mh.end_rings[("h", "b")]]
+        tip_ring = mb.end_rings[("br", "b")] + off
+        c = model.add(tie(mb.end_rings[("br", "a")] + off, gh.conn, model.nodes, max_gap=0.5 * size))
+        groups = [gh, gb]
+    for e in ends:
+        model.fix(e, "all")
+    tip = model.add_node(tip_xyz)
+    model.add(rigid_link(tip, tip_ring, model.nodes))
+    F = np.zeros((len(model.nodes), 6))
+    F[tip, :3] = P
+    sol = StaticSolver(model).solve(F)
+    vm = []
+    for g in groups:
+        st = shell_stresses(sol, g)
+        near = np.linalg.norm(st.centres - joint, axis=1) <= radius
+        vm.append(st.von_mises("max")[near])
+    vm = np.concatenate(vm)
+    return {"tip": sol.displacements[tip, :3].copy(), "vm_max_near_joint": float(vm.max()),
+            "n_nodes": len(model.nodes), "equilibrium": equilibrium(sol)["residual"], "model": model}
+
+
+def round_tube_shell(R: float, length: float, n_c: int, n_l: int, x0: float = 0.0):
+    """Shell mesh of a round tube along x (mid-surface radius R, nodes on the circle), quads counter-clockwise
+    seen from outside. Returns nodes (N, 3), quads, end rings (start, end)."""
+    a = 2 * np.pi * np.arange(n_c) / n_c
+    xs = x0 + np.linspace(0, length, n_l + 1)
+    nodes = np.array([[x, R * np.cos(t), R * np.sin(t)] for x in xs for t in a])
+    q = []
+    for i in range(n_l):
+        for j in range(n_c):
+            p, r = i * n_c + j, i * n_c + (j + 1) % n_c
+            q.append([p, p + n_c, r + n_c, r])
+    return nodes, np.array(q), np.arange(n_c), n_l * n_c + np.arange(n_c)
+
+
+def oblique_branch_shell(R: float, r: float, angle_deg: float, Lb: float, n_c: int, n_l: int):
+    """Shell mesh of a round branch (mid-surface radius r) whose axis leaves the host tube's axis (the x axis,
+    host mid-surface radius R) at the origin at angle_deg from +x in the x-y plane, cut where it meets the
+    host's mid-surface and ending square at distance Lb along its axis. On each generator line
+    p(s) = s d + r (cos phi e1 + sin phi e2) (e2 = z, e1 = e2 x d) the start is the outer root of
+    y^2 + z^2 = R^2: s0 = (sqrt(R^2 - r^2 sin^2 phi) - r cos phi cos(angle)) / sin(angle).
+    Returns nodes, quads, root ring, tip ring, axis direction."""
+    al = np.radians(angle_deg)
+    d = np.array([np.cos(al), np.sin(al), 0.0])
+    e2 = np.array([0.0, 0.0, 1.0])
+    e1 = np.cross(e2, d)
+    phi = 2 * np.pi * np.arange(n_c) / n_c
+    s0 = (np.sqrt(R * R - (r * np.sin(phi)) ** 2) - r * np.cos(phi) * np.cos(al)) / np.sin(al)
+    nodes = []
+    for i in range(n_l + 1):
+        f = i / n_l
+        s = s0 + f * (Lb - s0)
+        nodes.append(s[:, None] * d[None, :] + r * (np.cos(phi)[:, None] * e1 + np.sin(phi)[:, None] * e2))
+    nodes = np.vstack(nodes)
+    q = []
+    for i in range(n_l):
+        for j in range(n_c):
+            p, k = i * n_c + j, i * n_c + (j + 1) % n_c
+            q.append([p, k, k + n_c, p + n_c])  # counter-clockwise seen from outside (radial outward normal)
+    return nodes, np.array(q), np.arange(n_c), n_l * n_c + np.arange(n_c), d
+
+
+def oblique_round_t(angle_deg: float = 45.0, n_c: int = 16, R: float = 30.0, r: float = 15.0, t: float = 2.0,
+                    L: float = 400.0, Lb: float = 200.0, P: float = 500.0) -> dict:
+    """A round host tube along x (from -L/2 to L/2, both end rings clamped) and a round branch at angle_deg,
+    tied to the host wall (no shared nodes). n_c: facets around the host; the branch has n_c / 2 (half the
+    radius) and elements about as long as wide. Load P along -z at a node on the branch axis at its tip,
+    tied to the tip ring rigidly. Returns the tip displacement."""
+    from .connect import rigid_link, tie
+    from .shell import MITC4
+
+    size = 2 * np.pi * R / n_c
+    nh, qh, ra, rb = round_tube_shell(R, L, n_c, int(round(L / size)), x0=-L / 2)
+    nbc = max(8, n_c // 2)
+    nb, qb, root, tipring, d = oblique_branch_shell(R, r, angle_deg, Lb, nbc, int(round(Lb / size)))
+    model = FEModel(nh)
+    gh = model.add(MITC4(qh, t, E_ST, NU_ST))
+    off = len(model.nodes)
+    model.add_nodes(nb)
+    model.add(MITC4(qb + off, t, E_ST, NU_ST))
+    c = model.add(tie(root + off, gh.conn, model.nodes, max_gap=0.5 * size))
+    model.fix(np.r_[ra, rb], "all")
+    tip = model.add_node(Lb * d)
+    model.add(rigid_link(tip, tipring + off, model.nodes))
+    F = np.zeros((len(model.nodes), 6))
+    F[tip, 2] = -P
+    sol = StaticSolver(model).solve(F)
+    gaps = [p["gap"] for p in c.projection]
+    return {"tip": sol.displacements[tip, :3].copy(), "n_nodes": len(model.nodes), "max_gap": float(max(gaps)),
+            "all_inside": all(p["inside"] for p in c.projection), "equilibrium": equilibrium(sol)["residual"],
+            "model": model}
+
+
 # ------------------------------------------------------------------ 4. plate with a hole, 3D
 
 
