@@ -816,7 +816,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -913,6 +913,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
      }
     ]
    }
@@ -5834,6 +5844,84 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0029",
     "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "rollbar"
+    ],
+    "hits": [
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "gap_mm": 651.1029946543966
+      },
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "gap_mm": 708.0182995285636
+      },
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
@@ -5872,15 +5960,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -6481,7 +6569,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -6578,6 +6666,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
      }
     ]
    }
@@ -7532,7 +7630,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -7629,6 +7727,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
      }
     ]
    }
@@ -8356,7 +8464,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -8453,6 +8561,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
      }
     ]
    }
@@ -9737,7 +9855,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -9834,6 +9952,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
      }
     ]
    }
@@ -14595,6 +14723,84 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0029",
     "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "rollbar"
+    ],
+    "hits": [
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "gap_mm": 651.1029946543966
+      },
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "gap_mm": 708.0182995285636
+      },
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
@@ -14633,15 +14839,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
