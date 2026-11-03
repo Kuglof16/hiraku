@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ナレーション録音</title>
+<link rel="stylesheet" href="recorder.css">
+</head>
+<body>
+<header class="top">
+  <h1>ナレーション録音 <span class="sub">HIRAKU</span></h1>
+  <div class="tools">
+    <label class="btn">原稿を読む (TSV)<input type="file" id="scriptFile" accept=".tsv,.txt,text/tab-separated-values,text/plain" hidden></label>
+    <label class="btn ghost">合成の声のフォルダ<input type="file" id="synthDir" webkitdirectory multiple hidden></label>
+    <span class="sep"></span>
+    <label class="field">入力 <select id="device"><option value="">既定のマイク</option></select></label>
+    <button id="micBtn" class="btn">マイクを使う</button>
+    <div class="meter" title="入力の大きさ (フィルターの前)">
+      <div class="meter-bar"><div id="meterFill"></div><div id="meterPeak"></div></div>
+      <span id="meterText">— dBFS</span>
+      <span id="clip" class="clip">クリップ</span>
+    </div>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- sentence list -->
+  <aside class="list" id="listPane">
+    <div class="pane-head">原稿 <span id="scriptInfo" class="muted">まだ読んでいません</span></div>
+    <div id="dropHint" class="drop-hint">原稿の TSV をここに<br>ドラッグするか、上の「原稿を読む」で選ぶ</div>
+    <ol id="list"></ol>
+  </aside>
+
+  <!-- prompter -->
+  <section class="prompter" id="prompter">
+    <div class="p-head">
+      <span id="pKey" class="key">—</span>
+      <span id="pCut" class="muted"></span>
+      <span id="recBadge" class="rec-badge">● 録音中</span>
+    </div>
+    <div id="pPrev" class="ctx prev"></div>
+    <div class="current">
+      <div id="pJa" class="ja">原稿を読み込むと、ここに録る文が大きく出ます。</div>
+      <div id="pEn" class="en"></div>
+    </div>
+    <div id="pNext" class="ctx next"></div>
+
+    <div class="bands">
+      <div class="band-row">
+        <span class="band-label">この文</span>
+        <div class="band"><div id="bandFill" class="band-fill"></div><div id="bandMark" class="band-mark"></div></div>
+        <span id="bandText" class="band-text">目安 — 秒</span>
+      </div>
+      <div class="band-row">
+        <span class="band-label">カット</span>
+        <div class="band"><div id="cutFill" class="band-fill"></div></div>
+        <span id="cutText" class="band-text">—</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="prevBtn" class="btn ghost" title="前の文 (←)">← 前</button>
+      <button id="recBtn" class="btn rec" title="録る / 止める (スペース)">● 録る <kbd>Space</kbd></button>
+      <button id="retakeBtn" class="btn ghost" title="録り直し (R)">録り直し <kbd>R</kbd></button>
+      <button id="nextBtn" class="btn ghost" title="次の文 (→)">次 → </button>
+      <label class="check"><input type="checkbox" id="countdownOn" checked> 3・2・1 の合図</label>
+    </div>
+
+    <div class="takes-head">
+      <span>この文の録音</span>
+      <span id="synthInfo" class="muted"></span>
+      <button id="synthPlay" class="btn small ghost" hidden>▶ 合成の声</button>
+    </div>
+    <ul id="takes" class="takes"></ul>
+
+    <div class="export">
+      <button id="exportOne" class="btn small">この文を書き出す</button>
+      <button id="exportAll" class="btn small">選んだ録音を全部書き出す</button>
+      <button id="exportDir" class="btn small ghost">フォルダを選んで保存</button>
+      <span id="exportInfo" class="muted"></span>
+    </div>
+
+    <div id="countdown" class="countdown"><span id="countNum">3</span></div>
+  </section>
+
+  <!-- filter -->
+  <aside class="filter" id="filterPane">
+    <div class="pane-head">声のフィルター</div>
+    <div class="presets">
+      <button class="btn small preset" data-preset="clear">くっきり</button>
+      <button class="btn small preset" data-preset="soft">やわらか</button>
+      <button class="btn small preset" data-preset="raw">そのまま</button>
+    </div>
+    <div class="ab">
+      <span>聞く音</span>
+      <button id="abBtn" class="ab-btn on">フィルター後</button>
+      <button id="playLoop" class="btn small ghost" title="選んだ録音をくり返し流して、聞きながらつまみを回す">▶ 選んだ録音をくり返す</button>
+    </div>
+    <label class="check monitor"><input type="checkbox" id="monitorOn"> マイクの音をその場で聞く (ヘッドホンで)</label>
+    <div class="meter small-meter" title="フィルターの後の大きさ">
+      <span class="band-label">後</span>
+      <div class="meter-bar"><div id="outFill"></div></div>
+      <span id="dsInfo" class="muted">歯擦音 0 dB</span>
+      <span id="gateInfo" class="muted">ゲート —</span>
+    </div>
+    <div id="knobs"></div>
+    <div class="io">
+      <button id="saveJson" class="btn small ghost">設定を JSON で書き出す</button>
+      <label class="btn small ghost">JSON を読む<input type="file" id="loadJson" accept=".json,application/json" hidden></label>
+    </div>
+    <p class="note" id="normNote"></p>
+  </aside>
+</main>
+
+<script src="dsp.js"></script>
+<script src="recorder.js"></script>
+</body>
+</html>
