@@ -318,17 +318,19 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(renumber(ev), "HK3_cause_before_continue")
 
     def test_a_run_that_stops_after_the_picks_is_done_without_a_design(self):
-        # requirements stop_after: picks — domains picked and the hearing, then done; no design is made
-        def run(picks):
+        # project.stop_after "picks" (from the requirements file): domains picked and the hearing, then done;
+        # no design is made. A done without a design and without it is still wrong, whatever events it has.
+        def run(stop_after):
             ev = [e for e in sample_events()
                   if e["kind"] in ("run.started", "agent.started", "agent.stopped", "run.finished")]
-            if picks:
-                ev.insert(1, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "domains.picked",
-                              "agent": "lead", "data": {"want": ev[0]["data"].get("want", ""), "flags": {},
-                                                        "picks": ev[0]["data"].get("domain_picks", []), "off": []}})
+            ev.insert(1, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "domains.picked",
+                          "agent": "lead", "data": {"want": ev[0]["data"].get("want", ""), "flags": {},
+                                                    "picks": ev[0]["data"].get("domain_picks", []), "off": []}})
+            if stop_after:
+                ev[0]["data"]["stop_after"] = stop_after
             return renumber(ev)
-        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run(True)))
-        self.assertIn("HK4_no_stop_before_judged", self.rules(run(False)))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run("picks")))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(None)))
 
     def test_h4_done_while_a_picked_domain_is_pending(self):
         ev = sample_events()
