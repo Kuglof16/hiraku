@@ -115,9 +115,9 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v4(self):
+    def test_version_mark_is_v5(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v4</div>', viewer)
+        self.assertIn('<div id="ver">v5</div>', viewer)
 
     def test_viewer_turns_freely(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
@@ -132,8 +132,8 @@ class Roles(unittest.TestCase):
         self.assertEqual([b[0] for b in bodies], [r[0] for r in roles_in_pet3d()])
         self.assertEqual(len({b[1] for b in bodies}), 10, "body kinds must differ")
         quantities = [b[2] for b in bodies if b[2] is not None]
-        self.assertEqual(len(quantities), 9, "only the packager has no contour")
-        self.assertEqual(len(set(quantities)), 9, "contour quantities must differ")
+        self.assertEqual(len(quantities), 8, "only the designer and the packager have no contour")
+        self.assertEqual(len(set(quantities)), 8, "contour quantities must differ")
         block = PET3D[PET3D.index("const BUILDERS = {"):]
         block = block[: block.index("};")]
         for rid, kind, _, _ in bodies:
@@ -142,13 +142,17 @@ class Roles(unittest.TestCase):
         self.assertEqual(quantity["cae.aero"], "速さ (相対)")
         self.assertEqual(quantity["cae.crash"], "衝撃の応力 (相対)")
         self.assertIsNone(quantity["packager"])
+        self.assertIsNone(quantity["designer"])
         kind = {b[0]: b[1] for b in bodies}
         self.assertEqual(kind["lead"], "fe-sphere")
+        self.assertEqual(kind["designer"], "cad-model")
         self.assertEqual(kind["packager"], "assembly")
-        self.assertEqual(kind["cae.handling"], "vehicle-dynamics")
+        self.assertEqual(kind["cae.handling"], "multibody")
+        self.assertEqual(kind["cae.strength"], "stress-concentration")
         self.assertEqual(kind["cae.powertrain"], "combustion")
         self.assertEqual(kind["cae.crash"], "impact-wave")
-        self.assertEqual(quantity["cae.strength"], "相対の応力")
+        self.assertEqual(quantity["cae.strength"], "応力集中 (公称からの上がり分)")
+        self.assertEqual(quantity["cae.handling"], "ばねの力 (相対)")
         self.assertEqual(quantity["cae.nvh"], "変位 (相対)")
         self.assertEqual(quantity["cae.thermal"], "温度 (相対)")
         # README carries the table of bodies
@@ -156,7 +160,7 @@ class Roles(unittest.TestCase):
         for rid, kind, q, _ in bodies:
             self.assertRegex(readme, r"`%s`[^\n]*`%s`[^\n]*%s" % (re.escape(rid), re.escape(kind), re.escape(q or "なし")), rid)
 
-    def test_v4_fixes_in_the_source(self):
+    def test_v5_fixes_in_the_source(self):
         def fn(name):
             body = PET3D[PET3D.index("function %s(ctx" % name):]
             return body[: body.index("\n  }\n")]
@@ -166,19 +170,31 @@ class Roles(unittest.TestCase):
         self.assertIn("icoNodes(ctx, (d) => shapePoint(THREE, d))", lead)
         self.assertIn("stressBody(ctx,", lead)
         self.assertIn("stressFields(pts, ctx.roots, ctx.propMass)", fn("stressBody"))
-        # designer: no dimension lines (no arrow heads, no extension lines)
+        # designer: a CAD model (fillets, one colour, edge lines); no contour,
+        # no mesh dots, no dimension lines
         des = fn("bodyDesigner")
-        self.assertNotIn("dimension", des)
-        self.assertNotIn("ConeGeometry", des)
-        # packager: no contour material, no flow lines, no node dots
+        self.assertIn("roundedBox(", des)
+        self.assertIn("cadMaterial(", des)
+        for word in ("addFe(", "contourMaterial(", "addDots(", "ConeGeometry", "dimension"):
+            self.assertNotIn(word, des)
+        # packager: no contour, no flow lines, no node dots; seams, not an exploded gap
         pkg = fn("bodyPackager")
         for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots("):
             self.assertNotIn(word, pkg)
-        # handling: not the v3 rigid bodies, joint and springs
+        self.assertRegex(pkg, r"SEAM = 0\.00\d")
+        # handling: a multibody model (joints, springs); not the v3 blobs and
+        # not the v4 friction circles / lane change track
         han = fn("bodyHandling")
-        for word in ("SphereGeometry(0.11", "helix", "springs"):
+        for word in ("SphereGeometry(0.11", "TorusGeometry(1, 0.06", "pathOk", "cones", "flowMaterial("):
             self.assertNotIn(word, han)
-        # crash: nodes move only by the small dent
+        for word in ("lowArm", "upArm", "knuckle", "spring", "damper", "SphereGeometry(", "triad"):
+            self.assertIn(word, han)
+        # strength: the hole and the Kirsch field; not the v2 limb loads
+        st = fn("bodyStrength")
+        self.assertIn("kirsch", st)
+        self.assertNotIn("stressBody(", st)
+        self.assertNotIn("icoNodes(", st)
+        # crash (unchanged): nodes move only by the small dent
         self.assertRegex(fn("bodyCrash"), r"DENT = \{ depth: 0\.0[0-9]+")
 
     def test_pose_uses_no_clock_or_random(self):
@@ -247,7 +263,7 @@ class Viewer(unittest.TestCase):
                 self.assertEqual(r["sw"], rgb[::-1])
                 self.assertEqual(r["tk"], ["%.1f" % (i / 10) for i in range(11)])
                 self.assertEqual(r["legend"], "block")
-                self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), "相対の応力")
+                self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), "応力集中 (公称からの上がり分)")
                 # working steps the load 0 -> 1, other states carry the full load
                 self.assertEqual(r["ramp"][0], 0)
                 self.assertTrue(0 < r["ramp"][1] < r["ramp"][2] < 1)
@@ -263,22 +279,24 @@ class Viewer(unittest.TestCase):
 
                 # the legend title is the quantity of the role
                 for role, title in (("cae.aero", "速さ (相対)"), ("cae.crash", "衝撃の応力 (相対)"), ("cae.thermal", "温度 (相対)"),
-                                    ("cae.powertrain", "燃焼の温度 (相対)"), ("lead", "相対の応力 (自重と手足)")):
+                                    ("cae.powertrain", "燃焼の温度 (相対)"), ("lead", "相対の応力 (自重と手足)"),
+                                    ("cae.handling", "ばねの力 (相対)")):
                     page.goto(url.replace("cae.strength", role))
                     page.wait_for_function("window.petViewer !== undefined", timeout=30000)
                     page.evaluate("window.petViewer.ready")
                     self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), title, role)
 
-                # the packager has no contour: no legend in the one-pet view either
-                page.goto(url.replace("cae.strength", "packager"))
-                page.wait_for_function("window.petViewer !== undefined", timeout=30000)
-                page.evaluate("window.petViewer.ready")
-                self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none")
+                # the packager and the designer have no contour: no legend in the one-pet view either
+                for role in ("packager", "designer"):
+                    page.goto(url.replace("cae.strength", role))
+                    page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                    page.evaluate("window.petViewer.ready")
+                    self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none", role)
             finally:
                 browser.close()
 
     def test_values_follow_the_loads(self):
-        # strength: the stress contour follows the loads (v2 model)
+        # lead: the stress contour follows the limb loads (v2 model)
         from playwright.sync_api import sync_playwright
 
         # build every pet in the viewer page (it has three.js on its import map)
@@ -287,7 +305,7 @@ class Viewer(unittest.TestCase):
           const THREE = await import('three');
           const out = {};
           for (const mesh of ['coarse', 'fine']) {
-            for (const r of window.HirakuPets.ROLES.filter((r) => r.id === 'cae.strength' || r.id === 'lead')) {
+            for (const r of window.HirakuPets.ROLES.filter((r) => r.id === 'lead')) {
               const p = window.HirakuPets.create(THREE, { role: r.id, mesh });
               const f = p.field;
               const node = (n) => f.loads.find(l => l.name === n).node;
@@ -316,8 +334,8 @@ class Viewer(unittest.TestCase):
                 res = page.evaluate(js)
             finally:
                 browser.close()
-        # strength and lead (lead is the v2 body again: same mesh, same load model)
-        self.assertEqual(len(res), 4)
+        # lead is the v2 body: same mesh, same load model
+        self.assertEqual(len(res), 2)
         for k, v in res.items():
             want = {"nodes": 42, "elements": 80} if k.startswith("coarse") else {"nodes": 92, "elements": 180}
             self.assertEqual(v["counts"], want, k)
@@ -412,8 +430,9 @@ class Viewer(unittest.TestCase):
                 self.assertGreater(c["info"], 0, (rid, k))
 
 
-    def test_v4_bodies(self):
-        # packager without contour bands, the strength arrow outside the body
+    def test_v5_bodies(self):
+        # designer without contour, packager as one unit, handling as a
+        # mechanism, strength concentrated at the hole edge, arrows outside
         from playwright.sync_api import sync_playwright
 
         page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
@@ -421,37 +440,74 @@ class Viewer(unittest.TestCase):
           const THREE = await import('three');
           const HP = window.HirakuPets;
           const out = {};
-          // packager: no contour material, no flow lines, parts in different colours
+          const contourMats = (p) => {
+            let n = 0;
+            p.group.traverse((o) => { if (o.material && o.material.userData && (o.material.userData.hk || o.material.userData.flow)) n++; });
+            return n;
+          };
+          // designer: no contour bands, a CAD material, no values
+          const de = HP.create(THREE, { role: 'designer' });
+          let cad = 0;
+          de.group.traverse((o) => { if (o.material && o.material.userData && o.material.userData.cad) cad++; });
+          const dc = de.contour(1.0, 'working');
+          out.designer = { hk: contourMats(de), cad, quantity: dc.quantity, hasMax: 'max' in dc, info: dc.info.length };
+          de.dispose();
+          // packager: no contour, parts stacked with thin seams
           const pk = HP.create(THREE, { role: 'packager' });
-          let hk = 0, aval = 0, body = 0;
-          pk.update(1.0, 'working');
-          pk.group.traverse((o) => {
-            if (o.material && o.material.userData && (o.material.userData.hk || o.material.userData.flow)) hk++;
-            if (o.userData.body) { body++; if (o.material.userData.hk) aval++; }
-          });
+          pk.update(1.2, 'idle');
+          pk.group.updateMatrixWorld(true);
+          const boxes = [];
+          pk.group.traverse((o) => { if (o.userData.body) boxes.push(new THREE.Box3().setFromObject(o)); });
+          boxes.sort((a, b) => a.min.y - b.min.y);
+          const gaps = boxes.slice(1).map((b, i) => b.min.y - boxes[i].max.y);
           const c = pk.contour(1.0, 'working');
-          out.packager = { hk, aval, body, quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts };
+          out.packager = { hk: contourMats(pk), body: boxes.length, gaps, quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts };
           pk.dispose();
-          // strength: points along the arrow (from the tip outward) are outside the body
+          // handling: ball joints, tyres on the ground, inner wheel lifts on mismatch
+          const hd = HP.create(THREE, { role: 'cae.handling' });
+          const res = {};
+          for (const [t, s] of [[1.2, 'idle'], [1.37, 'working'], [1.2, 'mismatch']]) {
+            hd.update(t, s);
+            hd.group.updateMatrixWorld(true);
+            let balls = 0;
+            const tyres = [];
+            hd.group.traverse((o) => {
+              const g = o.geometry && o.geometry.parameters;
+              if (!g) return;
+              if (o.geometry.type === 'SphereGeometry' && Math.abs(g.radius - 0.055) < 1e-9) balls++;
+              if (o.geometry.type === 'CylinderGeometry' && Math.abs(g.radiusTop - 0.39) < 1e-9) tyres.push(new THREE.Box3().setFromObject(o).min.y);
+            });
+            res[s] = { balls, tyres, c: hd.contour(t, s) };
+          }
+          out.handling = res;
+          hd.dispose();
+          // strength: argmax at the hole edge, top or bottom; far field small
           const st = HP.create(THREE, { role: 'cae.strength' });
+          const f = st.field;
+          const h = f.hole;
+          const pol = f.nodes.map((q) => [Math.hypot(q[0] - h.center[0], q[1] - h.center[1]), Math.atan2(q[1] - h.center[1], q[0] - h.center[0])]);
+          const arg = f.settled.indexOf(Math.max(...f.settled));
+          const far = Math.max(...f.settled.filter((v, i) => pol[i][0] > 3 * h.radius));
+          const side = Math.max(...f.settled.filter((v, i) => pol[i][0] < h.radius + 1e-6 && Math.abs(Math.cos(pol[i][1])) > 0.99));
           st.update(0, 'idle');
           st.group.updateMatrixWorld(true);
           const meshes = [];
           st.group.traverse((o) => { if (o.isMesh && o.material && o.material.userData && o.material.userData.hk) meshes.push(o); });
-          const a = st.arrow;
           const ray = new THREE.Raycaster();
-          const centre = a.frame.localToWorld(new THREE.Vector3());
-          const res = [];
-          for (const k of [0.0, 0.05, 0.2, 0.4, 0.6, a.length]) {
-            const p = a.frame.localToWorld(a.tip.clone().addScaledVector(a.dir, -k));
-            const dir = centre.clone().sub(p);
-            const far = dir.length();
-            ray.set(p, dir.normalize());
-            ray.far = far;
-            const hits = ray.intersectObjects(meshes, false);
-            res.push({ k, hits: hits.length, first: hits.length ? hits[0].distance : null });
+          const arrows = [];
+          for (const a of st.arrows) {
+            const centre = a.frame.localToWorld(new THREE.Vector3(0, a.tail.y, 0));
+            for (const k of [0.0, 0.1, 0.25, a.length]) {
+              const p = a.frame.localToWorld(a.tail.clone().addScaledVector(a.dir, k));
+              const dir = centre.clone().sub(p);
+              ray.set(p, dir.clone().normalize());
+              ray.far = dir.length();
+              const hits = ray.intersectObjects(meshes, false);
+              arrows.push({ k, hits: hits.length, first: hits.length ? hits[0].distance : null });
+            }
           }
-          out.arrow = res;
+          out.strength = { max: f.settled[arg], r: pol[arg][0], th: pol[arg][1], a: h.radius, far, side,
+                           mis: st.contour(1.2, 'mismatch').max, work0: st.contour(0, 'working').max, arrows, n: st.arrows.length };
           st.dispose();
           return out;
         }"""
@@ -463,16 +519,42 @@ class Viewer(unittest.TestCase):
                 res = page.evaluate(js)
             finally:
                 browser.close()
+        de = res["designer"]
+        self.assertEqual(de["hk"], 0, "no contour bands on the designer")
+        self.assertGreaterEqual(de["cad"], 1)
+        self.assertIsNone(de["quantity"])
+        self.assertFalse(de["hasMax"])
+        self.assertGreater(de["info"], 0)
         pk = res["packager"]
         self.assertEqual(pk["hk"], 0, "no contour or flow material on the packager")
         self.assertIsNone(pk["quantity"])
         self.assertFalse(pk["hasMax"])
         self.assertEqual(pk["body"], 3)
-        self.assertEqual(len({p["color"] for p in pk["parts"]}), 3)
-        for r in res["arrow"]:
-            # a point outside a convex body sees the surface between it and the centre
+        for g in pk["gaps"]:
+            # the parts sit on each other: a seam, no exploded gap
+            self.assertLess(abs(g), 0.012, pk["gaps"])
+        self.assertIn(len({p["color"] for p in pk["parts"]}), (2, 3))
+        hd = res["handling"]
+        for s, v in hd.items():
+            self.assertEqual(v["balls"], 8, s)
+            self.assertEqual(v["c"]["quantity"], "ばねの力 (相対)")
+        for y in hd["idle"]["tyres"] + hd["working"]["tyres"]:
+            self.assertLess(abs(y), 0.02, "tyres stand on the ground")
+        # mismatch: the inner wheel lifts
+        self.assertGreater(max(hd["mismatch"]["tyres"]), 0.05)
+        st = res["strength"]
+        self.assertAlmostEqual(st["max"], 1.0, places=6)
+        self.assertAlmostEqual(st["r"], st["a"], places=5, msg="largest value on the hole edge")
+        self.assertAlmostEqual(abs(math.sin(st["th"])), 1.0, places=3, msg="at the top or bottom of the hole")
+        self.assertLess(st["far"], 0.1)
+        self.assertLess(st["side"], 0.01, "the hole edge on the load axis is not concentrated")
+        self.assertGreater(st["mis"], 1.0)
+        self.assertEqual(st["work0"], 0)
+        self.assertEqual(st["n"], 4)
+        for r in st["arrows"]:
+            # every point of an arrow is outside the body: the side wall lies between it and the middle
             self.assertGreaterEqual(r["hits"], 1, r)
-            self.assertLess(r["first"], 0.03 + r["k"] + 1e-6, r)
+            self.assertGreater(r["first"], 0.02, r)
 
     def test_free_rotation_and_url(self):
         # drag in the one-pet view up to a view from straight above, then from
