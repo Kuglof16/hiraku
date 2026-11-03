@@ -1067,7 +1067,7 @@ export const DEMOS = {
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -1076,7 +1076,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      },
      {
@@ -1093,7 +1093,7 @@ export const DEMOS = {
       "value": "あり",
       "source": "hearing",
       "trust": 1,
-      "basis": "ROHVA 1 has an item for ROPS, https:\/\/rohva.org/ansi-standard/ (not checked in this repository)"
+      "basis": "ROHVA 1 has an item for ROPS, https:\/\/rohva.org/ansi-standard/; read 2026-11-03 in a source check"
      },
      {
       "key": "Q74",
@@ -6659,7 +6659,7 @@ export const DEMOS = {
        "value": 40,
        "unit": "degC",
        "trust": 1,
-       "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)"
+       "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), LINAK LA31 datasheet, https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf; read 2026-11-03 in a source check"
       }
      },
      {
@@ -6689,7 +6689,7 @@ export const DEMOS = {
       "default": {
        "value": "IPX4",
        "trust": 2,
-       "basis": "JIS T 9254 (copy), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): IPX4, 6.1 g, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
@@ -6746,7 +6746,7 @@ export const DEMOS = {
        "value": 70,
        "unit": "deg",
        "trust": 2,
-       "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
@@ -6759,7 +6759,7 @@ export const DEMOS = {
        "value": 4,
        "unit": "1",
        "trust": 2,
-       "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
@@ -6810,7 +6810,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: the AIST page is a list only; not reachable)",
       "value": "高齢女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -6818,7 +6818,7 @@ export const DEMOS = {
       "name": "体重 (強さの不利側)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), 9.2.1 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 1350,
       "unit": "N"
      },
@@ -6827,7 +6827,7 @@ export const DEMOS = {
       "name": "静的に倒れない限界 (側端にかける力)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, 9.3 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 1350,
       "unit": "N"
      },
@@ -6836,7 +6836,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf (not checked in this repository)",
+      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check. The JIS T 9254 part: not checked in this repository",
       "value": "JIS T 9254 の型と FDA の区分 (Zone 1-4)"
      },
      {
@@ -6844,7 +6844,7 @@ export const DEMOS = {
       "name": "なぞる規格",
       "source": "default",
       "trust": 2,
-      "basis": "catalog research (not checked in this repository)",
+      "basis": "catalog research (not checked in this repository; tried 2026-11-03: the basis has no URL; not reachable)",
       "value": "JIS T 9254・FDA"
      },
      {
@@ -6868,7 +6868,7 @@ export const DEMOS = {
       "name": "繰り返し回数",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された), 9.5 c, 9.8 c, 9.7.2 c, 9.4 a 1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": "着座 10000 回・昇降 3000 回・背上げと膝上げ 1000 回・柵の上げ下げ 30000 回"
      },
      {
@@ -6892,7 +6892,7 @@ export const DEMOS = {
       "name": "気温 (範囲の高い端)",
       "source": "default",
       "trust": 1,
-      "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)",
+      "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), LINAK LA31 datasheet, https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf; read 2026-11-03 in a source check",
       "value": 40,
       "unit": "degC"
      },
@@ -6901,7 +6901,7 @@ export const DEMOS = {
       "name": "水・ほこり (IP)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): IPX4, 6.1 g, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": "IPX4"
      },
      {
@@ -6926,7 +6926,7 @@ export const DEMOS = {
       "value": 1700,
       "source": "hearing",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150), 9.2.1 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "unit": "N"
      },
      {
@@ -6934,7 +6934,7 @@ export const DEMOS = {
       "name": "アクチュエータの動く範囲",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 70,
       "unit": "deg"
      },
@@ -6943,7 +6943,7 @@ export const DEMOS = {
       "name": "安全率 (降伏に対して)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 4,
       "unit": "1"
      },
@@ -7735,7 +7735,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: AIST; not reachable)",
       "value": "若年女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -7743,7 +7743,7 @@ export const DEMOS = {
       "name": "常にかかる内力 (弦の張力、6 本の合計)",
       "source": "default",
       "trust": 2,
-      "basis": "D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N. 足したのは調査エージェント (販売店が載せた表の写し), https:\/\/www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR (not checked in this repository)",
+      "basis": "D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N. 足したのは調査エージェント (販売店が載せた表の写し), https:\/\/www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR; read 2026-11-03 in a source check (the sum of the EXL110 chart, computed: 456 N)",
       "value": 456,
       "unit": "N",
       "note": "6 本の張りを足した値。弦の太さの組み合わせを変えたら聞き直す"
@@ -8520,7 +8520,7 @@ export const DEMOS = {
       "default": {
        "value": "タイル・木・カーペット",
        "trust": 1,
-       "basis": "JARI のロボット安定性試験設備の走行路の路面, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf (not checked in this repository)"
+       "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check"
       }
      },
      {
@@ -8533,7 +8533,7 @@ export const DEMOS = {
        "value": 12.7,
        "unit": "mm",
        "trust": 1,
-       "basis": "Bear Robotics Servi Plus の敷居, https:\/\/www.bearrobotics.ai/servi-plus (not checked in this repository)"
+       "basis": "Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https:\/\/www.bearrobotics.ai/servi-plus; read 2026-11-03 in a source check"
       }
      },
      {
@@ -8642,7 +8642,7 @@ export const DEMOS = {
        "value": 10,
        "unit": "h",
        "trust": 1,
-       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか (not checked in this repository)"
+       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)"
       }
      },
      {
@@ -8725,7 +8725,7 @@ export const DEMOS = {
       "name": "縦の坂",
       "source": "default",
       "trust": 1,
-      "basis": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), https:\/\/laws.e-gov.go.jp/api/1/lawdata/418CO0000000379. 製品の定格は 5 度以下 (Pudu BellaBot), https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), 第19条, https:\/\/laws.e-gov.go.jp/api/1/lawdata/418CO0000000379; read 2026-11-03 in a source check. 製品の定格は 5 度以下 (Pudu BellaBot), https:\/\/www.pudurobotics.com/en/products/bellabot (this part not checked in this repository)",
       "value": 8.33,
       "unit": "%"
      },
@@ -8752,7 +8752,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html (not checked in this repository)",
+      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html. Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
       "value": "子どもを含む"
      },
      {
@@ -8768,7 +8768,7 @@ export const DEMOS = {
       "name": "充電時間",
       "source": "default",
       "trust": 1,
-      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "value": 4.5,
       "unit": "h"
      },
@@ -8786,7 +8786,7 @@ export const DEMOS = {
       "name": "人に当たったときの力",
       "source": "default",
       "trust": 2,
-      "basis": "ISO/TS 15066 の体のモデルの表を載せた論文, https:\/\/arxiv.org/pdf/2311.13814. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない) (not checked in this repository)",
+      "basis": "ISO/TS 15066 の体のモデルの表を載せた論文, Table 1, https:\/\/arxiv.org/pdf/2311.13814; read 2026-11-03 in a source check. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない)",
       "value": "ISO/TS 15066 の部位ごとの値 (準静的、下腿 130・大腿 220・胸 140・頭 130 N) を借用"
      },
      {
@@ -8794,7 +8794,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      },
      {
@@ -8802,7 +8802,7 @@ export const DEMOS = {
       "name": "なぞる規格",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13482 の要旨 https:\/\/www.iso.org/standard/53820.html (not checked in this repository)",
+      "basis": "ISO 13482 の要旨 https:\/\/www.iso.org/standard/53820.html. Secondary: seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
       "value": "ISO 13482 = JIS B 8445、JIS B 8446-1"
      },
      {
@@ -8810,7 +8810,7 @@ export const DEMOS = {
       "name": "電池の規則",
       "source": "default",
       "trust": 1,
-      "basis": "UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版), https:\/\/certifico.com/component/attachments/download/748 (not checked in this repository)",
+      "basis": "UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版), https:\/\/certifico.com/component/attachments/download/748; read 2026-11-03 in a source check",
       "value": "輸送は UN 38.3"
      },
      {
@@ -8834,7 +8834,7 @@ export const DEMOS = {
       "name": "路面・床と摩擦係数",
       "source": "default",
       "trust": 1,
-      "basis": "JARI のロボット安定性試験設備の走行路の路面, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf (not checked in this repository)",
+      "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check",
       "value": "タイル・木・カーペット"
      },
      {
@@ -8842,7 +8842,7 @@ export const DEMOS = {
       "name": "段差",
       "source": "default",
       "trust": 1,
-      "basis": "Bear Robotics Servi Plus の敷居, https:\/\/www.bearrobotics.ai/servi-plus (not checked in this repository)",
+      "basis": "Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https:\/\/www.bearrobotics.ai/servi-plus; read 2026-11-03 in a source check",
       "value": 12.7,
       "unit": "mm"
      },
@@ -8869,7 +8869,7 @@ export const DEMOS = {
       "value": 40,
       "source": "hearing",
       "trust": 1,
-      "basis": "Pudu BellaBot: 1 段 10 kg・計 40 kg, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot: 1 段 10 kg・計 40 kg, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "unit": "kg"
      },
      {
@@ -8878,7 +8878,7 @@ export const DEMOS = {
       "value": 1.2,
       "source": "hearing",
       "trust": 1,
-      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "unit": "m/s"
      },
      {
@@ -8886,7 +8886,7 @@ export const DEMOS = {
       "name": "航続・稼働時間",
       "source": "default",
       "trust": 1,
-      "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか (not checked in this repository)",
+      "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)",
       "value": 10,
       "unit": "h"
      },
@@ -9118,7 +9118,7 @@ export const DEMOS = {
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -9145,7 +9145,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      },
      {
@@ -9884,7 +9884,7 @@ export const DEMOS = {
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -9893,7 +9893,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      }
     ]

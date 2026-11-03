@@ -2,7 +2,8 @@
 # Shape: hiraku.intake "answers file": key -> {value, unit?, trust?, basis?}. trust defaults to 1
 # (the person's own statement) and basis to "answered in the hearing".
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source at the place named, in a source check on that date.
 answers:
   Q03:
     value: 1 日 6 回の乗り降りを 10 年
@@ -18,5 +19,5 @@ answers:
     trust: 2
     basis: >-
       JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150),
-      https://kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)
+      9.2.1 a, https://kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check
 note: マットレスは厚さ 150 mm 以下を使う予定

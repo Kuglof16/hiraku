@@ -1,4 +1,5 @@
 import copy
+import re
 import unittest
 
 from hiraku import contract
@@ -31,7 +32,7 @@ class ItemsTest(unittest.TestCase):
                 self.assertIn(d["trust"], (1, 2, 3))
                 self.assertTrue(d["basis"], it["key"])
                 if d["trust"] in (1, 2):
-                    self.assertIn("not checked", d["basis"], it["key"])
+                    self.assertTrue("not checked" in d["basis"] or re.search(r"read 20\d\d-\d\d-\d\d", d["basis"]), it["key"])
 
     def test_catalog_asks_must_for_these(self):
         must = {it["key"] for it in load_items() if it["ask"] == "must"}
@@ -66,7 +67,7 @@ class PlanTest(unittest.TestCase):
         defaulted = {r["key"]: r for r in plan.defaulted}
         self.assertEqual(defaulted["Q60"]["value"], 1350)
         self.assertEqual(defaulted["Q60"]["source"], "default")
-        self.assertIn("not checked", defaulted["Q60"]["basis"])
+        self.assertIn("read 2026-11-03", defaulted["Q60"]["basis"])
 
     def test_a_confirm_question_carries_its_default_with_the_source(self):
         req, own = bare("electric-guitar")
@@ -170,7 +171,7 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertEqual(p.asked["questions"], [])
         (added,) = p.answered["answers"]
         self.assertEqual((added["key"], added["source"], added["trust"]), ("Q63", "default", 1))
-        self.assertIn("not checked", added["basis"])
+        self.assertIn("read 2026-11-03", added["basis"])
         out = {r["key"]: r for r in p.requirements_file["requirements"]}
         self.assertEqual(out["Q63"], added)  # the same record in the answered list and in the requirements
         self.assertEqual(hearing_text(p), "要件のファイルのまま進みます (既定値で足した 1 件: Q63)")
