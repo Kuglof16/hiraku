@@ -436,9 +436,26 @@ TOWER_MIN_DX_MM = 285.0
 # tests/solvers/test_designgen_footroom.py; build() checks each design's own (_check_rear_post).
 BULKHEAD_DX_MIN_MM = 150.0
 FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driver's feet, each side
-PANEL_T_MM = 20.0  # floor and bulkhead panels' thickness (as the first floors)
-PANEL_KG_M2 = 6.0 / (0.45 * 0.6)  # the first v1's footwell floor (6 kg, 450 x 600 mm) per area: footwell and bulkhead
-DECK_V1 = {"length": 950.0, "width": 880.0, "mass": 18.0}  # the first v1's deck; a narrower deck weighs less per area
+# The plate parts (the floors, the deck, the bulkhead): each box is the plate itself, its thin side the sheet's
+# thickness (load_path takes a part that thin as a plate of its box's thickness and its part.material). They are
+# steel floor plate (checkered) of SS400 grade. Source, read on 2026-11-04: Nippon Steel's catalogue A101
+# (床用鋼板・たてじま鋼板, A101_02_202406f, https://www.nipponsteel.com/product/catalog_download/pdf/A101.pdf):
+# its structural floor plate NFP-400 meets the chemical and mechanical requirements of JIS G 3101 SS400 (and its
+# dimensions and shape but for the checkers); its standard thicknesses are 2.3, 3.2, 4.5, 6.0, ... mm, with a unit
+# mass of 19.73 kg/m2 at 2.3 mm and 26.79 kg/m2 at 3.2 mm (the checkers included). Which standard thickness each
+# part takes is HIRAKU's choice (assumption, not sized): 3.2 mm where people stand or cargo lies, the thinnest
+# standard 2.3 mm for the bulkhead. A plate's mass is its area x thickness x the material's density (plate_masses),
+# without the checkers (7 % less than the catalogue's 26.79 kg/m2 at 3.2 mm, 9 % less than 19.73 at 2.3 mm).
+PLATE_STEEL = "ss400"
+PLATE_FINISH = "painted"  # assumption
+FLOOR_PLATE_T_MM = 3.2  # the footwell floor, the floor under the seats and the deck (one value: _driver_v1)
+BULKHEAD_PLATE_T_MM = 2.3
+PLATE_T_MM = {"floor_front": FLOOR_PLATE_T_MM, "floor": FLOOR_PLATE_T_MM, "deck": FLOOR_PLATE_T_MM,
+              "bulkhead": BULKHEAD_PLATE_T_MM}
+# The front body (outer panel and bumper) is a box around them, not one plate: its mass stays the first v1's
+# (assumption) and it is taken as steel of PLATE_STEEL (assumption, not checked)
+FRONT_BODY_KG = 15.0
+DECK_WIDTH_MM = 880.0  # the deck at most this wide (the first v1's deck, assumption)
 DECK_TOWER_GAP_MM = 10.0  # the deck and the load this far inside the rear towers' posts
 DRIVESHAFT_GAP_MM = 10.0  # the driveshafts this far under the rails at full bump
 SUSP_PIVOT_GAP_MM = 25.0  # the arms' box (around the lower arm) this far off its pivots' legs and cross members
@@ -458,7 +475,9 @@ SEAT_LENGTH_MM = 500.0  # the seat's box along x and across (assumption, as the 
 SEAT_WIDTH_MM = 500.0
 SEAT_HEIGHT_V1_MM = 260.0  # the first v1's seat box height: its cushion top this far above the floor (assumption)
 SEAT_HEIGHT_MIN_MM = 200.0  # the seat's frame and cushion at least this tall (assumption, no source)
-COLUMN_ANGLE_RANGE_DEG = (20.0, 50.0)  # steering_column_angle's range (its meaning below says why)
+# steering_column_angle's range (its meaning below says why; 50 deg's top came down to 49 when the floors became
+# 3.2 mm sheets instead of 20 mm boxes, the driver and the column 16.8 mm lower)
+COLUMN_ANGLE_RANGE_DEG = (20.0, 49.0)
 
 
 def _driver_v1() -> dict[str, float]:
@@ -471,7 +490,7 @@ def _driver_v1() -> dict[str, float]:
     from hiraku.solvers.k4_geometry import people
 
     d = {k: x.default for k, x in VARIABLES.items()}
-    floor_top = d["rail_height"] + d["rail_h"] / 2.0 + ON_RAILS_MM + PANEL_T_MM  # the floors' top (both 20 mm)
+    floor_top = d["rail_height"] + d["rail_h"] / 2.0 + ON_RAILS_MM + FLOOR_PLATE_T_MM  # the floors' top
     seat_top = floor_top + SEAT_HEIGHT_V1_MM
     back = d["seat_x"] - SEAT_LENGTH_MM / 2.0
     big = people.seated(back, seat_top, 0.0, floor_top, people.BIG)
@@ -503,8 +522,8 @@ _DRIVER_VARS = {
                                  "centre (the wheel square to it); its length runs from the wheel's centre to above the "
                                  "pinion on the rack (kit/steering.column_length), and the intermediate shaft from there "
                                  "to the pinion. Range: from 20 deg (assumption, no source: flatter, the wheel stands "
-                                 "within 20 deg of upright before the chest) to 50 deg (at the default steering_x a column "
-                                 "steeper than about 50.6 deg puts the dash at or below the tops of the front towers' "
+                                 "within 20 deg of upright before the chest) to 49 deg (at the default steering_x a column "
+                                 "steeper than about 49.8 deg puts the dash at or below the tops of the front towers' "
                                  "rear posts, which the dash posts stand on, and the layout does not close)"),
     "steering_wheel_height": Var("mm", _DRIVER_V1["steering_wheel_height"],
                                  float(math.ceil(_DRIVER_V1["knee_top_above_seat"])),
@@ -699,6 +718,23 @@ PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "dr
               "seat_L", "seat_belt_L", "occupant_R", "occupant_L", "cargo"]
 
 
+def plate_mass(size, density: float) -> float:
+    """kg of a plate whose box is `size` (mm; the thinnest side its thickness): area x thickness x density."""
+    return float(np.prod([float(s) for s in size])) * density * 1e-9
+
+
+def plate_masses(lay: Layout, density: float) -> None:
+    """The plate parts (PLATE_T_MM) of PLATE_STEEL, each weighing its own sheet (plate_mass): the kits took the
+    pedals', the master cylinder's and the rear lamps' masses out of the plates they stand on (kit/body.py,
+    kit/safety.py), which held only while the plates' masses were a budget; those parts now weigh on top."""
+    for pid in PLATE_T_MM:
+        p = lay.part(pid)
+        p["mass_kg"] = plate_mass(p["box"]["size_mm"], density)
+        p["material"], p["finish"] = PLATE_STEEL, PLATE_FINISH
+    fb = lay.part("front_body")
+    fb["material"], fb["finish"] = PLATE_STEEL, PLATE_FINISH
+
+
 def _kit(fn, *args, **kw):
     """Call a kit's placing function; a part it cannot place is a DesignGenError (it says why)."""
     try:
@@ -775,11 +811,14 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         raise DesignGenError(f"the footwell floor from x = {floor_front_x:.0f} mm (behind the front wheels' steering "
                              f"sweep) to the seat cross member S1 ({S1:g} mm) is shorter than {MIN_STATION_GAP_MM:g} "
                              f"mm; move seat_x back or make the wheelbase longer")
-    ff_size = (floor_front_x - S1, 2.0 * floor_half, PANEL_T_MM)
-    lay.put(Item("floor_front", "足元の床", "body", ff_size, PANEL_KG_M2 * ff_size[0] * ff_size[1] * 1e-6),
+    steel = json.loads(MATERIALS.read_text(encoding="utf-8"))[PLATE_STEEL]
+    rho_plate = float(steel["density_kg_m3"])
+    ff_size = (floor_front_x - S1, 2.0 * floor_half, PLATE_T_MM["floor_front"])
+    lay.put(Item("floor_front", "足元の床", "body", ff_size, plate_mass(ff_size, rho_plate)),
             x=rear_at(S1), y=0.0, z=bottom_at(on_rails))
-    lay.put(Item("floor", "座席の下の床", "body", (S1 - S2, track, 20.0), 8.0), x=lay.between("S1", "S2"), y=0.0,
-            z=bottom_at(on_rails))
+    fl_size = (S1 - S2, track, PLATE_T_MM["floor"])
+    lay.put(Item("floor", "座席の下の床", "body", fl_size, plate_mass(fl_size, rho_plate)), x=lay.between("S1", "S2"),
+            y=0.0, z=bottom_at(on_rails))
     deck_len = S2 - DECK_GAP_MM - E
     # the deck and the load between the rear suspension towers and the upper arms' pivot brackets (both stand
     # on the rails); the front body between the front ones
@@ -788,12 +827,12 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         uca = min(abs(s["suspension"]["hardpoints_mm"][k][1]) for s in ss for k in ("uca_front", "uca_rear"))
         return min(rail_y - v["tower_b"] / 2.0, uca - mounts.BRACKET_PAD_MM) - DECK_TOWER_GAP_MM
 
-    deck_w = min(DECK_V1["width"], 2.0 * inside_mounts(False))
-    lay.put(Item("deck", "荷台の床", "body", (deck_len, deck_w, 20.0),
-                 DECK_V1["mass"] * deck_len * deck_w / (DECK_V1["length"] * DECK_V1["width"])),
+    deck_w = min(DECK_WIDTH_MM, 2.0 * inside_mounts(False))
+    dk_size = (deck_len, deck_w, PLATE_T_MM["deck"])
+    lay.put(Item("deck", "荷台の床", "body", dk_size, plate_mass(dk_size, rho_plate)),
             x=rear_at(E), y=0.0, z=bottom_at(on_rails), carried_by=lay.at("S2", "B", "E"))
-    lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0), 15.0),
-            x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
+    lay.put(Item("front_body", "前の外板とバンパー", "body", (360.0, min(600.0, 2.0 * inside_mounts(True)), 280.0),
+                 FRONT_BODY_KG), x=front_at(lay.station_x("F")), y=0.0, z=bottom_at(on_rails))
     # the battery fits between the rails under the floor; its volume and mass go with the capacity
     scale = v["battery_capacity"] / BATTERY_V1["capacity"]
     b_w = min(BATTERY_V1["width"], lay.rail_inner_gap() - 20.0)
@@ -864,13 +903,13 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if bh_h <= 0:
         raise DesignGenError("the dash cross member under the steering column would be below the rails; "
                              "move steering_x or seat_x")
-    bh_size = (PANEL_T_MM, 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
-    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size,
-                 PANEL_KG_M2 * bh_size[1] * bh_size[2] * 1e-6),
+    bh_size = (PLATE_T_MM["bulkhead"], 2.0 * (rail_y + v["rail_b"] / 2.0), bh_h)
+    lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size, rho_plate)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
+    plate_masses(lay, rho_plate)
     lay.reorder(PART_ORDER)
-    materials = {"stkr400": material}
+    materials = {"stkr400": material, PLATE_STEEL: steel}
     # the suspension's mounts on the frame (kit/mounts.py): towers, the lower arms' legs and cross members,
     # brackets; then the dash posts and cross member on the front towers' rear posts, holding the column
     tower = frame.section(*rect_tube(v["tower_b"], v["tower_b"], v["tower_t"]))

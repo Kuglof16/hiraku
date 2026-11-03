@@ -145,8 +145,9 @@ class FootwellAndDashTest(unittest.TestCase):
         dash = next(m for m in V1["members"] if m["id"] == "dash_cross")
         self.assertEqual(sorted(col["carried_by"]), sorted([dash["node_a"], dash["node_b"]]))
         self.assertEqual(part(V1, "bulkhead")["kind"], "body")
+        bh = part(V1, "bulkhead")["box"]
         self.assertAlmostEqual(part(V1, "brake_master")["box"]["center_mm"][0] + 60.0,
-                               part(V1, "bulkhead")["box"]["center_mm"][0] - 10.0, places=6)  # on its back face
+                               bh["center_mm"][0] - bh["size_mm"][0] / 2.0, places=6)  # on its back face
 
     def test_the_three_layout_errors_are_gone(self):
         """The right leg was 5 mm into the front wheel, the feet 146 mm off the footwell floor, and the rear

@@ -149,8 +149,9 @@ class CheckTest(unittest.TestCase):
     def test_v1(self):
         r = check.check(V1)
         q = r["quantities"]
-        # 602.14 kg before the suspension's mounts, the dash and bulkhead and the 320 mm longer front
-        self.assertAlmostEqual(q["mass"]["value"], 631.15, delta=0.01)
+        # 602.14 kg before the suspension's mounts, the dash and bulkhead and the 320 mm longer front; 631.15 kg
+        # before the plates weighed their own sheets (ladder_4w.PLATE_T_MM)
+        self.assertAlmostEqual(q["mass"]["value"], 642.00, delta=0.01)
         self.assertEqual(q["ground_clearance"]["value"], 150.0)  # the arms' box, 30 mm below the lower arm
         self.assertEqual(q["ground_clearance"]["where"], "susp_FL")
         self.assertAlmostEqual(q["free_steer_angle"]["value"], 16.48, delta=0.01)

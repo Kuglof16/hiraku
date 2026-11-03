@@ -138,7 +138,7 @@ class RangesTest(unittest.TestCase):
     def test_steepest_column_closes_at_the_default_steering(self):
         for a in VAR["steering_column_angle"].lo, VAR["steering_column_angle"].hi:
             contract.validate("design", ladder_4w.build({"steering_column_angle": a}))
-        with self.assertRaisesRegex(designgen.DesignGenError, "outside 20 to 50 deg"):
+        with self.assertRaisesRegex(designgen.DesignGenError, "outside 20 to 49 deg"):
             ladder_4w.build({"steering_column_angle": 55.0})
 
 
@@ -236,7 +236,7 @@ class KneeRoomClosedFormTest(unittest.TestCase):
         for sx in (-560.0, -470.0):
             self.assertAlmostEqual(self.check(build(steering_x=sx)) - base, sx - RUN10["steering_x"], places=6)
         self.assertAlmostEqual(self.check(build(seat_x=-1045.0, battery_x=-1045.0)) - base, 30.0, places=6)
-        for a in (20.0, 50.0):
+        for a in ladder_4w.COLUMN_ANGLE_RANGE_DEG:
             t = math.radians(a)
             want = -RC * (math.cos(t) + math.sin(t)) + RC * (math.cos(math.radians(35)) + math.sin(math.radians(35)))
             self.assertAlmostEqual(self.check(build(steering_column_angle=a)) - base, want, places=6)

@@ -72,8 +72,9 @@ class Version2SetTest(unittest.TestCase):
     def test_which_parts_are_plates(self):
         plates = LP.plate_parts(self.d)
         self.assertEqual(set(plates), {"floor_front", "floor", "deck", "bulkhead", "side_net_L", "side_net_R"})
-        self.assertEqual(plates["floor"].t, 20.0)
-        self.assertEqual(plates["floor"].material, LP.PLATE_MATERIAL["name"])  # no part.material: assumed steel
+        self.assertAlmostEqual(plates["floor"].t, 3.2)  # the box is the sheet (designgen.ladder_4w.PLATE_T_MM)
+        self.assertEqual(plates["floor"].material, "ss400")
+        self.assertFalse(any(pl.assumed for pl in plates.values()))
         self.assertEqual(plates["side_net_L"].material, "ss400")
         self.assertAlmostEqual(plates["side_net_L"].t, 3.0)
         np.testing.assert_allclose(np.abs(plates["floor"].normal), [0.0, 0.0, 1.0])

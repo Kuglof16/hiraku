@@ -212,15 +212,22 @@ class LoadPathTest(unittest.TestCase):
         tool = LoadPath()
         cls.runs = {k: tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {}) for k, lc in cls.cases.items()}
 
-    def test_version_2_passes(self):
+    def test_version_2_judged(self):
+        """R8-free and R8-push pass. R7-foot does not since the bulkhead is a 2.3 mm sheet (ladder_4w.PLATE_T_MM)
+        and not a 20 mm solid box: the brake pedal's stand on it moves more than Q69; the accelerator's passes."""
         from tests.solvers.test_builders_load_path import judged, results
 
         for k, lc in self.cases.items():
             rec = self.runs[k]
             self.assertEqual(rec["status"], "ok", rec.get("error"))
-            self.assertTrue(judged(lc, rec), f"{k}: {results(rec).get(lc['criterion']['quantity'])}")
+            got = results(rec).get(lc["criterion"]["quantity"])
+            self.assertEqual(judged(lc, rec), k != "R7-foot-500N", f"{k}: {got}")
             self.assertEqual(results(rec)["free_parts"]["value"], 0.0)
             self.assertNotIn("unsupported_load", results(rec))
+        foot = results(self.runs["R7-foot-500N"])
+        lim = self.cases["R7-foot-500N"]["criterion"]["limit"]["value"]
+        self.assertEqual(foot["pedal_deflection"]["where"], "pedal_brake")
+        self.assertLessEqual(foot["pedal_deflection.pedal_accel"]["value"], lim)
         contract.validate("design", self.d)
 
 
