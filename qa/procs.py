@@ -6,6 +6,10 @@ one started in turn: a test worker stopped this way leaves its scripted run (a
 is a launcher, and killing it does end the interpreter behind it.) run() stops the
 whole tree (taskkill /T on Windows, the process group elsewhere) before it raises
 subprocess.TimeoutExpired.
+
+one_blas_thread() gives a child process one BLAS thread: numpy and scipy each bundle
+OpenBLAS, which reserves commit memory for every thread it may start, so many test
+workers and scripted runs at once ran the PC out of commit memory.
 """
 
 from __future__ import annotations
@@ -13,6 +17,16 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+
+ONE_THREAD = {"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"}
+
+
+def one_blas_thread(env: dict | None = None) -> dict:
+    """env (default os.environ) with OPENBLAS_NUM_THREADS and OMP_NUM_THREADS 1 where they are not set."""
+    out = dict(os.environ if env is None else env)
+    for key, value in ONE_THREAD.items():
+        out.setdefault(key, value)
+    return out
 
 
 def kill_tree(proc: subprocess.Popen) -> None:

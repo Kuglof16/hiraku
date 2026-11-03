@@ -62,7 +62,8 @@ def _scripted_run(req: Path, out: Path):
     """One `python -m hiraku run REQ --scripted --runs OUT`; (run folder or None, process, seconds).
     A run still going after RUN_TIMEOUT_S is stopped with everything it started (qa.procs) and
     gives no run folder, so its tests fail with the seconds instead of the class erring."""
-    env = dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUTF8="1")  # Japanese status lines
+    # Japanese status lines; one BLAS thread (several runs go at once: qa.procs.one_blas_thread)
+    env = procs.one_blas_thread(dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUTF8="1"))
     env.pop("ANTHROPIC_API_KEY", None)  # the scripted run must not need it
     cmd = [sys.executable, "-m", "hiraku", "run", str(req), "--scripted", "--runs", str(out)]
     t0 = time.perf_counter()

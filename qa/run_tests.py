@@ -190,9 +190,9 @@ def _order(groups: dict[str, list[str]]) -> list[str]:
 def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
     out = tmp / f"{name}{tag}.json"
     t0 = time.perf_counter()
-    try:  # on timeout the worker and the runs it started are stopped (qa.procs)
+    try:  # on timeout the worker and the runs it started are stopped; one BLAS thread each (qa.procs)
         proc = procs.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out), name], cwd=ROOT,
-                         text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                         env=procs.one_blas_thread(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"name": name, "s": time.perf_counter() - t0, "crash": f"no result within {timeout:g} s"}
     s = time.perf_counter() - t0

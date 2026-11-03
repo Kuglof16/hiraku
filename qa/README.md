@@ -12,7 +12,7 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `check_run.py` | `runs/<run_id>/` の記録が契約 (`hiraku/contract/`) と hooks の決まり (HK1〜HK4) に合っているかを点検する |
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
 | `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。同じ PC でほかの `qa.run_tests` が回っているときは、始めと終わりの要約に「warning: another qa.run_tests is running on this PC」を出す (システムの一時フォルダの `hiraku-run-tests/<pid>.json` で見る) |
-| `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う |
+| `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う。`run_tests` の試験のプロセスと台本の運転には、BLAS のスレッドを 1 本にして渡す (`OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`、もう決めてあればそのまま)。numpy と scipy の OpenBLAS は、使うかもしれないスレッドの数だけメモリを先に取るので、たくさん同時に回すと PC のメモリが尽きる |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 
 ## 走らせ方

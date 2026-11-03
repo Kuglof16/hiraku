@@ -183,6 +183,26 @@ class Procs(unittest.TestCase):
                 time.sleep(0.25)
             self.assertFalse(_alive(pid), f"grandchild {pid} still running")
 
+    def test_one_blas_thread_unless_set(self):
+        env = procs.one_blas_thread({"PATH": "x"})
+        self.assertEqual((env["OPENBLAS_NUM_THREADS"], env["OMP_NUM_THREADS"], env["PATH"]), ("1", "1", "x"))
+        self.assertEqual(procs.one_blas_thread({"OPENBLAS_NUM_THREADS": "4"})["OPENBLAS_NUM_THREADS"], "4")
+
+    def test_workers_get_one_blas_thread(self):
+        from unittest import mock
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen.update(kw.get("env") or {})
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(rt.procs, "run", fake_run), \
+                mock.patch.dict("os.environ", {}, clear=False):
+            os.environ.pop("OPENBLAS_NUM_THREADS", None)
+            os.environ.pop("OMP_NUM_THREADS", None)
+            rt._run_one("tests.x.Y", Path(tmp), 60.0)
+        self.assertEqual((seen.get("OPENBLAS_NUM_THREADS"), seen.get("OMP_NUM_THREADS")), ("1", "1"))
+
     def test_a_quick_command_returns_like_subprocess_run(self):
         done = procs.run([sys.executable, "-c", "import sys; print('out'); print('err', file=sys.stderr); sys.exit(3)"],
                          timeout=60, text=True)

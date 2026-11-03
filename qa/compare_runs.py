@@ -321,7 +321,7 @@ def scripted_run(requirements: Path, runs: Path, design: Path | None = None, tim
     design = design.resolve() if design else None
     runs.mkdir(parents=True, exist_ok=True)
     before = {p.name for p in runs.iterdir()}
-    env = dict(os.environ, PYTHONUTF8="1")
+    env = procs.one_blas_thread(dict(os.environ, PYTHONUTF8="1"))
     env.pop("ANTHROPIC_API_KEY", None)
     cmd = [sys.executable, "-m", "hiraku", "run", str(requirements), "--scripted", "--runs", str(runs)]
     if design:
