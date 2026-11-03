@@ -10,6 +10,8 @@ the yaml, an expression over the flags). The functions read the parts' `kind` an
     brake    brake pedal / lever --brake--> supports with actuation.brake
     power    battery --power--> motor, with a fuse / switch on the way
     seat, restraint, rops are joined to the frame (members, nodes, parts of kind frame)
+    mounting every part (but people and cargo) is held to the frame by structural links ("load" or no `carries`)
+              that reach a member or node the part's box is near; a ground point also holds a part
 
 What is missing is a hit: the part where the chain stops, the two sides of the gap, and what to add. A
 design where no part has a connects_to cannot be followed: the parts the chain would run between are
@@ -22,6 +24,7 @@ sources and its ends, or the seats and what holds them), and "design" when a hit
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from typing import Any, Callable
 
@@ -35,6 +38,9 @@ Result = tuple[list[str], list[Record], list[Record]]  # targets, hits, not_eval
 PREFIX = "system:"
 SPEC_FILE = REPO_ROOT / "data" / "knowledge" / "systems.yaml"
 WHOLE = "design"
+MOUNT_GAP_MM = 500.0  # a part is not bolted to a member or node farther from its box than this (an assumption, see SY-10)
+STRUCTURAL = (None, "load")  # the links that hold a part; torque, steer, brake and power links only pass a force on
+NOT_MOUNTED = ("occupant", "cargo", "frame")  # people and the load are carried, a frame part is the frame
 
 POWER_KINDS = ("motor", "engine")
 STEER_INPUT = ("steering",)
@@ -53,6 +59,10 @@ class Net:
         self.frame: set[str] = {m["id"] for m in design.get("members", [])} | {n["id"] for n in design.get("nodes", [])}
         self.frame |= {pid for pid, p in self.parts.items() if p.get("kind") == "frame"}
         self.member_part: dict[str, str | None] = {m["id"]: m.get("part") for m in design.get("members", [])}
+        self.nodes: dict[str, list[float]] = {n["id"]: n["xyz_mm"] for n in design.get("nodes", []) if "xyz_mm" in n}
+        self.members: dict[str, tuple[list[float], list[float]]] = {
+            m["id"]: (self.nodes[m["node_a"]], self.nodes[m["node_b"]]) for m in design.get("members", [])
+            if m.get("node_a") in self.nodes and m.get("node_b") in self.nodes}
         self.adj: dict[str, list[tuple[str, str | None]]] = {}
         self.linked = False  # does any part say what it is joined to
         for p in self.parts.values():
@@ -95,6 +105,15 @@ class Net:
 
     def reaches_frame(self, node: str, avoid: set[str] | None = None, frame: set[str] | None = None) -> bool:
         return bool(self.reach([node], avoid=avoid) & (self.frame if frame is None else frame))
+
+
+def _box_gap(part: Record, point: list[float]) -> float:
+    c, s = part["box"]["center_mm"], part["box"]["size_mm"]
+    return math.sqrt(sum(max(abs(point[i] - c[i]) - s[i] / 2, 0.0) ** 2 for i in range(3)))
+
+
+def _segment_gap(part: Record, a: list[float], b: list[float], steps: int = 60) -> float:
+    return min(_box_gap(part, [a[i] + (b[i] - a[i]) * k / steps for i in range(3)]) for k in range(steps + 1))
 
 
 def _hit(part_id: str, message: str, **values: float) -> Record:
@@ -218,6 +237,77 @@ def lighting(net: Net) -> Result:
     return [WHOLE], hits, []
 
 
+def mounting(net: Net) -> Result:
+    """Every part (people and cargo apart) is held to the frame: a chain of structural links from the part reaches a
+    member or node, or a ground point, and each link to a member or node ends where the part's box is (MOUNT_GAP_MM).
+    A link to a member the part's box is far from is a mount on paper only: the part floats."""
+    parts = [pid for pid, p in net.parts.items() if p.get("kind") not in NOT_MOUNTED]
+    if not parts:
+        return [], [], []
+    if not net.linked:
+        return parts, [], _missing_links(*parts)
+    gaps: dict[str, float] = {}  # part -> its smallest gap to a frame member or node it names
+    held: dict[str, list[str]] = {pid: [] for pid in parts}  # part -> the structural neighbours that can hold it
+    owns = set(net.member_part.values())
+    for pid in parts:
+        part = net.parts[pid]
+        for link in part.get("connects_to") or []:
+            if link.get("carries") not in STRUCTURAL:
+                continue
+            to = net.node(link["to"])
+            if to in net.frame and to not in net.members and to not in net.nodes and to not in net.parts:
+                held[pid].append(to)  # a member or node with no coordinates: nothing to measure
+                continue
+            if to in net.members:  # a member: the link counts when the part is near the tube
+                gap = 0.0 if pid in owns or "box" not in part else _segment_gap(part, *net.members[to])
+            elif to in net.nodes:
+                gap = 0.0 if pid in owns or "box" not in part else _box_gap(part, net.nodes[to])
+            else:
+                held[pid].append(to)
+                continue
+            gaps[pid] = min(gap, gaps.get(pid, gap))
+            if gap <= MOUNT_GAP_MM:
+                held[pid].append(to)
+    fixed = {pid for pid in parts if _reaches_ground(net, pid, held)}
+    ends = {pid: {net.node(x["to"]) for x in net.parts[pid].get("connects_to") or []} | net.neighbours(pid) for pid in parts}
+    grew = True
+    while grew:  # a shaft or a rod is held at its two ends: two neighbours that are held or on the ground
+        grew = False
+        for pid in parts:
+            if pid not in fixed and sum(1 for n in ends[pid] if n in fixed or n.startswith("support:")) >= 2:
+                fixed.add(pid)
+                grew = True
+    hits = []
+    for pid in parts:
+        if pid in fixed:
+            continue
+        far = gaps.get(pid)
+        if far is not None and far > MOUNT_GAP_MM:
+            why = (f"{pid} は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から {far:.0f} mm 離れています "
+                   f"(上限 {MOUNT_GAP_MM:.0f} mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。"
+                   "止め先の部材か節を、部品の箱のそばのものにしてください")
+        else:
+            why = (f"{pid} は、骨組みの部材か節 (または接地点) まで、構造のつながり (carries が load か無し) でつながっていません。"
+                   "取り付ける部材・節・ブラケットを足し、connects_to に書いてください")
+        hits.append(_hit(pid, why, **({"gap_mm": far} if far is not None else {"attached": 0})))
+    return parts, hits, []
+
+
+def _reaches_ground(net: Net, start: str, held: dict[str, list[str]]) -> bool:
+    """Does a chain of holding links from the part reach the frame (a member or node) or a ground point?"""
+    seen, queue = {start}, deque([start])
+    while queue:
+        n = queue.popleft()
+        for m in held.get(n, ()):
+            if m in seen:
+                continue
+            if m in net.frame or m.startswith("support:"):  # a member, a node, a part of kind frame, or a ground point
+                return True
+            seen.add(m)
+            queue.append(m)
+    return False
+
+
 def power_chain(net: Net) -> Result:
     batteries = net.of_kind("battery")
     motors = net.of_kind("motor")
@@ -248,6 +338,7 @@ def disconnect(net: Net) -> Result:
 CHECKS: dict[str, Callable[[Net], Result]] = {
     "drive_chain": drive_chain, "steer_chain": steer_chain, "brake_chain": brake_chain, "seat_attach": seat_attach,
     "restraint": restraint, "rops": rops, "lighting": lighting, "power_chain": power_chain, "disconnect": disconnect,
+    "mounting": mounting,
 }
 
 

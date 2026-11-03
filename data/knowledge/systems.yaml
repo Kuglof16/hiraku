@@ -128,3 +128,15 @@ rules:
       mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch
       or other disconnect was not checked in this repository; the basis only says the standard covers the
       electrical safety of the propulsion system
+  - id: SY-10
+    text: どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)
+    check: system:mounting
+    when: 1 == 1
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or
+      none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's
+      box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links
+      pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on.
+      Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on
+      its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then

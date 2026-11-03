@@ -45,6 +45,9 @@ def vehicle():
     ]
     act = {"FL": (False, True, True), "FR": (False, True, True), "RL": (True, True, False), "RR": (True, True, False)}
     supports = [{"id": i, "kind": "wheel", "actuation": {"drive": d, "brake": b, "steer": s}} for i, (d, b, s) in act.items()]
+    for p in parts:  # every part is bolted to a rail too (the chain tests above are about the other links)
+        if not any(x.get("carries") in (None, "load") for x in p["connects_to"]):
+            p["connects_to"].append(link("rail_L", "load", "bolt"))
     return {"design_version": 1, "parts": parts, "supports": supports,
             "members": [{"id": "rail_R"}, {"id": "rail_L"}], "nodes": [{"id": "N1"}]}
 
@@ -83,12 +86,12 @@ class CompleteDesignTest(unittest.TestCase):
 
     def test_the_flags_decide_which_rules_apply(self):
         d = vehicle()
-        none = {rid: check(rid, d, {}) for rid in RULES}
+        none = {rid: check(rid, d, {}) for rid in RULES if rid != "SY-10"}  # SY-10 (mounting) is for every product
         self.assertTrue(all(r["targets"] == [] and r["pass"] and not r["not_evaluable"] for r in none.values()))
         battery_only = {rid: bool(check(rid, d, {"battery": True})["targets"]) for rid in RULES}
-        self.assertEqual({k for k, v in battery_only.items() if v}, {"SY-08", "SY-09"})
+        self.assertEqual({k for k, v in battery_only.items() if v}, {"SY-08", "SY-09", "SY-10"})
         walking = {rid for rid in RULES if check(rid, d, {"self_propelled": True})["targets"]}
-        self.assertEqual(walking, {"SY-01", "SY-03"})  # steering needs a rider as well
+        self.assertEqual(walking, {"SY-01", "SY-03", "SY-10"})  # steering needs a rider as well
         unknown = check("SY-01", d, None)
         self.assertEqual(unknown["not_evaluable"], [{"part_id": "design", "missing": ["flags"]}])
         self.assertTrue(unknown["pass"])
@@ -301,8 +304,44 @@ class WithTheOtherRulesTest(unittest.TestCase):
         self.assertEqual(flagless["SY-01"]["not_evaluable"], [{"part_id": "design", "missing": ["flags"]}])
         self.assertEqual(flagless["SY-01"]["targets"], ["design"])
 
+    COLUMN = ("steering_column", "steering_wheel")  # the parts that are bolted to RA and RS1 on paper
+
+    def moved(self, design, near):
+        """The design with the steering column and wheel placed on the member RA (near) or far from every member."""
+        d = copy.deepcopy(design)
+        nodes = {n["id"]: n["xyz_mm"] for n in d["nodes"]}
+        at = nodes["RA"]  # a node of the frame that the column and the wheel name
+        for p in d["parts"]:
+            if p["id"] in self.COLUMN:
+                p["box"]["center_mm"] = list(at) if near else [5000.0, 5000.0, 5000.0]
+        return d
+
+    def test_a_part_drawn_in_the_air_is_found_even_when_it_says_it_is_bolted_on(self):
+        far = self.run_all(self.moved(self.design, near=False))["SY-10"]
+        self.assertEqual(sorted(hit_ids(far)), sorted(self.COLUMN))
+        self.assertEqual(far["pass"], False)
+        for h in far["hits"]:
+            self.assertGreater(h["values"]["gap_mm"], systems.MOUNT_GAP_MM)
+            self.assertIn("mm 離れています", h["message"])
+        self.assertLessEqual(set(hit_ids(far)), set(far["targets"]))
+        near = self.run_all(self.moved(self.design, near=True))["SY-10"]
+        self.assertEqual((near["hits"], near["pass"]), ([], True))
+
+    def test_a_part_with_no_structural_link_floats_and_a_shaft_held_at_both_ends_does_not(self):
+        d = vehicle()
+        d["parts"] = [p for p in d["parts"]]
+        lone = part("bracket", "body", "body", link("controller", "power", "wire"))  # only a power link: it holds nothing
+        d["parts"].append(lone)
+        rec = check("SY-10", d)
+        self.assertEqual(hit_ids(rec), ["bracket"])
+        self.assertEqual(rec["hits"][0]["values"], {"attached": 0.0})
+        self.assertNotIn("driveshaft", hit_ids(rec))  # joined to the motor and the wheels: held at both ends
+        people = copy.deepcopy(d)
+        people["parts"].append({"id": "driver", "name": "driver", "kind": "occupant", "connects_to": []})
+        self.assertEqual(hit_ids(check("SY-10", people)), ["bracket"])  # people are carried, not mounted
+
     def test_the_demo_vehicle_has_every_system_it_needs_and_joins_them(self):
-        by = self.run_all(self.design)
+        by = self.run_all(self.moved(self.design, near=True))
         for rid, rec in by.items():
             self.assertEqual((rec["hits"], rec["not_evaluable"]), ([], []), rid)
         self.assertEqual(by["SY-07"]["targets"], [])  # not a road vehicle: no lamps asked for
@@ -316,7 +355,7 @@ class WithTheOtherRulesTest(unittest.TestCase):
             rec = self.run_all(without(self.design, *gone))[rid]
             self.assertEqual(sorted(hit_ids(rec)), sorted(expected), rid)
             self.assertLessEqual(set(hit_ids(rec)), set(rec["targets"]), rid)
-        others = self.run_all(without(self.design, "pedal_brake"))
+        others = self.run_all(without(self.moved(self.design, near=True), "pedal_brake"))
         self.assertTrue(all(r["pass"] for rid, r in others.items() if rid != "SY-03"))
 
     def test_the_demo_vehicle_without_links_cannot_be_followed(self):

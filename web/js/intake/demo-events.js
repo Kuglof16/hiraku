@@ -816,7 +816,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -913,6 +913,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -1050,7 +1060,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 4 件、既定値 13 件、答えが無いまま 3 件",
    "data": {
     "answers": [
      {
@@ -1069,6 +1079,105 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      },
      {
       "key": "Q34",
@@ -9173,6 +9282,84 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0029",
     "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "rollbar"
+    ],
+    "hits": [
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "gap_mm": 651.1029946543966
+      },
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "gap_mm": 708.0182995285636
+      },
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
@@ -9218,15 +9405,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -9831,7 +10018,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -9928,6 +10115,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -10184,7 +10381,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check. The JIS T 9254 part: not checked in this repository",
+      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check (the address above returned HTTP 404 when tried again the same day, so the zones were not re-read from it). JIS T 9254:2015 (the copy at https:\/\/kikakurui.com/t9/T9254-2009-01.html), figures 3 and 4: the probes are a neck of 60 mm, a chest of 318 mm and a head of 120 mm, applied with the bottom flat and the side rails at their highest; read 2026-11-03",
       "value": "JIS T 9254 の型と FDA の区分 (Zone 1-4)"
      },
      {
@@ -10882,7 +11079,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -10979,6 +11176,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -11706,7 +11913,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -11803,6 +12010,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -12486,6 +12703,42 @@ export const DEMOS = {
       "basis": "assumption (the top speed, Q50)"
      },
      {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
       "key": "Q70",
       "name": "公道を走るか",
       "value": "私有地 (林道) だけ",
@@ -12494,12 +12747,75 @@ export const DEMOS = {
       "basis": "assumption of this fixed file; Q70 is a required question and was not asked"
      },
      {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
       "key": "Q82",
       "name": "出荷の形",
       "value": "完成車",
       "source": "default",
       "trust": 3,
       "basis": "assumption"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      },
      {
       "key": "Q90",
@@ -13087,7 +13403,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「系の決まり」から 9 件の規則",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SY",
@@ -13184,6 +13500,16 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -13195,7 +13521,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 13 件: Q57・Q63・Q66・Q67・Q68・Q69・Q75・Q76・Q77・Q78・Q86・Q87・Q88)",
    "data": {
     "answers": [
      {
@@ -13214,6 +13540,105 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table \"Steering control effort requirements\" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a design load is the assumption)",
+      "value": 300,
+      "unit": "N"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the range where the feel and the position of the control do not change; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check",
+      "value": 500,
+      "unit": "N"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: small against the control's travel; no source",
+      "value": 5,
+      "unit": "mm"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), \"0.70 g or greater\", p. 69024 (reasoning p. 68993); read 2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger",
+      "value": 0.7,
+      "unit": "g"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read 2026-11-03. The vehicle's own peak counts instead when it is larger",
+      "value": 0.9,
+      "unit": "g"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03",
+      "value": 725,
+      "unit": "N"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03",
+      "value": 25,
+      "unit": "mm"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder",
+      "value": 500,
+      "unit": "kg"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule for other traffic, borrowed: applying it to the occupants is an assumption",
+      "value": 30,
+      "unit": "deg"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)",
+      "value": 50,
+      "unit": "deg"
      }
     ]
    }
@@ -21284,6 +21709,84 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0029",
     "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "rollbar"
+    ],
+    "hits": [
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "gap_mm": 651.1029946543966
+      },
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "gap_mm": 708.0182995285636
+      },
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
@@ -21329,15 +21832,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [

@@ -103,8 +103,11 @@ requirements:
     basis: >-
       JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006),
       https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf.
-      The FDA zones: FDA guidance, read 2026-11-03 in a source check. The JIS T 9254 part: not checked
-      in this repository
+      The FDA zones: FDA guidance, read 2026-11-03 in a source check (the address above returned HTTP 404 when
+      tried again the same day, so the zones were not re-read from it). JIS T 9254:2015 (the copy at
+      https://kikakurui.com/t9/T9254-2009-01.html), figures 3 and 4: the probes are a neck of 60 mm, a chest of
+      318 mm and a head of 120 mm, applied with the bottom flat and the side rails at their highest; read
+      2026-11-03
   - key: Q72
     name: なぞる規格
     value: JIS T 9254・FDA
