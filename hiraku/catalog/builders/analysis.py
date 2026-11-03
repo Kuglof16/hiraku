@@ -660,13 +660,53 @@ R4_REAR_FRACTION = 1.0 / 6.0
 R4_TOL = 0.25
 
 # No PLAN: the tool that loads the roll bar and judges it is not on the shelf (HIRAKU's Claude writes it in the run).
-# K0 formulas for its prediction, inputs from hiraku.solvers.k0_handcalc.frame_inputs.portal_frame_inputs(design)
-# (its "side", "rear" and "top" dicts are every input but these from the load case):
-#   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top), H_c, k
-#   frame_static.portal_frame_rear  E_in = lc.rear_energy, f = lc.rear_fraction -> delta_E (along the vehicle), P_c
-#   frame_static.portal_frame_top   F = lc.crush_force               -> delta (down at mid-span), F_c (collapse)
-# and the occupant space: hiraku.solvers.k4_geometry.occupant_clearance(design, displacements=...) with the roll
-# bar's top nodes (LHT, RHT; designgen.ladder_4w.build_rollbar) moved by those deflections.
+# Its prediction is R4_PREDICTIONS, inputs read off the design by r4_inputs
+# (hiraku.solvers.k0_handcalc.rops_inputs.rops_inputs: frame_inputs.portal_frame_inputs's "side", "rear" and "top"
+# dicts as from.side_<k>, from.rear_<k>, from.top_<k>, and the gaps g_side, g_rear, g_top), in this order:
+#   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top)
+#   frame_static.portal_frame_rear  E_in = lc.rear_energy, f = lc.rear_fraction -> delta_E (along the vehicle)
+#   frame_static.portal_frame_top   F = lc.crush_force               -> delta (down at mid-span)
+#   frame_static.rops_occupant_clearance  g_* = from.g_*, d_* = pred.rops_*_deflection -> rops_occupant_clearance
+# (the gaps from k4_geometry.occupant_spaces and the roll bar's members as k4_geometry.occupant_clearance measures
+# them, along each loading's motion of the top corners; rops_inputs says how).
+R4_DEFLECTIONS = (("side", "frame_static.portal_frame_side", "delta_E", {"E_in": "lc.side_energy"}),
+                  ("rear", "frame_static.portal_frame_rear", "delta_E", {"E_in": "lc.rear_energy", "f": "lc.rear_fraction"}),
+                  ("top", "frame_static.portal_frame_top", "delta", {"F": "lc.crush_force"}))
+R4_PORTAL_INPUTS = {"side": ("E", "h", "w", "I_c", "I_b", "theta_f", "M_pf", "M_pt"),
+                    "rear": ("E", "h", "I_c", "theta_f", "M_pf"),
+                    "top": ("E", "h", "w", "I_c", "I_b", "I_min", "A_c", "theta_f", "M_pb", "M_pt", "f_y")}
+
+
+def r4_inputs(design: Record, load_case: Record) -> Record:
+    """R4_PREDICTIONS' from.<name> values: the portal formulas' inputs off the roll bar and the gaps to the
+    occupants' space of the load case's loading (rops_inputs.rops_inputs)."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc import units
+    from hiraku.solvers.k0_handcalc.rops_inputs import rops_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    p = load_case.get("params") or {}
+    f = units.to_unit(p["rear_fraction"], "1", "rear_fraction") if "rear_fraction" in p else R4_REAR_FRACTION
+    try:
+        return rops_inputs(design, loading=loading_of(load_case), rear_fraction=f)["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+
+
+_R4_ASSUME = ["ロールバーは門形の梁 (柱 2 本と上の梁)、横と後ろはエネルギーを吸うまで弾性・完全塑性の折れ線",
+              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)"]
+R4_PREDICTIONS = [
+    {"quantity": f"rops_{d}_deflection", "formula_id": fid, "output": out, "assumptions": list(_R4_ASSUME),
+     "inputs": {**{k: f"from.{d}_{k}" for k in R4_PORTAL_INPUTS[d]}, **extra}, "inputs_from": r4_inputs}
+    for d, fid, out, extra in R4_DEFLECTIONS
+] + [
+    {"quantity": "rops_occupant_clearance", "formula_id": "frame_static.rops_occupant_clearance",
+     "output": "rops_occupant_clearance",
+     "assumptions": _R4_ASSUME + ["隙間は、荷重の向きに上の角を動かしたとき乗員の空間に触れるまでの、荷重の点の動き"],
+     "inputs": {**{f"g_{d}": f"from.g_{d}" for d, *_x in R4_DEFLECTIONS},
+                **{f"d_{d}": f"pred.rops_{d}_deflection" for d, *_x in R4_DEFLECTIONS}},
+     "inputs_from": r4_inputs},
+]
 
 
 def r4_rops(spec: Record, req: Record, design: Record) -> Record:
