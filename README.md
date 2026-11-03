@@ -10,7 +10,7 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 - デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた試験 (段差越え P1・強度 R1・振動 N1・ハンドルの切れ角 H1・乗員の体格 H3・発進 P3) を「手計算で予測 → 解析 → 照合」で回す流れ。基準のある試験は合否まで出す (P1 は基準が無く照合まで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で合否を出す
 - 設計役が設計の変数を変えて次の版を作る (`revise_design`)。デモの車両では、v1 で不合格の H1・H3 を直して v2 で合格する
-- 解析の道具 17 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。`hiraku.solvers.builtin_tools()` の数)。どれも答えの分かっている例と照合してから使う。手計算の式 61 個 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つの道具 (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
+- 解析のツール 17 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。`hiraku.solvers.builtin_tools()` の数)。どれも答えの分かっている例と照合してから使う。手計算の式 61 個 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つのツール (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
 - 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
 - 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 - 画面から実行を始める口。実行の一覧の「デモの実行」と「その場で走らせる」で、要件のファイルを台本の運転か Claude の運転で始める。デモの行のうち依頼の文のものは、その文を入れた依頼の画面 A1 を開く。A1 で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。Claude の運転は、サーバーを起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
@@ -38,7 +38,7 @@ python -m venv .venv
 .venv\Scripts\python -m unittest
 ```
 
-API キー無しで、Claude の代わりに決まった順に道具を呼ぶ「台本の運転」で 1 回まわし、記録を確かめる:
+API キー無しで、Claude の代わりに決まった順にツールを呼ぶ「台本の運転」で 1 回まわし、記録を確かめる:
 
 ```
 .venv\Scripts\python -m hiraku run data/requirements/offroad-4w.yaml --scripted
@@ -56,12 +56,12 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 - 画面は three.js 0.170.0 (MIT) を jsDelivr から読み込むので、ネットにつながっている必要があります。字は PC にある BIZ UDPGothic を使い、同梱していません
 - ブラウザの試験は Playwright を使い、`python -m tests.web.browser` で回します (中で `HIRAKU_WEB_BROWSER=1` を入れる。試験の名前を 1 つ渡すと、それだけを回す)。ふつうの全部の試験では飛ばします (Playwright は requirements.txt に入れていません)
 - Rapier と照らし合わせる試験は、`qa/rapier` で `npm install` をしておく必要があります。していなければ、その試験は飛ばします
-- 動画の書き出しの道具は `promo/` にあり、要るものは `promo/requirements-video.txt` です
+- 動画の書き出しのツールは `promo/` にあり、要るものは `promo/requirements-video.txt` です
 
 ## 中身
 
 - `hiraku/agent/` エージェントのループ・hooks・役 (まとめ役・設計役・パッケージ役・分野ごとの CAE 役)、`plugins/hiraku/` skills
-- `hiraku/tools/` エージェントが呼ぶ道具 (MCP)。数値は道具が計算し、モデルには書かせない
+- `hiraku/tools/` エージェントが呼ぶツール (MCP)。数値はツールが計算し、モデルには書かせない
 - `hiraku/solvers/` 手計算の式 (K0) と CAE の土台 (K1 梁の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度)
 - `hiraku/intake/` 受付 (分野を選ぶ・ヒアリング・ナレッジの取り込み・規則と系の点検)
 - `hiraku/catalog/` 要件から試験の荷重条件を作る、`hiraku/designgen/` 設計の変数から設計を組む
@@ -74,7 +74,7 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 
 ### エージェントのループ (Claude Agent SDK)
 
-- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の版 1 と道具の棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときは版 0 から始め、設計役が `propose_design` で版 1 を作る (同)。
+- 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の版 1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときは版 0 から始め、設計役が `propose_design` で版 1 を作る (同)。
 - 役は 4 種類ある (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
   - まとめ役 (lead): メインのエージェント。仕事を役に渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
   - 分野ごとの CAE 役 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。
@@ -83,13 +83,13 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 - サブエージェントはどれも前景で動く (`background=False`)。まとめ役はその報告を待つ (`roles.py`、`runner.py` の `FOREGROUND_ROLES_ENV`)。
 - 荷重条件 1 つの進め方は CAE 役の指示に書いてある (`prompts.py` の `cae_prompt`)。
   1. `get_context` で荷重条件と設計の値を読む。
-  2. `list_tools` と `list_formulas` で道具と式を選ぶ。
+  2. `list_tools` と `list_formulas` でツールと式を選ぶ。
   3. `record_prediction` で手計算の予測を記録する。
   4. `analyze` で解析する。
   5. `compare` で予測と照合する。
   6. 食い違ったら `record_cause` に原因と直し方を書き、予測を記録し直してやり直す。
 - 赤の分野が残り、直す回数 (`round_limit`) も残っていれば、まとめ役が設計役に渡す。新しい版では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
-- 使える組み込みの道具は `Agent` と `Skill` だけ。`permission_mode="dontAsk"` で、名前を並べた道具のほかは止まる (`hiraku/agent/runner.py` の `build_options`)。
+- 使える組み込みのツールは `Agent` と `Skill` だけ。`permission_mode="dontAsk"` で、名前を並べたツールのほかは止まる (`hiraku/agent/runner.py` の `build_options`)。
 - この PC の CLAUDE.md・設定・hooks は読まない (`setting_sources=[]`)。MCP サーバーは `hiraku` だけ (`strict_mcp_config=True`) (同)。
 
 ### hooks
@@ -104,36 +104,36 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 | ID | hook | 止めるもの・守らせるもの |
 |---|---|---|
 | HK1 | PreToolUse | 同じ版・同じ荷重条件の予測が無い `analyze` を止める (`rules.py` の `check_analyze`) |
-| HK2 | PreToolUse | 答えの分かっている例に通っていない道具の `analyze` を止める (同) |
+| HK2 | PreToolUse | 答えの分かっている例に通っていないツールの `analyze` を止める (同) |
 | HK3 | PreToolUse | 原因の書かれていない食い違いがある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
 | HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (まとめ役 3 回、役ごとに 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
-| HK5 | PreToolUse | 軽い計算から確かめる。その版で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) の道具で確かめる荷重条件に赤か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
+| HK5 | PreToolUse | 軽い計算から確かめる。その版で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) のツールで確かめる荷重条件に赤か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
 
 - 止めたときは `hook.denied` か `hook.blocked_stop` の event を出す。理由の文には「足りないもの」と「次に呼ぶもの」を書き、それが Claude に返る (`hooks.py`、`rules.py` の冒頭)。
-- 道具の関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
+- ツールの関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
 - PostToolUse では、次にすることを `additionalContext` で渡す。`analyze` のあとは `compare` を、食い違ったあとは `record_cause` を促す (`hooks.py` の `next_step`)。
-- 止めるボタンを押すと、実行のフォルダに `stop.request` ができる。そのあとは道具の呼び出しを全部止め、終わる (`hooks.py` の `pre_tool_use`・`stop`)。
+- 止めるボタンを押すと、実行のフォルダに `stop.request` ができる。そのあとはツールの呼び出しを全部止め、終わる (`hooks.py` の `pre_tool_use`・`stop`)。
 - SubagentStart と SubagentStop では `agent.started` と `agent.stopped` を出す (`hooks.py`)。
 
-### MCP の道具 (`hiraku/tools/`)
+### MCP のツール (`hiraku/tools/`)
 
-サーバーの名前は `hiraku`、道具の名前は `mcp__hiraku__<名前>` (`hiraku/tools/mcp.py`、`docs/contract.md`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。
+サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>` (`hiraku/tools/mcp.py`、`docs/contract.md`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。
 
-- 読む道具
+- 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
   - `list_formulas`: 手計算 (K0) の式の一覧。
-  - `list_tools`: 解析の道具の棚。`usable` が true の道具だけを使える。
+  - `list_tools`: 解析のツールの棚。`usable` が true のツールだけを使える。
 - 予測・解析・照合
   - `record_prediction`: 式と入力と前提を選ぶ。値は K0 が計算する。
-  - `analyze`: 全部の解析の道具をこの 1 つから呼ぶ。
+  - `analyze`: 全部の解析のツールをこの 1 つから呼ぶ。
   - `compare`: 予測と解析を照合する。一致して基準があれば、合否も作る。
   - `record_cause`: 食い違いの原因と直し方を書く。分野の止まりがこれで解ける。
 - 設計 (設計役だけ)
   - `propose_design`: 版 0 から最初の版を作る。
   - `revise_design`: 設計の変数を変えて、次の版を作る。
-- 道具を作る
-  - `check_tool`: Claude が書いた道具のコードを、別のプロセスで、答えの分かっている例と比べて確かめる。
-  - `make_tool`: 確かめに通った道具を棚に入れる。
+- ツールを作る
+  - `check_tool`: Claude が書いたツールのコードを、別のプロセスで、答えの分かっている例と比べて確かめる。
+  - `make_tool`: 確かめに通ったツールを棚に入れる。
 - 報告
   - `write_report`: まとめ役が最後に 1 回呼ぶ。文の中の「数 + 単位」が記録と合わなければ断る。
 - 受付 (`hiraku/intake/tools.py`)
@@ -152,7 +152,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### 台本の運転と Claude の運転
 
-- 台本の運転 (`--scripted`) は Claude を呼ばない。同じ道具の関数と hooks の規則を、決まった順に呼ぶ。順は `data/catalog/scripted.yaml` と試験ごとの作り方にある (`hiraku/agent/scripted.py` の冒頭、`hiraku/__main__.py`)。
+- 台本の運転 (`--scripted`) は Claude を呼ばない。同じツールの関数と hooks の規則を、決まった順に呼ぶ。順は `data/catalog/scripted.yaml` と試験ごとの作り方にある (`hiraku/agent/scripted.py` の冒頭、`hiraku/__main__.py`)。
   - 台本は原因を調べられない。原因を書くのは、台本が名指しした食い違いのときだけ。ほかの食い違いが出たら実行を止める (`scripted.py` の冒頭)。
   - 費用は 0 と出す (`__main__.py` の `_print_end`)。
 - Claude の運転は、その窓の環境変数 `ANTHROPIC_API_KEY` を要る。無ければ、実行のフォルダを作る前に止まる (`runner.py` の `require_api_key`、`__main__.py`)。
@@ -167,11 +167,11 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### 数がどこから出るか
 
-- 役のプロンプトには「数値は全部、道具が出す。自分で計算した数を入力にも文にも書かない。単位の換算もしない」とある (`prompts.py` の `COMMON_RULES`)。
+- 役のプロンプトには「数値は全部、ツールが出す。自分で計算した数を入力にも文にも書かない。単位の換算もしない」とある (`prompts.py` の `COMMON_RULES`)。
 - 予測の値は K0 が計算し、Claude は式と入力を選ぶだけ (`docs/contract.md` の「1 つの数字を信用して合否を出すまで」、`mcp.py` の `record_prediction` の説明)。
-- 照合の許す幅は荷重条件に入っていて、モデルは決めない。合否は道具の中でだけ作る (`docs/contract.md`)。
+- 照合の許す幅は荷重条件に入っていて、モデルは決めない。合否はツールの中でだけ作る (`docs/contract.md`)。
 - 報告の数はコードが記録から入れる。Claude が書くのは `summary` と `next` だけ (`docs/contract.md`、`mcp.py` の `write_report` の説明)。
-- Claude が実行の中で作った道具は、答えの分かっている例に全部通ったときだけ棚に入る (`mcp.py` の `make_tool` の説明、`docs/contract.md`)。
+- Claude が実行の中で作ったツールは、答えの分かっている例に全部通ったときだけ棚に入る (`mcp.py` の `make_tool` の説明、`docs/contract.md`)。
 
 ## どう作ったか
 
@@ -192,7 +192,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 ### 契約と持ち場
 
 - 部署どうしの決まりは `docs/contract.md`。形の正本は `hiraku/contract/hiraku.schema.json` で、食い違ったら schema が正しい (`docs/contract.md`)。
-- 契約の中身: 記録の形、`runs/<run_id>/` の木、event の種類、MCP の道具の入力の形、hooks の規則 (`docs/contract.md`、`hiraku/contract/layout.py`、`hiraku/contract/protocols.py`)。
+- 契約の中身: 記録の形、`runs/<run_id>/` の木、event の種類、MCP のツールの入力の形、hooks の規則 (`docs/contract.md`、`hiraku/contract/layout.py`、`hiraku/contract/protocols.py`)。
 - 持ち場は `hiraku/contract/layout.py` の `OWNERS` で、`owner_of(path)` で引ける。部署は自分の持ち場だけを書く。ほかは統括部を通す (同ファイルのコメント)。
   - lead (統括部): `hiraku/contract/`、`docs/`、`README.md`、`CLAUDE.md` など
   - design (設計部): `hiraku/agent/`・`hiraku/tools/`・`hiraku/store/`・`plugins/` など
@@ -219,7 +219,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 
 - `git log --all --grep="Drafted with Codex"` に当たるコミットは 0 件。
 - `codex` という字を含むコミット (大文字小文字を区別しない) は 1 件ある。35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」。
-  - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部の道具。
+  - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
 - 全部の branch のコミット 680 件のうち、487 件に `Co-Authored-By: Claude` の行がある (`git log --all --grep="Co-Authored-By: Claude"`)。
 
@@ -267,7 +267,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 | 介護ベッドのアクチュエーターの定格 4000 N、動かす割合 10 %、連続 120 s、6 mm/s、3000 rpm | カタログの種類の値 | `hiraku/designgen/care_bed.py` (P5・T3) |
 | 介護ベッドの疲労 (FAT 71、傾き 3、折れ点 1e7、折れ点のあとの傾き 22)、1 回の使用で 2 ストローク、1 日の使用を 1 時間に集める | Hobbacher 2016 (IIW) の形。FAT と 22、使い方は仮定 | `hiraku/solvers/k0_handcalc/library_bed.py` (R3・T3) |
 | 介護ベッドの寸法 (床・キャスター・板)、質量 (アクチュエーター 2.5 kg・制御器 1.5 kg・ヘッドボード 5 kg・キャスター 0.8 kg)、材料 (STKR400・STKM13A・SS400) | 仮定、出典なし | `hiraku/designgen/care_bed.py` |
-| 介護ベッドの手計算と道具の照合の許す幅 (S1 2 %、R5 20 %、P5 20 %、T3 10 %、R3 50 %) | HIRAKU の選び | `hiraku/catalog/builders/product_care_bed.py` |
+| 介護ベッドの手計算とツールの照合の許す幅 (S1 2 %、R5 20 %、P5 20 %、T3 10 %、R3 50 %) | HIRAKU の選び | `hiraku/catalog/builders/product_care_bed.py` |
 | ナレッジの規則の値 (ボルトの縁端距離 1.2 d0、すみ肉溶接の長さ 30 mm か 6 倍、中空断面の b/t・h/t ≤ 35、固定の締結具の公差の式、1 人で持てる 23 kg、腰幅と座面の奥行き、指の隙間 25 mm、60 V、電池 55 ℃、角パイプの厚さ 1.6 mm から) | EN 1993-1-8・ASME Y14.5・NIOSH の持ち上げの式 (Waters ほか 1993)・AIST 1991-92・ISO 13854・UN R100・EVE LF50K の仕様書・JIS G 3466。出典を開かずに記憶から書いたものは `recalled` と印を付けた。確かめたのは、縁端距離 1.2 d0 (EN 1993-1-8 の表 3.3)、溶接の長さ 30 mm か 6 倍 (同 4.5.1(2)、有効長さの規定)、角形の中空断面の ≤ 35 (同 表 7.8)、23 kg (NIOSH Pub. 94-110 に再録の Waters ほか 1993 の 6.2)、指の隙間 25 mm (ISO 13854 の表 1)、電池 55 ℃ (LF50K)、60 V (UN R100 の 2.17。R100 の言葉は "High Voltage" (直流 60 V を超える))。確かめていないのは、公差の式 (ASME を読めず二次の出典だけ)、腰幅と座面の奥行き (AIST を読めない)、厚さ 1.6 mm (JIS の改正案だけ読めた)。中空断面の ≤ 35 は角パイプ・角形の管だけの値で、丸パイプに当てているところを直している途中: 丸パイプは EN 1993-1-8 の表 7.1 で 10 ≤ d0/t0 ≤ 50 (一般に) | `data/knowledge/*.yaml` |
 
 外から持ってきた画像の素材 (Poly Haven、CC0。https://polyhaven.com/license を読んで確かめた):
