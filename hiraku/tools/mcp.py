@@ -22,7 +22,7 @@ from hiraku import contract
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
-from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RUN_TOOLS, rule_check
+from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RECORD_KINDS, RUN_TOOLS, rule_check
 
 Record = dict[str, Any]
 
@@ -68,12 +68,19 @@ def _domain_filter(extra: Record | None = None) -> Record:
 INPUT_SCHEMAS: dict[str, Record] = {
     "get_context": {"type": "object", "additionalProperties": False, "properties": {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
-                     "description": "返してほしい部分。無ければ requirements・load_cases・judgements・records。"
-                                    "手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design (中身は design_part で少しずつ)、設計役の変数は design_variables。"
+                     "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
+                                    "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
-                         "description": "formula_inputs (無ければ全部の荷重条件) と joint_wall_inputs の荷重条件"},
+                         "description": "load_cases・records・formula_inputs をこの荷重条件だけに絞る。joint_wall_inputs の荷重条件"},
+        "domain": {"enum": list(contract.DOMAINS), "description": "load_cases と formula_inputs をこの分野だけに絞る"},
+        "record_kinds": {"type": "array", "items": {"enum": list(RECORD_KINDS)}, "uniqueItems": True,
+                         "description": "records をこの種類だけに (prediction・analysis・comparison・cause・verdict)"},
+        "requirement_keys": {"type": "array", "items": {"type": "string"}, "uniqueItems": True,
+                             "description": "requirements をこの要件の key (Q15 など) だけに"},
+        "archetype": {"type": "string", "description": "archetypes をこの型だけに"},
         "design_part": {"enum": list(DESIGN_PARTS),
                         "description": "design の一部だけを、offset と limit で少しずつ (無ければ design は全体の要約)"},
         "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
@@ -98,8 +105,10 @@ INPUT_SCHEMAS: dict[str, Record] = {
 
 DESCRIPTIONS = {
     "get_context": (
-        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections で足す部分を選ぶ (無ければ "
-        "requirements・load_cases (担当の役・基準・許す幅つき)・judgements・records)。設計を直した版では、最初に "
+        "この実行の今の様子。いつも: 版・選んだ分野・原因の無い食い違い。sections を付けなければ小さな一覧 (overview: "
+        "荷重条件の ID・分野・担当・段・feeds、分野ごとの判定の札、記録の種類ごとの数、部分の名前と中身) だけが返る。"
+        "sections で要る部分を名前で頼み、大きな部分は絞る (load_cases と formula_inputs は domain か load_case_id、records は "
+        "record_kinds と load_case_id、requirements は requirement_keys、archetypes は archetype)。設計を直した版では、最初に "
         "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
         "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
         "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"

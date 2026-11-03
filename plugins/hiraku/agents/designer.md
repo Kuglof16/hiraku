@@ -35,7 +35,7 @@ effort: "high"
 4. 版 1 ができたら、決まった試験の荷重条件と担当の役を、まとめ役に 1 行で返す。
 
 次の版 (通らなかった試験を直すとき):
-1. get_context(sections=["judgements", "records", "design_variables"]) で、判定・記録 (verdicts、analyses の results と where)・変えられる変数 (範囲と今の値) を見る。
+1. get_context(sections=["judgements", "records", "design_variables"], record_kinds=["verdict", "analysis"]) で、判定・記録 (verdicts、analyses の results と where)・変えられる変数 (範囲と今の値) を見る。
 2. 通らなかった理由を、記録の値で確かめる (例: 干渉の量、足りない寸法、応力と限界)。
 3. 直す変数を選ぶ。変える量は、記録にある不足の量を根拠に選ぶ。ほかの試験を悪くしそうな変更 (重さ・重心・強さ) は避けるか、reason にその心配を書く。
    - シェルの解析 (frame_shell) で、管と管のつなぎ目 (結果の where) が赤のときは、つなぎ目の壁が曲がっている。レール全体を太く・厚くする前に、design_variables にあれば、つなぎ目の補強 (ガセット・横の部材をレールに通す、など) を考える。

@@ -26,7 +26,7 @@ LEAD_PROMPT = f"""\
 
 進め方:
 0. get_context で design_version が 0 (設計がまだ無い) なら、まず設計役 (designer) に「要件から最初の版を作る」と渡す。設計役が propose_design で版 1 を作ると、荷重条件と担当の役が決まる。
-1. get_context (sections を付けずに) で、選んだ分野 (domain_picks)・荷重条件 (load_cases。担当の役は owner。feeds はその荷重条件の結果を使う下流の荷重条件)・judgements を見る。設計の中身は読まない (役が読む)。
+1. get_context (sections を付けずに) で、選んだ分野 (domain_picks) と小さな一覧 overview (荷重条件の ID・分野・担当の役 owner・段 stage・feeds (その荷重条件の結果を使う下流の荷重条件)、分野ごとの判定の札) を見る。荷重条件の中身や記録は、要るときだけ sections で頼み、load_case_id・domain・record_kinds で絞る。設計の中身は読まない (役が読む)。
 2. 軽い段から順に進める (HK5。荷重条件の stage: 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算。レイアウトが変われば強度や車の動きの数が全部動くので、まず段 0 を決める)。まず段 0 の荷重条件をパッケージ役 (packager) に渡し、組み立てと規則を確かめさせる。段 0 が緑になったら、段 1 の荷重条件の担当の役 (owner) に、Agent の道具でその役のサブエージェント (cae-<分野>) に仕事を渡し、段 1 が緑になったら段 2、そのあと段 3 と進む。同じ段の役は、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。重い段の道具の analyze は、軽い段に赤か未判定が残る間は止められる。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。パッケージ役には、ナレッジの規則を当てる rule_check も頼む (パッケージ役がいなければ自分で 1 回呼ぶ)。
 3. 役が動いている間は、道具を呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、その段の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。赤が出たら、次の段に進む前に 4. で設計役に渡す。強度が梁の解析 (frame_static) だけで緑のときは、棚にシェルの道具 (frame_shell) があれば、つなぎ目を見るため強度役にシェルでも回すよう頼む。
    - rule_check の当たり (hits) のうち、規則の文が人の選択を求めているもの、または直すと要件に反するものは、設計役に渡す前に人に聞く。規則の番号・部品・選べること (設計を直す / この規則を外す) を 1 文で言う (hiraku:take-the-request の 4)。
@@ -52,7 +52,7 @@ DESIGNER_PROMPT = f"""\
 4. 版 1 ができたら、決まった試験の荷重条件と担当の役を、まとめ役に 1 行で返す。
 
 次の版 (通らなかった試験を直すとき):
-1. get_context(sections=["judgements", "records", "design_variables"]) で、判定・記録 (verdicts、analyses の results と where)・変えられる変数 (範囲と今の値) を見る。
+1. get_context(sections=["judgements", "records", "design_variables"], record_kinds=["verdict", "analysis"]) で、判定・記録 (verdicts、analyses の results と where)・変えられる変数 (範囲と今の値) を見る。
 2. 通らなかった理由を、記録の値で確かめる (例: 干渉の量、足りない寸法、応力と限界)。
 3. 直す変数を選ぶ。変える量は、記録にある不足の量を根拠に選ぶ。ほかの試験を悪くしそうな変更 (重さ・重心・強さ) は避けるか、reason にその心配を書く。
    - シェルの解析 (frame_shell) で、管と管のつなぎ目 (結果の where) が赤のときは、つなぎ目の壁が曲がっている。レール全体を太く・厚くする前に、design_variables にあれば、つなぎ目の補強 (ガセット・横の部材をレールに通す、など) を考える。
@@ -90,7 +90,7 @@ def cae_prompt(domain: str) -> str:
 手順の詳しいところは Skill の道具で読めます: 荷重条件を始めるときは hiraku:predict-then-analyze、食い違ったときは hiraku:find-the-cause。
 
 進め方:
-1. get_context(sections=["load_cases", "design_summary"]) で、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計 (design) は、design_summary に無い値が要るときだけ頼む (要約が返る。部品・部材などの中身は design_part・offset・limit で少しずつ)。設計を直した版では、get_context の最初の design_changes に、前の版から変わった変数の前と後がある。
+1. get_context(sections=["load_cases", "design_summary"], load_case_id=...) で、担当の荷重条件ごとに、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計 (design) は、design_summary に無い値が要るときだけ頼む (要約が返る。部品・部材などの中身は design_part・offset・limit で少しずつ)。設計を直した版では、get_context の最初の design_changes に、前の版から変わった変数の前と後がある。
    - record_prediction の前に、get_context(sections=["formula_inputs"], load_case_id=...) を必ず読む。荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、コードがこの版の設計から出した値・単位・出どころ (from) で返す。入力はここから写す (別の荷重条件・別の製品の式や値を借りない)。refused の式はこの設計に使えない (理由つき)、missing の入力は上流を一致させたあとにもう一度読む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true の道具を選ぶ。list_formulas(tool=...) で、その道具の式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのある道具の横の剛体の式は初めの見積もりで、解析とは食い違う)。
    - 合う道具が棚に無いときだけ、道具を書く: get_tool_template で道具の形 (通して動く見本のコードと決まり) を見て書き、check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例 (known_answers()) は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。

@@ -69,7 +69,7 @@ def _compact_analysis(a: Record) -> Record:
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
                     "design_variables", "archetypes", "joint_wall_inputs", "formula_inputs")
-DEFAULT_CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records")
+DEFAULT_CONTEXT_SECTIONS = ()  # no sections asked: context_overview (counts and ids), every section by name
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
 
@@ -189,16 +189,91 @@ def design_changes(ctx: RunContext) -> Record | None:
                      f"design_summary・formula_inputs をこの版でもう一度読む")}
 
 
+RECORD_KINDS = ("prediction", "analysis", "comparison", "cause", "verdict")
+# what each section holds, for the small default answer (no sections asked)
+SECTION_HINTS = {
+    "requirements": "要件の全部 (requirement_keys で絞れる)",
+    "load_cases": "荷重条件の中身: params・criterion・tolerance_rel・feeds・担当の役 (domain か load_case_id で絞れる)",
+    "judgements": "分野ごとの判定の札",
+    "records": "予測・解析・照合・原因・合否の記録 (record_kinds と load_case_id で絞れる)",
+    "design_summary": "手計算の入力になる設計の値",
+    "design": "設計の要約 (design_part・offset・limit で中身を少しずつ)",
+    "design_variables": "設計役が変えられる変数 (範囲と今の値)",
+    "archetypes": "設計の型 (archetype で 1 つに絞れる)",
+    "joint_wall_inputs": "つなぎ目の壁の曲げの式の入力 (load_case_id が要る)",
+    "formula_inputs": "荷重条件ごとの式の入力 (load_case_id か domain で絞れる)",
+}
+
+
+def _load_cases_wanted(ctx: RunContext, args: Record) -> list[Record]:
+    """The run's load cases, only the domain's or the one load case when args name them."""
+    out = list(ctx.load_cases)
+    if args.get("load_case_id"):
+        out = [ctx.load_case(args["load_case_id"])]
+    if args.get("domain"):
+        out = [lc for lc in out if lc["domain"] == args["domain"]]
+    return out
+
+
+def _records_section(ctx: RunContext, args: Record) -> Record:
+    """The run's records, only the kinds in record_kinds and those of load_case_id when given (a
+    comparison's and a cause's load case is their prediction's)."""
+    s = ctx.store
+    kinds = list(args.get("record_kinds") or RECORD_KINDS)
+    bad = [k for k in kinds if k not in RECORD_KINDS]
+    if bad:
+        raise ToolError(f"record_kinds は {', '.join(RECORD_KINDS)} のどれかです: {', '.join(bad)}")
+    lc_id = args.get("load_case_id")
+    if lc_id:
+        ctx.load_case(lc_id)  # an unknown id is refused with its sentence
+
+    def of_case(rec: Record) -> bool:
+        if not lc_id:
+            return True
+        if "load_case_id" in rec:
+            return rec["load_case_id"] == lc_id
+        cmp = rec if "prediction_id" in rec else s.get("comparison", rec.get("comparison_id", ""))
+        pred = ctx.prediction((cmp or {}).get("prediction_id", ""))
+        return bool(pred) and pred["load_case_id"] == lc_id
+
+    shape = {"prediction": ("predictions", _compact_prediction), "analysis": ("analyses", _compact_analysis),
+             "comparison": ("comparisons", None), "cause": ("causes", None), "verdict": ("verdicts", None)}
+    out: Record = {}
+    for k in kinds:
+        key, fn = shape[k]
+        out[key] = [fn(x) if fn else x for x in s.records(k) if of_case(x)]
+    return out
+
+
+def context_overview(ctx: RunContext) -> Record:
+    """get_context's default answer: counts and ids of what each section holds, with the sections named.
+    Every call goes into the caller's context; the sections are asked for by name."""
+    s = ctx.store
+    return {
+        "requirements": {"count": len(ctx.project["requirements"])},
+        "load_cases": [{"load_case_id": lc["load_case_id"], "domain": lc["domain"], "owner": ctx.owner(lc["load_case_id"]),
+                        "stage": load_case_stage(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
+                       for lc in ctx.load_cases],
+        "judgements": {j["domain"]: j["state"] for j in s.judgements()} if ctx.version else {},
+        "records": {k: len(s.records(k)) for k in RECORD_KINDS},
+        "sections_available": dict(SECTION_HINTS),
+    }
+
+
 def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> Record:
-    """The run so far: always the run, design version, picked domains and open mismatches;
-    `sections` adds parts (default: requirements, load_cases with the role that owns each,
-    judgements, records). design_summary (inputs for hand calculations), design (an overview of the
-    record; with design_part, offset and limit one page of a part of it), design_variables (what the designer may change), joint_wall_inputs (the joint wall
-    formula's inputs for `load_case_id`) and formula_inputs (every planned formula's inputs worked out
-    by code, for `load_case_id` or all load cases) come only when asked."""
+    """The run so far: always the run, design version, picked domains and open mismatches. Without
+    `sections`, an overview (context_overview: counts and ids, the sections named); `sections` adds
+    parts: requirements (requirement_keys filter), load_cases with the role that owns each (domain or
+    load_case_id filter), judgements, records (record_kinds and load_case_id filters), design_summary
+    (inputs for hand calculations), design (an overview of the record; with design_part, offset and
+    limit one page of a part of it), design_variables (what the designer may change), archetypes
+    (archetype filter), joint_wall_inputs (the joint wall formula's inputs for `load_case_id`) and
+    formula_inputs (every planned formula's inputs worked out by code, for `load_case_id`, a domain's
+    or all load cases)."""
     p = ctx.project
     s = ctx.store
-    wanted = (args or {}).get("sections") or DEFAULT_CONTEXT_SECTIONS
+    args = args or {}
+    wanted = args.get("sections") or DEFAULT_CONTEXT_SECTIONS
     out: Record = {
         "run_id": p["run_id"],
         "want": p["want"],
@@ -214,24 +289,44 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "open_mismatches": [c["comparison_id"] for c in ctx.open_mismatches()],
         "sections": list(wanted),
     }
+    if not wanted:
+        out["overview"] = context_overview(ctx)
+        return out
+    if args.get("domain") and args["domain"] not in contract.DOMAINS:
+        raise ToolError(f"domain は {', '.join(contract.DOMAINS)} のどれかです: {args['domain']!r}")
+
+    def requirements() -> list[Record]:
+        keys = args.get("requirement_keys")
+        return [r for r in p["requirements"] if not keys or r["key"] in keys]
+
+    def kinds() -> Any:
+        got = archetypes(ctx)
+        if got is not None and args.get("archetype"):
+            got = [k for k in got if k.get("name") == args["archetype"]]
+            if not got:
+                raise ToolError(f"型 {args['archetype']!r} はありません (get_context の archetypes)")
+        return got
+
+    def formula_inputs() -> Record:
+        if args.get("load_case_id") or not args.get("domain"):
+            return formula_inputs_section(ctx, args.get("load_case_id"))
+        whole = {"design_version": ctx.version, "how": FORMULA_INPUTS_HOW, "load_cases": []}
+        for lc in _load_cases_wanted(ctx, args):
+            whole["load_cases"] += formula_inputs_section(ctx, lc["load_case_id"])["load_cases"]
+        return whole
+
     parts = {
-        "requirements": lambda: p["requirements"],
+        "requirements": requirements,
         "load_cases": lambda: [dict(lc, owner=ctx.owner(lc["load_case_id"]), stage=load_case_stage(ctx, lc))
-                               for lc in ctx.load_cases],  # stage: HK5, lower stages first
+                               for lc in _load_cases_wanted(ctx, args)],  # stage: HK5, lower stages first
         "judgements": lambda: s.judgements() if ctx.version else [],
-        "records": lambda: {
-            "predictions": [_compact_prediction(x) for x in s.records("prediction")],
-            "analyses": [_compact_analysis(x) for x in s.records("analysis")],
-            "comparisons": s.records("comparison"),
-            "causes": s.records("cause"),
-            "verdicts": s.records("verdict"),
-        },
+        "records": lambda: _records_section(ctx, args),
         "design_summary": lambda: design_summary(s.design()) if ctx.version else None,
-        "design": lambda: _design_section(ctx, args or {}),
+        "design": lambda: _design_section(ctx, args),
         "design_variables": lambda: design_variables(ctx),
-        "archetypes": lambda: archetypes(ctx),
-        "joint_wall_inputs": lambda: joint_wall_inputs(ctx, (args or {}).get("load_case_id")),
-        "formula_inputs": lambda: formula_inputs_section(ctx, (args or {}).get("load_case_id")),
+        "archetypes": kinds,
+        "joint_wall_inputs": lambda: joint_wall_inputs(ctx, args.get("load_case_id")),
+        "formula_inputs": formula_inputs,
     }
     for name in wanted:
         out[name] = parts[name]()

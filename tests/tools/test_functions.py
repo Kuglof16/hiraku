@@ -20,17 +20,58 @@ class StartTest(RunCase, unittest.TestCase):
     def test_get_context(self):
         c = get_context(self.ctx, {})
         self.assertEqual(c["design_version"], 1)
+        # without sections: the small overview only (counts and ids, the sections named)
+        self.assertEqual(c["sections"], [])
+        ov = c["overview"]
+        self.assertEqual([lc["load_case_id"] for lc in ov["load_cases"]], ["P1-step100", "R1-step100"])
+        self.assertEqual({lc["owner"] for lc in ov["load_cases"]}, {"cae.strength"})
+        self.assertEqual(ov["load_cases"][0]["feeds"], ["R1-step100"])
+        self.assertEqual(ov["judgements"], {"strength": "pending"})
+        self.assertEqual(ov["records"], {"prediction": 0, "analysis": 0, "comparison": 0, "cause": 0, "verdict": 0})
+        from hiraku.tools.functions import CONTEXT_SECTIONS
+
+        self.assertEqual(set(ov["sections_available"]), set(CONTEXT_SECTIONS))
+        for big in ("requirements", "load_cases", "records", "design", "design_summary", "design_variables"):
+            self.assertNotIn(big, c)
+        c = get_context(self.ctx, {"sections": ["load_cases"]})
         self.assertEqual([lc["load_case_id"] for lc in c["load_cases"]], ["P1-step100", "R1-step100"])
         self.assertEqual({lc["owner"] for lc in c["load_cases"]}, {"cae.strength"})
-        # the large parts only on request
-        self.assertEqual(c["sections"], ["requirements", "load_cases", "judgements", "records"])
-        for big in ("design", "design_summary", "design_variables"):
-            self.assertNotIn(big, c)
         c = get_context(self.ctx, {"sections": ["design_summary"]})
         self.assertEqual(c["design_summary"]["wheelbase"], {"value": 1800.0, "unit": "mm"})
         self.assertEqual(c["design_summary"]["member_length"]["rail_L0"]["value"], 900.0)
         self.assertNotIn("load_cases", c)
         self.assertEqual(get_context(self.ctx, {"sections": ["design"]})["design"]["design_version"], 1)
+
+    def test_large_sections_are_filtered(self):
+        def ids(args):
+            return [lc["load_case_id"] for lc in get_context(self.ctx, {"sections": ["load_cases"], **args})["load_cases"]]
+
+        self.assertEqual(ids({"load_case_id": "R1-step100"}), ["R1-step100"])
+        self.assertEqual(ids({"domain": "powertrain"}), ["P1-step100"])
+        self.assertEqual(ids({"domain": "aero"}), [])
+        with self.assertRaises(ToolError):
+            get_context(self.ctx, {"sections": ["load_cases"], "domain": "nope"})
+        reqs = get_context(self.ctx, {"sections": ["requirements"], "requirement_keys": ["Q15"]})["requirements"]
+        self.assertEqual([r["key"] for r in reqs], ["Q15"])
+        ana, c1, c2 = self.run_p1()
+        rec = get_context(self.ctx, {"sections": ["records"], "record_kinds": ["comparison"]})["records"]
+        self.assertEqual(set(rec), {"comparisons"})
+        self.assertEqual(len(rec["comparisons"]), 2)
+        rec = get_context(self.ctx, {"sections": ["records"], "load_case_id": "R1-step100"})["records"]
+        self.assertEqual([len(v) for v in rec.values()], [0, 0, 0, 0, 0])
+        rec = get_context(self.ctx, {"sections": ["records"], "load_case_id": "P1-step100"})["records"]
+        self.assertEqual((len(rec["predictions"]), len(rec["analyses"]), len(rec["comparisons"])), (2, 1, 2))
+        self.assertEqual(get_context(self.ctx)["overview"]["records"]["comparison"], 2)
+        with self.assertRaises(ToolError):
+            get_context(self.ctx, {"sections": ["records"], "record_kinds": ["nope"]})
+
+    def test_the_mcp_schema_lists_the_filters(self):
+        from hiraku.tools.mcp import DESCRIPTIONS, INPUT_SCHEMAS
+
+        props = INPUT_SCHEMAS["get_context"]["properties"]
+        for k in ("sections", "load_case_id", "domain", "record_kinds", "requirement_keys", "archetype", "design_part"):
+            self.assertIn(k, props)
+        self.assertIn("overview", DESCRIPTIONS["get_context"])
 
     def test_list_filters(self):
         self.assertEqual([f["formula_id"] for f in list_formulas(self.ctx, {"tool": "step_climb"})["formulas"]],
