@@ -151,251 +151,251 @@ window.KT_DATA = {
  },
  "values": {
   "ref": "main",
-  "head": "033ef52",
-  "lines_total": 71001,
-  "commits": 524,
-  "days": 2,
-  "subjects_from": 321,
+  "head": "2249748",
+  "lines_total": 138308,
+  "commits": 1150,
+  "days": 3,
+  "subjects_from": 753,
   "messages": [
    {
     "sha": "68b816f",
     "text": "Start the repository: license, README…"
    },
    {
-    "sha": "66b6f23",
-    "text": "Add hiraku.webserve: serve web/ and read…"
+    "sha": "1a14e98",
+    "text": "Follow the contract update: rewrite a…"
    },
    {
-    "sha": "bdd07fd",
-    "text": "Add K0 formulas for tilt, crosswind, lane…"
-   },
-   {
-    "sha": "611e11b",
-    "text": "Use the new contract units: air density and…"
-   },
-   {
-    "sha": "9cbb03e",
-    "text": "Add the fatigue tool: unit-force stresses…"
-   },
-   {
-    "sha": "5e33924",
-    "text": "K2: vehicle model, K&C bench, time…"
-   },
-   {
-    "sha": "3b54a1b",
-    "text": "Add the run store: run folder, project.json…"
+    "sha": "f4d551b",
+    "text": "Contract: signed comparison diffs, assembly…"
    },
    {
     "sha": "42255ad",
     "text": "Carry occupants and cargo as design parts…"
    },
    {
-    "sha": "a34ef3d",
-    "text": "Add closed-form known answers and solver…"
+    "sha": "b995349",
+    "text": "Add unit factors for m^2, kg/m^3, kg*m^2…"
    },
    {
-    "sha": "2d8a073",
-    "text": "Follow the updated contract: solver entry…"
-   },
-   {
-    "sha": "3db34a1",
-    "text": "check_run: blocked_by goes with…"
-   },
-   {
-    "sha": "4363363",
-    "text": "Balance subtitle splits; take slots from the…"
-   },
-   {
-    "sha": "e594350",
-    "text": "Background music synthesized in…"
-   },
-   {
-    "sha": "4acc796",
-    "text": "Hook rule ids HK1-HK4 on the screen"
+    "sha": "8e47731",
+    "text": "Remake only the changed sentences; N08b 9.7…"
    },
    {
     "sha": "fa42a6d",
     "text": "CLAUDE.md: run the whole test suite before…"
    },
    {
-    "sha": "189feaf",
-    "text": "Speed up the box overlap test and rainflow…"
+    "sha": "e79250f",
+    "text": "Background music as a breathing drone with…"
    },
    {
-    "sha": "eb6d31f",
-    "text": "A failed Claude run gives the error text as…"
+    "sha": "226f054",
+    "text": "Open a saved run by default; ready the…"
    },
    {
-    "sha": "4455875",
-    "text": "check_run --effects: where the hooks acted…"
+    "sha": "8861330",
+    "text": "Contract: analysis.assumptions…"
    },
    {
-    "sha": "5faeb27",
-    "text": "K2: declared load-case params and K0 formula…"
+    "sha": "ab72022",
+    "text": "verdict.margin; round_limit ends stopped…"
    },
    {
-    "sha": "4a79eec",
-    "text": "3D: test scenes from the records, part…"
+    "sha": "177b2af",
+    "text": "Layout from one rules file; automatic layout…"
    },
    {
-    "sha": "2081ff9",
-    "text": "run.finished stop_code; roles stopped with a…"
+    "sha": "69f499a",
+    "text": "Stop button for runs started from the…"
    },
    {
-    "sha": "f32568e",
-    "text": "Contract: stop_code goes with status…"
+    "sha": "70673cd",
+    "text": "K2 builders: name the prediction-only…"
    },
    {
-    "sha": "d58b998",
-    "text": "check_run: stop_code and analysis.scene…"
+    "sha": "0464122",
+    "text": "Contract: intake events, rule and rule_check…"
    },
    {
-    "sha": "02cc7b5",
-    "text": "designgen: tyre and wheel values of the 3D…"
+    "sha": "ae722d0",
+    "text": "Pets v2: faceted body and a load-driven…"
    },
    {
-    "sha": "7c37dfc",
-    "text": "K2: the projection note says what the part…"
-   },
-   {
-    "sha": "dcf63e6",
-    "text": "Contract: assembly step details…"
-   },
-   {
-    "sha": "f2ca769",
-    "text": "Contract: tools/ in the run folder…"
-   },
-   {
-    "sha": "a54d6fa",
-    "text": "N05 cut page: the vehicle bursts open into…"
-   },
-   {
-    "sha": "a88254b",
-    "text": "Video requirements file; scripted steps for…"
-   },
-   {
-    "sha": "9da1eaa",
-    "text": "N02 cut (five tests and their limits); N01…"
-   },
-   {
-    "sha": "5151724",
-    "text": "Contract: requirements and project may list…"
-   },
-   {
-    "sha": "ef72aee",
-    "text": "R3 gets a plain hand prediction; on the demo…"
-   },
-   {
-    "sha": "1150f56",
-    "text": "check_run: tile state follows its load…"
-   },
-   {
-    "sha": "3d66470",
-    "text": "Intake: pick_domains (N09) from the…"
-   },
-   {
-    "sha": "0984f05",
-    "text": "N05 opens on a double door; layout.js reads…"
-   },
-   {
-    "sha": "f968ebe",
-    "text": "WIP check_run: record kinds from…"
-   },
-   {
-    "sha": "044e459",
-    "text": "K1 beam stress painted on the elements of a…"
-   },
-   {
-    "sha": "7a38d7d",
-    "text": "Intake: use the contract's layout constants…"
-   },
-   {
-    "sha": "ad4e391",
-    "text": "Contract: shell mesh record, mesh.created…"
-   },
-   {
-    "sha": "b6ee08e",
-    "text": "Who is on board comes from…"
+    "sha": "5a7f653",
+    "text": "N05 cut: ?hero=0 leaves the big vehicle out…"
    },
    {
     "sha": "2838d55",
     "text": "Shell meshes drawn from mesh fields; series…"
    },
    {
-    "sha": "4b6264f",
-    "text": "Contract: input shapes of the intake MCP…"
+    "sha": "4e3a54e",
+    "text": "A5's dropped knowledge file goes to the run…"
    },
    {
-    "sha": "8b4c3db",
-    "text": "Intake screens in their own tabs; the…"
-   },
-   {
-    "sha": "9144676",
-    "text": "One loading rule, the contract's…"
-   },
-   {
-    "sha": "72b0bea",
-    "text": "frame_static draws the beam stress on the…"
-   },
-   {
-    "sha": "8295909",
-    "text": "K2: K&C compliance from the bushings, the…"
-   },
-   {
-    "sha": "d2af457",
-    "text": "Intake: a requirements file given to a run…"
+    "sha": "e0d37eb",
+    "text": "N1: hand twist mode of the ladder and a…"
    },
    {
     "sha": "90fadb7",
     "text": "A4 tool shelf screen: tools as a tree by…"
    },
    {
-    "sha": "4c4398f",
-    "text": "analyze: make the version's mesh before…"
+    "sha": "d95a221",
+    "text": "Contract: ToolError lives in protocols so…"
    },
    {
-    "sha": "9b73182",
-    "text": "Tests run before every merge: one scripted…"
-   },
-   {
-    "sha": "90afc19",
-    "text": "Prompts: look at the joints with the shell…"
-   },
-   {
-    "sha": "87a24c0",
-    "text": "Narration draft 6: N00 8.6 s; n03, n06, n07…"
-   },
-   {
-    "sha": "15ec005",
-    "text": "Shell views: fields of the beam and shell…"
-   },
-   {
-    "sha": "3dd3b94",
-    "text": "Demo vehicle on double wishbones (builtin…"
+    "sha": "97ed1cb",
+    "text": "README: the catalog's test list without a…"
    },
    {
     "sha": "52a2c76",
     "text": "K2: shorter check scenes, long K2 tests…"
    },
    {
-    "sha": "420e1fe",
-    "text": "Series against x for the screens; assembly…"
+    "sha": "cd40a5f",
+    "text": "Scripted ask on a rule hit names the dropped…"
    },
    {
-    "sha": "c688ed6",
-    "text": "T1 past its limit; K0 step_climb.climb_limit"
+    "sha": "491936a",
+    "text": "Contract: field.frames for a field at chosen…"
    },
    {
-    "sha": "eed881e",
-    "text": "K2: mount forces as joint vectors; K&C…"
+    "sha": "ba24637",
+    "text": "loading: keep the earlier too-few-occupants…"
    },
    {
-    "sha": "7edb3a7",
-    "text": "run --intake-events: emit the events of…"
+    "sha": "cc156c0",
+    "text": "README: values checked against their sources…"
    },
    {
-    "sha": "27cccf7",
-    "text": "Layout: hiraku/export/ belongs to the design…"
+    "sha": "771837b",
+    "text": "Intake: system rule_checks name every part…"
+   },
+   {
+    "sha": "95cfa93",
+    "text": "WIP: parts kits as left by the previous run"
+   },
+   {
+    "sha": "842637e",
+    "text": "Catalog R1s: R1 on the frame as shells…"
+   },
+   {
+    "sha": "2b20a77",
+    "text": "fe: mesh quality for shells and bricks…"
+   },
+   {
+    "sha": "353444e",
+    "text": "frame3d: a 3D beam stiffness solver sharing…"
+   },
+   {
+    "sha": "f8677da",
+    "text": "Cut pages within the story limits: one…"
+   },
+   {
+    "sha": "3532465",
+    "text": "N17b, the showcase-style opening and ending…"
+   },
+   {
+    "sha": "7cfeea3",
+    "text": "Demo convergence test: the 5 mm level is…"
+   },
+   {
+    "sha": "b3d732b",
+    "text": "fe.tubes: IIW hot spots on the tie lines by…"
+   },
+   {
+    "sha": "165d4c3",
+    "text": "T2 judges the motor and the controller…"
+   },
+   {
+    "sha": "2a5b465",
+    "text": "Report: numbers from the current design's…"
+   },
+   {
+    "sha": "659173d",
+    "text": "Requirements: Q60's source is the CPSC staff…"
+   },
+   {
+    "sha": "b88c4bd",
+    "text": "Runs that cannot make a first version end…"
+   },
+   {
+    "sha": "962706d",
+    "text": "N06: tag lines break between phrases, not…"
+   },
+   {
+    "sha": "9a11c4b",
+    "text": "export / assemble: NVENC on the GPU by…"
+   },
+   {
+    "sha": "fda510f",
+    "text": "run_tests: one full suite on the PC at a time"
+   },
+   {
+    "sha": "f24aa5f",
+    "text": "solvers/timing.py: where a run's time goes…"
+   },
+   {
+    "sha": "8599d11",
+    "text": "frame_static and frame_shell report each…"
+   },
+   {
+    "sha": "69afd72",
+    "text": "analyze refuses a tool whose applies_to does…"
+   },
+   {
+    "sha": "72b0888",
+    "text": "fe.tubes: round-tube hot spots settle with…"
+   },
+   {
+    "sha": "677b4a3",
+    "text": "N17: the next step lit is the named one with…"
+   },
+   {
+    "sha": "8d02b77",
+    "text": "check_run: the green rule's (b) by…"
+   },
+   {
+    "sha": "056ce44",
+    "text": "formula_inputs and compose_plan take the…"
+   },
+   {
+    "sha": "a241736",
+    "text": "K2 launch: the radius K0 takes is…"
+   },
+   {
+    "sha": "1ba5267",
+    "text": "Test layout copies: name the promo commit…"
+   },
+   {
+    "sha": "2acab8b",
+    "text": "Real look: materials for body panels, split…"
+   },
+   {
+    "sha": "0acf35e",
+    "text": "check_run: a report's next item from a…"
+   },
+   {
+    "sha": "19a53ec",
+    "text": "Care bed S1-side-rail-push is judged on the…"
+   },
+   {
+    "sha": "30ee97b",
+    "text": "space_frame_utv: the rear lower links get…"
+   },
+   {
+    "sha": "e720a26",
+    "text": "Screen text: ツール, not 道具 (HK2 label…"
+   },
+   {
+    "sha": "4c700b7",
+    "text": "Screen-facing words: ツール instead of 道具 in…"
+   },
+   {
+    "sha": "45803f5",
+    "text": "Intake: the summary line test reads the…"
    }
   ],
   "depth": {
@@ -412,5 +412,5 @@ window.KT_DATA = {
    "explained": 8
   }
  },
- "counted_at": "2026-11-04T01:23+09:00"
+ "counted_at": "2026-11-04T04:41+09:00"
 };
