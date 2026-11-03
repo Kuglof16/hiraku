@@ -117,11 +117,10 @@ class Declarations(unittest.TestCase):
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
-        no_k0_yet = {"kc_bench"}  # K0 has no K&C formula (roll centre, compliance steer) yet
         for name, tool in TOOLS.items():
             desc = tool.describe()
             declared = {p["name"]: p for p in desc["params"]}
-            self.assertEqual(bool(desc["predicts"]), name not in no_k0_yet, name)
+            self.assertTrue(desc["predicts"], name)
             self.assertEqual(tool.spec()["formulas"], desc["formulas"])
             for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):

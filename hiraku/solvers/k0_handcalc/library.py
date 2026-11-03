@@ -583,8 +583,9 @@ def _rail_step_bending() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    from . import library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_nvh
+    from . import (library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_kc,
+                   library_nvh)
 
     return (_step_climb() + _mass_props() + _frame_static() + library_dynamics.all_formulas()
             + library_energy.all_formulas() + library_crash.all_formulas() + library_nvh.all_formulas()
-            + library_fatigue.all_formulas() + library_geometry.all_formulas())
+            + library_fatigue.all_formulas() + library_geometry.all_formulas() + library_kc.all_formulas())

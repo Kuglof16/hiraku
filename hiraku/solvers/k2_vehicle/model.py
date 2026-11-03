@@ -367,9 +367,11 @@ def _corner(s: dict, mirror: int, st: _Settings, design: dict, notes: list[str])
             bushings = kinematics.Bushings(_var(design, "bushing_radial_stiffness", "N/m", notes),
                                            _var(design, "bushing_axial_stiffness", "N/m", notes),
                                            _var(design, "tie_rod_stiffness", "N/m", notes))
-            table = _builtin_table(hp_pos, radius, max(travel, 0.02) * 0.6, bushings)
-            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle), with its "
-                         "compliance from the bushings and the tie rod; longitudinal forces taken at the contact point")
+            table = _builtin_table(hp_pos, radius, _table_travel(travel), bushings)
+            _note(notes, "K&C table from the generic short-long-arm layout (builtin, not a real vehicle), its tie rod's "
+                         "inner joint placed where the toe follows the travel least (no bump steer: K2's choice, "
+                         "assumed), with its compliance from the bushings and the tie rod; longitudinal forces taken "
+                         "at the contact point")
         else:
             table = kinematics.load_table(ref)
         c.path = kinematics.PathPoly.from_table(table)
@@ -379,10 +381,37 @@ def _corner(s: dict, mirror: int, st: _Settings, design: dict, notes: list[str])
     return c
 
 
+def _table_travel(travel: float) -> float:
+    """Half range (m) of a builtin K&C table for a suspension travel (m, bump to rebound)."""
+    return max(travel, 0.02) * 0.6
+
+
+def hardpoints_of(design: dict, support_id: str) -> dict:
+    """The double-wishbone hardpoints (mm, design frame) of a support on the builtin K&C table,
+    as K2 builds and runs them: the left-wheel layout, mirrored in y for a right wheel
+    (Hardpoints.to_json keys). Raises DesignError when the support has no builtin table."""
+    sup = next((s for s in design.get("supports") or [] if s["id"] == support_id), None)
+    if sup is None:
+        raise DesignError(f"no support {support_id!r} in the design")
+    sus = sup["suspension"]
+    if sus.get("type") != "kc_table" or not str(sus.get("kc_table", "")).startswith("builtin:"):
+        raise DesignError(f"support {support_id} is not on the builtin K&C table (suspension.type kc_table, "
+                          "kc_table 'builtin:double_wishbone')")
+    pos = np.asarray(sup["position_mm"], dtype=float) / 1000.0
+    travel = float(sus["travel_mm"]) / 1000.0 if "travel_mm" in sus else DEFAULTS["travel"][0]
+    left = pos.copy()
+    left[1] = abs(left[1])
+    out = kinematics.builtin_hardpoints(left, float(sup["radius_mm"]) / 1000.0, _table_travel(travel)).to_json()
+    if pos[1] < 0.0:
+        out = {k: ([v[0], -v[1], v[2]] if isinstance(v, list) else v) for k, v in out.items()}
+    return out
+
+
 @lru_cache(maxsize=32)
 def _table_of(key: tuple) -> str:
     wc, radius, travel, bushings = key
-    return json.dumps(kinematics.build_table(kinematics.generic_sla(np.array(wc), radius), travel, bushings=bushings))
+    return json.dumps(kinematics.build_table(kinematics.builtin_hardpoints(np.array(wc), radius, travel), travel,
+                                             bushings=bushings))
 
 
 def _builtin_table(wc: np.ndarray, radius: float, travel: float, bushings: kinematics.Bushings) -> dict:

@@ -113,10 +113,10 @@ class MFTyre:
         kappa = -dx / sigma
         ta = dy / sigma
         if self.mirror:
-            fx, fy, mz = self.mf.forces(ntot, kappa, -ta, -gamma)
+            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks(ntot, kappa, -ta, -gamma)
             fy, mz = -fy, -mz
         else:
-            fx, fy, mz = self.mf.forces(ntot, kappa, ta, gamma)
+            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks(ntot, kappa, ta, gamma)
         rate_x, rate_y = vsl - lam * dx, vst - lam * dy
         if (dx <= self.dx_lo and rate_x < 0.0) or (dx >= self.dx_hi and rate_x > 0.0):
             rate_x = 0.0
@@ -132,9 +132,8 @@ class MFTyre:
             fl, ft = fl * cap / mag, ft * cap / mag
         sliding = False
         if ntot > 0.0:
-            mf = self.mf
-            rk = kappa / (self.kappa_peak * mf.mu_x(ntot) * ntot / mf.kxk(ntot) / self.rx0)
-            ra = ta / (self.ta_peak * mf.mu_y(ntot) * ntot / abs(mf.kya(ntot)) / self.ry0)
+            rk = kappa / (self.kappa_peak * dxp / kxk / self.rx0)
+            ra = ta / (self.ta_peak * dyp / abs(self.mf.kya(ntot)) / self.ry0)
             sliding = rk * rk + ra * ra > 1.0
         return fl, ft, mz, sliding, lim
 
