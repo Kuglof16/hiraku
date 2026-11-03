@@ -45,11 +45,15 @@ their basis. What it looks at:
   from the load case criterion
 - judgements: red_count and state follow the listed verdicts: red when one fails
   (even with load cases left without a verdict), else pending while a load case
-  with a criterion has no verdict or is held back (a mismatch whose cause is not
-  written or not resolved, safe-side causes excepted; a tool's newest result
+  with a criterion has no verdict or is held back (the latest comparison of the
+  judged quantity is a mismatch whose cause is not written, or neither resolved
+  nor safe-side; earlier mismatches it replaced do not hold; a tool's newest result
   beyond the criterion, frame_shell judged on max_hot_spot_stress), else green;
   the last tile of each domain and version is still right at the end of the run
   (a later result beyond the criterion voids a safe-side verdict)
+- HK5 (light first): an analysis with a tool of stage n starts only when every load
+  case with a criterion already checked in that version with a lower-stage tool
+  has a passing verdict (stage from the tool's tool.checked spec, 1 when missing)
 - HK4: a run that finished as done has no picked domain still pending: every load
   case with a criterion has a verdict in the last version (a red tile alone does
   not end a domain), and no tile is left pending
@@ -1087,9 +1091,11 @@ class RunChecker:
 
     def _held(self, i: int, domain: str, v: int) -> dict[str, list[str]]:
         """Load cases of the domain (with a criterion, without a failing verdict) that may not count as
-        passed at event i (docs/contract.md, 分野が緑になる条件): a mismatch whose cause is not written
-        or not resolved (a safe-side cause counts as explained), or a tool's newest ok analysis with its
-        judged result beyond the criterion, which also voids a safe-side verdict."""
+        passed at event i (docs/contract.md, 分野が緑になる条件): the latest comparison of the judged
+        quantity is a mismatch whose cause is not written, or neither resolved nor safe-side (earlier
+        mismatches a later comparison of the same load case and quantity replaced do not hold), or a
+        tool's newest ok analysis has its judged result beyond the criterion, which also voids a
+        safe-side verdict."""
         out: dict[str, list[str]] = {}
         for lc_id, lc in self.load_cases.items():
             crit = lc.get("criterion")
@@ -1100,16 +1106,25 @@ class RunChecker:
             if verdicts and not verdicts[-1].get("pass"):
                 continue
             why = []
+            # the latest comparison of the judged quantity holds the case when it is a mismatch whose cause
+            # is not written, or neither resolved nor safe-side; earlier ones it replaced do not
+            latest: dict[str, tuple[str, dict]] = {}
             for cid, (j, c) in self.recs["comparison"].items():
                 p = self.recs["prediction"].get(c.get("prediction_id"))
-                if (j > i or c.get("status") != "mismatch" or p is None or p[1].get("load_case_id") != lc_id
-                        or p[1].get("design_version") != v):
+                a = self.recs["analysis"].get(c.get("analysis_id"))
+                if j > i or p is None or p[1].get("load_case_id") != lc_id or p[1].get("design_version") != v:
+                    continue
+                judged = JUDGED_AS.get(((a[1] if a else {}).get("tool"), crit.get("quantity")), crit.get("quantity"))
+                if c.get("quantity") == judged:
+                    latest[judged] = (cid, c)
+            for cid, c in latest.values():
+                if c.get("status") != "mismatch":
                     continue
                 causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == cid]
                 cause = self._state_at("cause", causes[-1], i) if causes else None
                 if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
-                    out_why = "no cause" if cause is None else f"{causes[-1]} not resolved"
-                    why.append(f"mismatch {cid} ({out_why})")
+                    out_why = "no cause" if cause is None else f"{causes[-1]} not resolved, not safe-side"
+                    why.append(f"latest comparison {cid} of {c.get('quantity')} is a mismatch ({out_why})")
             newest: dict[str, dict] = {}
             for aid, (j, a) in self.recs["analysis"].items():
                 if j < i and a.get("load_case_id") == lc_id and a.get("design_version") == v and a.get("status") == "ok":
@@ -1265,6 +1280,34 @@ class RunChecker:
             elif kind == "cause.recorded":
                 for s in open_mismatch.values():
                     s.discard(data.get("comparison_id"))
+
+    def _stage(self, tool: str | None) -> int:
+        """The tool's weight class (tool_spec.stage, 0-3) from its last tool.checked; 1 when missing."""
+        checks = self.tool_checks.get(tool or "")
+        s = checks[-1][1].get("stage") if checks else None
+        return s if isinstance(s, int) and not isinstance(s, bool) else 1
+
+    def check_light_first(self) -> None:
+        """HK5 (light first): in a version, an analysis with a tool of stage n starts only when every load
+        case with a criterion already checked with a lower-stage tool has a passing verdict. (Lower-stage
+        load cases not analysed yet are not seen in the records; the hook knows them from the tests.)"""
+        for aid, (fin, a) in self.recs["analysis"].items():
+            at, v, n = self.started.get(aid, fin), a.get("design_version"), self._stage(a.get("tool"))
+            lower: dict[str, tuple[str, str]] = {}
+            for bid, (bfin, b) in self.recs["analysis"].items():
+                if (b.get("design_version") == v and self.started.get(bid, bfin) < at
+                        and self._stage(b.get("tool")) < n):
+                    lower.setdefault(b.get("load_case_id"), (bid, b.get("tool")))
+            for lc_id, (bid, tool) in lower.items():
+                if not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict):
+                    continue
+                verdicts = [r for j, r in self.recs["verdict"].values()
+                            if j < at and r.get("load_case_id") == lc_id and self.version_of("verdict", r) == v]
+                state = "not judged" if not verdicts else ("red" if not verdicts[-1].get("pass") else None)
+                if state:
+                    self.error("HK5_light_first", self.where_of[at],
+                               f"{aid} ({a.get('tool')}, stage {n}) started while {lc_id}, checked by {bid} "
+                               f"({tool}, stage {self._stage(tool)}), is {state}")
 
     def check_hooks(self) -> None:
         for i, e in enumerate(self.events):
@@ -1498,6 +1541,7 @@ class RunChecker:
         self.check_judgements()
         self.check_report()
         self.check_h3()
+        self.check_light_first()
         self.check_hooks()
         self.check_agents()
         self.check_finish()
