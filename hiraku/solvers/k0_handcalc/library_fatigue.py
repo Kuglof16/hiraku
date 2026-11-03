@@ -5,7 +5,7 @@ Slope below the knee: for a stress spectrum summed by Miner's rule the S-N curve
 is continued below the knee with m2 = 2 m - 1 (5 for m = 3): IIW-1823-07 (2008),
 Recommendations for Fatigue Design of Welded Joints and Components, sec. 4.3.1,
 PDF p.110; the value was read in that document by the quality department. The
-steeper slope of the design variable fatigue_slope_after_knee (22 in the demo
+steeper slope of the design variable fatigue_slope_after_knee_constant_amplitude (22 in the demo
 designs) is the constant-amplitude, very-high-cycle slope (same document, sec. 3.2,
 PDF p.44) and is used only by fatigue.constant_amplitude_damage.
 """

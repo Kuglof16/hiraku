@@ -183,7 +183,7 @@ VARIABLES: dict[str, Var] = {
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see above)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
-    "fatigue_slope_after_knee": Var("1", 22.0, meaning="assumption"),
+    "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption"),
     "tyre_stiffness": Var("N/mm", 150.0, meaning="assumption"),
     # tyre and suspension details of the 3D vehicle model (K2), assumptions with no source
     "tyre_damping_ratio": Var("1", 0.05, meaning="assumption: vertical damping ratio of the tyre"),
@@ -263,7 +263,7 @@ _V1_ORDER = ["wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing"
              "controller_thermal_resistance", "drag_coefficient", "frontal_area", "side_force_coefficient", "side_area",
              "centre_of_pressure_height", "air_density", "front_cornering_stiffness", "rear_cornering_stiffness",
              "max_steer_angle", "bumper_stiffness", "bumper_stroke", "crush_stiffness", "fatigue_fat_class", "fatigue_slope",
-             "fatigue_knee_cycles", "fatigue_slope_after_knee", "tyre_stiffness"]
+             "fatigue_knee_cycles", "fatigue_slope_after_knee_constant_amplitude", "tyre_stiffness"]
 # A design built here carries these from the first version on; variables added since
 # take their defaults (which build v1) when an older design lacks them.
 SIGNATURE = ("wheelbase", "track", "wheel_radius", "wheel_width", "rail_spacing", "rail_height", "front_overhang",
