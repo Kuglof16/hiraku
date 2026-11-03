@@ -14,6 +14,14 @@ the mesh's weld strips). max_stress, the largest element stress, sits at a
 sharp re-entrant corner of a joint where the shell's stress is singular, so
 it grows as the elements shrink; it is kept as a reference.
 
+Per member, max_stress.<member id> (the largest element stress of the member
+or gusset plate outside the wheel mounts, as max_stress and the per-member
+stress field) and max_hot_spot_stress.<member id> (as the per-member hot-spot
+field) are reported beside the overall values; they are not judged. The
+element stress fields on the mesh include the mount elements, so their largest
+can be above max_stress; the effects give the largest outside and inside the
+mounts.
+
 Run parameters (analyze's params): element_size, the shell elements' target
 edge (the version's mesh record is made at the default, so another size is
 solved but not drawn on it); mesh_convergence "3" (default) solves the same
@@ -58,7 +66,8 @@ from . import scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
 from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
-                           front_supports, g_factor, upstream_ground_forces, upstream_mount_series)
+                           front_supports, g_factor, member_effect, member_results, upstream_ground_forces,
+                           upstream_mount_series)
 
 WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
                "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
@@ -76,17 +85,18 @@ MESH_CONVERGENCE = Param("mesh_convergence", None, "'3': also solve on two more 
                          "same weld line (the 5 mm level of the demo frame takes about 30 s); 'off': not",
                          default="3", choices=("off", "3"))
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
+MOUNT_NOTE = "車輪の取付の当て板の要素も含む (max_stress はそれを外した最大)"
 LABELS = {
-    "max": "シェルの von Mises (外と内の面の大きい方)",
-    "top": "シェルの von Mises (外の面)",
-    "bottom": "シェルの von Mises (内の面)",
+    "max": f"シェルの von Mises (外と内の面の大きい方、{MOUNT_NOTE})",
+    "top": f"シェルの von Mises (外の面、{MOUNT_NOTE})",
+    "bottom": f"シェルの von Mises (内の面、{MOUNT_NOTE})",
 }
 LABEL_MEMBER = "シェルの von Mises (部材ごとの最大)"
 LABEL_HOT_SPOT = "構造的ホットスポット応力 (溶接線に直角、部材ごとの絶対値の最大)"
 LABEL_BEAM = "梁の von Mises (部材ごとの最大、シェルと同じ地面の力)"
 LABEL_DISP = "シェルの変位 (輪のつなぎ目の剛体の動きを除く)"
 LABEL_ZZ = "誤差の目安 (Zienkiewicz-Zhu: なめらかに直した応力と要素の応力の差、外と内の面)"
-LABEL_FRAMES = "シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと)"
+LABEL_FRAMES = f"シェルの von Mises (外と内の面の大きい方、上流の取付点の力の時刻ごと、{MOUNT_NOTE})"
 LABEL_FRAMES_MEMBER = "シェルの von Mises (部材ごとの最大、上流の取付点の力の時刻ごと)"
 SOURCES = {
     "given": "ground forces from the upstream analysis {lc}",
@@ -151,13 +161,15 @@ def hot_spot_outputs(res: dict) -> tuple[list[Record], list[Record], list[Record
     if top is None:
         return [], [], [{"name": "no structural hot spot read (no shared joint with weld strips outside the wheel mounts)"}]
     v = top["value"]
-    results = [result("max_hot_spot_stress", abs(v), "MPa", top["member"])]
     per_member: dict[str, float] = {}
     per_joint: dict[str, dict] = {}
     for h in hs:
         per_member[h["member"]] = max(per_member.get(h["member"], 0.0), abs(h["value"]))
         if h["joint"] not in per_joint or abs(h["value"]) > abs(per_joint[h["joint"]]["value"]):
             per_joint[h["joint"]] = h
+    # per member: reported, not judged (the criterion is judged on max_hot_spot_stress)
+    results = ([result("max_hot_spot_stress", abs(v), "MPa", top["member"])]
+               + member_results("max_hot_spot_stress", per_member))
     fields = [{"kind": "stress", "label": LABEL_HOT_SPOT, "unit": "MPa",
                "per_member": {m: round(x, 2) for m, x in per_member.items()}}]
     a, b = HOT_SPOT_READ_T
@@ -174,6 +186,7 @@ def hot_spot_outputs(res: dict) -> tuple[list[Record], list[Record], list[Record
                   f"{len(res['mesh'].weld_lines)} weld line segments at {len(per_joint)} joints; the {CORNER_SKIP_T:g} t "
                   f"corner squares and the wheel mounts not read"), "value": len(hs), "unit": "1"},
     ]
+    effects.append(member_effect("max_hot_spot_stress", per_member))
     for node in sorted(per_joint):
         h = per_joint[node]
         effects.append({"name": (f"largest hot spot at joint {node} ({h['kind']}): {SIDE[h['side']]} ({h['member']}, "
@@ -205,6 +218,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     ]
     for sid, g in res["ground"].items():
         results.append(result(f"wheel_load_{sid}", g["force_N"][2], "N", sid))
+    # per member (and gusset plate): the largest element stress outside the wheel mounts, as max_stress
+    member_peak = {m: v for m, (v, _) in res["member_max"].items()}
+    results += member_results("max_stress", member_peak)
     hs_results, hs_fields, hs_effects = hot_spot_outputs(res)
     results = hs_results + results
 
@@ -288,10 +304,15 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
                                  f"{n_ex} elements inside those mounts left out of the peak, the safety factors, the "
                                  f"stress concentration and the membrane / bending split (their stresses stay in the "
                                  f"fields)"), "value": n_ex, "unit": "1"})
+        # the stress fields (surface max / top / bottom) include the mount elements; max_stress does not
+        effects.append({"name": (f"largest element stress outside the wheel mounts (max_stress): element {e} of "
+                                 f"{worst}"), "value": peak, "unit": "MPa"})
         if res["excluded_max"] is not None:
             v, ee = res["excluded_max"]
-            effects.append({"name": f"largest stress inside the mounts (left out): element {ee} of {ms.element_member[ee]}",
-                            "value": v, "unit": "MPa"})
+            effects.append({"name": (f"largest element stress inside the wheel mounts (left out of max_stress; in the "
+                                     f"stress fields, whose largest it is when above max_stress): element {ee} of "
+                                     f"{ms.element_member[ee]}"), "value": v, "unit": "MPa"})
+    effects.append(member_effect("max_stress", member_peak))
     effects += [
         {"name": src},
         {"name": "hold reaction / weight (six restraints that only stop rigid-body motion)",
