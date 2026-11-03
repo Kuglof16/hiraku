@@ -332,6 +332,20 @@ class CheckRun(unittest.TestCase):
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(run("picks")))
         self.assertIn("HK4_no_stop_before_judged", self.rules(run(None)))
 
+    def test_h4_does_not_wait_for_a_domain_with_no_test_to_build(self):
+        # a picked domain whose tests have no way to build their load cases: test_ids empty, not judged
+        def run(test_ids, reason):
+            ev = sample_events()
+            picks = [*ev[0]["data"]["domain_picks"],
+                     {"domain": "nvh", "shown_name": "音振", "reason": reason, "test_ids": test_ids}]
+            ev[0]["data"]["domain_picks"] = picks
+            return ev
+        said = "騒音 N3 は荷重条件の作り方が無いので、この実行では見ない"
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said)))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run([], "騒音"), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(["N3"], said)))  # tests to judge, no tile
+
     def test_h4_done_while_a_picked_domain_is_pending(self):
         ev = sample_events()
         j = by_kind(ev, "judgement.updated")["data"]

@@ -1360,6 +1360,12 @@ class RunChecker:
             self.warn("run.agents", self.where_of[fin], f"finished while {', '.join(sorted(running))} "
                                                         f"had no agent.stopped (their work was cut off)")
 
+    @staticmethod
+    def _not_looked_at(pick: dict) -> bool:
+        """A picked domain this run does not judge: its test_ids are empty (none of its tests has a way to
+        build its load cases, and the pick's reason says the run does not look at it)."""
+        return "test_ids" in pick and not pick["test_ids"]
+
     def _unjudged(self) -> dict[str, list[str]] | None:
         """Picked domains still pending as HK4 counts them (hiraku.tools.rules.pending), with
         their load cases that have a criterion and no verdict in the last design version.
@@ -1371,6 +1377,8 @@ class RunChecker:
                   if self.version_of("verdict", v) == last}
         out = {}
         for p in self.project.get("domain_picks", []):
+            if self._not_looked_at(p):
+                continue
             dom = p.get("domain")
             missing = [lc_id for lc_id, lc in self.load_cases.items()
                        if lc.get("domain") == dom and "criterion" in lc and lc_id not in judged]
@@ -1440,6 +1448,11 @@ class RunChecker:
         for pick in self.project.get("domain_picks", []):
             dom = pick.get("domain")
             j = latest.get(dom)
+            if self._not_looked_at(pick):  # no test of it can be built in this run: not waited for
+                if "見ない" not in str(pick.get("reason") or ""):
+                    self.warn("HK4_no_stop_before_judged", w, f"{dom} is picked with no test_ids, but its reason "
+                                                              f"does not say this run does not look at it")
+                continue
             if (dom in unjudged or j is None or j.get("state") == "pending") and behind_red:
                 if "低い段の赤" not in str(self.project.get("stop_reason") or ""):
                     self.warn("HK4_no_stop_before_judged", w, f"round_limit with {dom} not judged behind a red, but the "
