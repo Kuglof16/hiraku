@@ -361,6 +361,14 @@ def _specs(step: Record, when: str | None = None) -> list[tuple[Record, str | No
 TOOLLESS_PREDICTIONS = {"R4": ("hiraku.catalog.builders.analysis", "R4_PREDICTIONS")}
 TOOLLESS_NOTE = ("この試験を解析する道具は棚にありません (get_tool_template を見て make_tool で作る)。"
                  "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です")
+MADE_TOOL_NOTE = ("この試験を解析する道具 {tools} は、この運転で作られて棚に入っています (make_tool)。"
+                  "手計算の予測は下の式の順で、入力はコードが設計から読んだ値です。道具の結果と式の対は list_formulas(tool=...) の predicts")
+
+
+def made_tools_for(ctx: RunContext, test_id: str) -> list[str]:
+    """The usable tools made in this run (origin claude) that analyse this test."""
+    return [n for n, spec in (ctx.specs or {}).items()
+            if spec.get("origin") == "claude" and spec.get("usable") and test_id in (spec.get("tests") or [])]
 
 
 def _toolless_specs(test_id: str) -> list[Record]:
@@ -421,7 +429,11 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
         seen = {e["formula_id"] for e in entries}
         known = None
         crit = (lc.get("criterion") or {}).get("quantity")
-        for tool in [s["tool"] for s in steps]:
+        made = made_tools_for(ctx, lc["test_id"]) if not steps else []
+        if made:  # the builders' hand calculations for the test, now with the made tool to compare against
+            entries += [_entry(ctx, lc, made[0], spec, None) for spec in _toolless_specs(lc["test_id"])]
+            seen |= {e["formula_id"] for e in entries}
+        for tool in [s["tool"] for s in steps] + made:
             for pair in (pairs(tool) if pairs else []):
                 if pair.get("formula_id") in seen:
                     continue
@@ -437,7 +449,7 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
                 entries.append({"tool": tool, **pair, "role": role, "no_reader": (
                     "この式の入力をコードで読む手順はありません。list_formulas で入力の名前と単位を見て、"
                     "get_context の design_summary と荷重条件から自分で入れ、どこから取ったかを assumptions に書いてください")})
-        toolless = _toolless_specs(lc["test_id"]) if not steps else []
+        toolless = _toolless_specs(lc["test_id"]) if not (steps or made) else []
         # the product's own predictions the plan step lacks (all of them when there is no step)
         listed = {_key(e) for e in entries}
         own = [s for s in _product_specs(ctx, lc) if _key(s) not in listed]
@@ -448,7 +460,9 @@ def formula_inputs(ctx: RunContext, load_case_id: str | None = None, pairs: Any 
         entries += [_entry(ctx, lc, None, spec, None) for spec in toolless]
         item: Record = {"load_case_id": lc["load_case_id"], "test_id": lc["test_id"], "domain": lc["domain"],
                         "criterion": lc.get("criterion"), "formulas": entries}
-        if toolless:
+        if made:
+            item["note"] = MADE_TOOL_NOTE.format(tools="、".join(made))
+        elif toolless:
             item["note"] = TOOLLESS_NOTE
         elif not steps:
             item["note"] = ("この荷重条件には、式の入力をコードで読む手順がありません。list_tools と list_formulas で"

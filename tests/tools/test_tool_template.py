@@ -44,7 +44,7 @@ class ToolTemplateTest(RunCase, unittest.TestCase):
         self.assertIn("where", t["result_fields"]["all"])
         self.assertIn("numpy", t["imports"])
         self.assertIn("get_tool_template", DESCRIPTIONS)
-        self.assertEqual(INPUT_SCHEMAS["get_tool_template"]["properties"], {})
+        self.assertEqual(set(INPUT_SCHEMAS["get_tool_template"]["properties"]), {"api_of"})
 
     def test_the_k1_example_passes_check_tool_and_runs_on_the_runs_design(self):
         t = get_tool_template(self.ctx, {}, "cae.strength")
@@ -75,6 +75,35 @@ class ToolTemplateTest(RunCase, unittest.TestCase):
         self.assertIn("build", api["hiraku"]["hiraku.solvers.k1_frame"])
         self.assertIn("check_record", api["hiraku"]["hiraku.solvers.shelf.base"])
         self.assertIn("rule", out)
+
+    def test_api_of_gives_signatures_and_docstrings(self):
+        from hiraku.solvers.k4_geometry import rollbar
+
+        name = "hiraku.solvers.k4_geometry.rollbar.occupant_clearance"
+        out = check_tool(self.ctx, {"code": get_tool_template(self.ctx)["code"], "api_of": [name,
+                         "hiraku.solvers.k4_geometry.rollbar", "os.path", "hiraku.solvers.k4_geometry.no_such"]},
+                         "cae.strength")
+        got = out["api_of"]
+        self.assertEqual(got[name]["signature"], str(inspect.signature(rollbar.occupant_clearance)))
+        self.assertEqual(got[name]["doc"][:40], inspect.getdoc(rollbar.occupant_clearance)[:40])
+        self.assertIn("occupant_clearance", got["hiraku.solvers.k4_geometry.rollbar"]["members"])
+        self.assertIn("error", got["os.path"])  # not a HIRAKU module a tool may import
+        self.assertIn("error", got["hiraku.solvers.k4_geometry.no_such"])
+        self.assertIn("api_of", INPUT_SCHEMAS["check_tool"]["properties"])
+        tpl = get_tool_template(self.ctx, {"api_of": ["hiraku.solvers.k4_geometry"]})
+        self.assertIn("rollbar", tpl["api_of"]["hiraku.solvers.k4_geometry"]["submodules"])
+        with self.assertRaises(ToolError):
+            get_tool_template(self.ctx, {"api_of": "hiraku.solvers.k4_geometry"})
+
+    def test_a_long_print_keeps_its_start_and_its_end(self):
+        from hiraku.tools.functions import PRINTED_HEAD, PRINTED_TAIL, _printed
+
+        text = "A" * PRINTED_HEAD + "B" * 9000 + "C" * PRINTED_TAIL
+        got = _printed(text)
+        self.assertTrue(got.startswith("A" * PRINTED_HEAD))
+        self.assertTrue(got.endswith("C" * PRINTED_TAIL))
+        self.assertIn("9000", got)
+        self.assertEqual(_printed("short"), "short")
 
     def test_a_tool_without_formulas_or_a_referenced_answer_is_refused(self):
         code = get_tool_template(self.ctx)["code"]

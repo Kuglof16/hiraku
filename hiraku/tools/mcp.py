@@ -59,6 +59,18 @@ def compare_input_schema() -> Record:
     return schema
 
 
+API_OF = {"type": "array", "items": {"type": "string"}, "maxItems": 20, "description": (
+    "入出力と説明 (docstring) を見たい名前: 道具が import できる HIRAKU のモジュール (例 hiraku.solvers.k4_geometry.rollbar) "
+    "か、その中の関数・クラス (例 hiraku.solvers.k4_geometry.rollbar.occupant_clearance)。モジュールなら中の関数の一覧")}
+
+
+def check_tool_input_schema() -> Record:
+    """tool_input.check_tool and `api_of` (the contract's input has no api_of; the tool takes it)."""
+    schema = contract_input_schema("check_tool")
+    schema["properties"] = {**schema["properties"], "api_of": API_OF}
+    return schema
+
+
 def _domain_filter(extra: Record | None = None) -> Record:
     props: Record = {"domain": {"enum": list(contract.DOMAINS), "description": "この分野だけ"}}
     props.update(extra or {})
@@ -86,7 +98,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "offset": {"type": "integer", "minimum": 0, "description": "design_part の何番目から (0 から)"},
         "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
-    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {}},
+    "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {"api_of": API_OF}},
     "list_formulas": _domain_filter({"tool": {"type": "string", "description": "この道具が予測に使う式だけ"}}),
     "list_tools": _domain_filter({
         "tool": {"type": "string", "description": "この道具の全体 (答えの分かっている例と式の一覧)"},
@@ -99,7 +111,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "revise_design": contract_input_schema("revise_design"),
     "propose_design": contract_input_schema("propose_design"),
     "make_tool": contract_input_schema("make_tool"),
-    "check_tool": contract_input_schema("check_tool"),
+    "check_tool": check_tool_input_schema(),
     "write_report": contract_input_schema("write_report"),
 }
 
@@ -168,7 +180,8 @@ DESCRIPTIONS = {
     "check_tool": (
         "道具の Python の文 (code) を、その道具自身の答えの分かっている例で、別のプロセスで確かめる。棚には入れない。"
         "通らない例・使えない import・例外・決まり (rule) に合わないことは problems に文で返る。api は道具が import して"
-        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。make_tool の前の試しに使う"
+        "呼べるモジュール・関数・クラス (toolmaker の許す一覧から)。api_of に名前を付けると、その関数の入出力と説明が返る。"
+        "make_tool の前の試しに使う"
     ),
     "make_tool": (
         "棚に試験に合う道具が無いときに、道具を書いて棚に入れる。check_tool と同じに確かめ、答えの分かっている例が"
