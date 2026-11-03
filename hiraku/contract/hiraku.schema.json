@@ -1185,6 +1185,52 @@
             "max"
           ],
           "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
+        },
+        "frames": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "t_s"
+          ],
+          "description": "The same field at chosen moments of a time history (e.g. the frame stress solved at each kept step of a K2 run). Each list has one entry per t_s. The screen colours by the entry nearest to the replay time.",
+          "properties": {
+            "t_s": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "source_analysis_id": {
+              "type": "string",
+              "description": "The analysis whose time history gave the loads."
+            },
+            "per_element": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "description": "With mesh_id: one per_element list per moment."
+            },
+            "per_member": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "max": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "The largest value at each moment."
+            }
+          }
         }
       },
       "dependentRequired": {
