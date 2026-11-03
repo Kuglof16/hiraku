@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import make_server
-from tests.web.intake_cut_fixture import ASK_PLAIN, BATTERY_KG, BUILTIN, DROPPED, SAID, SKIPPED, design_events, n09_events, n14_events, write_run
+from tests.web.intake_cut_fixture import ASK_PLAIN, BATTERY_KG, BUILTIN, DROPPED, SAID, SKIPPED, design_events, n09_claude_events, n09_events, n14_events, write_run
 from tests.web.test_browser import ENABLED, sync_playwright
 from tests.web.test_cut_story_browser import FIT, READ, limits_of, story_layout
 
@@ -86,6 +86,48 @@ def pale_lines(d):
     short = full.split(" は", 1)[1].strip() if " は" in full else full
     return [f"{PLAIN[d]}：{full}", f"{PLAIN[d]}：{short}"]
 
+
+# A run Claude picks for (the shape of the plugin's runs, as 20261104-002518-offroad-4w): the
+# catalog's pick at start_run first (its reasons list the tests; here thermal is left off, so
+# a page that read it would light six), then Claude's: seven picks, thermal among them, each
+# reason in Claude's words, and flag_reasons.
+CATALOG_PICKS = [
+    {"domain": "handling", "shown_name": "操安", "reason": "置・走・悪 に当てはまるので、S2 旋回での転倒 (J ターン・定常円) を当てる", "test_ids": ["S2"]},
+    {"domain": "powertrain", "shown_name": "動力", "reason": "走・池 に当てはまるので、P2 坂を登る・坂で発進する を当てる", "test_ids": ["P2"]},
+    {"domain": "aero", "shown_name": "空力", "reason": "外・走 に当てはまるので、F1 横風 を当てる", "test_ids": ["F1"]},
+    {"domain": "crash", "shown_name": "衝突", "reason": "乗・走・悪 に当てはまるので、C1 壁への正面衝突 を当てる", "test_ids": ["C1"]},
+    {"domain": "strength", "shown_name": "強度信頼性", "reason": "預・荷 に当てはまるので、R1 静的強度 を当てる", "test_ids": ["R1"]},
+    {"domain": "nvh", "shown_name": "音振", "reason": "振・乗 に当てはまるので、N1 固有振動数と加振 を当てる", "test_ids": ["N1"]},
+]
+CATALOG_OFF = [{"domain": "thermal", "reason": "この製品の性質では当てはまる試験が無い: T1 電池の温度 (池∧続)"}]
+CLAUDE_REASON = {
+    "handling": "最高 40 km/h で悪路を走るため、旋回時の転覆や安定性を確かめる",
+    "powertrain": "500 kg の車両を電動で登坂・加速させる駆動力と航続を確かめる",
+    "aero": "40 km/h での走行抵抗の一部として空気抵抗を見積もる",
+    "crash": "人が乗る車両なので、衝突時に乗員を守れるかを確かめる",
+    "strength": "悪路の衝撃と積載に骨組みが耐えるかを確かめる",
+    "nvh": "悪路の振動とモーターの回転が乗員と骨組みに共振しないかを確かめる",
+    "thermal": "連続走行でモーターと電池が熱くなりすぎないかを確かめる",
+}
+CLAUDE_TESTS = {"handling": ["S2", "S3"], "powertrain": ["P1", "P2"], "aero": ["F1"], "crash": ["C1", "C3"],
+                "strength": ["R1", "R2"], "nvh": ["N1"], "thermal": ["T1", "T2"]}
+CLAUDE_PICKS = [{"domain": d, "shown_name": NAME[d], "reason": r, "test_ids": CLAUDE_TESTS[d]} for d, r in CLAUDE_REASON.items()]
+FLAG_REASONS = {"battery": "電池で走る", "continuous": "林道を連続で走りモーターと電池が発熱する", "rough": "林道の未舗装路を走る"}
+CLAUDE_ASM = ["H1", "H2"]
+CLAUDE_ORDER = list(CLAUDE_REASON) + ["assembly"]
+
+
+def lit_lines(d):
+    """A lit chip's second line: Claude's reason, or cut at its joins when it does not fit
+    (first "…か" without "を確かめる", then without the cause before the first "、")."""
+    out = [CLAUDE_REASON[d]]
+    s = re.sub(r"かを確かめる$", "か", out[-1])
+    if s != out[-1]:
+        out.append(s)
+    if "、" in out[-1]:
+        out.append(out[-1].split("、", 1)[1].strip())
+    return out
+
 N09_STATE = """() => {
   const rows = {};
   for (const el of document.querySelectorAll(".n09-chip")) {
@@ -131,6 +173,8 @@ class CutN09N14Test(unittest.TestCase):
         cls.design_run = "20261103-120001-design-shape"
         cls.n14 = "20261103-120002-n14-shape"
         write_run(runs, cls.n09, n09_events(cls.n09, WANT, PICKS, OFF, ASM))
+        cls.n09c = "20261103-120003-n09-claude-shape"
+        write_run(runs, cls.n09c, n09_claude_events(cls.n09c, WANT, (CATALOG_PICKS, CATALOG_OFF), (CLAUDE_PICKS, []), FLAG_REASONS, CLAUDE_ASM))
         write_run(runs, cls.design_run, design_events(cls.design_run))
         write_run(runs, cls.n14, n14_events(cls.n14))
         cls.layout_file = cls.tmp / "layout.json"
@@ -222,6 +266,35 @@ class CutN09N14Test(unittest.TestCase):
             # the lit chips are the record's picks with tests, and assembly with its tests
             self.assertEqual(sorted(d for d, r in c["rows"].items() if r["state"] == "lit"), sorted(d for d in due if d in LIT), t)
         self.assertEqual(seen[0.0]["counts"].get("moving"), 1)  # the vehicle turning
+
+    def test_n09_reads_claudes_pick_with_its_reasons(self):
+        """A run with two domains.picked: the later one (Claude's) is shown. Seven chips light,
+        thermal among them; each lit domain's line is Claude's reason (no id); assembly, with
+        no reason in the record, keeps its plain words."""
+        T = self.layout["n09"]["times"]
+        times = [0.0, round(T["chips_from_s"] - 0.05, 3)] + [round(T["chips_from_s"] + k * T["chip_step_s"] + 0.01, 3) for k in range(8)] + [self.layout["n09"]["duration_s"] - 0.05]
+        seen = self.read("n09", f"run={self.n09c}&design_run={self.design_run}", times, N09_STATE, ['[data-box="n09.chips"]', '[data-box="n09.request"]'])
+        for t, got in seen.items():
+            self.check_common("n09", got, t, ["request", "view", "chips"], N09_WORDS + ["を当てる", "当てはまる"])
+            c = got["cut"]
+            self.assertEqual(c["want"], WANT, t)
+            due = [d for k, d in enumerate(CLAUDE_ORDER) if t >= T["chips_from_s"] + k * T["chip_step_s"]]
+            for d, r in c["rows"].items():
+                self.assertEqual(r["name"], NAME[d], (t, d))
+                if d not in due:
+                    self.assertEqual((r["state"], r["line"]), ("wait", PLAIN[d]), (t, d))
+                elif d == "assembly":
+                    self.assertEqual((r["state"], r["line"]), ("lit", PLAIN[d]), (t, d))
+                else:
+                    self.assertEqual(r["state"], "lit", (t, d))
+                    self.assertIn(r["line"], lit_lines(d), (t, d))
+        end = seen[self.layout["n09"]["duration_s"] - 0.05]["cut"]["rows"]
+        lit = sorted(d for d, r in end.items() if r["state"] == "lit")
+        self.assertEqual(lit, sorted(CLAUDE_ORDER))
+        self.assertEqual(len([d for d in lit if d != "assembly"]), 7)
+        self.assertIn("thermal", lit)
+        self.assertIn(end["thermal"]["line"], lit_lines("thermal"))
+        self.assertTrue(end["thermal"]["line"].startswith("連続走行でモーターと電池が熱くなりすぎないか"))
 
     def test_n09_without_a_design_says_so(self):
         got = self.read("n09", f"run={self.n09}", [1.0], N09_STATE, [])[1.0]
