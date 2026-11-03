@@ -29,6 +29,7 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
 import { overOf } from "./fields.js";
+import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { Look } from "./look.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
@@ -297,7 +298,8 @@ export class Workbench3D {
 
     this.inkMat = new LineMaterial({ color: INK, linewidth: 1.7 });
     this.mutedMat = new LineMaterial({ color: MUTED, linewidth: 1.1 });
-    for (const m of [this.inkMat, this.mutedMat]) m.userData.shared = true;
+    this.freeEdgeMat = new LineMaterial({ color: FREE_EDGE_COLOR, linewidth: 4, depthTest: false, transparent: true });
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.userData.shared = true;
     this.links = new LineSegments2(new LineSegmentsGeometry(), this.mutedMat);
     this.iso.add(this.links);
 
@@ -339,7 +341,7 @@ export class Workbench3D {
       this.labelRenderer.setSize(w, h);
     }
     this.applyAspect();
-    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
 
@@ -732,14 +734,14 @@ export class Workbench3D {
     return o;
   }
 
-  // Colour a shell's faces by element values (one colour per element) or by node values.
+  // Colour a shell's faces by element values (one colour per element) or by node values,
+  // or by colours given per element (m.colors: the mesh's own views, quality.js).
   paintShell(o, m, contour) {
     const col = o.faces.geometry.getAttribute("color");
     const rgb = new Map(); // band colour -> [r, g, b] (linear)
     const c = new THREE.Color();
     for (let k = 0; k < o.vNode.length; k += 1) {
-      const v = m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]];
-      const hex = colorOf(v, contour.max, contour.min);
+      const hex = m.colors ? m.colors[o.vElem[k]] : colorOf(m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]], contour.max, contour.min);
       let t = rgb.get(hex);
       if (!t) rgb.set(hex, (t = c.set(hex).toArray()));
       col.array.set(t, k * 3);
@@ -759,18 +761,30 @@ export class Workbench3D {
     this.model.visible = !shell;
     this.setModeShape(contour?.modes || contour?.mesh?.modes ? contour : null);
     this.applyPartLook();
+    this.freeEdgeLines = null;
+    this.setupMarks = null;
     if (shell) {
       this.paintShell(shell, contour.mesh, contour);
-      // the largest value on its element (or node), as recorded
+      // the largest value on its element (or node), as recorded; the worst element of a metric
       const P = contour.mesh.rec.nodes_mm;
       const at = contour.mesh.maxAt;
-      const ids = at.elem !== undefined ? contour.mesh.rec.elements[at.elem] : [at.node];
-      const where = new THREE.Vector3();
-      for (const n of ids) where.add(v3(P[n]));
-      where.multiplyScalar(1 / ids.length);
-      const tag = label(`最大 ${esc(fmtVU(contour.fieldMax, contour.field.unit))}`, "lbl-max");
-      tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
-      this.overGhosts.add(tag);
+      if (at) {
+        const ids = at.elem !== undefined ? contour.mesh.rec.elements[at.elem] : [at.node];
+        const where = new THREE.Vector3();
+        for (const n of ids) where.add(v3(P[n]));
+        where.multiplyScalar(1 / ids.length);
+        const tag = label(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.fieldMax, contour.field.unit)}`), "lbl-max");
+        tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
+        this.overGhosts.add(tag);
+      }
+      if (contour.freeEdges?.length) {
+        const pos = [];
+        for (const [a, b] of contour.freeEdges) pos.push(...P[a], ...P[b]);
+        this.freeEdgeLines = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.freeEdgeMat);
+        this.freeEdgeLines.renderOrder = 6;
+        this.overGhosts.add(this.freeEdgeLines);
+      }
+      if (contour.setup) this.buildSetup(contour.setup, contour.mesh.rec);
       return;
     }
     for (const [id, info] of Object.entries(this.members)) {
@@ -838,6 +852,92 @@ export class Workbench3D {
       tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
       this.overGhosts.add(tag);
     }
+  }
+
+  // What the solver put on the model (quality.js setupContourOf), on its mesh's nodes:
+  // a cone pointing at the node along each stopped translation, a ring round each
+  // stopped rotation's axis; each load an arrow with its head at origin_mm (lengths as
+  // setVectors), a turning arrow round a moment's axis, and a thin line to each node the
+  // load was spread to, darker the larger its weight.
+  buildSetup(st, rec) {
+    const g = new THREE.Group();
+    const P = rec.nodes_mm;
+    const AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+    const Z = new THREE.Vector3(0, 0, 1);
+    const mat = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity });
+    const tMat = mat(FIX_T_COLOR);
+    const rMat = mat(FIX_R_COLOR);
+    for (const c of st.constraints) {
+      const p = v3(P[c.node]);
+      for (const d of c.dofs) {
+        const axis = AX[d[1]];
+        if (!axis) continue;
+        let o;
+        if (d[0] === "u") {
+          o = new THREE.Mesh(new THREE.ConeGeometry(28, 80, 14), tMat);
+          o.quaternion.setFromUnitVectors(UP, axis);
+          o.position.copy(p).addScaledVector(axis, -48);
+          o.userData.kind = "fix-t";
+        } else {
+          o = new THREE.Mesh(new THREE.TorusGeometry(60, 6, 8, 32), rMat);
+          o.quaternion.setFromUnitVectors(Z, axis);
+          o.position.copy(p);
+          o.userData.kind = "fix-r";
+        }
+        o.userData.node = c.node;
+        o.userData.dof = d;
+        o.renderOrder = 9;
+        g.add(o);
+      }
+    }
+    const mags = st.loads.map((l) => Math.hypot(...l.vector_N));
+    const fmax = Math.max(1e-9, ...mags);
+    st.loads.forEach((l, i) => {
+      const origin = v3(l.origin_mm);
+      const mag = mags[i];
+      if (mag > 0) {
+        const dir = v3(l.vector_N).normalize();
+        const len = 160 + 640 * (mag / fmax);
+        const start = origin.clone().addScaledVector(dir, -len);
+        const a = makeArrow(LOAD_COLOR);
+        placeArrow(a, start, dir, len);
+        a.userData.kind = "load";
+        g.add(a);
+        const tag = label(`${esc(l.label ?? `荷重 ${i + 1}`)}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`, "lbl-vec lbl-load");
+        tag.position.copy(start.clone().addScaledVector(dir, -40));
+        g.add(tag);
+      }
+      const mo = Array.isArray(l.moment_Nmm) ? v3(l.moment_Nmm) : null;
+      if (mo && mo.lengthSq() > 0) {
+        // three quarters of a ring round the moment's axis, the cone at its end turning
+        // the right-hand way
+        const r = 150;
+        const arc = 1.5 * Math.PI;
+        const turn = new THREE.Group();
+        const m = mat(LOAD_COLOR);
+        turn.add(new THREE.Mesh(new THREE.TorusGeometry(r, 9, 8, 40, arc), m));
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(26, 70, 14), m);
+        cone.position.set(r * Math.cos(arc), r * Math.sin(arc), 0);
+        cone.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-Math.sin(arc), Math.cos(arc), 0));
+        turn.add(cone);
+        turn.quaternion.setFromUnitVectors(Z, mo.clone().normalize());
+        turn.position.copy(origin);
+        turn.userData.kind = "moment";
+        turn.traverse((o) => (o.renderOrder = 9));
+        g.add(turn);
+      }
+      const spread = (l.spread_to ?? []).filter((s) => st.okNode(s.node) && Number.isFinite(s.weight));
+      const wmax = Math.max(1e-12, ...spread.map((s) => Math.abs(s.weight)));
+      for (const s of spread) {
+        const geo = new THREE.BufferGeometry().setFromPoints([origin, v3(P[s.node])]);
+        const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: LOAD_COLOR, transparent: true, depthTest: false, opacity: 0.2 + 0.8 * (Math.abs(s.weight) / wmax) }));
+        line.userData = { kind: "spread", node: s.node, weight: s.weight };
+        line.renderOrder = 7;
+        g.add(line);
+      }
+    });
+    this.setupMarks = g;
+    this.overGhosts.add(g);
   }
 
   // The focus (maxElementFocus) of a shell contour's largest element, or null.

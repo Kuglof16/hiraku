@@ -305,6 +305,45 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .legend .acts { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .legend .acts button { font-size: 12px; border: 1.5px solid var(--blue); border-radius: 6px; padding: 2px 8px; color: var(--blue); background: transparent; }
 .legend .acts button.on { background: var(--blue); color: #fbf9f4; font-weight: 600; }
+.legend .kinds.metrics button { border-style: dashed; }
+.legend .kinds.metrics button.on { border-style: solid; }
+.legend .fe, .legend .keyrow { margin-top: 4px; font-size: 12px; }
+.legend .cats { display: grid; grid-template-columns: 18px auto; column-gap: 8px; row-gap: 3px; }
+.legend .cats .tk0 { font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
+/* the list of the mesh's own view (js/quality.js): quality, thickness, setup */
+.meshcard {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  z-index: 5;
+  width: 300px;
+  max-height: calc(100% - 520px);
+  min-height: 120px;
+  overflow: auto;
+  background: rgba(251, 249, 244, 0.95);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+}
+.meshcard[hidden] { display: none; }
+.meshcard h3 { margin: 0 0 6px; font-size: 14px; }
+.meshcard h3 small { font-weight: 400; color: var(--muted); }
+.meshcard table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.meshcard th { text-align: right; font-weight: 600; color: var(--muted); }
+.meshcard td { padding: 1px 4px; border-top: 1px solid var(--line); }
+.meshcard td:not(:first-child) { text-align: right; }
+.meshcard td:first-child, .meshcard th { white-space: nowrap; }
+.meshcard tr.bad td { color: var(--red); font-weight: 600; }
+.meshcard .verdict { display: inline-block; font-weight: 700; border-radius: 6px; padding: 1px 10px; margin-bottom: 6px; color: #fbf9f4; }
+.meshcard .v-ok { background: #3d8b4f; }
+.meshcard .v-warn { background: #c98a1b; }
+.meshcard .v-fail { background: var(--red); }
+.meshcard .unsolved { color: var(--red); font-weight: 700; margin-bottom: 6px; }
+.meshcard .notes { color: var(--muted); }
+.meshcard .sub { font-weight: 600; margin: 4px 0 2px; }
+.meshcard .ir, .meshcard .massdiff { margin: 2px 0 4px; font-weight: 600; }
+.meshcard .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; border: 1px solid var(--ink); }
 .legend .cmp { margin-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 /* before / after side by side (js/app.js setCompare): the previous version at the left */
 .viewport .cmp-view { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; pointer-events: none; border-right: 1.5px solid var(--line); }

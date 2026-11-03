@@ -25,6 +25,7 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -53,6 +54,8 @@ const ui = {
   fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
   zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
   compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
+  meshMode: null, // the mesh's own view in place of a field (quality.js MODE_ORDER), or null
+  qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
 };
@@ -422,7 +425,29 @@ function previousOf(s, ana, field) {
 // analysis' first of stress, damage, temperature, mode shape, displacement, on a mesh
 // when there is one. With ui.compare, the same field of the previous design version
 // comes along on one shared colour scale (contour.compare).
+// In its place, the mesh's own views (ui.meshMode, quality.js): the mesh check of the
+// field's mesh, its wall thicknesses, and the setup of the field's analysis. With no
+// field to show (e.g. a mesh the solver refused), the newest mesh of the version.
 function buildContour(s, chain) {
+  const base = fieldContour(s, chain);
+  const ana = (base && s.analyses[base.analysisId]) || chain.shown || null;
+  const version = ana?.design_version ?? s.currentVersion;
+  const newest = s.order.meshes.map((id) => s.meshes[id]).filter((m) => m.design_version === version).at(-1) ?? null;
+  const rec = base ? base.mesh?.rec ?? null : setupOf(ana, s.meshes)?.rec ?? newest;
+  const design = s.designs[rec?.design_version ?? version] ?? null;
+  const thick = rec ? thicknessContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, design) : null;
+  const setup = setupContourOf(ana, s.meshes);
+  const modes = MODE_ORDER.filter((m) => (m === "quality" ? !!qualityOf(rec) : m === "thickness" ? !!thick : !!setup));
+  let mode = modes.includes(ui.meshMode) ? ui.meshMode : null;
+  if (!base && !mode && modes.includes("quality")) mode = "quality";
+  if (!mode) return base ? { ...base, meshModes: modes } : null;
+  const metrics = mode === "quality" ? drawableMetrics(rec) : [];
+  const metric = metrics.includes(ui.qualityMetric) ? ui.qualityMetric : metrics[0] ?? null;
+  const ct = mode === "quality" ? qualityContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, metric, design) : mode === "thickness" ? thick : setup;
+  return { ...ct, kinds: base?.kinds ?? [], fieldKind: base?.kind ?? null, variants: [], meshModes: modes, metrics, canCompare: false, compare: null, toolTitle: base?.toolTitle ?? "" };
+}
+
+function fieldContour(s, chain) {
   const anas = analysesBeside(s, chain.shown);
   const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
   const kinds = FIELD_ORDER.filter((k) => all.some((x) => x.f.kind === k));
@@ -463,6 +488,32 @@ function buildContour(s, chain) {
   return { ...ct, kinds, variants, tool: pick.a.tool, toolTitle: toolTitle(s, pick.a.tool), canCompare: !!prev, compare };
 }
 
+// The colour bar's bands, top (max) to bottom (min), every other one with its value.
+function bandRows(ct, relative) {
+  const rows = [];
+  for (let i = BANDS - 1; i >= 0; i -= 1) {
+    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  }
+  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
+  return rows.join("");
+}
+
+// The card beside the legend: the list of the mesh's own view (quality.js), else hidden.
+let meshCard = null;
+function renderMeshCard(ct) {
+  const html = ui.toggles.contour && ct?.mode ? modeCardHtml(ct) : "";
+  if (!meshCard) {
+    if (!html) return;
+    meshCard = document.createElement("div");
+    meshCard.className = "meshcard";
+    meshCard.id = "meshcard";
+    viewport.append(meshCard);
+  }
+  meshCard.hidden = !html;
+  meshCard.innerHTML = html;
+}
+
 function renderLegend(ct) {
   const el = $("legend");
   if (!ct?.key || !ui.toggles.contour) {
@@ -472,12 +523,25 @@ function renderLegend(ct) {
   el.hidden = false;
   const unit = unitLabel(ct.field.unit);
   const relative = ct.kind === "mode_shape";
-  const rows = [];
-  for (let i = BANDS - 1; i >= 0; i -= 1) {
-    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
-    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  const fieldOn = (k) => !ct.mode && k === ct.kind;
+  // the field kinds, then the mesh's own views (quality.js), in one row
+  const modes = ct.meshModes ?? [];
+  const kindRow =
+    ct.kinds.length + modes.length > 1
+      ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${fieldOn(k) ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}` +
+        `${modes.map((m) => `<button data-mode="${m}" class="${ct.mode === m ? "on" : ""}">${MODE_JA[m]}</button>`).join("")}</div>`
+      : "";
+  const zoomAct = ct.mesh?.maxAt
+    ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : ct.mode === "quality" ? "いちばん悪い要素に寄る" : "最大の所に寄る"}</button>`
+    : "";
+  if (ct.mode) {
+    const p = modeLegendParts(ct);
+    const metricRow = ct.metrics?.length
+      ? `<div class="kinds metrics">${ct.metrics.map((k) => `<button data-metric="${esc(k)}" class="${k === ct.metric ? "on" : ""}">${esc(METRIC_JA[k] ?? k)}</button>`).join("")}</div>`
+      : "";
+    el.innerHTML = kindRow + metricRow + (zoomAct ? `<div class="acts">${zoomAct}</div>` : "") + `<div class="ttl">${p.title}</div>` + (p.bar ?? `<div class="bar">${bandRows(ct, false)}</div>`) + p.under + `<div class="src">${p.src}</div>`;
+    return;
   }
-  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
   const over = ct.limitKnown
     ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
@@ -487,14 +551,14 @@ function renderLegend(ct) {
   // one row of buttons per analysis (its tool's title is on each button when there are several)
   const nButtons = ct.variants.reduce((n, g) => n + g.buttons.length, 0);
   const chips =
-    (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
+    kindRow +
     (nButtons > 1
       ? ct.variants
           .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
           .join("")
       : "");
   const acts =
-    (ct.mesh ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : "最大の所に寄る"}</button>` : "") +
+    zoomAct +
     (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
@@ -510,7 +574,7 @@ function renderLegend(ct) {
     chips +
     (acts ? `<div class="acts">${acts}</div>` : "") +
     `<div class="ttl">${title}</div>` +
-    `<div class="bar">${rows.join("")}</div>` +
+    `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
     `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
@@ -813,8 +877,9 @@ function draw() {
     const ct = buildContour(s, chain);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour ? contour : null);
-    if (!contour?.mesh) ui.zoomMax = false;
+    if (!contour?.mesh?.maxAt) ui.zoomMax = false;
     renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    renderMeshCard(contour);
     setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
@@ -930,12 +995,14 @@ $("tests").addEventListener("click", (ev) => {
   drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act]");
+  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act], button[data-mode], button[data-metric]");
   if (!b) return;
   if (b.dataset.act === "zoom") ui.zoomMax = !ui.zoomMax;
   else if (b.dataset.act === "compare") ui.compare = !ui.compare;
-  else if (b.dataset.field) ui.fieldKind = b.dataset.field;
-  else ui.fieldVariant = b.dataset.variant;
+  else if (b.dataset.mode) ui.meshMode = b.dataset.mode;
+  else if (b.dataset.metric) ui.qualityMetric = b.dataset.metric;
+  else if (b.dataset.field) [ui.fieldKind, ui.meshMode] = [b.dataset.field, null];
+  else [ui.fieldVariant, ui.meshMode] = [b.dataset.variant, null];
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {
