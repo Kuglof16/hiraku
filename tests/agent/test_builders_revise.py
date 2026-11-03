@@ -100,10 +100,16 @@ class BeyondBuildTest(unittest.TestCase):
         out = build_load_cases(self.catalog, self.req, fakes.loaded_design(), ["P1", "R1", "H1"], beyond=["P1", "R1", "H1"])
         ids = [lc["load_case_id"] for lc in out]
         self.assertEqual(ids, ["P1-step100", "R1-step100", "H1-steer30",
-                               "P1-step250-beyond", "R1-step250-beyond", "H1-steer40-beyond"])
+                               "P1-step250-beyond", "P1-step330-beyond", "R1-step250-beyond", "H1-steer40-beyond"])
         by_id = {lc["load_case_id"]: lc for lc in out}
         self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100"])
         self.assertEqual(by_id["P1-step250-beyond"]["feeds"], ["R1-step250-beyond"])
+        # the step past the wheel (1.1 x the 300 mm front wheel): judged on climbed, feeds nothing
+        wall = by_id["P1-step330-beyond"]
+        self.assertNotIn("feeds", wall)
+        self.assertEqual((wall["criterion"]["quantity"], wall["criterion"]["op"], wall["criterion"]["limit"]),
+                         ("climbed", ">=", {"value": 1.0, "unit": "1"}))
+        self.assertEqual(wall["params"]["step_height"], {"value": 330.0, "unit": "mm"})
         for lc in out:
             self.assertEqual(contract.errors("load_case", lc), [], lc["load_case_id"])
             self.assertEqual(lc["title"].startswith("限界の外"), lc["load_case_id"].endswith("-beyond"))
@@ -145,7 +151,8 @@ class BeyondRunTest(BuildersCase, unittest.TestCase):
         self.assertEqual(steps["P1-step250-beyond"]["tool"], "step_climb")  # data/catalog/scripted.yaml
         # the stand-in shelf has no step_climb_dynamic: those steps are left out and named
         self.assertEqual(plan["unshelved"], [("P1-step100", "step_climb_dynamic"),
-                                             ("P1-step250-beyond", "step_climb_dynamic")])
+                                             ("P1-step250-beyond", "step_climb_dynamic"),
+                                             ("P1-step330-beyond", "step_climb_dynamic")])
         order = [s["load_case"] for s in plan["steps"]]
         if "R1-step250-beyond" in order:
             self.assertLess(order.index("P1-step250-beyond"), order.index("R1-step250-beyond"))
