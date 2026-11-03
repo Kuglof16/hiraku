@@ -18,13 +18,15 @@ the left), the aligning moment Mz about the body z axis.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize
 
 POLY_DEGREE = 5
 
@@ -350,6 +352,47 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings |
 
 # the table's unit of each compliance column (per kN at the contact point, per kN m about z)
 COMPLIANCE_UNIT = {k: ("deg_per_kNm" if k.endswith("_mz") else "deg_per_kN") for k in COMPLIANCE_KEYS}
+
+
+def low_bump_steer(hp: Hardpoints, travel: float, n: int = 7) -> Hardpoints:
+    """hp with the tie rod's inner joint moved (in y and z) to where the toe follows the travel
+    least: the largest |toe - toe at design| over an n-row table of +-travel is minimised
+    (Nelder-Mead from the given point). Aiming at no bump steer is K2's own choice for the
+    generic layout (assumed; no source read in this repository)."""
+    def moved(p) -> Hardpoints:
+        return dataclasses.replace(hp, tie_inner=np.array([float(hp.tie_inner[0]), float(p[0]), float(p[1])]))
+
+    def worst(p) -> float:
+        try:
+            rows = build_table(moved(p), travel, n)["rows"]
+        except ValueError:
+            return 1e3  # the loop does not close there
+        toe = [r["toe_deg"] for r in rows]
+        return max(abs(t - toe[n // 2]) for t in toe)
+
+    res = minimize(worst, [float(hp.tie_inner[1]), float(hp.tie_inner[2])], method="Nelder-Mead",
+                   options={"xatol": 1e-4, "fatol": 1e-4, "maxiter": 200})
+    return moved(res.x)
+
+
+_POINTS = ("lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_outer", "tie_inner", "tie_outer",
+           "wheel_center")
+
+
+@lru_cache(maxsize=64)
+def _builtin(key: tuple) -> Hardpoints:
+    y, z, radius, travel = key
+    return low_bump_steer(generic_sla(np.array([0.0, y, z]), radius), travel)
+
+
+def builtin_hardpoints(wheel_center: np.ndarray, radius: float, travel: float) -> Hardpoints:
+    """The builtin double wishbone of a LEFT wheel: the generic layout with the tie rod placed for
+    the least bump steer over +-travel (m). The layout does not depend on the wheel's x, so it is
+    made at x = 0 and moved there; the same geometry always gives the same points."""
+    x, y, z = (float(v) for v in wheel_center)
+    hp = _builtin((y, z, float(radius), float(travel)))
+    shift = np.array([x, 0.0, 0.0])
+    return dataclasses.replace(hp, axle=np.array(hp.axle), **{k: getattr(hp, k) + shift for k in _POINTS})
 
 
 def save_table(table: dict, path: str | Path) -> None:

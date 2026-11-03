@@ -69,6 +69,34 @@ class KcBench(unittest.TestCase):
         self.assertAlmostEqual(lat["values"][-1], res["toe_at_1kN_lateral"] * lat["x"]["values"][-1])
         self.assertGreater(res["roll_center_height"], 0.0)
 
+    def test_k0_predicts_the_bench(self):
+        from hiraku import solvers
+        from hiraku.solvers.k2_vehicle.shelf.kc_bench import k0_inputs
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        rec = TOOLS["kc_bench"].run(d, {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})
+        res = {r["quantity"]: r["value"] for r in rec["results"]}
+        ins = k0_inputs(build_vehicle(d).corners[0].table)
+        reg = solvers.formula_registry()
+        h = reg.evaluate("kc.roll_center_height", ins["kc.roll_center_height"])["outputs"]["h_rc"]
+        self.assertEqual(h["unit"], "mm")
+        self.assertAlmostEqual(h["value"] / res["roll_center_height"], 1.0, delta=2e-3)
+        toe = reg.evaluate("kc.aligning_steer", dict(ins["kc.aligning_steer"], M={"value": 100.0, "unit": "N*m"}))
+        toe = toe["outputs"]["toe"]["value"]
+        # K0 gives way only at the tie rod: the same sign, less than K2's bench with the bushings
+        self.assertLess(res["toe_at_aligning_moment"], toe)
+        self.assertLess(toe, 0.0)
+
+    def test_hardpoints_of_a_support_are_the_bench_points(self):
+        from hiraku.solvers.k2_vehicle.model import hardpoints_of
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        veh = build_vehicle(d)
+        fl, fr = hardpoints_of(d, "FL"), hardpoints_of(d, "FR")
+        self.assertEqual(fl, veh.corners[0].table["hardpoints_mm"])
+        self.assertEqual(fr["tie_inner"], [fl["tie_inner"][0], -fl["tie_inner"][1], fl["tie_inner"][2]])
+        # the tie rod is placed for the least bump steer: under 0.1 deg over the table
+        toe = [r["toe_deg"] for r in veh.corners[0].table["rows"]]
+        self.assertLess(max(toe) - min(toe), 0.1)
+
     def test_a_design_without_a_kc_table_is_told_so(self):
         rec = TOOLS["kc_bench"].run(box_design(), {"load_case_id": "kc", "params": {}}, [{"prediction_id": "p"}], {})
         self.assertEqual(rec["status"], "failed")
