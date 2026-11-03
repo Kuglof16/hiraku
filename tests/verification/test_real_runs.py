@@ -177,7 +177,7 @@ class MeshFieldRecord(unittest.TestCase):
     mesh and the tool's analysis pass check_run's rules for meshes and the fields on
     them (one value per element or node of a mesh created before, of the same version)."""
 
-    def test_frame_static_on_the_demo_mesh(self):
+    def test_each_mesh_tool_on_the_demo_mesh(self):
         import hiraku.solvers as solvers
         if not callable(getattr(solvers, "frame_mesh", None)):
             self.skipTest("hiraku.solvers.frame_mesh() is not there yet (analysis dept)")
@@ -189,18 +189,20 @@ class MeshFieldRecord(unittest.TestCase):
         mesh = dict(solvers.frame_mesh(design), mesh_id="mesh-0001")
         lc = {"load_case_id": "R1-step100", "test_id": "R1", "domain": "strength", "title": "R1",
               "params": {"step_height": {"value": 100.0, "unit": "mm"}}, "tolerance_rel": 0.15}
-        tool = {t.name: t for t in tools}.get("frame_static") or tools[0]
-        out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh})
-        self.assertEqual(out.get("status"), "ok", out.get("error"))
-        self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
-        checker = cr.RunChecker(ROOT)
-        checker.where_of = ["mesh.created", "analysis.finished"]
-        checker.designs[design["design_version"]] = (-1, design)
-        checker.recs["mesh"]["mesh-0001"] = (0, mesh)
-        checker.recs["analysis"]["ana-0001"] = (1, dict(out, analysis_id="ana-0001"))
-        checker.check_meshes()
-        self.assertEqual([str(f) for f in checker.findings], [])
-        self.assertEqual(contract.errors("analysis", dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])), [])
+        for tool in tools:
+            with self.subTest(tool=tool.name):
+                out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh})
+                self.assertEqual(out.get("status"), "ok", out.get("error"))
+                self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
+                rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
+                checker = cr.RunChecker(ROOT)
+                checker.where_of = ["mesh.created", "analysis.finished"]
+                checker.designs[design["design_version"]] = (-1, design)
+                checker.recs["mesh"]["mesh-0001"] = (0, mesh)
+                checker.recs["analysis"]["ana-0001"] = (1, rec)
+                checker.check_meshes()
+                self.assertEqual([str(f) for f in checker.findings], [])
+                self.assertEqual(contract.errors("analysis", rec), [])
 
 
 class SavedRuns(unittest.TestCase):
