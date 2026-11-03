@@ -658,10 +658,12 @@ def _tyres(corners: list[Corner], notes: list[str], name: str = DEFAULT_TYRE):
         c.mf = MF61(coeffs, fz0=fz0, r0=c.radius, lmux=c.mu / base.mu_x(fz), lmuy=c.mu / base.mu_y(fz),
                     lkx=c.c_long / base.kxk(fz), lky=c.c_lat / abs(base.kya(fz)))
     notes.append(f"tyre forces: Magic Formula 6.1 with the coefficients of the {coeffs['tyre']} tyre "
-                 f"({coeffs['source']['title']}; not checked against the book), scaled to this vehicle: nominal "
+                 f"({coeffs['source']['title']}; not checked against the book). Not a measured UTV tyre: only "
+                 "the shapes of the passenger car tyre's curves are used, scaled to this vehicle: nominal "
                  f"load {fz0:.0f} N (the mean static wheel load), R0 = the wheel radius, and at each wheel's static "
                  "load the peak friction = mu and the slopes at zero slip = the stiffnesses K2 took (design or "
-                 "defaults above)")
+                 "defaults above); held at the coefficients' nominal inflation pressure (no pressure terms, so "
+                 "nothing is extrapolated to a low-pressure tyre)")
 
 
 def _aero(items: list, corners: list[Corner], symmetric: bool, notes: list[str]):
