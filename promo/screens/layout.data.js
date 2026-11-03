@@ -895,11 +895,16 @@ window.PROMO_LAYOUT = {
       "ok_of_reading": 0.55,
       "_note": "battery charge and temperature, then speed, as graphs in the right column. reading_of_title: the largest size of the reading, a multiple of title_px (it is also held to the popup's width); ok_of_reading: the size of the tick line under it (✓ 上限より下), a share of the reading's size"
     },
+    "loop": {
+      "ease": "in-out",
+      "_note": "the long drive's time runs through the record with this ease (in-out or linear)"
+    },
     "times": {
       "lead_s": 0.3,
-      "loop_to_s": 2.0,
+      "loop_to_s": 2.6,
+      "ok_s": 2.3,
       "accel_s": 2.9,
-      "_note": "0.3-2.0 s the long loop, then the tick (below the limit) holds to 2.9 s while the voice says オーバーヒートしないか (1.44-2.56 s in the maker's recording) (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
+      "_note": "0.3-2.6 s the long loop (eased in and out), the tick (below the limit) from ok_s 2.3 s as the loop slows, and it stays through the acceleration; the voice says オーバーヒートしないか at 1.44-2.56 s in the maker's recording (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)"
     },
     "overlay": {
       "color": "#c8402a",
