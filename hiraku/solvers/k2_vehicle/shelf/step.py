@@ -91,8 +91,9 @@ def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=N
 
 def mount_vectors(veh, snap: dict) -> list:
     """The forces each K&C corner puts on the body at its mounts (kinematics.corner_mount_forces of
-    the corner's tyre force, its normal included, at the snapshot's travel), as load vectors on the
-    body at the mounts, world axes."""
+    the corner's tyre force, its normal included, at the snapshot's travel), as joint vectors at
+    '<support>.<hardpoint key>': the mount's point and the force the body receives, world axes.
+    A corner whose hardpoints have no damper points gives none."""
     rot = np.asarray(snap["rot"])
     origin = np.asarray(snap["origin"])
     out = []
@@ -103,7 +104,7 @@ def mount_vectors(veh, snap: dict) -> list:
         contact = rot.T @ (np.asarray(snap["p"][i]) - origin)  # where the tyre touches, design frame
         for mount, (point, force) in kinematics.corner_mount_forces(c.table, c.side, snap["s"][i], f_body,
                                                                     contact).items():
-            out.append({"kind": "load", "at": f"{c.id}.{mount}",
+            out.append({"kind": "joint", "at": f"{c.id}.{mount}",
                         "origin_mm": [float(x) * 1000.0 for x in origin + rot @ point],
                         "vector_N": [float(x) for x in rot @ force]})
     return out
