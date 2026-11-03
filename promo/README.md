@@ -209,6 +209,8 @@ py promo/export.py encode <作業>/frames/n18 <作業>/clips/n18_2160p.mp4 --hei
 
 3840×2160 の PNG のコマから、1080p (Lanczos で縮小) と 4K の H.264 (BT.709) を作ります。
 
+`encode` と `clip` は `--encoder auto|nvenc|x264` で圧縮のしかたを選びます。既定の `auto` は、ffmpeg に h264_nvenc があって短い試しの圧縮が通れば GPU (NVENC)、だめなら libx264 (CPU) です。NVENC は `-cq` を `--crf` と同じ数にした VBR で、測った N18 とアプリの再生のコマでは、可逆の元に対する SSIM が x264 (crf 14・slow) の 0.99875・0.99902 に対して 0.99946・0.99946、CPU 時間は 17.1・14.3 秒が 5.2・6.6 秒でした (ファイルは 1.8〜6.4 倍大きい)。設定と測った値は [ASSEMBLE.md](ASSEMBLE.md) の「GPU で圧縮する・フィルタを軽くする」。
+
 アプリの再生は、サーバー (`python -m hiraku.webserve`) を立ててから URL で渡します。`--gpu` を付けると WebGL をグラフィックカードで描きます (付けないとソフトウェア描画)。
 
 ```
@@ -231,6 +233,8 @@ py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" <作業>/f
 ## 1 本につなぐ (`assemble.py`)
 
 原稿の枠どおりにカットの映像を並べ、境目のつなぎ (切る・溶ける・光・粒) と暗い画面の粒と光のにじみを付けて 1 本にします。表は `assembly.json`、使い方は [ASSEMBLE.md](ASSEMBLE.md)。
+
+圧縮は既定で GPU (NVENC、`--encoder auto`。使えなければ libx264) です。光と粒のつなぎの式はつなぎのコマだけで走らせます。いまの表 (本人の声、1080p) の組み立ては、前の 2317.9 秒 (ffmpeg の CPU 6122.3 秒) が 292.1 秒 (CPU 679.7 秒) になりました。前と後の同じコマの SSIM は、見た目の層の無いカットで 0.99853 以上、層のあるカットで 0.97052 以上です (層のあるカットが 0.98 を下回る理由は粒の圧縮で、ASSEMBLE.md に書きました)。
 
 ## 声と字幕 (`voice.py`, `subs.py`)
 
