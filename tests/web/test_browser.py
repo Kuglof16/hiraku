@@ -540,6 +540,34 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(len(got["lines"]), 2)
         page.close()
 
+    @unittest.skipUnless("mesh.created" in contract.EVENT_KINDS, "contract without meshes")
+    def test_mesh_created_is_kept(self):
+        """mesh.created (the contract's example) lands in state.meshes by mesh_id with one log line."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        mesh = json.loads((contract.EXAMPLES_DIR / "mesh.json").read_text(encoding="utf-8"))
+        ev = {"run_id": events[0]["run_id"], "ts": "2026-11-02T20:30:10.000+09:00", "seq": 0, "t": events[1]["t"] + 0.05,
+              "kind": "mesh.created", "agent": "system", "design_version": 1, "data": mesh}
+        events = events[:2] + [ev] + events[2:]
+        for i, e in enumerate(events):
+            e["seq"] = i
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        got = page.evaluate(
+            """async (events) => {
+              await window.hiraku.load(events, 1e6);
+              const s = window.hiraku.state();
+              return { ids: s.order.meshes, elements: s.meshes["mesh-0001"].elements.length,
+                       lines: [...document.querySelectorAll("#log li")].map((li) => li.textContent).filter((x) => x.includes("メッシュを作った")) };
+            }""",
+            events,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(got["ids"], ["mesh-0001"])
+        self.assertEqual(got["elements"], len(mesh["elements"]))
+        self.assertEqual(len(got["lines"]), 1)
+        self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
+        page.close()
+
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
     def test_intake_events_are_kept(self):
         """domains.picked, hearing.*, knowledge.imported and rule_check.recorded (the
