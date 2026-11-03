@@ -18,6 +18,7 @@ from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.domains_fixture import domain_events
 from tests.web.k2_fixture import tilt_events
+from tests.web.mesh_fixture import mesh_events
 from tests.web.safe_side_fixture import safe_side_events
 
 try:
@@ -566,6 +567,91 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["elements"], len(mesh["elements"]))
         self.assertEqual(len(got["lines"]), 1)
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
+        page.close()
+
+    @unittest.skipUnless("x" in contract.schema()["$defs"]["series"]["properties"], "contract without series against x")
+    def test_series_against_another_quantity_are_charted(self):
+        """Series with x (a K&C bench) give a graph without a motion: one chart per channel
+        and abscissa, the axis named from x.quantity and x.unit, and no time cursor."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        travel = [float(v) for v in range(-60, 61, 10)]
+        force = [float(v) for v in range(0, 2001, 250)]
+        # shape example: straight lines through made-up slopes, not a result
+        ana["series"] = [
+            {"channel": f"camber.{w}", "unit": "deg", "x": {"quantity": "wheel_travel", "unit": "mm", "values": travel}, "values": [k * v for v in travel]}
+            for w, k in (("FL", -0.02), ("FR", 0.02))
+        ] + [{"channel": "toe.FL", "unit": "deg", "x": {"quantity": "lateral_force", "unit": "N", "values": force}, "values": [1e-4 * v for v in force]}]
+        for e in events:
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        read = """() => ({ toggle: !!document.querySelector('#toggles button[data-toggle="graph"]'), shown: !document.getElementById("graph").hidden,
+                   chips: [...document.querySelectorAll("#graph .gr-chips button")].map((b) => [b.textContent, b.classList.contains("on")]),
+                   unit: document.querySelector("#graph .gr-unit")?.textContent ?? null, lines: document.querySelectorAll("#graph polyline").length,
+                   cursor: document.querySelectorAll("#graph .cur").length })"""
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        first = page.evaluate(read)
+        self.assertEqual(errors, [])
+        self.assertTrue(first["toggle"])
+        self.assertTrue(first["shown"])
+        self.assertEqual(first["chips"], [["camber", True], ["toe", False]])
+        self.assertEqual(first["unit"], "[°]・wheel_travel [mm]")
+        self.assertEqual(first["lines"], 2)
+        self.assertEqual(first["cursor"], 0)
+        page.click("#graph .gr-chips button:text-is('toe')")
+        page.wait_for_function("document.querySelector('#graph .gr-unit')?.textContent.includes('lateral_force')")
+        second = page.evaluate(read)
+        self.assertEqual(second["unit"], "[°]・lateral_force [N]")
+        self.assertEqual(second["lines"], 1)
+        self.assertEqual(errors, [])
+        page.close()
+
+    @unittest.skipUnless("mesh.created" in contract.EVENT_KINDS, "contract without meshes")
+    def test_mesh_fields_draw_the_shell(self):
+        """A field on a shell mesh (about 20 000 nodes and quads) draws the mesh in place of
+        the beams, one colour per element; the legend switches between the beams and the
+        mesh's surfaces, and a displacement on the mesh nodes moves the mesh."""
+        events, mesh = mesh_events()
+        for e in events:
+            self.assertEqual(contract.errors("event", e), [], e["kind"])
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        state = """() => { const b = window.hiraku.bench; const o = Object.values(b.shellObjs)[0];
+          const col = o.faces.geometry.getAttribute("color").array;
+          const colours = new Set(); for (let i = 0; i < col.length; i += 3 * 6) colours.add(`${col[i]},${col[i + 1]},${col[i + 2]}`);
+          return { shell: o.group.visible, beams: b.model.visible, corners: o.vNode.length, colours: colours.size,
+                   surface: b.keys.contour?.field.surface ?? null, kind: b.keys.contour?.kind ?? null,
+                   variants: [...document.querySelectorAll("#legend .variants button")].map((x) => [x.textContent, x.classList.contains("on")]) }; }"""
+        first = page.evaluate(state)
+        self.assertEqual(errors, [])
+        self.assertTrue(first["shell"])
+        self.assertFalse(first["beams"])
+        self.assertEqual(first["corners"], 6 * len(mesh["elements"]))
+        self.assertGreater(first["colours"], 3)
+        self.assertEqual(first["surface"], "max")
+        self.assertEqual(first["variants"], [["梁", False], ["メッシュ・外面", False], ["メッシュ・中面", False], ["メッシュ・内面", False], ["メッシュ・外面と内面の大きい方", True]])
+        page.click("#legend .variants button:text-is('梁')")
+        page.wait_for_function("window.hiraku.bench.model.visible")
+        beams = page.evaluate(state)
+        self.assertEqual((beams["shell"], beams["beams"]), (False, True))
+        page.click("#legend .variants button:text-is('メッシュ・内面')")
+        page.wait_for_function("window.hiraku.bench.keys.contour?.field.surface === 'bottom'")
+        self.assertTrue(page.evaluate(state)["shell"])
+        page.click("#legend .kinds:not(.variants) button:text-is('変位')")
+        page.wait_for_function("window.hiraku.bench.keys.contour?.kind === 'displacement'")
+        moved = page.evaluate(
+            """() => { const b = window.hiraku.bench; const o = b.modeShape.shell;
+              b.animate(0.25, false);
+              const p = o.faces.geometry.getAttribute("position").array; let d = 0;
+              for (let i = 0; i < p.length; i += 1) d = Math.max(d, Math.abs(p[i] - o.rest[i]));
+              b.animate(0, false);
+              const q = o.faces.geometry.getAttribute("position").array; let back = 0;
+              for (let i = 0; i < q.length; i += 1) back = Math.max(back, Math.abs(q[i] - o.rest[i]));
+              return { d, back }; }"""
+        )
+        self.assertGreater(moved["d"], 1.0)
+        self.assertLess(moved["back"], 1e-6)
+        self.assertEqual(errors, [])
         page.close()
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
