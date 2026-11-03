@@ -9,6 +9,15 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 
 
+def _ladder():
+    """The demo vehicle without its roll bar (on by default): the plain ladder frame."""
+    from hiraku.designgen.ladder_4w import build
+    return build({"rollbar": {"value": 0.0, "unit": "1"}})
+
+
+LADDER = _ladder()
+
+
 def v1_part(pid):
     return next(p for p in V1["parts"] if p["id"] == pid)
 
@@ -20,7 +29,7 @@ def item_of(pid):
 
 class PackageTest(unittest.TestCase):
     def setUp(self):
-        self.lay = Layout(dict(V1, parts=[]))
+        self.lay = Layout(dict(LADDER, parts=[]))
 
     def test_frame_features(self):
         self.assertEqual(self.lay.stations(), {"F": 400.0, "A": 0.0, "S1": -450.0, "S2": -1000.0, "B": -1700.0, "E": -2100.0})
@@ -31,9 +40,8 @@ class PackageTest(unittest.TestCase):
         lay = self.lay
         lay.put(item_of("floor"), x=lay.between("S1", "S2"), y=0.0, z=bottom_at(lay.rail_top() + 10.0))
         lay.put(item_of("battery"), x=lay.between("S1", "S2"), y=0.0, z=top_at(lay.bottom_of("floor")))
-        lay.put(item_of("motor"), x=rear_at(lay.station_x("B") + 25.0), y=0.0, z=top_at(lay.rail_top()), carried_by=lay.at("B"))
         lay.put(item_of("seat_R"), x=lay.between("S1", "S2"), y=-300.0, z=bottom_at(lay.top_of("floor")))
-        for pid in ("floor", "battery", "motor", "seat_R"):
+        for pid in ("floor", "battery", "seat_R"):  # the motor: kit/drivetrain.py (test_parts.DrivetrainTest)
             got, want = lay.part(pid), v1_part(pid)
             self.assertEqual(got["box"], want["box"], pid)
             self.assertEqual(got.get("carried_by"), want.get("carried_by"), pid)
@@ -75,8 +83,8 @@ class FrameKitTest(unittest.TestCase):
         rail, cross = f.section(*rect_tube(40, 80, 2.3)), f.section(*rect_tube(40, 40, 2.3))
         f.ladder({"F": 400.0, "A": 0.0, "S1": -450.0, "S2": -1000.0, "B": -1700.0, "E": -2100.0}, 350.0, 380.0, rail, cross)
         part = f.part()
-        self.assertEqual(part["nodes"], V1["nodes"])
-        self.assertEqual(part["members"], V1["members"])
+        self.assertEqual(part["nodes"], LADDER["nodes"])
+        self.assertEqual(part["members"], LADDER["members"])
 
     def test_lines_curves_mirror_and_merge(self):
         import math
@@ -126,12 +134,15 @@ class CheckTest(unittest.TestCase):
     def test_v1(self):
         r = check.check(V1)
         q = r["quantities"]
-        self.assertAlmostEqual(q["mass"]["value"], 591.47, delta=0.01)
-        self.assertEqual(q["ground_clearance"]["value"], 200.0)  # the motor's underside
-        self.assertEqual(q["ground_clearance"]["where"], "motor")
+        self.assertAlmostEqual(q["mass"]["value"], 602.14, delta=0.01)  # 591.47 kg and the roll bar's members
+        self.assertEqual(q["ground_clearance"]["value"], 160.0)  # the knuckle's box, 20 mm below the lower ball joint
+        self.assertEqual(q["ground_clearance"]["where"], "knuckle_FL")
         self.assertAlmostEqual(q["free_steer_angle"]["value"], 16.48, delta=0.01)
-        self.assertAlmostEqual(q["knee_room"]["value"], -41.4, places=6)
-        self.assertAlmostEqual(q["reach_to_controls"]["value"], 606.0 - 575.0, places=6)
+        self.assertAlmostEqual(q["knee_room"]["value"], -69.3, delta=0.1)  # the steering column's turned box
+        self.assertEqual(q["knee_room"]["where"], "steering_column")
+        self.assertAlmostEqual(q["reach_to_controls"]["value"], 58.9, delta=0.1)
+        for k in ("foot_room", "leg_clearance", "foot_support", "pedal_reach", "wheel_reach"):  # the seated body (K4)
+            self.assertIn(k, q)
         self.assertTrue(any("knee_room" in p for p in r["problems"]))
         self.assertTrue(any("rail_L_AS1" in p for p in r["problems"]))
         # approach: the line tangent to the 300 mm tyre through cross_F's lower front edge (420, 360)

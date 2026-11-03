@@ -280,12 +280,68 @@
       "value": 10.0,
       "unit": "1"
     },
+    "driveshaft_diameter": {
+      "value": 30.0,
+      "unit": "mm"
+    },
+    "driveshaft_wall": {
+      "value": 5.0,
+      "unit": "mm"
+    },
+    "driveshafts": {
+      "value": 1.0,
+      "unit": "1"
+    },
+    "lamps": {
+      "value": 0.0,
+      "unit": "1"
+    },
+    "rollbar": {
+      "value": 1.0,
+      "unit": "1"
+    },
+    "rollbar_height": {
+      "value": 1100.0,
+      "unit": "mm"
+    },
+    "rollbar_width": {
+      "value": 1200.0,
+      "unit": "mm"
+    },
+    "rollbar_offset": {
+      "value": 80.0,
+      "unit": "mm"
+    },
+    "rollbar_square": {
+      "value": 0.0,
+      "unit": "1"
+    },
+    "rollbar_d": {
+      "value": 42.7,
+      "unit": "mm"
+    },
+    "rollbar_b": {
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "rollbar_t": {
+      "value": 2.3,
+      "unit": "mm"
+    },
     "tyre_relaxation_length": {
       "value": 300.0,
       "unit": "mm"
     },
     "wheel_inertia": {
       "value": 0.63,
+      "unit": "kg*m^2"
+    },
+    "motor_rotor_inertia": {
+      "value": 0.005149582473980394,
+      "unit": "kg*m^2"
+    },
+    "reducer_output_inertia": {
+      "value": 0.005767532370858041,
       "unit": "kg*m^2"
     }
   },
@@ -601,14 +657,36 @@
       ]
     },
     {
+      "id": "main_switch",
+      "name": "電池の主スイッチ (遮断)",
+      "kind": "switch",
+      "box": {
+        "center_mm": [
+          -300.0,
+          190.0,
+          300.0
+        ],
+        "size_mm": [
+          80.0,
+          80.0,
+          80.0
+        ]
+      },
+      "mass_kg": 0.3,
+      "carried_by": [
+        "LA",
+        "LS1"
+      ]
+    },
+    {
       "id": "motor",
-      "name": "モーターと減速機",
+      "name": "モーター",
       "kind": "motor",
       "box": {
         "center_mm": [
-          -1550.0,
+          -1495.0,
           0.0,
-          310.0
+          300.0
         ],
         "size_mm": [
           250.0,
@@ -616,11 +694,69 @@
           220.0
         ]
       },
-      "mass_kg": 25.0,
+      "mass_kg": 11.770474226240898,
       "carried_by": [
         "LB",
         "RB"
       ]
+    },
+    {
+      "id": "reducer",
+      "name": "減速機と差動",
+      "kind": "reducer",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          0.0,
+          300.0
+        ],
+        "size_mm": [
+          160.0,
+          392.0,
+          100.0
+        ]
+      },
+      "mass_kg": 7.846982817493933,
+      "carried_by": [
+        "LB",
+        "RB"
+      ]
+    },
+    {
+      "id": "driveshaft_RL",
+      "name": "左のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          373.0,
+          300.0
+        ],
+        "size_mm": [
+          30.0,
+          384.0,
+          30.0
+        ]
+      },
+      "mass_kg": 2.6912714781325846
+    },
+    {
+      "id": "driveshaft_RR",
+      "name": "右のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+        "center_mm": [
+          -1700.0,
+          -373.0,
+          300.0
+        ],
+        "size_mm": [
+          30.0,
+          384.0,
+          30.0
+        ]
+      },
+      "mass_kg": 2.6912714781325846
     },
     {
       "id": "controller",
@@ -660,7 +796,7 @@
           100.0
         ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 5.7,
       "carried_by": [
         "LA",
         "RA",
@@ -684,11 +820,87 @@
           20.0
         ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 3.6000000000000005,
       "carried_by": [
         "LA",
         "RA",
         "LS1",
+        "RS1"
+      ]
+    },
+    {
+      "id": "pedal_accel",
+      "name": "アクセルのペダル",
+      "kind": "accelerator_pedal",
+      "box": {
+        "center_mm": [
+          -69.76882046860206,
+          -330.0,
+          508.8360923856119
+        ],
+        "size_mm": [
+          100.0,
+          80.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -20.000000000000092,
+          0.0
+        ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+        "RA",
+        "RS1"
+      ]
+    },
+    {
+      "id": "pedal_brake",
+      "name": "ブレーキのペダル",
+      "kind": "brake_pedal",
+      "box": {
+        "center_mm": [
+          -69.76882046860206,
+          -220.0,
+          508.8360923856119
+        ],
+        "size_mm": [
+          100.0,
+          80.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -20.000000000000092,
+          0.0
+        ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+        "RA",
+        "RS1"
+      ]
+    },
+    {
+      "id": "brake_master",
+      "name": "ブレーキのマスターシリンダー",
+      "kind": "brake_master_cylinder",
+      "box": {
+        "center_mm": [
+          -20.0,
+          -220.0,
+          714.5183687566542
+        ],
+        "size_mm": [
+          120.0,
+          70.0,
+          70.0
+        ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+        "RA",
         "RS1"
       ]
     },
@@ -767,26 +979,155 @@
       ]
     },
     {
-      "id": "steering",
-      "name": "ハンドルとペダル",
+      "id": "steering_wheel",
+      "name": "ハンドル",
       "kind": "steering",
       "box": {
         "center_mm": [
-          -250.0,
-          -200.0,
-          750.0
+          -400.0,
+          -300.0,
+          1205.411492555231
         ],
         "size_mm": [
-          300.0,
-          200.0,
-          500.0
+          40.0,
+          350.0,
+          350.0
+        ],
+        "rpy_deg": [
+          0.0,
+          35.00000000000015,
+          0.0
         ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 2.559843507744881,
       "carried_by": [
         "RA",
         "RS1"
       ]
+    },
+    {
+      "id": "steering_column",
+      "name": "ステアリングのコラム",
+      "kind": "steering_column",
+      "box": {
+        "center_mm": [
+          -260.0,
+          -300.0,
+          1107.3824372058716
+        ],
+        "size_mm": [
+          381.8168848532077,
+          40.0,
+          40.0
+        ],
+        "rpy_deg": [
+          0.0,
+          34.99999999999999,
+          0.0
+        ]
+      },
+      "mass_kg": 2.047874806195905,
+      "carried_by": [
+        "RA",
+        "RS1"
+      ]
+    },
+    {
+      "id": "steering_shaft",
+      "name": "ステアリングの中間軸",
+      "kind": "steering_shaft",
+      "box": {
+        "center_mm": [
+          -120.0,
+          -195.0,
+          643.2559256558302
+        ],
+        "size_mm": [
+          785.7147692846985,
+          24.0,
+          24.0
+        ],
+        "rpy_deg": [
+          0.0,
+          73.99663870148639,
+          90.0
+        ]
+      },
+      "mass_kg": 1.0239374030979524,
+      "carried_by": [
+        "RA",
+        "RS1"
+      ]
+    },
+    {
+      "id": "steering_rack",
+      "name": "ステアリングのラック",
+      "kind": "steering_rack",
+      "box": {
+        "center_mm": [
+          -120.0,
+          0.0,
+          277.15846945514807
+        ],
+        "size_mm": [
+          50.0,
+          518.3389226134536,
+          50.0
+        ]
+      },
+      "mass_kg": 4.607718313940786,
+      "carried_by": [
+        "LA",
+        "RA",
+        "LS1",
+        "RS1"
+      ]
+    },
+    {
+      "id": "tie_rod_FL",
+      "name": "前左のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+        "center_mm": [
+          -120.0,
+          354.58473065336347,
+          281.07923472757403
+        ],
+        "size_mm": [
+          256.9581664284861,
+          16.0,
+          16.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -1.8649127058044157,
+          90.0
+        ]
+      },
+      "mass_kg": 0.8803129845102374
+    },
+    {
+      "id": "tie_rod_FR",
+      "name": "前右のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+        "center_mm": [
+          -120.0,
+          -354.58473065336347,
+          281.07923472757403
+        ],
+        "size_mm": [
+          256.9581664284861,
+          16.0,
+          16.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -1.8649127058044157,
+          -90.0
+        ]
+      },
+      "mass_kg": 0.8803129845102374
     },
     {
       "id": "seat_R",
@@ -804,9 +1145,30 @@
           260.0
         ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
         "RS1",
+        "RS2"
+      ]
+    },
+    {
+      "id": "seat_belt_R",
+      "name": "運転席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+        "center_mm": [
+          -1000.0,
+          -540.0,
+          710.0
+        ],
+        "size_mm": [
+          50.0,
+          20.0,
+          300.0
+        ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
         "RS2"
       ]
     },
@@ -826,9 +1188,30 @@
           260.0
         ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
         "LS1",
+        "LS2"
+      ]
+    },
+    {
+      "id": "seat_belt_L",
+      "name": "助手席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+        "center_mm": [
+          -1000.0,
+          540.0,
+          710.0
+        ],
+        "size_mm": [
+          50.0,
+          20.0,
+          300.0
+        ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
         "LS2"
       ]
     },
@@ -904,7 +1287,7 @@
     },
     {
       "id": "wheel_FL",
-      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
         "center_mm": [
@@ -922,7 +1305,7 @@
     },
     {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前左のサスペンション (アームとダンパー)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -936,11 +1319,11 @@
           200.0
         ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0
     },
     {
       "id": "wheel_FR",
-      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
         "center_mm": [
@@ -958,7 +1341,7 @@
     },
     {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前右のサスペンション (アームとダンパー)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -972,11 +1355,11 @@
           200.0
         ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0
     },
     {
       "id": "wheel_RL",
-      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
         "center_mm": [
@@ -994,7 +1377,7 @@
     },
     {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後左のサスペンション (アームとダンパー)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -1008,11 +1391,11 @@
           200.0
         ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.119687015489763
     },
     {
       "id": "wheel_RR",
-      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
         "center_mm": [
@@ -1030,7 +1413,7 @@
     },
     {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後右のサスペンション (アームとダンパー)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -1044,7 +1427,223 @@
           200.0
         ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.119687015489763
+    },
+    {
+      "id": "knuckle_FL",
+      "name": "前左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+        "center_mm": [
+          -60.0,
+          475.00000000000006,
+          307.5
+        ],
+        "size_mm": [
+          160.0,
+          70.0,
+          295.0
+        ]
+      },
+      "mass_kg": 2.5
+    },
+    {
+      "id": "knuckle_FR",
+      "name": "前右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+        "center_mm": [
+          -60.0,
+          -475.00000000000006,
+          307.5
+        ],
+        "size_mm": [
+          160.0,
+          70.0,
+          295.0
+        ]
+      },
+      "mass_kg": 2.5
+    },
+    {
+      "id": "knuckle_RL",
+      "name": "後左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+        "center_mm": [
+          -1760.0,
+          475.00000000000006,
+          307.5
+        ],
+        "size_mm": [
+          159.99999999999977,
+          70.0,
+          295.0
+        ]
+      },
+      "mass_kg": 2.5
+    },
+    {
+      "id": "toe_link_RL",
+      "name": "後左のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+        "center_mm": [
+          -1819.9999999999998,
+          354.58473065336347,
+          281.07923472757403
+        ],
+        "size_mm": [
+          256.9581664284861,
+          16.0,
+          16.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -1.8649127058044157,
+          90.0
+        ]
+      },
+      "mass_kg": 0.8803129845102374
+    },
+    {
+      "id": "knuckle_RR",
+      "name": "後右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+        "center_mm": [
+          -1760.0,
+          -475.00000000000006,
+          307.5
+        ],
+        "size_mm": [
+          159.99999999999977,
+          70.0,
+          295.0
+        ]
+      },
+      "mass_kg": 2.5
+    },
+    {
+      "id": "toe_link_RR",
+      "name": "後右のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+        "center_mm": [
+          -1819.9999999999998,
+          -354.58473065336347,
+          281.07923472757403
+        ],
+        "size_mm": [
+          256.9581664284861,
+          16.0,
+          16.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -1.8649127058044157,
+          -90.0
+        ]
+      },
+      "mass_kg": 0.8803129845102374
+    },
+    {
+      "id": "caliper_FL",
+      "name": "前左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+        "center_mm": [
+          -110.0,
+          490.0,
+          300.0
+        ],
+        "size_mm": [
+          60.0,
+          50.0,
+          90.0
+        ]
+      },
+      "mass_kg": 1.5
+    },
+    {
+      "id": "caliper_FR",
+      "name": "前右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+        "center_mm": [
+          -110.0,
+          -490.0,
+          300.0
+        ],
+        "size_mm": [
+          60.0,
+          50.0,
+          90.0
+        ]
+      },
+      "mass_kg": 1.5
+    },
+    {
+      "id": "caliper_RL",
+      "name": "後左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+        "center_mm": [
+          -1810.0,
+          490.0,
+          300.0
+        ],
+        "size_mm": [
+          60.0,
+          50.0,
+          90.0
+        ]
+      },
+      "mass_kg": 1.5
+    },
+    {
+      "id": "caliper_RR",
+      "name": "後右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+        "center_mm": [
+          -1810.0,
+          -490.0,
+          300.0
+        ],
+        "size_mm": [
+          60.0,
+          50.0,
+          90.0
+        ]
+      },
+      "mass_kg": 1.5
+    },
+    {
+      "id": "rollbar",
+      "name": "ロールバー (横転のときに乗る人を守る枠。管は骨組みの部材)",
+      "kind": "rollbar",
+      "box": {
+        "center_mm": [
+          -1080.0,
+          0.0,
+          1810.0
+        ],
+        "size_mm": [
+          42.69999999999982,
+          1200.0,
+          42.69999999999982
+        ]
+      },
+      "mass_kg": 0.0,
+      "carried_by": [
+        "LH",
+        "LHO",
+        "LHT",
+        "RH",
+        "RHO",
+        "RHT"
+      ]
     }
   ],
   "nodes": [
@@ -1143,6 +1742,54 @@
         -350.0,
         380.0
       ]
+    },
+    {
+      "id": "LH",
+      "xyz_mm": [
+        -1080.0,
+        350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LHO",
+      "xyz_mm": [
+        -1080.0,
+        600.0,
+        380.0
+      ]
+    },
+    {
+      "id": "LHT",
+      "xyz_mm": [
+        -1080.0,
+        600.0,
+        1810.0
+      ]
+    },
+    {
+      "id": "RH",
+      "xyz_mm": [
+        -1080.0,
+        -350.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RHO",
+      "xyz_mm": [
+        -1080.0,
+        -600.0,
+        380.0
+      ]
+    },
+    {
+      "id": "RHT",
+      "xyz_mm": [
+        -1080.0,
+        -600.0,
+        1810.0
+      ]
     }
   ],
   "members": [
@@ -1171,8 +1818,16 @@
       "part": "frame"
     },
     {
-      "id": "rail_L_S2B",
+      "id": "rail_L_S2H",
       "node_a": "LS2",
+      "node_b": "LH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_L_HB",
+      "node_a": "LH",
       "node_b": "LB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -1211,8 +1866,16 @@
       "part": "frame"
     },
     {
-      "id": "rail_R_S2B",
+      "id": "rail_R_S2H",
       "node_a": "RS2",
+      "node_b": "RH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+    },
+    {
+      "id": "rail_R_HB",
+      "node_a": "RH",
       "node_b": "RB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -1273,6 +1936,46 @@
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame"
+    },
+    {
+      "id": "rollbar_foot_L",
+      "node_a": "LH",
+      "node_b": "LHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+    },
+    {
+      "id": "rollbar_post_L",
+      "node_a": "LHO",
+      "node_b": "LHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+    },
+    {
+      "id": "rollbar_foot_R",
+      "node_a": "RH",
+      "node_b": "RHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+    },
+    {
+      "id": "rollbar_post_R",
+      "node_a": "RHO",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+    },
+    {
+      "id": "rollbar_top",
+      "node_a": "LHT",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
     }
   ],
   "sections": {
@@ -1291,6 +1994,13 @@
         "h": 40.0,
         "t": 2.3
       }
+    },
+    "ct42.7x2.3": {
+      "shape": "round_tube",
+      "dims_mm": {
+        "d": 42.7,
+        "t": 2.3
+      }
     }
   },
   "materials": {
@@ -1301,6 +2011,15 @@
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+    },
+    "stkm13a": {
+      "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 215.0,
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
     }
   }

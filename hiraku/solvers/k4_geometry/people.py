@@ -90,12 +90,12 @@ BIG, SMALL = "m95", "f5"
 FOOT_ANGLE_DEG = 20.0
 KNEE_ANGLE_DEG = 100.0
 KNEE_MAX_DEG = 150.0
-PEDAL_KINDS = ("pedal",)
-WHEEL_KINDS = ("steering_wheel",)
+PEDAL_KINDS = ("pedal", "accelerator_pedal", "brake_pedal")
+WHEEL_KINDS = ("steering", "steering_wheel")  # the steering wheel (designs with pedals only, see body_fit)
 # Bodies the legs and feet are not checked against: the person's own seat, the occupants' mass
 # boxes (the body itself) and, for the feet, the floor and pedals they rest on.
 LEG_SKIP_KINDS = ("seat", "occupant")
-FOOT_SKIP_KINDS = ("seat", "occupant", "pedal")
+FOOT_SKIP_KINDS = ("seat", "occupant", *PEDAL_KINDS)
 
 
 def _box(p):

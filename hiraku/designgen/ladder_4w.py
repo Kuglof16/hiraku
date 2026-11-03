@@ -11,10 +11,13 @@ Frame stations along x (x forward, origin under the front axle): F front end,
 A front axle, S1 and S2 the cross members at the front and back of the seats
 (seat_x +- 275 mm), B rear axle, E rear end. Dimensions, masses and the other
 variables' defaults are design choices (assumptions) unless a comment gives a
-source; the defaults build data/designs/offroad-4w-v1.json. With rollbar = 1 a
-roll bar stands behind the seats (build_rollbar): the rails are split at a
+source; the defaults build data/designs/offroad-4w-v1.json. With rollbar = 1 (the
+default) a roll bar stands behind the seats (build_rollbar): the rails are split at a
 node H between S2 and B, outriggers carry the posts' feet out to the
 rollbar_width, and a top beam joins the posts (data/designs/offroad-4w-rollbar.json).
+The parts of the drive, steering, brakes, restraints and the battery's switch come from
+the kits (kit/drivetrain.py, steering.py, body.py, safety.py), and every part carries its
+system and links (kit/systems.py) when the contract has those fields.
 
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
@@ -24,12 +27,13 @@ https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03).
 
 from __future__ import annotations
 
+import functools
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from hiraku.designgen.kit import body, drivetrain, steering
+from hiraku.designgen.kit import body, drivetrain, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
@@ -162,6 +166,12 @@ VARIABLES: dict[str, Var] = {
     # driveshafts: steel tubes from the reducer to the driven wheels (kit/drivetrain.py), assumptions
     "driveshaft_diameter": Var("mm", 30.0, meaning="assumption: driveshaft tube outer diameter"),
     "driveshaft_wall": Var("mm", 5.0, meaning="assumption: driveshaft tube wall"),
+    "driveshafts": Var("1", 1.0, 0.0, 1.0, "1: a driveshaft from the reducer to each driven wheel; 0: none, the drive "
+                       "ends at the reducer and no torque reaches the wheels (the shafts' mass stays in the reducer, so "
+                       "the mass does not change)"),
+    # lamps (kit/safety.py): needed on public roads only
+    "lamps": Var("1", 0.0, 0.0, 1.0, "1: headlamps, tail lamps, stop lamps and turn signals on the front body and "
+                 "behind the frame's rear end (needed on public roads); 0: none (off public roads)"),
     # joint reinforcement at the T joints (where a cross member ends on the side of a rail): the shape
     # follows from these variables alone (CHOICES["joints"] is a short way to set them). Written into
     # design.variables only when changed from their defaults, so a design without reinforcement is
@@ -177,10 +187,10 @@ VARIABLES: dict[str, Var] = {
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
                                  "model's members are unchanged; 0: they end on the rail's side"),
     # roll bar (ROPS): a portal hoop behind the seats, two posts and a top beam (build_rollbar places it from
-    # the frame and the seats). Written into design.variables only when one of them differs from its default,
-    # so a design without a roll bar is the same as before these variables existed. The sizes and defaults are
-    # design choices (assumptions, no source).
-    "rollbar": Var("1", 0.0, 0.0, 1.0, "1: a roll bar (portal hoop) behind the seats, standing on the rails at a node "
+    # the frame and the seats). On by default (the demo vehicle has the systems it needs: kit/safety.py); a
+    # design that has no rollbar variable and no roll bar members (built before it was on by default) is read
+    # as rollbar = 0 (values_of). The sizes and defaults are design choices (assumptions, no source).
+    "rollbar": Var("1", 1.0, 0.0, 1.0, "1: a roll bar (portal hoop) behind the seats, standing on the rails at a node "
                    "rollbar_offset behind the seat's rear cross member S2, on outriggers out to rollbar_width; 0: none"),
     "rollbar_height": Var("mm", 1100.0, 900.0, 1400.0, "top beam centre line above the seat cushion top (the seats' "
                           "box top); assumption: the default puts the tube above the seated head of a young male 95th "
@@ -196,13 +206,12 @@ VARIABLES: dict[str, Var] = {
     "rollbar_b": Var("mm", 40.0, 25.0, 80.0, "square tube width (rollbar_square = 1)"),
     "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
-SWITCHES = ("cross_members_through", "rollbar", "rollbar_square")  # 0 or 1
+SWITCHES = ("cross_members_through", "rollbar", "rollbar_square", "driveshafts", "lamps")  # 0 or 1
 ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
                 "rollbar_t")
 ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
 # Optional variables, written into design.variables only when one of their group differs from its default.
-OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",),
-            "rollbar": ROLLBAR_VARS}
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
@@ -321,6 +330,8 @@ def values_of(design: Record) -> dict[str, Record]:
     if "gussets" in now and float(now["gussets"]["value"]) == 0.0:
         out.pop("gusset_leg", None)
         out.pop("gusset_thickness", None)
+    if "rollbar" not in now and not any(m["id"].startswith("rollbar_") for m in design.get("members", [])):
+        out["rollbar"] = _q(0.0, "1")  # built when the roll bar was off by default
     return out
 
 
@@ -359,13 +370,31 @@ def applies(flags: dict) -> bool:
 
 
 # Part list order of v1 (the rest after them as placed: each wheel, then its suspension)
-PART_ORDER = ["battery", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux", "floor_front",
-              "pedal_accel", "pedal_brake", "floor", "deck", "front_body", "steering_wheel", "steering_column", "steering_rack",
-              "tie_rod_FL", "tie_rod_FR", "seat_R", "seat_L", "occupant_R", "occupant_L", "cargo"]
+PART_ORDER = ["battery", "main_switch", "motor", "reducer", "driveshaft_RL", "driveshaft_RR", "controller", "aux",
+              "floor_front", "pedal_accel", "pedal_brake", "brake_master", "floor", "deck", "front_body", "steering_wheel",
+              "steering_column", "steering_shaft", "steering_rack", "tie_rod_FL", "tie_rod_FR", "seat_R", "seat_belt_R",
+              "seat_L", "seat_belt_L", "occupant_R", "occupant_L", "cargo"]
+
+
+def _kit(fn, *args, **kw):
+    """Call a kit's placing function; a part it cannot place is a DesignGenError (it says why)."""
+    try:
+        return fn(*args, **kw)
+    except DesignGenError:
+        raise
+    except ValueError as e:
+        raise DesignGenError(str(e)) from None
+
+
+@functools.lru_cache(maxsize=1)
+def _reference_shafts_kg() -> float:
+    """The driveshafts' mass of the default design (v1): MOTOR_V1's mass was the motor, the reducer and these."""
+    d = build(_reference=True)
+    return float(sum(p["mass_kg"] for p in d["parts"] if p["kind"] == "driveshaft"))
 
 
 def build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
-          name: str | None = None) -> Record:
+          name: str | None = None, _reference: bool | None = None) -> Record:
     """A design record from variables ({name: quantity or number}; the others take their defaults).
 
     Raises DesignGenError when a value is out of its range or the layout does not close
@@ -420,22 +449,28 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     motor_mass = MOTOR_V1["mass"] * max(v["motor_peak_power"] / MOTOR_V1["power"], v["motor_peak_torque"] / MOTOR_V1["torque"])
     material = json.loads(MATERIALS.read_text(encoding="utf-8"))["stkr400"]
     rho = float(material["density_kg_m3"])
-    drive = drivetrain.place(lay, motor_mass, "B", (v["driveshaft_diameter"], v["driveshaft_wall"]), rho)
+    shaft = (v["driveshaft_diameter"], v["driveshaft_wall"])
+    ref = None if _reference is not None else _reference_shafts_kg()  # the earlier motor's mass held v1's shafts
+    drive = _kit(drivetrain.place, lay, motor_mass, "B", shaft, rho, shafts=v["driveshafts"] == 1, reference_shafts=ref)
     lay.put(Item("controller", "モーターの制御器", "controller", (250.0, 200.0, 80.0), 4.0),
             x=front_at(S2 + CONTROLLER_LEAD_MM), y=0.0, z=top_at(lay.rail_bottom()), carried_by=lay.at("S2"))
     lay.put(Item("aux", "配線と 12 V の補機", "electrical", (300.0, 300.0, 100.0), 6.0),
             x=rear_at(S1), y=0.0, z=top_at(lay.rail_bottom() + AUX_DROP_MM))
+    _kit(safety.place_main_switch, lay, "aux")
+    if v["lamps"] == 1:
+        _kit(safety.place_lamps, lay, "front_body", E - v["cross_b"] / 2.0, rail_z, "deck")
     for pid, label, y in (("seat_R", "運転席", -seat_y), ("seat_L", "助手席", seat_y)):
         lay.put(Item(pid, label, "seat", (500.0, 500.0, 260.0), 12.0), x=seat_x, y=y, z=bottom_at(lay.top_of("floor")))
+    _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
                 x=seat_x - OCCUPANT_BACK_MM, y=sy, z=bottom_at(lay.top_of(seat)))
     # pedals from the driver's foot, then the steering from the driver's knee (kit/body.py, kit/steering.py)
-    feet = body.place_pedals(lay, "seat_R", "floor_front")
+    feet = _kit(body.place_pedals, lay, "seat_R", "floor_front", outboard_limit=rail_y + v["rail_b"] / 2.0)
     knee = feet["pose"].legs["R"].knee
-    steering.place(lay, 12.0, v["steering_x"] - STEERING_WHEEL_BEHIND_MM, -seat_y, -seat_y + STEERING_INBOARD_MM,
-                           float(knee[2]) + feet["pose"].radii["thigh"], rho)
+    _kit(steering.place, lay, 12.0, v["steering_x"] - STEERING_WHEEL_BEHIND_MM, -seat_y, -seat_y + STEERING_INBOARD_MM,
+         float(knee[2]) + feet["pose"].radii["thigh"], rho, avoid=("pedal_accel", "pedal_brake"))
     if BODY_PARTS:
         from hiraku.solvers.k4_geometry.people import grip_points
 
@@ -448,12 +483,13 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     for s in supports:  # each wheel (unsprung) and its arms, their tops level with the floors, inner face on the rail
         x, y, z = s["position_mm"]
         corner = corner_name(s, supports)
-        lay.put(Item(f"wheel_{s['id']}", f"{corner}の車輪 (タイヤ・ホイール・ハブ・ブレーキ)", "wheel", (2 * r, ww, 2 * r),
+        lay.put(Item(f"wheel_{s['id']}", f"{corner}の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)", "wheel", (2 * r, ww, 2 * r),
                      WHEEL_MASS_KG), x=x, y=y, z=z, carried_by=None)
-        lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アーム・ナックル・ダンパー)", "suspension",
+        lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アームとダンパー)", "suspension",
                      (250.0, 120.0, 200.0), 8.0),
                 x=x, y=right_at(rail_y) if y > 0 else left_at(-rail_y), z=top_at(on_rails), carried_by=None)
-    steering.place_corners(lay, rho)  # knuckles and the rear toe links, out of the suspension parts
+    _kit(steering.place_corners, lay, rho)  # knuckles and the rear toe links, out of the suspension parts
+    _kit(safety.place_brakes, lay, "pedal_brake", "front_body", "floor_front", feet["pose"])
     lay.reorder(PART_ORDER)
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
@@ -492,6 +528,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         "materials": materials,
     }
     write_hardpoints(design)
+    safety.add_rollbar_part(design)
+    systems.write(design)  # system and connects_to of every part, when the contract has them
     return design
 
 

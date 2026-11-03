@@ -6,8 +6,10 @@
 Pedals: the large driver (AIST young adult male 95th percentile, k4_geometry.people) sits in the
 seat with the heel on the floor and the knee at people.KNEE_ANGLE_DEG; the accelerator's pad is
 under the ball of the right foot, square to the sole (people.FOOT_ANGLE_DEG), its upper face at
-the ball; the brake's pad is BRAKE_OFFSET_MM inboard of it at the same place along x and z. Their
-mass (PEDAL_KG each) is taken out of the floor they stand on.
+the ball, but not further out than outboard_limit (the generator passes the frame rails' outer
+face: the pedals stand in the footwell inside the front wheels' sweep, assumption); the brake's
+pad is BRAKE_OFFSET_MM inboard of it at the same place along x and z. Their mass (PEDAL_KG each)
+is taken out of the floor they stand on.
 
 The body as parts (occupant_parts): the occupant's mass split by segment (SEGMENT_SHARE) into the
 trunk with the head (the part keeps the occupant's id) and thighs, shanks, feet and arms, each
@@ -58,9 +60,11 @@ def driver_pose(lay: Layout, seat: str, floor: str):
     return people.seated(back, top, y, fz, people.BIG)
 
 
-def place_pedals(lay: Layout, seat: str, floor: str) -> Record:
+def place_pedals(lay: Layout, seat: str, floor: str, outboard_limit: float | None = None) -> Record:
     """Put the accelerator and brake pedals in under the driver's right foot; returns
-    {"ball": the right ball of the foot, "pose": the driver's pose}."""
+    {"ball": the right ball of the foot, "pose": the driver's pose}. outboard_limit: the pads' outer
+    edge stays at most this far from the centre line (the footwell between the frame rails, inside
+    the front wheels' sweep); a foot further out turns in to the pedal (the pad moves in along y only)."""
     from hiraku.solvers.k4_geometry import people
 
     pose = driver_pose(lay, seat, floor)
@@ -70,10 +74,13 @@ def place_pedals(lay: Layout, seat: str, floor: str) -> Record:
     normal = np.array([-np.sin(a), 0.0, np.cos(a)])
     t = PEDAL_PAD_MM[2]
     centre = ball - normal * t / 2.0
+    if outboard_limit is not None and abs(centre[1]) + PEDAL_PAD_MM[1] / 2.0 > outboard_limit:
+        centre[1] = np.sign(centre[1]) * (outboard_limit - PEDAL_PAD_MM[1] / 2.0)
     _, _, rpy = link_box(centre - along, centre + along, 1.0)
     inboard = 1.0 if ball[1] < 0 else -1.0  # toward the centre line
-    for pid, label, dy in (("pedal_accel", "アクセルのペダル", 0.0), ("pedal_brake", "ブレーキのペダル", inboard * BRAKE_OFFSET_MM)):
-        p = lay.put(Item(pid, label, "pedal", PEDAL_PAD_MM, PEDAL_KG), centre[0], centre[1] + dy, centre[2])
+    for pid, label, kind, dy in (("pedal_accel", "アクセルのペダル", "accelerator_pedal", 0.0),
+                                 ("pedal_brake", "ブレーキのペダル", "brake_pedal", inboard * BRAKE_OFFSET_MM)):
+        p = lay.put(Item(pid, label, kind, PEDAL_PAD_MM, PEDAL_KG), centre[0], centre[1] + dy, centre[2])
         p["box"]["rpy_deg"] = rpy
     fl = lay.part(floor)
     if fl["mass_kg"] <= 2 * PEDAL_KG:

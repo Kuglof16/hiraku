@@ -37,8 +37,11 @@ class ModalTest(unittest.TestCase):
 
         d = on_board(DESIGN, "two_cargo")
         r = modes(d, 6)
-        i = next(k for k, x in enumerate(r["flexibility"]) if x >= 0.3)
-        u = r["shapes"][i]
+        # the ladder's own bending (the roll bar's sway, on by default, bends the hoop and leaves the ladder as it is)
+        i = next(k for k, x in enumerate(r["ladder_flexibility"]) if x >= 0.3)
+        from hiraku.solvers.k1_frame.modal import ladder_nodes
+
+        u = {n: r["shapes"][i][n] for n in ladder_nodes(d, list(r["shapes"][i]))}  # the ladder's nodes
         self.assertLess(max(abs(v[0]) for v in u.values()), 0.25 * max(abs(v[2]) for v in u.values()))
         self.assertLess(u["LE"][2] * u["RE"][2], 0.0)  # the rear corners move opposite ways
         hand = solvers.formula_registry().evaluate("modal.ladder_twist_mode", ladder_twist_inputs(d)["inputs"])

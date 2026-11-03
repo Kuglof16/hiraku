@@ -24,6 +24,9 @@ GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w}  # by product
 ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w}  # by kind of design
 # requirement keys that set variables of the design (key -> (variable, unit))
 FROM_REQUIREMENTS = {"Q33": ("occupant_mass", "kg"), "Q40": ("cargo_mass", "kg"), "Q50": ("max_speed", "km/h")}
+# Product flags that switch a generator variable on in the first version (when the generator has it and
+# the caller does not give it): a vehicle for public roads carries its lamps (ladder_4w.lamps, kit/safety.py).
+FROM_FLAGS = {"public_road": ("lamps", 1.0)}
 
 
 def generator(product: str) -> ModuleType:
@@ -109,6 +112,9 @@ def propose(archetype: str, choices: dict, values: dict, requirements: Record) -
                 vals[name] = {"value": units.convert(float(r["value"]), r.get("unit", unit), unit, r["key"]), "unit": unit}
             except ValueError as e:
                 raise DesignGenError(f"requirement {r['key']}: {e}") from None
+    for flag, (name, value) in FROM_FLAGS.items():  # e.g. lamps on a vehicle for public roads
+        if (requirements.get("flags") or {}).get(flag) and name in gen.VARIABLES and name not in vals:
+            vals[name] = {"value": value, "unit": gen.VARIABLES[name].unit}
     product = requirements.get("product", archetype)
     return gen.build(vals, version=1, parent=None, reason="first version", name=f"{product} v1: {gen.DESCRIPTION}")
 

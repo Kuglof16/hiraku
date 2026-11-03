@@ -12,10 +12,17 @@ Where the parts go (each rule from the K2 hard points of the driven supports and
 - the motor sits ahead of the reducer, its back face on the reducer's front face, on the same
   height (motor axis parallel to the outputs: assumption).
 
-Masses: the given total (the motor and reducer of the earlier versions) is split: each
-driveshaft is a steel tube (outer diameter and wall given) from joint to joint plus two joints of
-CV_JOINT_KG; of the rest, REDUCER_SHARE is the reducer and the remainder the motor. The
-driveshafts have no carried_by: they ride with their wheel (the outer joint moves with it).
+Masses: each driveshaft is a steel tube (outer diameter and wall given) from joint to joint plus
+two joints of CV_JOINT_KG; the motor and the reducer share the given total less the shafts'
+reference mass (`reference_shafts`: the shafts the total was split with; the caller passes those of
+its first version, so the motor does not get lighter when a wider track makes the shafts longer),
+REDUCER_SHARE to the reducer and the rest to the motor. With the reference equal to the shafts'
+own mass the parts add up to the total. The driveshafts have no carried_by: they ride with their
+wheel (the outer joint moves with it).
+
+Without driveshafts (place(..., shafts=False): a design missing a link of the drive on purpose)
+the motor and the reducer are placed as with them and the shafts' mass is added to the reducer,
+so the total and the turning inertias stay the same; nothing carries the torque on to the wheels.
 """
 
 from __future__ import annotations
@@ -78,22 +85,31 @@ def cross_member_bottom(lay: Layout, station: str) -> float:
     return float(min(out))
 
 
-def place(lay: Layout, total_mass: float, station: str, shaft: tuple[float, float], rho: float) -> Record:
-    """Put the motor, the reducer and the driveshafts in; returns their masses and the turning inertias
-    (kg*m^2): {"motor", "reducer", "shafts", "rotor_inertia", "gear_inertia"}."""
+def shaft_masses(design: Record, shaft: tuple[float, float], rho: float) -> dict[str, float]:
+    """{driven support id: mass of its driveshaft (kg)}: the tube from joint to joint and two joints."""
+    od, wall = shaft
+    out = {}
+    for s in driven(design):
+        a, b = driveshaft_joints(design, s["id"])
+        out[s["id"]] = tube_mass(float(np.linalg.norm(np.subtract(b, a))), od, wall, rho) + 2 * CV_JOINT_KG
+    return out
+
+
+def place(lay: Layout, total_mass: float, station: str, shaft: tuple[float, float], rho: float,
+          shafts: bool = True, reference_shafts: float | None = None) -> Record:
+    """Put the motor, the reducer and (with shafts) the driveshafts in; returns their masses and the
+    turning inertias (kg*m^2): {"motor", "reducer", "shafts" (those placed), "rotor_inertia", "gear_inertia"}.
+    reference_shafts: the shafts' mass the total was split with (None: these shafts' own mass)."""
     od, wall = shaft
     sups = driven(lay.design)
     if not sups:
         raise ValueError("no driven wheel to drive")
     joints = {s["id"]: driveshaft_joints(lay.design, s["id"]) for s in sups}
-    shafts = {}
-    for s in sups:
-        a, b = joints[s["id"]]
-        length = float(np.linalg.norm(np.subtract(b, a)))
-        shafts[s["id"]] = tube_mass(length, od, wall, rho) + 2 * CV_JOINT_KG
-    rest = total_mass - sum(shafts.values())
+    shaft_mass = shaft_masses(lay.design, shaft, rho)
+    ref = sum(shaft_mass.values()) if reference_shafts is None else reference_shafts
+    rest = total_mass - ref
     if rest <= 0:
-        raise ValueError(f"the driveshafts ({sum(shafts.values()):.1f} kg) weigh more than the drive ({total_mass:.1f} kg)")
+        raise ValueError(f"the driveshafts ({ref:.1f} kg) weigh more than the drive ({total_mass:.1f} kg)")
     m_red = REDUCER_SHARE * rest
     m_mot = rest - m_red
     inner = np.array([j[0] for j in joints.values()])
@@ -103,15 +119,16 @@ def place(lay: Layout, total_mass: float, station: str, shaft: tuple[float, floa
     height = 2.0 * (cross_member_bottom(lay, station) - REDUCER_BELOW_MM - axis_z)
     if height <= 0:
         raise ValueError("the driveshafts' line is above the cross member at the axle: no room for the reducer")
-    red = lay.put(Item("reducer", "減速機と差動", "reducer", (REDUCER_LENGTH_MM, width, height), m_red),
+    m_case = m_red if shafts else m_red + sum(shaft_mass.values())
+    red = lay.put(Item("reducer", "減速機と差動", "reducer", (REDUCER_LENGTH_MM, width, height), m_case),
                   x=axis_x, y=float(inner[:, 1].mean()) if len(inner) > 1 else 0.0, z=axis_z, carried_by=lay.at(station))
     lay.put(Item("motor", "モーター", "motor", MOTOR_SIZE_MM, m_mot),
             x=rear_at(red["box"]["center_mm"][0] + REDUCER_LENGTH_MM / 2.0), y=0.0, z=axis_z, carried_by=lay.at(station))
-    for s in sups:
+    for s in sups if shafts else []:
         a, b = joints[s["id"]]
         corner = "左" if s["position_mm"][1] > 0 else "右"
-        put_link(lay, Item(f"driveshaft_{s['id']}", f"{corner}のドライブシャフト", "driveshaft", (0, 0, 0), shafts[s["id"]]),
-                 a, b, od / 2.0, carried_by=None)
-    return {"motor": m_mot, "reducer": m_red, "shafts": shafts,
+        put_link(lay, Item(f"driveshaft_{s['id']}", f"{corner}のドライブシャフト", "driveshaft", (0, 0, 0),
+                           shaft_mass[s["id"]]), a, b, od / 2.0, carried_by=None)
+    return {"motor": m_mot, "reducer": m_case, "shafts": shaft_mass if shafts else {},
             "rotor_inertia": ROTOR_SHARE * m_mot * (ROTOR_RADIUS_MM / 1000.0) ** 2 / 2.0,
             "gear_inertia": GEAR_SHARE * m_red * (GEAR_RADIUS_MM / 1000.0) ** 2 / 2.0}

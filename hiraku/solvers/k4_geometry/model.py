@@ -30,7 +30,10 @@ MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is m
 # are listed so that designs using them get capsules without a change here.
 SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "steering_column",
                  "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper")
-WELDED = {"frame", "gusset"}  # part kinds welded into the frame at their carried_by joints
+WELDED = {"frame", "gusset", "rollbar"}  # part kinds welded into the frame at their carried_by joints
+# Part kinds that stand for frame members (their box is a member's box): they overlap the members
+# at their carried_by nodes any amount (the roll bar part is its top beam, kit/safety.py).
+FRAME_PIECES = ("frame", "rollbar")
 # Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
 # end (motion.sweep turns them about the inner end).
 LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
@@ -135,7 +138,7 @@ def allowance(a: Body, b: Body, design: dict) -> float:
         return float("inf") if a.nodes & b.nodes else TOUCH_MM
     if a.kind == "member" or b.kind == "member":
         part, mem = (b, a) if a.kind == "member" else (a, b)
-        if part.kind == "frame" and part.nodes & mem.nodes:  # a piece of the frame welded in at the joint
+        if part.kind in FRAME_PIECES and part.nodes & mem.nodes:  # a piece of the frame welded in at the joint
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM

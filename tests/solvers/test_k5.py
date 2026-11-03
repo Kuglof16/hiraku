@@ -8,6 +8,13 @@ from hiraku.solvers.shelf import fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+
+
+def _one_steel():
+    """The demo vehicle without the roll bar (its tubes are another steel): one material, so scaling its E
+    scales every stiffness alike."""
+    from hiraku.designgen import ladder_4w
+    return ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
 TOOLS = {t.name: t for t in solvers.builtin_tools()}
 PRED = [{"prediction_id": "pred-0001"}]
 
@@ -43,7 +50,7 @@ class SensitivityTest(unittest.TestCase):
     def test_through_run_params(self):
         lc = {"load_case_id": "R1", "test_id": "R1", "domain": "strength", "title": "x",
               "params": {"step_height": q(100, "mm")}, "tolerance_rel": 0.15}
-        rec = TOOLS["frame_static"].run(DESIGN, lc, PRED, {"sensitivity": {"quantity": "max_stress", "paths": [
+        rec = TOOLS["frame_static"].run(_one_steel(), lc, PRED, {"sensitivity": {"quantity": "max_stress", "paths": [
             "sections.rt40x80x2.3.dims_mm.h", "materials.stkr400.E_MPa"]}})
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
         sens = [x for x in rec["effects"] if x["name"].startswith("max_stress to")]

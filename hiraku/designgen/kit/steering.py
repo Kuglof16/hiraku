@@ -11,7 +11,8 @@ Where the parts go:
   wheel's centre is at wheel_x, on the driver's middle line; the column runs forward and down
   from it at COLUMN_ANGLE_DEG, the wheel square to it, high enough that the rim's lowest point is
   KNEE_GAP_MM above the top of the large driver's knee; the column ends above the pinion (at its
-  x, at least COLUMN_MIN_MM long) and an intermediate shaft runs from there to the pinion;
+  x, at least COLUMN_MIN_MM long) and an intermediate shaft runs from there to the pinion; the
+  pinion moves inboard along the rack until that shaft is PEDAL_GAP_MM clear of the pedals;
 - a knuckle is the box around the outer joints of the wheel's links (lca_outer, uca_outer,
   tie_outer) and KNUCKLE_PAD_MM beyond them; a wheel that does not steer has a toe link from
   tie_inner to tie_outer, like a tie rod.
@@ -34,6 +35,7 @@ from hiraku.designgen.kit.package import Item, Layout
 
 Record = dict[str, Any]
 
+WHEEL_KIND = "steering"  # the steering wheel: the steering system's input (where the systems check starts)
 STEERING_WHEEL_DIAMETER_MM = 350.0  # assumption
 STEERING_WHEEL_THICKNESS_MM = 40.0  # rim and hub along the column (assumption)
 COLUMN_RADIUS_MM = 20.0  # column and its jacket (assumption)
@@ -50,6 +52,8 @@ KNEE_GAP_MM = 50.0  # the steering wheel's rim above the top of the large driver
 KNUCKLE_KG = 2.5  # one knuckle with its hub bearing (assumption)
 KNUCKLE_PAD_MM = 20.0  # the knuckle's box this far beyond its joints (assumption)
 PINION_END_MM = 30.0  # the pinion at least this far in from the rack's ends (assumption)
+PINION_STEP_MM = 5.0  # the pinion's step inboard while the intermediate shaft meets a pedal
+PEDAL_GAP_MM = 10.0  # the intermediate shaft this far clear of the pedals (assumption)
 
 
 def _hp(design: Record, sid: str) -> Record:
@@ -90,7 +94,7 @@ def _axis(part: Record) -> tuple[np.ndarray, np.ndarray]:
 def column_ends(design: Record, part: Record) -> tuple[list[float], list[float]]:
     """(steering wheel centre, lower end) of the column: the centre of the wheel nearest to its upper end."""
     top, low = _axis(part)
-    wheels = [p for p in design["parts"] if p["kind"] == "steering_wheel"]
+    wheels = [p for p in design["parts"] if p["kind"] in (WHEEL_KIND, "steering_wheel")]
     w = min(wheels, key=lambda p: float(np.linalg.norm(np.asarray(p["box"]["center_mm"], float) - top)))
     return [float(v) for v in w["box"]["center_mm"]], low.tolist()
 
@@ -124,9 +128,30 @@ def wheel_centre(wheel_x: float, driver_y: float, knee_top: float) -> np.ndarray
     return np.array([wheel_x, driver_y, knee_top + KNEE_GAP_MM + r * math.sqrt(1.0 - u[2] ** 2)])
 
 
+def _clear_pinion(lay: Layout, low: np.ndarray, pin: np.ndarray, avoid: tuple[str, ...]) -> np.ndarray:
+    """The pinion moved inboard along the rack, PINION_STEP_MM at a time, until the intermediate shaft
+    from `low` to it is PEDAL_GAP_MM clear of the parts in `avoid` (the pedals)."""
+    from hiraku.solvers.k4_geometry.capsule import capsule_box_overlap, from_points
+    from hiraku.solvers.k4_geometry.obb import from_box
+
+    boxes = [from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg")) for p in lay.parts
+             if p["id"] in avoid]
+    a, b = (np.asarray(p, float) for p in rack_ends(lay.design))
+    ys = sorted((a[1], b[1]))
+    step = PINION_STEP_MM if pin[1] < 0 else -PINION_STEP_MM  # toward the centre line
+    y = float(pin[1])
+    while boxes and max(capsule_box_overlap(from_points(low, pin, SHAFT_RADIUS_MM), o) for o in boxes) > -PEDAL_GAP_MM:
+        y += step
+        if not ys[0] + PINION_END_MM <= y <= ys[1] - PINION_END_MM:
+            raise ValueError("the intermediate steering shaft cannot clear the pedals along the rack")
+        pin = pinion(lay.design, y)
+    return pin
+
+
 def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinion_y: float, knee_top: float,
-          rho: float) -> Record:
-    """Put the rack, tie rods, column and steering wheel in; returns their masses."""
+          rho: float, avoid: tuple[str, ...] = ()) -> Record:
+    """Put the rack, tie rods, column and steering wheel in; returns their masses. avoid: parts (the
+    pedals) the intermediate shaft keeps PEDAL_GAP_MM clear of (the pinion moves inboard for it)."""
     design = lay.design
     left_right = rack_ends(design)
     rods = {}
@@ -146,6 +171,7 @@ def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinio
     u = column_direction()
     length = max((pin[0] - centre[0]) / u[0], COLUMN_MIN_MM)
     low = centre + u * length
+    pin = _clear_pinion(lay, low, pin, avoid)
     put_link(lay, Item("steering_rack", "ステアリングのラック", "steering_rack", (0, 0, 0), m_rack), *left_right,
              RACK_RADIUS_MM)
     for s in steered(design):
@@ -162,7 +188,7 @@ def place(lay: Layout, total_mass: float, wheel_x: float, driver_y: float, pinio
 
     half = STEERING_WHEEL_THICKNESS_MM / 2.0
     _, _, rpy = link_box(centre - u * half, centre + u * half, 1.0)
-    w = lay.put(Item("steering_wheel", "ハンドル", "steering_wheel",
+    w = lay.put(Item("steering_wheel", "ハンドル", WHEEL_KIND,
                      (STEERING_WHEEL_THICKNESS_MM, STEERING_WHEEL_DIAMETER_MM, STEERING_WHEEL_DIAMETER_MM), m_wheel),
                 *centre.tolist())
     if rpy is not None:
