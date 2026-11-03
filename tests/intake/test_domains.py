@@ -1,3 +1,4 @@
+import re
 import unittest
 
 from hiraku import contract
@@ -21,13 +22,13 @@ class ProductFilesTest(unittest.TestCase):
                 req = load_product(slug)  # load_requirements validates
                 self.assertEqual(contract.errors("requirements_file", req), [])
 
-    def test_external_values_say_not_checked(self):
+    def test_external_values_say_whether_they_were_read(self):
         for slug in ("care-bed", "electric-guitar", "serving-robot"):
             req = load_product(slug)
             for r in req["requirements"]:
                 if r["trust"] in (1, 2):
                     with self.subTest(slug=slug, key=r["key"]):
-                        self.assertIn("not checked", r["basis"])
+                        self.assertTrue("not checked" in r["basis"] or re.search(r"read 20\d\d-\d\d-\d\d", r["basis"]), r["basis"])
 
     def test_sample_answers_exist_for_the_products_that_have_must_questions(self):
         for slug in ("care-bed", "serving-robot", "offroad-4w"):

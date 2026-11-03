@@ -4,6 +4,7 @@
     model = fe.FEModel(nodes)                               # model.py: nodes with 0, 3 or 6 DOFs
     model.add(fe.solid.Hex20(conn, E, nu, rho))             # solid.py: HEX20 (3x3x3) / Hex8 (2x2x2)
     model.add(fe.shell.MITC4(conn, t, E, nu, rho))          # shell.py: k1_shell's MITC4 as a group
+    model.add(fe.tri.Tri3(conn3, t, E, nu, rho))            # tri.py: DKT + CST triangles (bending="mitc3" too)
     model.add(fe.connect.Spring(pairs, k, frames))          # connect.py: springs and bushings
     model.add(fe.connect.rigid_link(m, slaves, model.nodes))         # RBE2
     model.add(fe.connect.distributing_link(ref, ids, model.nodes))   # RBE3
@@ -24,10 +25,10 @@
 Units: N, mm, MPa, tonne (density t/mm^3).
 """
 
-from . import analysis, beam, checks, connect, eigen, frame, loads, mesh, precheck, quality, shell, solid
+from . import analysis, beam, checks, connect, eigen, frame, loads, mesh, precheck, quality, shell, solid, tri
 from .model import Constraint, ElementGroup, Equation, FEModel, Layout, ModelError, Solution, StaticSolver, resultant, \
     solve_static
 
 __all__ = ["Constraint", "ElementGroup", "Equation", "FEModel", "Layout", "ModelError", "Solution", "StaticSolver",
            "analysis", "beam", "checks", "connect", "eigen", "frame", "loads", "mesh", "precheck", "quality", "resultant", "shell",
-           "solid", "solve_static"]
+           "solid", "solve_static", "tri"]

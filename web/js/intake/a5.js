@@ -2,7 +2,7 @@
 
 import { CATEGORIES, FACTS } from "./data.js";
 import { fill, h } from "./dom.js";
-import { allRules, ruleState, ruleTree } from "./model.js";
+import { allRules, ruleNeeds, ruleState, ruleTree } from "./model.js";
 
 const MODES = [["category", "分類から"], ["source", "出どころから"]];
 const FILTERS = [["all", "すべて"], ["builtin", "基本"], ["dropped", "取り込んだ"], ["hit", "当たった"]];
@@ -54,12 +54,15 @@ function detail(m, rule, ui) {
   const hitIds = new Set(st.hits.map((x) => x.part_id));
   const neIds = new Map(st.notEvaluable.map((x) => [x.part_id, x.missing]));
   const c = m.checks.get(rule.rule_id);
+  const needs = ruleNeeds(rule, FACTS);
   return h("div", { class: "in-detail" },
     h("header", {}, h("code", {}, rule.rule_id), h("h3", {}, rule.text), status(st, ui.disabled.has(rule.rule_id))),
     h("dl", {},
       h("dt", {}, "分類"), h("dd", {}, cat),
       h("dt", {}, "出どころ"), h("dd", {}, rule.origin === "builtin" ? "基本の制約" : `取り込んだファイル ${rule.docName}`),
       h("dt", {}, "式"), h("dd", {}, h("code", { class: "in-formula" }, rule.check), h("small", {}, ` 式の出どころ: ${BY_JA[rule.check_by] || "データに書いてあった式"}`)),
+      needs.length ? [h("dt", {}, "要る値"), h("dd", {}, needs.map((n) => [h("code", { title: n.name }, `${n.label} (${n.name})`),
+        n.inDesigns ? null : h("small", { class: "in-miss" }, " 今の設計は持っていない値"), " "]))] : null,
       h("dt", {}, "対象"), h("dd", {}, rule.applies_to?.kinds?.join("・") || "すべての部品"),
       h("dt", {}, "根拠"), h("dd", {}, h("span", { class: `in-dot t${rule.trust}`, title: TRUST_JA[rule.trust] }, rule.trust), " ", rule.basis)),
     h("h4", {}, "設計に当てた結果", st.checked ? h("small", {}, ` 版 ${st.designVersion}`) : null),

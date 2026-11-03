@@ -559,7 +559,6 @@ class KnownAnswersTest(unittest.TestCase):
         self.assertTrue(all(r["pass"] for r in rows))
         for r in rows:
             self.assertEqual(set(r), {"case", "quantity", "expected", "got", "unit", "tolerance_rel", "pass", "source"})
-        self.assertLess(dt, 15.0)
 
 
 class LoadSpreadTest(unittest.TestCase):

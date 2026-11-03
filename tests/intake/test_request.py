@@ -17,7 +17,7 @@ from hiraku.intake.guess import guess_flags
 
 ROBOT = load_product("serving-robot")
 BED = load_product("care-bed")
-BED_ANSWERS = {"Q30": "利用者 1 人 + 介助者 1 人", "Q40": {"value": 1700, "unit": "N"}}
+BED_ANSWERS = {"Q30": "driver", "Q40": {"value": 1700, "unit": "N"}}
 NOW = datetime(2026, 11, 3, 14, 0, 0)
 
 
@@ -175,7 +175,7 @@ class FinishTest(unittest.TestCase):
 
     def test_a_product_nobody_has_a_file_for(self):
         first = request.begin("飲み物を運ぶロボ", product="my-robot")
-        done = request.finish(first["draft"], {"Q40": 20, "Q50": 1.0, "Q30": "x"})
+        done = request.finish(first["draft"], {"Q40": 20, "Q50": 1.0, "Q30": "two_cargo"})
         self.assertEqual(done["requirements_file"]["product"], "my-robot")
         self.assertEqual(contract.errors("requirements_file", done["requirements_file"]), [])
 

@@ -27,6 +27,25 @@ class StandardSizes(unittest.TestCase):
         self.assertIn([80, 40, 2.3], rect)
         self.assertTrue(all(d > 2 * t > 0 for d, t in data["round_tube"]["sizes"]))
 
+    def test_every_printed_unit_mass_follows_the_standards_formula(self):
+        # the tables print W rounded to 3 significant figures (JIS Z 8401, rounding to the even neighbour on a tie);
+        # recomputing every row with the standard's own formula and rounding the same way gives the printed value
+        from decimal import ROUND_HALF_EVEN, Decimal
+
+        def sig3(x: float) -> float:
+            d = Decimal(repr(x))
+            return float(d.quantize(Decimal(1).scaleb(d.adjusted() - 2), rounding=ROUND_HALF_EVEN))
+
+        data = json.loads(DATA.read_text(encoding="utf-8"))
+        formulas = {"rect_tube": lambda a, b, t: 0.0157 * t * (a + b - 3.287 * t),  # JIS G 3466 (STKR)
+                    "round_tube": lambda d, t: 0.02466 * t * (d - t)}              # JIS G 3444 (STK)
+        for shape, w in formulas.items():
+            block = data[shape]
+            self.assertEqual(len(block["unit_mass_kg_m"]), len(block["sizes"]), shape)
+            bad = [(s, printed, sig3(w(*s))) for s, printed in zip(block["sizes"], block["unit_mass_kg_m"])
+                   if abs(sig3(w(*s)) - printed) > 1e-9 * printed]
+            self.assertEqual(bad, [], shape)
+
     def test_standard_records_fit_the_contract(self):
         for shape in ("rect_tube", "round_tube"):
             recs = kit.standard(shape)

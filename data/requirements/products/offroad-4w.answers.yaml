@@ -4,7 +4,8 @@
 # Q03 (use), Q20 (IP) and Q91 (hours) are left unanswered on purpose: they stay open in the hearing.
 # A key the requirements file already has is not asked, so it is not answered here.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source in a source check on that date.
 answers:
   Q34:
     value: いない
@@ -13,7 +14,7 @@ answers:
   Q64:
     value: あり
     trust: 1
-    basis: ROHVA 1 has an item for ROPS, https://rohva.org/ansi-standard/ (not checked in this repository)
+    basis: ROHVA 1 has an item for ROPS, https://rohva.org/ansi-standard/; read 2026-11-03 in a source check
   Q74:
     value: 51.2
     unit: V

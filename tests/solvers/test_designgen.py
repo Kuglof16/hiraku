@@ -115,7 +115,7 @@ class DesignGenTest(unittest.TestCase):
         from hiraku.catalog.build import check_design_loading
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
         kinds = designgen.archetypes(req["flags"])
-        self.assertEqual([k["name"] for k in kinds], ["ladder_4w"])
+        self.assertEqual([k["name"] for k in kinds], ["ladder_4w", "space_frame_utv"])  # Claude picks one
         self.assertEqual(kinds[0]["choices"], {"joints": ["butt", "gusset", "through"]})
         self.assertEqual(designgen.archetypes({"self_propelled": False, "ride": True}), [])
         d = designgen.propose("ladder_4w", {}, {}, req)

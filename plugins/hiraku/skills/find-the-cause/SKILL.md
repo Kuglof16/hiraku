@@ -33,6 +33,7 @@ description: 予測と解析が食い違った (compare が mismatch) ときに�
 
 - `cause`: 何が違っていたかを 1 文で。分かっていない所は「確かめていない」と書く。推測を事実のように書かない
 - `fix`: 次に何を変えるか (予測の前提か入力を直す、別の式を使う、設計を直す)
+- シェルのホットスポットが梁の式を大きく超えたつなぎ目なら、別の式は `frame_static.joint_wall_bending` で、入力は `get_context(sections=["joint_wall_inputs"], load_case_id=...)` から写す (skill `hiraku:predict-then-analyze` の 2b)
 
 ## 5. やり直すか、安全側として合否を出すか
 

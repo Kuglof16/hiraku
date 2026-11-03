@@ -1,6 +1,6 @@
 # 契約 (部署のあいだの決まり)
 
-HIRAKU は、Claude Code のセッションを「部署」に見立てて並べて作った。統括部 (契約を書き、各部署の成果を確かめて main に取り込む) と、設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部。各部署は自分の git worktree と branch で、下の表の持ち場のファイルだけを書く。この文書は、その部署どうしが同じ形でつながるための決まり。
+HIRAKU は、Claude Code のセッションを「部署」に見立てて並べて作った。統括部 (契約を書き、各部署の成果を確かめて main に取り込む) と、設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部・受付部、それに HIRAKU をプラグインの道で回して困った所を集める実験部 (コードは書かない)。各部署は自分の git worktree と branch で、下の表の持ち場のファイルだけを書く。この文書は、その部署どうしが同じ形でつながるための決まり。
 
 形の正本は [`hiraku/contract/hiraku.schema.json`](../hiraku/contract/hiraku.schema.json)。この文書は読み方の案内で、食い違ったら schema が正しい。schema を変えたいときは統括部に頼む (部署の中で勝手に足さない)。
 
@@ -47,6 +47,10 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 合否 (`verdict`) は道具の中でだけ作る: 一致した照合から (`compare`、`basis: "match"`、値は解析) か、説明された安全側の食い違いから (`record_cause`、上の 4)。`basis` が無いものは `match`。
 
+分野が緑 (合格) になる条件 (2026-11-03、実験部の 2 本目の実行で、シェルが 472 MPa を出したのに強度が緑で終わったことから): その版の、その分野の荷重条件のどれについても、(a) 合格の `verdict` がある、(b) 照合の食い違いのうち、原因が解けていない (`resolved` が false) ものが無い、(c) 判定に使う量で基準を超えた解析の結果が無い。どれかが欠ければ、その分野は緑にならない (赤か、まだ判定の無い扱い)。あとの解析が基準を超えたら、前の安全側の `verdict` (`explained_safe_side`) は効かなくなる。HK4 は (b)・(c) の残る分野を「まだ判定の無い分野」と同じに扱う (設計役へ渡すか、原因を書いて解くまで終われない)。
+
+判定に使う量: 荷重条件の基準の量 (`criterion.quantity`) が `max_stress` のとき、板 (シェル) の道具 `frame_shell` で判定に使うのは `max_hot_spot_stress` (溶接の止端の構造応力)。要素の最大 `max_stress` は鋭い角で細かくするほど上がる値なので、記録には出すが判定には使わない。`comparison.quantity` には、実際に比べた結果の量の名前を書く (呼ぶときの `result_quantity` と同じ)。
+
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
 | ID | 中身 |
@@ -55,6 +59,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 | HK2 | 照合 (答えの分かっている例) に通っていない道具の `analyze` は止める |
 | HK3 | 原因の無い食い違いがある分野では `analyze` と `compare` を止める |
 | HK4 | 選んだ分野にまだ判定の無いものがある間は終われない (上限に達したときだけ止まる。止めた回数に上限を付ける) |
+
+照合の使い回し (HK2 の補い): 棚の道具の照合は、hiraku のソース (`.py` を全部) のハッシュが同じ間だけ、前の実行の結果を使ってよい。そのときの `tool_check` に `code_hash` と `cached_from` (使い回した実行の run_id) を書く。コードが 1 行でも変われば照合をやり直す。実行の中で Claude が作った道具の照合は使い回さない
 
 ## 解析部と設計部のあいだ (Python)
 
@@ -71,12 +77,13 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - pre 処理の中身: analysis の任意の欄 `setup` に、その荷重条件でモデルに入れたものを書く。`constraints` (メッシュの節の番号と止めた自由度)、`loads` (力の点・向き・大きさ、分けたときは `spread_to` に節と重み)、`inertia_relief`、`checks` (解く前の点検の値: 釣り合いの残り・モデルの質量・設計の質量など、quantity。名前は `equilibrium_residual`・`load_balance_residual` (単位 1)、`model_mass` (kg)、`mass_difference` (%)、`free_rigid_body_modes` (1) にそろえる)。接続要素 (剛な結び・ばね・tie) は mesh の側に持つ (形は共通の核と一緒に決める)
 - メッシュの品質 (pre 処理の点検): mesh の任意の欄 `quality` に、解く前にコードが測った値を入れる。`metrics` (縦横比・反り・ゆがみ・角度・ヤコビアン比など。名前 → `worst`・`p95`・`limit`・`over_limit`・`worst_element`)、任意で `per_element` (画面で色に塗る)、`topology` (自由縁・重なった節・つながっていない組・裏返った法線・負の体積)、`verdict` (`ok`・`warn`・`fail`。fail ならソルバーは解かない)。限度はソルバーの目安で、出典が無ければ仮定と書く
 - メッシュの大きさの確かめ (post 処理): 誤差の目安は field の `kind` `error_estimate` (要素ごと `per_element`、単位 `%`。例: Zienkiewicz–Zhu。なめらかに直した応力と要素の応力の差のエネルギーの大きさを、直した応力の大きさで割る)。画面で色に塗り、細かくすべき所を見せる。収束は analysis の任意の欄 `mesh_convergence`: 判定に使う値 (`quantity`・`unit`) を同じ設計の細かいメッシュで解き直した `levels` (粗い順、`element_size_mm`・`value`、任意で `elements`、記録したメッシュなら `mesh_id`。細かい方のメッシュは記録しない)、最も細かい 2 つの変化 `change_pct` と限度 `limit_pct`、3 つあれば Richardson の `observed_order`・`extrapolated`・`error_pct`、`verdict` (`converged`・`not_converged`・`singular`。singular は小さくするほど値が上がり続ける所 (鋭い角・点の荷重) で、そのままでは判定に使えない)
+- 1 つの版に mesh が 2 つ以上あってよい (例: 版の板のメッシュ `frame_mesh` と、管ごとに切って tie で結ぶ `frame_tubes` のメッシュ)。mesh の任意の欄 `mesher` に作ったものの名前を書き、field は自分の載る mesh を `mesh_id` で名指す。道具が自分でメッシュを作るときも、`mesh.created` を `analysis.started` の前に出す
 - メッシュを作るのは解析部の `hiraku.solvers.frame_mesh(design)` (入口は任意の 1 つ、`OPTIONAL_SOLVER_ENTRY_POINTS`。mesh_id の無い mesh を返す)。記録するのは `analyze`: 道具が `needs_mesh` (無ければ False) なら、その版の mesh が無いときだけ 1 回作って `mesh.created` を出し (mesh は解析の入力なので、その解析の `analysis.started` より前に出す)、道具の `run` に `params["mesh"]` で渡す。道具は同じ設計から作った mesh かを確かめ、field の `mesh_id` に書く。渡されないとき (照合・単体の試験) は mesh の field を出さず results だけ返す
 - サスの取付点は、設計の `support.suspension.hardpoints_mm` (取付点の名前 → vec3、mm) に、設計を作るコードが書く。K2 の関数・梁とシェル・画面は、ここから読む (出どころを 1 つにする)。取付点ごとの力は、analysis の `vectors` に `kind: "joint"` (`at` は `<支持の id>.<取付点の名前>`、`origin_mm` は取付点、`vector_N` は車体が受ける力) で出す。サスのタワーはフレームの部材、金具の板は部品 (kind `bracket`) で持つ
 - 接地する所 (`support`) は任意で `tire` (`coefficients`: `data/tyres/` のタイヤの係数のファイル、`relaxation_length_mm`) を持ち、サスペンションは任意で `bushings` (腕の内側のブッシュの半径方向・軸方向とタイロッドの剛性 N/mm、K&C の C) を持つ。無い値は解く側が仮定して analysis の `assumptions` に書く
 - `series` は時間 (`t_s`) か、ほかの量 (`x`: `{quantity, unit, values}`。K&C の台のストロークや横力) のどちらか 1 つを横軸に持つ
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
-- 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ `two_cargo`。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。1 人を体の部分 (胴・もも・すね など) に分けてよい: id の最初の `.` より前が同じ occupant の部品 (`driver.torso`・`driver.thigh_l`) は 1 人 (`person_of`) で、まとめて載るか降りる。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
+- 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ、要件のファイルの `default_loading` (製品ごとの既定。1 人で使うベッドなら `driver`)、それも無ければ `two_cargo`。荷重条件を作るコードが、要件のファイルの既定を `params["loading"]` に入れる。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。1 人を体の部分 (胴・もも・すね など) に分けてよい: id の最初の `.` より前が同じ occupant の部品 (`driver.torso`・`driver.thigh_l`) は 1 人 (`person_of`) で、まとめて載るか降りる。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` に道具が書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線)
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`・`error`。`red_left` は、直す回数が残っているのに赤の分野を残したまま、終わりを止める hooks の上限に達して終わったとき)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
 - 実行を外から止めるとき (画面の止めるボタン) は、実行のフォルダに `stop.request` (`layout.STOP_REQUEST_FILE`) を置く。実行の側はそれを見て、記録を整えて `stopped`・`stop_code` `user_stop` で終わる
@@ -110,7 +117,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い。`hits` と `not_evaluable` の `part_id` はどれも `targets` に入れる (品質保証部の記録の点検が確かめる)。設計の全体に当たる規則 (系の点検で部品が欠けている など) は `part_id` を `design` にし、`targets` にも `design` を入れる
 - 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
-- 系の点検: 部品は任意で `system` (駆動・操舵・制動・サス・座席・拘束・ROPS・灯火など) と `connects_to` ({`to`, `via`, `carries`}) を持ち、設計を作るコードが書く。製品のフラグから要る系を決める規則 (分類 `system`) を、コードがつながりの鎖で当てる (例: 駆動輪のある製品は、モーターから駆動輪まで torque の鎖が切れずにつながる)。結果は `rule_check` の記録で、欠けた所が `hits`
+- 系の点検: 部品は任意で `system` (駆動・操舵・制動・サス・座席・拘束・ROPS・灯火など) と `connects_to` ({`to`, `via`, `carries`}。`to` は部品・部材・フレームの節 (`nodes` の id、部品がフレームのつなぎ目に付くとき)・支持・`<支持>.<取付点>` の id) を持ち、設計を作るコードが書く。製品のフラグから要る系を決める規則 (分類 `system`) を、コードがつながりの鎖で当てる (例: 駆動輪のある製品は、モーターから駆動輪まで torque の鎖が切れずにつながる)。結果は `rule_check` の記録で、欠けた所が `hits`
 - 規則の分類 `rule_category` の日本語の名前は `contract.RULE_CATEGORY_NAMES_JA`。MCP の道具 `pick_domains`・`ask_user`・`import_knowledge`・`rule_check` の入力の形は schema の `tool_input.<名前>` (受付部の `hiraku/intake/tools.py` はそこから引く)
 
 ## runs/&lt;run_id&gt;/
@@ -124,6 +131,10 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - 記録を後から直すとき (原因が「直った」になる、照合に `cause_id` が付く): 同じ種類の event を、同じ ID と直したあとの全部の中身でもう一度出し、ファイルもそれに合わせる。ID ごとに最後の event が正で、ファイルはいつも最後の event の `data` と同じ。`design.json` だけは直さず、変えるときは次の版にする
 - ID は実行の中で通し番号 (`pred-0001`・`ana-0001`・`cmp-0001`・`cause-0001`・`ver-0001`・`rchk-0001`・`mesh-0001`)
 - `runs/` はコミットしない
+
+- 実行を動かしたもの: project の任意の欄 `driver` (`scripted` 台本・`agent_sdk` HIRAKU のエージェントのループを本人の `ANTHROPIC_API_KEY` で・`claude_code_plugin` 本人の Claude Code のセッションに HIRAKU のプラグインをつないで、本人のサインインで。このとき HIRAKU は Claude を呼ばず、`events.jsonl` を書くのは MCP サーバーのプロセス)
+
+- 困った所: report の任意の欄 `issues` (`write_report` の入力にも同じ欄)。設計の結果ではなく、HIRAKU そのものが邪魔をした所を書く: `kind` (`missing_tool`・`missing_formula`・`assumed_value`・`unexplained_mismatch`・`tool_error`・`unclear_instruction`・`other`)、`what`、任意で `where`・`record_ids`・`workaround`。実験部が集めて、統括部が部署に振る
 
 ## events.jsonl の 1 行
 

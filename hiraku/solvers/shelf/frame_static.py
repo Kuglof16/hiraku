@@ -69,7 +69,11 @@ def frame_outputs(res: dict) -> Record:
         vectors.append({"kind": "inertia", "at": "cg", "origin_mm": cg,
                         "vector_N": [float(v) for v in -res["mass"]["mass_kg"] * a]})
         results.append(result("inertia_acceleration", float(np.linalg.norm(a)), "m/s^2", "cg"))
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": stress_terms(res)}
+    terms = stress_terms(res)
+    for t in terms:  # the worst member's stress split into axial, the bendings and torsion (MPa each)
+        part = t["name"].split(" (", 1)[0]
+        results.append(result(f"max_stress_{part}", t["value"], "MPa", worst))
+    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms}
 
 
 def _beam(length, section, material=fixtures.STEEL):

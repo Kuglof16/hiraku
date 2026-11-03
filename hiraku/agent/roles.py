@@ -11,12 +11,13 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.catalog import REPO_ROOT
+from hiraku.catalog.mixes import Mix, role_key
 from hiraku.tools.context import RunContext
 
 Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
-             "check_tool", "make_tool")
+             "get_tool_template", "check_tool", "make_tool")
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
@@ -41,6 +42,8 @@ def agent_id_from_sdk(agent_type: str | None) -> str | None:
     """Contract agent id for an SDK agent name, or None for agents HIRAKU did not define."""
     if not agent_type:
         return None
+    # Claude Code names a plugin's agents "<plugin>:<name>" (plugins/hiraku/agents/<name>.md)
+    agent_type = agent_type.removeprefix(f"{PLUGIN_NAME}:")
     if agent_type.startswith("cae-") and agent_type[4:] in contract.DOMAINS and agent_type[4:] != "assembly":
         return "cae." + agent_type[4:]
     if agent_type in ("designer", "packager"):
@@ -68,14 +71,25 @@ def possible_roles(ctx: RunContext) -> list[Record]:
     return agents
 
 
-def subagents(ctx: RunContext) -> dict:
+def role_model(agent_id: str, mix: Mix | None) -> tuple[str, str]:
+    """(model, effort) of a role other than the lead: from the mix, else "inherit" (the lead's model)
+    with the role's fixed effort (DESIGNER_EFFORT, CAE_EFFORT), as before mixes existed."""
+    if mix is not None:
+        spec = mix[role_key(agent_id)]
+        return spec["model"], spec["effort"]
+    return "inherit", DESIGNER_EFFORT if agent_id == "designer" else CAE_EFFORT
+
+
+def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
     """AgentDefinition per role of this run (possible_roles) but the lead: CAE roles,
     the packager (the CAE steps on the assembly load cases) and the designer. All run in
-    the foreground (background=False), so the lead waits for their results."""
+    the foreground (background=False), so the lead waits for their results. Each role's
+    model and effort come from the mix (hiraku.catalog.mixes) when one is given."""
     from claude_agent_sdk import AgentDefinition
 
     out = {}
     for a in possible_roles(ctx):
+        model, effort = role_model(a["agent_id"], mix) if a["role"] in ("cae", "packager", "designer") else (None, None)
         if a["role"] in ("cae", "packager"):
             domain = a.get("domain", "assembly")
             out[sdk_name(a["agent_id"])] = AgentDefinition(
@@ -83,8 +97,8 @@ def subagents(ctx: RunContext) -> dict:
                 prompt=prompts.cae_prompt(domain),
                 tools=[contract.mcp_name(t) for t in (PACKAGER_TOOLS if a["role"] == "packager" else CAE_TOOLS)],
                 skills=plugin_skills(),
-                model="inherit",
-                effort=CAE_EFFORT,
+                model=model,
+                effort=effort,
                 background=False,
             )
         elif a["role"] == "designer":
@@ -92,8 +106,8 @@ def subagents(ctx: RunContext) -> dict:
                 description=prompts.DESIGNER_DESCRIPTION,
                 prompt=prompts.DESIGNER_PROMPT,
                 tools=[contract.mcp_name(t) for t in DESIGNER_TOOLS],
-                model="inherit",
-                effort=DESIGNER_EFFORT,
+                model=model,
+                effort=effort,
                 background=False,
             )
     return out

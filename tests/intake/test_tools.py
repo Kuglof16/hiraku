@@ -153,12 +153,28 @@ class AskUserToolTest(ToolsTestCase):
 
     def test_answers_make_it_ready(self):
         ctx = make_ctx(self.root, product="care-bed")
-        got = call("ask_user", ctx, answers={"Q30": "利用者 1 人 + 介助者", "Q40": {"value": 1700, "unit": "N"}},
+        got = call("ask_user", ctx, answers={"Q30": "driver", "Q40": {"value": 1700, "unit": "N"}},
                    answers_file="data/requirements/products/care-bed.answers.yaml")
         self.assertTrue(got["ready"])
         by = {r["key"]: r for r in got["answers"]}
         self.assertEqual(by["Q40"]["value"], 1700)  # the call's answers win over the file's
         self.assertEqual(by["Q03"]["source"], "hearing")  # from the file
+
+    def test_the_answers_file_may_be_named_by_its_file_name_or_the_product(self):
+        for i, name in enumerate(("care-bed.answers.yaml", "care-bed", "data/requirements/products/care-bed.answers.yaml")):
+            with self.subTest(name=name):
+                got = call("ask_user", make_ctx(self.root / f"r{i}", product="care-bed"), answers_file=name)
+                self.assertTrue(got["ready"])
+                self.assertEqual({r["key"]: r for r in got["answers"]}["Q30"]["value"], "driver")
+
+    def test_a_refused_or_missing_answers_file_says_what_to_pass(self):
+        ctx = make_ctx(self.root)
+        with self.assertRaises(ToolError) as cm:
+            call("ask_user", ctx, answers_file="README.md")
+        self.assertIn("data/requirements/products/<名前>.answers.yaml", str(cm.exception))
+        with self.assertRaises(ToolError) as cm:
+            call("ask_user", ctx, answers_file="nobody.answers.yaml")
+        self.assertIn("care-bed.answers.yaml", str(cm.exception))  # what there is
 
     def test_the_answers_file_must_be_one_of_the_products(self):
         ctx = make_ctx(self.root)
@@ -169,7 +185,7 @@ class AskUserToolTest(ToolsTestCase):
 
     def test_events_when_the_contract_has_them(self):
         ctx = make_ctx(self.root)
-        got = call("ask_user", ctx, answers={"Q30": "x", "Q40": 1})
+        got = call("ask_user", ctx, answers={"Q30": "two_cargo", "Q40": 1})
         if ev.known(ev.HEARING_ASKED):
             self.assertTrue(got["recorded"], got.get("not_recorded"))
             k = self.kinds(ctx)

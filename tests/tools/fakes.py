@@ -207,6 +207,11 @@ class FakeFrameStatic(FakeTool):
     def __init__(self, **kw):
         super().__init__("frame_static", "strength", ["R1"], **kw)
 
+    def describe(self):
+        """As the real frame_static pairs max_stress with its rail formulas (one of them here)."""
+        return {"name": self.name, "params": [], "predicts": [
+            {"quantity": "max_stress", "formula_id": "frame_static.rail_bending", "output": "sigma"}]}
+
     def run(self, design, load_case, predictions, params):
         self.runs.append((design, load_case, predictions, params))
         up = params["upstream_analyses"]["P1-step100"]
