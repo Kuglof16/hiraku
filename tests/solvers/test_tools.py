@@ -107,6 +107,10 @@ def design_for(tool):
     return DESIGN
 
 
+COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"},
+          "frame_tubes": {"element_size": {"value": 40.0, "unit": "mm"}}}
+
+
 class DeclarationsTest(unittest.TestCase):
     """load_case_params and predicts: what the design department wires load cases and predictions from."""
 
@@ -130,8 +134,9 @@ class DeclarationsTest(unittest.TestCase):
         for t in TOOLS.values():
             if not t.predicts:
                 continue
-            # frame_shell's mesh convergence solves more meshes; it is tested in test_mesh_convergence
-            params = {"mesh_convergence": "off"} if t.name == "frame_shell" else {}
+            # the coarsest meshes: a 10 mm shell of the demo vehicle commits about 8 GB in SuperLU. Mesh convergence
+            # solves more meshes; it is tested in test_mesh_convergence
+            params = COARSE.get(t.name, {})
             rec = t.run(design_for(t), required_case(t, t.tests[0]), PRED, params)
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
