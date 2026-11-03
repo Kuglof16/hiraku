@@ -9,6 +9,7 @@ import {
   agentLongName,
   agentName,
   fmt,
+  fmtMargin,
   fmtPct,
   fmtQ,
   fmtSigned,
@@ -18,6 +19,7 @@ import {
   quantityName,
   ruleOf,
 } from "./labels.js";
+import { kindCountText } from "./meshkind.js";
 
 const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
 
@@ -154,7 +156,9 @@ export function applyEvent(s, ev) {
       s.runId = d.run_id ?? ev.run_id;
       s.startTs = ev.ts ?? null;
       s.status = "running";
-      s.cost = d.cost_usd ?? 0;
+      // null: HIRAKU cannot know the cost (driver claude_code_plugin); kept as null, not 0.
+      // A record without the field (older runs) starts at 0 as before.
+      s.cost = d.cost_usd === undefined ? 0 : d.cost_usd;
       for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
       log(s, ev, "info", `実行を始めた: ${d.want ?? ""}`);
       setActivity(s, ev, "依頼を読んで分野と試験を決めた");
@@ -281,12 +285,12 @@ export function applyEvent(s, ev) {
       break;
     }
     case "mesh.created": {
-      // A shell mesh of one design version's frame; fields name it by mesh_id.
+      // A mesh (shells, solids or both) of one design version; fields name it by mesh_id.
       put(s, "meshes", d.mesh_id, d, ev);
       const els = d.elements ?? [];
-      const quads = els.filter((e) => e.length === 4).length;
+      const kinds = kindCountText({ elements: els, element_kind: d.element_kind });
       const size = d.element_size_mm ? `・要素の大きさ ${fmt(d.element_size_mm, 3)} mm` : "";
-      const txt = `版 ${d.design_version} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length} (四角 ${quads}・三角 ${els.length - quads})${size}`;
+      const txt = `版 ${d.design_version} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length}${kinds ? ` (${kinds})` : ""}${size}`;
       logRecord(s, ev, d.mesh_id, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -356,7 +360,7 @@ export function applyEvent(s, ev) {
     case "verdict.recorded": {
       put(s, "verdicts", d.verdict_id, d, ev);
       const how = isSafeSide(d) ? ` (安全側で判定: ${valueFromJa(d)}の値・${d.cause_id ?? ""})` : "";
-      const txt = `判定${how}: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmt(d.margin_pct, 3)} %)`;
+      const txt = `判定${how}: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmtMargin(d)})`;
       logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -372,7 +376,7 @@ export function applyEvent(s, ev) {
     }
     case "tool.checked": {
       s.tools[d.name] = d;
-      log(s, ev, d.usable ? "ok" : "warn", `道具「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
+      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
       break;
     }
     case "hook.denied": {
@@ -407,7 +411,7 @@ export function applyEvent(s, ev) {
       break;
     }
     case "cost.updated": {
-      s.cost = d.cost_usd ?? s.cost;
+      if (d.cost_usd !== undefined) s.cost = d.cost_usd; // null stays null (unknown)
       break;
     }
     default:

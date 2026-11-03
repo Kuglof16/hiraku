@@ -4,6 +4,8 @@ The planted strings are assembled at run time so this file itself stays clean
 when the scan reads the real repository.
 """
 
+import contextlib
+import io
 import os
 import subprocess
 import tempfile
@@ -75,6 +77,22 @@ class JudgeScan(unittest.TestCase):
             'K = "sk-' + 'ant-' + "a" * 24 + '"',
         ]) + "\n"})
         self.assertTrue({"email", "home.path", "secret"} <= self.rules())
+
+    def test_made_up_addresses_on_reserved_domains_are_left_out(self):
+        self.commit({"promo/tests/test_x.py": "\n".join([
+            f'A = "viewer{AT}example.invalid"',
+            f'B = "qa{AT}runs.test"',
+            f'C = "someone{AT}mail.example"',
+            f'D = "real{AT}mail.example.net"',  # a real-looking domain still counts
+        ]) + "\n"})
+        scan = js.Scan(self.repo, "main", self.hook)
+        found = [f for f in scan.run() if f.rule == "email"]
+        self.assertEqual([f.text for f in found], [f"real{AT}mail.example.net"])
+        self.assertEqual(scan.reserved_emails, 3)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            js.main(["--repo", str(self.repo), "--words-from", str(self.hook)])
+        self.assertIn("left out 3 address(es) on domains reserved for tests", out.getvalue())
 
     def test_tracked_local_files(self):
         self.commit({".env": "X=1\n", "runs/r/events.jsonl": "{}\n"})

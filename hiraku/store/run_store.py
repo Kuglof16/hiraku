@@ -27,6 +27,8 @@ Record = dict[str, Any]
 
 # Event kind emitted when a record of this kind is written (the contract's one map).
 RECORD_EVENT = layout.RECORD_EVENT
+# project.driver whose cost HIRAKU cannot know (the person's own Claude Code pays): cost_usd null
+UNPRICED_DRIVER = "claude_code_plugin"
 
 
 class StoreError(RuntimeError):
@@ -47,12 +49,30 @@ def _write_json(path: Path, obj: Any) -> None:
     with tmp.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    os.replace(tmp, path)
+    _retry(lambda: os.replace(tmp, path))
+
+
+REPLACE_TRIES, REPLACE_WAIT_S = 20, 0.05  # Windows refuses a replace or a read while another holds the file open
+
+
+def _retry(fn: Callable[[], Any]) -> Any:
+    """fn(), tried again for a moment on PermissionError: on Windows, os.replace onto a file another process
+    (the plugin's hook command, the screen) has open for reading is refused, and so is opening one being replaced."""
+    for i in range(REPLACE_TRIES):
+        try:
+            return fn()
+        except PermissionError:
+            if i == REPLACE_TRIES - 1:
+                raise
+            time.sleep(REPLACE_WAIT_S)
 
 
 def _read_json(path: Path) -> Any:
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    def read() -> Any:
+        with path.open(encoding="utf-8") as f:
+            return json.load(f)
+
+    return _retry(read)
 
 
 class RunStore:
@@ -78,7 +98,8 @@ class RunStore:
                wall: Callable[[], datetime] = _now, mono: Callable[[], float] = time.monotonic) -> "RunStore":
         """Make runs/<run_id>/, write project.json and emit run.started.
 
-        project_fields: every project field except run_id, created_at, status and cost_usd.
+        project_fields: every project field except run_id, created_at, status and cost_usd (0.0, or
+        null for driver claude_code_plugin).
         """
         now = wall()
         run_id = layout.new_run_id(now, slug or project_fields["product"])
@@ -90,7 +111,8 @@ class RunStore:
             "created_at": _iso(now),
             **project_fields,
             "status": "running",
-            "cost_usd": 0.0,
+            # null where HIRAKU cannot know the cost: the person's own Claude Code pays (plugin path)
+            "cost_usd": None if project_fields.get("driver") == UNPRICED_DRIVER else 0.0,
             "design_versions": list(project_fields.get("design_versions", [])),
         }
         contract.validate("project", project)
@@ -180,11 +202,13 @@ class RunStore:
         """The newest design version (0 before the first design)."""
         return max(self._project.get("design_versions") or [0])
 
-    def set_cost(self, cost_usd: float) -> Record:
+    def set_cost(self, cost_usd: float, extra: Record | None = None) -> Record:
+        """project.json cost_usd and a cost.updated event; extra (token counts, turns) goes into the
+        event's data next to cost_usd (the contract requires only cost_usd there)."""
         with self._lock:
             self._project["cost_usd"] = float(cost_usd)
             self._save_project()
-            return self.emit("cost.updated", agent="system", data={"cost_usd": float(cost_usd)})
+            return self.emit("cost.updated", agent="system", data={**(extra or {}), "cost_usd": float(cost_usd)})
 
     def update_project(self, fields: Record, *, agent: str = "system", text: str | None = None) -> Record:
         """Change project fields after the start (the load cases, picks and roles of a run whose
@@ -202,7 +226,8 @@ class RunStore:
         with self._lock:
             contract.validate("report", report)
             _write_json(self.path / layout.REPORT_FILE, report)
-            self.emit("report.written", agent=agent, design_version=report["design_version"], data=report)
+            # a report before the first version says design_version 0; an event's design_version is 1 or more
+            self.emit("report.written", agent=agent, design_version=report["design_version"] or None, data=report)
             return report
 
     def stop_requested(self) -> bool:
@@ -278,21 +303,23 @@ class RunStore:
 
     def records(self, kind: str, design_version: int | None = None) -> list[Record]:
         """Records of one kind, in id order, for one version or for the whole run."""
-        versions = [design_version] if design_version else sorted(self._project.get("design_versions") or [])
-        out = []
-        for v in versions:
-            folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
-            if folder.is_dir():
-                out.extend(_read_json(p) for p in sorted(folder.glob("*.json")))
-        return out
+        with self._lock:  # tools run in threads (the MCP servers): no read while another thread replaces a file
+            versions = [design_version] if design_version else sorted(self._project.get("design_versions") or [])
+            out = []
+            for v in versions:
+                folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
+                if folder.is_dir():
+                    out.extend(_read_json(p) for p in sorted(folder.glob("*.json")))
+            return out
 
     def find(self, kind: str, record_id: str) -> tuple[int, Record] | None:
         """(design_version, record) for an id, or None."""
-        for v in sorted(self._project.get("design_versions") or []):
-            p = layout.record_path(self.path, v, kind, record_id)
-            if p.exists():
-                return v, _read_json(p)
-        return None
+        with self._lock:
+            for v in sorted(self._project.get("design_versions") or []):
+                p = layout.record_path(self.path, v, kind, record_id)
+                if p.exists():
+                    return v, _read_json(p)
+            return None
 
     def get(self, kind: str, record_id: str) -> Record | None:
         hit = self.find(kind, record_id)
@@ -301,8 +328,9 @@ class RunStore:
     # ------------------------------------------------------------------ judgements
 
     def judgements(self, design_version: int | None = None) -> list[Record]:
-        path = layout.version_dir(self.path, design_version or self.design_version) / layout.JUDGEMENTS_FILE
-        return _read_json(path) if path.exists() else []
+        with self._lock:
+            path = layout.version_dir(self.path, design_version or self.design_version) / layout.JUDGEMENTS_FILE
+            return _read_json(path) if path.exists() else []
 
     def set_judgement(self, judgement: Record, *, agent: str = "system", text: str | None = None) -> Record:
         """Replace this domain's tile in v<NNN>/judgements.json and emit judgement.updated."""

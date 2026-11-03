@@ -14,8 +14,9 @@ makes two scripted runs now and compares them (is the scripted run deterministic
 What is compared: every file of the two run folders (project.json, design.json, each
 record file, judgements.json, report.json, tools/), and events.jsonl line by line.
 Left out, because they differ from one run to the next by nature:
-- times: ts and t of an event; created_at and wall_time_s at any depth (a t inside
-  an event's data, such as time in a simulated series, is compared)
+- times: ts and t of an event; created_at, wall_time_s and timings_s (an analysis's
+  clock times by name) at any depth (a t inside an event's data, such as time in a
+  simulated series, is compared; the contract keeps clock times out of everything else)
 - the run: run_id at any depth, and the run id or run folder wherever a text names it
 - cost: cost_usd at any depth
 Anything else that differs is listed with the file (a record file is named by its
@@ -43,17 +44,20 @@ from pathlib import Path
 from typing import Any
 
 from hiraku.contract import layout
+from qa import procs
 
 ROOT = Path(__file__).resolve().parents[1]
-MASKED = {"ts", "created_at", "wall_time_s", "run_id", "cost_usd"}
+# clock times live only in wall_time_s and analysis.timings_s (name -> seconds) by the contract
+MASKED = {"ts", "created_at", "wall_time_s", "timings_s", "run_id", "cost_usd"}
 EVENT_MASKED = MASKED | {"t"}  # at the top of an event line only
 HIDDEN = "<masked>"
 _STRING = r'"(?:[^"\\]|\\.)*"'
 _NUMBER = r"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"
+_FLAT_OBJECT = r"\{[^{}\[\]]*\}"  # timings_s: an object of names and numbers
 # "key": value of a masked key in a JSON text (the byte check masks a nested t as well:
 # its value is compared field by field)
-MASKED_VALUE_RE = re.compile(r'"(%s)"(\s*:\s*)(?:%s|%s|null|true|false)'
-                             % ("|".join(sorted(EVENT_MASKED)), _STRING, _NUMBER))
+MASKED_VALUE_RE = re.compile(r'"(%s)"(\s*:\s*)(?:%s|%s|%s|null|true|false)'
+                             % ("|".join(sorted(EVENT_MASKED)), _STRING, _NUMBER, _FLAT_OBJECT))
 NUMBER_RE = re.compile(_NUMBER)
 
 
@@ -313,18 +317,25 @@ def compare(a: Path, b: Path, rel: float = 0.0, max_per_file: int = 20) -> Repor
 
 
 # --- scripted runs -------------------------------------------------------------------
-def scripted_run(requirements: Path, runs: Path, design: Path | None = None) -> Path:
-    """python -m hiraku run REQUIREMENTS --scripted --runs RUNS (without the API key); the new run folder."""
+def scripted_run(requirements: Path, runs: Path, design: Path | None = None, timeout: float | None = None) -> Path:
+    """python -m hiraku run REQUIREMENTS --scripted --runs RUNS (without the API key); the new run folder.
+    With timeout (s), a run still going then is stopped with everything it started (RuntimeError)."""
     requirements, runs = requirements.resolve(), runs.resolve()
     design = design.resolve() if design else None
     runs.mkdir(parents=True, exist_ok=True)
     before = {p.name for p in runs.iterdir()}
-    env = dict(os.environ, PYTHONUTF8="1")
+    # every tool check runs: no check taken from an earlier run in the runs folder (HIRAKU_TOOL_CHECK_REUSE=0,
+    # which would add cached_from) nor from the tests' disk cache (HIRAKU_CHECK_CACHE, which adds an agent.said)
+    env = procs.one_blas_thread(dict(os.environ, PYTHONUTF8="1", HIRAKU_TOOL_CHECK_REUSE="0"))
     env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("HIRAKU_CHECK_CACHE", None)
     cmd = [sys.executable, "-m", "hiraku", "run", str(requirements), "--scripted", "--runs", str(runs)]
     if design:
         cmd += ["--design", str(design)]
-    proc = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        proc = procs.run(cmd, cwd=ROOT, env=env, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"no run within {timeout:g} s (stopped): {requirements.name}\n{(e.stderr or '')[-1500:]}") from None
     new = sorted(p for p in runs.iterdir() if p.is_dir() and p.name not in before)
     if len(new) != 1:
         raise RuntimeError(f"expected one new run folder in {runs}, got {len(new)} (exit {proc.returncode})\n"

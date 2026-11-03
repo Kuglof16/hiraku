@@ -10,7 +10,8 @@ errors (must be fixed before publishing):
   from the private pre-commit hook kept outside the repository (the WORDS= and
   PATHS= lines), so this file names none of them. Default: .private/pre-commit
   next to the main checkout; override with --words-from.
-- e-mail addresses other than GitHub noreply ones, in files, commit messages
+- e-mail addresses other than GitHub noreply ones (made-up ones on the test domains
+  .invalid, .example and .test are left out and counted in one line), in files, commit messages
   and commit author/committer fields
 - paths into a home folder (the Users folder on Windows and macOS, home on Linux)
 - things that look like keys (sk-ant-..., a filled ANTHROPIC_API_KEY=...)
@@ -64,6 +65,8 @@ SELF = "qa/judge_scan.py"  # holds the patterns themselves
 NO_SPEECH_CHECK = ("CLAUDE.md",)  # states the rule against quoting
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 EMAIL_OK = re.compile(r"(@users\.noreply\.github\.com|noreply@anthropic\.com|@example\.(com|org))$")
+# made-up addresses in tests: top-level domains reserved for testing and examples (RFC 2606), never real
+EMAIL_RESERVED = re.compile(r"\.(invalid|example|test)$", re.IGNORECASE)
 HOME_RE = re.compile(r"(?i)([a-z]:[\\/]+users[\\/]+[^\\/\s]+|/Users/[^/\s]+|/home/[^/\s]+)")
 KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|ANTHROPIC_API_KEY\s*=\s*['\"]?[A-Za-z0-9_-]{12,}")
 LOCAL_FILES = re.compile(r"(^|/)(\.env(\..*)?|CLAUDE\.local\.md|[^/]*\.local\.[^/]+)$|^runs/|^\.private/")
@@ -236,6 +239,7 @@ class Scan:
         self.repo, self.ref = repo, ref
         self.private = private_patterns(hook)
         self.findings: list[Finding] = []
+        self.reserved_emails = 0  # addresses on .invalid / .example / .test, left out
         self.unchecked = ""  # README's list of values not checked (確かめていない), read by scan_files
         if not self.private:
             self.add("error", "private.patterns", str(hook.name), "no WORDS/PATHS patterns found; private words not checked")
@@ -250,7 +254,9 @@ class Scan:
             if m:
                 self.add("error", "private.word", where, f"{m.group(0)!r} in: {line.strip()}")
         for m in EMAIL_RE.finditer(line):
-            if not EMAIL_OK.search(m.group(0)):
+            if EMAIL_RESERVED.search(m.group(0)):
+                self.reserved_emails += 1
+            elif not EMAIL_OK.search(m.group(0)):
                 self.add("error", "email", where, m.group(0))
         m = HOME_RE.search(line)
         if m:
@@ -367,10 +373,13 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     repo = args.repo.resolve()
     hook = args.words_from or default_hook(repo)
-    findings = Scan(repo, args.ref, hook).run()
+    scan = Scan(repo, args.ref, hook)
+    findings = scan.run()
     errors = [f for f in findings if f.level == "error"]
     shown = errors if args.errors_only else sorted(findings, key=lambda f: (f.level != "error", f.rule, f.where))
     print(f"{args.ref}: {len(errors)} error(s), {len(findings) - len(errors)} to review")
+    if scan.reserved_emails:
+        print(f"  left out {scan.reserved_emails} address(es) on domains reserved for tests (.invalid, .example, .test)")
     for f in shown:
         print(f"  {f}")
     return 1 if errors else 0

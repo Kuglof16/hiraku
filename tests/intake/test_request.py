@@ -17,7 +17,7 @@ from hiraku.intake.guess import guess_flags
 
 ROBOT = load_product("serving-robot")
 BED = load_product("care-bed")
-BED_ANSWERS = {"Q30": "利用者 1 人 + 介助者 1 人", "Q40": {"value": 1700, "unit": "N"}}
+BED_ANSWERS = {"Q30": "driver", "Q40": {"value": 1700, "unit": "N"}}
 NOW = datetime(2026, 11, 3, 14, 0, 0)
 
 
@@ -66,7 +66,7 @@ class BeginTest(unittest.TestCase):
         first = request.begin("何かを運ぶ", picker=claude_like("strength"))
         self.assertEqual((first["mode"], first["flags_from"], first["cost_usd"]), ("claude", "claude", 0.12))
         picks = {p["domain"]: p for p in first["domains"]["picks"]}
-        self.assertEqual(picks["strength"]["reason"], "Claude の理由")
+        self.assertTrue(picks["strength"]["reason"].startswith("Claude の理由"))  # the code may add what cannot be run yet
         self.assertEqual(first["domains"]["flag_reasons"]["liquid"], "飲み物を運ぶので")
 
     def test_a_picker_that_fails_falls_back_to_the_words(self):
@@ -103,7 +103,7 @@ class ReviseTest(unittest.TestCase):
             self.fail("no chip changes the domains")
         self.assertEqual(second["flags_from"], "given")
         picks = {p["domain"]: p for p in second["domains"]["picks"]}
-        self.assertEqual(picks["strength"]["reason"], "Claude の理由")  # strength stays lit with Claude's reason
+        self.assertTrue(picks["strength"]["reason"].startswith("Claude の理由"))  # strength stays lit with Claude's reason
 
     def test_taking_a_card_off_moves_it_to_off(self):
         first = request.begin(ROBOT["want"], product="serving-robot")
@@ -175,7 +175,7 @@ class FinishTest(unittest.TestCase):
 
     def test_a_product_nobody_has_a_file_for(self):
         first = request.begin("飲み物を運ぶロボ", product="my-robot")
-        done = request.finish(first["draft"], {"Q40": 20, "Q50": 1.0, "Q30": "x"})
+        done = request.finish(first["draft"], {"Q40": 20, "Q50": 1.0, "Q30": "two_cargo"})
         self.assertEqual(done["requirements_file"]["product"], "my-robot")
         self.assertEqual(contract.errors("requirements_file", done["requirements_file"]), [])
 

@@ -3,10 +3,12 @@
 // thickness of each element (mesh.member_thickness_mm by element_member) and what the
 // solver put on the model (analysis.setup: constraints, loads and their spread,
 // checks). Every number shown is a recorded value or a count / ratio made here from
-// the records (free edges from the elements, elements past a limit, the mass ratio).
+// the records (free edges from the shell elements, elements past a limit). The setup's
+// checks are shown as recorded (the mass difference is the record's mass_difference).
 
 import { BANDS, BAND_COLORS, GRAY, OVER_COLOR } from "./colormap.js";
-import { esc, fmt, fmtSigned, fmtVU, unitLabel } from "./labels.js";
+import { esc, fmt, fmtVU, unitLabel } from "./labels.js";
+import { shellFreeEdges } from "./meshkind.js";
 
 export const MODE_JA = { quality: "メッシュの品質", thickness: "板厚と材料", setup: "解く前の設定" };
 export const MODE_ORDER = ["quality", "thickness", "setup"];
@@ -29,11 +31,15 @@ export const TOPOLOGY_JA = {
 };
 const TOPOLOGY_ORDER = Object.keys(TOPOLOGY_JA);
 export const VERDICT_JA = { ok: "良い", warn: "注意 (限度を超えた要素がある)", fail: "不可 (ソルバーはこのメッシュを解かない)" };
+// The contract's names of setup.checks (docs/contract.md: pre 処理の中身), then design_mass,
+// which the schema's description gives as an example.
 export const CHECK_JA = {
   equilibrium_residual: "釣り合いの残り",
+  load_balance_residual: "かけた力と反力の残り",
   model_mass: "モデルの質量",
+  mass_difference: "モデルと設計の質量の差",
+  free_rigid_body_modes: "拘束されていない剛体の動き",
   design_mass: "設計の質量",
-  applied_load_total: "かけた力の合計",
 };
 export const FREE_EDGE_COLOR = "#d61f9c";
 export const FIX_T_COLOR = "#1f6f6b"; // a stopped translation
@@ -71,22 +77,9 @@ export function lowIsBad(name, m, values) {
   return name.startsWith("min_");
 }
 
-// Edges used by one element only, as [a, b] node pairs, counted from mesh.elements.
-export function freeEdges(rec) {
-  const n = rec.nodes_mm.length;
-  const uses = new Map();
-  for (const e of rec.elements) {
-    for (let i = 0; i < e.length; i += 1) {
-      const a = e[i];
-      const b = e[(i + 1) % e.length];
-      const key = Math.min(a, b) * n + Math.max(a, b);
-      uses.set(key, (uses.get(key) ?? 0) + 1);
-    }
-  }
-  const out = [];
-  for (const [key, c] of uses) if (c === 1) out.push([Math.floor(key / n), key % n]);
-  return out;
-}
+// Sides used by one shell element only, as [a, b] node pairs, counted from mesh.elements
+// (meshkind.js: a solid has no free edges; its edges are shared by its own faces).
+export const freeEdges = shellFreeEdges;
 
 const bandOf = (u) => BAND_COLORS[Math.min(BANDS - 1, Math.max(0, Math.floor(u * BANDS)))];
 
@@ -243,10 +236,6 @@ export function setupContourOf(analysis, meshes) {
   const constraints = (setup.constraints ?? []).filter((c) => okNode(c.node) && Array.isArray(c.dofs));
   const loads = (setup.loads ?? []).filter((l) => Array.isArray(l.origin_mm) && Array.isArray(l.vector_N));
   const checks = setup.checks ?? {};
-  const mm = checks.model_mass;
-  const dm = checks.design_mass;
-  // (model - design) / design, when both masses are in one unit
-  const massDiff = mm && dm && mm.unit === dm.unit && Number.isFinite(mm.value) && Number.isFinite(dm.value) && dm.value !== 0 ? (mm.value - dm.value) / dm.value : null;
   return {
     key: `setup|${analysis.analysis_id}|${rec.mesh_id}`,
     mode: "setup",
@@ -261,7 +250,7 @@ export function setupContourOf(analysis, meshes) {
     max: 1,
     limitKnown: false,
     analysisId: analysis.analysis_id,
-    setup: { constraints, loads, inertiaRelief: setup.inertia_relief ?? null, checks, massDiff, okNode },
+    setup: { constraints, loads, inertiaRelief: setup.inertia_relief ?? null, checks, okNode },
   };
 }
 
@@ -374,18 +363,20 @@ function setupCard(ct) {
       return `<tr data-load="${i}">${td(esc(l.label ?? `荷重 ${i + 1}`))}${td(`${fmt(f / 1000, 3)} kN${mo > 0 ? `・${fmt(mo / 1000, 3)} N·m` : ""}`)}${td(sp)}</tr>`;
     })
     .join("");
+  // each check as recorded; the mass difference (model against design, %) with its sign
   const checks = Object.entries(st.checks)
-    .map(([k, q]) => `<tr data-check="${esc(k)}">${td(esc(CHECK_JA[k] ?? k))}${td(esc(fmtVU(q?.value, q?.unit)))}</tr>`)
+    .map(([k, q]) => {
+      const sign = k === "mass_difference" && q?.value > 0 ? "+" : "";
+      return `<tr data-check="${esc(k)}">${td(esc(CHECK_JA[k] ?? k))}${td(esc(sign + fmtVU(q?.value, q?.unit)))}</tr>`;
+    })
     .join("");
-  const diff = st.massDiff !== null ? `<div class="massdiff" data-rel="${st.massDiff}">モデルと設計の質量の差 ${fmtSigned(st.massDiff, 2)} (設計に対して)</div>` : "";
   const ir = st.inertiaRelief === true ? `<div class="ir">慣性リリーフ: 釣り合わない力は慣性で受ける (拘束では受けない)</div>` : "";
   return (
     `<h3>解く前の設定 <small>${esc(ct.analysisId)}・${esc(ct.mesh.rec.mesh_id)}</small></h3>` +
     `<div class="sub">拘束 ${st.constraints.length} 点 (並進 ${n.t}・回転 ${n.r})</div><table class="qt">${cons}</table>` +
     `<div class="sub">荷重 ${st.loads.length}</div><table class="qt">${loads}</table>` +
     ir +
-    (checks ? `<div class="sub">点検</div><table class="qt">${checks}</table>` : "") +
-    diff
+    (checks ? `<div class="sub">点検</div><table class="qt">${checks}</table>` : "")
   );
 }
 

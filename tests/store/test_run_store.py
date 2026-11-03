@@ -115,6 +115,26 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(self.store.next_id("prediction"), "pred-0002")
         self.assertEqual(self.store.next_id("analysis"), "ana-0001")
 
+    def test_a_refused_replace_is_tried_again(self):
+        """Windows refuses os.replace onto a file another process has open; the store waits a moment and tries again."""
+        from unittest import mock
+
+        from hiraku.store import run_store
+
+        real, calls = run_store.os.replace, []
+
+        def flaky(a, b):
+            calls.append(b)
+            if len(calls) < 3:
+                raise PermissionError(13, "in use")
+            return real(a, b)
+
+        with mock.patch.object(run_store.os, "replace", flaky), mock.patch.object(run_store, "REPLACE_WAIT_S", 0):
+            self.store.set_judgement({"design_version": 1, "domain": "strength", "state": "pending", "red_count": 0,
+                                      "verdict_ids": [], "summary": "x"})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(self.store.judgements(1)[0]["summary"], "x")
+
     def test_judgements_replace_the_domain_tile(self):
         self.store.write_design(example("design.json"))
         j = example("judgement.json")
@@ -133,6 +153,17 @@ class RunStoreTest(unittest.TestCase):
         last = self.store.events()[-1]
         self.assertEqual(last["kind"], "run.finished")
         self.assertEqual(last["data"]["status"], "stopped")
+
+    def test_the_plugin_paths_cost_is_null(self):
+        self.assertEqual(self.store.project["cost_usd"], 0.0)  # a run HIRAKU pays for (or a scripted one)
+        for driver, cost in (("claude_code_plugin", None), ("scripted", 0.0), ("agent_sdk", 0.0)):
+            with self.subTest(driver=driver):
+                s = RunStore.create(dict(project_fields(), driver=driver), root=self.root, slug=driver.replace("_", "-"))
+                self.assertEqual(s.project["cost_usd"], cost)
+                on_disk = json.loads((s.path / "project.json").read_text(encoding="utf-8"))
+                self.assertIn("cost_usd", on_disk)
+                self.assertEqual(on_disk["cost_usd"], cost)
+                self.assertEqual(contract.errors("event", s.events()[0]), [])
 
     def test_reopen_continues_seq_and_ids(self):
         self.store.write_design(example("design.json"))

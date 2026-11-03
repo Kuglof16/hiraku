@@ -1,5 +1,4 @@
 # Built-in rules: assembly (組み立て). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the source; the source was not opened for this repository.
 doc_id: KN-AS
 title: 組み立ての決まり
 category: assembly
@@ -8,10 +7,17 @@ rules:
     text: 1 人で持ち上げる部品は 23 kg 以下
     kinds: [battery, motor, controller, electrical, body, steering, seat, suspension, wheel]
     check: mass_kg <= 23
-    trust: 2
+    trust: 1
     basis: >-
-      NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993)
-      (recalled; not checked in this repository). A hit means two people or a lifting aid are needed
+      Waters, Putz-Anderson, Garg, Fine, "Revised NIOSH equation for the design and evaluation of manual
+      lifting tasks", Ergonomics 36(7):749-776, 1993, https://doi.org/10.1080/00140139308967940,
+      sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03.
+      The 23 kg is the load constant: the recommended weight limit at the standard lifting location
+      (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good
+      coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed
+      lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg
+      as the one-person limit for any lift, which is the most lenient value the equation allows.
+      A hit means two people or a lifting aid are needed
   - id: AS-02
     text: 部品の箱は地面より下に出ない
     check: bottom_z_mm >= 0

@@ -14,6 +14,7 @@ words the engine misreads; subtitles keep the text as written.
     py promo/voice.py synth   SCRIPT OUT_DIR --speaker ID [--readings FILE] [--only N07_2.wav ...]
 
     py promo/voice.py adopt   SCRIPT WAV_DIR       # recorded WAVs (N00_1.wav ...) -> voice.json
+    py promo/voice.py edges   SRC_DIR DST_DIR      # recorded WAVs with faded edges, same lengths
 
 ``synth`` writes one WAV per sentence and ``voice.json`` (file, seconds,
 text), then prints how each cut's voice fits its slot. ``--only`` remakes
@@ -28,7 +29,9 @@ The engine address is http://127.0.0.1:10101 unless AIVIS_URL is set.
 from __future__ import annotations
 
 import argparse
+import array
 import json
+import math
 import os
 import sys
 import urllib.parse
@@ -255,6 +258,162 @@ def adopt(script: Path, wav_dir: Path) -> dict:
     return {"meta": meta, "missing": missing, "extra": extra, "odd_format": odd}
 
 
+# --- edges of recorded sentences --------------------------------------------
+#
+# Measured on the recorded takes: the room tone under the voice (about -60 dBFS
+# in 5 ms frames, mostly above 2 kHz where the music is thin) started at the
+# first sample of each WAV and stopped at the sample where the take was
+# stopped, 0-0.65 s after the last word (one take was stopped while its last
+# sound was still going), often with a click there. Over the
+# music both edges stood out as a sudden start / stop of hiss. ``edges`` keeps
+# the room tone only where the voice is: a raised-cosine fade-in ending at the
+# voice's first sound, a raised-cosine fade-out starting just after its last
+# word, digital silence outside. The length of the WAV does not change, so
+# the timeline laid out from it does not move.
+
+EDGE_FRAME_S = 0.005
+EDGE_FADE_IN_S = 0.03     # into the first sound; short enough not to soften the onset
+EDGE_FADE_OUT_S = 0.15    # room tone and breath after the last word
+EDGE_HOLD_S = 0.02        # after the last voiced frame, before the fade-out starts
+EDGE_VOICE_DB = 35.0      # voiced: a 5 ms frame within this of the loudest (as the recorder's trim)
+EDGE_MIN_RUN_S = 0.03     # a voiced run this long; shorter ones are clicks
+EDGE_SOFT_DB = 8.0        # first sound: this far above the room tone before the voice
+EDGE_SOUND_DB = -80.0     # after the take ends only the filters' low-frequency decay is
+                          # left; its second difference is near the 16-bit floor (about -93 dB)
+EDGE_SNAP_S = 0.003       # how far a cut may move to reach a zero crossing
+
+
+def _frame_db(x, n: int) -> list[float]:
+    out = []
+    for k in range(len(x) // n):
+        s = sum(v * v for v in x[k * n:(k + 1) * n]) / n
+        out.append(10 * math.log10(s + 1e-14))
+    return out
+
+
+def _runs(mask: list[bool], min_len: int) -> list[tuple[int, int]]:
+    out, start = [], None
+    for i, m in enumerate(mask + [False]):
+        if m and start is None:
+            start = i
+        elif not m and start is not None:
+            if i - start >= min_len:
+                out.append((start, i))
+            start = None
+    return out
+
+
+def _zero_crossing(x, i: int, step: int, limit: int) -> int:
+    """The nearest index from i (going by step, at most limit samples) where the
+    signal changes sign or is zero; i itself when there is none."""
+    for k in range(limit + 1):
+        j = i + step * k
+        if j <= 0 or j >= len(x):
+            break
+        if x[j] == 0 or (x[j - 1] < 0) != (x[j] < 0):
+            return j
+    return i
+
+
+def find_edges(x, rate: int) -> dict:
+    """Sample positions in a sentence: the first sound, the last voiced frame
+    and where any sound ends (see the constants above). ``x`` is a sequence
+    of floats or ints."""
+    n = max(1, int(round(EDGE_FRAME_S * rate)))
+    db = _frame_db(x, n)
+    if not db:
+        return {"onset": 0, "voice_end": len(x), "sound_end": len(x)}
+    top = max(db)
+    voiced = _runs([d > top - EDGE_VOICE_DB for d in db], max(1, int(round(EDGE_MIN_RUN_S / EDGE_FRAME_S))))
+    if not voiced:
+        return {"onset": 0, "voice_end": len(x), "sound_end": len(x)}
+    first, last = voiced[0][0], voiced[-1][1]
+    # the first sound: back from the first voiced run while frames stay above the room tone
+    room = sorted(db[:first])[len(db[:first]) // 2] if first else -200.0
+    onset = first
+    while onset > 0 and db[onset - 1] > room + EDGE_SOFT_DB:
+        onset -= 1
+    # where sound ends: last frame whose second difference is above EDGE_SOUND_DB
+    sound_end = last
+    for k in range(len(db) - 1, last - 1, -1):
+        seg = x[max(2, k * n):(k + 1) * n]
+        d2 = [seg[i] - 2 * seg[i - 1] + seg[i - 2] for i in range(2, len(seg))] if len(seg) > 2 else []
+        if d2 and 10 * math.log10(sum(v * v for v in d2) / len(d2) + 1e-14) > EDGE_SOUND_DB:
+            sound_end = k + 1
+            break
+    return {"onset": onset * n, "voice_end": last * n, "sound_end": min(len(x), max(sound_end, last) * n)}
+
+
+def fade_edges(x: list[float], rate: int) -> tuple[list[float], dict]:
+    """``x`` with the room tone kept only where the voice is (see above).
+    Returns the new samples and the spans in seconds."""
+    e = find_edges(x, rate)
+    y = list(x)
+    fi, fo, hold = (int(round(s * rate)) for s in (EDGE_FADE_IN_S, EDGE_FADE_OUT_S, EDGE_HOLD_S))
+    snap = int(round(EDGE_SNAP_S * rate))
+    # fade-in: ends at the first sound, starts at a zero crossing
+    in_end = e["onset"]
+    in_start = _zero_crossing(x, max(0, in_end - fi), -1, snap)
+    for i in range(0, in_start):
+        y[i] = 0.0
+    span = max(1, in_end - in_start)
+    for i in range(in_start, in_end):
+        y[i] = x[i] * math.sin(0.5 * math.pi * (i - in_start) / span) ** 2
+    # fade-out: from just after the last word; it ends before the sound stops,
+    # and moves earlier when the take was stopped while still sounding
+    out_end = min(e["voice_end"] + hold + fo, e["sound_end"])
+    out_end = _zero_crossing(x, out_end, -1, snap)
+    out_start = max(in_end, out_end - fo)
+    span = max(1, out_end - out_start)
+    for i in range(out_start, out_end):
+        y[i] = x[i] * math.cos(0.5 * math.pi * (i - out_start) / span) ** 2
+    for i in range(out_end, len(y)):
+        y[i] = 0.0
+    spans = {"fade_in_n": (in_start, in_end), "fade_out_n": (out_start, out_end),
+             "fade_in_s": (round(in_start / rate, 3), round(in_end / rate, 3)),
+             "fade_out_s": (round(out_start / rate, 3), round(out_end / rate, 3)),
+             "voice_end_s": round(e["voice_end"] / rate, 3), "sound_end_s": round(e["sound_end"] / rate, 3)}
+    return y, spans
+
+
+def read_pcm16(path: Path) -> tuple[list[float], int]:
+    with wave.open(str(path), "rb") as w:
+        if w.getsampwidth() != 2 or w.getnchannels() != 1:
+            raise ValueError(f"{path.name}: expected 16-bit mono")
+        rate = w.getframerate()
+        data = array.array("h", w.readframes(w.getnframes()))
+    if sys.byteorder == "big":
+        data.byteswap()
+    return [v / 32768 for v in data], rate
+
+
+def write_pcm16(path: Path, x: list[float], rate: int) -> None:
+    data = array.array("h", (max(-32768, min(32767, round(v * 32768))) for v in x))
+    if sys.byteorder == "big":
+        data.byteswap()
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(data.tobytes())
+
+
+def cmd_edges(src: Path, dst: Path) -> int:
+    if src.resolve() == dst.resolve():
+        raise SystemExit("write the faded WAVs to another folder")
+    dst.mkdir(parents=True, exist_ok=True)
+    files = sorted(src.glob("*.wav"))
+    for p in files:
+        x, rate = read_pcm16(p)
+        y, s = fade_edges(x, rate)
+        write_pcm16(dst / p.name, y, rate)
+        print(f"{p.name:12s} {len(x) / rate:6.3f} s  in {s['fade_in_s'][0]:.3f}-{s['fade_in_s'][1]:.3f}  "
+              f"voice end {s['voice_end_s']:.3f}  out {s['fade_out_s'][0]:.3f}-{s['fade_out_s'][1]:.3f}  "
+              f"sound end {s['sound_end_s']:.3f}")
+    print(f"wrote {len(files)} WAVs to {dst}")
+    return 0
+
+
 def cmd_adopt(script: Path, wav_dir: Path) -> int:
     res = adopt(script, wav_dir)
     for r in res["meta"]["lines"]:
@@ -295,6 +454,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("adopt", help="measure recorded WAVs and write voice.json")
     p.add_argument("script", type=Path)
     p.add_argument("wav_dir", type=Path)
+    p = sub.add_parser("edges", help="fade the room tone in and out at each recorded sentence's edges")
+    p.add_argument("src", type=Path)
+    p.add_argument("dst", type=Path)
     a = ap.parse_args(argv)
 
     if a.cmd == "speakers":
@@ -313,6 +475,8 @@ def main(argv: list[str] | None = None) -> int:
         cmd_synth(a.script, a.out_dir, a.speaker, a.readings, a.speed, a.only)
     elif a.cmd == "adopt":
         return cmd_adopt(a.script, a.wav_dir)
+    elif a.cmd == "edges":
+        return cmd_edges(a.src, a.dst)
     return 0
 
 

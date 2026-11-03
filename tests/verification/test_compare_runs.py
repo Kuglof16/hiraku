@@ -22,6 +22,7 @@ def _event(seq, run_id, kind, t, data, text=""):
 def _analysis(wall):
     return {"analysis_id": "ana-0001", "tool": "modal", "design_version": 1, "results": [{"quantity": "mode_1",
             "value": {"value": 1.7771981498622405, "unit": "Hz"}}], "wall_time_s": wall,
+            "timings_s": {"mesh_s": 0.25 * wall, "solve_s": 0.5 * wall},
             "fields": [{"kind": "mode_shape", "per_node": {"LA": [0.5, -0.25, 1.0], "LB": [0.0, 0.125, -0.75]}}],
             "series": [{"name": "z", "t": [0.0, 0.5], "values": [0.0, 1.0]}]}
 

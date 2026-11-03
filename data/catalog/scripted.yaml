@@ -19,7 +19,7 @@
 #   design.support.<id>.<field>    e.g. design.support.FL.radius_mm (unit from the suffix)
 #   design.section.<key>.<dim>     section dimension in mm (dims_mm)
 #   design.var.<name>              design variable
-#   pred.<quantity>                newest prediction of that quantity in this run and version
+#   pred.<quantity>                newest prediction of that quantity for this load case in this version
 #   ana.<load case>.<quantity>     result of the trusted (matched) analysis of an upstream load case
 #                                  (the load case may be named by its test id: ana.P1.front_wheel_force,
 #                                  the case of that test that feeds this one, past the limit or not)
@@ -42,22 +42,36 @@
 # from it, and the step ends. With `end` true the cause is recorded and the step ends there
 # (`end_say`); when the load case's criterion judges that quantity, the test stays without a
 # verdict and the run goes on. With none of these the run says `stop` and stops.
+#
+# The steps of a version run stage by stage (HK5, light first): the stage of the step's tool
+# (hiraku.tools.shelf.tool_stage), or the step's `stage` when it puts the check later.
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   # The designer's revisions, one per round, used when a tile comes out red
-  # (revise_design: the variables of hiraku.designgen, absolute values).
+  # (revise_design: the variables of hiraku.designgen, absolute values). With `fit: driver` the seat,
+  # steering and pedals are searched by code on the design with the entry's changes
+  # (hiraku.designgen.driver_fit, `fit_time_s` its time limit) and added to them.
   revise:
-    - say: 組み立てと動力の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くします
+    # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
+    - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       changes:
         track: {value: 1220, unit: mm}
         steering_x: {value: -200, unit: mm}
-        motor_peak_power: {value: 12, unit: kW}
       reason: >-
         H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を 50 mm 前へ出す。
+        H3: 運転者の膝とステアリングのすき間が足りないので、ステアリングと足元の箱を前へ出す (steering_x -570 mm から -200 mm へ)
+      source: >-
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0003 (30 deg), H3 ver-0004 (268.6 mm)
+    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
+      changes:
+        motor_peak_power: {value: 13, unit: kW}
+      reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
-      source: the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change
+      source: >-
+        the demo scripted run 20261104-004233-offroad-4w-scripted, version 2: P3 ver-0007 (time_to_speed 6.878 s against 6 s); version 3 with this change
+        (13 kW): P3 ver-0012 (5.834 s). 12 kW gave 6.083 s (run 20261104-004022-offroad-4w-scripted)
   steps:
     - &p1_step
       load_case: P1-step100
@@ -177,11 +191,15 @@ offroad-4w:
           inputs: {M: from.M, b: from.b, h: from.h, t: from.t, b_c: from.b_c, h_c: from.h_c, t_c: from.t_c, E: from.E,
                    nu: from.nu, leg: from.leg, through: from.through, open_end: from.open_end}
           inputs_from: analysis.joint_wall_calc
-    # The same step driven in K2 (step_climb_dynamic), after R1: R1 reads the step_climb results
-    # (the wheel loads), and an upstream load case gives the newest matched analysis.
+    # The same step driven in K2 (step_climb_dynamic), after R1 and R1s: they read the step_climb
+    # results (the wheel loads), and an upstream load case gives the newest matched analysis. So the
+    # step goes with the heavy stage (stage: 3, after R1s; HK5 lets it: P1's own stage is 1), not with
+    # the vehicle dynamics. In the N15 run 20261103-212918-offroad-4w-scripted, where it ran at stage 2,
+    # frame_shell read its mount forces (ana-0072 inputs_from ana-0063) and gave 163.6 MPa on version 4.
     - &p1_dynamic
       load_case: P1-step100
       tool: step_climb_dynamic
+      stage: 3
       say: 段差を K2 で走らせて、前輪が段の角から浮く瞬間の押す力と前輪の荷重を、偶力を入れた式と比べます
       predictions: *p1_pushed
     # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
@@ -274,6 +292,55 @@ offroad-4w-video:
       source: >-
         the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change;
         frame_shell and joint_wall_bending with this revision, rail_t 4.5 mm with and without gussets (the analysis department)
+
+# Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
+# (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
+# round by round until every tile is green (tests/agent/test_scene_n15.py). Each revision fixes the
+# reds of the version before it; the values were read off the scripted runs' records (`source`).
+offroad-4w-n15:
+  extends: offroad-4w
+  # HK5, light first: one revision per red stage. Version 1: the layout (stage 0) is red ->
+  # version 2: stage 0 and 1 green, the vehicle dynamics (stage 2) red at P3 -> version 3: stages
+  # 0-2 green, the shells (stage 3) red at R1s -> version 4: every tile green.
+  # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
+  # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
+  notes:
+    - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
+  revise:
+    - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
+      changes:
+        track: {value: 1220, unit: mm}
+        steering_x: {value: -200, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、ステアリングを -570 mm から -200 mm へ前へ出す
+      source: >-
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm);
+        version 2 with this change: H1 ver-0004 (30 deg), H3 ver-0005 (268.6 mm). steering_x is the demo plan's value,
+        until the seat and steering values are searched by code (the analysis department's driver fit)
+    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
+      changes:
+        motor_peak_power: {value: 15, unit: kW}
+      reason: >-
+        P3: 40 km/h までが 6.88 s で 6 s を超えるので、モーターの最大出力を 10 kW から 15 kW に上げる
+        (あとで強度のためにレールを重くしても 6 s に収まるように)
+      source: >-
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 2: P3 ver-0019 (time_to_speed 6.878 s); version 3 with this change: P3 ver-0035 (5.519 s);
+        version 4 (heavier rails): P3 ver-0053 (5.746 s). On version 4 the launch tool gives 6.080 s at 13 kW and 5.886 s at 14 kW
+    - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      changes:
+        rail_t: {value: 4.5, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
+        gusset_thickness: {value: 3.2, unit: mm}
+        cross_h: {value: 50, unit: mm}
+      reason: >-
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
+        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
+        (版 3 で、つなぎ目のホットスポットは 560 MPa、限界 163 MPa)
+      source: >-
+        the N15 scripted run 20261104-015442-offroad-4w-scripted, version 3: R1s ver-0036 (frame_shell ana-0046 max_hot_spot_stress 559.7 MPa at rail_L_BE, cmp-0076);
+        version 4 with this change: R1s ver-0054 (frame_shell ana-0070 123.0 MPa at rail_L_BE, cmp-0116).
+        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake

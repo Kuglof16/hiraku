@@ -65,7 +65,7 @@ function marks(t) {
 
 export function mountShelf(el, api) {
   const ui = { mode: "domain", filter: "all", query: "", collapsed: new Set(), selected: null };
-  const shelf = { ready: false, tools: [], formulas: [], error: null, asked: false, failed: null };
+  const shelf = { ready: false, tools: [], formulas: [], archetypes: {}, error: null, asked: false, failed: null };
   const code = new Map(); // `${runId}|${name}` -> {state: "loading"|"none"|"ok"|"error", n, text}
   let timer = null;
 
@@ -88,7 +88,8 @@ export function mountShelf(el, api) {
     try {
       const got = await (await fetch("/api/shelf", { cache: "no-store" })).json();
       if (got.ready) {
-        Object.assign(shelf, { ready: true, tools: got.tools ?? [], formulas: got.formulas ?? [], error: got.error ?? null, failed: null });
+        Object.assign(shelf, { ready: true, tools: got.tools ?? [], formulas: got.formulas ?? [], archetypes: got.archetypes ?? {},
+          error: got.error ?? null, failed: null });
       } else {
         timer = setTimeout(ask, POLL_MS);
       }
@@ -108,6 +109,20 @@ export function mountShelf(el, api) {
     return h("span", { class: "sh-f", title: f ? `${f.expression}` : "棚の式の一覧に無い" }, f ? f.title : "", h("code", {}, id));
   }
 
+  // A tool's applies_to (the kinds of design it can analyse; none: any design) as one line of names:
+  // the generator's TITLE up to its first " (" (the whole title on hover), or the kind's key as it is.
+  function appliesTo(t) {
+    const kinds = t.applies_to ?? [];
+    if (!kinds.length) return null;
+    const names = kinds.map((k) => {
+      const title = shelf.archetypes[k];
+      return typeof title === "string" && title ? h("span", { class: "sh-arch", dataset: { kind: k }, title }, title.split(" (")[0])
+        : h("span", { class: "sh-arch", dataset: { kind: k } }, k);
+    });
+    return h("div", { class: "sh-applies", title: "このツールが使える設計の型 (applies_to)" },
+      "使える設計: ", names.flatMap((n, i) => (i ? ["・", n] : [n])));
+  }
+
   function row(t) {
     return h("li", { class: `sh-tool${ui.selected === t.name ? " sel" : ""}${isUnusable(t) ? " is-off" : ""}${isClaude(t) ? " is-claude" : ""}`,
         dataset: { tool: t.name }, onclick: () => { ui.selected = t.name; render(); } },
@@ -116,7 +131,8 @@ export function mountShelf(el, api) {
         h("span", { class: "sh-tests", title: "対応する試験 (カタログの番号)" }, (t.tests ?? []).length ? t.tests.map((x) => h("span", { class: "sh-tid" }, x)) : h("span", { class: "sh-dim" }, "試験なし")),
         h("span", { class: "sh-k0", title: "手計算の段 (K0 の式)" }, (t.formulas ?? []).length ? t.formulas.map(formulaChip) : h("span", { class: "sh-dim" }, "式なし")),
         h("span", { class: "sh-base", title: "CAE の段 (土台)" }, h("b", {}, t.base), ` ${BASE_JA[t.base] ?? ""}`),
-        checkState(t)));
+        checkState(t)),
+      appliesTo(t));
   }
 
   function branch(b) {

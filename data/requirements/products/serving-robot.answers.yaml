@@ -2,21 +2,18 @@
 # Shape: hiraku.intake "answers file": key -> {value, unit?, trust?, basis?}. trust defaults to 1
 # (the person's own statement) and basis to "answered in the hearing".
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source in a source check on that date.
 answers:
-  Q30:
-    value: 周りの客
-    trust: 3
-    basis: assumption (a sample answer)
   Q40:
     value: 40
     unit: kg
     trust: 1
     basis: >-
-      Pudu BellaBot: 1 段 10 kg・計 40 kg, https://www.pudurobotics.com/en/products/bellabot
-      (not checked in this repository)
+      Pudu BellaBot: 1 段 10 kg・計 40 kg, https://www.pudurobotics.com/en/products/bellabot;
+      read 2026-11-03 in a source check
   Q50:
     value: 1.2
     unit: m/s
     trust: 1
-    basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot (not checked in this repository)
+    basis: Pudu BellaBot, https://www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check

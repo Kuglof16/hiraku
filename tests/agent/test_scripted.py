@@ -1,4 +1,5 @@
 import copy
+import json
 import unittest
 from unittest import mock
 
@@ -80,7 +81,11 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertGreater(r1[0]["diff_rel"], 0.15)
         self.assertLess(r1[1]["diff_rel"], -0.15)
         causes = [cause_of(self.ctx, c) for c in r1]
+        # resolved_by names only a later match; the safe-side verdict settles the earlier cause for the tile
         self.assertEqual([c["resolved"] for c in causes], [False, False])
+        from hiraku.tools.judge import held_cases
+
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", self.ctx.version))
         self.assertIn("張り出し", causes[0]["cause"])
         self.assertIn("rail_joint_stress", causes[0]["fix"])
         self.assertNotIn("safe_side", causes[0])
@@ -97,6 +102,35 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
+
+    def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
+        from unittest import mock
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+        from hiraku.designgen import driver_fit
+
+        found = {"changes": {"steering_x": {"value": -509.5, "unit": "mm"}, "seat_height": {"value": 317.0, "unit": "mm"}},
+                 "smallest": {"name": "knee_room", "value": 12.0, "unit": "mm", "where": "steering_column"}}
+        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit:
+            changes, reason = scripted.fit_driver(self.ctx, {"track": {"value": 1220, "unit": "mm"},
+                                                             "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
+        self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
+        self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
+        self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
+        self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
+        self.assertEqual(changes["track"]["value"], 1220)
+        self.assertIn("driver_fit", reason)
+        self.assertIn("knee_room 12.0 mm", reason)
+
+    def test_plan_notes_are_said_and_reported(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        plan["notes"] = ["R4 は回していません"]
+        self.assertEqual(run_scripted(self.ctx, plan), "done")
+        said = [json.dumps(e, ensure_ascii=False) for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("R4 は回していません" in t for t in said))
+        report = next(e for e in self.ctx.store.events() if e["kind"] == "report.written")
+        self.assertIn("R4 は回していません", report["data"]["summary"])
 
     def test_rail_joint_inputs_come_from_the_design(self):
         run_scripted(self.ctx)
@@ -220,6 +254,19 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                 with self.assertRaises(ScriptError):
                     resolve(self.ctx, bad, lc)
 
+    def test_pred_ref_reads_the_load_case_being_run(self):
+        p1 = self.ctx.load_case("P1-step100")
+        load, _ = self.predict_p1()
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        # a newer prediction of the same quantity for another load case does not count for P1
+        self.ctx.load_cases.append(dict(p1, load_case_id="P1-step250-beyond"))
+        other = self.ctx.store.add_record("prediction", dict(load, prediction_id=self.ctx.store.next_id("prediction"),
+                                                             load_case_id="P1-step250-beyond", value=load["value"] * 2),
+                                          design_version=self.ctx.version, agent="cae.strength", domain="strength")
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", self.ctx.load_case("P1-step250-beyond"))["value"],
+                         other["value"])
+
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")
         self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],
@@ -292,7 +339,7 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
                                                          {"load_case": "R1-step100", "tool": "frame_static", "say": "b"}]}
 
     def plans(self, data):
-        return mock.patch("hiraku.agent.scripted.read_data", return_value=data)
+        return mock.patch("hiraku.tools.plan.read_data", return_value=data)
 
     def test_a_file_entry_extends_the_products_plan(self):
         own = {"extends": "offroad-4w", "rule_check": True,

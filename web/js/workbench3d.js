@@ -20,6 +20,15 @@
 //
 // Parts are shaped by kind inside their boxes (shapes.js); the look (?look=)
 // picks materials and light (look.js).
+//
+// Drawing (render): the picture (in the real look on its own renderer: through
+// realpost.js, antialiased, with ambient occlusion and tone mapping), then the
+// overlay (layer OVERLAY), drawn after it and outside it:
+//   - the contour's colours: an unlit twin (contourTwin) of each coloured mesh, its
+//     colour not tone mapped, so a pixel of the contour is the legend's colour; it is
+//     tested against the depth of the picture's solid things (drawn again, depth only)
+//   - what is drawn over everything (arrows, the setup's marks, free edges, the centre
+//     of gravity), and the diagram's ink lines again over the twins
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -31,10 +40,12 @@ import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
 import { overOf } from "./fields.js";
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { Look } from "./look.js";
+import { GROUND_MM, Look, cutLookOf } from "./look.js";
+import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
+import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -44,6 +55,57 @@ const LIMIT_RED = "#c8402a";
 // joint: the force the body takes at a suspension mounting point (at "<support>.<point>")
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a", joint: "#1f6f6b" };
 const UP = new THREE.Vector3(0, 1, 0);
+// The layer of what is drawn after the picture (see the top of this file).
+export const OVERLAY = 1;
+// The depth of the picture's solid things for the overlay to test against: pushed back a
+// little (more than a shell's faces are, polygonOffset 1), so a twin on its own surface passes.
+const DEPTH_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
+
+// Draw an object (and what is under it) only in the overlay.
+function overlayOnly(obj) {
+  obj.traverse((o) => o.layers.set(OVERLAY));
+  return obj;
+}
+
+// The unlit copy of a mesh in the overlay, on the mesh's own geometry (so it moves and
+// bends with it): its colour is drawn as it is (not lit, not tone mapped).
+function contourTwin(mesh) {
+  let t = mesh.userData.twin;
+  if (!t) {
+    const src = mesh.material;
+    t = new THREE.Mesh(
+      mesh.geometry,
+      new THREE.MeshBasicMaterial({
+        toneMapped: false,
+        fog: false, // the legend's colour, not hazed (a stage's haze)
+        side: src.side,
+        polygonOffset: src.polygonOffset,
+        polygonOffsetFactor: src.polygonOffsetFactor,
+        polygonOffsetUnits: src.polygonOffsetUnits,
+      }),
+    );
+    t.layers.set(OVERLAY);
+    t.matrixAutoUpdate = false; // the mesh's own place
+    t.visible = false;
+    mesh.add(t);
+    mesh.userData.twin = t;
+  }
+  return t;
+}
+
+// Show a mesh's twin in one colour (hex), in its geometry's vertex colours ("vertex"), or hide it (null).
+function paintTwin(mesh, color) {
+  const t = color === null && !mesh.userData.twin ? null : contourTwin(mesh);
+  if (!t) return;
+  t.visible = color !== null;
+  if (color === null) return;
+  const vertex = color === "vertex";
+  if (t.material.vertexColors !== vertex) {
+    t.material.vertexColors = vertex;
+    t.material.needsUpdate = true;
+  }
+  t.material.color.set(vertex ? "#ffffff" : color);
+}
 // Camera directions (ISO, from the target) for the scenes that need their own view.
 export const VIEWS = {
   default: [0.85, 0.95, 0.62],
@@ -236,7 +298,7 @@ function makeArrow(color) {
   const cone = new THREE.Mesh(new THREE.ConeGeometry(26, 1, 16), mat);
   g.add(shaft, cone);
   for (const o of [g, shaft, cone]) o.renderOrder = 8;
-  return g;
+  return overlayOnly(g);
 }
 
 function placeArrow(g, start, dir, len) {
@@ -267,10 +329,14 @@ export class Workbench3D {
   // opts.renderer: a WebGLRenderer shared with other views (the cut pages draw many
   // views through one); such a view has no labels and no mouse control, and is
   // drawn with renderInto. opts.ground: "shadow" for a ground that only takes the
-  // shadow (a vehicle standing on the page's own background).
+  // shadow (a vehicle standing on the page's own background). opts.quality: the real
+  // look's cost (look.js QUALITY; ?quality=). opts.stage: a cut page's view (look.js: the
+  // sky and its haze behind, the gravel road, the sun behind the vehicle); in the real look
+  // it is drawn through the renderer's shared post (realpost.js sharedPost: antialiasing,
+  // ambient occlusion) when its quality has them.
   constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
-    this.look = new Look(lookName);
+    this.look = new Look(lookName, opts.quality, { stage: !!opts.stage });
     this.ownRenderer = !opts.renderer;
     this.groundStyle = opts.ground ?? null;
     this.renderer = opts.renderer ?? new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -298,6 +364,13 @@ export class Workbench3D {
     }
 
     this.sun = this.look.setUp(this.renderer, this.scene);
+    // The lights are in the overlay's layer too: a pass that counts other lights than the
+    // pass before makes three.js choose every lit material's shader again (each frame).
+    this.scene.traverse((o) => o.isLight && o.layers.enable(OVERLAY));
+    // the real look on its own renderer: antialiasing and occlusion in post (none at the low quality)
+    const q = this.look.q;
+    this.post = this.ownRenderer && this.look.real && (q.ao || q.msaa) ? new RealPost(this.renderer, this.scene, this.camera, q) : null;
+    this.sharedPost = !this.ownRenderer && this.look.stage && !!(q.ao || q.msaa);
 
     this.world = new THREE.Group();
     this.scene.add(this.world);
@@ -342,6 +415,7 @@ export class Workbench3D {
 
     this.cg = new THREE.Sprite(new THREE.SpriteMaterial({ map: cgTexture(), depthTest: false, transparent: true }));
     this.cg.renderOrder = 10;
+    overlayOnly(this.cg);
     this.cg.scale.setScalar(150);
     this.cg.visible = false;
     this.iso.add(this.cg);
@@ -368,6 +442,7 @@ export class Workbench3D {
       this.labelRenderer.setSize(w, h);
       this.leaders.setAttribute("width", String(w));
       this.leaders.setAttribute("height", String(h));
+      this.post?.setSize(w, h, this.renderer.getPixelRatio());
     }
     this.applyAspect();
     for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.resolution.set(w, h);
@@ -401,7 +476,7 @@ export class Workbench3D {
     for (const m of design.members ?? []) {
       const g = memberGeometry(design, m, nodes);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial());
+      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
       mesh.castShadow = mesh.receiveShadow = this.look.real;
       mesh.matrixAutoUpdate = false;
@@ -414,11 +489,14 @@ export class Workbench3D {
       pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
-      const tag = label(esc(m.id), "lbl-id");
-      tag.position.copy(g.mid);
-      this.names.add(tag);
+      if (this.labelRenderer) {
+        const tag = label(esc(m.id), "lbl-id");
+        tag.position.copy(g.mid);
+        this.names.add(tag);
+      }
     }
-    for (const [id, p] of Object.entries(nodes)) {
+    // the names of members and nodes only where labels are drawn (not on a shared renderer)
+    for (const [id, p] of this.labelRenderer ? Object.entries(nodes) : []) {
       const tag = label(esc(id), "lbl-node");
       tag.position.copy(p);
       this.names.add(tag);
@@ -426,6 +504,8 @@ export class Workbench3D {
     this.restInk = ink;
     this.inkLines = new LineSegments2(new LineSegmentsGeometry().setPositions(ink.length ? ink : [0, 0, 0, 0, 0, 0]), this.inkMat);
     this.inkLines.visible = ink.length > 0 && !this.look.real;
+    this.inkLines.layers.enable(OVERLAY); // again over the contour's twins
+    this.inkLines.renderOrder = 1;
     this.model.add(this.inkLines);
     this.modeShape = null;
 
@@ -436,12 +516,13 @@ export class Workbench3D {
       group.matrixAutoUpdate = false;
       const lines = [];
       if (s.kind === "wheel") {
-        // A tyre, rim, hub and spokes (the spokes show the wheel turning).
-        for (const pc of wheelPieces(r, w)) {
+        // A tyre, rim, hub and spokes (the spokes show the wheel turning); one mesh per material.
+        const pieces = wheelPieces(r, w);
+        for (const pc of pieces) if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
+        for (const pc of mergePieces(pieces)) {
           const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial("wheel", pc.sub));
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           group.add(mesh);
-          if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
         }
         for (const side of [-1, 1]) lines.push(0, side * w * 0.36, 0, r * 0.6, side * w * 0.36, 0);
         geo.dispose();
@@ -458,7 +539,7 @@ export class Workbench3D {
       group.add(ring);
       const tag = label(esc(s.id), "lbl-id");
       tag.position.set(0, 0, r + 60);
-      group.add(tag);
+      if (this.labelRenderer) group.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.wheels.add(group);
       this.wheelObjs[s.id] = { group, base: c, ring, tag, r, w, frameNode: s.frame_node ?? null };
       box.expandByPoint(c.clone().add(v3([r, w / 2, r]))).expandByPoint(c.clone().sub(v3([r, w / 2, r])));
@@ -487,25 +568,29 @@ export class Workbench3D {
         for (const m of [torso, ball]) m.castShadow = this.look.real;
         g.add(torso, ball);
       } else {
-        // The part's shape for its kind inside its box, or the box itself.
-        const pieces = partPieces(p) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
+        // The part's shape for its kind inside its box, or the box itself (its edges
+        // rounded in the real look only).
+        const pieces = partPieces(p, { round: this.look.real, design });
         const holder = new THREE.Group();
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
         holder.updateMatrix();
         const lines = [];
-        for (const pc of pieces) {
-          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p.kind, pc.sub));
+        for (const pc of pieces) pushEdges(lines, pc.geo, holder.matrix, 35);
+        // one mesh per material (the pieces of the same sub merged)
+        for (const pc of mergePieces(pieces)) {
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p, pc.sub, design.materials ?? null));
           mesh.material.userData.sub = pc.sub;
           mesh.renderOrder = 2;
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           holder.add(mesh);
-          pushEdges(lines, pc.geo, holder.matrix, 35);
         }
         g.add(holder);
         if (!this.look.real) {
           edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.mutedMat);
+          edges.layers.enable(OVERLAY);
+          edges.renderOrder = 1;
           g.add(edges);
         }
       }
@@ -514,7 +599,7 @@ export class Workbench3D {
       const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
       tag.element.title = p.name ?? p.id;
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
-      g.add(tag);
+      if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
       this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
     }
@@ -564,7 +649,17 @@ export class Workbench3D {
         if (!m || m.userData.baseColor === undefined) return;
         const own = !m.userData.sub; // pieces like a spring keep their colour
         const valued = typeof v === "number" && own;
-        m.color.set(valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : m.userData.baseColor);
+        const hex = valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : null;
+        m.color.set(hex ?? m.userData.baseColor);
+        paintTwin(x, hex);
+        // A part with a value is often inside the vehicle (a battery under the floor and the
+        // seats). The diagram look shows it through what is in front; in the real look its
+        // colour is drawn over what is in front, so it can still be read.
+        const twin = x.userData.twin;
+        if (twin && twin.material.depthTest !== !(real && valued)) {
+          twin.material.depthTest = !(real && valued);
+          twin.renderOrder = real && valued ? 3 : 0;
+        }
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
@@ -629,7 +724,9 @@ export class Workbench3D {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
+      // on a stage the road runs out to where the haze has hidden it (look.js GROUND_MM)
+      const far = this.look.stage ? GROUND_MM : 20000;
+      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - far, x1 + far, y0 - far, y1 + far));
       this.ground.add(holder);
       return;
     }
@@ -703,30 +800,32 @@ export class Workbench3D {
     this.followApplied = null;
   }
 
-  // A shell mesh (the contract's mesh record) as faces and element edges, built once
-  // per mesh_id. Each triangle corner has its own vertex (a quad a-b-c-d is a-b-c and
-  // a-c-d), so an element takes one colour; vNode / vElem say which mesh node and
-  // element each vertex is. The edges are each element side once, on the node positions.
+  // A mesh (the contract's mesh record: shells, solids or both) as faces and element edges,
+  // built once per mesh_id. What is drawn is each shell element and the outer faces of the
+  // solids (meshkind.js); each triangle corner has its own vertex, so an element takes one
+  // colour; vNode / vElem say which mesh node and element each vertex is. The edges are each
+  // shell side and each edge round a solid's outer face once, on the node positions.
   shellObj(rec) {
     const had = this.shellObjs[rec.mesh_id];
     if (had) return had;
     const P = rec.nodes_mm;
+    const seen = outerFaces(rec);
     let corners = 0;
-    for (const e of rec.elements) corners += 3 * (e.length - 2);
+    for (const f of seen) corners += 3 * f.tris.length;
     const pos = new Float32Array(corners * 3);
     const vNode = new Uint32Array(corners);
     const vElem = new Uint32Array(corners);
     let k = 0;
-    rec.elements.forEach((e, ei) => {
-      for (let t = 1; t + 1 < e.length; t += 1) {
-        for (const n of [e[0], e[t], e[t + 1]]) {
+    for (const f of seen) {
+      for (const tri of f.tris) {
+        for (const n of tri) {
           vNode[k] = n;
-          vElem[k] = ei;
+          vElem[k] = f.elem;
           pos.set(P[n], k * 3);
           k += 1;
         }
       }
-    });
+    }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(corners * 3), 3));
@@ -738,22 +837,14 @@ export class Workbench3D {
     faces.castShadow = faces.receiveShadow = this.look.real;
     const nodePos = new Float32Array(P.length * 3);
     P.forEach((p, i) => nodePos.set(p, i * 3));
-    const seen = new Set();
-    const pairs = [];
-    for (const e of rec.elements) {
-      for (let i = 0; i < e.length; i += 1) {
-        const a = e[i];
-        const b = e[(i + 1) % e.length];
-        const key = Math.min(a, b) * P.length + Math.max(a, b);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push(a, b);
-      }
-    }
+    const pairs = edgePairs(rec, seen);
     const eg = new THREE.BufferGeometry();
     eg.setAttribute("position", new THREE.BufferAttribute(nodePos, 3));
     eg.setIndex(pairs);
-    const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.3 }));
+    // the element edges are drawn over the faces' twin, in the overlay
+    const edges = overlayOnly(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.3, toneMapped: false })));
+    edges.renderOrder = 1;
+    paintTwin(faces, "vertex");
     const group = new THREE.Group();
     group.add(faces, edges);
     group.visible = false;
@@ -811,6 +902,7 @@ export class Workbench3D {
         for (const [a, b] of contour.freeEdges) pos.push(...P[a], ...P[b]);
         this.freeEdgeLines = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.freeEdgeMat);
         this.freeEdgeLines.renderOrder = 6;
+        overlayOnly(this.freeEdgeLines);
         this.overGhosts.add(this.freeEdgeLines);
       }
       if (contour.setup) this.buildSetup(contour.setup, contour.mesh.rec);
@@ -824,6 +916,7 @@ export class Workbench3D {
       if (!contour) {
         mat.color.set(plain);
         mat.needsUpdate = true;
+        paintTwin(info.mesh, null);
         continue;
       }
       const v = contour.values?.[id];
@@ -831,6 +924,7 @@ export class Workbench3D {
       const vb = contour.nodes?.[info.node_b];
       if (typeof v === "number") {
         mat.color.set(colorOf(v, contour.max, contour.min));
+        paintTwin(info.mesh, colorOf(v, contour.max, contour.min));
       } else if (typeof va === "number" && typeof vb === "number") {
         const pos = geo.getAttribute("position");
         const cols = new Float32Array(pos.count * 3);
@@ -843,8 +937,10 @@ export class Workbench3D {
         geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
         mat.color.set("#ffffff");
         mat.vertexColors = true;
+        paintTwin(info.mesh, "vertex");
       } else {
         mat.color.set(plain);
+        paintTwin(info.mesh, null);
       }
       mat.needsUpdate = true;
       const over = typeof v === "number" ? v > contour.max : Math.max(va ?? -Infinity, vb ?? -Infinity) > contour.max;
@@ -965,7 +1061,7 @@ export class Workbench3D {
         g.add(line);
       }
     });
-    this.setupMarks = g;
+    this.setupMarks = overlayOnly(g);
     this.overGhosts.add(g);
   }
 
@@ -1531,17 +1627,79 @@ export class Workbench3D {
 
   render() {
     if (!this.noFollow && !this.focused) this.follow();
-    if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
+    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay)
+    this.camera.updateMatrixWorld();
+    const sunDir = this.look.stage ? this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
+    if (this.sun && this.bboxIso) {
+      this.iso.updateWorldMatrix(true, false); // shadowPoints reads iso's world matrix (the renderer updates the rest)
+      this.look.aimSun(this.sun, this.controls.target, this.shadowPoints(), sunDir);
+    }
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself
       this.renderer.toneMapping = this.look.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
       this.renderer.shadowMap.enabled = this.look.real;
+      if (this.look.real) this.renderer.shadowMap.type = this.look.q.shadow.type === "pcfsoft" ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) this.post.render();
+    else if (this.sharedPost && !this.tinted) sharedPost(this.renderer, this.scene, this.camera, this.size.w, this.size.h, this.look.quality, this.look.q).render();
+    else this.renderer.render(this.scene, this.camera);
+    this.renderOverlay();
     if (this.labelRenderer) {
       this.labelRenderer.render(this.scene, this.camera);
       this.placeOutLabels();
     }
+  }
+
+  // The corners of the vehicle's box (100 mm round it) where it stands now, in three.js
+  // world metres: what the sun's shadow box is fitted to.
+  shadowPoints() {
+    const b = this.bboxIso;
+    const m = new THREE.Matrix4().multiplyMatrices(this.iso.matrixWorld, this.body.matrix);
+    const pts = [];
+    for (const x of [b.min.x - 100, b.max.x + 100]) for (const y of [b.min.y - 100, b.max.y + 100]) for (const z of [b.min.z - 100, b.max.z + 100]) pts.push(new THREE.Vector3(x, y, z).applyMatrix4(m));
+    return pts;
+  }
+
+  // The overlay (layer OVERLAY) over the picture. With a contour, first the depth of the
+  // picture's solid things (lines, sprites and see-through things are left out), so the
+  // twins are hidden where something stands in front of them.
+  renderOverlay() {
+    const r = this.renderer;
+    const autoClear = r.autoClear;
+    const autoShadow = r.shadowMap.autoUpdate;
+    // the sky is in the picture already: the overlay's passes leave it out
+    const background = this.scene.background;
+    this.scene.background = null;
+    r.autoClear = false;
+    r.shadowMap.autoUpdate = false;
+    // the picture's pass has brought every world matrix up to date
+    const autoWorld = this.scene.matrixWorldAutoUpdate;
+    this.scene.matrixWorldAutoUpdate = false;
+    if (this.keys.contour) {
+      r.clearDepth();
+      const hidden = [];
+      this.scene.traverse((o) => {
+        if (o.visible && skipsDepth(o)) {
+          o.visible = false;
+          hidden.push(o);
+        }
+      });
+      this.scene.overrideMaterial = DEPTH_ONLY;
+      r.render(this.scene, this.camera);
+      this.scene.overrideMaterial = null;
+      for (const o of hidden) o.visible = true;
+    }
+    // the overlay's own pass only when something is shown in it (each pass walks the whole scene)
+    let shown = !!this.keys.contour;
+    if (!shown) this.scene.traverseVisible((o) => (shown ||= (o.layers.mask & (1 << OVERLAY)) !== 0 && !o.isGroup && !o.isScene && !o.isCSS2DObject));
+    const mask = this.camera.layers.mask;
+    this.camera.layers.set(OVERLAY);
+    if (shown) r.render(this.scene, this.camera);
+    this.camera.layers.mask = mask;
+    this.scene.matrixWorldAutoUpdate = autoWorld;
+    this.scene.background = background;
+    r.autoClear = autoClear;
+    r.shadowMap.autoUpdate = autoShadow;
   }
 
   // A view on a shared renderer: draw into the lower left w x h pixels of its canvas
@@ -1562,6 +1720,7 @@ export class Workbench3D {
     r.setScissorTest(false);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(r.domElement, 0, H - h, w, h, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    this.canvas2d = ctx.canvas; // the canvas it was last copied to (the tests read it)
   }
 
   // Points that outline the design at rest (ISO mm): frame nodes, the corners of the
@@ -1619,6 +1778,21 @@ export class Workbench3D {
     this.followApplied = null;
   }
 }
+
+// A 3D view of a cut page (cut*.js): drawn through the cut's one renderer (cut.renderer) as a
+// stage, in the look the layout gives the cut (look.js cutLookOf: its `look` key, "real" when
+// it has none; ?look= over both). opts: more of the constructor's (e.g. quality).
+export function cutView(cut, name, opts = {}) {
+  const look = cutLookOf(cut.layout, name, new URLSearchParams(location.search));
+  const view = new Workbench3D(null, look, { renderer: cut.renderer, stage: true, ...opts });
+  CUT_VIEWS.push(view);
+  return view;
+}
+
+// The cut page's views, in the order they were made (window.hiraku.views(): the tests read
+// their looks and the canvases they were last drawn into, canvas2d).
+const CUT_VIEWS = [];
+export const cutViews = () => [...CUT_VIEWS];
 
 function sectionArea(sec) {
   const d = sec.dims_mm ?? {};

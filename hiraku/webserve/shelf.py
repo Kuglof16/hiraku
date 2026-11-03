@@ -1,5 +1,6 @@
 """The analysis tool shelf for the A4 screen: every builtin tool's spec and the K0
-formulas, from the solvers' two entry points.
+formulas, from the solvers' two entry points, and the names of the kinds of design
+(hiraku.designgen.ARCHETYPES -> the generator's TITLE) that a tool's applies_to lists.
 
 A tool's spec runs its known-answer checks, which takes tens of seconds for the whole
 shelf, so it is computed once, in the background, on the first request; until then the
@@ -14,12 +15,18 @@ from typing import Any, Callable
 
 
 def load_shelf() -> dict[str, Any]:
-    from hiraku import solvers
+    from hiraku import designgen, solvers
 
     return {
         "tools": [tool.spec() for tool in solvers.builtin_tools()],
         "formulas": solvers.formula_registry().list_formulas(),
+        "archetypes": archetype_titles(designgen.ARCHETYPES),
     }
+
+
+def archetype_titles(archetypes: dict[str, Any]) -> dict[str, str]:
+    """{kind of design: its generator's TITLE}, for the generators that have one."""
+    return {name: gen.TITLE for name, gen in archetypes.items() if isinstance(getattr(gen, "TITLE", None), str)}
 
 
 class Shelf:
@@ -42,6 +49,6 @@ class Shelf:
         try:
             result = {"ready": True, **self._load()}
         except Exception as e:  # noqa: BLE001 - the page shows why the shelf is missing
-            result = {"ready": True, "error": f"{type(e).__name__}: {e}", "tools": [], "formulas": []}
+            result = {"ready": True, "error": f"{type(e).__name__}: {e}", "tools": [], "formulas": [], "archetypes": {}}
         with self._lock:
             self._result = result

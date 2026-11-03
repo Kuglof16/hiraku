@@ -174,6 +174,17 @@ class CheckRun(unittest.TestCase):
         p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
         self.assertIn("project.changed", {f.rule for f in cr.check_run(run) if f.level == "error"})
 
+    def test_requirements_re_sent_before_the_first_version(self):
+        # contract: requirements changed mid-run are re-sent any time (a hearing before the designer's version 1)
+        ev = sample_events()
+        upd = copy.deepcopy(ev[0])
+        upd.update(kind="project.updated", agent="lead")
+        reqs = upd["data"].get("requirements")
+        self.assertTrue(reqs, "the sample run has requirements")
+        upd["data"]["requirements"] = reqs[:-1]  # one requirement dropped in the hearing
+        ev.insert(ev.index(by_kind(ev, "design.created")), upd)
+        self.assertEqual(self.rules(renumber(ev)), set())
+
     def test_tools_made_in_the_run_and_the_stop_request(self):
         run = write_run(self.root / "x", sample_events())
         tools = run / layout.TOOLS_DIR
@@ -232,6 +243,11 @@ class CheckRun(unittest.TestCase):
         ev = self._report(sample_events())
         by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y"}]
         self.assertFlags(ev, "report.domains")
+        # an item answering a rule's hit may name a domain the run did not pick (warned when no hit)
+        by_kind(ev, "report.written")["data"]["next"] = [{"domain": "aero", "change": "x", "reason": "y",
+                                                          "rule_id": "SM-01"}]
+        self.assertNotIn("report.domains", self.rules(ev))
+        self.assertIn("report.domains", self.rules(ev, "warn"))  # the sample has no rule_check hit
 
     def test_report_file_is_the_last_report_written(self):
         run = write_run(self.root / "x", self._report(sample_events()))
@@ -300,6 +316,35 @@ class CheckRun(unittest.TestCase):
         for e in ev[i:]:
             e["t"] = max(e["t"], cmp_ev["t"])
         self.assertFlags(renumber(ev), "HK3_cause_before_continue")
+
+    def test_a_run_that_stops_after_the_picks_is_done_without_a_design(self):
+        # project.stop_after "picks" (from the requirements file): domains picked and the hearing, then done;
+        # no design is made. A done without a design and without it is still wrong, whatever events it has.
+        def run(stop_after):
+            ev = [e for e in sample_events()
+                  if e["kind"] in ("run.started", "agent.started", "agent.stopped", "run.finished")]
+            ev.insert(1, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "domains.picked",
+                          "agent": "lead", "data": {"want": ev[0]["data"].get("want", ""), "flags": {},
+                                                    "picks": ev[0]["data"].get("domain_picks", []), "off": []}})
+            if stop_after:
+                ev[0]["data"]["stop_after"] = stop_after
+            return renumber(ev)
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run("picks")))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(None)))
+
+    def test_h4_does_not_wait_for_a_domain_with_no_test_to_build(self):
+        # a picked domain whose tests have no way to build their load cases: test_ids empty, not judged
+        def run(test_ids, reason):
+            ev = sample_events()
+            picks = [*ev[0]["data"]["domain_picks"],
+                     {"domain": "nvh", "shown_name": "音振", "reason": reason, "test_ids": test_ids}]
+            ev[0]["data"]["domain_picks"] = picks
+            return ev
+        said = "騒音 N3 は荷重条件の作り方が無いので、この実行では見ない"
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said)))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(run([], said), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run([], "騒音"), "warn"))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(run(["N3"], said)))  # tests to judge, no tile
 
     def test_h4_done_while_a_picked_domain_is_pending(self):
         ev = sample_events()
@@ -380,6 +425,41 @@ class CheckRun(unittest.TestCase):
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
+
+    def test_round_limit_still_judges_the_latest_version(self):
+        # HK4: the round limit only ends revisions; the latest version is still judged (red is judged)
+        def stopped(state):
+            ev = self._finish(sample_events(), "stopped", "round_limit", state)
+            ev[0]["data"]["round_limit"] = 0  # reached with the one version
+            if state == "red":
+                ev = self._finish(self._red(ev), "stopped", "round_limit", "red")
+            return ev
+        self.assertIn("HK4_no_stop_before_judged", self.rules(stopped("pending")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red")))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(stopped("red"), "warn"))
+
+    def test_round_limit_may_leave_cases_behind_a_lower_stage_red(self):
+        # HK4 / HK5's dead end: revisions used up with a red left, the heavier cases are not run (contract)
+        def stopped(reason):
+            ev = self._unjudged_case(self._red(sample_events()))  # R1 red, R3-qa without a verdict
+            ev = self._finish(ev, "stopped", "round_limit", "red")
+            ev[0]["data"]["round_limit"] = 0
+            ev[0]["data"]["stop_reason"] = reason
+            by_kind(ev, "run.finished")["data"]["stop_reason"] = reason
+            return ev
+        said = stopped("R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
+        silent = stopped("R1 が赤のまま直しの回数を使い切った")
+        self.assertNotIn("HK4_no_stop_before_judged", self.rules(silent))
+        self.assertIn("HK4_no_stop_before_judged", self.rules(silent, "warn"))
+
+    def test_comparison_where_picks_the_result(self):
+        ev = sample_events()
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_L0"  # the sample's result is at rail_L0
+        self.assertNotIn("comparison.values", self.rules(ev))
+        by_kind(ev, "comparison.recorded")["data"]["where"] = "rail_R1"
+        self.assertFlags(ev, "comparison.values")
 
     def test_stopped_without_stop_code_is_a_warning(self):
         ev = self._finish(sample_events(), "stopped", state="pending")
@@ -584,6 +664,169 @@ class CheckRun(unittest.TestCase):
         v = by_kind(ev, "verdict.recorded")["data"]
         v["limit"] = {"value": 200.0, "unit": "MPa"}
         self.assertFlags(ev, "verdict.criterion")
+
+    @staticmethod
+    def _shell_after_green(ev, hot_spot, element=None, then=None, after="judgement.updated"):
+        """A frame_shell analysis of R1 (ana-0002) after the sample's green tile (or after the first
+        event of kind `after`), with the weld toe's hot-spot stress and the element maximum; then an
+        optional judgement.updated state after it."""
+        at = next(n for n, e in enumerate(ev) if e["kind"] == after) + 1
+        started, finished = copy.deepcopy(by_kind(ev, "analysis.started")), copy.deepcopy(by_kind(ev, "analysis.finished"))
+        for e in (started, finished):
+            e["data"].update(analysis_id="ana-0002", tool="frame_shell")
+            e["t"], e["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        finished["data"].pop("fields", None)
+        finished["data"]["results"] = [{"quantity": "max_hot_spot_stress", "value": hot_spot, "unit": "MPa"},
+                                       {"quantity": "max_stress", "value": element or hot_spot, "unit": "MPa"}]
+        extra = [started, finished]
+        if then:
+            j = copy.deepcopy(by_kind(ev, "judgement.updated"))
+            j["data"].update(state=then)
+            j["t"], j["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+            extra.append(j)
+        ev[at:at] = extra
+        return renumber(ev)
+
+    def test_a_later_result_beyond_the_criterion_holds_a_green_tile(self):
+        # the sample's limit is 156.7 MPa; a green tile left standing after a shell result beyond it
+        self.assertFlags(self._shell_after_green(sample_events(), 200.0), "judgement.state")
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 100.0)))
+        # the tile turned pending after the result: right (HK4 then speaks for ending the run done)
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 200.0, then="pending")))
+        # turned green again after it: wrong at that judgement
+        self.assertFlags(self._shell_after_green(sample_events(), 200.0, then="green"), "judgement.state")
+        # frame_shell is judged on the hot spot, not on its element maximum (contract, 判定に使う量)
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 100.0, element=300.0)))
+
+    @staticmethod
+    def _stages(ev, **stages):
+        """tool.checked for each named tool with its stage (tool_spec.stage), before the design."""
+        spec0 = json.loads((contract.EXAMPLES_DIR / "tool_spec.json").read_text(encoding="utf-8"))
+        for k, (name, stage) in enumerate(stages.items()):
+            ev.insert(1 + k, {"seq": 0, "ts": ev[0]["ts"], "t": ev[0]["t"], "run_id": RUN_ID, "kind": "tool.checked",
+                              "agent": "system", "data": dict(copy.deepcopy(spec0), name=name, stage=stage)})
+        return renumber(ev)
+
+    def test_h5_heavier_tools_wait_for_the_lighter_load_cases(self):
+        # frame_shell (stage 3) after frame_static's R1 (stage 1) passed: allowed
+        ev = self._stages(self._shell_after_green(sample_events(), 100.0), frame_static=1, frame_shell=3)
+        self.assertNotIn("HK5_light_first", self.rules(ev))
+        # on R1 itself before R1 had its verdict: allowed (the heavier tool may be what settles it)
+        early = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
+                             frame_static=1, frame_shell=3)
+        self.assertNotIn("HK5_light_first", self.rules(early))
+        # on R1 after frame_static's verdict on R1 was red: HK5 denies it (revise first)
+        red = sample_events()
+        by_kind(red, "verdict.recorded")["data"]["pass"] = False
+        red = self._stages(self._shell_after_green(red, 100.0, after="verdict.recorded"), frame_static=1, frame_shell=3)
+        self.assertIn("HK5_light_first", self.rules(red))
+        # on another load case while R1 has no verdict yet: HK5 denies it
+        other = self._stages(self._shell_after_green(sample_events(), 100.0, after="analysis.finished"),
+                             frame_static=1, frame_shell=3)
+        for e in other:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertFlags(other, "HK5_light_first")
+        # a case past the limit (-beyond) is meant to fail: its red does not hold back the heavier tools
+        beyond = json.loads(json.dumps(sample_events()).replace("R1-step100", "R1-step100-beyond"))
+        by_kind(beyond, "verdict.recorded")["data"]["pass"] = False
+        beyond = self._stages(self._shell_after_green(beyond, 100.0, after="verdict.recorded"),
+                              frame_static=1, frame_shell=3)
+        for e in beyond:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        self.assertNotIn("HK5_light_first", self.rules(beyond))
+        # tools of one stage may run side by side, and without stages every tool is stage 1
+        self.assertNotIn("HK5_light_first", self.rules(self._stages(
+            self._shell_after_green(sample_events(), 100.0, after="analysis.finished"), frame_static=1, frame_shell=1)))
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_after_green(sample_events(), 100.0,
+                                                                                after="analysis.finished")))
+
+    @staticmethod
+    def _compare_again(ev, n, analyzed, cause=None):
+        """After the sample's green tile: frame_static again (ana-000n, max_stress = analyzed) and its
+        comparison with the sample's prediction (cmp-000n), with an optional cause of it."""
+        at = next(k for k, e in enumerate(ev) if e["kind"] == "agent.stopped")
+        started, finished = copy.deepcopy(by_kind(ev, "analysis.started")), copy.deepcopy(by_kind(ev, "analysis.finished"))
+        c = copy.deepcopy(by_kind(ev, "comparison.recorded"))
+        aid, cid = f"ana-{n:04d}", f"cmp-{n:04d}"
+        started["data"]["analysis_id"] = aid
+        finished["data"].update(analysis_id=aid, results=[{"quantity": "max_stress", "value": analyzed, "unit": "MPa"}])
+        finished["data"].pop("fields", None)
+        pv, tol = c["data"]["predicted"]["value"], c["data"]["tolerance_rel"]
+        rel = (analyzed - pv) / abs(pv)
+        c["data"].update(comparison_id=cid, analysis_id=aid, analyzed={"value": analyzed, "unit": "MPa"},
+                         diff_abs=analyzed - pv, diff_rel=rel, status="match" if abs(rel) <= tol else "mismatch")
+        new = [started, finished, c]
+        if cause is not None:
+            new.append({"seq": 0, "ts": c["ts"], "t": c["t"], "run_id": RUN_ID, "kind": "cause.recorded",
+                        "agent": c["agent"], "data": dict({"cause_id": f"cause-{n - 1:04d}", "comparison_id": cid,
+                                                           "hypothesis": "the joint is stiffer than the beam model",
+                                                           "evidence": "local stress at the weld", "resolved": False,
+                                                           "resolved_by": None}, **cause)})
+        for e in new:
+            e["t"], e["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        ev[at:at] = new
+        return renumber(ev)
+
+    def test_a_stand_in_quantity_decides_when_the_judged_one_is_near_zero(self):
+        def near_zero(stand_in_matches):
+            ev = self._compare_again(sample_events(), 2, 150.0)  # a later mismatch of max_stress, no cause
+            crit = ev[0]["data"]["load_cases"][0]["criterion"]
+            crit.update(limit={"value": 1e9, "unit": "MPa"}, stand_in_quantity="stress_range")  # 150 < 1e-6 x 1e9
+            fin = next(e for e in ev if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0002")
+            c = copy.deepcopy(next(e for e in ev if e["kind"] == "comparison.recorded"
+                                   and e["data"]["comparison_id"] == "cmp-0002"))
+            pv = c["data"]["predicted"]["value"]
+            got = pv if stand_in_matches else 2 * pv
+            fin["data"]["results"].append({"quantity": "stress_range", "value": got, "unit": "MPa"})
+            c["data"].update(comparison_id="cmp-0003", quantity="stress_range", analyzed={"value": got, "unit": "MPa"},
+                             diff_abs=got - pv, diff_rel=(got - pv) / abs(pv),
+                             status="match" if stand_in_matches else "mismatch")
+            ev.insert(ev.index(next(e for e in ev if e["kind"] == "agent.stopped")), c)
+            return renumber(ev)
+        self.assertNotIn("judgement.state", self.rules(near_zero(True)))  # the stand-in matches
+        self.assertIn("judgement.state", self.rules(near_zero(False)))
+
+    def test_the_latest_comparison_of_the_judged_quantity_holds_a_green_tile(self):
+        # the limit is 156.7 MPa: 150 MPa is within it, but 21 % off the prediction (a mismatch)
+        self.assertIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0)))
+        self.assertIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0, {"safe_side": False})))
+        safe = {"safe_side": True, "safe_side_reason": "the prediction is on the safe side"}
+        self.assertNotIn("judgement.state", self.rules(self._compare_again(sample_events(), 2, 150.0, safe)))
+        # a later match of the same load case and quantity replaces the open mismatch (contract 5e016ee)
+        ev = self._compare_again(self._compare_again(sample_events(), 2, 150.0), 3, 125.0)
+        self.assertNotIn("judgement.state", self.rules(ev))
+
+    def test_comparison_quantity_is_the_result_compared(self):
+        def compared(name, value=None):
+            ev = sample_events()
+            a = by_kind(ev, "analysis.finished")["data"]
+            analyzed = by_kind(ev, "comparison.recorded")["data"]["analyzed"]
+            a["results"].append({"quantity": "max_hot_spot_stress", "value": value or analyzed["value"], "unit": "MPa"})
+            by_kind(ev, "comparison.recorded")["data"]["quantity"] = name
+            return ev
+        self.assertNotIn("comparison.values", self.rules(compared("max_hot_spot_stress")))  # prediction says max_stress
+        self.assertFlags(compared("no_such_result"), "comparison.values")
+        self.assertFlags(compared("max_hot_spot_stress", value=99.0), "comparison.values")
+
+    def test_analysis_ids_follow_analysis_started(self):
+        def two(first_started_first):
+            ev = self._shell_after_green(sample_events(), 100.0)
+            s2 = next(e for e in ev if e["kind"] == "analysis.started" and e["data"]["analysis_id"] == "ana-0002")
+            f2 = next(e for e in ev if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0002")
+            ev.remove(s2)
+            ev.remove(f2)
+            s1 = next(n for n, e in enumerate(ev) if e["kind"] == "analysis.started")
+            for e in (s2, f2):
+                e["t"], e["ts"] = ev[s1]["t"], ev[s1]["ts"]
+            # ana-0002 starts (after or before ana-0001) and finishes before ana-0001 does
+            ev[s1 + 1:s1 + 1] = [s2, f2] if first_started_first else []
+            if not first_started_first:
+                ev[s1:s1] = [s2, f2]
+            return renumber(ev)
+        self.assertNotIn("ids.order", self.rules(two(True), "warn"))
+        self.assertIn("ids.order", self.rules(two(False), "warn"))
 
     def test_judgement_red_count(self):
         ev = sample_events()
@@ -833,6 +1076,15 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._rule_check(after="run.started"), "rule_check.design")
         self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
         self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
+
+    def test_rule_check_on_the_whole_design(self):
+        rc = self._example("rule_check")
+        whole = dict(targets=["design"], hits=[dict(rc["hits"][0], part_id="design")], not_evaluable=[])
+        events = self._rule_check(knowledge=True, **whole)
+        self.assertEqual(self.rules(events), set())
+        self.assertNotIn("rule_check.targets", self.rules(events, "warn"))  # "design" is not a missing part
+        self.assertFlags(self._rule_check(**dict(whole, targets=["battery"])), "rule_check.targets")
+        self.assertNotIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "design"]), "warn"))
 
     def _mesh(self, field=None, after="design.created", **change):
         m = self._example("mesh")

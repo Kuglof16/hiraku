@@ -12,6 +12,7 @@ and says `recorded: false` with the reason (hiraku.intake.events).
 
 from __future__ import annotations
 
+import json
 import weakref
 from pathlib import Path
 from typing import Any, Callable
@@ -24,7 +25,7 @@ from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
 from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
-from hiraku.intake.products import PRODUCTS_DIR, load_product, product_files
+from hiraku.intake.products import ANSWERS_SUFFIX, PRODUCTS_DIR, load_product, product_files
 
 Record = dict[str, Any]
 
@@ -49,6 +50,29 @@ def _emit(ctx: Any, event: Record, *, design_version: int | None = None) -> str 
     return ev.emit_if_known(_store(ctx), event, design_version=design_version)
 
 
+def _same_as_last(ctx: Any, event: Record) -> bool:
+    """Is this event's data what the run's newest event of the same kind already says?
+
+    A tool may be called again for the same thing (the agent asks the same questions twice, picks the same
+    domains twice); the run records a change once, not each call."""
+    store = _store(ctx)
+    events = getattr(store, "events", None)
+    if events is None:
+        return False
+    mine = json.loads(json.dumps(event["data"], ensure_ascii=False))
+    for e in reversed(events()):
+        if e.get("kind") == event["kind"]:
+            return e.get("data") == mine
+    return False
+
+
+def _emit_changed(ctx: Any, event: Record) -> tuple[str | None, bool]:
+    """(problem, repeated): emit unless the run's newest event of this kind already says the same."""
+    if _same_as_last(ctx, event):
+        return None, True
+    return _emit(ctx, event), False
+
+
 # ------------------------------------------------------------------------------------------ pick_domains
 
 
@@ -57,10 +81,12 @@ def pick_domains_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     record = pick_domains(
         args.get("want", ""), args.get("flags") or {}, args.get("speed_class"),
         flag_reasons=args.get("flag_reasons"), reasons=args.get("reasons"), shown_names=args.get("shown_names"),
-        exclude=args.get("exclude"),
+        exclude=args.get("exclude"), product=(getattr(ctx, "project", None) or {}).get("product"),
     )
-    problem = _emit(ctx, ev.picked_event(record))
+    problem, repeated = _emit_changed(ctx, ev.picked_event(record))
     out: Record = {**record, "recorded": problem is None}
+    if repeated:
+        out["unchanged"] = "前に記録した分野の選びと同じなので、記録は増やしていません"
     if problem:
         out["not_recorded"] = problem
     missing = reasons_missing(record, args.get("reasons"))
@@ -92,17 +118,56 @@ def _product_defaults(slug: str, current: Record) -> dict[str, Record]:
 
 
 def _answers_from_file(path: str) -> tuple[dict[str, Any], str | None]:
-    p = (REPO_ROOT / path).resolve()
+    """The answers file named by `path`: relative to the repository (data/requirements/products/<name>), or just
+    <name> (looked up in the products folder), with or without the .answers.yaml ending."""
     allowed = PRODUCTS_DIR.resolve()
-    if not p.is_relative_to(allowed):
-        raise IntakeError(f"答えのファイルは data/requirements/products/ の中のものだけ読めます ({path!r})")
-    if not p.is_file():
-        raise IntakeError(f"答えのファイル {path!r} がありません")
-    return hearing.load_answers(p)
+    names = [path, f"{path}{ANSWERS_SUFFIX}"]
+    tries = [(root / n).resolve() for n in names for root in (REPO_ROOT, PRODUCTS_DIR)]
+    inside = [p for p in tries if p.is_relative_to(allowed)]
+    if not inside:
+        raise IntakeError(f"答えのファイルは data/requirements/products/ の中のものだけ読めます ({path!r})。"
+                          "data/requirements/products/<名前>.answers.yaml のパスで渡してください")
+    for p in inside:
+        if p.is_file():
+            return hearing.load_answers(p)
+    have = ", ".join(sorted(f.name for f in allowed.glob(f"*{ANSWERS_SUFFIX}")))
+    raise IntakeError(f"答えのファイル {path!r} がありません。data/requirements/products/ にあるのは: {have}。"
+                      "data/requirements/products/<名前>.answers.yaml のパスで渡してください")
+
+
+def _rule_questions(ctx: Any, raw: Any) -> list[Record]:
+    """The rule hits the lead wants the person to decide on, checked: the contract's shape, rules this run has."""
+    out: list[Record] = []
+    known = {r["rule_id"] for r in _enabled_rules(ctx)}
+    for q in raw or []:
+        problems = contract.errors("rule_question", q)
+        if problems:
+            raise IntakeError("rule_hits の 1 件が契約の形ではありません: " + "; ".join(str(p) for p in problems[:2]))
+        if q["rule_id"] not in known:
+            raise IntakeError(f"規則 {q['rule_id']} はこの実行にありません。ある規則: {', '.join(sorted(known))}")
+        out.append({**q, "choices": list(q.get("choices") or hearing.RULE_CHOICES)})
+    return out
+
+
+def dropped_rules(ctx: Any) -> dict[str, str]:
+    """rule_id -> why, for the rules a person dropped for this run (rule_answers of hearing.answered, the newest wins)."""
+    events = getattr(_store(ctx), "events", None)
+    out: dict[str, str] = {}
+    for e in events() if events else []:
+        if e.get("kind") != ev.HEARING_ANSWERED:
+            continue
+        for a in (e.get("data") or {}).get("rule_answers", []):
+            if a.get("choice") == "drop_rule":
+                out[a["rule_id"]] = a.get("note") or "人が、この実行ではこの規則を外すと答えた"
+            else:
+                out.pop(a["rule_id"], None)
+    return out
 
 
 @_guard
 def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
+    rule_questions = _rule_questions(ctx, args.get("rule_hits"))
+    rule_answers: list[Record] = []
     answers: dict[str, Any] = dict(args.get("answers") or {})
     note = args.get("note")
     if args.get("answers_file"):
@@ -119,20 +184,33 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if wait > 0 and not answers and run_path is not None:
         # wait for a person: show the questions now (A2), then take what the screen writes into the run folder
         plan = hearing.plan_hearing(req, product_defaults=defaults, wording=wording, choices=choices)
-        if plan.questions:
+        if plan.questions or rule_questions:
             hearing.clear_mailbox(run_path)
-            if (p := _emit(ctx, ev.asked_event({"questions": plan.questions}))):
-                problems.append(p)
+            asked = {"questions": plan.questions, "rule_questions": rule_questions}
+            problem, repeated = _emit_changed(ctx, ev.asked_event(asked))
+            if problem:
+                problems.append(problem)
             asked_early = True
-            hearing.write_request(run_path, {"questions": plan.questions})
+            hearing.write_request(run_path, {k: v for k, v in asked.items() if v})
             got = hearing.wait_for_answer(run_path, wait)
             hearing.clear_mailbox(run_path)
             if got:
                 answers = dict(got.get("answers") or {})
                 note = note or got.get("note")
+                rule_answers = hearing.check_rule_answers(got.get("rule_answers"), rule_questions)
     prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
+    if rule_questions:
+        prepared.asked["rule_questions"] = rule_questions
+    if rule_answers:
+        prepared.answered["rule_answers"] = rule_answers
     to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
-    problems += [p for e in to_emit if (p := _emit(ctx, e))]
+    unchanged = []
+    for e in to_emit:  # the same questions, or the same (empty) answers, are not recorded again
+        problem, repeated = _emit_changed(ctx, e)
+        if repeated:
+            unchanged.append(e["kind"])
+        elif problem:
+            problems.append(problem)
     new = prepared.answered["answers"]
     recorded_req = False
     update = getattr(_store(ctx), "update_project", None)
@@ -151,6 +229,20 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "requirements_recorded": recorded_req,
         "recorded": not problems,
     }
+    if rule_questions:
+        out["rule_questions"] = rule_questions
+        out["rule_answers"] = rule_answers
+        waiting = [q["rule_id"] for q in rule_questions if q["rule_id"] not in {a["rule_id"] for a in rule_answers}]
+        if waiting:
+            out["rules_waiting"] = waiting
+        dropped = [a["rule_id"] for a in rule_answers if a["choice"] == "drop_rule"]
+        revise = [a["rule_id"] for a in rule_answers if a["choice"] == "revise_design"]
+        if dropped:
+            out["rules_dropped"] = dropped  # rule_check leaves them out of this run from now on
+        if revise:
+            out["rules_to_revise"] = revise  # the designer changes the design for these
+    if unchanged:
+        out["unchanged"] = f"{' と '.join(unchanged)} は前に記録した内容と同じなので、記録は増やしていません"
     if not recorded_req and new:
         out["requirements_to_add"] = new  # the run store has no update_project: the caller adds them
     if problems:
@@ -273,7 +365,8 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     version = args.get("design_version") or store.design_version
     design = store.design(version)
     rules = _enabled_rules(ctx)
-    disabled = set(args.get("disable") or [])
+    dropped = dropped_rules(ctx)  # a person dropped these for this run (hearing.answered rule_answers)
+    disabled = set(args.get("disable") or []) | set(dropped)
     stray = sorted(disabled - {r["rule_id"] for r in rules})
     if stray:
         raise IntakeError(f"規則 {', '.join(stray)} はありません。使えるのは {', '.join(r['rule_id'] for r in rules)} です")
@@ -307,6 +400,7 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
                           for c in checks if c["not_evaluable"]],
         "recorded": persist and not problems,
         **({"not_recorded": problems[0]} if problems else {}),
+        **({"dropped_rules": [{"rule_id": r, "reason": why} for r, why in dropped.items()]} if dropped else {}),
     }
 
 
@@ -356,7 +450,8 @@ TOOLS: dict[str, Record] = {
             "要件のうち、この製品に要るのに実行の要件に無いもの (必須・確認) を、まとめて 1 回聞く。質問と選択肢はコードが "
             "項目の表から作る。答えが無い確認の質問は、出どころつきの既定値を使う。必須の質問は答えが無いと進めない。"
             "answers には、人が実際に言ったことだけを {要件の番号: 値 か {value, unit, basis}} で入れる (推測で埋めない)。"
-            "answers_file は data/requirements/products/ の答えのファイル。質問を製品に合わせて言い換えたいときは wording "
+            "answers_file は data/requirements/products/ の答えのファイル (パス data/requirements/products/<名前>.answers.yaml か、名前だけ)。"
+            "Q30 の答えは見る組み合わせ (empty・driver・two・two_cargo か、空車・運転者だけ・2 人・2 人 + 荷)。質問を製品に合わせて言い換えたいときは wording "
             "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
             "答えが来るか時間が切れるまで待つ)。"
         ),

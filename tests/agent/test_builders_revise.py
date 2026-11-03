@@ -270,6 +270,17 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
         self.assertIsNone(get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"])
 
+    def test_the_cost_refusal_says_whose_cost_it_reads(self):
+        self.ctx.project["cost_usd"] = self.ctx.project["cost_limit_usd"]  # as written at the end of the lead's turn
+        with self.assertRaises(ToolError) as cm:
+            revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertIn("まとめ役の最後に終わった番の時点で", str(cm.exception))
+
+    def test_a_null_cost_does_not_stop_a_revision(self):
+        self.ctx.project["cost_usd"] = None  # the plugin path: HIRAKU cannot know the cost
+        out = revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertEqual(out["design_version"], 2)
+
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
     def plan(self, revise=True):
@@ -296,7 +307,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")
         v1 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(1)}
         v2 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(2)}
-        self.assertEqual(v1, {"strength": "green", "assembly": "red"})
+        self.assertEqual(v1, {"strength": "pending", "assembly": "red"})  # HK5: stage 0 red, revised before R1
         self.assertEqual(v2, {"strength": "green", "assembly": "green"})
         self.assertEqual(self.designgen.calls, [TRACK_FIX])
         # a zero limit (interference <= 0 mm): margin in mm, no percentage
@@ -307,21 +318,31 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual([(p["design_version"], p["value"], p["agent"]) for p in h1],
                          [(1, 100.0, "packager"), (2, 0.0, "packager")])
         self.assertEqual({p["design_version"] for p in self.ctx.store.records("prediction")
-                          if p["load_case_id"] == "R1-step100"}, {1, 2})  # every load case is redone
+                          if p["load_case_id"] == "R1-step100"}, {2})  # the heavier stage waits for the layout
         created = self.events("design.created")
         self.assertEqual([(e["agent"], e["design_version"]) for e in created], [("designer", 1), ("designer", 2)])
         started = [e["agent"] for e in self.events("agent.started")]
-        self.assertEqual(started, ["lead", "cae.strength", "packager", "designer"])
-        self.assertIn("設計の版 2 で、全部の荷重条件をやり直します", [e["text"] for e in self.events("agent.said")])
+        self.assertEqual(started, ["lead", "packager", "designer", "cae.strength"])
+        said = [e["text"] for e in self.events("agent.said")]
+        self.assertIn("設計の版 2 で、段 0 から全部の荷重条件をやり直します", said)
+        self.assertIn("版 1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
+        self.assertIn("版 2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
+        self.assertNotIn("hook.denied", [e["kind"] for e in self.ctx.store.events()
+                                         if (e.get("data") or {}).get("rule") == "HK5_light_first"])
         events = self.ctx.store.events()
         self.assertEqual([e["seq"] for e in events], list(range(len(events))))
 
-    def test_without_a_revision_the_red_tile_ends_the_run(self):
-        self.assertEqual(run_scripted(self.ctx, self.plan(revise=False)), "done")  # judged: red is an answer
+    def test_without_a_revision_the_red_layout_holds_the_heavier_stages(self):
+        # HK5: a red stage 0 and no revision in the plan: the lighter stage's red is the answer,
+        # the heavier stages are not checked (a revision was left in round_limit, so not_judged)
+        self.assertEqual(run_scripted(self.ctx, self.plan(revise=False)), "stopped")
         self.assertEqual(self.ctx.version, 1)
         self.assertEqual({j["domain"]: j["state"] for j in self.ctx.store.judgements()},
-                         {"strength": "green", "assembly": "red"})
-        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")  # a revision was left
+                         {"strength": "pending", "assembly": "red"})
+        finished = self.events("run.finished")[-1]["data"]
+        self.assertEqual(finished["stop_code"], "not_judged")
+        self.assertIn("台本に設計の直しが残っていません", finished["stop_reason"])
+        self.assertIn("HK5", finished["stop_reason"])
 
     def test_red_after_the_last_revision_ends_at_the_round_limit(self):
         plan = self.plan()

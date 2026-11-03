@@ -9,16 +9,16 @@ investigate a cause: it writes one only for a mismatch its plan names
 (expected_mismatch, with the cause written in the plan and its source); any
 other mismatch stops the run. Likewise the safe-side judgement of a
 mismatch is the plan's; record_cause still checks the direction of the
-numbers. When a judgement comes out red, the plan's next `revise` entry is
-the designer's revise_design, and every step runs again on the new version.
+numbers. The steps of a version run stage by stage (HK5, light first: the
+stage of each step's tool, shelf.tool_stage, layout and rules first); when a
+load case of a stage comes out red, the plan's next `revise` entry is the
+designer's revise_design before the next stage, and the new version starts
+again from stage 0.
 """
 
 from __future__ import annotations
 
-import copy
-import importlib
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -26,200 +26,61 @@ from hiraku import contract
 from hiraku.agent import inbox
 from hiraku.contract import layout
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
-from hiraku.catalog import CATALOG_DIR, REPO_ROOT, beyond_plans, external_builders, is_beyond, loading_of, read_data
+from hiraku.catalog import REPO_ROOT, is_beyond
 from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, rule_check, trusted_analysis, write_report)
-from hiraku.tools.judge import verdict_line
-from hiraku.tools.summary import design_summary
+                                    revise_design, rule_check, write_report)
+from hiraku.tools.judge import latest_verdicts, verdict_line
+from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+                               load_plan, plan_of, resolve)
+from hiraku.tools.report import scripted_next
+from hiraku.tools.shelf import STAGE_NAMES_JA, tool_stage
 
 Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
-REPORT_SUMMARY = "台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録から道具が入れました"
+NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
+FIT_TIME_S = 120.0  # the driver fit's time limit when the plan gives none
 
 
-class ScriptError(RuntimeError):
-    pass
+def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None) -> tuple[dict, str]:
+    """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
+    with them (hiraku.designgen.driver_fit.best_driver_place: the smallest of the H3 margins made the largest).
+    Returns the changes with the fit's added (the fit's win for its variables) and the reason with the margins."""
+    from hiraku import designgen
+    from hiraku.designgen import driver_fit
+
+    base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
+    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S))
+    small = got["smallest"]
+    found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
+    text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
+            f"いちばん小さい余裕は {small['name']} {small['value']:.1f} {small['unit']} ({small.get('where') or '-'})")
+    return {**changes, **got["changes"]}, text
 
 
-def load_plan(product: str, requirements: str | None = None) -> Record:
-    """The plan in data/catalog/scripted.yaml: the requirements file's own entry (its file name
-    without .yaml) when there is one, else the product's (no steps when neither has one).
-
-    A file's entry with `extends: <entry>` is that entry's plan with the file's keys over it;
-    a step of the file replaces the step of the same load case and tool in place, and its
-    other steps follow."""
-    data = read_data(CATALOG_DIR / "scripted.yaml")
-    own = data.get(requirements) if requirements else None
-    if own is None:
-        return data.get(product) or {"steps": []}
-    base = copy.deepcopy(data.get(own["extends"]) or {"steps": []}) if own.get("extends") else {"steps": []}
-    mine = {k: v for k, v in own.items() if k != "extends"}
-    theirs = list(mine.get("steps") or [])
-    key = {(s["load_case"], s["tool"]): s for s in theirs}
-    steps = [key.pop((s["load_case"], s["tool"]), s) for s in base.get("steps") or []]
-    steps += [s for s in theirs if (s["load_case"], s["tool"]) in key]
-    return {**base, **mine, "steps": steps}
+REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
 
 
-def has_plan(product: str, requirements: str | None = None) -> bool:
-    """Whether data/catalog/scripted.yaml has steps for this requirements file (its name without
-    .yaml) or product. Without them a scripted run has only the builders' default steps."""
-    return bool(load_plan(product, requirements).get("steps"))
+def scripted_summary(ctx: RunContext) -> str:
+    """The report's one line for a scripted run, for the person who reads it: from the last version's
+    tiles, which picked domains passed, failed or have no verdict (contract.DOMAIN_NAMES_JA). It says
+    the run is scripted (no Claude); the parts behind it are in the report's domains."""
+    tiles = {j["domain"]: j["state"] for j in ctx.store.judgements()}
 
+    def names(ds: list[str]) -> str:
+        return "・".join(contract.DOMAIN_NAMES_JA[d] for d in ds)
 
-def plan_of(ctx: RunContext) -> Record:
-    """This run's plan: its requirements file's entry, else its product's (load_plan)."""
-    path = getattr(ctx, "requirements_path", None)
-    return load_plan(ctx.project["product"], path.stem if path else None)
+    green = [d for d in ctx.picked if tiles.get(d) == "green"]
+    red = [d for d in ctx.picked if tiles.get(d) == "red"]
+    rest = [d for d in ctx.picked if d not in green and d not in red]
+    head = f"台本の運転で、設計の版 {ctx.version} は"
+    if green and not red and not rest:
+        return f"{head}選んだ {len(green)} 分野 ({names(green)}) がすべて合格"
+    parts = ([f"{names(green)} が合格"] if green else []) + ([f"{names(red)} が不合格"] if red else []) \
+        + ([f"{names(rest)} は判定が付いていない"] if rest else [])
+    return head + "、".join(parts)
 
-
-def _joint_wall_inputs(design: Record, load_case: Record) -> Record:
-    """frame_static.joint_wall_bending's inputs off the design for this load case's loading and step
-    (hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs, at the joint where it is largest)."""
-    from hiraku.solvers.k0_handcalc.frame_inputs import joint_wall_inputs
-    from hiraku.solvers.shelf.frame_static import front_supports
-
-    params = load_case.get("params") or {}
-    step = params.get("step_height")
-    if step is not None and step.get("unit") != "mm":
-        raise ScriptError(f"{load_case['load_case_id']}: step_height must be in mm, got {step.get('unit')!r}")
-    # the supports on the step as frame_shell takes them: the load case's step_supports, else the front-most
-    on = params.get("step_supports")
-    on = [s.strip() for s in on.split(",")] if isinstance(on, str) else on or front_supports(design)
-    return joint_wall_inputs(design, loading=loading_of(load_case), step_mm=step["value"] if step else None,
-                             step_supports=on if step else None)["inputs"]
-
-
-# Readers a plan may name in inputs_from that are not in hiraku.catalog.builders.
-READERS = {"joint_wall_inputs": _joint_wall_inputs}
-
-
-def _reader(name: str) -> Any:
-    """A plan's inputs_from written by name in scripted.yaml: one of READERS, or "<module>.<function>"
-    of hiraku.catalog.builders (the builders' readers of formula inputs off a design)."""
-    if name in READERS:
-        return READERS[name]
-    module, _, func = name.rpartition(".")
-    if not module or not re.fullmatch(r"[a-z0-9_]+", module):
-        raise ScriptError(f"inputs_from {name!r}: write <module>.<function> of hiraku.catalog.builders")
-    try:
-        return getattr(importlib.import_module(f"hiraku.catalog.builders.{module}"), func)
-    except (ImportError, AttributeError) as e:
-        raise ScriptError(f"inputs_from {name!r} is not in hiraku.catalog.builders: {e}") from None
-
-
-def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
-    """The product's plan plus a step from the builders' PLANS for each load case it lacks
-    (PLANS_BEYOND first for a case past the limit), ordered upstream first. `missing` lists
-    the load cases nobody gave a step for. A product step whose load case this run did not
-    build (another step height, say) is left out: its causes were written for that load case.
-    So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
-    out = copy.deepcopy(plan if plan is not None else plan_of(ctx))
-    # each step its own copy: steps may share parts through YAML aliases
-    built = [copy.deepcopy(s) for s in out["steps"] if ctx.has_load_case(s["load_case"])]
-    out["steps"] = [s for s in built if s["tool"] in ctx.tools]
-    out["unshelved"] = [(s["load_case"], s["tool"]) for s in built if s["tool"] not in ctx.tools]
-    have = {s["load_case"] for s in out["steps"]}
-    recipes, past = external_builders()[2], beyond_plans()
-    out["missing"] = []
-    for lc in ctx.load_cases:
-        if lc["load_case_id"] in have:
-            continue
-        recipe = (is_beyond(lc) and past.get(lc["test_id"])) or recipes.get(lc["test_id"])
-        if recipe is None:
-            out["missing"].append(lc["load_case_id"])
-        else:
-            out["steps"].append({**recipe, "load_case": lc["load_case_id"]})
-    ordered: list[Record] = []
-    left = list(out["steps"])
-    in_plan = {s["load_case"] for s in left}
-    while left:  # a step goes once the load cases feeding it (and in the plan) have gone
-        done = {s["load_case"] for s in ordered}
-        ready = next((s for s in left if all(u["load_case_id"] in done or u["load_case_id"] not in in_plan
-                                             for u in ctx.upstream_of(s["load_case"]))), left[0])
-        ordered.append(ready)
-        left.remove(ready)
-    out["steps"] = ordered
-    return out
-
-
-_SUFFIX_UNITS = {"mm": "mm", "kg": "kg", "MPa": "MPa", "N": "N", "deg": "deg"}
-
-_NAME_REF = re.compile(r"\{([^{}]+)\}")
-
-
-def _load_case_of(ctx: RunContext, ref: str, load_case: Record) -> str:
-    """A load case id, or for a test id (ana.P1.x) the run's load case of that test that feeds
-    this one (a case past the limit is fed by the upstream case past the limit), else the first."""
-    if ctx.has_load_case(ref):
-        return ref
-    of_test = [lc for lc in ctx.load_cases if lc["test_id"] == ref]
-    feeding = [lc for lc in of_test if load_case["load_case_id"] in lc.get("feeds", [])]
-    return (feeding or of_test)[0]["load_case_id"]
-
-
-def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None = None) -> Any:
-    """What one plan ref points at: a quantity record, or a name (e.g. load.rail_joint.support).
-    `given` is what the prediction's inputs_from read off the design (from.<name>)."""
-    head, _, rest = ref.partition(".")
-    design = ctx.store.design()
-    if head == "from":
-        if given is None:
-            raise ScriptError(f"{ref!r}: the prediction has no inputs_from")
-        return given[rest]
-    if head == "lc":
-        return load_case["params"][rest]
-    if head == "req":
-        return next(x for x in ctx.project["requirements"] if x["key"] == rest)
-    if head in ("load", "summary"):
-        node: Any = design_summary(design)
-        if head == "load":
-            node = node["loadings"][loading_of(load_case)]
-        for part in rest.split("."):
-            node = node[part]
-        return node
-    if head == "design":
-        kind, _, rest = rest.partition(".")
-        if kind == "var":
-            return design["variables"][rest]
-        key, field = rest.split(".", 1)
-        if kind == "support":
-            s = next(x for x in design["supports"] if x["id"] == key)
-            return {"value": s[field], "unit": _SUFFIX_UNITS[field.rsplit("_", 1)[1]]}
-        if kind == "section":
-            return {"value": design["sections"][key]["dims_mm"][field], "unit": "mm"}
-    if head == "pred":
-        return [p for p in ctx.store.records("prediction", ctx.version) if p["quantity"] == rest][-1]
-    if head == "ana":
-        lc_id, quantity = rest.rsplit(".", 1)
-        return next(r for r in trusted_analysis(ctx, _load_case_of(ctx, lc_id, load_case))["results"]
-                    if r["quantity"] == quantity)
-    raise ScriptError(f"unknown input ref {ref!r}")
-
-
-def _name(ctx: RunContext, ref: str, load_case: Record, given: Record | None) -> str:
-    got = _lookup(ctx, ref, load_case, given)
-    if not isinstance(got, str):
-        raise ScriptError(f"{{{ref}}} must point at a name, not {got!r}")
-    return got
-
-
-def resolve(ctx: RunContext, ref: Any, load_case: Record, given: Record | None = None) -> Record:
-    """Turn one input ref of the plan into a quantity {value, unit}.
-
-    `{ref}` inside a ref is replaced by the name it points at first, e.g.
-    ana.P1-step100.wheel_load_{load.rail_joint.support}.
-    """
-    if isinstance(ref, dict):
-        return {"value": float(ref["value"]), "unit": ref["unit"]}
-    try:
-        text = _NAME_REF.sub(lambda m: _name(ctx, m.group(1), load_case, given), str(ref))
-        q = _lookup(ctx, text, load_case, given)
-        return {"value": float(q["value"]), "unit": q["unit"]}
-    except (KeyError, StopIteration, IndexError, ValueError, TypeError) as e:
-        raise ScriptError(f"cannot resolve input ref {ref!r}: {type(e).__name__} {e}") from None
 
 
 def _deny(ctx: RunContext, agent: str, tool: str, args: Record) -> bool:
@@ -253,13 +114,7 @@ def _check_stop(ctx: RunContext) -> None:
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
-        given = None
-        if p.get("inputs_from"):  # the builder's reader of this formula's inputs off the design
-            reader = _reader(p["inputs_from"]) if isinstance(p["inputs_from"], str) else p["inputs_from"]
-            try:
-                given = reader(ctx.store.design(), lc)
-            except (KeyError, ValueError, TypeError) as e:
-                raise ScriptError(f"inputs_from of {p['formula_id']} cannot read this design: {e}") from None
+        given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
         args = {
             "load_case_id": lc["load_case_id"],
             "quantity": p["quantity"],
@@ -287,8 +142,9 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
     _check_stop(ctx)
+    denial = rules.check_call(ctx, "analyze", args)
     if _deny(ctx, agent, "analyze", args):
-        raise Stop(f"a hook rule stopped analyze on {lc['load_case_id']}")
+        raise Stop(f"a hook rule ({denial.rule}) stopped analyze on {lc['load_case_id']}: {denial.reason}")
     ana = analyze(ctx, args, agent)
     if ana["status"] != "ok":
         _say(ctx, agent, lc, f"解析が失敗しました: {ana.get('error', '')}")
@@ -353,6 +209,32 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         _say(ctx, agent, lc, expected.get("stop") or "この先の予測は台本にありません。ここで止めます")
         raise Stop(f"the plan has no next prediction after {hit['comparison_id']}")
     _run_step(ctx, lc, agent, tool, retry)
+
+
+def stage_groups(ctx: RunContext, steps: list[Record]) -> list[tuple[int, list[Record]]]:
+    """The steps grouped by stage, lowest first (HK5). A step's stage is its tool's (shelf.tool_stage), or
+    the plan's `stage` on the step when it puts a check later (never earlier: HK5 still checks the call),
+    and never lower than that of an earlier step of a load case feeding it, so upstream goes first;
+    within a stage the steps keep their order (compose_plan: upstream first)."""
+    keyed: list[tuple[int, Record]] = []
+    for step in steps:
+        ups = {u["load_case_id"] for u in ctx.upstream_of(step["load_case"])}
+        own = tool_stage(ctx, step["tool"])
+        k = max([own, int(step.get("stage", own))] + [kk for kk, st in keyed if st["load_case"] in ups])
+        keyed.append((k, step))
+    return [(k, [st for kk, st in keyed if kk == k]) for k in sorted({kk for kk, _ in keyed})]
+
+
+def stage_reds(ctx: RunContext, group: list[Record]) -> list[Record]:
+    """The failing verdicts of this version for the load cases of one stage's steps; cases past the
+    limit (catalog.is_beyond) are meant to fail and do not count."""
+    ids = {st["load_case"] for st in group}
+    return [v for lc_id, v in latest_verdicts(ctx, ctx.version).items()
+            if lc_id in ids and not v["pass"] and not is_beyond(ctx.load_case(lc_id))]
+
+
+def _stage_ja(n: int) -> str:
+    return f"段 {n} ({STAGE_NAMES_JA.get(n, '?')})"
 
 
 def _red_tiles(ctx: RunContext) -> list[Record]:
@@ -444,11 +326,17 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     its defaults.
     """
     s = ctx.store
-    s.emit("agent.started", agent="lead", data={"agent_id": "lead"})
-    s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順に道具を呼びます")
+    s.emit("agent.started", agent="lead", data={"agent_id": "lead", **NO_MODEL})
+    s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順にツールを呼びます")
+    if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
+        s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
+        s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        status, reason, code = rules.judged_end(ctx)
+        s.finish(status, stop_reason=reason, stop_code=code)
+        return status
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
         first = (plan if plan is not None else plan_of(ctx)).get("propose") or {}
-        s.emit("agent.started", agent="designer", data={"agent_id": "designer"})
+        s.emit("agent.started", agent="designer", data={"agent_id": "designer", **NO_MODEL})
         s.emit("agent.said", agent="designer", text=first.get("say") or "要件から、最初の版を作ります")
         kinds = archetypes(ctx) or [{"name": ""}]
         try:
@@ -470,8 +358,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     if plan["missing"]:
         s.emit("agent.said", agent="lead", text="台本の予測のしかたが無いので回せない荷重条件: " + "、".join(plan["missing"]))
     if plan["unshelved"]:
-        s.emit("agent.said", agent="lead", text="道具が棚に無いので回さない手順: "
+        s.emit("agent.said", agent="lead", text="ツールが棚に無いので回さない手順: "
                + "、".join(f"{lc} ({tool})" for lc, tool in plan["unshelved"]))
+    for note in plan.get("notes") or []:  # what the plan leaves out on purpose, said in the record
+        s.emit("agent.said", agent="lead", text=note)
     started: list[str] = []
     showed_hk1 = not plan.get("show_hk1", False)
     drop, dropped, asked = plan.get("knowledge_drop"), False, False
@@ -479,30 +369,71 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
 
     def start(agent: str, domain: str | None = None) -> None:
         if agent not in started:
-            s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent})
+            s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **NO_MODEL})
             started.append(agent)
 
+    def revise(text: str) -> None:
+        _check_stop(ctx)
+        rev = revisions.pop(0)
+        start("designer")
+        s.emit("agent.said", agent="designer", text=rev.get("say") or text)
+        changes, reason = dict(rev.get("changes") or {}), rev["reason"]
+        if rev.get("fit") == "driver":  # the seat, steering and pedals searched by code (designgen.driver_fit)
+            changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"))
+        try:
+            out = revise_design(ctx, {"changes": changes, "reason": reason}, "designer")
+        except ToolError as e:
+            s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+            raise Stop(f"revise_design refused: {e}") from None
+        s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、段 0 から全部の荷重条件をやり直します")
+
+    def can_revise() -> bool:
+        return bool(revisions) and ctx.version - 1 < ctx.project["round_limit"]
+
+    held_back: tuple[int, list[Record]] | None = None
     try:
         _check_stop(ctx)  # pressed while the tools were checked or the first version was built
         while True:
-            for step in plan["steps"]:
+            revised, held_back = False, None
+            for stage, group in stage_groups(ctx, plan["steps"]):
                 _check_stop(ctx)
-                lc = ctx.load_case(step["load_case"])
-                agent = ctx.owner(lc["load_case_id"])
-                start(agent, lc["domain"] if agent.startswith("cae.") else None)
-                if not showed_hk1:
-                    _deny(ctx, agent, "analyze", {"tool": step["tool"], "load_case_id": lc["load_case_id"],
-                                                  "prediction_ids": []})
-                    showed_hk1 = True
-                try:
-                    _run_step(ctx, lc, agent, step["tool"], step)
-                except (ToolError, ScriptError) as e:
-                    _say(ctx, agent, lc, f"止まりました: {e}")
-                    raise Stop(str(e)) from None
-                if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
-                    _drop_knowledge(ctx, drop)
-                    _answer_drop(ctx, drop)
-                    dropped = True
+                s.emit("agent.said", agent="lead", text=f"版 {ctx.version}、{_stage_ja(stage)}の荷重条件を確かめます: "
+                       + "、".join(dict.fromkeys(st["load_case"] for st in group)))
+                for step in group:
+                    _check_stop(ctx)
+                    lc = ctx.load_case(step["load_case"])
+                    agent = ctx.owner(lc["load_case_id"])
+                    start(agent, lc["domain"] if agent.startswith("cae.") else None)
+                    if not showed_hk1:
+                        _deny(ctx, agent, "analyze", {"tool": step["tool"], "load_case_id": lc["load_case_id"],
+                                                      "prediction_ids": []})
+                        showed_hk1 = True
+                    try:
+                        _run_step(ctx, lc, agent, step["tool"], step)
+                    except (ToolError, ScriptError) as e:
+                        _say(ctx, agent, lc, f"止まりました: {e}")
+                        raise Stop(str(e)) from None
+                    if drop and not dropped and lc["load_case_id"] == drop["after"]:  # the person drops a file
+                        _drop_knowledge(ctx, drop)
+                        _answer_drop(ctx, drop)
+                        dropped = True
+                reds = stage_reds(ctx, group)
+                if not reds:
+                    continue
+                named = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in reds)
+                if can_revise():
+                    s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。"
+                                                            f"重い段に進む前に、設計役が直します")
+                    names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
+                    revise(f"{names}が赤なので、設計を直します")
+                    revised = True
+                    break
+                held_back = (stage, reds)
+                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。設計を直す手が"
+                                                        f"残っていないので、重い段には進みません (HK5)")
+                break
+            if revised:
+                continue
             _check_stop(ctx)  # what was put in the inbox during the last step
             if plan.get("rule_check"):  # the knowledge rules on this version's parts
                 who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
@@ -511,20 +442,12 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                 checked = _check_rules(ctx, who)
                 if checked and plan.get("ask_on_hits") and not asked:
                     asked = _ask_on_hits(ctx, checked)
-            reds = _red_tiles(ctx)
-            if not reds or not revisions or ctx.version - 1 >= ctx.project["round_limit"]:
+            if held_back is not None:
                 break
-            _check_stop(ctx)
-            rev = revisions.pop(0)
-            start("designer")
-            names = "、".join(contract.DOMAIN_NAMES_JA[j["domain"]] for j in reds)
-            s.emit("agent.said", agent="designer", text=rev.get("say") or f"{names}が赤なので、設計を直します")
-            try:
-                out = revise_design(ctx, {"changes": rev["changes"], "reason": rev["reason"]}, "designer")
-            except ToolError as e:
-                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
-                raise Stop(f"revise_design refused: {e}") from None
-            s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、全部の荷重条件をやり直します")
+            reds = _red_tiles(ctx)
+            if not reds or not can_revise():
+                break
+            revise(f"{'、'.join(contract.DOMAIN_NAMES_JA[j['domain']] for j in reds)}が赤なので、設計を直します")
     except StopRequested:
         s.emit("agent.said", agent="lead", text="止めるボタンが押されたので、ここで止めます")
         status, reason, code = "stopped", STOPPED_BY_BUTTON, "user_stop"
@@ -533,14 +456,30 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     except KeyboardInterrupt:
         status, reason, code, interrupted = "stopped", STOPPED_BY_USER, "user_stop", True
 
-    if status == "done" and not rules.stop_reason(ctx):  # every picked domain judged: the lead's report
+    if status == "done" and held_back is not None:  # HK5: a red stage and no revision left
+        stage, reds = held_back
+        used_up = ctx.version - 1 >= ctx.project["round_limit"]
+        names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
+        why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
+               else "台本に設計の直しが残っていません")
+        status, code = "stopped", "round_limit" if used_up else "not_judged"
+        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。軽い段の赤が残るので、"
+                  f"それより重い段の荷重条件は確かめていません (HK5)")
+    if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
-        write_report(ctx, {"summary": rep.get("summary") or REPORT_SUMMARY, "next": list(rep.get("next") or [])}, "lead")
+        nxt, computed = list(rep.get("next") or []), []
+        if not nxt:  # the plan names none: the code's, from the records (each item marked as the script's)
+            nxt, computed = scripted_next(ctx)
+        summary = rep.get("summary") or scripted_summary(ctx)
+        if plan.get("notes"):  # the report says it too
+            summary = summary + " " + " ".join(plan["notes"])
+        write_report(ctx, {"summary": summary, "next": nxt}, "lead",
+                     computed=computed)
     for agent in started:
         s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
     s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
     if status == "done":
-        left = rules.stop_reason(ctx)
+        left = rules.unjudged_reason(ctx)
         if left:
             status, reason, code = "stopped", left, "not_judged"
         else:
