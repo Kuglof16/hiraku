@@ -174,6 +174,17 @@ class CheckRun(unittest.TestCase):
         p.write_text(json.dumps(proj, ensure_ascii=False), encoding="utf-8")
         self.assertIn("project.changed", {f.rule for f in cr.check_run(run) if f.level == "error"})
 
+    def test_requirements_re_sent_before_the_first_version(self):
+        # contract: requirements changed mid-run are re-sent any time (a hearing before the designer's version 1)
+        ev = sample_events()
+        upd = copy.deepcopy(ev[0])
+        upd.update(kind="project.updated", agent="lead")
+        reqs = upd["data"].get("requirements")
+        self.assertTrue(reqs, "the sample run has requirements")
+        upd["data"]["requirements"] = reqs[:-1]  # one requirement dropped in the hearing
+        ev.insert(ev.index(by_kind(ev, "design.created")), upd)
+        self.assertEqual(self.rules(renumber(ev)), set())
+
     def test_tools_made_in_the_run_and_the_stop_request(self):
         run = write_run(self.root / "x", sample_events())
         tools = run / layout.TOOLS_DIR
@@ -584,6 +595,92 @@ class CheckRun(unittest.TestCase):
         v = by_kind(ev, "verdict.recorded")["data"]
         v["limit"] = {"value": 200.0, "unit": "MPa"}
         self.assertFlags(ev, "verdict.criterion")
+
+    @staticmethod
+    def _shell_after_green(ev, hot_spot, element=None, then=None):
+        """A frame_shell analysis of R1 (ana-0002) after the sample's green tile, with the weld toe's
+        hot-spot stress and the element maximum; then an optional judgement.updated state after it."""
+        at = next(n for n, e in enumerate(ev) if e["kind"] == "judgement.updated") + 1
+        started, finished = copy.deepcopy(by_kind(ev, "analysis.started")), copy.deepcopy(by_kind(ev, "analysis.finished"))
+        for e in (started, finished):
+            e["data"].update(analysis_id="ana-0002", tool="frame_shell")
+            e["t"], e["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        finished["data"].pop("fields", None)
+        finished["data"]["results"] = [{"quantity": "max_hot_spot_stress", "value": hot_spot, "unit": "MPa"},
+                                       {"quantity": "max_stress", "value": element or hot_spot, "unit": "MPa"}]
+        extra = [started, finished]
+        if then:
+            j = copy.deepcopy(by_kind(ev, "judgement.updated"))
+            j["data"].update(state=then)
+            j["t"], j["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+            extra.append(j)
+        ev[at:at] = extra
+        return renumber(ev)
+
+    def test_a_later_result_beyond_the_criterion_holds_a_green_tile(self):
+        # the sample's limit is 156.7 MPa; a green tile left standing after a shell result beyond it
+        self.assertFlags(self._shell_after_green(sample_events(), 200.0), "judgement.state")
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 100.0)))
+        # the tile turned pending after the result: right (HK4 then speaks for ending the run done)
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 200.0, then="pending")))
+        # turned green again after it: wrong at that judgement
+        self.assertFlags(self._shell_after_green(sample_events(), 200.0, then="green"), "judgement.state")
+        # frame_shell is judged on the hot spot, not on its element maximum (contract, 判定に使う量)
+        self.assertNotIn("judgement.state", self.rules(self._shell_after_green(sample_events(), 100.0, element=300.0)))
+
+    def test_an_open_mismatch_holds_a_green_tile_unless_its_cause_is_safe_side(self):
+        def mismatch(cause=None):
+            ev = sample_events()
+            a = by_kind(ev, "analysis.finished")["data"]
+            a["results"].append({"quantity": "max_stress_corner", "value": 200.0, "unit": "MPa"})
+            c = copy.deepcopy(by_kind(ev, "comparison.recorded"))
+            pv = c["data"]["predicted"]["value"]
+            c["data"].update(comparison_id="cmp-0002", quantity="max_stress_corner", status="mismatch",
+                             analyzed={"value": 200.0, "unit": "MPa"}, diff_abs=200.0 - pv, diff_rel=(200.0 - pv) / abs(pv))
+            at = next(n for n, e in enumerate(ev) if e["kind"] == "judgement.updated")
+            new = [c]
+            if cause is not None:
+                k = {"seq": 0, "ts": c["ts"], "t": c["t"], "run_id": RUN_ID, "kind": "cause.recorded",
+                     "agent": c["agent"], "data": dict({"cause_id": "cause-0001", "comparison_id": "cmp-0002",
+                                                        "hypothesis": "corner stress concentration",
+                                                        "evidence": "element max at the corner", "resolved": False,
+                                                        "resolved_by": None}, **cause)}
+                new.append(k)
+            ev[at:at] = new
+            return renumber(ev)
+        self.assertIn("judgement.state", self.rules(mismatch()))
+        self.assertIn("judgement.state", self.rules(mismatch({"safe_side": False})))
+        self.assertNotIn("judgement.state", self.rules(mismatch({"safe_side": True, "safe_side_reason": "on the safe side"})))
+
+    def test_comparison_quantity_is_the_result_compared(self):
+        def compared(name, value=None):
+            ev = sample_events()
+            a = by_kind(ev, "analysis.finished")["data"]
+            analyzed = by_kind(ev, "comparison.recorded")["data"]["analyzed"]
+            a["results"].append({"quantity": "max_hot_spot_stress", "value": value or analyzed["value"], "unit": "MPa"})
+            by_kind(ev, "comparison.recorded")["data"]["quantity"] = name
+            return ev
+        self.assertNotIn("comparison.values", self.rules(compared("max_hot_spot_stress")))  # prediction says max_stress
+        self.assertFlags(compared("no_such_result"), "comparison.values")
+        self.assertFlags(compared("max_hot_spot_stress", value=99.0), "comparison.values")
+
+    def test_analysis_ids_follow_analysis_started(self):
+        def two(first_started_first):
+            ev = self._shell_after_green(sample_events(), 100.0)
+            s2 = next(e for e in ev if e["kind"] == "analysis.started" and e["data"]["analysis_id"] == "ana-0002")
+            f2 = next(e for e in ev if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == "ana-0002")
+            ev.remove(s2)
+            ev.remove(f2)
+            s1 = next(n for n, e in enumerate(ev) if e["kind"] == "analysis.started")
+            for e in (s2, f2):
+                e["t"], e["ts"] = ev[s1]["t"], ev[s1]["ts"]
+            # ana-0002 starts (after or before ana-0001) and finishes before ana-0001 does
+            ev[s1 + 1:s1 + 1] = [s2, f2] if first_started_first else []
+            if not first_started_first:
+                ev[s1:s1] = [s2, f2]
+            return renumber(ev)
+        self.assertNotIn("ids.order", self.rules(two(True), "warn"))
+        self.assertIn("ids.order", self.rules(two(False), "warn"))
 
     def test_judgement_red_count(self):
         ev = sample_events()
