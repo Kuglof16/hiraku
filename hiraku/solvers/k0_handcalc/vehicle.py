@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import sections
+from .rigid import box_inertia
 from .units import STANDARD_GRAVITY
 
 
@@ -34,20 +35,6 @@ class MassItem:
     carrier: str  # "member", "nodes" or "support"
     carried_by: list[str]  # member id, frame node ids, or [support id]
     inertia_kg_mm2: np.ndarray | None = None  # own inertia about its centre of gravity (3 x 3)
-
-
-def box_inertia(mass: float, size_mm, rpy_deg=None) -> np.ndarray:
-    """Inertia (kg*mm^2) of a solid box about its centre, rotated by roll-pitch-yaw (fixed axes x, y, z)."""
-    a, b, c = (float(s) for s in size_mm)
-    local = mass / 12.0 * np.diag([b * b + c * c, a * a + c * c, a * a + b * b])
-    if not rpy_deg or not any(rpy_deg):
-        return local
-    r, p, y = np.radians(rpy_deg)
-    Rx = np.array([[1, 0, 0], [0, np.cos(r), -np.sin(r)], [0, np.sin(r), np.cos(r)]])
-    Ry = np.array([[np.cos(p), 0, np.sin(p)], [0, 1, 0], [-np.sin(p), 0, np.cos(p)]])
-    Rz = np.array([[np.cos(y), -np.sin(y), 0], [np.sin(y), np.cos(y), 0], [0, 0, 1]])
-    R = Rz @ Ry @ Rx
-    return R @ local @ R.T
 
 
 def rod_inertia(mass: float, a: np.ndarray, b: np.ndarray) -> np.ndarray:
