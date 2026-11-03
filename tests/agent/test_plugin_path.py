@@ -8,12 +8,14 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 import yaml
 
 from hiraku import contract
+from hiraku.contract import layout
 from hiraku.agent import plugin, plugin_files
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR
@@ -230,9 +232,22 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         got = asyncio.run(other.call_tool("open_run", {"run_id": run_id}))
         self.assertTrue(got["is_error"])
 
+    def test_the_alive_file_is_touched_while_the_server_serves_the_run(self):
+        """layout.PLUGIN_ALIVE_FILE: touched at start and on every poll; gone once the server lets go."""
+        import os
+
+        alive = self.ctx.store.path / layout.PLUGIN_ALIVE_FILE
+        self.assertTrue(alive.is_file())
+        os.utime(alive, (0, 0))  # as if the last touch were long ago
+        self.server.poll_once()
+        self.assertLess(time.time() - alive.stat().st_mtime, layout.PLUGIN_ALIVE_S)
+        self.server.shutdown()
+        self.assertFalse(alive.exists())
+
     def test_the_stop_button_ends_the_run(self):
         (self.ctx.store.path / "stop.request").write_text("", encoding="utf-8")
         self.server.poll_once()
+        self.assertFalse((self.ctx.store.path / layout.PLUGIN_ALIVE_FILE).exists())  # the server let go
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "user_stop")
         self.assertTrue(self.call_error("get_context"))

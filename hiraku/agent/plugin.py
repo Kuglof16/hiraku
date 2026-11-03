@@ -344,10 +344,12 @@ class PluginServer:
         with self._lock:
             if self.ctx is not None and self.ctx.project["status"] == "running":
                 self.close("stopped", STOPPED_NEW_RUN, "user_stop")
+            self.let_go(self.ctx)
             self.ctx = ctx
             self.attribution = Attribution()
             ctx.store.emit("agent.started", agent="lead", data={"agent_id": "lead"})
             set_current(self.runs, ctx.store.path)
+            self.touch_alive(ctx)
         self.note_unpredictable(ctx)
         return self._answer(ctx)
 
@@ -371,16 +373,34 @@ class PluginServer:
             if self.ctx is not None and self.ctx is not ctx and self.ctx.project["status"] == "running" \
                     and self.ctx.store.path.resolve() != path.resolve():
                 self.close("stopped", STOPPED_NEW_RUN, "user_stop")
+            if self.ctx is not None and self.ctx.store.path.resolve() != path.resolve():
+                self.let_go(self.ctx)
             self.ctx = ctx
             self.attribution = Attribution()
             set_current(self.runs, path)
+            self.touch_alive(ctx)
         self.note_unpredictable(ctx)
         return self._answer(ctx)
 
+    @staticmethod
+    def touch_alive(ctx: RunContext | None) -> None:
+        """layout.PLUGIN_ALIVE_FILE: this server serves the run (the screen holds a plugin run while the
+        file is younger than layout.PLUGIN_ALIVE_S); touched at start and on every poll."""
+        if ctx is not None and ctx.project["status"] == "running":
+            (ctx.store.path / layout.PLUGIN_ALIVE_FILE).touch()
+
+    @staticmethod
+    def let_go(ctx: RunContext | None) -> None:
+        """The server no longer serves the run: its alive file goes."""
+        if ctx is not None:
+            (ctx.store.path / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
+
     def close(self, status: str, reason: str | None, code: str) -> None:
-        """End the current run: roles still running stop, then the lead, then run.finished."""
+        """End the current run: roles still running stop, then the lead, then run.finished; the
+        server lets go of it (its alive file goes)."""
         with self._lock:
             ctx = self.ctx
+            self.let_go(ctx)
             if ctx is None or ctx.project["status"] != "running":
                 return
             run_dir = ctx.store.path
@@ -447,7 +467,8 @@ class PluginServer:
 
     def poll_once(self) -> None:
         """Notes, then the stop button (the run ends; the hooks let everything through after),
-        then the inbox (its events, and what is for the lead to the hooks' state)."""
+        then the inbox (its events, and what is for the lead to the hooks' state); the alive file
+        is touched while the run goes on."""
         from hiraku.agent.session import STOPPED_BY_BUTTON
 
         self.drain()
@@ -455,6 +476,7 @@ class PluginServer:
             ctx = self.ctx
             if ctx is None or ctx.project["status"] != "running":
                 return
+            self.touch_alive(ctx)
             if ctx.store.stop_requested():
                 ctx.store.emit("agent.said", agent="system", text="止めるボタンが押されたので、実行を止めます")
                 self.close("stopped", STOPPED_BY_BUTTON, "user_stop")
