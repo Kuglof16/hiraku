@@ -20,6 +20,7 @@ import { abscissa, channelsOf, extent, lerpAt, motionOf, nearestAt, xSeriesOf } 
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { CutN16 } from "./cut_n16.js";
+import { CutN17 } from "./cut_n17.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -690,7 +691,7 @@ class CutN02 {
 }
 
 // N04 and N15 (the grid of all domains and assembly) are in cut_grid.js; N16 (the assembly order) in cut_n16.js.
-const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16: CutN16 };
+const CUTS = { n05: Cut, n01: CutN01, n02: CutN02, n04: CutN04, n15: CutN15, n16: CutN16, n17: CutN17 };
 
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;
