@@ -538,9 +538,20 @@ _DRIVER_VARS["bulkhead_dx"] = Var(
     f"{BULKHEAD_DX_MIN_MM:g} mm (the post GAP_MM behind the bracket of the upper arm's rear pivot on the rail, at "
     "v1's hard points; build() refuses a design where it is nearer) to the default (v1's, TOWER_MIN_DX_MM: farther "
     "back only shortens the footwell). Written into design.variables only when it is not the default")
+SEAT_SLIDE_MAX_MM = 300.0  # seat_slide's upper end (assumption; no source for a vehicle's seat travel was read)
+_DRIVER_VARS["seat_slide"] = Var(
+    "mm", 0.0, 0.0, SEAT_SLIDE_MAX_MM,
+    "the driver's seat's fore-and-aft travel (the whole length of its slide); seat_x is the travel's middle. The "
+    "seat's box stays at the middle (its mass and the interference check, H1, are there); K4 seats the large and "
+    "the small driver each where their own H3 margins are best within the travel (k4_geometry.people.poses), and "
+    "the driver's body parts are where the large driver sits. The driver's seat belt stands behind the seat back "
+    "at the rearmost end of the travel. The passenger's seat does not slide. 0: a fixed seat (v1). Range: 0 to "
+    f"{SEAT_SLIDE_MAX_MM:g} mm (assumption, not verified: no source for a seat's travel was read). Written into "
+    "design.variables only when it is not 0")
 VARIABLES = {k: x for name, var in VARIABLES.items()
              for k, x in ([(name, var)] + (list(_DRIVER_VARS.items()) if name == "battery_x" else []))}
 OPTIONAL["bulkhead_dx"] = ("bulkhead_dx",)
+OPTIONAL["seat_slide"] = ("seat_slide",)
 
 # Options a failed requirement may call for (off by default, so that the defaults still build v1). Each is a
 # variable (or a few) the designer may revise, with CHOICES below as short ways to set them.
@@ -812,6 +823,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         lay.put(Item(pid, label, "seat", (SEAT_LENGTH_MM, SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=seat_x, y=y,
                 z=bottom_at(lay.top_of("floor")))
     _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
+    if v["seat_slide"] > 0:
+        _belt_behind_travel(lay, "seat_belt_R", v["seat_slide"] / 2.0)
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
         sy = lay.part(seat)["box"]["center_mm"][1]
         lay.put(Item(pid, label, "occupant", (450.0, 450.0, 520.0), v["occupant_mass"]),
@@ -954,10 +967,43 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         if m["id"].startswith("rops_"):
             m["part"] = safety.ROLLBAR_PART
     add_options(design, v, guard, rho)
+    if v["seat_slide"] > 0 and BODY_PARTS:
+        _driver_on_the_slide(design, "occupant_R")
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     return design
+
+
+def _belt_behind_travel(lay: Layout, belt: str, back_mm: float) -> None:
+    """Put the seat belt (as kit/safety.place_belts placed it, behind the seat back at the travel's middle)
+    back_mm farther back: behind the seat back at the rearmost end of the travel. Placed again, so that the
+    nodes it is carried by are those of where it now is."""
+    p = lay.part(belt)
+    lay.parts.remove(p)
+    c, size = p["box"]["center_mm"], p["box"]["size_mm"]
+    lay.put(Item(p["id"], p["name"], p["kind"], tuple(size), float(p["mass_kg"])), x=float(c[0]) - back_mm,
+            y=float(c[1]), z=float(c[2]))
+
+
+def _driver_on_the_slide(design: Record, occupant: str) -> None:
+    """The driver's body parts (kit/body.occupant_parts) where K4 seats the large driver within the seat's
+    travel (k4_geometry.people.poses), each part in its place in the parts list. K4's place for him does not
+    depend on the body parts (the legs are not checked against occupant parts, the knee room skips them)."""
+    from hiraku.solvers.k4_geometry.people import grip_points, poses
+
+    pose = poses(design)[occupant]["big"]
+    parts = design["parts"]
+    mine = {p["id"]: i for i, p in enumerate(parts) if body.person_of(p["id"]) == occupant}
+    trunk = parts[mine[occupant]]
+    whole = dict(trunk, mass_kg=float(sum(parts[i]["mass_kg"] for i in mine.values())))
+    lay = Layout({**design, "parts": [whole]})
+    wheel = next((p for p in parts if p["id"] == "steering_wheel"), None)
+    new = body.occupant_parts(lay, occupant, pose, grip_points(wheel) if wheel is not None else None)
+    if {p["id"] for p in new} != set(mine):
+        raise DesignGenError(f"{occupant}'s body parts changed on the seat's slide")
+    for p in new:
+        parts[mine[p["id"]]] = p
 
 
 def _behind(radius: float, across: float) -> float:
