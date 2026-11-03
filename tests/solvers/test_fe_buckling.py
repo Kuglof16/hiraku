@@ -112,6 +112,53 @@ class EulerColumnTest(unittest.TestCase):
         self.check(ec.solid_column("pinned", n_len=40, n_side=2), 0.01)
 
 
+class LateralTorsionalTest(unittest.TestCase):
+    """I-beam (h 200, b 100, tf 8.5, tw 5.6 plates) 4000 mm long, fork ends, uniform moment about the strong
+    axis: M_cr = (pi / L) sqrt(E Iz G J) sqrt(1 + pi^2 E Cw / (G J L^2)) (Timoshenko & Gere)."""
+
+    def test_beam_against_the_formula_without_warping(self):
+        """Beam elements have no warping DOF, so against the formula with Cw = 0: +2.6 %, +0.64 %, +0.16 %
+        at 4, 8, 16 elements (about h^2), within 0.2 % at 16."""
+        e = [ec.beam_lateral_buckling(n_el=n) for n in (4, 8, 16)]
+        err = [r["M_cr"] / r["M_formula"] - 1.0 for r in e]
+        self.assertTrue(err[0] > err[1] > err[2] > 0.0, err)
+        self.assertLess(err[2], 0.002)
+        self.assertGreater(err[0] / err[1], 3.5)
+
+    def test_moment_sign_and_gradient(self):
+        """The reversed moment buckles at the same load (doubly symmetric section). A moment at one end only
+        buckles at 1.77 times the uniform one (the moment-gradient factor C1; 1.75 by Salvadori's
+        approximation 1.75 + 1.05 psi + 0.3 psi^2 at psi = 0, as commonly quoted - not checked here, so only
+        a range 1.7 to 1.9 is held); without the moment terms in K_G there is no lateral buckling."""
+        u = ec.beam_lateral_buckling(n_el=16)
+        x, c = line_mesh((0, 0, 0), (4000.0, 0, 0), 16)
+        s = u["section"]
+        model = FEModel(x)
+        model.add(Beam(c, ec.E_ST, ec.G_ST, s["A"], s["Iy"], s["Iz"], s["J"], ref=(0.0, 1.0, 0.0)))
+        for n in (0, 16):
+            model.fix(n, [1, 2, 3])
+        model.fix(0, [0])
+        F = np.zeros((17, 6))
+        F[16, 4], F[0, 4] = -1e6, 1e6
+        r = eigen.buckling(model, F, 1)
+        self.assertLess(abs(r.factors[0] * 1e6 / u["M_cr"] - 1.0), 1e-9)
+        g = ec.beam_lateral_buckling(n_el=32, ratio=0.0)
+        c1 = g["M_cr"] / ec.beam_lateral_buckling(n_el=32)["M_cr"]
+        self.assertTrue(1.7 < c1 < 1.9, c1)
+        model.groups[0].kg_moments = False
+        r = eigen.buckling(model, F, 1)
+        self.assertEqual(len(r.factors), 0)
+
+    def test_shell_ibeam_carries_warping(self):
+        """The same beam in MITC4 shells (4 elements over the flange width and the web, 80 along): within 5 %
+        of the formula with Cw (measured -3.5 %: the flanges' torsion in plates is below b tf^3 / 3 by about
+        0.63 tf / b, and the web distorts a little) and 14 % above the one without (warping is in the shells)."""
+        r = ec.shell_ibeam_lateral_buckling()
+        self.assertAlmostEqual(r["moment_applied"] / 1e6, 1.0, delta=1e-3)  # the mid-line Iy vs the nodes'
+        self.assertLess(abs(r["M_cr"] / r["M_warping"] - 1.0), 0.05)
+        self.assertGreater(r["M_cr"] / r["M_formula"], 1.10)
+
+
 class PlateBucklingTest(unittest.TestCase):
     def test_simply_supported_plate(self):
         """300 x 200 x 2 plate: k = 4.34 at m = 2 half waves; MITC4 30 x 20 within 1 %, the same m."""

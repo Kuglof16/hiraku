@@ -16,6 +16,20 @@ Formulation (written here from the textbook forms):
 - Geometric (initial-stress) stiffness from the axial force N (tension positive):
       N * integral of H'^T H' dx on each bending plane, and N Ip / (A L) [[1, -1], [-1, 1]] on the twist
   (Przemieniecki 1968, chapter on stability; not checked here). Shear deformation is not in K_G.
+- Geometric stiffness from the bending moments (lateral-torsional buckling), derived here: with the
+  section rotating rigidly by the twist phi, a point (y, z) moves u_y = v - z phi, u_z = w + y phi, and the
+  second-order part of the axial Green strain (1/2)(u_y'^2 + u_z'^2) times sigma = N/A + My z / Iy - Mz y / Iz
+  integrated over a doubly symmetric section gives
+      (1/2) integral [N (v'^2 + w'^2) + N Ip / A phi'^2 - 2 My v' phi' - 2 Mz w' phi'] dx.
+  The moment terms are used in the form + integral (My phi v'' + Mz phi w'') dx, which equals the above when
+  M is constant and phi = 0 at the ends (fork supports) and is the form of the lateral-buckling energy for
+  beams with transverse loads at the shear centre (the 2 M phi u'' term of Trahair, Flexural-Torsional
+  Buckling of Structures, 1993, and Timoshenko & Gere 1961, chapter 6 - neither checked here). Left out:
+  the Wagner terms of sections that are not doubly symmetric (integral sigma y (y^2 + z^2) dA), warping
+  (the element has no warping DOF: Cw = 0), the torque's terms and load-height effects. Moments here are
+  internal moments, Mz = E Iz v'' and My = E Iy theta_y'; they vary linearly along the element.
+  With these terms K_G is not zero for a rigid rotation of a bent element (the known non-invariance of
+  the linearised beam K_G under end moments); Beam.kg_moments = False leaves them out.
 
 Local axes: x from node a to node b; y the part of `ref` (default global z, or global x for an element
 along z) normal to x; z = x cross y. Iz is about local z (bending in the x-y plane: v, theta_z = dv/dx),
@@ -180,7 +194,9 @@ class Beam(ElementGroup):
         m[:, W_PLANE[:, None], W_PLANE[None, :]] = hh * np.outer(W_SIGN, W_SIGN)[None]
         return m
 
-    def local_geometric(self, L: np.ndarray, N: np.ndarray) -> np.ndarray:
+    def local_geometric(self, L: np.ndarray, N: np.ndarray, My=None, Mz=None) -> np.ndarray:
+        """Initial-stress stiffness (E, 12, 12) in local axes from the axial force N (E,) and, when given, the
+        bending moments My, Mz (E, 2) at the two ends (internal moments, linear along the element)."""
         ne = len(L)
         g = np.zeros((ne, 12, 12))
         dd = _integrate(L, lambda xi: np.einsum("ea,eb->eab", hermite(xi, L)[1], hermite(xi, L)[1]))
@@ -189,6 +205,18 @@ class Beam(ElementGroup):
         g[:, W_PLANE[:, None], W_PLANE[None, :]] = dd * np.outer(W_SIGN, W_SIGN)[None]
         tw = np.array([3, 9])
         g[:, tw[:, None], tw[None, :]] = _bar(N * (self.Iy + self.Iz) / (self.A * L))
+        if My is not None or Mz is not None:
+            # integral of M(x) phi(x) v''(x) dx: M linear, phi linear (1 - xi, xi), v'' from the Hermite cubics
+            def coupling(M):
+                M = np.asarray(M, float)
+                return _integrate(L, lambda xi: np.einsum(
+                    "e,ea,b->eab", M[:, 0] * (1 - xi) + M[:, 1] * xi, hermite(xi, L)[2], np.array([1 - xi, xi])))
+            for M, plane, sign in ((My, V_PLANE, np.ones(4)), (Mz, W_PLANE, W_SIGN)):
+                if M is None:
+                    continue
+                c = coupling(M) * sign[None, :, None]
+                g[:, plane[:, None], tw[None, :]] += c
+                g[:, tw[:, None], plane[None, :]] += np.transpose(c, (0, 2, 1))
         return g
 
     # --- the ElementGroup interface
@@ -217,9 +245,21 @@ class Beam(ElementGroup):
         """N (E,), tension positive."""
         return self.end_forces(nodes, ue, thermal)[:, 6]
 
+    def end_moments(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> tuple[np.ndarray, np.ndarray]:
+        """Internal bending moments My, Mz (E, 2) at the two ends: M(0) = -(end force on the moment DOF at a),
+        M(L) = +(end force at b), so that Mz = E Iz v'' and My = E Iy theta_y' (theta_y = -w')."""
+        f = self.end_forces(nodes, ue, thermal)
+        return np.stack([-f[:, 4], f[:, 10]], axis=1), np.stack([-f[:, 5], f[:, 11]], axis=1)
+
     def geometric_stiffness(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
+        """K_G of the axial force and, with self.kg_moments (default True), of the bending moments (lateral-
+        torsional coupling, see the module docstring)."""
         R, L = self.frames(nodes)
-        return self.to_global(self.local_geometric(L, self.axial_force(nodes, ue, thermal)), R)
+        N = self.axial_force(nodes, ue, thermal)
+        if getattr(self, "kg_moments", True):
+            My, Mz = self.end_moments(nodes, ue, thermal)
+            return self.to_global(self.local_geometric(L, N, My, Mz), R)
+        return self.to_global(self.local_geometric(L, N), R)
 
     def local_thermal(self, L: np.ndarray, alpha, dT) -> np.ndarray:
         """Equivalent local end forces (E, 12) of a uniform temperature change dT (per element)."""
