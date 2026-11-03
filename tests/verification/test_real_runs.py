@@ -323,9 +323,26 @@ class _MeshFieldTests:
         with self.subTest(tool=tool.name, design=self.kind or "ladder demo"):
             out = tool.run(design, lc, [{"prediction_id": "pred-0001"}], {"mesh": mesh} if mesh else {})
             self.assertEqual(out.get("status"), "ok", out.get("error"))
-            if mesh is None:  # its own mesh: which mesh record its fields name waits for the contract
-                self.assertEqual(contract.errors("analysis", dict(out, analysis_id="ana-0001",
-                                                                  prediction_ids=["pred-0001"])), [])
+            if mesh is None:
+                # contract (more than one mesh per version): a tool that meshes the design itself records
+                # that mesh (mesh.created, with mesher) and its fields name it by mesh_id; without mesh
+                # fields, results and per-member fields only
+                rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
+                self.assertEqual(contract.errors("analysis", rec), [])
+                named = {f["mesh_id"] for f in out.get("fields", []) if f.get("mesh_id")}
+                if named:
+                    own = out.get("mesh")
+                    self.assertIsInstance(own, dict, f"fields on mesh {sorted(named)} but the tool gives no mesh record")
+                    self.assertEqual(own.get("mesher"), tool.name, "its mesh does not say mesher")
+                    self.assertEqual(named, {own.get("mesh_id")}, "its fields name another mesh than its own")
+                    checker = cr.RunChecker(ROOT)
+                    checker.where_of = ["mesh.created", "analysis.finished"]
+                    checker.designs[design["design_version"]] = (-1, design)
+                    checker.recs["mesh"][own["mesh_id"]] = (0, own)
+                    checker.recs["analysis"]["ana-0001"] = (1, rec)
+                    checker.check_meshes()
+                    self.assertEqual([str(f) for f in checker.findings if f.level == "error"], [],
+                                     "\n".join(str(f) for f in checker.findings))
                 return
             self.assertTrue(any(f.get("mesh_id") == "mesh-0001" for f in out.get("fields", [])), "no field on the mesh")
             rec = dict(out, analysis_id="ana-0001", prediction_ids=["pred-0001"])
