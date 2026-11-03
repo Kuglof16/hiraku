@@ -198,6 +198,31 @@ class ImportKnowledgeToolTest(ToolsTestCase):
                 with self.assertRaises(ToolError):
                     call("import_knowledge", ctx, path=bad)
 
+    def test_the_same_path_twice_is_the_same_document_named_after_the_file(self):
+        ctx = make_ctx(self.root)
+        folder = Path(ctx.store.path) / "knowledge"
+        folder.mkdir()
+        (folder / "notes.md").write_text(self.md(), encoding="utf-8")
+        first = call("import_knowledge", ctx, path="knowledge/notes.md")
+        second = call("import_knowledge", ctx, path="knowledge/notes.md", skip={"c3": "x"},
+                      formulas={"c5": {"check": "bottom_z_mm >= 100", "kinds": ["battery"]}})
+        self.assertEqual((first["doc_id"], second["doc_id"]), ("U1", "U1"))
+        self.assertEqual(second["needs_formula"], [])
+        if ev.known(ev.KNOWLEDGE_IMPORTED):
+            docs = [e["data"]["doc"] for e in ctx.store.events() if e["kind"] == ev.KNOWLEDGE_IMPORTED and e["data"]["doc"]["origin"] == "dropped"]
+            self.assertEqual([d["filename"] for d in docs], ["notes.md", "notes.md"])  # the file's name, not the path
+
+    def test_a_shift_jis_file_is_read(self):
+        ctx = make_ctx(self.root)
+        folder = Path(ctx.store.path) / "knowledge"
+        folder.mkdir()
+        (folder / "excel.csv").write_bytes("規則,式,分類\n座面の幅は 400 mm 以上,size_y_mm >= 400,人\n".encode("cp932"))
+        got = call("import_knowledge", ctx, path="knowledge/excel.csv")
+        self.assertEqual([r["text"] for r in got["rules"]], ["座面の幅は 400 mm 以上"])
+        (folder / "binary.bin").write_bytes(b"\xff\xfe\x00\x80\x81")
+        with self.assertRaises(ToolError):
+            call("import_knowledge", ctx, path="knowledge/binary.bin")
+
     def test_nothing_to_read(self):
         with self.assertRaises(ToolError):
             call("import_knowledge", make_ctx(self.root))

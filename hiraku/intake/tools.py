@@ -214,8 +214,15 @@ def _read_dropped(ctx: Any, args: Record) -> tuple[str, str]:
     base = (Path(store.path) / layout.KNOWLEDGE_DIR).resolve()
     p = (Path(store.path) / rel).resolve()
     if not p.is_relative_to(base) or not p.is_file():
-        raise IntakeError(f"path は実行のフォルダの knowledge/ の中のファイルだけです ({rel!r})")
-    return p.name, p.read_text(encoding="utf-8-sig")
+        raise IntakeError(f"path は実行のフォルダの {layout.KNOWLEDGE_DIR}/ の中のファイルだけです ({rel!r})")
+    raw = p.read_bytes()
+    try:
+        return p.name, raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            return p.name, raw.decode("cp932")  # a CSV saved by Excel in Japan
+        except UnicodeDecodeError:
+            raise IntakeError(f"{p.name} を文字として読めません (UTF-8 か Shift_JIS で保存してください)") from None
 
 
 @_guard
