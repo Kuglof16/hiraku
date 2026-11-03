@@ -40,7 +40,8 @@ const MUTED = "#6b665c";
 const RULE = "#e2dccf";
 const RULE_MAJOR = "#c9c3b6";
 const LIMIT_RED = "#c8402a";
-const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a" };
+// joint: the force the body takes at a suspension mounting point (at "<support>.<point>")
+const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a", joint: "#1f6f6b" };
 const UP = new THREE.Vector3(0, 1, 0);
 // Camera directions (ISO, from the target) for the scenes that need their own view.
 export const VIEWS = {
