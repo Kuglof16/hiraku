@@ -82,7 +82,7 @@
    "cuts": [
     "N05"
    ],
-   "video": "${WORK}/clips/n05_final_v4_1080p.mp4",
+   "video": "${WORK}/clips/n05_final_v5_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
