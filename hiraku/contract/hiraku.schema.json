@@ -2995,6 +2995,7 @@
                       "done",
                       "not_judged",
                       "round_limit",
+                      "red_left",
                       "cost_limit",
                       "turn_limit",
                       "user_stop",
@@ -3052,6 +3053,7 @@
                           "enum": [
                             "not_judged",
                             "round_limit",
+                            "red_left",
                             "cost_limit",
                             "turn_limit",
                             "user_stop"

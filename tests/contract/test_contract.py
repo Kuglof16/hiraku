@@ -102,7 +102,7 @@ class SchemaTest(unittest.TestCase):
 
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
-        ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop")]
+        ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
         for status, code in ok:
             self.assertEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
         for status, code in [("done", "cost_limit"), ("failed", "done"), ("stopped", "error")]:
