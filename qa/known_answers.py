@@ -300,11 +300,23 @@ def bredt_torsion(T: float, L: float, G: float, b: float, h: float, t: float) ->
     theta' = T (sum ds / t) / (4 A_m^2 G) and J = 4 A_m^2 / (sum ds / t), with
     sum ds / t = 2 (b_m + h_m) / t for one wall thickness. A square tube does not warp,
     so a clamped end does not change its twist.
+
+    The walls also twist as thin strips at the same rate, a stiffness in parallel with
+    the cell (what a shell model of the walls keeps): a strip of width s and thickness t
+    has the Prandtl stress function phi = t^2 / 4 - y^2 across its thickness
+    (laplacian -2, zero on both faces), so J_open = 2 * integral of phi = s t^3 / 3,
+    leaving out the strip's ends. With both, theta' = T / (G (J + J_open)), and the cell
+    carries T J / (J + J_open), so the membrane shear is that share of tau. The "_walls"
+    values are these.
     """
     s = box_midline(b, h, t)
-    J = 4 * s["A_m"] ** 2 * t / (2 * (s["b_m"] + s["h_m"]))
+    perimeter = 2 * (s["b_m"] + s["h_m"])
+    J = 4 * s["A_m"] ** 2 * t / perimeter
+    J_open = perimeter * t**3 / 3
     q = T / (2 * s["A_m"])
-    return {"shear_flow": q, "shear_stress": q / t, "J": J, "twist_rate": T / (G * J), "twist": T * L / (G * J)}
+    share = J / (J + J_open)
+    return {"shear_flow": q, "shear_stress": q / t, "J": J, "twist_rate": T / (G * J), "twist": T * L / (G * J),
+            "J_open": J_open, "twist_rate_walls": T / (G * (J + J_open)), "shear_stress_walls": share * q / t}
 
 
 # --- units [SI] --------------------------------------------------------------------------

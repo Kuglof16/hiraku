@@ -10,9 +10,10 @@ from ..k0_handcalc import units
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
+from ..k1_frame.surface import surface_field
 from . import fixtures, scene
-from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_list, param_value,
-                   result)
+from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, mesh_of, on_board, param_list,
+                   param_value, result)
 
 CLOSED_FORM_TOL = 1e-3
 STEP_HEIGHT = Param("step_height", "mm", "height of the step the step_supports climb (without it: the vehicle at rest)")
@@ -170,6 +171,7 @@ class FrameStatic(BuiltinTool):
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
                 "its ground forces load the frame instead of step_height")
+    needs_mesh = True  # the beam stress is also drawn on the version's shell mesh
 
     def known_answers(self) -> list[Record]:
         return frame_known_answers()
@@ -180,6 +182,8 @@ class FrameStatic(BuiltinTool):
         grip vectors) at every support, those forces load the frame instead of
         being worked out here, and an "inertia" vector at "cg" in it is checked
         against what the forces leave unbalanced (inertia relief takes that part).
+        mesh: the version's shell mesh record; the beam stress on the tubes'
+        outer surface is added as a field with one value per mesh element.
         """
         design = on_board(design, load_case)
         g = g_factor(load_case)
@@ -191,6 +195,11 @@ class FrameStatic(BuiltinTool):
         res = analyze(design, g_factor=g, step_mm=None if up else step, step_supports=sup,
                       ground_forces=up[1] if up else None, inertia_N=up[2] if up else None)
         out = frame_outputs(res)
+        mesh, why = mesh_of(design, params)
+        if mesh is not None:
+            out["fields"].append(surface_field(res["model"], mesh))
+        elif why:
+            out["effects"].append({"name": why})
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out

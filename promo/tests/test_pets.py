@@ -27,6 +27,14 @@ def roles_in_pet3d():
     return re.findall(r'\{ id: "([^"]+)", name: "([^"]+)", color: "(#[0-9a-f]{6})", prop: "(\w+)", propName: "([^"]+)" \}', block)
 
 
+def bodies_in_pet3d():
+    block = PET3D[PET3D.index("const BODIES = {"):]
+    block = block[: block.index("};")]
+    rows = re.findall(r'"([^"]+)": \{ kind: "([^"]+)", quantity: (?:"([^"]+)"|null), analysis: "([^"]+)" \}', block)
+    # quantity None = a body without a contour
+    return [(rid, kind, q or None, a) for rid, kind, q, a in rows]
+
+
 def stops(src):
     return re.findall(r"#[0-9a-f]{6}", re.search(r"STOPS = \[([^\]]+)\]", src).group(1))
 
@@ -107,9 +115,87 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v2(self):
+    def test_version_mark_is_v5(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v2</div>', viewer)
+        self.assertIn('<div id="ver">v5</div>', viewer)
+
+    def test_viewer_turns_freely(self):
+        viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
+        # trackball: no up / down limit; the pose (offset + up) goes to the URL
+        self.assertIn("TrackballControls", viewer)
+        self.assertNotIn("OrbitControls", viewer)
+        self.assertIn('p.set("orbit"', viewer)
+        self.assertIn('p.set("pan"', viewer)
+
+    def test_each_role_has_its_own_body(self):
+        bodies = bodies_in_pet3d()
+        self.assertEqual([b[0] for b in bodies], [r[0] for r in roles_in_pet3d()])
+        self.assertEqual(len({b[1] for b in bodies}), 10, "body kinds must differ")
+        quantities = [b[2] for b in bodies if b[2] is not None]
+        self.assertEqual(len(quantities), 8, "only the designer and the packager have no contour")
+        self.assertEqual(len(set(quantities)), 8, "contour quantities must differ")
+        block = PET3D[PET3D.index("const BUILDERS = {"):]
+        block = block[: block.index("};")]
+        for rid, kind, _, _ in bodies:
+            self.assertRegex(block, r'"%s": body\w+,' % re.escape(kind), rid)
+        quantity = {b[0]: b[2] for b in bodies}
+        self.assertEqual(quantity["cae.aero"], "速さ (相対)")
+        self.assertEqual(quantity["cae.crash"], "衝撃の応力 (相対)")
+        self.assertIsNone(quantity["packager"])
+        self.assertIsNone(quantity["designer"])
+        kind = {b[0]: b[1] for b in bodies}
+        self.assertEqual(kind["lead"], "fe-sphere")
+        self.assertEqual(kind["designer"], "cad-model")
+        self.assertEqual(kind["packager"], "assembly")
+        self.assertEqual(kind["cae.handling"], "multibody")
+        self.assertEqual(kind["cae.strength"], "stress-concentration")
+        self.assertEqual(kind["cae.powertrain"], "combustion")
+        self.assertEqual(kind["cae.crash"], "impact-wave")
+        self.assertEqual(quantity["cae.strength"], "応力集中 (公称からの上がり分)")
+        self.assertEqual(quantity["cae.handling"], "ばねの力 (相対)")
+        self.assertEqual(quantity["cae.nvh"], "変位 (相対)")
+        self.assertEqual(quantity["cae.thermal"], "温度 (相対)")
+        # README carries the table of bodies
+        readme = (PETS / "README.md").read_text(encoding="utf-8")
+        for rid, kind, q, _ in bodies:
+            self.assertRegex(readme, r"`%s`[^\n]*`%s`[^\n]*%s" % (re.escape(rid), re.escape(kind), re.escape(q or "なし")), rid)
+
+    def test_v5_fixes_in_the_source(self):
+        def fn(name):
+            body = PET3D[PET3D.index("function %s(ctx" % name):]
+            return body[: body.index("\n  }\n")]
+
+        # lead is built like the v2 body: jittered icosphere nodes + the limb-load stress
+        lead = fn("bodyLead")
+        self.assertIn("icoNodes(ctx, (d) => shapePoint(THREE, d))", lead)
+        self.assertIn("stressBody(ctx,", lead)
+        self.assertIn("stressFields(pts, ctx.roots, ctx.propMass)", fn("stressBody"))
+        # designer: a CAD model (fillets, one colour, edge lines); no contour,
+        # no mesh dots, no dimension lines
+        des = fn("bodyDesigner")
+        self.assertIn("roundedBox(", des)
+        self.assertIn("cadMaterial(", des)
+        for word in ("addFe(", "contourMaterial(", "addDots(", "ConeGeometry", "dimension"):
+            self.assertNotIn(word, des)
+        # packager: no contour, no flow lines, no node dots; seams, not an exploded gap
+        pkg = fn("bodyPackager")
+        for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots("):
+            self.assertNotIn(word, pkg)
+        self.assertRegex(pkg, r"SEAM = 0\.00\d")
+        # handling: a multibody model (joints, springs); not the v3 blobs and
+        # not the v4 friction circles / lane change track
+        han = fn("bodyHandling")
+        for word in ("SphereGeometry(0.11", "TorusGeometry(1, 0.06", "pathOk", "cones", "flowMaterial("):
+            self.assertNotIn(word, han)
+        for word in ("lowArm", "upArm", "knuckle", "spring", "damper", "SphereGeometry(", "triad"):
+            self.assertIn(word, han)
+        # strength: the hole and the Kirsch field; not the v2 limb loads
+        st = fn("bodyStrength")
+        self.assertIn("kirsch", st)
+        self.assertNotIn("stressBody(", st)
+        self.assertNotIn("icoNodes(", st)
+        # crash (unchanged): nodes move only by the small dent
+        self.assertRegex(fn("bodyCrash"), r"DENT = \{ depth: 0\.0[0-9]+")
 
     def test_pose_uses_no_clock_or_random(self):
         for word in ("Date.now", "performance.now", "Math.random", "requestAnimationFrame"):
@@ -123,6 +209,11 @@ class Roles(unittest.TestCase):
 @unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
 @unittest.skipUnless(HAS_PLAYWRIGHT and has_network(), "needs the network (three.js comes from jsDelivr)")
 class Viewer(unittest.TestCase):
+    def open(self, page, url):
+        page.goto(url)
+        page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+        return page.evaluate("window.petViewer.ready")
+
     def test_ready_resolves(self):
         from playwright.sync_api import sync_playwright
 
@@ -172,6 +263,7 @@ class Viewer(unittest.TestCase):
                 self.assertEqual(r["sw"], rgb[::-1])
                 self.assertEqual(r["tk"], ["%.1f" % (i / 10) for i in range(11)])
                 self.assertEqual(r["legend"], "block")
+                self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), "応力集中 (公称からの上がり分)")
                 # working steps the load 0 -> 1, other states carry the full load
                 self.assertEqual(r["ramp"][0], 0)
                 self.assertTrue(0 < r["ramp"][1] < r["ramp"][2] < 1)
@@ -184,10 +276,27 @@ class Viewer(unittest.TestCase):
                 page.wait_for_function("window.petViewer !== undefined", timeout=30000)
                 page.evaluate("window.petViewer.ready")
                 self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none")
+
+                # the legend title is the quantity of the role
+                for role, title in (("cae.aero", "速さ (相対)"), ("cae.crash", "衝撃の応力 (相対)"), ("cae.thermal", "温度 (相対)"),
+                                    ("cae.powertrain", "燃焼の温度 (相対)"), ("lead", "相対の応力 (自重と手足)"),
+                                    ("cae.handling", "ばねの力 (相対)")):
+                    page.goto(url.replace("cae.strength", role))
+                    page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                    page.evaluate("window.petViewer.ready")
+                    self.assertEqual(page.evaluate("document.querySelector('#legend .ttl').textContent"), title, role)
+
+                # the packager and the designer have no contour: no legend in the one-pet view either
+                for role in ("packager", "designer"):
+                    page.goto(url.replace("cae.strength", role))
+                    page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                    page.evaluate("window.petViewer.ready")
+                    self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('legend')).display"), "none", role)
             finally:
                 browser.close()
 
     def test_values_follow_the_loads(self):
+        # lead: the stress contour follows the limb loads (v2 model)
         from playwright.sync_api import sync_playwright
 
         # build every pet in the viewer page (it has three.js on its import map)
@@ -196,7 +305,7 @@ class Viewer(unittest.TestCase):
           const THREE = await import('three');
           const out = {};
           for (const mesh of ['coarse', 'fine']) {
-            for (const r of window.HirakuPets.ROLES) {
+            for (const r of window.HirakuPets.ROLES.filter((r) => r.id === 'lead')) {
               const p = window.HirakuPets.create(THREE, { role: r.id, mesh });
               const f = p.field;
               const node = (n) => f.loads.find(l => l.name === n).node;
@@ -225,7 +334,8 @@ class Viewer(unittest.TestCase):
                 res = page.evaluate(js)
             finally:
                 browser.close()
-        self.assertEqual(len(res), 20)
+        # lead is the v2 body: same mesh, same load model
+        self.assertEqual(len(res), 2)
         for k, v in res.items():
             want = {"nodes": 42, "elements": 80} if k.startswith("coarse") else {"nodes": 92, "elements": 180}
             self.assertEqual(v["counts"], want, k)
@@ -238,6 +348,250 @@ class Viewer(unittest.TestCase):
             self.assertEqual(v["argMis"], v["legL"], k)
             self.assertGreater(v["mis"], 1.0, k)
             self.assertEqual(v["work"], 0, k)
+
+    def test_bodies_per_role(self):
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          // contour meshes = the body itself (not flow lines, props or marks)
+          // (or, for a body without a contour, the meshes marked userData.body)
+          const isBody = (o) => o.isMesh && ((o.material && o.material.userData && o.material.userData.hk) || o.userData.body);
+          const snap = (p) => {
+            const out = [];
+            p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => {
+              if (isBody(o)) out.push(Array.from(o.geometry.attributes.position.array), Array.from(o.matrixWorld.elements),
+                o.geometry.attributes.aVal ? Array.from(o.geometry.attributes.aVal.array) : []);
+            });
+            return out;
+          };
+          const height = (p) => {
+            const box = new THREE.Box3();
+            p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => { if (isBody(o)) box.expandByObject(o); });
+            return box.max.y - box.min.y;
+          };
+          const out = {};
+          for (const r of HP.ROLES) {
+            const a = HP.create(THREE, { role: r.id });
+            const b = HP.create(THREE, { role: r.id });
+            a.update(0, 'idle');
+            const h = height(a);
+            const states = {};
+            let same = true;
+            for (const [t, s] of [[1.37, 'working'], [2.9, 'working'], [1.2, 'mismatch'], [0.45, 'pass']]) {
+              a.update(t, s); b.update(0.1, 'idle'); b.update(t, s);
+              same = same && JSON.stringify(snap(a)) === JSON.stringify(snap(b));
+              const c = a.contour(t, s);
+              states[s + t] = { quantity: c.quantity, max: c.max, min: c.min, info: c.info.length };
+            }
+            out[r.id] = { kind: a.body.kind, quantity: a.body.quantity, h, same, states };
+            a.dispose(); b.dispose();
+          }
+          return { out, bodies: HP.BODIES };
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                page.goto(page_url)
+                page.wait_for_function("window.petViewer !== undefined", timeout=30000)
+                page.evaluate("window.petViewer.ready")
+                res = page.evaluate(js)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+        out = res["out"]
+        self.assertEqual(len(out), 10)
+        self.assertEqual(len({v["kind"] for v in out.values()}), 10)
+        heights = sorted(v["h"] for v in out.values())
+        median = heights[5]
+        for rid, v in out.items():
+            self.assertEqual(v["kind"], res["bodies"][rid]["kind"], rid)
+            # same height in the line-up (within 12 % of the median)
+            self.assertLess(abs(v["h"] / median - 1), 0.12, (rid, v["h"], median))
+            # same t and state -> same geometry and values
+            self.assertTrue(v["same"], rid)
+            for k, c in v["states"].items():
+                self.assertEqual(c["quantity"], v["quantity"], (rid, k))
+                if v["quantity"] is None:
+                    # no contour: no values, only the description lines
+                    self.assertIsNone(c.get("max"), (rid, k))
+                    self.assertGreater(c["info"], 0, (rid, k))
+                    continue
+                self.assertTrue(math.isfinite(c["max"]) and math.isfinite(c["min"]), (rid, k))
+                self.assertGreaterEqual(c["min"], -1e-9, (rid, k))
+                self.assertGreaterEqual(c["max"], c["min"], (rid, k))
+                self.assertGreater(c["info"], 0, (rid, k))
+
+
+    def test_v5_bodies(self):
+        # designer without contour, packager as one unit, handling as a
+        # mechanism, strength concentrated at the hole edge, arrows outside
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          const out = {};
+          const contourMats = (p) => {
+            let n = 0;
+            p.group.traverse((o) => { if (o.material && o.material.userData && (o.material.userData.hk || o.material.userData.flow)) n++; });
+            return n;
+          };
+          // designer: no contour bands, a CAD material, no values
+          const de = HP.create(THREE, { role: 'designer' });
+          let cad = 0;
+          de.group.traverse((o) => { if (o.material && o.material.userData && o.material.userData.cad) cad++; });
+          const dc = de.contour(1.0, 'working');
+          out.designer = { hk: contourMats(de), cad, quantity: dc.quantity, hasMax: 'max' in dc, info: dc.info.length };
+          de.dispose();
+          // packager: no contour, parts stacked with thin seams
+          const pk = HP.create(THREE, { role: 'packager' });
+          pk.update(1.2, 'idle');
+          pk.group.updateMatrixWorld(true);
+          const boxes = [];
+          pk.group.traverse((o) => { if (o.userData.body) boxes.push(new THREE.Box3().setFromObject(o)); });
+          boxes.sort((a, b) => a.min.y - b.min.y);
+          const gaps = boxes.slice(1).map((b, i) => b.min.y - boxes[i].max.y);
+          const c = pk.contour(1.0, 'working');
+          out.packager = { hk: contourMats(pk), body: boxes.length, gaps, quantity: c.quantity, hasMax: 'max' in c, parts: pk.body.parts };
+          pk.dispose();
+          // handling: ball joints, tyres on the ground, inner wheel lifts on mismatch
+          const hd = HP.create(THREE, { role: 'cae.handling' });
+          const res = {};
+          for (const [t, s] of [[1.2, 'idle'], [1.37, 'working'], [1.2, 'mismatch']]) {
+            hd.update(t, s);
+            hd.group.updateMatrixWorld(true);
+            let balls = 0;
+            const tyres = [];
+            hd.group.traverse((o) => {
+              const g = o.geometry && o.geometry.parameters;
+              if (!g) return;
+              if (o.geometry.type === 'SphereGeometry' && Math.abs(g.radius - 0.055) < 1e-9) balls++;
+              if (o.geometry.type === 'CylinderGeometry' && Math.abs(g.radiusTop - 0.39) < 1e-9) tyres.push(new THREE.Box3().setFromObject(o).min.y);
+            });
+            res[s] = { balls, tyres, c: hd.contour(t, s) };
+          }
+          out.handling = res;
+          hd.dispose();
+          // strength: argmax at the hole edge, top or bottom; far field small
+          const st = HP.create(THREE, { role: 'cae.strength' });
+          const f = st.field;
+          const h = f.hole;
+          const pol = f.nodes.map((q) => [Math.hypot(q[0] - h.center[0], q[1] - h.center[1]), Math.atan2(q[1] - h.center[1], q[0] - h.center[0])]);
+          const arg = f.settled.indexOf(Math.max(...f.settled));
+          const far = Math.max(...f.settled.filter((v, i) => pol[i][0] > 3 * h.radius));
+          const side = Math.max(...f.settled.filter((v, i) => pol[i][0] < h.radius + 1e-6 && Math.abs(Math.cos(pol[i][1])) > 0.99));
+          st.update(0, 'idle');
+          st.group.updateMatrixWorld(true);
+          const meshes = [];
+          st.group.traverse((o) => { if (o.isMesh && o.material && o.material.userData && o.material.userData.hk) meshes.push(o); });
+          const ray = new THREE.Raycaster();
+          const arrows = [];
+          for (const a of st.arrows) {
+            const centre = a.frame.localToWorld(new THREE.Vector3(0, a.tail.y, 0));
+            for (const k of [0.0, 0.1, 0.25, a.length]) {
+              const p = a.frame.localToWorld(a.tail.clone().addScaledVector(a.dir, k));
+              const dir = centre.clone().sub(p);
+              ray.set(p, dir.clone().normalize());
+              ray.far = dir.length();
+              const hits = ray.intersectObjects(meshes, false);
+              arrows.push({ k, hits: hits.length, first: hits.length ? hits[0].distance : null });
+            }
+          }
+          out.strength = { max: f.settled[arg], r: pol[arg][0], th: pol[arg][1], a: h.radius, far, side,
+                           mis: st.contour(1.2, 'mismatch').max, work0: st.contour(0, 'working').max, arrows, n: st.arrows.length };
+          st.dispose();
+          return out;
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                res = page.evaluate(js)
+            finally:
+                browser.close()
+        de = res["designer"]
+        self.assertEqual(de["hk"], 0, "no contour bands on the designer")
+        self.assertGreaterEqual(de["cad"], 1)
+        self.assertIsNone(de["quantity"])
+        self.assertFalse(de["hasMax"])
+        self.assertGreater(de["info"], 0)
+        pk = res["packager"]
+        self.assertEqual(pk["hk"], 0, "no contour or flow material on the packager")
+        self.assertIsNone(pk["quantity"])
+        self.assertFalse(pk["hasMax"])
+        self.assertEqual(pk["body"], 3)
+        for g in pk["gaps"]:
+            # the parts sit on each other: a seam, no exploded gap
+            self.assertLess(abs(g), 0.012, pk["gaps"])
+        self.assertIn(len({p["color"] for p in pk["parts"]}), (2, 3))
+        hd = res["handling"]
+        for s, v in hd.items():
+            self.assertEqual(v["balls"], 8, s)
+            self.assertEqual(v["c"]["quantity"], "ばねの力 (相対)")
+        for y in hd["idle"]["tyres"] + hd["working"]["tyres"]:
+            self.assertLess(abs(y), 0.02, "tyres stand on the ground")
+        # mismatch: the inner wheel lifts
+        self.assertGreater(max(hd["mismatch"]["tyres"]), 0.05)
+        st = res["strength"]
+        self.assertAlmostEqual(st["max"], 1.0, places=6)
+        self.assertAlmostEqual(st["r"], st["a"], places=5, msg="largest value on the hole edge")
+        self.assertAlmostEqual(abs(math.sin(st["th"])), 1.0, places=3, msg="at the top or bottom of the hole")
+        self.assertLess(st["far"], 0.1)
+        self.assertLess(st["side"], 0.01, "the hole edge on the load axis is not concentrated")
+        self.assertGreater(st["mis"], 1.0)
+        self.assertEqual(st["work0"], 0)
+        self.assertEqual(st["n"], 4)
+        for r in st["arrows"]:
+            # every point of an arrow is outside the body: the side wall lies between it and the middle
+            self.assertGreaterEqual(r["hits"], 1, r)
+            self.assertGreater(r["first"], 0.02, r)
+
+    def test_free_rotation_and_url(self):
+        # drag in the one-pet view up to a view from straight above, then from
+        # straight below; the URL the viewer writes gives the same picture
+        from playwright.sync_api import sync_playwright
+
+        base = (PETS / "viewer.html").as_uri() + "?view=one&role=cae.crash&state=idle&cam=front&t=1.2&ui=0"
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                for dy, want in ((158, 1), (-182, -1)):
+                    page = browser.new_page(viewport={"width": 640, "height": 680})
+                    self.open(page, base)
+                    x0, y0 = 357, 340
+                    page.mouse.move(x0, y0)
+                    page.mouse.down()
+                    for k in range(1, 13):
+                        page.mouse.move(x0, y0 + dy * k / 12)
+                        page.wait_for_timeout(40)
+                    page.mouse.up()
+                    page.wait_for_timeout(600)
+                    orbit = page.evaluate("window.petViewer.state.orbit")
+                    href = page.evaluate("location.href")
+                    shot = page.screenshot()
+                    page.close()
+                    el = math.degrees(math.asin(orbit[1] / math.hypot(*orbit[:3])))
+                    # beyond the 90 deg limit an orbit control would have
+                    self.assertGreater(el * want, 80, orbit)
+                    self.assertIn("orbit=", href)
+                    page = browser.new_page(viewport={"width": 640, "height": 680})
+                    self.open(page, href)
+                    page.wait_for_timeout(300)
+                    self.assertEqual(page.evaluate("window.petViewer.state.orbit"), orbit)
+                    self.assertEqual(page.screenshot(), shot, "reopened URL gives the same picture")
+                    page.close()
+            finally:
+                browser.close()
 
 
 if __name__ == "__main__":

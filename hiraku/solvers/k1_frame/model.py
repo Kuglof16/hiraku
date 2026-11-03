@@ -156,8 +156,12 @@ class FrameModel:
         self.restrain(self.wheel_nodes[c], "z")
         return [a, b, c]
 
-    def restrain_on_wheels(self) -> None:
-        """Stand the frame on its supports: vertical rigid or spring, plus in-plane holds."""
+    def restrain_on_wheels(self, in_plane_at_frame: bool = False) -> None:
+        """Stand the frame on its supports: vertical rigid or spring, plus in-plane holds (x and y at the
+        first support, y at the one farthest from it in x) at the wheel centres, or with in_plane_at_frame
+        at their frame nodes. The modal analysis holds at the frame nodes: a hold below the frame turns the
+        frame's twist into a fore-and-aft and sideways sway through its lever (on the demo vehicle the first
+        frame mode fell from 9.7 to 8.1 Hz, with 69 % of its kinetic energy fore-and-aft)."""
         sup = self.design["supports"]
         for s in sup:
             node = self.wheel_nodes[s["id"]]
@@ -174,8 +178,9 @@ class FrameModel:
         pts = {s["id"]: np.asarray(s["position_mm"], float) for s in sup}
         a = sup[0]["id"]
         b = max(pts, key=lambda k: abs(pts[k][0] - pts[a][0]))
-        self.restrain(self.wheel_nodes[a], "xy")
-        self.restrain(self.wheel_nodes[b], "y")
+        at = {s["id"]: (s["frame_node"] if in_plane_at_frame else self.wheel_nodes[s["id"]]) for s in sup}
+        self.restrain(at[a], "xy")
+        self.restrain(at[b], "y")
 
     # ------------------------------------------------------------ solve and read
 

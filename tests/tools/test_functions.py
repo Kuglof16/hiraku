@@ -330,6 +330,8 @@ class MeshTest(RunCase, unittest.TestCase):
         self.assertEqual([(m["mesh_id"], m["design_version"]) for m in meshes], [("mesh-0001", 1)])
         self.assertEqual([r[3]["mesh"]["mesh_id"] for r in self.tools["step_climb"].runs], ["mesh-0001"] * 2)
         self.assertEqual(self.kinds().count("mesh.created"), 1)
+        kinds = self.kinds()  # the mesh is an input: recorded before the analysis that uses it starts
+        self.assertLess(kinds.index("mesh.created"), kinds.index("analysis.started"))
         self.assert_events_fit()
 
     def test_a_tool_without_needs_mesh_gets_none(self):

@@ -14,7 +14,7 @@ from hiraku.contract import layout
 
 def _cmd_run(a: argparse.Namespace) -> int:
     from hiraku.agent.scripted import SCRIPTED_SLUG_SUFFIX, run_scripted
-    from hiraku.agent.session import STOPPED_BY_USER, intake_events_for, start_run
+    from hiraku.agent.session import STOPPED_BY_USER, start_run
     from hiraku.catalog import load_requirements
 
     if not a.scripted:
@@ -32,8 +32,7 @@ def _cmd_run(a: argparse.Namespace) -> int:
     try:
         req = load_requirements(a.requirements)
         slug = req["product"] + (SCRIPTED_SLUG_SUFFIX if a.scripted else "")
-        intake = None if a.no_intake else intake_events_for(req)
-        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug, intake_events=intake)
+        ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug, intake=not a.no_intake)
     except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2

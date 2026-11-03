@@ -24,6 +24,22 @@ class PipelineTest(unittest.TestCase):
         kinds = [e["kind"] for e in got.events]
         self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 9 + [ev.HEARING_ASKED, ev.HEARING_ANSWERED])  # the contract's order
 
+    def test_a_run_started_from_a_requirements_file_asks_nothing_when_the_file_has_what_is_required(self):
+        req = load_product("serving-robot")
+        file_reqs = [r for r in req["requirements"] if r["key"] != "Q63"] + [
+            {"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
+            {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
+        got = intake(req["want"], req["flags"], "walk", product="serving-robot", requirements=file_reqs, from_file=True)
+        kinds = [e["kind"] for e in got.events]
+        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 9 + [ev.HEARING_ANSWERED])  # no hearing.asked
+        answered = got.events[-1]
+        self.assertEqual(answered["text"], "要件のファイルのまま進みます (既定値で足した 1 件: Q63)")
+        self.assertEqual([a["key"] for a in answered["data"]["answers"]], ["Q63"])
+        merged = {r["key"]: r for r in got.requirements_file["requirements"]}
+        self.assertEqual(merged["Q63"], answered["data"]["answers"][0])  # what project.requirements takes is what was said
+        self.assertEqual(len(merged), len(file_reqs) + 1)
+        self.assertEqual(contract.errors("event", {"seq": 1, "ts": "2026-11-03T10:00:00+09:00", "t": 1, "run_id": "r", **{k: answered[k] for k in ("kind", "agent", "text", "data")}}), [])
+
     def test_a_required_question_without_an_answer_is_not_ready(self):
         req = load_product("care-bed")
         got = intake(req["want"], req["flags"], "static", product="care-bed")
