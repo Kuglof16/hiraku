@@ -152,13 +152,28 @@ class BuildersTest(unittest.TestCase):
                 else:
                     self.assertLessEqual(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
 
-    def test_r3_misses_on_the_unsafe_side_and_ends_without_a_verdict(self):
-        plan = PLANS["R3"]
-        self.assertNotIn("retry", plan["expected_mismatch"])
-        self.assertNotIn("safe_side", plan["expected_mismatch"])
-        self.assertTrue(plan["expected_mismatch"]["end"])  # the cause is recorded and the run goes on
-        damage = {r["quantity"]: r["value"] for r in self.runs["R3"]["results"]}["fatigue_damage"]
-        self.assertGreater(damage, 0.0)  # the analysis is what the hand value falls short of
+    def test_r3_predicts_the_end_cross_member(self):
+        """The hand calculation looks at the weld the fatigue tool finds worst: the overhang's end cross member."""
+        from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+
+        self.assertNotIn("expected_mismatch", PLANS["R3"])
+        worst = next(r for r in self.runs["R3"]["results"] if r["quantity"] == "fatigue_damage")
+        self.assertEqual(worst["where"], end_cross_member_inputs(DESIGN)["end_cross_member"])
+
+    def test_r3_plan_on_version_2(self):
+        """Wider track (the wheels further outboard of the rails): still within the tolerance."""
+        from hiraku import designgen
+
+        v2 = designgen.regenerate(DESIGN, {"track": {"value": 1220, "unit": "mm"}, "steering_x": {"value": -200, "unit": "mm"}})
+        lc = BUILDERS["R3"](spec("R3"), REQ, v2)
+        got = {r["quantity"]: r["value"] for r in tool_for("R3").run(v2, lc, PRED, {})["results"]}["fatigue_damage"]
+        preds = {}
+        for p in PLANS["R3"]["predictions"]:
+            extra = p["inputs_from"](v2, lc)
+            out = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, v2, lc, extra, preds) for k, ref in p["inputs"].items()})
+            preds[p["quantity"]] = out["outputs"][p["output"]]
+        hand = preds["fatigue_damage"]["value"]
+        self.assertLessEqual(abs(got - hand) / hand, lc["tolerance_rel"], f"hand {hand:.4f}, tool {got:.4f}")
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
