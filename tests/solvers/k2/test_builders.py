@@ -183,9 +183,13 @@ class Plans(unittest.TestCase):
                 for key in ("source", "cause", "fix"):
                     self.assertTrue(expected[key].strip(), key)
                 self.assertTrue(expected.get("retry") or expected.get("stop"))
+            later = {ref for p in predictions(step) for ref in p["inputs"].values()}
             for p in predictions(step):
                 with self.subTest(test=tid, quantity=p["quantity"]):
-                    self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
+                    if f"pred.{p['quantity']}" in later and p["quantity"] not in {q for q, _, _ in pairs}:
+                        pass  # an intermediate hand value a later prediction takes (pred.<quantity>), not compared
+                    else:
+                        self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
                     self.assertEqual(set(p["inputs"]), set(self.formulas[p["formula_id"]]["inputs"]))
                     self.assertTrue(p["assumptions"])
 
