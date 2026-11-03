@@ -134,8 +134,7 @@
    "cuts": [
     "N09"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N09.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n09_app_1080p.mp4"
   },
   {
    "cuts": [
@@ -147,29 +146,25 @@
    "cuts": [
     "N11"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N11.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n11_app_1080p.mp4"
   },
   {
    "cuts": [
     "N12"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N12.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n12_app_1080p.mp4"
   },
   {
    "cuts": [
     "N13"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N13.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n13_app_1080p.mp4"
   },
   {
    "cuts": [
     "N14"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N14.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n14_app_1080p.mp4"
   },
   {
    "cuts": [
