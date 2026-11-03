@@ -13,8 +13,8 @@
     "_note": "night: ground of the title screens; ink: black ink on paper; tile_*: the N05 test tiles"
   },
   "n00": {
-    "duration_s": 6.5,
-    "_duration_note": "6.5 s is N00's slot in the narration script (draft 5: 0:00-0:06.5, the silent tail after the voice cut by 0.5 s)",
+    "duration_s": 8.6,
+    "_duration_note": "8.6 s is N00's slot in narration draft 6 (0:00-0:08.6): the voice is the longer line that says what HIRAKU is (7.86 s from 0.3 s)",
     "name": { "y": 172, "size_px": 210 },
     "rule": { "y": 430, "w": 400, "h": 2, "_note": "centred" },
     "row": { "y": 500, "gap_px": 34 },
@@ -184,6 +184,40 @@
     "fly_from": { "x": 960, "y": 470 },
     "tests": ["step", "tilt", "wind", "rough", "dlc", "brake", "long", "launch", "crash", "nvh", "fatigue", "heat"]
   },
+  "n03": {
+    "duration_s": 5.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n03). 5.0 s is N03's slot in narration draft 6 (0:19.6-0:24.6)",
+    "view": { "x": 96, "y": 96, "w": 1200, "h": 790, "_note": "the 3D drive (loop and straight), the same box as n01.view" },
+    "popup": { "x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "_note": "battery charge and temperature, then speed, as graphs in the right column" },
+    "times": { "lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9,
+               "_note": "0.3-2.8 s the long loop (battery and heat), from 2.9 s the acceleration (speed); the voice says どこまで速く from about 2.9 s (measured from its pauses)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n06": {
+    "duration_s": 11.7,
+    "_note": "drawn by the screens department (web cut.html?cut=n06): six designs that do not work. 11.7 s is N06's slot in narration draft 6 (0:33.6-0:45.3)",
+    "grid": { "x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24, "_note": "bottom 886, above the subtitle band" },
+    "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
+    "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 } },
+    "times": { "tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55,
+               "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.30-2.79, 3.14-5.93 s)" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
+  "n07": {
+    "duration_s": 15.3,
+    "_note": "drawn by the screens department (web cut.html?cut=n07): what CAE is, shown as a weak joint found and reinforced. 15.3 s is N07's slot in narration draft 6 (0:45.3-1:00.6). Labels say only before / after the reinforcement (no beam or shell words: viewers do not know them)",
+    "view": { "x": 96, "y": 96, "w": 1500, "h": 790, "_note": "the 3D view; bottom 886" },
+    "legend": { "x": 1620, "y": 96, "w": 204, "h": 790, "title_px": 22, "text_px": 20, "_note": "the colour bar in a column of its own, not over the view" },
+    "label": { "x": 120, "y": 120, "size_px": 30, "_note": "inside the view, top left: 補強の前 / 補強の後" },
+    "times": { "lead_s": 0.3, "turn_to_s": 6.5, "zoom_s": 6.5, "zoom_to_s": 8.5, "swap_s": 11.0, "swap_to_s": 13.0,
+               "_note": "the vehicle turns with the stress colours during sentences 1-2 (0.30-4.22, 4.57-8.89 s); it moves in on the highest element as sentence 2 says 突き止める; the reinforced version's colours come in as sentence 3 says 確かめ、分析する (9.24-15.28 s) and stay while it says それが CAE です" },
+    "turn_deg": 90,
+    "zoom": { "fill": 0.45, "_note": "when zoomed in, the area around the highest element fills 45 % of the view's height" },
+    "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
   "n08b": {
     "duration_s": 10.0,
     "fig": { "y": 210, "w": 860, "gap_px": 60, "num_size_px": 200, "cap_gap_px": 26, "cap_size_px": 44,
@@ -233,6 +267,13 @@
       "_note": "rows: first question appears, then one per row_step; answer_lag: Claude's answer after its question (all three by 2.3 s, inside sentence 1). check: HIRAKU's hand value of row 1 (sentence 2 starts at 3.53 s), one row per check_step; the analysis, the difference and the tick follow by cae_lag, diff_lag, tick_lag (last tick at 5.75 s). src: the source lines. From 6.0 s to 8.3 s the screen holds still"
     }
   },
+  "n17": {
+    "duration_s": 8.8,
+    "_note": "drawn by the screens department (web cut.html?cut=n17): the one-page report. 8.8 s is N17's slot in narration draft 6 (2:36.1-2:44.9)",
+    "page": { "x": 360, "y": 80, "w": 1200, "h": 806, "title_px": 34, "text_px": 22, "_note": "centred; bottom 886" },
+    "times": { "lead_s": 0.3, "light_s": 5.8, "_note": "light: 次に変えるなら lights up as the voice says 次に何を (about 5.8 s; sentence 2 runs 3.83-8.52 s)" },
+    "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
+  },
   "n18": {
     "duration_s": 9.0,
     "light": { "y": 40, "w": 130, "h": 470, "_note": "centred" },
@@ -256,7 +297,11 @@
   "check": {
     "times": {
       "n00": [0.6, 1.8, 3.5, 6.5],
+      "n03": [0.5, 2.0, 4.5],
       "n04": [0.5, 1.5, 3.5],
+      "n06": [1.0, 4.0, 11.0],
+      "n07": [0.5, 7.5, 12.0, 15.0],
+      "n17": [0.5, 6.0, 8.5],
       "n15": [0.5, 2.5, 4.8],
       "n16": [0.5, 3.0, 5.0, 6.2],
       "n05": [0, 0.5, 0.8, 1.0, 1.15, 1.4, 2.9, 4.5],

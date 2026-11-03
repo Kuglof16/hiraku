@@ -138,6 +138,10 @@ py promo/export.py frames "http://127.0.0.1:8765/?run=sample&video=1" <作業>/f
 
 3 分 (5400 コマ) は、GPU ならおよそ 20〜35 分です。1 コマの PNG は約 1.2 MB です。
 
+## 1 本につなぐ (`assemble.py`)
+
+原稿の枠どおりにカットの映像を並べ、境目のつなぎ (切る・溶ける・光・粒) と暗い画面の粒と光のにじみを付けて 1 本にします。表は `assembly.json`、使い方は [ASSEMBLE.md](ASSEMBLE.md)。
+
 ## 声と字幕 (`voice.py`, `subs.py`)
 
 声はこの PC で動かす AivisSpeech Engine (VOICEVOX と同じ形の HTTP の口) で合成します。原稿はタブ区切りで、1 行が 1 文です。
