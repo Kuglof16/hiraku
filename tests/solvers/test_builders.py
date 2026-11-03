@@ -81,8 +81,12 @@ class BuildersTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.cases = {tid: BUILDERS[tid](spec(tid), REQ, DESIGN) for tid in OURS}
-        cls.runs = {tid: tool_for(tid).run(DESIGN, lc, PRED, {}) for tid, lc in cls.cases.items()}
+        # keyed by test id, or by load case id for a test that builds more than one (T2)
+        cls.cases = {}
+        for tid in OURS:
+            got = BUILDERS[tid](spec(tid), REQ, DESIGN)
+            cls.cases.update({lc["load_case_id"]: lc for lc in got} if isinstance(got, list) else {tid: got})
+        cls.runs = {key: tool_for(lc["test_id"]).run(DESIGN, lc, PRED, {}) for key, lc in cls.cases.items()}
 
     def test_every_test_has_a_builder(self):
         for tid in OURS:
@@ -114,7 +118,8 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual((lc["params"]["grade_high"]["value"], lc["params"]["grade_low"]["value"]), (12.0, 7.0))
         self.assertNotIn("Q13", lc["requirement_keys"])
         self.assertEqual(self.cases["T1"]["criterion"]["limit"], {"value": 55.0, "unit": "degC"})
-        self.assertEqual(self.cases["T2"]["criterion"]["limit"], {"value": 85.0, "unit": "degC"})
+        self.assertEqual(self.cases["T2-40C-controller"]["criterion"]["limit"], {"value": 85.0, "unit": "degC"})
+        self.assertEqual(self.cases["T2-40C-motor"]["criterion"]["limit"], {"value": 155.0, "unit": "degC"})
         self.assertEqual(self.cases["R3"]["params"]["road_class"], "C")
         self.assertEqual(self.cases["T1"]["params"]["ambient_temperature"], {"value": 40.0, "unit": "degC"})
         self.assertEqual(self.cases["H1"]["criterion"]["limit"], DESIGN["variables"]["max_steer_angle"])
@@ -126,12 +131,11 @@ class BuildersTest(unittest.TestCase):
         self.assertLess(r["knee_room"], 0.0)
 
     def test_plans_predict_within_the_tolerance(self):
-        for tid, plan in PLANS.items():
-            if tid not in OURS:
-                continue
-            lc = self.cases[tid]
+        for key, lc in self.cases.items():
+            tid = lc["test_id"]
+            plan = PLANS[tid]
             self.assertEqual(plan["tool"], tool_for(tid).name)
-            got = {r["quantity"]: r for r in self.runs[tid]["results"]}
+            got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
             expected = plan.get("expected_mismatch", {}).get("quantity")
             for p in plan["predictions"]:
@@ -181,11 +185,11 @@ class BuildersTest(unittest.TestCase):
 
     def test_plans_predict_the_criterion(self):
         """The scripted run judges a load case from a prediction of its criterion's quantity."""
-        for tid, lc in self.cases.items():
+        for key, lc in self.cases.items():
             if "criterion" not in lc:
                 continue
-            self.assertIn(tid, PLANS)
-            self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in PLANS[tid]["predictions"]], tid)
+            self.assertIn(lc["test_id"], PLANS)
+            self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in PLANS[lc["test_id"]]["predictions"]], key)
 
     def test_missing_requirement_is_named(self):
         req = copy.deepcopy(REQ)
@@ -207,6 +211,34 @@ class BuildersTest(unittest.TestCase):
         p = PLANS["T1"]["predictions"][0]
         hand = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, DESIGN, lc, {}) for k, ref in p["inputs"].items()})
         self.assertAlmostEqual(hand["outputs"][p["output"]]["value"], lc["criterion"]["limit"]["value"] + 5.0, places=6)
+
+    def test_t2_judges_the_motor_and_the_controller(self):
+        """T2 (モーター・制御器の温度): one load case per part, each with that part's temperature and limit."""
+        t2 = sorted(k for k in self.cases if k.startswith("T2"))
+        self.assertEqual(t2, ["T2-40C-controller", "T2-40C-motor"])
+        for part, ja, other in (("motor", "モーター", "制御器"), ("controller", "制御器", "モーター")):
+            lc = self.cases[f"T2-40C-{part}"]
+            self.assertEqual((lc["test_id"], lc["criterion"]["quantity"]), ("T2", f"temp_{part}_max"))
+            self.assertEqual(lc["criterion"]["limit"], DESIGN["variables"][f"{part}_max_temperature"])
+            self.assertIn(f"{part}_max_temperature", lc["criterion"]["basis"])
+            self.assertIn(f"{ja}の温度", lc["title"])
+            self.assertNotIn(other, lc["title"])
+        self.assertEqual([p["quantity"] for p in PLANS["T2"]["predictions"]],
+                         ["temp_motor_max", "temp_controller_max", "drive_time"])
+
+    def test_t2_past_the_limit(self):
+        """Past the limit: one case per part at the ambient where the hand calculation puts that part 5 K over."""
+        got = BUILDERS["T2"](dict(spec("T2"), variant="beyond"), REQ, DESIGN)
+        self.assertEqual([lc["load_case_id"].rsplit("-", 2)[1:] for lc in got], [["motor", "beyond"], ["controller", "beyond"]])
+        for lc, (quantity, output) in zip(got, (("temp_motor_max", "T_motor"), ("temp_controller_max", "T_controller"))):
+            contract.validate("load_case", lc)
+            self.assertTrue(lc["title"].startswith("限界の外"))
+            self.assertEqual(lc["criterion"]["quantity"], quantity)
+            rec = tool_for("T2").run(DESIGN, lc, PRED, {})
+            self.assertGreater({r["quantity"]: r["value"] for r in rec["results"]}[quantity], lc["criterion"]["limit"]["value"])
+            p = next(p for p in PLANS["T2"]["predictions"] if p["output"] == output)
+            hand = FORMULAS.evaluate(p["formula_id"], {k: resolve(ref, DESIGN, lc, {}) for k, ref in p["inputs"].items()})
+            self.assertAlmostEqual(hand["outputs"][output]["value"], lc["criterion"]["limit"]["value"] + 5.0, places=6)
 
     def test_climb_limit(self):
         out = lambda h: {k: v["value"] for k, v in FORMULAS.evaluate(  # noqa: E731

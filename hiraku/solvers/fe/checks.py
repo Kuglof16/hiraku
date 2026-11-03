@@ -276,7 +276,8 @@ def _design(nodes: dict, members: list, sections: dict) -> dict:
 
 
 def rect_t_joint(size: float = 10.0, tied: bool = True, L: float = 400.0, Lb: float = 300.0,
-                 host=(40.0, 80.0, 2.3), branch=(30.0, 30.0, 2.0), P=(0.0, 0.0, -1000.0), radius: float = 60.0) -> dict:
+                 host=(40.0, 80.0, 2.3), branch=(30.0, 30.0, 2.0), P=(0.0, 0.0, -1000.0), radius: float = 60.0,
+                 off_corner_mm: float = 10.0) -> dict:
     """A rect tube along x (b x h x t: b across in y, h vertical) clamped at both ends (all DOFs of the end
     rings) with a square branch along +y at mid-length; load P at a node on the branch axis at its tip, tied
     to the tip ring by a rigid link.
@@ -285,7 +286,15 @@ def rect_t_joint(size: float = 10.0, tied: bool = True, L: float = 400.0, Lb: fl
     tied=True: the two tubes meshed apart (k1_shell.build_mesh of each alone; the host has no grid lines
     through the branch) and the branch's end ring tied to the host's wall faces.
     Returns the tip displacement and the largest von Mises (outer or inner surface) of the elements whose
-    centres are within `radius` of the point where the branch axis meets the host wall."""
+    centres are within `radius` of the point where the branch axis meets the host wall (vm_max_near_joint),
+    the distance of that element's centre from the branch's footprint on the host wall (d_foot_of_max; inf
+    when it is not on that wall), and the largest von Mises of the host wall's elements whose centres are at
+    least `off_corner_mm` from the footprint (vm_max_off_corner).
+
+    The footprint's corners are singular (a square tube ending on a wall), so vm_max_near_joint grows with
+    every refinement there and depends on how fine the elements at the corner are (k1_shell.build_mesh's weld
+    strips cut them to t x t on the shared mesh only); vm_max_off_corner is the value to compare between
+    meshes."""
     from ..k1_shell.mesh import build_mesh
     from ..k1_shell.solve import ShellModel
     from .connect import rigid_link, tie
@@ -330,13 +339,24 @@ def rect_t_joint(size: float = 10.0, tied: bool = True, L: float = 400.0, Lb: fl
     F = np.zeros((len(model.nodes), 6))
     F[tip, :3] = P
     sol = StaticSolver(model).solve(F)
-    vm = []
-    for g in groups:
+    vm, cen, on_host = [], [], []
+    for k, g in enumerate(groups):
         st = shell_stresses(sol, g)
         near = np.linalg.norm(st.centres - joint, axis=1) <= radius
         vm.append(st.von_mises("max")[near])
-    vm = np.concatenate(vm)
+        cen.append(st.centres[near])
+        host_el = np.isin(ms.element_member, ["h1", "h2"]) if not tied else np.full(len(st.centres), k == 0)
+        on_host.append(host_el[near])
+    vm, cen, on_host = np.concatenate(vm), np.concatenate(cen), np.concatenate(on_host)
+    # distance of each element centre from the branch's footprint (its mid-surface rectangle) in the host wall
+    # it stands on (x along the host, z up); only elements of that wall have one
+    on_wall = on_host & (np.abs(cen[:, 1] - wall) < th / 2.0)
+    dx = np.maximum(np.abs(cen[:, 0] - L / 2) - (bb - tb) / 2.0, 0.0)
+    dz = np.maximum(np.abs(cen[:, 2]) - (hb - tb) / 2.0, 0.0)
+    d_foot = np.where(on_wall, np.hypot(dx, dz), np.inf)
+    off = on_wall & (d_foot >= off_corner_mm)
     return {"tip": sol.displacements[tip, :3].copy(), "vm_max_near_joint": float(vm.max()),
+            "vm_max_off_corner": float(vm[off].max()), "d_foot_of_max": float(d_foot[np.argmax(vm)]),
             "n_nodes": len(model.nodes), "equilibrium": equilibrium(sol)["residual"], "model": model}
 
 

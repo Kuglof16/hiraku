@@ -16,12 +16,13 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any
 
-from hiraku.designgen import care_bed, ladder_4w
+from hiraku.designgen import care_bed, ladder_4w, space_frame_utv
 from hiraku.designgen.ladder_4w import DesignGenError
 
 Record = dict[str, Any]
 GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w, "care-bed": care_bed}  # by product
-ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w, "care_bed": care_bed}  # by kind of design
+ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w, "care_bed": care_bed,
+                                     "space_frame_utv": space_frame_utv}  # by kind of design
 # requirement keys that set variables of the design (key -> (variable, unit)); a generator with its own
 # requirement_values(requirements) (care_bed: Q33 and Q40 in N) takes its variables from that instead
 FROM_REQUIREMENTS = {"Q33": ("occupant_mass", "kg"), "Q40": ("cargo_mass", "kg"), "Q50": ("max_speed", "km/h")}
@@ -40,7 +41,7 @@ def generator(product: str) -> ModuleType:
 def generator_of(design: Record) -> ModuleType:
     """The generator that made a design: the one whose signature variables the design carries."""
     have = set(design.get("variables", {}))
-    for gen in GENERATORS.values():
+    for gen in list(GENERATORS.values()) + [g for g in ARCHETYPES.values() if g not in GENERATORS.values()]:
         if set(gen.SIGNATURE) <= have:
             return gen
     raise DesignGenError("this design was not built from variables here: its variables match no design generator")
@@ -128,4 +129,4 @@ def propose(archetype: str, choices: dict, values: dict, requirements: Record) -
 
 __all__ = ["ARCHETYPES", "GENERATORS", "DesignGenError", "archetypes", "care_bed", "generator", "generator_of", "ladder_4w",
            "propose",
-           "regenerate", "variables"]
+           "regenerate", "space_frame_utv", "variables"]
