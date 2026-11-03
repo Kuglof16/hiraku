@@ -2,31 +2,14 @@
 # changed). The "answer file" form of N14: key -> {value, unit?, trust?, basis?}. trust defaults to 1
 # (the person's own statement) and basis to "answered in the hearing".
 # Q03 (use), Q20 (IP) and Q91 (hours) are left unanswered on purpose: they stay open in the hearing.
+# A key the requirements file already has is not asked, so it is not answered here.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
 # been read again for this repository.
 answers:
-  Q11:
-    value: 砂利
-    trust: 1
-    basis: >-
-      林道規程 (林野庁): 林道の支線・分線は砂利が基本,
-      https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf
-      (not checked in this repository)
-    note: 摩擦係数は公開の値が見つからず、不利な側を置く (仮定)
-  Q14:
-    value: 15
-    unit: deg
-    trust: 3
-    basis: assumption (no source)
   Q34:
     value: いない
     trust: 3
     basis: assumption (a sample answer)
-  Q51:
-    value: 6
-    unit: s
-    trust: 3
-    basis: assumption (0 to 40 km/h in 6 s; no source)
   Q64:
     value: あり
     trust: 1

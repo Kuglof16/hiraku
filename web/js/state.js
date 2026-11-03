@@ -19,7 +19,7 @@ import {
   ruleOf,
 } from "./labels.js";
 
-const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts"];
+const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
 
 export function initialState() {
   const s = {
@@ -278,6 +278,17 @@ export function applyEvent(s, ev) {
       if (agent) agent.status = `版 ${v}`;
       log(s, ev, "info", `${who(ev)}: 版 ${v} を作った${d.change_reason ? ` (${d.change_reason})` : ""}`);
       setActivity(s, ev, `版 ${v} の設計を作った`);
+      break;
+    }
+    case "mesh.created": {
+      // A shell mesh of one design version's frame; fields name it by mesh_id.
+      put(s, "meshes", d.mesh_id, d, ev);
+      const els = d.elements ?? [];
+      const quads = els.filter((e) => e.length === 4).length;
+      const size = d.element_size_mm ? `・要素の大きさ ${fmt(d.element_size_mm, 3)} mm` : "";
+      const txt = `版 ${d.design_version} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length} (四角 ${quads}・三角 ${els.length - quads})${size}`;
+      logRecord(s, ev, d.mesh_id, "info", `${who(ev)}: ${txt}`);
+      setActivity(s, ev, txt);
       break;
     }
     case "prediction.recorded": {

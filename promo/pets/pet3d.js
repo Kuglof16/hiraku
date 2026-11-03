@@ -6,19 +6,30 @@
 //   const pet = window.HirakuPets.create(THREE, { role: "cae.crash" });
 //   scene.add(pet.group);
 //   pet.update(t, "idle", camera);   // pose depends only on t and the state
+//   pet.contour(t, "working");       // { load, loadCase, max, min } for a legend
 //
-// Body: a round finite-element style mesh. An icosphere is welded into nodes
-// and triangle elements, every node except the top one is moved a little with
-// a seeded random generator (same seed -> same body every time), and the
-// surface is shaded with a banded stress contour (5 steps, blue to red)
-// computed per node and interpolated across the elements. Element edges are
-// drawn in the fragment shader from barycentric coordinates (constant width
-// in screen pixels), nodes are small instanced spheres, and an inverted hull
-// gives the ink outline.
+// Body: a low-poly finite-element style mesh. An icosphere (coarse: 1
+// subdivision, 42 nodes / 80 elements; fine: 2 subdivisions, 92 / 180) is
+// welded into nodes and triangle elements, every node except the top one is
+// moved a little with a seeded random generator (same seed -> same body every
+// time), and every element is shaded with its own face normal (flat facets).
 //
-// Colours: stress steps --s1..--s5, the CAE domain colours --d-*, --paper,
-// --night, --pass, --miss and --ink-* come from promo/screens/common.css;
-// lead / designer / packager colours come from PET_COLORS in web/js/app.js.
+// Contour: a nodal "relative stress" computed from the loads on the pet
+// (body weight carried by the two leg roots, the prop weight as a moment at
+// the right arm root, the left arm's own weight, and a self-weight membrane
+// term that is zero at the top). Each load is applied at the node nearest its
+// root and decays with distance. The values are normalised so that the
+// largest nodal value of the settled load case is 1.0. The fragment shader
+// interpolates the nodal value linearly inside each triangle and cuts it into
+// BANDS steps, so band borders (iso-lines) run across the elements, as in the
+// banded contour plots of a CAE post-processor. This is a toy model to place
+// the colours by where the forces act; it is not a solved field.
+//
+// Colours: the contour bands (BANDS = 10, STOPS blue -> red) are the same as
+// web/js/colormap.js; the CAE domain colours --d-*, --paper, --night,
+// --pass, --miss, --s4/--s5 (props) and --ink-* come from
+// promo/screens/common.css; lead / designer / packager colours come from
+// PET_COLORS in web/js/app.js.
 
 (function () {
   "use strict";
@@ -52,13 +63,57 @@
   const STATES = ["idle", "report", "pass", "mismatch", "working"];
 
   // icosphere subdivision per mesh level (three.js IcosahedronGeometry detail)
-  const DETAIL = { coarse: 2, fine: 4 };
+  const DETAIL = { coarse: 1, fine: 2 };
 
   // Layout in pet units (ground at y = 0, body centre at y = BODY_Y).
   const BODY_Y = 1.22;
   const SHAPE = { sx: 1.0, sy: 0.93, sz: 0.9, egg: 0.07 };
   // Box the viewer frames: covers feet, prop and the marks above the head.
-  const FRAME = { cx: 0.34, cy: 1.78, w: 3.6, h: 3.75 };
+  const FRAME = { cx: 0.32, cy: 1.87, w: 3.6, h: 4.0 };
+
+  // ---- contour colours: same values as web/js/colormap.js ------------------
+  const BANDS = 10;
+  const STOPS = ["#2b59c3", "#2fa7d6", "#4cbf7a", "#e8c547", "#e9893a", "#c8402a"];
+
+  function hexToRgb(h) {
+    const n = parseInt(h.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(c) {
+    return "#" + c.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
+  }
+  function lerpStops(u) {
+    const x = Math.max(0, Math.min(1, u)) * (STOPS.length - 1);
+    const i = Math.min(STOPS.length - 2, Math.floor(x));
+    const f = x - i;
+    const a = hexToRgb(STOPS[i]);
+    const b = hexToRgb(STOPS[i + 1]);
+    return rgbToHex(a.map((v, k) => v + (b[k] - v) * f));
+  }
+  const BAND_COLORS = Array.from({ length: BANDS }, (_, i) => lerpStops((i + 0.5) / BANDS));
+
+  // ---- loads (relative units, toy model) -----------------------------------
+  const LOAD = {
+    bodyWeight: 1.0,   // carried half by each leg root (settled case)
+    armWeight: 0.06,   // the empty left arm
+    spread: 0.45,      // decay length of a root concentration (pet units)
+    lever: 0.11,       // arm root amplitude = weight * arm length / lever
+    membrane: 0.12,    // self-weight membrane term, zero at the top
+    kt: 4.0,           // mismatch: whole weight on the left leg, notch factor kt
+  };
+  // weight of each prop held in the right hand
+  const PROP_MASS = {
+    clipboard: 0.3, pencil: 0.24, spanner: 0.34, wheel: 0.4, battery: 0.48,
+    windsock: 0.3, target: 0.36, ibeam: 0.5, fork: 0.26, thermometer: 0.24,
+  };
+
+  // Load factor over time: the working state steps the load up in 10
+  // increments (0 -> 1 in 3.2 s), holds it, and starts again every 4.4 s.
+  function loadFactor(t, state) {
+    if (state !== "working") return 1;
+    const k = Math.floor((((t % 4.4) + 4.4) % 4.4) / 0.32);
+    return Math.min(1, k / 10);
+  }
 
   // ---- deterministic helpers -------------------------------------------
 
@@ -91,20 +146,50 @@
     return new THREE.Vector3(d.x * SHAPE.sx * k, d.y * SHAPE.sy, d.z * SHAPE.sz * k);
   }
 
-  // Stress value in [0, 1] at a body direction: hot spots where the legs,
-  // the arm and the antenna attach, low over the top and the back.
-  function stressAt(d) {
-    const g = (x, y, z, s) => {
-      const n = Math.hypot(x, y, z);
-      const dx = d.x - x / n, dy = d.y - y / n, dz = d.z - z / n;
-      return Math.exp(-(dx * dx + dy * dy + dz * dz) / s);
+  // Raw nodal stress at body point p for a list of loads
+  // [{ at: Vector3 (a node), amp }]. Each root load decays as a point load on
+  // a shell, amp / (1 + (d / spread)^2)^1.5. The membrane term is the weight
+  // of the shell above a horizontal cut over the cut length,
+  // sqrt((1 - y) / (1 + y)), taken constant below the leg roots (yLow).
+  function rawStress(p, loads, yLow) {
+    const y = clamp(p.y / SHAPE.sy, yLow, 1);
+    let v = LOAD.membrane * Math.sqrt((1 - y) / (1 + y));
+    for (const L of loads) {
+      const q = p.distanceTo(L.at) / LOAD.spread;
+      v += L.amp / Math.pow(1 + q * q, 1.5);
+    }
+    return v;
+  }
+
+  // Nodal fields for the settled case and the mismatch case. `roots` are the
+  // limb roots in body coordinates; each load goes to the nearest node.
+  function stressFields(pts, roots, propMass) {
+    const nearest = (r) => pts.reduce((b, p) => (p.distanceTo(r) < b.distanceTo(r) ? p : b), pts[0]);
+    const at = {};
+    for (const k of Object.keys(roots)) at[k] = nearest(roots[k]);
+    const armR = (propMass * roots.armLenR) / LOAD.lever;
+    const armL = (LOAD.armWeight * roots.armLenL) / LOAD.lever;
+    const settled = [
+      { name: "legL", at: at.legL, amp: LOAD.bodyWeight / 2 },
+      { name: "legR", at: at.legR, amp: LOAD.bodyWeight / 2 },
+      { name: "armR", at: at.armR, amp: armR },
+      { name: "armL", at: at.armL, amp: armL },
+    ];
+    const mismatch = [
+      { name: "legL", at: at.legL, amp: LOAD.bodyWeight * LOAD.kt },
+      { name: "armR", at: at.armR, amp: armR },
+      { name: "armL", at: at.armL, amp: armL },
+    ];
+    const yLow = roots.legL.y / SHAPE.sy;
+    const a = pts.map((p) => rawStress(p, settled, yLow));
+    const b = pts.map((p) => rawStress(p, mismatch, yLow));
+    const ref = Math.max(...a);
+    return {
+      settled: a.map((v) => v / ref),
+      mismatch: b.map((v) => v / ref),
+      loads: settled.map((L) => ({ name: L.name, node: pts.indexOf(L.at), amp: L.amp / ref })),
+      mismatchLoads: mismatch.map((L) => ({ name: L.name, node: pts.indexOf(L.at), amp: L.amp / ref })),
     };
-    let v = 0.45 - 0.36 * d.y;
-    v += 0.4 * (g(0.36, -0.9, 0.14, 0.12) + g(-0.36, -0.9, 0.14, 0.12));
-    v += 0.3 * g(0.9, -0.25, 0.28, 0.08);
-    v += 0.3 * g(0, 1, 0, 0.04);
-    v += 0.06 * Math.sin(4.1 * d.x + 1.3) * Math.cos(3.2 * d.z - 0.5);
-    return clamp(v, 0, 1);
   }
 
   // Weld a non-indexed geometry into nodes + triangles.
@@ -160,20 +245,22 @@
     const m = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0 });
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
+      // nodal value per vertex; the varying is interpolated linearly inside
+      // each triangle, then cut into BANDS steps per fragment
       sh.vertexShader =
-        "attribute float aStress;\nattribute vec3 aBary;\nvarying float vStress;\nvarying vec3 vBary;\n" +
+        "attribute float aSettled;\nattribute float aMismatch;\nattribute vec3 aBary;\n" +
+        "uniform float uLoad;\nuniform float uMis;\nvarying float vStress;\nvarying vec3 vBary;\n" +
         sh.vertexShader.replace(
           "#include <begin_vertex>",
-          "#include <begin_vertex>\n  vStress = aStress;\n  vBary = aBary;"
+          "#include <begin_vertex>\n  vStress = mix(uLoad * aSettled, aMismatch, uMis);\n  vBary = aBary;"
         );
       sh.fragmentShader =
         [
-          "uniform vec3 uPal[5];",
+          `uniform vec3 uPal[${BANDS}];`,
           "uniform vec3 uInk;",
           "uniform vec3 uRimColor;",
           "uniform float uRim;",
-          "uniform float uPhase;",
-          "uniform float uFlow;",
+          "uniform float uSelf;",
           "uniform float uLinePx;",
           "uniform float uEdges;",
           "varying float vStress;",
@@ -183,16 +270,13 @@
           .replace(
             "#include <color_fragment>",
             `#include <color_fragment>
-  float hkS = vStress;
-  float hkX = hkS + uPhase;
-  float hkFlow = 1.0 - abs(mod(hkX, 2.0) - 1.0);
-  hkS = mix(hkS, hkFlow, uFlow);
-  float hkB = clamp(hkS, 0.0, 0.9999) * 5.0;
+  float hkB = clamp(vStress, 0.0, 0.99999) * ${BANDS}.0;
   int hkI = int(floor(hkB));
-  int hkJ = min(hkI + 1, 4);
+  int hkJ = min(hkI + 1, ${BANDS - 1});
   float hkW = fwidth(hkB);
   float hkT = smoothstep(1.0 - hkW, 1.0, fract(hkB));
-  diffuseColor.rgb = mix(uPal[hkI], uPal[hkJ], hkI < 4 ? hkT : 0.0);
+  diffuseColor.rgb = mix(uPal[hkI], uPal[hkJ], hkI < ${BANDS - 1} ? hkT : 0.0);
+  vec3 hkBand = diffuseColor.rgb;
   vec3 hkD = vBary / max(fwidth(vBary), vec3(1e-5));
   float hkM = min(min(hkD.x, hkD.y), hkD.z);
   float hkLine = (1.0 - smoothstep(uLinePx * 0.5 - 0.6, uLinePx * 0.5 + 0.6, hkM)) * uEdges;
@@ -202,6 +286,8 @@
             "#include <opaque_fragment>",
             `float hkFr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
   outgoingLight += uRimColor * uRim * hkFr * (1.0 - hkLine);
+  // keep the band colour close to the legend: part lit, part flat colour
+  outgoingLight = mix(outgoingLight, hkBand, uSelf * (1.0 - hkLine));
   #include <opaque_fragment>`
           );
     };
@@ -210,7 +296,7 @@
 
   // ---- builders -----------------------------------------------------------
 
-  function buildBody(THREE, opts, seed, U) {
+  function buildBody(THREE, opts, seed, U, roots, propMass) {
     const detail = DETAIL[opts.mesh] ?? DETAIL.coarse;
     const ico = new THREE.IcosahedronGeometry(1, detail);
     // put one vertex of the icosahedron on +y so the antenna grows from a node
@@ -221,36 +307,36 @@
     // edge length of the subdivided icosahedron on the unit sphere
     const edge = 1.0515 / (detail + 1);
     const rnd = mulberry32(seed);
-    const dirs = [];
     const pts = [];
     for (const n of w.nodes) {
       const d = new THREE.Vector3(n[0], n[1], n[2]).normalize();
-      dirs.push(d.clone());
       if (d.y > 0.9999) {
         pts.push(shapePoint(THREE, d));
         continue;
       }
       const r = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1);
-      r.addScaledVector(d, -r.dot(d)).multiplyScalar(0.2 * edge);
-      const radial = 1 + (rnd() - 0.5) * 0.035;
+      r.addScaledVector(d, -r.dot(d)).multiplyScalar(0.16 * edge);
+      const radial = 1 + (rnd() - 0.5) * 0.03;
       const dj = d.clone().add(r).normalize();
       pts.push(shapePoint(THREE, dj).multiplyScalar(radial));
     }
-    const stress = dirs.map(stressAt);
+    const field = stressFields(pts, roots, propMass);
 
-    // indexed, smooth normals: used for the hull and for soft shading
+    // indexed, smooth normals: used for the outline hull and the node dots
     const smooth = new THREE.BufferGeometry();
     smooth.setAttribute("position", new THREE.Float32BufferAttribute(pts.flatMap((p) => [p.x, p.y, p.z]), 3));
     smooth.setIndex(w.tris.flat());
     smooth.computeVertexNormals();
     const sn = smooth.attributes.normal;
 
-    // non-indexed faces with barycentrics, stress and slightly faceted normals
+    // non-indexed faces: one face normal per element (flat facets),
+    // barycentrics for the edge lines, and the two nodal fields
     const nTri = w.tris.length;
     const pos = new Float32Array(nTri * 9);
     const nor = new Float32Array(nTri * 9);
     const bar = new Float32Array(nTri * 9);
-    const str = new Float32Array(nTri * 3);
+    const fs = new Float32Array(nTri * 3);
+    const fm = new Float32Array(nTri * 3);
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3();
     const v = new THREE.Vector3();
     w.tris.forEach((tri, i) => {
@@ -260,17 +346,32 @@
         const id = tri[k];
         const p = pts[id];
         pos.set([p.x, p.y, p.z], i * 9 + k * 3);
-        v.set(sn.getX(id), sn.getY(id), sn.getZ(id)).lerp(fn, 0.3).normalize();
-        nor.set([v.x, v.y, v.z], i * 9 + k * 3);
+        nor.set([fn.x, fn.y, fn.z], i * 9 + k * 3);
         bar.set([k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0], i * 9 + k * 3);
-        str[i * 3 + k] = stress[id];
+        fs[i * 3 + k] = field.settled[id];
+        fm[i * 3 + k] = field.mismatch[id];
       }
     });
     const faces = new THREE.BufferGeometry();
     faces.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     faces.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
     faces.setAttribute("aBary", new THREE.BufferAttribute(bar, 3));
-    faces.setAttribute("aStress", new THREE.BufferAttribute(str, 1));
+    faces.setAttribute("aSettled", new THREE.BufferAttribute(fs, 1));
+    faces.setAttribute("aMismatch", new THREE.BufferAttribute(fm, 1));
+
+    // point on the faceted surface along a direction from the centre
+    const ray = new THREE.Ray();
+    function surface(dir) {
+      ray.set(new THREE.Vector3(), dir.clone().normalize());
+      const hit = new THREE.Vector3();
+      for (const tri of w.tris) {
+        if (ray.intersectTriangle(pts[tri[0]], pts[tri[1]], pts[tri[2]], false, hit)) {
+          const n = new THREE.Vector3().subVectors(pts[tri[2]], pts[tri[1]]).cross(new THREE.Vector3().subVectors(pts[tri[0]], pts[tri[1]])).normalize();
+          return { point: hit, normal: n };
+        }
+      }
+      return { point: shapePoint(THREE, dir.clone().normalize()), normal: dir.clone().normalize() };
+    }
 
     const group = new THREE.Group();
     const body = new THREE.Mesh(faces, bodyMaterial(THREE, U));
@@ -280,7 +381,7 @@
     const hull = new THREE.Mesh(smooth, null);
     group.add(hull);
 
-    const dotR = opts.mesh === "fine" ? 0.022 : 0.03;
+    const dotR = opts.mesh === "fine" ? 0.028 : 0.034;
     const dotGeom = new THREE.SphereGeometry(dotR, 8, 6);
     const nodes = new THREE.InstancedMesh(dotGeom, null, pts.length);
     const m4 = new THREE.Matrix4();
@@ -292,7 +393,11 @@
     group.add(nodes);
 
     const top = pts.reduce((best, p) => (p.y > best.y ? p : best), pts[0]);
-    return { group, body, hull, nodes, top: top.clone(), counts: { nodes: pts.length, elements: nTri } };
+    return {
+      group, body, hull, nodes, surface, top: top.clone(),
+      counts: { nodes: pts.length, elements: nTri },
+      field: { nodes: pts.map((p) => [p.x, p.y, p.z]), settled: field.settled, mismatch: field.mismatch, loads: field.loads, mismatchLoads: field.mismatchLoads },
+    };
   }
 
   function addHull(THREE, mesh, width, hulls) {
@@ -306,9 +411,9 @@
     return h;
   }
 
-  function capsuleBetween(THREE, p0, p1, r, mat) {
+  function capsuleBetween(THREE, p0, p1, r, mat, capSegs, radial) {
     const len = p0.distanceTo(p1);
-    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), mat);
+    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, capSegs ?? 4, radial ?? 10), mat);
     m.position.copy(p0).add(p1).multiplyScalar(0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p1.clone().sub(p0).normalize());
     return m;
@@ -576,12 +681,13 @@
     const seed = hashString(role.id);
 
     const U = {
-      uPal: { value: C.s.map((h) => new THREE.Color(h)) },
+      uPal: { value: BAND_COLORS.map((h) => new THREE.Color(h)) },
       uInk: { value: new THREE.Color(C.ink) },
       uRimColor: { value: new THREE.Color(C.glow) },
-      uRim: { value: 0.35 },
-      uPhase: { value: 0 },
-      uFlow: { value: 0 },
+      uRim: { value: 0.2 },
+      uSelf: { value: 0.5 },
+      uLoad: { value: 1 },
+      uMis: { value: 0 },
       uLinePx: { value: 1.5 },
       uEdges: { value: opts.edges ? 1 : 0 },
     };
@@ -594,7 +700,7 @@
       paperDouble: new THREE.MeshStandardMaterial({ color: C.paper, roughness: 0.7, side: THREE.DoubleSide }),
       metal: std(THREE, 0xc9c5bb, 0.32, 0.55),
       white: std(THREE, 0xffffff, 0.3),
-      limb: std(THREE, C.ink, 0.55),
+      limb: new THREE.MeshStandardMaterial({ color: C.ink, roughness: 0.55, flatShading: true }),
     };
     const hulls = [];
     const live = {};
@@ -613,7 +719,25 @@
     core.position.y = BODY_Y - PIVOT_Y;
     torso.add(core);
 
-    const B = buildBody(THREE, opts, seed, U);
+    // limb roots in body coordinates (centre of the body at the origin);
+    // the loads of the contour act here
+    const legTop = (sx) => new THREE.Vector3(sx * 0.34, PIVOT_Y + 0.22, 0.05);
+    const toBody = (p) => p.clone().sub(new THREE.Vector3(0, BODY_Y, 0));
+    const shoulderR = shapePoint(THREE, new THREE.Vector3(0.9, -0.28, 0.3).normalize()).multiplyScalar(0.95);
+    const handR = new THREE.Vector3(1.2, -0.52, 0.36);
+    const shoulderL = shapePoint(THREE, new THREE.Vector3(-0.92, -0.3, 0.25).normalize()).multiplyScalar(0.95);
+    const handL = new THREE.Vector3(-1.1, -0.6, 0.28);
+    // "R" is the prop side (+x) and "L" the other side (-x), as for the arms
+    const roots = {
+      legL: shapePoint(THREE, toBody(legTop(-1)).normalize()),
+      legR: shapePoint(THREE, toBody(legTop(1)).normalize()),
+      armR: shoulderR.clone(),
+      armL: shoulderL.clone(),
+      armLenR: shoulderR.distanceTo(handR),
+      armLenL: shoulderL.distanceTo(handL),
+    };
+
+    const B = buildBody(THREE, opts, seed, U, roots, PROP_MASS[role.prop] ?? 0.3);
     core.add(B.group);
     B.hull.userData.hullWidth = 0.035;
     hulls.push(B.hull);
@@ -624,12 +748,12 @@
     const legs = new THREE.Group();
     hop.add(legs);
     for (const sx of [-1, 1]) {
-      const top = new THREE.Vector3(sx * 0.34, PIVOT_Y + 0.22, 0.05);
+      const top = legTop(sx);
       const bot = new THREE.Vector3(sx * 0.36, 0.08, 0.06);
-      const leg = capsuleBetween(THREE, bot, top, 0.075, M.limb);
+      const leg = capsuleBetween(THREE, bot, top, 0.075, M.limb, 2, 6);
       leg.castShadow = true;
       legs.add(leg);
-      const foot = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), M.limb);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), M.limb);
       foot.scale.set(0.14, 0.075, 0.19);
       foot.position.set(sx * 0.37, 0.075, 0.1);
       foot.castShadow = true;
@@ -641,9 +765,12 @@
     for (const sx of [-1, 1]) {
       const d = new THREE.Vector3(sx * 0.28, 0.17, 0.95).normalize();
       const p = shapePoint(THREE, d);
+      // sit the eye on the flat element it lands on, half turned to that facet
+      const s = B.surface(p);
       const nrm = new THREE.Vector3(p.x / (SHAPE.sx * SHAPE.sx), p.y / (SHAPE.sy * SHAPE.sy), p.z / (SHAPE.sz * SHAPE.sz)).normalize();
+      nrm.lerp(s.normal, 0.5).normalize();
       const eye = new THREE.Group();
-      eye.position.copy(p).addScaledVector(nrm, 0.02);
+      eye.position.copy(s.point).addScaledVector(nrm, 0.02);
       eye.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nrm);
       core.add(eye);
       const lid = new THREE.Group();
@@ -675,29 +802,25 @@
     const curve = new THREE.QuadraticBezierCurve3(
       new THREE.Vector3(0, -0.04, 0), new THREE.Vector3(-0.03, 0.3, 0), new THREE.Vector3(0.1, 0.56, 0)
     );
-    const stalk = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.028, 8, false), M.limb);
+    const stalk = new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.028, 6, false), M.limb);
     stalk.castShadow = true;
     antenna.add(stalk);
-    const tipMat = new THREE.MeshStandardMaterial({ color: role.color, roughness: 0.3, emissive: new THREE.Color(role.color), emissiveIntensity: 0 });
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.145, 28, 18), tipMat);
+    const tipMat = new THREE.MeshStandardMaterial({ color: role.color, roughness: 0.3, flatShading: true, emissive: new THREE.Color(role.color), emissiveIntensity: 0 });
+    const tip = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 1), tipMat);
     tip.position.set(0.1, 0.66, 0);
     tip.castShadow = true;
     antenna.add(tip);
     addHull(THREE, tip, 0.03, hulls);
 
-    // arm on +x (the pet's right hand) holding the prop low, and a short left arm
-    const shoulderR = shapePoint(THREE, new THREE.Vector3(0.9, -0.28, 0.3).normalize()).multiplyScalar(0.95);
-    const handR = new THREE.Vector3(1.2, -0.52, 0.36);
-    const armR = capsuleBetween(THREE, shoulderR, handR, 0.06, M.limb);
+    // arm on +x (the prop hand) holding the prop low, and a short arm on -x
+    const armR = capsuleBetween(THREE, shoulderR, handR, 0.06, M.limb, 2, 6);
     armR.castShadow = true;
     core.add(armR);
-    const shoulderL = shapePoint(THREE, new THREE.Vector3(-0.92, -0.3, 0.25).normalize()).multiplyScalar(0.95);
-    const handL = new THREE.Vector3(-1.1, -0.6, 0.28);
-    const armL = capsuleBetween(THREE, shoulderL, handL, 0.06, M.limb);
+    const armL = capsuleBetween(THREE, shoulderL, handL, 0.06, M.limb, 2, 6);
     armL.castShadow = true;
     core.add(armL);
     for (const p of [handR, handL]) {
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 12), M.limb);
+      const hand = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, 1), M.limb);
       hand.position.copy(p);
       core.add(hand);
     }
@@ -706,12 +829,17 @@
     prop.scale.multiplyScalar(1.25);
     core.add(prop);
 
-    // marks above the head (billboarded in update when a camera is given)
+    // marks above the head, clear of the antenna tip (top of the tip is at
+    // about BODY_Y + 1.73; the badge radius is 0.24 after scaling)
+    // billboarded in update when a camera is given
+    const MARK_Y = BODY_Y + 2.1;
     const marks = new THREE.Group();
-    marks.position.set(0.05, BODY_Y + 1.62, 0.1);
+    marks.position.set(0.3, MARK_Y, 0.1);
     root.add(marks);
     const check = buildCheck(THREE, M, hulls);
     const question = buildQuestion(THREE, M, hulls);
+    check.scale.setScalar(0.9);
+    question.scale.setScalar(0.9);
     marks.add(check, question);
 
     // contact shadow
@@ -779,13 +907,14 @@
         e.pupil.position.set(lookX - e.side * 0.008, lookY, 0);
       }
 
-      U.uFlow.value = state === "working" ? 1 : 0;
-      U.uPhase.value = state === "working" ? t * 0.55 : 0;
+      // contour: load factor (working steps it up), mismatch load case
+      U.uLoad.value = loadFactor(t, state);
+      U.uMis.value = state === "mismatch" ? 1 : 0;
       tipMat.emissiveIntensity = state === "working" ? 0.25 + 0.25 * Math.sin(TAU * t * 1.2) : 0;
 
       check.visible = state === "pass";
       question.visible = state === "mismatch";
-      marks.position.y = BODY_Y + 1.62 + 0.035 * Math.sin((TAU * t) / 1.4) + (state === "pass" ? hopY * 0.5 : 0);
+      marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * t) / 1.4) + hopY;
       marks.rotation.z = state === "mismatch" ? 0.12 * Math.sin((TAU * t) / 2.2) : 0;
       if (camera) {
         root.updateWorldMatrix(true, false);
@@ -839,10 +968,20 @@
       });
     }
 
+    // What the contour shows at (t, state): load factor, load case, and the
+    // largest nodal value (1.0 for the settled case by construction).
+    function contour(t, state) {
+      state = STATES.includes(state) ? state : "idle";
+      const load = loadFactor(t, state);
+      const mis = state === "mismatch";
+      const vals = mis ? B.field.mismatch : B.field.settled.map((v) => v * load);
+      return { load, loadCase: mis ? "mismatch" : "settled", max: Math.max(...vals), min: Math.min(...vals) };
+    }
+
     applyScale();
     update(0, "idle");
-    return { group: root, role, counts: B.counts, update, setPixelScale, setOptions, dispose };
+    return { group: root, role, counts: B.counts, field: B.field, update, contour, setPixelScale, setOptions, dispose };
   }
 
-  window.HirakuPets = { ROLES, STATES, FRAME, create };
+  window.HirakuPets = { ROLES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create };
 })();

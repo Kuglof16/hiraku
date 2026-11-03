@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hiraku import contract
-from hiraku.catalog import REPO_ROOT, read_data
+from hiraku.catalog import REPO_ROOT
+from hiraku.contract import layout
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck
 from hiraku.intake.domains import ANALYSIS_DOMAINS, IntakeError, pick_domains, reasons_missing
@@ -109,14 +110,37 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         answers = {**file_answers, **answers}
         note = note or file_note
     req = _requirements_file(ctx)
-    prepared = hearing.prepare(req, answers, note, product_defaults=_product_defaults(req["product"], req),
-                               wording=args.get("wording"), choices=args.get("choices"))
-    problems = [p for e in ev.hearing_events(prepared) if (p := _emit(ctx, e))]
+    defaults = _product_defaults(req["product"], req)
+    wording, choices = args.get("wording"), args.get("choices")
+    problems: list[str] = []
+    asked_early = False
+    wait = float(args.get("wait_seconds") or 0)
+    run_path = getattr(_store(ctx), "path", None)
+    if wait > 0 and not answers and run_path is not None:
+        # wait for a person: show the questions now (A2), then take what the screen writes into the run folder
+        plan = hearing.plan_hearing(req, product_defaults=defaults, wording=wording, choices=choices)
+        if plan.questions:
+            hearing.clear_mailbox(run_path)
+            if (p := _emit(ctx, ev.asked_event({"questions": plan.questions}))):
+                problems.append(p)
+            asked_early = True
+            hearing.write_request(run_path, {"questions": plan.questions})
+            got = hearing.wait_for_answer(run_path, wait)
+            hearing.clear_mailbox(run_path)
+            if got:
+                answers = dict(got.get("answers") or {})
+                note = note or got.get("note")
+    prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
+    to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
+    problems += [p for e in to_emit if (p := _emit(ctx, e))]
     new = prepared.answered["answers"]
     recorded_req = False
-    add = getattr(_store(ctx), "add_requirements", None)
-    if add is not None and new:
-        add(new)
+    update = getattr(_store(ctx), "update_project", None)
+    if update is not None and new:
+        # the answers and defaults join project.requirements (the same key is replaced); project.updated says so
+        merged = {r["key"]: r for r in ctx.project["requirements"]}
+        merged.update({r["key"]: r for r in new})
+        update({"requirements": [merged[k] for k in sorted(merged)]}, agent="lead", text="ヒアリングの答えを要件に入れました")
         recorded_req = True
     out: Record = {
         "text": hearing.hearing_text(prepared),
@@ -128,7 +152,7 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "recorded": not problems,
     }
     if not recorded_req and new:
-        out["requirements_to_add"] = new  # the run store has no add_requirements yet: the caller adds them
+        out["requirements_to_add"] = new  # the run store has no update_project: the caller adds them
     if problems:
         out["not_recorded"] = problems[0]
     if not prepared.ready:
@@ -187,7 +211,7 @@ def _read_dropped(ctx: Any, args: Record) -> tuple[str, str]:
     store = _store(ctx)
     if not rel or store is None:
         raise IntakeError("読むファイルを text (中身) と filename で渡すか、実行のフォルダの中の path で渡してください")
-    base = (Path(store.path) / "knowledge").resolve()
+    base = (Path(store.path) / layout.KNOWLEDGE_DIR).resolve()
     p = (Path(store.path) / rel).resolve()
     if not p.is_relative_to(base) or not p.is_file():
         raise IntakeError(f"path は実行のフォルダの knowledge/ の中のファイルだけです ({rel!r})")
@@ -209,7 +233,7 @@ def import_knowledge_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             problems.append(p)
     out: Record = {
         "doc_id": doc_id,
-        "rules": [{k: r[k] for k in ("rule_id", "category", "text", "check", "check_by")} for r in got.record["rules"]],
+        "rules": [{k: r[k] for k in ("rule_id", "category", "text", "check", "check_by") if k in r} for r in got.record["rules"]],
         "needs_formula": got.needs_formula,
         "recorded": not problems,
     }
@@ -252,7 +276,11 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     checks = rulecheck.check_all(rules, design, ctx.project["requirements"], disabled=disabled, id_factory=ids)
     if persist:
         for c in checks:
-            store.add_record("rule_check", c, design_version=version, agent="packager")
+            if ev.store_records(store, "rule_check"):  # the store writes the file and emits the event
+                store.add_record("rule_check", c, design_version=version, agent="packager")
+            elif (p := _emit(ctx, {"kind": ev.RULE_CHECK_RECORDED, "agent": "packager", "data": c}, design_version=version)):
+                problems.append(p)  # the store does not know the kind yet: the event alone (no file)
+                break
     else:
         problems.append(f"event kind {ev.RULE_CHECK_RECORDED} is not in the contract yet")
     summary = rulecheck.summarize(checks)
@@ -311,7 +339,8 @@ TOOLS: dict[str, Record] = {
             "項目の表から作る。答えが無い確認の質問は、出どころつきの既定値を使う。必須の質問は答えが無いと進めない。"
             "answers には、人が実際に言ったことだけを {要件の番号: 値 か {value, unit, basis}} で入れる (推測で埋めない)。"
             "answers_file は data/requirements/products/ の答えのファイル。質問を製品に合わせて言い換えたいときは wording "
-            "({番号: 文})、選択肢を変えたいときは choices。"
+            "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
+            "答えが来るか時間が切れるまで待つ)。"
         ),
         "input_schema": {
             "type": "object", "additionalProperties": False,
@@ -319,6 +348,8 @@ TOOLS: dict[str, Record] = {
                 "answers": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"},
                             "description": "人の答え。値か {value, unit?, trust?, basis?}"},
                 "note": {"type": "string", "description": "「ほかに伝えること」の文"},
+                "wait_seconds": {"type": "number", "minimum": 0, "maximum": 900,
+                                 "description": "答えが無いとき、画面の人の答えを最大この秒数だけ待つ。0 (既定) なら待たず、確認の質問は既定値で進む"},
                 "answers_file": {"type": "string", "description": "答えのファイル (data/requirements/products/ の中)"},
                 "wording": {"type": "object", "propertyNames": {"pattern": "^Q[0-9]{2}$"}, "additionalProperties": {"type": "string"},
                             "description": "質問の言い換え {番号: 文}"},

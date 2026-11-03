@@ -60,10 +60,11 @@ def _ramp_angle(points, wheel_x: float, r: float, ahead: bool) -> tuple[float, s
 
 def check(design: Record, loading: str = "two_cargo") -> Record:
     """Quantities of the design and the problems found (each a sentence)."""
-    from hiraku.solvers.k0_handcalc.vehicle import mass_summary, parts_on_board
+    from hiraku.contract.loading import on_board
+    from hiraku.solvers.k0_handcalc.vehicle import mass_summary
     from hiraku.solvers.k4_geometry import fit, interferences, knee_space, sweep
 
-    on = parts_on_board(design, loading)
+    on = on_board(design, loading)
     ms = mass_summary(on)
     q: Record = {"mass": _q(ms["mass_kg"], "kg"), "cg_x": _q(ms["cg_mm"][0], "mm"), "cg_y": _q(ms["cg_mm"][1], "mm"),
                  "cg_z": _q(ms["cg_mm"][2], "mm")}

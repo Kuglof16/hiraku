@@ -103,30 +103,59 @@ class SharedShape(unittest.TestCase):
     def test_n05_door(self):
         n = self.rules["n05"]
         d = n["door"]
-        # the vehicle itself opens in two halves: no door leaves, panels or handles
-        self.assertEqual(set(d) - {"_note"}, {"open_dur_s", "angle_deg", "perspective_px", "ease",
-                                              "seam_w_px", "seam_glow_w_px", "spill_dur_s"})
+        # a double door behind the vehicle: it cracks, holds, then swings wide
+        self.assertEqual(set(d) - {"_note"}, {
+            "crack_dur_s", "crack_deg", "crack_ease", "hold_dur_s", "open_dur_s", "angle_deg",
+            "perspective_px", "ease", "seam_w_px", "seam_glow_w_px", "spill_dur_s",
+            "hero_fade_dur_s", "hero_fade_scale", "panel", "handle"})
         self.assertEqual(len(d["ease"]), 4)
-        self.assertTrue(0 < d["angle_deg"] <= 180)
-        # fully open (and hidden) before the burst and the tiles fly out
-        self.assertLessEqual(n["times"]["door_open_s"] + d["open_dur_s"], n["times"]["burst_s"])
-        # the halves part on the stage's middle, where the tiles fly out of
-        self.assertEqual(n["hero"]["x"] + n["hero"]["w"] / 2, self.rules["stage"]["w"] / 2)
-        self.assertEqual(n["fly_from"]["x"], self.rules["stage"]["w"] / 2)
-        # nothing of the door is left in the check's allowances
+        self.assertEqual(len(d["crack_ease"]), 4)
+        self.assertTrue(0 < d["crack_deg"] < d["angle_deg"] <= 180)
+        self.assertGreater(d["hold_dur_s"], 0)
+        # the door stays shut a while first (later than the first two versions' 0.3 s)
+        t = n["times"]
+        self.assertGreaterEqual(t["door_open_s"], 0.5)
+        # fully open (and hidden) when the flash comes, before the tiles fly out
+        swing = t["door_open_s"] + d["crack_dur_s"] + d["hold_dur_s"]
+        self.assertAlmostEqual(swing + d["open_dur_s"], t["burst_s"], places=6)
+        self.assertLess(t["burst_s"], t["tiles_s"])
+        # the vehicle is gone (faded) by the flash, and grows on from push_scale
+        self.assertLessEqual(swing + d["hero_fade_dur_s"], t["burst_s"])
+        self.assertGreater(d["hero_fade_scale"], n["hero_motion"]["push_scale"])
+        # the panels fit inside a leaf (half the stage wide)
+        p, stage = d["panel"], self.rules["stage"]
+        self.assertLess(2 * p["inset_px"], stage["w"] / 2)
+        self.assertLess(2 * p["inset_px"] + p["upper_h_px"] + p["gap_px"], stage["h"])
+        # the door parts on the stage's middle, where the tiles fly out of
+        self.assertEqual(n["hero"]["x"] + n["hero"]["w"] / 2, stage["w"] / 2)
+        self.assertEqual(n["fly_from"]["x"], stage["w"] / 2)
+        # the door covers the subtitle band, and the vehicle stands over it
         chk = self.rules["check"]
-        self.assertNotIn(".door", [e["selector"] for e in chk["band_exempt"]])
-        self.assertFalse([r for r in chk["allow_overlap"] if "door" in r["a"] + r["b"]])
-        # the check looks at the opening (between door_open_s and burst_s)
-        t0, t1 = n["times"]["door_open_s"], n["times"]["door_open_s"] + d["open_dur_s"]
-        self.assertTrue([t for t in chk["times"]["n05"] if t0 < t < t1])
+        self.assertIn(".door", [e["selector"] for e in chk["band_exempt"]])
+        self.assertTrue([r for r in chk["allow_overlap"]
+                         if r["cut"] == "n05" and {r["a"], r["b"]} == {"n05.door", "n05.hero"}])
+        # the check looks at the door shut, opening, and open
+        at = chk["times"]["n05"]
+        self.assertTrue([x for x in at if x < t["door_open_s"]])
+        self.assertTrue([x for x in at if t["door_open_s"] < x < t["burst_s"]])
+        self.assertTrue([x for x in at if x > t["tag_s"]])
 
-    def test_n05_page_has_no_door(self):
+    def test_n05_page_door_and_vehicle(self):
         html = (lc.SCREENS / "n05.html").read_text(encoding="utf-8")
-        for gone in ('class="door', 'class="leaf', "door-slide", "door-back", "--door-panel", "--door-handle"):
+        self.assertIn('class="door"', html)
+        self.assertIn('class="leaf leaf-l"', html)
+        self.assertIn('class="leaf leaf-r"', html)
+        # the vehicle does not split; it is drawn in ?layer=fg too
+        for gone in ('class="half', "--hinge-l", "door-slide"):
             self.assertNotIn(gone, html)
-        self.assertIn('class="half half-l"', html)
-        self.assertIn('class="half half-r"', html)
+        self.assertIn('<div class="hero" data-box="n05.hero">', html)
+        self.assertIn('class="grid bg-only"', html)
+        # its picture comes from ?hero= or n05.hero.src, else the line drawing
+        self.assertIn('get("hero")', html)
+        self.assertIn("cutRules.hero.src", html)
+        self.assertIn("src", self.rules["n05"]["hero"])
+        # the door is behind the vehicle (earlier in the page)
+        self.assertLess(html.index('class="door"'), html.index('class="hero"'))
 
     def test_units_in_names(self):
         def walk(obj, path):
@@ -357,6 +386,10 @@ class InBrowser(unittest.TestCase):
         self.assertEqual(m["door-open-dur"], f"{d['open_dur_s']}s")
         self.assertEqual(m["door-ease"], "cubic-bezier(" + ", ".join(str(x) for x in d["ease"]) + ")")
         self.assertEqual(m["hero-motion-push-scale"], "1.04")
+        self.assertEqual(m["door-crack"], f"{d['crack_deg']}deg")
+        self.assertEqual(m["door-hold-dur"], f"{d['hold_dur_s']}s")
+        self.assertEqual(m["door-crack-ease"], "cubic-bezier(" + ", ".join(str(x) for x in d["crack_ease"]) + ")")
+        self.assertEqual(m["door-hero-fade-scale"], str(d["hero_fade_scale"]))
         self.assertNotIn("door-angle-deg", got["vars"])           # an angle is not a length
         self.assertEqual(got["vars"]["door-perspective-px"], d["perspective_px"])
         self.assertEqual(got["angle"], f"{d['angle_deg']}deg")
