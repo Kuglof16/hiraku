@@ -113,8 +113,30 @@ class Units(unittest.TestCase):
             self.assertAlmostEqual(tool.turn_rate({"motor_max_speed": given}, "motor_max_speed"), want, places=9)
 
 
+class CheckRecords(unittest.TestCase):
+    def test_an_expected_zero_is_held_to_an_absolute_bound(self):
+        from hiraku.solvers.k2_vehicle.checks import _check
+        from hiraku.solvers.toolmaker.make import check_passes
+        zero = _check("mirror", "yaw_rate", 0.0, 4e-10, "rad/s", 1e-9, "symmetry")
+        self.assertEqual((zero["tolerance_rel"], zero["tolerance_abs"], zero["pass"]), (0.0, 1e-9, True))
+        self.assertEqual(contract.errors("tool_check", zero), [])
+        self.assertTrue(check_passes(zero))
+        self.assertFalse(check_passes(dict(zero, got=2e-9)))
+        rel = _check("beam", "deflection", 2.0, 2.01, "mm", 1e-2, "beam formula")
+        self.assertNotIn("tolerance_abs", rel)
+        self.assertEqual(contract.errors("tool_check", rel), [])
+        self.assertTrue(check_passes(rel))
+
+
 class Declarations(unittest.TestCase):
     """The load-case params and the K0 pairs that the load-case builders and the agents use."""
+
+    def test_stages_for_light_first(self):
+        # contract tool_spec.stage (HK5): the K&C bench is a static one-corner model (1), the others
+        # integrate the vehicle in time (2)
+        want = {"kc_bench": 1}
+        for name, tool in TOOLS.items():
+            self.assertEqual(tool.describe()["stage"], want.get(name, 2), name)
 
     def test_describe_params(self):
         for name, tool in TOOLS.items():

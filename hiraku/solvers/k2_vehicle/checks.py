@@ -47,9 +47,13 @@ def _check(case: str, quantity: str, expected: float, got: float | None, unit: s
             passed = abs(got) <= tol
         else:
             passed = abs(got - expected) <= tol * abs(expected)
-    return {"case": case, "quantity": quantity, "expected": float(expected),
-            "got": None if got is None else float(got), "unit": unit, "tolerance_rel": float(tol),
-            "pass": bool(passed), "source": source}
+    out = {"case": case, "quantity": quantity, "expected": float(expected),
+           "got": None if got is None else float(got), "unit": unit, "tolerance_rel": float(tol),
+           "pass": bool(passed), "source": source}
+    if expected == 0.0:
+        # an expected 0 is checked on an absolute bound (contract tool_check.tolerance_abs)
+        out["tolerance_rel"], out["tolerance_abs"] = 0.0, float(tol)
+    return out
 
 
 def check_static_loads() -> list[dict]:
