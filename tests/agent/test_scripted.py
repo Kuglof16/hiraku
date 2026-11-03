@@ -117,7 +117,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
                                                              "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
         self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
         self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
-        self.assertIsNone(fit.call_args.kwargs["max_evals"])
+        self.assertEqual(fit.call_args.kwargs["max_evals"], scripted.FIT_EVALS)  # a fixed count by default
         self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
         self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
         self.assertEqual(changes["track"]["value"], 1220)

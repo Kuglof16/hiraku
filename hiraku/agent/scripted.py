@@ -41,6 +41,7 @@ Record = dict[str, Any]
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
 FIT_TIME_S = 900.0  # the driver fit's time limit when the plan gives none (a guard; fit_evals ends it first)
+FIT_EVALS = 150  # designs the driver fit measures when the plan gives no fit_evals
 
 
 def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None,
@@ -56,7 +57,7 @@ def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s:
     # the same on every machine; the time limit only guards against a fit that does not end.
     base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
     got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S),
-                                       max_evals=int(evals) if evals else None)
+                                       max_evals=int(evals or FIT_EVALS))
     small = got["smallest"]
     found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
     text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
