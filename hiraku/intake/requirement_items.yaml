@@ -1,4 +1,4 @@
-# The requirement items HIRAKU can ask about (keys Q03..Q94), the same for every product.
+# The requirement items HIRAKU can ask about (keys Q03..Q95), the same for every product.
 # Which item a product needs, and whether the person is asked, follow from the flags:
 #   applies_if  expression over the product flags (hiraku.catalog.expr); an item that does not apply
 #               is neither shown nor asked
@@ -473,3 +473,9 @@ items:
       basis: >-
         assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted).
         Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read
+
+  - key: Q95
+    name: 車両そのものの質量の上限 (乗る人と荷を除く)
+    applies_if: ride and rough
+    ask: confirm
+    question: 車両そのものの重さ (乗る人と積む荷を除く) は何 kg までにしますか。
