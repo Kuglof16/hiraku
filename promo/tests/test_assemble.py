@@ -107,7 +107,7 @@ class Table(unittest.TestCase):
         self.assertEqual(joins["N17b"], ("light", 0.6))
         self.assertEqual(joins["N10"], ("dissolve", 0.25))
         looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
-        self.assertEqual(looked, ["N05", "N08b", "N17b", "N18"])
+        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b", "N18"])  # the dark cuts (N08: the plain CAE tool on night)
         # tiles a script with these cuts, whatever the slot lengths
         slots, t = [], 0.0
         for c in cuts:
