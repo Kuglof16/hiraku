@@ -53,6 +53,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 代わりに比べる量: 基準の任意の欄 `stand_in_quantity` (例: 疲労の損傷 `fatigue_damage` に対する応力の幅 `stress_range`)。判定に使う量の予測と解析の結果が、どちらも基準の限度の 1e-6 倍より小さいとき (損傷がほぼ 0 で、比の差に意味が無いとき) は、上の (b) を `stand_in_quantity` のいちばん新しい照合で見る。合否 (a)・(c) は判定に使う量のまま。照合はどちらの量も記録に残す。欄は荷重条件を作るコードが書く
 
+場所ごとの予測: 予測は解析の前なので、手計算は判定の量がどこで最大になるかを前もって知らない。そこで、判定の量を場所ごとにも予測してよい (`<量>.<場所の id>`、例 `max_hot_spot_stress.LE`。部材ごとの結果と同じ名前の形)。`compare` は判定の量を比べるとき、解析の結果の `where` に当たる場所ごとの予測があればそれと比べ、`comparison.where` にその場所を書く。無ければ全体の予測と比べる。手計算が自分で選んだ最大の所どうしの比べは記録に残してよいが、緑の決まりの (b) には使わない。手計算がその場所を表せないときは、場所ごとの予測にその理由を書く
+
 hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。止めたら `hook.denied` の event に規則の ID を入れる):
 
 | ID | 中身 |
@@ -89,6 +91,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - `series` は時間 (`t_s`) か、ほかの量 (`x`: `{quantity, unit, values}`。K&C の台のストロークや横力) のどちらか 1 つを横軸に持つ
 - 道具の名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - 道具は任意の欄 `applies_to` に、使える設計の型 (`hiraku.designgen` の `ARCHETYPES` の名前。例: `frame_tubes` は `["space_frame_utv"]`) を並べてよい。無ければどの設計にも使える。設計の型は、その設計を作った generator の型。`analyze` は、版の設計の型が `applies_to` に無い道具を理由の文つきで断り、型の分からない設計 (手で作った設計) にも `applies_to` のある道具は使わない。`list_tools` はこの欄も見せる
+- 部品の任意の欄 `material` (部材と同じく `design.materials` の鍵) と `finish` (`painted`・`powder_coat`・`bare`・`anodized`・`galvanized`・`molded`)。設計を作るコードが書き、画面の実物の見た目はここから材質を決める (無ければ部品の種類から)。質量と強さに効く値は `design.materials` の側に出典つきで
 - 乗員と荷は設計の部品 (`kind` が `occupant` / `cargo`) として持つ。どれを載せるかは荷重条件の `params["loading"]`: `empty`・`driver`・`two`・`two_cargo` (カタログの Q30)。無ければ、要件のファイルの `default_loading` (製品ごとの既定。1 人で使うベッドなら `driver`)、それも無ければ `two_cargo`。荷重条件を作るコードが、要件のファイルの既定を `params["loading"]` に入れる。`driver` は design.parts の並びで最初の occupant、`two` は最初の 2 つ、cargo の部品は `two_cargo` のときだけ載る。occupant の部品が 1 つも無い設計 (座席の無い製品) は誰も載せず、あるのに足りない設計 (1 人分しか無いのに `two`) はその荷重条件に合わない (ValueError)。1 人を体の部分 (胴・もも・すね など) に分けてよい: id の最初の `.` より前が同じ occupant の部品 (`driver.torso`・`driver.thigh_l`) は 1 人 (`person_of`) で、まとめて載るか降りる。この決まりは `hiraku/contract/loading.py` の `parts_on_board`・`on_board`・`loading_of` だけに書き、どの部署もそれを呼ぶ (自分で書き直さない)
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` に道具が書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線)
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`・`error`。`red_left` は、直す回数が残っているのに赤の分野を残したまま、終わりを止める hooks の上限に達して終わったとき)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
