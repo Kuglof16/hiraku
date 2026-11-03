@@ -22,6 +22,9 @@ from .base import G_FACTOR, LOADING, BuiltinTool, Predicts, Record, mesh_of, on_
 from .frame_static import (JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, front_supports, g_factor,
                            upstream_ground_forces)
 
+WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
+               "step_mm=<step_height or None>, step_supports=...): the joint (not at a wheel mount) where the "
+               "side wall's plate bending is largest; the shell's peak is that wall bending at a cross member's end")
 AWAY_FACTOR = 2.0  # "away from the joints": element centre at least this many tube sizes from every design node
 LABELS = {
     "max": "シェルの von Mises (外と内の面の大きい方)",
@@ -57,7 +60,13 @@ EXCLUDE_ASSUMPTION = ("取付の区画 (節がすべて上の範囲にある要�
 GUSSET_ASSUMPTION = ("ガセット (kind gusset の部品) はシェルでは板の要素 (材料は横の部材と同じ、脚の 2 辺は溶接で全長が"
                      "つながる) として入り、梁 (K1) では質量だけとして入る")
 THROUGH_ASSUMPTION = ("横の部材を通す形 (cross_members_through = 1): シェルでは横の部材の 4 面の壁が手前の壁の穴を通って"
-                      "向こうの壁の中面まで伸び、両方の壁と節を共有する。梁 (K1) の形は変わらない")
+                      "向こうの壁の中面まで伸び、両方の壁と節を共有する。梁 (K1) の形は変わらない。レールの中を通る分 "
+                      "(部品 through_<部材>_<節>、手前の壁の穴の分を引いた正味) は、梁と K0 では節にかかる部品として入り、"
+                      "シェルでは横の部材の要素が持つので部品としては足さない")
+MASS_ASSUMPTION = ("質量の二重数えを避けるため、シェルの要素が持つ部品 (板として入れたガセットと、通す形にした節の "
+                   "through_ の部品) はシェルでは部品として足さない。全体の質量と重心 (mass_summary、K0・K1・K2) "
+                   "にはどちらも部品として入っている。シェルの管の質量 (rho t 面積) と梁の質量 (密度 A L) の差は慣性の"
+                   "釣り合いに任せる")
 
 
 def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step, sup) -> Record:
@@ -187,6 +196,12 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     if ms.through_joints:
         effects.append({"name": (f"cross members through the rails at {', '.join(ms.through_joints)} (shell only; the "
                                  f"beam model is unchanged)"), "value": len(ms.through_joints), "unit": "1"})
+    through = [p for p in res.get("shell_parts", []) if p not in ms.part_material]
+    if through:
+        kg = sum(p["mass_kg"] for p in design["parts"] if p["id"] in through)
+        effects.append({"name": (f"{len(through)} through parts (the tube inside the rails) carried by the shell's "
+                                 f"elements, so not added again as parts; in vehicle_mass via the elements"),
+                        "value": kg, "unit": "kg"})
     if float(np.linalg.norm(res["inertia_alpha"])) > 0:
         effects.append({"name": f"angular acceleration from inertia relief {_vec(res['inertia_alpha'], 3)} rad/s^2 "
                                 f"(value: its size in rad/s^2)",
@@ -199,7 +214,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
         assumptions.append(GUSSET_ASSUMPTION)
     if ms.through_joints:
         assumptions.append(THROUGH_ASSUMPTION)
-    out = {"results": results, "fields": fields, "vectors": vectors, "effects": effects}
+    if res.get("shell_parts"):
+        assumptions.append(MASS_ASSUMPTION)
+    out ={"results": results, "fields": fields, "vectors": vectors, "effects": effects}
     if assumptions:
         out["assumptions"] = assumptions
     return out
@@ -233,6 +250,7 @@ class FrameShell(BuiltinTool):
     base = "K1"
     tests = ["R1"]
     formulas = [
+        "frame_static.joint_wall_bending",
         "frame_static.rail_joint_stress",
         "frame_static.rail_step_bending",
         "frame_static.rail_bending",
@@ -241,6 +259,7 @@ class FrameShell(BuiltinTool):
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
     predicts = (
+        Predicts("max_stress", "frame_static.joint_wall_bending", "sigma", WALL_INPUTS),
         Predicts("max_stress", "frame_static.rail_joint_stress", "sigma",
                  JOINT_INPUTS + "; the shell includes the stress concentration at the joints (wall bending where "
                                 "tubes meet, the load coming in at the mount), which the formula does not"),

@@ -60,11 +60,12 @@ def variables(design: Record) -> list[Record]:
 def regenerate(design: Record, changes: dict[str, Record]) -> Record:
     """The design rebuilt with some of its variables changed ({name: {value, unit}}), the
     others as they are. A choice of the generator may be given too ({"joints": "gusset"}):
-    it stands for the variables it sets. design_version, parent_version, name and
+    it stands for the variables it sets (the variables alone give the same design). design_version, parent_version, name and
     change_reason are copied from `design`; the caller sets them for the new version."""
     gen = generator_of(design)
     choices = {k: v for k, v in changes.items() if k in getattr(gen, "CHOICES", {})}
-    changes = {**gen.choice_values(choices), **{k: v for k, v in changes.items() if k not in choices}} if choices else changes
+    if choices:
+        changes = gen.apply_choices(choices, {k: v for k, v in changes.items() if k not in choices})
     for name in changes:
         var = gen.VARIABLES.get(name)
         if var is None:
@@ -98,11 +99,7 @@ def propose(archetype: str, choices: dict, values: dict, requirements: Record) -
             raise DesignGenError(f"{k} must be one of {', '.join(gen.CHOICES[k])}, got {opt!r}")
     vals = dict(values or {})
     if choices:
-        set_by = gen.choice_values(choices)
-        clash = sorted(k for k in set_by if k in vals)
-        if clash:
-            raise DesignGenError(f"{', '.join(clash)} come from the choices {choices}; do not give them as values")
-        vals.update(set_by)
+        vals = gen.apply_choices(choices, vals)
     for r in requirements.get("requirements", []):
         if r["key"] in FROM_REQUIREMENTS and isinstance(r.get("value"), (int, float)) and not isinstance(r["value"], bool):
             name, unit = FROM_REQUIREMENTS[r["key"]]
