@@ -3121,6 +3121,12 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "stop_after": {
+          "enum": [
+            "picks"
+          ],
+          "description": "Copied from the requirements file's stop_after when the run starts, so every process that opens the run reads it."
         }
       }
     },
