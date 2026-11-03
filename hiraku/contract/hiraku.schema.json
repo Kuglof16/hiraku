@@ -1250,8 +1250,10 @@
             "displacement",
             "temperature",
             "mode_shape",
-            "damage"
-          ]
+            "damage",
+            "error_estimate"
+          ],
+          "description": "error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
         },
         "label": {
           "type": "string"
@@ -1859,6 +1861,91 @@
                 "$ref": "#/$defs/quantity"
               },
               "description": "Pre-processing checks: e.g. equilibrium_residual, model_mass, design_mass."
+            }
+          }
+        },
+        "mesh_convergence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "quantity",
+            "unit",
+            "levels",
+            "verdict"
+          ],
+          "description": "The judged value solved again on finer meshes of the same design (h-refinement), made by code. The meshes beyond the analysis's mesh_id are not recorded; levels gives their size and count.",
+          "properties": {
+            "quantity": {
+              "type": "string",
+              "description": "Name of the result checked (as in results), e.g. hot-spot stress at a weld line."
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "levels": {
+              "type": "array",
+              "minItems": 2,
+              "description": "Coarse to fine.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "element_size_mm",
+                  "value"
+                ],
+                "properties": {
+                  "element_size_mm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "elements": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "mesh_id": {
+                    "type": "string",
+                    "pattern": "^mesh-[0-9]{4,}$",
+                    "description": "When this level is the analysis's recorded mesh."
+                  }
+                }
+              }
+            },
+            "change_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "|v_fine - v_next| / |v_fine| x 100 between the two finest levels."
+            },
+            "limit_pct": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Largest change_pct accepted as converged."
+            },
+            "observed_order": {
+              "type": "number",
+              "description": "Order p from three levels (Richardson)."
+            },
+            "extrapolated": {
+              "type": "number",
+              "description": "Value at zero element size from three levels (Richardson extrapolation)."
+            },
+            "error_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Estimated error of the finest value against extrapolated, in %."
+            },
+            "verdict": {
+              "enum": [
+                "converged",
+                "not_converged",
+                "singular"
+              ],
+              "description": "singular: the value keeps rising as the elements shrink (sharp corner, point load); it cannot be judged as it stands."
+            },
+            "notes": {
+              "type": "string"
             }
           }
         }
