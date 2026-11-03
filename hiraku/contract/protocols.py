@@ -11,6 +11,12 @@ from typing import Any, Protocol, runtime_checkable
 
 Record = dict[str, Any]
 
+
+class ToolError(Exception):
+    """A tool call that cannot go ahead. The message is shown to Claude as is,
+    so it says what is wrong and what to do next. Defined here so every layer
+    (intake, tools, agent) raises the same class; hiraku.tools.context re-exports it."""
+
 # Entry points of hiraku.solvers (hiraku/solvers/__init__.py). Callers use only
 # these two names; importing hiraku.solvers must have no side effects.
 #   formula_registry() -> FormulaRegistry
