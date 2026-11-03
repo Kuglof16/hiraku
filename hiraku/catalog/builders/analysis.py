@@ -532,15 +532,15 @@ def h1_interference(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h1_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.library_geometry import _free_steer
-    from hiraku.solvers.k4_geometry import steer_room
+    """geometry.free_steer_angle's inputs: hiraku.solvers.k0_handcalc.scene_inputs.steer_room_inputs."""
+    from hiraku.solvers.k0_handcalc.scene_inputs import steer_room_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    rooms = steer_room(design)
-    if not rooms:
-        raise BuildError("no steered wheel has a frame member beside it")
-    sid = min(rooms, key=lambda k: _free_steer(rooms[k])["theta"])
-    r = rooms[sid]
-    return {"steer_w": q(r["w"], "mm"), "steer_l": q(r["l"], "mm"), "steer_c": q(r["c"], "mm")}
+    try:
+        got = steer_room_inputs(design)["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"steer_w": got["w"], "steer_l": got["l"], "steer_c": got["c"]}
 
 
 H1_PLAN = {
@@ -571,14 +571,16 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k4_geometry import AIST, knee_space
+    """occupant.knee_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_space_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_space_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    space = knee_space(on_board(design, loading_of(load_case)))
-    if not space:
-        raise BuildError("no occupant has a part ahead of the knees")
-    return {"knee_length": q(min(length for length, _ in space.values()), "mm"),
-            "buttock_knee": q(AIST["buttock_knee_m95"], "mm")}
+    try:
+        got = knee_space_inputs(design, loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"knee_length": got["L"], "buttock_knee": got["L_bk"]}
 
 
 H3_PLAN = {
