@@ -126,6 +126,7 @@ OWNERS = {
         "tests/contract/",
         "docs/",
         "README.md",
+        "HIRAKU.cmd",  # double-click launcher of the screen
         "CLAUDE.md",
         "requirements.txt",
         ".gitignore",
@@ -134,6 +135,7 @@ OWNERS = {
         "hiraku/agent/",
         "hiraku/tools/",
         "hiraku/store/",
+        "hiraku/export/",  # results to CSV, VTK and report files (A9)
         "hiraku/catalog/",
         "hiraku/__main__.py",
         "data/catalog/",
