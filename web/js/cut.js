@@ -637,6 +637,17 @@ class CutN02 {
         )
         .join("");
     this.stage.append(el);
+    // The conditions of the cases past the limit are their load cases' titles as recorded and
+    // can run to several lines: the rows' text steps down a pixel at a time until they end
+    // inside the box, not below layout.min_text_px.
+    const blocks = [...el.querySelectorAll(".n02-res")];
+    const bottom = () => Math.max(0, ...blocks.map((b) => b.offsetTop + b.offsetHeight));
+    let px = R.text_px;
+    while (bottom() > R.h && px > (this.layout.min_text_px ?? R.text_px)) {
+      px -= 1;
+      for (const b of blocks) b.style.fontSize = `${px}px`;
+    }
+    el.dataset.textPx = String(px);
   }
 
   resize(scale) {

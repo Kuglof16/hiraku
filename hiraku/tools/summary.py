@@ -19,7 +19,7 @@ import math
 from collections import Counter
 from typing import Any
 
-from hiraku.catalog.loading import parts_on_board
+from hiraku.contract.loading import parts_on_board
 from hiraku.contract.protocols import LOADINGS
 
 Record = dict[str, Any]
@@ -32,23 +32,16 @@ def _q(value: float, unit: str) -> Record:
 
 
 def section_area(section: Record) -> float | None:
-    """Cross-section area in mm^2 from the section's dims (or its A_mm2)."""
+    """Cross-section area in mm^2: the section's A_mm2, else from its dims by the hand
+    calculation's section formulas (k0_handcalc.sections); None when neither gives one."""
     if "A_mm2" in section:
         return float(section["A_mm2"])
-    d = section["dims_mm"]
-    shape = section["shape"]
+    from hiraku.solvers.k0_handcalc.sections import properties
+
     try:
-        if shape == "rect_tube":
-            return d["b"] * d["h"] - (d["b"] - 2 * d["t"]) * (d["h"] - 2 * d["t"])
-        if shape == "round_tube":
-            return math.pi / 4.0 * (d["d"] ** 2 - (d["d"] - 2 * d["t"]) ** 2)
-        if shape == "rect_solid":
-            return d["b"] * d["h"]
-        if shape == "round_solid":
-            return math.pi / 4.0 * d["d"] ** 2
-    except KeyError:
+        return properties(section)["A"]
+    except ValueError:
         return None
-    return None
 
 
 def frame_masses(design: Record) -> list[tuple[str, float, list[float]]]:
@@ -156,8 +149,11 @@ def design_summary(design: Record) -> Record:
     frame_items = [(m, c) for _, m, c in frame]
     out["loadings"] = {}
     for name in LOADINGS:
-        load = mass_summary(frame_items + [(p["mass_kg"], p["box"]["center_mm"]) for p in parts_on_board(design, name)],
-                            front_x)
+        try:
+            on = parts_on_board(design, name)
+        except ValueError:  # the design has occupant parts, but fewer than this loading seats
+            continue
+        load = mass_summary(frame_items + [(p["mass_kg"], p["box"]["center_mm"]) for p in on], front_x)
         joint = rail_joint(design, name)
         if joint is not None:
             load["rail_joint"] = joint

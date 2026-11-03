@@ -71,7 +71,7 @@ def modes(design: dict, n_modes: int = 10) -> dict:
     summ = mass_summary(design)
     fm = build(design)
     add_masses(fm, summ["items"])
-    fm.restrain_on_wheels()
+    fm.restrain_on_wheels(in_plane_at_frame=True)  # holds below the frame would sway the twist modes
     fm.model.add_load_combo(MASS_CASE, {MASS_CASE: 1.0})
     n_free = 6 * len(fm.model.nodes)
     k = max(1, min(n_modes, n_free - 2))

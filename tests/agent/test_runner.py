@@ -40,10 +40,12 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__make_tool", o.allowed_tools)
         self.assertIn("mcp__hiraku__write_report", o.allowed_tools)
         self.assertIn("mcp__hiraku__propose_design", o.allowed_tools)
-        self.assertEqual(len(o.allowed_tools), 14)
+        for name in ("pick_domains", "ask_user", "import_knowledge", "rule_check"):  # the intake department's
+            self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
+        self.assertEqual(len(o.allowed_tools), 18)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
-        self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze"])
+        self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])
         self.assertEqual(o.agents["cae-strength"].skills, o.skills)
         self.assertEqual(len(o.plugins), 1)
         self.assertTrue(Path(o.plugins[0]["path"]).is_dir())
@@ -56,6 +58,7 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__make_tool", o.agents["cae-strength"].tools)
         self.assertIn("mcp__hiraku__revise_design", o.agents["designer"].tools)
         self.assertNotIn("mcp__hiraku__make_tool", o.agents["designer"].tools)
+        self.assertNotIn("mcp__hiraku__rule_check", o.agents["cae-strength"].tools)  # the packager's
         self.assertIn("PreToolUse", o.hooks)
         self.assertIn("hiraku", o.mcp_servers)
         self.assertTrue(o.forward_subagent_text)

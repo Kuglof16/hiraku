@@ -9,6 +9,7 @@ from pathlib import Path
 
 from hiraku.webserve.launch import Launcher
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
+from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
 
 RUN_ID = "20261102-203000-offroad-4w"
@@ -229,6 +230,64 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class ShelfTest(unittest.TestCase):
+    """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.release = threading.Event()
+        self.calls = 0
+
+        def load():
+            self.calls += 1
+            self.release.wait(10)
+            return {"tools": [{"name": "frame_static"}], "formulas": [{"formula_id": "frame_static.rail_bending"}]}
+
+        run = self.tmp / "runs" / RUN_ID
+        (run / "tools").mkdir(parents=True)
+        (run / "events.jsonl").write_text(_line(0, "run.started"), encoding="utf-8")
+        (run / "tools" / "rollbar_load-1.py").write_bytes(b"def run():\n    return 1\n")
+        (run / "tools" / "rollbar_load-1.check.json").write_text('[{"case": "a"}]', encoding="utf-8")
+        self.server = make_server("127.0.0.1", 0, self.tmp / "runs", quiet=True, saved_dir=None, launcher=False, shelf=Shelf(load))
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def tearDown(self):
+        self.release.set()
+        self.server.shutdown()
+        self.server.server_close()
+        shutil.rmtree(self.tmp)
+
+    def get(self, path):
+        try:
+            with urllib.request.urlopen(self.base + path, timeout=10) as r:
+                return r.status, r.headers.get("Content-Type"), r.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("Content-Type"), e.read().decode("utf-8")
+
+    def test_shelf_is_ready_after_its_one_load(self):
+        self.assertEqual(json.loads(self.get("/api/shelf")[2]), {"ready": False})
+        self.assertEqual(json.loads(self.get("/api/shelf")[2]), {"ready": False})  # still loading, not loaded twice
+        self.release.set()
+        for _ in range(100):
+            got = json.loads(self.get("/api/shelf")[2])
+            if got["ready"]:
+                break
+            threading.Event().wait(0.05)
+        self.assertEqual([t["name"] for t in got["tools"]], ["frame_static"])
+        self.assertEqual(got["formulas"][0]["formula_id"], "frame_static.rail_bending")
+        self.assertEqual(self.calls, 1)
+
+    def test_a_runs_tool_files(self):
+        status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.py")
+        self.assertEqual((status, ctype.split(";")[0], text), (200, "text/plain", "def run():\n    return 1\n"))
+        status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.check.json")
+        self.assertEqual((status, json.loads(text)), (200, [{"case": "a"}]))
+        for bad in ("rollbar_load-2.py", "rollbar_load-1.txt", "..%2Fevents.jsonl", "Rollbar-1.py"):
+            self.assertEqual(self.get(f"/api/runs/{RUN_ID}/tools/{bad}")[0], 404, bad)
+        self.assertEqual(self.get("/api/runs/sample/tools/rollbar_load-1.py")[0], 404)
+
+
 class LaunchTest(unittest.TestCase):
     """Starting a run from the screen (the child is a stand-in for python -m hiraku run)."""
 
@@ -302,6 +361,61 @@ class LaunchTest(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=10) as r:
             self.assertTrue(json.loads(r.read())["stop_requested"])
         self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
+
+    def test_hearing_answer_goes_to_the_started_run_only(self):
+        base = self.serve({})
+        _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+
+        def answer(run_id, body):
+            req = urllib.request.Request(base + "/api/launch/hearing", data=json.dumps({"run_id": run_id, "answer": body}).encode(),
+                                         method="POST", headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        self.assertEqual(answer("20991231-000000-other", {"answers": {}})[0], 409)  # not the run started here
+        status, got = answer(out["run_id"], {"answers": {}, "note": "林道", "colour": "red"})
+        self.assertEqual(status, 400)  # the hearing's own check
+        self.assertIn("colour", got["error"])
+        self.assertFalse((self.runs / out["run_id"] / "hearing.answer.json").exists())
+        status, got = answer(out["run_id"], {"answers": {}, "note": "林道", "useDefaults": True})
+        self.assertEqual((status, got["answered"]), (200, True))
+        written = json.loads((self.runs / out["run_id"] / "hearing.answer.json").read_text(encoding="utf-8"))
+        self.assertEqual(written, {"answers": {}, "note": "林道", "use_defaults": True})
+
+    def test_dropped_knowledge_goes_to_the_started_run_through_its_inbox(self):
+        base = self.serve({})
+        _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        run = self.runs / out["run_id"]
+
+        def drop(body, raw=None):
+            data = raw if raw is not None else json.dumps(body).encode()
+            req = urllib.request.Request(base + "/api/launch/knowledge", data=data, method="POST", headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        self.assertEqual(drop({"run_id": "20991231-000000-other", "name": "a.md", "text": "x"})[0], 409)
+        for bad in (".hidden", "C:x.md", "", "..", "x/..", 7):
+            self.assertEqual(drop({"run_id": out["run_id"], "name": bad, "text": "x"})[0], 400, bad)
+        self.assertFalse((run / "inbox").exists())
+        status, got = drop({"run_id": out["run_id"], "name": "dir/曲げの決まり.md", "text": "曲げの内側の半径は板厚以上"})
+        self.assertEqual((status, got["file"], got["request"]), (200, "曲げの決まり.md", "inbox/1-knowledge.json"))
+        self.assertEqual((run / "knowledge" / "曲げの決まり.md").read_text(encoding="utf-8"), "曲げの内側の半径は板厚以上")
+        self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "曲げの決まり.md"})
+        self.assertEqual(drop({"run_id": out["run_id"], "name": "rules.csv", "text": "a,b"})[1]["request"], "inbox/2-knowledge.json")
+        self.assertEqual(sorted(p.name for p in (run / "inbox").iterdir()), ["1-knowledge.json", "2-knowledge.json"])
+        # only the name's last part is kept: nothing lands outside knowledge/
+        self.assertEqual(drop({"run_id": out["run_id"], "name": "../../evil.md", "text": "x"})[1]["file"], "evil.md")
+        self.assertTrue((run / "knowledge" / "evil.md").exists())
+        self.assertFalse((run / "evil.md").exists() or (self.runs / "evil.md").exists())
+        big = json.dumps({"run_id": out["run_id"], "name": "big.md", "text": "x" * 2_100_000}).encode()
+        self.assertEqual(drop(None, raw=big)[0], 413)
+        self.assertFalse((run / "knowledge" / "big.md").exists())
 
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})

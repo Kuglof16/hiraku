@@ -6,6 +6,10 @@ The two entry points (hiraku.contract.protocols.SOLVER_ENTRY_POINTS):
     formulas = solvers.formula_registry()   # FormulaRegistry
     tools = solvers.builtin_tools()         # list of AnalysisTool
 
+The optional one (OPTIONAL_SOLVER_ENTRY_POINTS):
+
+    mesh = solvers.frame_mesh(design)       # shell mesh record without mesh_id
+
 Importing this package does nothing else; the solvers load on the first call.
 Tools from hiraku.solvers.k2_vehicle are added when that package exposes
 `tools()` returning AnalysisTool objects. Names on the shelf are unique: no
@@ -37,6 +41,16 @@ def builtin_tools() -> list:
     return list(_tools())
 
 
+def frame_mesh(design: dict) -> dict:
+    """The shell mesh of the design's frame as a contract `mesh` record without mesh_id
+    (the optional entry point, hiraku.contract.protocols.OPTIONAL_SOLVER_ENTRY_POINTS)."""
+    from .k1_shell import build_mesh
+
+    rec = build_mesh(design).record("mesh-0000", int(design.get("design_version", 1)))
+    del rec["mesh_id"]
+    return rec
+
+
 def _k2_tools() -> list:
     try:
         k2 = importlib.import_module(".k2_vehicle", __name__)
@@ -48,4 +62,4 @@ def _k2_tools() -> list:
     return list(make()) if callable(make) else []
 
 
-__all__ = ["builtin_tools", "formula_registry"]
+__all__ = ["builtin_tools", "formula_registry", "frame_mesh"]

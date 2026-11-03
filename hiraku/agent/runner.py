@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from hiraku import contract
-from hiraku.agent import prompts
+from hiraku.agent import inbox, prompts
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
@@ -159,6 +159,9 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     woken with WAKE_TEXT unless a turn of its own has begun within WAKE_GRACE_S.
     The stop button (stop.request, checked every STOP_POLL_S) interrupts the CLI; the
     hooks deny every tool from then on, and the reading ends within STOP_GRACE_S.
+    The inbox (hiraku.agent.inbox) is read at the same times: its events are emitted
+    and what is for the lead goes to the hooks (told on its next tool call or stop),
+    or straight to the lead as a new turn when its turn has ended while roles work.
     """
     from claude_agent_sdk import AssistantMessage, ResultMessage
 
@@ -182,6 +185,12 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
     async def watch_stop() -> None:
         while not hooks.stopping():
             await asyncio.sleep(STOP_POLL_S)
+            told = await asyncio.to_thread(inbox.take, ctx)
+            if told:
+                hooks.for_lead.extend(told)  # the hooks tell the lead on its next tool call or stop
+                if state["idle"]:  # the lead's turn has ended while roles work: a turn of its own for them
+                    state["idle"] = False
+                    await client.query(hooks.take_for_lead())
         ctx.store.emit("agent.said", agent="system", text="止めるボタンが押されたので、実行を止めます")
         try:
             await client.interrupt()

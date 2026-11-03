@@ -13,6 +13,10 @@ Standard library only. Routes:
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
     GET /layout.json                    the video's layout rules (promo/screens/layout.json,
                                         the promo department's), read by the cut pages
+    GET /api/shelf                      the tool shelf for A4: every builtin tool's spec and
+                                        the K0 formulas ({"ready": false} while computed, shelf.py)
+    GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
+                                        (tools/<name>-<n>.check.json)
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -37,8 +41,9 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
-from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR
+from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
 from hiraku.webserve.launch import Launcher, LaunchError
+from hiraku.webserve.shelf import Shelf
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -64,7 +69,9 @@ CONTENT_TYPES = {
 }
 
 _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
+_TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
+KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
 
 
 def events_path(runs_dir: Path, run_id: str, saved_dir: Path | None = None) -> Path | None:
@@ -233,6 +240,7 @@ class Handler(BaseHTTPRequestHandler):
     default_run: str | None = None
     launcher: Launcher | None = None
     layout_file: Path = LAYOUT_FILE
+    shelf: Shelf = Shelf()
     quiet: bool = False
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
@@ -257,9 +265,16 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
                 self._send_json({"error": f"layout file unreadable: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        if path == "/api/shelf":
+            self._send_json(self.shelf.get())
+            return
         m = _EVENTS_PATH_RE.match(path)
         if m:
             self._send_events(m.group(1), query)
+            return
+        m = _TOOL_FILE_RE.match(path)
+        if m:
+            self._send_tool_file(m.group(1), m.group(2))
             return
         if path.startswith("/api/"):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -273,9 +288,16 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = 0
-        raw = self.rfile.read(min(max(length, 0), 10000))
         route = urlsplit(self.path).path
-        if route not in ("/api/launch", "/api/launch/stop") or not self.launcher:
+        # a dropped knowledge file carries its text; the other bodies are small
+        raw = self.rfile.read(min(max(length, 0), KNOWLEDGE_MAX_BYTES if route == "/api/launch/knowledge" else 10000))
+        left = min(max(length, 0), 64 * 1024 * 1024) - len(raw)
+        while left > 0:  # the rest of a body too big to take is read and dropped
+            chunk = self.rfile.read(min(left, 65536))
+            if not chunk:
+                break
+            left -= len(chunk)
+        if route not in ("/api/launch", "/api/launch/stop", "/api/launch/hearing", "/api/launch/knowledge") or not self.launcher:
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
         # Only this server's own page may start a run: another web page could
@@ -297,6 +319,9 @@ class Handler(BaseHTTPRequestHandler):
         if not (self.headers.get("Content-Type") or "").startswith("application/json"):
             self._send_json({"error": "send JSON"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
             return
+        if len(raw) < length:
+            self._send_json({"error": f"the body is over {len(raw) // 1000} kB"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+            return
         try:
             body = json.loads(raw.decode("utf-8") or "{}")
             if not isinstance(body, dict):
@@ -307,6 +332,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == "/api/launch/stop":
                 self._send_json(self.launcher.stop(body.get("run_id")))
+            elif route == "/api/launch/hearing":
+                self._send_json(self.launcher.answer(body.get("run_id"), body.get("answer")))
+            elif route == "/api/launch/knowledge":
+                self._send_json(self.launcher.knowledge(body.get("run_id"), body.get("name"), body.get("text")))
             else:
                 self._send_json(self.launcher.start(body.get("requirements"), body.get("mode")))
         except LaunchError as e:
@@ -352,6 +381,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_tool_file(self, run_id: str, name: str) -> None:
+        path = events_path(self.runs_dir, run_id, self.saved_dir)
+        target = path.parent / TOOLS_DIR / name if path is not None and path != SAMPLE_EVENTS else None
+        if target is None or not target.is_file():
+            self._send_json({"error": f"no {name} in {run_id}"}, HTTPStatus.NOT_FOUND)
+            return
+        data = target.read_bytes()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json; charset=utf-8" if name.endswith(".json") else "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _send_json(self, obj: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -380,11 +423,13 @@ def make_server(
     default_run: str | None = None,
     launcher: Launcher | bool | None = None,
     layout_file: Path | str = LAYOUT_FILE,
+    shelf: Shelf | None = None,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
     launcher: None starts runs into runs_dir with this process' environment;
-    False turns starting runs off; or a Launcher to use.
+    False turns starting runs off; or a Launcher to use. shelf: what /api/shelf
+    answers (by default the solvers' shelf, computed on the first request).
     """
     if launcher is None:
         launcher = Launcher(Path(runs_dir))
@@ -398,6 +443,7 @@ def make_server(
             "default_run": default_run,
             "launcher": launcher or None,
             "layout_file": Path(layout_file),
+            "shelf": shelf or Shelf(),
             "quiet": quiet,
         },
     )

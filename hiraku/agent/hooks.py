@@ -4,10 +4,14 @@
   hook.denied event and its reason (what is missing, what to call next) goes to Claude.
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
+  After any tool call of the lead's, it also carries what the person sent through
+  the screen (inbox, hiraku.agent.inbox) and the lead has not been told yet.
 - Stop / SubagentStop: HK4. While a picked domain is pending the stop is blocked
   (hook.blocked_stop); blocks are counted and capped so a run always ends. The
   lead's stop while a role is still running is neither blocked nor counted: the
-  run waits for the role (hiraku.agent.runner.converse).
+  run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
+  with a message from the person not yet told is blocked once with that message
+  (not counted either).
 - The stop button (stop.request in the run folder): every tool call is denied
   and every stop is let through, so the run winds down (runner.converse).
 - SubagentStart / SubagentStop: agent.started / agent.stopped.
@@ -39,6 +43,7 @@ class Hooks:
         self.running: dict[str, str] = {}  # SDK agent_id -> contract agent id
         self.on_roles_done: Callable[[], None] | None = None  # called when the last running role stops
         self.stop_requested = False  # set once stop.request is seen; it stays set
+        self.for_lead: list[str] = []  # what the screen sent for the lead (inbox), not told yet
 
     # ------------------------------------------------------------------ helpers
 
@@ -115,23 +120,35 @@ class Hooks:
                     f"やり直すよう各役に頼んでください")
         return None
 
+    def take_for_lead(self) -> str | None:
+        """What the screen sent for the lead (inbox), as one text, once."""
+        if not self.for_lead:
+            return None
+        texts, self.for_lead = self.for_lead, []
+        return "\n".join(texts)
+
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         short = self._short(input_data.get("tool_name", ""))
-        if short is None:
+        hint = None
+        if short is not None:
+            try:
+                hint = self.next_step(short, input_data.get("tool_input") or {})
+            except Exception:
+                hint = None
+        told = self.take_for_lead() if self.caller(input_data) == "lead" else None  # after any tool of the lead's
+        text = "\n\n".join(x for x in (hint, told) if x)
+        if not text:
             return {}
-        try:
-            hint = self.next_step(short, input_data.get("tool_input") or {})
-        except Exception:
-            hint = None
-        if not hint:
-            return {}
-        return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": hint}}
+        return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}
 
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
         if self.stopping():  # the stop button: let it end
             return {}
+        told = self.take_for_lead()
+        if told:  # the person said something the lead has not heard: go on with it (not HK4, not counted)
+            return {"decision": "block", "reason": told}
         if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
             return {}
         reason = rules.stop_reason(self.ctx)

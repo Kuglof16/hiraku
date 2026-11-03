@@ -145,6 +145,15 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(summ["rail_section"]["section"], "rt40x80x2")
         self.assertEqual(summ["rail_section"]["h"], {"value": 80.0, "unit": "mm"})
 
+    def test_a_design_with_too_few_occupants_for_a_loading(self):
+        # the contract's rule (hiraku.contract.loading): one occupant part cannot fill "two"
+        d = loaded_design()
+        d["parts"] = [p for p in d["parts"] if p["id"] != "passenger"]
+        self.assertEqual(sorted(design_summary(d)["loadings"]), ["driver", "empty"])
+        with self.assertRaises(CatalogError) as cm:
+            build_load_cases(self.catalog, self.req, d, ["P1"])
+        self.assertIn("needs 2 occupant parts, the design has 1", str(cm.exception))
+
     def test_rail_joint_in_summary(self):
         d = loaded_design()
         joint = design_summary(d)["loadings"]["two_cargo"]["rail_joint"]

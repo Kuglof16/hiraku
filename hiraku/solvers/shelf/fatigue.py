@@ -181,7 +181,8 @@ class Fatigue(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R3"]
-    formulas = ["fatigue.road_damage_quarter_car", "fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance",
+    formulas = ["fatigue.road_damage_four_wheels", "frame_static.end_cross_member_stress",
+                "fatigue.road_damage_quarter_car", "fatigue.constant_amplitude_damage", "fatigue.cycles_over_distance",
                 "modal.quarter_car", "frame_static.rail_joint_stress"]
     load_case_params = (
         Param("distance", "km", "life to check: the distance the damage is scaled to (e.g. requirement key Q90)",
@@ -194,6 +195,10 @@ class Fatigue(BuiltinTool):
         LOADING,
     )
     predicts = (
+        Predicts("fatigue_damage", "fatigue.road_damage_four_wheels", "D",
+                 "sigma_ra .. sigma_fb from frame_static.end_cross_member_stress with the inputs of "
+                 "hiraku.solvers.k0_handcalc.frame_inputs.end_cross_member_inputs(design, loading=...): the end cross "
+                 "member of the rear overhang, for a ladder frame whose wheels stand outboard of the rails"),
         Predicts("fatigue_damage", "fatigue.road_damage_quarter_car", "D",
                  "sigma_w from frame_static.rail_joint_stress at rest (F = 0, W = the joint's wheel load); one quarter "
                  "car on the road class of the load case"),

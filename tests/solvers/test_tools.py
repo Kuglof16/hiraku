@@ -45,7 +45,10 @@ class EntryPointTest(unittest.TestCase):
         self.assertEqual(sorted(n for n in set(names) if names.count(n) > 1), [])
 
     def test_import_has_no_side_effects(self):
+        import hiraku
+
         saved = {k: v for k, v in sys.modules.items() if k == "hiraku.solvers" or k.startswith("hiraku.solvers.")}
+        saved_attr = hiraku.__dict__.get("solvers")  # importing the package again rebinds hiraku.solvers
         for k in saved:
             del sys.modules[k]
         try:
@@ -56,6 +59,13 @@ class EntryPointTest(unittest.TestCase):
             for k in [k for k in sys.modules if k == "hiraku.solvers" or k.startswith("hiraku.solvers.")]:
                 del sys.modules[k]
             sys.modules.update(saved)
+            if saved_attr is None:
+                hiraku.__dict__.pop("solvers", None)
+            else:
+                hiraku.solvers = saved_attr
+        from hiraku import solvers as again
+
+        self.assertIs(again, sys.modules["hiraku.solvers"])
 
     def test_specs_are_usable_and_fit_the_contract(self):
         formula_ids = {f["formula_id"] for f in solvers.formula_registry().list_formulas()}

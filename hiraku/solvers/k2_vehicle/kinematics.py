@@ -1,15 +1,19 @@
-"""K&C bench: double-wishbone kinematics solved exactly, and the wheel path tables.
+"""K&C bench: double-wishbone kinematics solved exactly, its compliance, and the wheel path tables.
 
 The bench moves the lower arm through its range, closes the loop for the
 upper arm (ball-joint distance) and the tie rod (tie-rod length), and records
-the wheel centre, camber, toe and contact point against wheel travel. The
-vehicle model then runs on these tables (the "K" of K&C). Compliance ("C")
-is not modelled.
+the wheel centre, camber, toe and contact point against wheel travel (the "K"
+of K&C). At every travel it also solves the small elastic motion of the arms
+and the knuckle on their bushings under a unit force at the contact point and a
+unit aligning moment (the "C"): the toe and camber change per force. The
+vehicle model runs on these tables, kinematics and compliance.
 
 Conventions (body frame, ISO 8855: x forward, y left, z up). Tables are
 written for a LEFT wheel; a right wheel uses the mirror image (y -> -y).
 camber: top of the wheel outward is positive. toe: toe-in is positive.
 travel: wheel-centre vertical motion relative to the body, bump positive.
+Compliance forces act at the contact point in body axes (Fx forward, Fy to
+the left), the aligning moment Mz about the body z axis.
 """
 
 from __future__ import annotations
@@ -176,6 +180,91 @@ class DoubleWishboneBench:
                 "contact": cp, "rotation": rk}
 
 
+@dataclass(frozen=True)
+class Bushings:
+    """Stiffness (N/m) of a double-wishbone corner's elastic joints: each arm's two inner bushings
+    across the pivot axis (radial) and along it (axial), and the tie rod along its length (rod and
+    its inner joint). Ball joints and the arms themselves are taken as stiff."""
+
+    radial: float
+    axial: float
+    tie_rod: float
+
+    def to_json(self) -> dict:
+        return {"radial_N_per_mm": self.radial / 1000.0, "axial_N_per_mm": self.axial / 1000.0,
+                "tie_rod_N_per_mm": self.tie_rod / 1000.0}
+
+
+STIFF = 1e10  # N/m: the ball joints, and the wheel pad that holds the wheel centre's height on the bench
+
+# compliance per unit load at the contact point (body axes), LEFT wheel: rad/N, and rad/(N m) for mz
+COMPLIANCE_KEYS = ("toe_per_fx", "camber_per_fx", "toe_per_fy", "camber_per_fy", "toe_per_mz", "camber_per_mz")
+
+
+def _skew(r: np.ndarray) -> np.ndarray:
+    return np.array([[0.0, -r[2], r[1]], [r[2], 0.0, -r[0]], [-r[1], r[0], 0.0]])
+
+
+def _g(p: np.ndarray, o: np.ndarray) -> np.ndarray:
+    """Small displacement of the point p of a body with reference point o: u + theta x (p - o) = G [u; theta]."""
+    return np.hstack([np.eye(3), -_skew(p - o)])
+
+
+def compliance(hp: Hardpoints, sol: dict, bushings: Bushings) -> dict:
+    """Toe and camber change (rad) of a LEFT wheel per newton at the contact point (body x and y)
+    and per newton metre about body z, at the bench solution `sol` (one travel).
+
+    Three rigid bodies on springs, small displacements: the lower and the upper arm each on its
+    two inner bushings (radial and axial about the pivot axis, free to turn about it), both joined
+    to the knuckle by stiff ball joints; the knuckle also held by the tie rod (a spring along the
+    rod, its inner end fixed: the rack does not move) and at the wheel centre by a stiff vertical
+    spring (the wheel pad of a K&C rig keeps the travel). K q = f for the 18 displacements.
+    """
+    lbj, ubj, wc, cp, rk = sol["lbj"], sol["ubj"], sol["wheel_center"], sol["contact"], sol["rotation"]
+    tro = lbj + rk @ (hp.tie_outer - hp.lca_outer)
+    refs = (hp.lca_front, hp.uca_front, wc)  # reference points: lower arm, upper arm, knuckle
+    kk = np.zeros((18, 18))
+
+    def to_ground(b: int, p: np.ndarray, ks: np.ndarray) -> None:
+        g = _g(p, refs[b])
+        s = slice(6 * b, 6 * b + 6)
+        kk[s, s] += g.T @ ks @ g
+
+    def between(a: int, b: int, p: np.ndarray, ks: np.ndarray) -> None:
+        ga, gb = _g(p, refs[a]), _g(p, refs[b])
+        sa, sb = slice(6 * a, 6 * a + 6), slice(6 * b, 6 * b + 6)
+        kk[sa, sa] += ga.T @ ks @ ga
+        kk[sb, sb] += gb.T @ ks @ gb
+        kk[sa, sb] -= ga.T @ ks @ gb
+        kk[sb, sa] -= gb.T @ ks @ ga
+
+    for b, (pa, pb) in ((0, (hp.lca_front, hp.lca_rear)), (1, (hp.uca_front, hp.uca_rear))):
+        e = _unit(pb - pa)
+        ks = bushings.radial * (np.eye(3) - np.outer(e, e)) + bushings.axial * np.outer(e, e)
+        to_ground(b, pa, ks)
+        to_ground(b, pb, ks)
+    between(0, 2, lbj, STIFF * np.eye(3))
+    between(1, 2, ubj, STIFF * np.eye(3))
+    nt = _unit(tro - hp.tie_inner)
+    to_ground(2, tro, bushings.tie_rod * np.outer(nt, nt))
+    ez = np.array([0.0, 0.0, 1.0])
+    to_ground(2, wc, STIFF * np.outer(ez, ez))
+
+    axle = sol["axle"]
+    c0, t0 = camber_toe_left(axle)
+    gk = _g(cp, wc)
+    out = {}
+    for name, f6 in (("fx", gk.T @ np.array([1.0, 0.0, 0.0])), ("fy", gk.T @ np.array([0.0, 1.0, 0.0])),
+                     ("mz", np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0]))):
+        f = np.zeros(18)
+        f[12:] = f6
+        theta = np.linalg.solve(kk, f)[15:18]
+        c1, t1 = camber_toe_left(axle + np.cross(theta, axle))
+        out[f"toe_per_{name}"] = t1 - t0
+        out[f"camber_per_{name}"] = c1 - c0
+    return out
+
+
 def front_view_ic(hp: Hardpoints) -> np.ndarray | None:
     """Front-view instant centre (y, z) of the arm lines at design, when the pivot axes are along x."""
     def line(inner_a, inner_b, outer):
@@ -192,8 +281,10 @@ def front_view_ic(hp: Hardpoints) -> np.ndarray | None:
     return p1 + t * d1
 
 
-def build_table(hp: Hardpoints, travel: float, n: int = 81) -> dict:
-    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg)."""
+def build_table(hp: Hardpoints, travel: float, n: int = 81, bushings: Bushings | None = None) -> dict:
+    """Sweep the bench over +-travel (m) of wheel travel and return a K&C table (mm, deg); with
+    bushings, every row also has the compliance (deg per kN at the contact point, deg per kN m
+    about z)."""
     bench = DoubleWishboneBench(hp)
     z0 = float(hp.wheel_center[2])
     # Map lower-arm angle to travel: march outward from design in small steps.
@@ -232,7 +323,7 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81) -> dict:
     dy_dz = np.gradient(cp[:, 1], cp[:, 2])
     for z, s, slope in zip(grid, sols, dy_dz):
         d = s["wheel_center"] - wc0
-        rows.append({
+        row = {
             "travel_mm": float(z) * 1000.0,
             "wheel_center_mm": [float(x) * 1000.0 for x in d],
             "camber_deg": math.degrees(s["camber"]),
@@ -240,14 +331,25 @@ def build_table(hp: Hardpoints, travel: float, n: int = 81) -> dict:
             "contact_mm": [float(x) * 1000.0 for x in s["contact"]],
             # front-view kinematic roll centre from the contact point's motion
             "roll_center_height_mm": float(s["contact"][1] * slope + s["contact"][2]) * 1000.0,
-        })
-    return {
+        }
+        if bushings is not None:
+            for key, v in compliance(hp, s, bushings).items():
+                row[f"{key}_{COMPLIANCE_UNIT[key]}"] = math.degrees(v) * 1000.0
+        rows.append(row)
+    out = {
         "kind": "kc_table",
         "suspension": "double_wishbone",
         "side": "left",
         "hardpoints_mm": hp.to_json(),
         "rows": rows,
     }
+    if bushings is not None:
+        out["bushings"] = bushings.to_json()
+    return out
+
+
+# the table's unit of each compliance column (per kN at the contact point, per kN m about z)
+COMPLIANCE_UNIT = {k: ("deg_per_kNm" if k.endswith("_mz") else "deg_per_kN") for k in COMPLIANCE_KEYS}
 
 
 def save_table(table: dict, path: str | Path) -> None:
@@ -265,6 +367,7 @@ class PathPoly:
     coef rows: dx, dy, dz (m) of the wheel centre from its design position,
     and the change of camber and toe (rad) from design. Highest power first.
     camber0 / toe0: the design (static) camber and toe.
+    comp rows (when the table has them): COMPLIANCE_KEYS in rad/N and rad/(N m).
     """
 
     coef: np.ndarray  # (5, deg+1)
@@ -273,6 +376,7 @@ class PathPoly:
     camber0: float = 0.0
     toe0: float = 0.0
     roll_center_height: float | None = None  # m, at design travel
+    comp: np.ndarray | None = None  # (6, deg+1)
 
     @classmethod
     def vertical(cls) -> "PathPoly":
@@ -295,4 +399,8 @@ class PathPoly:
         rc = None
         if "roll_center_height_mm" in rows[0]:
             rc = float(np.interp(0.0, s, [r["roll_center_height_mm"] for r in rows])) / 1000.0
-        return cls(coef, float(s[0]), float(s[-1]), c0, t0, rc)
+        comp = None
+        cols = [f"{k}_{COMPLIANCE_UNIT[k]}" for k in COMPLIANCE_KEYS]
+        if all(c in rows[0] for c in cols):
+            comp = np.array([np.polyfit(s, np.radians([r[c] for r in rows]) / 1000.0, POLY_DEGREE) for c in cols])
+        return cls(coef, float(s[0]), float(s[-1]), c0, t0, rc, comp)

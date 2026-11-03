@@ -8,6 +8,9 @@
 5. rigid tilt table, closed form: atan((t/2) / h) = 50.19 deg for t = 1.2 m, h = 0.5 m (check-vehicle values),
    the same to the left and right
 6. parked on a 20 % slope with the brakes on: moves < 1 mm in 60 s
+7. the Magic Formula tyre at a wheel's static load: peak D = mu Fz in both directions, the slope at
+   zero slip BCD = the slip and cornering stiffness K0 takes, the combined-slip forces inside the
+   friction ellipse (to 5 %), and an aligning moment that turns the wheel toward its motion
 """
 
 from __future__ import annotations
@@ -224,14 +227,73 @@ def check_parked_on_slope() -> list[dict]:
                    "mm", 1.0, "a held vehicle must not creep (tyre deflection model has no slip at rest)")]
 
 
+def _peak(f, lo: float, hi: float) -> float:
+    """Largest value of a single-peaked f on [lo, hi] (golden-section search)."""
+    g = (math.sqrt(5.0) - 1.0) / 2.0
+    a, b = lo, hi
+    for _ in range(200):
+        c, d = b - g * (b - a), a + g * (b - a)
+        if f(c) > f(d):
+            b = d
+        else:
+            a = c
+    return f(0.5 * (a + b))
+
+
+def check_tyre() -> list[dict]:
+    d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="tyre check")
+    veh = build_vehicle(d)
+    c = veh.corners[0]
+    mf, fz, mu = c.mf, c.static_load, c.mu
+    case = f"Magic Formula tyre of the check vehicle's FL wheel at its static load {fz:.0f} N, mu {mu:g}"
+    # peaks of the pure-slip curves without their vertical shifts (the D of the formula)
+    dfz = (fz - mf.fz0) / mf.fz0
+    svx = fz * (mf.PVX1 + mf.PVX2 * dfz) * mf.lmux
+    peak_x = _peak(lambda k: mf.fx0(fz, k)[0] - svx, 0.0, 1.0)
+    svy = mf._fy0(fz, 0.0, 0.0)[4]
+    peak_y = _peak(lambda a: -(mf.fy0(fz, a) - svy), 0.0, math.tan(mf.alpha_max))
+    # slopes at zero slip of the formula (kappa_x = 0, alpha_y = 0: the horizontal shifts taken out)
+    h = 1e-7
+    shx = mf.PHX1 + mf.PHX2 * dfz
+    kx = (mf.fx0(fz, -shx + h)[0] - mf.fx0(fz, -shx - h)[0]) / (2.0 * h)
+    shy = mf._fy0(fz, 0.0, 0.0)[3]
+    ky = -(mf.fy0(fz, -shy + h) - mf.fy0(fz, -shy - h)) / (2.0 * h)
+    # combined slip: the largest (Fx / Dx)^2 + (Fy / Dy)^2 over kappa -1..1, alpha -55..55 deg
+    dx_, dy_ = mf.mu_x(fz) * fz, mf.mu_y(fz) * fz
+    worst = 0.0
+    for i in range(-50, 51):
+        for deg in range(-55, 56):
+            fx, fy, _ = mf.forces(fz, i / 50.0, math.tan(math.radians(deg)))
+            worst = max(worst, math.hypot(fx / dx_, fy / dy_))
+    mz_l = mf.forces(fz, 0.0, math.tan(math.radians(2.0)))[2]
+    mz_r = mf.forces(fz, 0.0, math.tan(math.radians(-2.0)))[2]
+    src = "Magic Formula: D sin(C atan(B x - E (B x - atan B x))) peaks at D; dF/dx at x = 0 is B C D"
+    return [
+        _check(case + ": peak Fx", "peak_longitudinal_force", mu * fz, peak_x, "N", 1e-6, src + "; D_x = mu_x F_z"),
+        _check(case + ": peak Fy", "peak_lateral_force", mu * fz, peak_y, "N", 1e-6, src + "; D_y = mu_y F_z"),
+        _check(case + ": slope dFx/dkappa at zero slip = the slip stiffness K0 takes", "slip_stiffness", c.c_long, kx,
+               "N", 1e-6, src + " = K_xk (4.E15) scaled to the design"),
+        _check(case + ": slope -dFy/dalpha at zero slip = the cornering stiffness K0 takes", "cornering_stiffness",
+               c.c_lat, ky, "N/rad", 1e-6, src + " = K_ya (4.E25) scaled to the design"),
+        _check(case + ": combined slip, kappa -1..1 and alpha -55..55 deg: largest hypot(Fx/Dx, Fy/Dy)",
+               "friction_ellipse", 1.0, worst, "1", 0.05,
+               "the friction ellipse of the pure-slip peaks; the combined-slip weighting is a fit, so 5 % over is allowed",
+               passed=worst <= 1.05),
+        _check(case + ": aligning moment at alpha +2 deg and -2 deg turns the wheel toward its motion (Mz(+2) > 0 > Mz(-2))",
+               "aligning_moment_sign", 1.0, 1.0 if mz_l > 0.0 > mz_r else 0.0, "1", 0.0,
+               "ISO signs: positive alpha slides the contact to the left, and the moment turns the heading that way"),
+    ]
+
+
 @lru_cache(maxsize=1)
 def _base() -> tuple:
     out = []
-    for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt, check_parked_on_slope):
+    for fn in (check_static_loads, check_mirror, check_free_fall, check_quarter_car, check_rigid_tilt, check_parked_on_slope,
+               check_tyre):
         out += fn()
     return tuple(out)
 
 
 def base_checks() -> list[dict]:
-    """All six pre-run checks (computed once per process)."""
+    """All seven pre-run checks (computed once per process)."""
     return [dict(c) for c in _base()]

@@ -36,7 +36,8 @@ class Modal(BuiltinTool):
     domain = "nvh"
     base = "K1"
     tests = ["N1"]
-    formulas = ["modal.spring_mass", "modal.quarter_car", "modal.simple_beam_first_mode", "modal.rotation_excitation"]
+    formulas = ["modal.spring_mass", "modal.quarter_car", "modal.ladder_twist_mode", "modal.simple_beam_first_mode",
+                "modal.rotation_excitation"]
     load_case_params = (
         Param("speed", "km/h", "driving speed for the wheel and motor rotation frequencies "
               "(without it: the design variable max_speed)"),
@@ -46,6 +47,9 @@ class Modal(BuiltinTool):
     predicts = (
         Predicts("first_body_mode", "modal.quarter_car", "f", "the body bouncing on suspension and tyre springs"),
         Predicts("first_body_mode", "modal.spring_mass", "f", "k = all suspension springs together, m = the sprung mass"),
+        Predicts("first_frame_mode", "modal.ladder_twist_mode", "f",
+                 "a ladder frame's twist; inputs from hiraku.solvers.k0_handcalc.frame_inputs.ladder_twist_inputs("
+                 "design, loading=...)"),
         Predicts("first_frame_mode", "modal.simple_beam_first_mode", "f1",
                  "one rail as a simply supported beam on the axles, without the masses it carries"),
         Predicts("wheel_rotation_frequency", "modal.rotation_excitation", "f_wheel"),
