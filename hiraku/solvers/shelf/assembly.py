@@ -33,6 +33,7 @@ def _plain(parts, nodes=(), members=(), supports=()):
 
 class Assembly(BuiltinTool):
     name = "assembly"
+    stage = 0  # layout: interference, occupant fit, assembly order
     title = "組み立て・干渉・人 (箱の分離軸の判定)"
     domain = "assembly"
     base = "K4"

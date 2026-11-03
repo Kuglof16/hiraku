@@ -35,10 +35,11 @@ def _clear():
 
 
 def _timed(rec: dict) -> dict:
-    """The record without what is a time (effects in s, wall_time_s) or says where the levels were solved."""
+    """The record without what is a time (wall_time_s, timings_s) or says where the levels were solved."""
     out = json.loads(json.dumps(rec))
     out.pop("wall_time_s", None)
-    out["effects"] = [e for e in out.get("effects", []) if e.get("unit") != "s"]
+    out.pop("timings_s", None)
+    out["effects"] = [e for e in out.get("effects", []) if not e["name"].startswith("mesh convergence solves")]
     return out
 
 
@@ -80,6 +81,13 @@ class ConvergenceLevels(unittest.TestCase):
         for key in sorted(set(a) | set(b)):
             with self.subTest(key=key):
                 self.assertEqual(json.dumps(a.get(key), sort_keys=True), json.dumps(b.get(key), sort_keys=True))
+
+    def test_clock_times_only_in_timings(self):
+        for rec in (self.serial, self.parallel):
+            self.assertEqual([e["name"] for e in rec["effects"] if e.get("unit") == "s"], [])
+            self.assertIn("shell_total", rec["timings_s"])
+            self.assertEqual(sorted(k for k in rec["timings_s"] if k.startswith("convergence_level_")),
+                             ["convergence_level_10mm", "convergence_level_40mm"])
 
     def test_levels_say_dof_and_where(self):
         def solves(rec):

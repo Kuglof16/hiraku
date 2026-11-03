@@ -198,6 +198,7 @@ def upstream_series(upstream: dict | None, design: Record) -> tuple[str, np.ndar
 
 class Fatigue(BuiltinTool):
     name = "fatigue"
+    stage = 3  # fatigue on road spectra
     title = "悪路の疲労 (輪の力 → フレームの応力 → レインフロー → S-N とマイナー則)"
     domain = "strength"
     base = "K1"

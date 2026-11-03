@@ -306,7 +306,7 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
                   f"on the joint nodes (ring and wall patch); sharp corners, no welds"
                   + ("; strips of t x t elements beside the joints' weld lines (grid lines at t and 2t from them, and "
                      "at t, 2t and 3t from the footprints' corners along them)" if ms.weld_strips else "")),
-         "value": res["timings"].get("total_s", 0.0), "unit": "s"},
+         "value": float(ms.n_elements), "unit": "1"},  # its clock times go to timings_s (shell_timings)
         {"name": "largest element aspect ratio (longest / shortest edge)",
          "value": float(ms.aspect_ratios().max()), "unit": "1"},
     ]
@@ -646,8 +646,8 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     """analysis.mesh_convergence and the effects, from res (solved at its element size) and the two other levels
     of convergence_sizes (`levels`, started before res was solved; None: solved here). The judged hot spot is
     read on the same weld line and surface on every level: the one of largest size on the level that is the
-    version's mesh (else res's level). The time and free DOF of every level go into the effects and into
-    res's model.timings["convergence_levels"]."""
+    version's mesh (else res's level). The free DOF of every level go into the effects, its clock time
+    into res's model.timings["convergence_levels"] (shell_timings reads it for timings_s)."""
     size = res["mesh"].element_size_mm
     levels = levels or Levels(design, size, solve)
     t0 = time.perf_counter()
@@ -769,17 +769,30 @@ def mesh_convergence(design: Record, res: dict, solve: dict, mesh: Record | None
     globs = [(row["zz"] or zz_res)["global_pct"] for row in rows]
     effects.append({"name": (f"error estimate (Zienkiewicz-Zhu) of the whole model per level: {sz} mm -> "
                              f"{' / '.join(f'{g:.1f}' for g in globs)} %"), "value": float(globs[-1]), "unit": "%"})
-    extra = sum(times.values())
     dof = {round(r["element_size_mm"], 9): r["n_dof_free"] for r in timing_rows}
     effects.append({"name": ("mesh convergence solves: " + ", ".join(
-        f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements, {dof.get(round(float(s), 9), 0)} free DOF) "
-        f"{t:.1f} s" for s, t in times.items()) + f" (in {solved_in})"),
-        "value": extra, "unit": "s"})
+        f"{s:g} mm ({levels_res[s]['mesh'].n_elements} elements, {dof.get(round(float(s), 9), 0)} free DOF)"
+        for s in times) + f" (in {solved_in}; their clock times in timings_s)"),
+        "value": float(len(times)), "unit": "1"})
     return rec, effects
+
+
+def shell_timings(res: dict, converged: bool) -> dict[str, float]:
+    """analysis.timings_s (clock times, never in results, effects or text): the shell solve's parts
+    (analyze_shell's *_s timings) and, after mesh_convergence, each other level's solve and the wait for them."""
+    out = {f"shell_{k[:-2]}": float(v) for k, v in res["timings"].items() if k.endswith("_s")}
+    if converged:
+        t = res["frame"].model.timings
+        for row in t.get("convergence_levels", []):
+            if row["where"] != "base":
+                out[f"convergence_level_{row['element_size_mm']:g}mm"] = float(row["total_s"])
+        out["convergence_wait"] = float(t.get("convergence_wait", 0.0))
+    return out
 
 
 class FrameShell(BuiltinTool):
     name = "frame_shell"
+    stage = 3  # shell FE, mesh convergence
     title = "フレームの静的 (シェル: 管の壁の板)"
     domain = "strength"
     base = "K1"
@@ -871,6 +884,7 @@ class FrameShell(BuiltinTool):
             out["mesh_convergence"], eff = mesh_convergence(design, res, solve, mesh, zz, levels)
             out["effects"] += eff
             out["assumptions"].append(convergence_assumption())
+        out["timings_s"] = shell_timings(res, not series and conv == "3")
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
