@@ -39,6 +39,33 @@ Joints (at each design node where tube ends meet):
   the other tube. Listed in `notes`.
 - Open tube ends are not closed, corners are sharp (no corner radius) and
   welds are not modelled (shared nodes are fully continuous).
+
+Joint reinforcement (the beam model K1 keeps its members and nodes either way):
+- design variable cross_members_through = 1: at every T joint the branch's
+  four walls go on through a hole in the near wall of the tube it meets, to
+  the mid-surface of that tube's far wall. The branch gets a grid line at
+  the near wall, its ring there is shared with the near wall (the hole's
+  edge; the near wall inside the footprint is left out) and its end ring
+  with the far wall. L joints stay as they are. A branch whose footprint
+  reaches the edge of the wall (its walls would lie in the other tube's
+  walls) stays a plain T joint (listed in `notes`).
+- parts of kind "gusset": a flat right-triangle plate at a T joint, carried
+  by the joint's node. box.center_mm is the triangle's centroid, box.size_mm
+  [leg along the tube that passes through, leg along the branch, plate
+  thickness]. The plate lies in the plane of the branch's upper (or lower)
+  wall mid-surface; its right-angle corner is where the through tube's side
+  wall meets the branch's side wall, one leg runs along the through tube's
+  wall and the other along the branch's corner line, and both legs share
+  nodes with the tube walls (welded). It is meshed with quadrilaterals (the
+  triangle split into three quads at its centroid and edge mid-points, each
+  cut n x n); its elements carry the part id in element_member and take the
+  branch member's material.
+
+Wheel mounts: for each support whose frame node lies inside a straight
+tube, `mounts[frame node]` are that tube's wall nodes (all four walls)
+within +- the tube's height h of the node along the tube (an assumed
+bracket size), and `mount_elements` the elements whose nodes are all in
+that set (the bracket's footprint).
 """
 
 from __future__ import annotations
@@ -108,6 +135,8 @@ class _Run:
     t: float = 0.0
     area: float = 0.0
     order: int = 0
+    height: float = 0.0  # outer section size along ey (h of a rect tube, d of a round one)
+    extra_s: set = field(default_factory=set)  # grid lines from through joints and gussets
     ext: list[float] = field(default_factory=lambda: [0.0, 0.0])  # added length at start / end (negative: cut back)
     forced_s: set = field(default_factory=set)
     forced_c: list = field(default_factory=lambda: [set(), set(), set(), set()])
@@ -164,6 +193,26 @@ class _Joint:
     c_set: tuple = ()
     footprint: tuple = ()  # (s0, s1, c0, c1)
     reason: str = ""
+    through: bool = False  # the branch goes on through the near wall to the far wall
+    dist: float = 0.0  # node to the near wall's mid-surface
+    far_wall: int = -1
+    far_c_set: tuple = ()
+    far_footprint: tuple = ()
+    note: str = ""
+
+
+@dataclass
+class _Gusset:
+    id: str
+    joint: _Joint
+    O: np.ndarray  # right-angle corner
+    u_s: np.ndarray  # along the through tube
+    u_in: np.ndarray  # along the branch, away from the through tube
+    normal: np.ndarray  # out of the branch (the plate's top side)
+    g_s: float
+    g_in: float
+    t: float
+    n: int  # each of the three quads is cut n x n
 
 
 @dataclass
@@ -199,6 +248,11 @@ class ShellMesh:
     notes: list[str]
     shared_rings: dict[str, list[tuple[str, np.ndarray, np.ndarray]]] = field(default_factory=dict)
     member_axes: dict[str, np.ndarray] = field(default_factory=dict)  # member -> (3, 3) rows ex, ey, ez
+    mounts: dict[str, np.ndarray] = field(default_factory=dict)  # support frame node -> wall nodes of its mount
+    mount_elements: dict[str, np.ndarray] = field(default_factory=dict)  # frame node -> elements inside the mount
+    mount_half_mm: dict[str, float] = field(default_factory=dict)  # frame node -> half length of the mount
+    part_material: dict[str, str] = field(default_factory=dict)  # gusset part -> member whose material it takes
+    through_joints: list[str] = field(default_factory=list)  # design nodes of the through joints
 
     @property
     def n_nodes(self) -> int:
@@ -339,8 +393,10 @@ def _runs(design: dict, mem: dict[str, _Member]) -> tuple[list[_Run], dict]:
         if first.shape == "rect_tube":
             r.H = first.dims["h"] - first.t
             r.B = first.dims["b"] - first.t
+            r.height = first.dims["h"]
         else:
             r.R = (first.dims["d"] - first.t) / 2.0
+            r.height = first.dims["d"]
         out.append(r)
     return out, ends
 
@@ -400,8 +456,9 @@ def _end_s(run: _Run, end: int) -> float:
     return lo if end == 0 else hi
 
 
-def _classify(runs: list[_Run], ends: dict) -> list[_Joint]:
-    """Joint kinds at every node, with the run ends extended or cut back to suit."""
+def _classify(runs: list[_Run], ends: dict, through_mode: bool = False) -> list[_Joint]:
+    """Joint kinds at every node, with the run ends extended or cut back to suit (through_mode:
+    T branches go on to the far wall)."""
     joints = []
     for node in ends:
         through = [r for r in runs if node in r.nodes_at and r.start_node != node and r.end_node != node]
@@ -420,8 +477,11 @@ def _classify(runs: list[_Run], ends: dict) -> list[_Joint]:
                 al = _aligned_rect(r, host, u)
                 if al is not None:
                     wall, dist = al
-                    r.ext[e] = -dist
-                    joints.append(_Joint(node, "T", r.id, e, host.id, wall))
+                    j = _Joint(node, "T", r.id, e, host.id, wall, dist=dist)
+                    if through_mode:
+                        j.through, j.far_wall = True, (wall + 2) % 4
+                    r.ext[e] = dist if j.through else -dist
+                    joints.append(j)
                 else:
                     r.ext[e] = -host.half_extent(u)
                     joints.append(_Joint(node, "tied", r.id, e, host.id, reason="not square to the wall of a rect tube"))
@@ -450,10 +510,16 @@ def _classify(runs: list[_Run], ends: dict) -> list[_Joint]:
     return joints
 
 
-def _ring_points(run: _Run, end: int, size: float) -> np.ndarray:
+def _ring_points(run: _Run, end: int, size: float, s: float | None = None) -> np.ndarray:
+    """Ring points of a run at its end (or at station s)."""
     yz, _ = _ring_yz(run, size)
-    s = _end_s(run, end)
+    s = _end_s(run, end) if s is None else s
     return run.origin + s * run.ex + yz[:, :1] * run.ey + yz[:, 1:] * run.ez
+
+
+def _near_s(run: _Run, j: _Joint) -> float:
+    """Station of a through joint's branch at the near wall's mid-surface."""
+    return j.dist if j.branch_end == 0 else run.length - j.dist
 
 
 def _set_forced(runs: list[_Run], joints: list[_Joint], size: float) -> None:
@@ -465,7 +531,8 @@ def _set_forced(runs: list[_Run], joints: list[_Joint], size: float) -> None:
             if j.kind == "tied":
                 continue
             host, br = runs[j.host], runs[j.branch]
-            pts = _ring_points(br, j.branch_end, size)  # from the branch's current lines
+            near = _near_s(br, j) if j.through else None
+            pts = _ring_points(br, j.branch_end, size, near)  # from the branch's current lines
             ss, cs = [], []
             for p in pts:
                 s, y, z = host.local(p)
@@ -475,6 +542,11 @@ def _set_forced(runs: list[_Run], joints: list[_Joint], size: float) -> None:
             j.footprint = (min(ss), max(ss), min(cs), max(cs))
             new_s[host.id].update(j.s_set)
             new_c[host.id][j.wall].update(j.c_set)
+            if j.through:
+                cs = [host.wall_of(*host.local(p)[1:])[1] for p in _ring_points(br, j.branch_end, size)]
+                j.far_c_set = _key(cs)
+                j.far_footprint = (min(ss), max(ss), min(cs), max(cs))
+                new_c[host.id][j.far_wall].update(j.far_c_set)
         changed = any(new_s[r.id] != r.forced_s or new_c[r.id] != r.forced_c for r in runs)
         for r in runs:
             r.forced_s, r.forced_c = new_s[r.id], new_c[r.id]
@@ -493,16 +565,135 @@ def _clashes(runs: list[_Run], joints: list[_Joint]) -> list[_Joint]:
         host = runs[j.host]
         s0, s1, c0, c1 = j.footprint
         own_s, own_c = set(j.s_set), set(j.c_set)
-        if any(s0 + TOL < s < s1 - TOL and s not in own_s for s in _key(host.forced_s)):
+        if any(s0 + TOL < s < s1 - TOL and s not in own_s for s in _key(host.forced_s | host.extra_s)):
             bad.append(j)
             continue
         if any(c0 + TOL < c < c1 - TOL and c not in own_c for c in _key(host.forced_c[j.wall])):
             bad.append(j)
             continue
+        if j.through:
+            f0, f1 = j.far_footprint[2:]
+            if any(f0 + TOL < c < f1 - TOL and c not in set(j.far_c_set) for c in _key(host.forced_c[j.far_wall])):
+                bad.append(j)
+                continue
         lo, hi = host.s_range()
         if s0 < lo - TOL or s1 > hi + TOL or c0 < -TOL or c1 > host.wall_lengths()[j.wall] + TOL:
             bad.append(j)
     return bad
+
+
+def _fit_through(runs: list[_Run], joints: list[_Joint]) -> bool:
+    """Through joints whose footprint reaches an edge of the wall go back to plain T joints; True if any did."""
+    changed = False
+    for j in joints:
+        if not j.through or j.kind == "tied":
+            continue
+        host = runs[j.host]
+        Lw = host.wall_lengths()
+        c0, c1 = j.footprint[2:]
+        f0, f1 = j.far_footprint[2:]
+        if c0 <= TOL or c1 >= Lw[j.wall] - TOL or f0 <= TOL or f1 >= Lw[j.far_wall] - TOL:
+            j.through = False
+            runs[j.branch].ext[j.branch_end] = -j.dist
+            j.note = "the branch is as wide as the wall it meets, so its walls would lie in that tube's walls"
+            changed = True
+    return changed
+
+
+def _untie_through(runs: list[_Run], j: _Joint) -> None:
+    """A through joint that becomes tied: the branch stops at the near wall again."""
+    if j.through:
+        j.through = False
+        runs[j.branch].ext[j.branch_end] = -j.dist
+
+
+def _gusset_parts(design: dict) -> list[dict]:
+    return [p for p in design.get("parts", []) if p.get("kind") == "gusset"]
+
+
+def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], size: float) -> list[_Gusset]:
+    """Gusset geometry from the parts, and the grid lines they need (run.extra_s, with the through joints' lines)."""
+    for r in runs:
+        r.extra_s = set()
+    for j in joints:
+        if j.through and j.kind != "tied":
+            runs[j.branch].extra_s.add(round(_near_s(runs[j.branch], j), 9))
+    out = []
+    for p in parts:
+        carried = p.get("carried_by") or []
+        if len(carried) != 1:
+            raise DesignError(f"gusset {p['id']!r} must be carried by exactly one frame node (its joint), "
+                              f"it names {len(carried)}")
+        node = carried[0]
+        c = np.asarray(p["box"]["center_mm"], float)
+        cands = []
+        for j in joints:
+            if j.node != node or j.kind != "T":
+                continue
+            host, br = runs[j.host], runs[j.branch]
+            n0 = host.origin + host.nodes_at[node] * host.ex
+            u_in = _end_dir(br, j.branch_end)
+            if (c - n0) @ u_in > 0:
+                cands.append((j, host, br, n0, u_in))
+        if not cands:
+            raise DesignError(f"gusset {p['id']!r}: node {node!r} has no T joint (a tube ending square on the side "
+                              f"of a rect tube, sharing its ring) on the side of the gusset's centre; put gussets "
+                              f"at T joints")
+        j, host, br, n0, u_in = cands[0]
+        u_s = host.ex if (c - n0) @ host.ex >= 0 else -host.ex
+        u_n = np.cross(host.ex, u_in)
+        u_n /= np.linalg.norm(u_n)
+        if (c - n0) @ u_n < 0:
+            u_n = -u_n
+        g_s, g_in, t = (float(v) for v in p["box"]["size_mm"])
+        if min(g_s, g_in, t) <= 0:
+            raise DesignError(f"gusset {p['id']!r} needs positive legs and thickness, got size_mm {p['box']['size_mm']}")
+        O = n0 + u_in * j.dist + u_s * br.half_extent(u_s) + u_n * br.half_extent(u_n)
+        want = O + u_s * g_s / 3.0 + u_in * g_in / 3.0
+        if np.linalg.norm(want - c) > 1.0:
+            raise DesignError(f"gusset {p['id']!r}: its centre {np.round(c, 2).tolist()} is not the centroid of a "
+                              f"plate at the corner of joint {node!r} ({np.round(want, 2).tolist()} for these legs)")
+        n = max(1, math.ceil(math.hypot(g_s, g_in) / 2.0 / size - 1e-9))  # half the hypotenuse is the longest side
+        k = np.arange(1, 2 * n + 1) / (2 * n)
+        hs = host.local(O)[0] + (u_s @ host.ex) * g_s * k
+        bs = br.local(O)[0] + (u_in @ br.ex) * g_in * k
+        for run, ss, leg in ((host, hs, "along the tube it sits on"), (br, bs, "along the branch")):
+            lo, hi = run.s_range()
+            if ss.min() < lo - TOL or ss.max() > hi + TOL:
+                raise DesignError(f"gusset {p['id']!r}: its leg {leg} runs past the end of the tube; make it shorter")
+            run.extra_s.update(round(float(s), 9) for s in ss)
+        out.append(_Gusset(p["id"], j, O, u_s, u_in, u_n, g_s, g_in, t, n))
+    return out
+
+
+# the three quads of a gusset in triangle coordinates (a along u_s, b along u_in): corner, mid-points, centroid
+_TRI_QUADS = [[(0.0, 0.0), (0.5, 0.0), (1 / 3, 1 / 3), (0.0, 0.5)],
+              [(0.5, 0.0), (1.0, 0.0), (0.5, 0.5), (1 / 3, 1 / 3)],
+              [(0.0, 0.5), (1 / 3, 1 / 3), (0.5, 0.5), (0.0, 1.0)]]
+
+
+def _gusset_grid(g: _Gusset) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Points (P, 3), quads (Q, 4) into them (counter-clockwise seen from the top side) and which points lie on a leg."""
+    pts, quads, on_leg = [], [], []
+    n = g.n
+    flip = np.cross(g.u_s, g.u_in) @ g.normal < 0
+    for corners in _TRI_QUADS:
+        cab = np.array(corners)
+        u = np.arange(n + 1) / n
+        uu, vv = np.meshgrid(u, u, indexing="ij")  # uu along corner 0 -> 1, vv along corner 0 -> 3
+        ab = ((1 - uu)[..., None] * (1 - vv)[..., None] * cab[0] + uu[..., None] * (1 - vv)[..., None] * cab[1]
+              + uu[..., None] * vv[..., None] * cab[2] + (1 - uu)[..., None] * vv[..., None] * cab[3])
+        base = sum(len(p) for p in pts)
+        idx = base + np.arange((n + 1) ** 2).reshape(n + 1, n + 1)
+        i, k = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
+        q = np.stack([idx[i, k], idx[i + 1, k], idx[i + 1, k + 1], idx[i, k + 1]], axis=-1).reshape(-1, 4)
+        if flip:
+            q = q[:, ::-1]
+        ab = ab.reshape(-1, 2)
+        pts.append(g.O + ab[:, :1] * g.g_s * g.u_s + ab[:, 1:] * g.g_in * g.u_in)
+        on_leg.append((np.abs(ab[:, 0]) < 1e-12) | (np.abs(ab[:, 1]) < 1e-12))
+        quads.append(q)
+    return np.vstack(pts), np.vstack(quads), np.concatenate(on_leg)
 
 
 def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellMesh:
@@ -512,13 +703,22 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         raise ValueError("element_size_mm must be positive")
     mem = _members(design)
     runs, ends = _runs(design, mem)
-    joints = _classify(runs, ends)
-    for _ in range(len(joints) + 1):
+    joints = _classify(runs, ends, through_mode(design))
+    gparts = _gusset_parts(design)
+    run_through = {n: r for r in runs for n in r.nodes_at if n not in (r.start_node, r.end_node)}
+    mount_nodes = [s.get("frame_node") for s in design.get("supports", []) if s.get("frame_node") in run_through]
+    gussets: list[_Gusset] = []
+    for _ in range(2 * len(joints) + 2):
         _set_forced(runs, joints, size)
+        if _fit_through(runs, joints):
+            continue
+        gussets = _place_gussets(runs, joints, gparts, size)
+        _mount_lines(run_through, mount_nodes, joints)
         bad = _clashes(runs, joints)
         if not bad:
             break
         for j in bad:
+            _untie_through(runs, j)
             j.kind = "tied"
             j.reason = "its grid lines would clash with another joint's"
 
@@ -530,7 +730,7 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         foot = [(j.footprint[0], j.footprint[1]) for j in joints if j.kind != "tied" and j.host == r.id]
         member_lines = [s for s in r.nodes_at.values()
                         if lo < s < hi and not any(a - TOL <= s <= b + TOL for a, b in foot)]
-        ss = _divide([lo, hi, *[s for s in r.forced_s if lo < s < hi], *member_lines], size)
+        ss = _divide([lo, hi, *[s for s in r.forced_s | r.extra_s if lo < s < hi], *member_lines], size)
         yz, _ = _ring_yz(r, size)
         P = (r.origin[None, None, :] + ss[:, None, None] * r.ex + yz[None, :, :1] * r.ey + yz[None, :, 1:] * r.ez)
         ns, nc = len(ss), len(yz)
@@ -543,6 +743,30 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         run_elems.append(el)
         offset += ns * nc
     X = np.vstack(all_nodes)
+
+    # ---- holes in the near walls of through joints
+    hole_count: dict[str, int] = defaultdict(int)
+    for j in joints:
+        if not j.through or j.kind == "tied":
+            continue
+        host = runs[j.host]
+        el = run_elems[host.id]
+        loc = (X[el].mean(axis=1) - host.origin) @ np.stack([host.ex, host.ey, host.ez]).T
+        w = np.array([host.wall_of(y, z) for y, z in loc[:, 1:]])
+        s0, s1, c0, c1 = j.footprint
+        hole = ((w[:, 0] == j.wall) & (loc[:, 0] > s0 + TOL) & (loc[:, 0] < s1 - TOL)
+                & (w[:, 1] > c0 + TOL) & (w[:, 1] < c1 - TOL))
+        run_elems[host.id] = el[~hole]
+        hole_count[j.node] += int(hole.sum())
+
+    # ---- gusset plates (their leg nodes must fall on tube nodes)
+    n_tube = len(X)
+    gus_elems, gus_legs = [], []
+    for g in gussets:
+        P, Q, leg = _gusset_grid(g)
+        gus_elems.append(Q + len(X))
+        gus_legs.append(len(X) + np.nonzero(leg)[0])
+        X = np.vstack([X, P])
 
     # ---- merge coincident nodes (shared joint rings)
     parent = np.arange(len(X))
@@ -558,21 +782,39 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         if ra != rb:
             parent[max(ra, rb)] = min(ra, rb)
     roots = np.array([find(i) for i in range(len(X))])
+    for g, legs in zip(gussets, gus_legs):
+        loose = int(np.sum(roots[legs] >= n_tube))
+        if loose:
+            raise DesignError(f"gusset {g.id!r}: {loose} nodes of its legs do not fall on the tube walls' grid, so it "
+                              f"would not be welded on; report the design")
     uniq, new_of = np.unique(roots, return_inverse=True)
     nodes = X[uniq]
-    grids = [(ss, new_of[idx]) for ss, idx in grids]
     elements_per_run = [new_of[el] for el in run_elems]
+    gus_el = [new_of[q] for q in gus_elems]
+    # drop nodes left without elements (inside the holes of through joints)
+    used = np.zeros(len(nodes), bool)
+    used[np.concatenate([e.ravel() for e in elements_per_run + gus_el])] = True
+    remap = -np.ones(len(nodes), int)
+    remap[used] = np.arange(int(used.sum()))
+    nodes = nodes[used]
+    grids = [(ss, remap[new_of[idx]]) for ss, idx in grids]
+    elements_per_run = [remap[el] for el in elements_per_run]
+    gus_el = [remap[q] for q in gus_el]
 
     # ---- element member, stations
-    elements = np.vstack(elements_per_run)
+    elements = np.vstack(elements_per_run + gus_el)
     centres = nodes[elements].mean(axis=1)
     element_member: list[str] = []
+    run_first = []
     for r, el in zip(runs, elements_per_run):
+        run_first.append(len(element_member))
         c = nodes[el].mean(axis=1)
         s = (c - r.origin) @ r.ex
         bounds = np.array([r.member_s[m][1] for m in r.members[:-1]])
         k = np.searchsorted(bounds, s)
         element_member.extend(r.members[i] for i in k)
+    for g, q in zip(gussets, gus_el):
+        element_member.extend([g.id] * len(q))
     st_s = np.empty(len(elements))
     st_yz = np.empty((len(elements), 2))
     for mid, m in mem.items():
@@ -580,6 +822,11 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         rel = centres[sel] - m.a
         st_s[sel] = rel @ m.d
         st_yz[sel] = np.stack([rel @ m.ey, rel @ m.ez], axis=1)
+    for g in gussets:
+        sel = np.array([em == g.id for em in element_member])
+        rel = centres[sel] - g.O
+        st_s[sel] = rel @ g.u_s
+        st_yz[sel] = np.stack([rel @ g.u_in, rel @ g.normal], axis=1)
 
     # ---- rings, joints, links
     run_of = {mid: r for r in runs for mid in r.members}
@@ -603,7 +850,7 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
     joint_nodes: dict[str, set] = defaultdict(set)
     joint_kinds: dict[str, str] = {}
     shared_rings: dict[str, list] = defaultdict(list)
-    notes_T, notes_L, notes_tied = [], [], []
+    notes_T, notes_L, notes_tied, notes_through = [], [], [], []
     for node, es in ends.items():
         for mid, end in es:
             joint_nodes[node].update(int(i) for i in end_rings[(mid, end)])
@@ -614,7 +861,7 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
         h_ss, h_idx = grids[host.id]
         if j.kind == "tied":
             cand = np.unique(h_idx.ravel())
-            cand = np.array([c for c in cand if c not in slaves])
+            cand = np.array([c for c in cand if c >= 0 and c not in slaves])
             tree = cKDTree(nodes[cand])
             _, k = tree.query(nodes[ring])
             for s_node, m_node in zip(ring, cand[k]):
@@ -627,18 +874,35 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
                               f"{host.members[0]}: {j.reason})")
             continue
         s0, s1, c0, c1 = j.footprint
-        hy = np.array([host.local(p)[1:] for p in nodes[h_idx[0]]])
-        walls = np.array([host.wall_of(y, z) for y, z in hy])
-        on_wall = (walls[:, 0] == j.wall) & (walls[:, 1] >= c0 - TOL) & (walls[:, 1] <= c1 + TOL)
+        walls = np.array(_ring_yz(host, size)[1])
         in_s = (h_ss >= s0 - TOL) & (h_ss <= s1 + TOL)
-        patch = h_idx[np.ix_(in_s, on_wall)].ravel()
+        bm = br.members[0 if j.branch_end == 0 else -1]
+
+        def patch_on(wall, ca, cb):
+            on = (walls[:, 0] == wall) & (walls[:, 1] >= ca - TOL) & (walls[:, 1] <= cb + TOL)
+            p = h_idx[np.ix_(in_s, on)].ravel()
+            return p[p >= 0]
+
+        patch = patch_on(j.wall, c0, c1)
+        if j.through:
+            b_ss, b_idx = grids[br.id]
+            near_ring = b_idx[int(np.argmin(np.abs(b_ss - _near_s(br, j))))]
+            far_patch = patch_on(j.far_wall, *j.far_footprint[2:])
+            joint_nodes[j.node].update(int(i) for i in near_ring)
+            joint_nodes[j.node].update(int(i) for i in far_patch)
+            shared_rings[j.node].append((bm, near_ring.copy(), patch.copy()))
+            shared_rings[j.node].append((bm, ring.copy(), far_patch.copy()))
+        else:
+            shared_rings[j.node].append((bm, ring.copy(), patch.copy()))
         joint_nodes[j.node].update(int(i) for i in patch)
         joint_kinds[j.node] = j.kind if joint_kinds.get(j.node) != "tied" else "tied"
-        shared_rings[j.node].append((br.members[0 if j.branch_end == 0 else -1], ring.copy(), patch.copy()))
-        bm = br.members[0 if j.branch_end == 0 else -1]
         wall_name = ("+y", "+z", "-y", "-z")[j.wall]
-        if j.kind == "T":
-            notes_T.append(f"{j.node} ({bm} on the {wall_name} wall of {host.members[0]}..{host.members[-1]})")
+        if j.through:
+            notes_through.append(f"{j.node} ({bm} through the {wall_name} wall of {host.members[0]}..{host.members[-1]}, "
+                                 f"{hole_count[j.node]} elements of that wall left out for the hole)")
+        elif j.kind == "T":
+            notes_T.append(f"{j.node} ({bm} on the {wall_name} wall of {host.members[0]}..{host.members[-1]}"
+                           + (f"; not through: {j.note}" if j.note else "") + ")")
         else:
             other = host.members[0 if (host.start_node == j.node) else -1]
             notes_L.append(f"{j.node} ({other} extended to the outer wall of {bm}; {bm} ends on its {wall_name} wall)")
@@ -649,6 +913,11 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
              "Wall directions +y/+z/-y/-z are the K1 section axes of the tube (y = h direction, z = b direction)."]
     if notes_T:
         notes.append("T joints, ring nodes shared with the wall: " + "; ".join(notes_T) + ".")
+    if notes_through:
+        notes.append("Through joints (design variable cross_members_through = 1): the branch's four walls go on through "
+                     "a hole in the near wall to the mid-surface of the far wall, sharing its ring nodes with both "
+                     "walls: " + "; ".join(notes_through) + ". The beam model (K1) is unchanged: its members still "
+                     "meet at the node.")
     if notes_L:
         notes.append("L joints (larger section extended), ring nodes shared: " + "; ".join(notes_L) + ".")
     if notes_tied:
@@ -657,14 +926,64 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM) -> ShellM
     if any(r.shape == "round_tube" for r in runs):
         notes.append("Round tubes are regular polygons with the corners placed so the wall keeps the circle's "
                      "second moment of area.")
-    notes.append("Open tube ends are not closed; corners are sharp (no corner radius); welds are not modelled "
-                 "(shared nodes are continuous).")
+    part_material = {}
+    for g in gussets:
+        br = runs[g.joint.branch]
+        part_material[g.id] = br.members[0 if g.joint.branch_end == 0 else -1]
+    if gussets:
+        notes.append(f"Gussets (parts of kind gusset, {len(gussets)}): flat right-triangle plates in the plane of the "
+                     f"branch's upper or lower wall at T joints, legs welded (nodes shared) along the through tube's wall "
+                     f"and the branch's corner line, meshed as three quads cut n x n; material of the branch member. "
+                     f"The beam model (K1) carries them as mass only.")
+
+    # ---- wheel mounts: the through tube's walls within +- its height of the support's frame node
+    mounts, mount_elements, mount_half = {}, {}, {}
+    for fn in mount_nodes:
+        r = run_through[fn]
+        ss, idx = grids[r.id]
+        rows = np.abs(ss - r.nodes_at[fn]) <= r.height + TOL
+        nset = idx[rows].ravel()
+        nset = np.unique(nset[nset >= 0])
+        el = elements_per_run[r.id]
+        inside = np.all(np.isin(el, nset), axis=1)
+        mounts[fn] = nset
+        mount_elements[fn] = run_first[r.id] + np.nonzero(inside)[0]
+        mount_half[fn] = r.height
+    if mounts:
+        notes.append("Wheel mounts: " + "; ".join(f"{fn} (walls of {run_through[fn].members[0]}..{run_through[fn].members[-1]} "
+                                                    f"within +- {mount_half[fn]:g} mm, its height)" for fn in mounts) + ".")
 
     return ShellMesh(
         nodes=nodes, elements=elements, element_member=element_member,
-        member_thickness_mm={mid: m.t for mid, m in mem.items()}, element_size_mm=size,
+        member_thickness_mm={**{mid: m.t for mid, m in mem.items()}, **{g.id: g.t for g in gussets}},
+        element_size_mm=size,
         station_s_mm=st_s, station_yz_mm=st_yz, end_rings=end_rings,
         joints={k: np.array(sorted(v)) for k, v in joint_nodes.items()}, joint_kinds=joint_kinds,
         links=links, notes=notes, shared_rings=dict(shared_rings),
-        member_axes={mid: np.stack([m.d, m.ey, m.ez]) for mid, m in mem.items()},
+        member_axes={**{mid: np.stack([m.d, m.ey, m.ez]) for mid, m in mem.items()},
+                     **{g.id: np.stack([g.u_s, g.u_in, g.normal]) for g in gussets}},
+        mounts=mounts, mount_elements=mount_elements, mount_half_mm=mount_half, part_material=part_material,
+        through_joints=sorted({j.node for j in joints if j.through and j.kind != "tied"}),
     )
+
+
+def through_mode(design: dict) -> bool:
+    """The design variable cross_members_through (0 or 1; absent: 0)."""
+    v = (design.get("variables") or {}).get("cross_members_through")
+    if v is None:
+        return False
+    x = v.get("value") if isinstance(v, dict) else v
+    if x not in (0, 1):
+        raise DesignError(f"design variable cross_members_through must be 0 or 1, got {x!r}")
+    return x == 1
+
+
+def _mount_lines(run_through: dict, mount_nodes: list[str], joints: list[_Joint]) -> None:
+    """Grid lines at +- the tube height from each wheel mount node, where they cross no joint footprint."""
+    for fn in mount_nodes:
+        r = run_through[fn]
+        lo, hi = r.s_range()
+        foot = [j.footprint for j in joints if j.kind != "tied" and j.host == r.id and j.footprint]
+        for s in (r.nodes_at[fn] - r.height, r.nodes_at[fn] + r.height):
+            if lo + TOL < s < hi - TOL and not any(f[0] - TOL <= s <= f[1] + TOL for f in foot):
+                r.extra_s.add(round(float(s), 9))

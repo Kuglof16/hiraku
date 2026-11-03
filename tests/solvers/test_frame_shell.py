@@ -107,7 +107,13 @@ class DemoStepTest(unittest.TestCase):
                              ("mesh-0001", LABELS[s], len(self.mesh["elements"])))
         mx, top, bot = (np.array(stress[s]["per_element"]) for s in ("max", "top", "bottom"))
         np.testing.assert_allclose(mx, np.maximum(top, bot), atol=0.006)
-        self.assertAlmostEqual(float(mx.max()), value(self.with_mesh, "max_stress"), delta=0.006)
+        # the peak leaves out the elements inside the wheel mounts; their stresses stay in the field
+        ms = build_mesh(self.design)
+        out = np.zeros(len(mx), bool)
+        for el in ms.mount_elements.values():
+            out[el] = True
+        self.assertAlmostEqual(float(mx[~out].max()), value(self.with_mesh, "max_stress"), delta=0.006)
+        self.assertGreater(float(mx[out].max()), 0.0)
         disp = next(f for f in fs if f["kind"] == "displacement")
         self.assertEqual((disp["label"], len(disp["per_mesh_node"])), (LABEL_DISP, len(self.mesh["nodes_mm"])))
         self.assertTrue(all(len(v) == 3 for v in disp["per_mesh_node"]))
@@ -141,6 +147,17 @@ class DemoStepTest(unittest.TestCase):
         print(f"  R1 step 100 mm: shell {shell:.1f} MPa, beam {beam:.1f} MPa, shell/beam same member "
               f"{scf['value']:.2f}, wall time {self.with_mesh['wall_time_s']:.1f} s")
 
+    def test_mounts_are_said(self):
+        rec = self.with_mesh
+        ms = build_mesh(self.design)
+        n = sum(len(v) for v in ms.mount_elements.values())
+        eff = next(e for e in rec["effects"] if e["name"].startswith("wheel loads put in"))
+        self.assertEqual(eff["value"], n)
+        self.assertIn("LA +- 80 mm", eff["name"])
+        self.assertTrue(any("left out" in e["name"] and e["unit"] == "MPa" for e in rec["effects"]))
+        self.assertIn("確かめていない", " ".join(rec["assumptions"]))
+        self.assertIn("外した", " ".join(rec["assumptions"]))
+
     def test_balance(self):
         rec = self.with_mesh
         self.assertLess(value(rec, "residual_ratio"), 1e-6)
@@ -156,6 +173,61 @@ class DemoStepTest(unittest.TestCase):
         fs = tool("frame_static").run(self.design, self.lc, [{"prediction_id": "pred-0003"}],
                                       {"upstream_analyses": {"P1-step100": self.p1}})
         self.assertAlmostEqual(value(self.with_mesh, "max_stress_beam"), value(fs, "max_stress"), places=6)
+
+
+class ReinforcedJointsTest(unittest.TestCase):
+    """The demo with gussets (frame_shell with its mesh, 10 mm) and with the cross members through (20 mm), at rest."""
+
+    @classmethod
+    def setUpClass(cls):
+        from hiraku import designgen
+        v1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        cls.gusset = designgen.regenerate(v1, {"joints": "gusset"})
+        cls.through = designgen.regenerate(v1, {"joints": "through"})
+        cls.mesh = dict(solvers.frame_mesh(cls.gusset), mesh_id="mesh-0001")
+        lc = {"load_case_id": "R1-rest", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
+              "tolerance_rel": 0.15}
+        cls.rec = tool("frame_shell").run(cls.gusset, lc, [{"prediction_id": "pred-0001"}], {"mesh": cls.mesh})
+
+    def test_gusset_record(self):
+        rec = self.rec
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
+        self.assertEqual(len(mesh_fields(rec)), 4)  # the mesh with the gusset plates is drawn
+        pm = next(f for f in rec["fields"] if f.get("label", "").startswith("シェル") and "per_member" in f)["per_member"]
+        self.assertEqual(set(pm), {m["id"] for m in self.gusset["members"]})
+        self.assertIn("gussets meshed as plates", " ".join(e["name"] for e in rec["effects"]))
+        self.assertIn("ガセット", " ".join(rec["assumptions"]))
+        self.assertLess(value(rec, "residual_ratio"), 1e-6)
+
+    def test_frame_static_draws_on_the_gusset_mesh(self):
+        lc = {"load_case_id": "R1-rest", "test_id": "R1", "domain": "strength", "title": "R1", "params": {},
+              "tolerance_rel": 0.15}
+        rec = tool("frame_static").run(self.gusset, lc, [{"prediction_id": "pred-0001"}], {"mesh": self.mesh})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        f = mesh_fields(rec)[0]["per_element"]
+        on_plate = [v for v, m in zip(f, self.mesh["element_member"]) if m.startswith("gusset_")]
+        self.assertTrue(on_plate)
+        self.assertEqual(set(on_plate), {0.0})
+        self.assertIn("drawn at 0", " ".join(e["name"] for e in rec["effects"]))
+
+    def test_gusset_mass_counted_once(self):
+        from hiraku.contract import loading
+        from hiraku.solvers.k0_handcalc.vehicle import mass_summary
+        from hiraku.solvers.k1_shell.frame import analyze_shell
+        d = loading.on_board(self.through, "two_cargo")
+        res = analyze_shell(d, element_size_mm=20.0)
+        summ = mass_summary(d)
+        self.assertAlmostEqual(res["total_mass_kg"] - res["shell_mass_kg"], summ["mass_kg"] - summ["frame_mass_kg"],
+                               places=9)
+        self.assertLess(res["residual_ratio"], 1e-6)
+        self.assertFalse(res["excluded"][res["worst_element"]])
+        g = loading.on_board(self.gusset, "two_cargo")
+        gres = analyze_shell(g, element_size_mm=20.0)
+        gsum = mass_summary(g)
+        plates = sum(p["mass_kg"] for p in g["parts"] if p["kind"] == "gusset")
+        self.assertAlmostEqual(gres["total_mass_kg"] - gres["shell_mass_kg"],
+                               gsum["mass_kg"] - gsum["frame_mass_kg"] - plates, places=9)
 
 
 if __name__ == "__main__":

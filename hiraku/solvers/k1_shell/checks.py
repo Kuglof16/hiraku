@@ -253,9 +253,11 @@ def tube_cantilever_records(res: dict) -> list[Record]:
     x0, x1 = 0.3 * L, 0.7 * L
     twist = _ring_twist(mt, Ut, x1) - _ring_twist(mt, Ut, x0)
     src_t = SRC_BREDT + "; torque applied as the uniform shear flow on the tip ring, both ends free to warp"
+    j_open = 2.0 * ((b - t) + (h - t)) * t**3 / 3.0  # the walls' own (open-section) torsion, which the shell has
     out.append(check_record(case + f", {T / 1e6:g} kN*m torque at the tip", f"twist between {x0:g} and {x1:g} mm",
-                            T * (x1 - x0) / (G_ST * sec["J"]), twist, "rad", 0.03,
-                            src_t + "; twist = rate * length; J from sections.rect_tube"))
+                            T * (x1 - x0) / (G_ST * (sec["J"] + j_open)), twist, "rad", 0.005,
+                            src_t + "; twist = rate * length; J from sections.rect_tube plus the walls' own "
+                                    "torsion as plates, mid-line perimeter x t^3 / 3"))
     st = element_stresses(mt, Ut)
     Am = (b - t) * (h - t)
     for label, e in (("h wall", _wall_element(ms, L / 2, y=None, z=(b - t) / 2)),
