@@ -11,6 +11,7 @@
 want: 在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)
 product: care-bed
 speed_class: static
+default_loading: driver  # one person lies on the bed; no cargo
 flags:
   lean: true       # 預: a person lies and sits on it
   electric: true   # 電: actuators

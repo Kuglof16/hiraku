@@ -182,6 +182,16 @@ def von_mises(s: np.ndarray) -> np.ndarray:
                               + 3.0 * (txy ** 2 + tyz ** 2 + tzx ** 2), 0.0))
 
 
+def _solid_thermal_args(thermal) -> tuple:
+    """(alpha, T, nodal) from (alpha, T) or (alpha, T, nodal); nodal False when left out."""
+    t = tuple(thermal)
+    if len(t) == 2:
+        return t + (False,)
+    if len(t) == 3:
+        return t
+    raise ValueError(f"solid thermal must be (alpha, T) or (alpha, T, nodal), got {len(t)} items")
+
+
 class _Hex(ElementGroup):
     n_comp = 3
     n_nodes = 8
@@ -258,25 +268,35 @@ class _Hex(ElementGroup):
             M[:, k::3, k::3] = mm
         return M
 
-    def _nodal_field(self, values) -> np.ndarray:
-        """(E, n) element-node values of a per-node array, or of a per-element / single value."""
+    def _nodal_field(self, values, nodal: bool) -> np.ndarray:
+        """(E, n) element-node values: from a per-node array (nodal=True, indexed by the model's node numbers)
+        or a per-element array (E,) / one value (nodal=False). Any other shape is an error."""
         v = np.asarray(values, float)
-        if v.ndim == 1 and len(v) != len(self.conn):
+        if v.ndim == 0:
+            return np.full(self.conn.shape, float(v))
+        if nodal:
+            if v.ndim != 1 or len(v) <= int(self.conn.max()):
+                raise ValueError(f"{self.name}: nodal temperatures need one value per model node (shape (N,), "
+                                 f"N > {int(self.conn.max())}), got shape {v.shape}")
             return v[self.conn]
-        return np.broadcast_to(v.reshape(-1, 1) if v.ndim else v, self.conn.shape).astype(float)
+        if v.shape != (len(self.conn),):
+            raise ValueError(f"{self.name}: per-element temperatures need shape ({len(self.conn)},), got {v.shape}"
+                             f" (per-node values need nodal=True)")
+        return np.repeat(v[:, None], self.conn.shape[1], axis=1)
 
     def _thermal_strain(self, N: np.ndarray, thermal) -> np.ndarray:
-        """Free thermal strain alpha T (1, 1, 1, 0, 0, 0) at a point with shape values N; (E, 6)."""
-        alpha, T = thermal
-        Tp = self._nodal_field(T) @ N
+        """Free thermal strain alpha T (1, 1, 1, 0, 0, 0) at a point with shape values N; (E, 6).
+        thermal = (alpha, T) or (alpha, T, nodal)."""
+        alpha, T, nodal = _solid_thermal_args(thermal)
+        Tp = self._nodal_field(T, nodal) @ N
         a = np.broadcast_to(np.asarray(alpha, float), Tp.shape)
         out = np.zeros((len(Tp), 6))
         out[:, :3] = (a * Tp)[:, None]
         return out
 
     def point_stresses(self, nodes: np.ndarray, ue: np.ndarray, points: np.ndarray, thermal=None) -> list:
-        """[(sigma (E, 6), dNx (E, 3, n), det (E,))] at natural points (P, 3); thermal = (alpha, T) takes off
-        the free thermal strain (T per node (N,), per element (E,) or one value)."""
+        """[(sigma (E, 6), dNx (E, 3, n), det (E,))] at natural points (P, 3); thermal = (alpha, T[, nodal])
+        takes off the free thermal strain (T per element (E,) or one value; per node (N,) with nodal=True)."""
         X = nodes[self.conn]
         D = elasticity_matrix(self.E, self.nu)
         out = []
@@ -305,9 +325,9 @@ class _Hex(ElementGroup):
             K[:, k::3, k::3] = kg
         return K
 
-    def thermal_forces(self, nodes: np.ndarray, alpha, T) -> np.ndarray:
+    def thermal_forces(self, nodes: np.ndarray, alpha, T, nodal: bool = False) -> np.ndarray:
         """Equivalent element forces (E, 3n) of a temperature change: f = integral B^T D alpha T (1,1,1,0,0,0) dV,
-        T interpolated from the nodes (per node (N,)) or uniform per element (E,) / one value."""
+        T uniform per element (E,) / one value, or per node (N,) with nodal=True (interpolated in the element)."""
         X = nodes[self.conn]
         D = elasticity_matrix(self.E, self.nu)
         P, W = gauss_3d(self.integration)
@@ -315,7 +335,8 @@ class _Hex(ElementGroup):
         for p, w in zip(P, W):
             N, dN = self.shape(*p)
             _, det, dNx = jacobian(dN, X)
-            f += np.einsum("eak,eab,eb,e->ek", strain_matrix(dNx), D, self._thermal_strain(N, (alpha, T)), det * w)
+            f += np.einsum("eak,eab,eb,e->ek", strain_matrix(dNx), D, self._thermal_strain(N, (alpha, T, nodal)),
+                           det * w)
         return f
 
     def gauss_stresses(self, nodes: np.ndarray, ue: np.ndarray, thermal=None) -> np.ndarray:
@@ -396,7 +417,8 @@ def surface_load(nodes: np.ndarray, faces: np.ndarray, traction, n_nodes: int | 
 
 def solid_stresses(sol, group, thermal=None) -> dict:
     """Nodal-averaged stresses (N, 6) and von Mises (N,) of one solid group in a Solution
-    (nodes that the group does not touch get 0). thermal = (alpha, T) for a solution with thermal loads."""
+    (nodes that the group does not touch get 0). thermal = (alpha, T[, nodal]) for a solution with thermal
+    loads (nodal=True when T is per node)."""
     g = sol.model.groups[group] if isinstance(group, int) else group
     ue = sol.element_displacements(g)
     s, cnt = g.nodal_stresses(sol.model.nodes, ue, thermal=thermal)
