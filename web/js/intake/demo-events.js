@@ -1017,7 +1017,12 @@ export const DEMOS = {
       "origin": "dropped",
       "trust": 3,
       "basis": "dropped file ノウハウメモ (見本).md, line 4; the person's own know-how, not checked against a source",
-      "check_by": "code"
+      "check_by": "code",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
      },
      {
       "rule_id": "U1-03",
@@ -2876,55 +2881,13 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
-     "battery",
-     "motor",
-     "controller",
-     "aux",
      "floor_front",
      "floor",
      "deck",
-     "front_body",
-     "steering",
-     "seat_R",
-     "seat_L",
-     "occupant_R",
-     "occupant_L",
-     "cargo",
-     "wheel_FL",
-     "susp_FL",
-     "wheel_FR",
-     "susp_FR",
-     "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
+     "front_body"
     ],
     "hits": [],
     "not_evaluable": [
-     {
-      "part_id": "battery",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "motor",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "controller",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "aux",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
      {
       "part_id": "floor_front",
       "missing": [
@@ -2945,90 +2908,6 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "steering",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "seat_R",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "seat_L",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "occupant_R",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "occupant_L",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "cargo",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_FL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_FR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_RL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_RR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RR",
       "missing": [
        "bend_radius_mm"
       ]
@@ -6588,7 +6467,12 @@ export const DEMOS = {
       "origin": "dropped",
       "trust": 3,
       "basis": "dropped file ノウハウメモ (見本).md, line 4; the person's own know-how, not checked against a source",
-      "check_by": "code"
+      "check_by": "code",
+      "applies_to": {
+       "kinds": [
+        "body"
+       ]
+      }
      },
      {
       "rule_id": "U1-03",
@@ -8447,55 +8331,13 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
-     "battery",
-     "motor",
-     "controller",
-     "aux",
      "floor_front",
      "floor",
      "deck",
-     "front_body",
-     "steering",
-     "seat_R",
-     "seat_L",
-     "occupant_R",
-     "occupant_L",
-     "cargo",
-     "wheel_FL",
-     "susp_FL",
-     "wheel_FR",
-     "susp_FR",
-     "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
+     "front_body"
     ],
     "hits": [],
     "not_evaluable": [
-     {
-      "part_id": "battery",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "motor",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "controller",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "aux",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
      {
       "part_id": "floor_front",
       "missing": [
@@ -8516,90 +8358,6 @@ export const DEMOS = {
      },
      {
       "part_id": "front_body",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "steering",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "seat_R",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "seat_L",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "occupant_R",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "occupant_L",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "cargo",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_FL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_FR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_RL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RL",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "wheel_RR",
-      "missing": [
-       "bend_radius_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RR",
       "missing": [
        "bend_radius_mm"
       ]

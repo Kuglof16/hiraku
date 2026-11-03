@@ -131,6 +131,18 @@ class EndCrossMemberTest(unittest.TestCase):
         self.assertLess(warped, M / GJ)  # the rails' bending stiffens the ladder against twist
 
 
+class SnSeriesTest(unittest.TestCase):
+    def test_curve_and_spectrum(self):
+        from hiraku.solvers.shelf.fatigue import sn_series
+
+        out = sn_series(71.0, 3.0, 1e7, 22.0, [(100.0, 0.0, 1.0), (50.0, 0.0, 10.0), (0.0, 0.0, 5.0)], "m")
+        curve, spec = out
+        N, S = curve["x"]["values"], curve["values"]
+        self.assertTrue(all(a > b for a, b in zip(S, S[1:])))  # fewer cycles to failure at a larger range
+        self.assertAlmostEqual(float(np.interp(np.log(2e6), np.log(N), S)), 71.0, delta=0.5)  # FAT at 2e6 cycles
+        self.assertEqual((spec["channel"], spec["values"], spec["x"]["values"]), ("stress_ranges.m", [100.0, 50.0], [1.0, 11.0]))
+
+
 class InfluenceTest(unittest.TestCase):
     def test_superposition_reproduces_the_static_stress(self):
         S, cols, pts = influence(DESIGN, "z")

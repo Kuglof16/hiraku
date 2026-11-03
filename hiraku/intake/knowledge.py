@@ -287,6 +287,7 @@ _KIND_NOUNS: list[tuple[str, str]] = [  # (how a sentence names a part, the part
     ("コントローラ", "controller"), ("座席", "seat"), ("座面", "seat"), ("シート", "seat"), ("車輪", "wheel"),
     ("ホイール", "wheel"), ("タイヤ", "wheel"), ("乗員", "occupant"), ("積載", "cargo"), ("荷物", "cargo"),
     ("ハンドル", "steering"), ("ステアリング", "steering"), ("床", "body"), ("外板", "body"),
+    ("曲げ", "body"), ("板金", "body"), ("板の縁", "body"),  # sheet-metal talk is about the plates, as the built-in SM rules are
 ]
 _SCOPE_KINDS = {"support": ["support"], "member": ["frame"]}  # a fact of a support or a member is not a part's
 

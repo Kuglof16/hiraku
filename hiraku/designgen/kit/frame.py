@@ -123,6 +123,74 @@ class Frame:
                                    m["section"]))
         return out
 
+    # ---------------------------------------------------------------- joint reinforcement
+    def gussets(self, node: str, branch: str, leg: float, thickness: float, density_kg_m3: float) -> list[Record]:
+        """Four triangular gusset parts at the T joint where member `branch` ends on the side of the
+        rect tube that passes through `node` (ahead of and behind the branch, on its upper and lower
+        wall): each a right triangle with legs `leg` along the through tube and along the branch,
+        its right angle where the through tube's side wall meets the branch's side wall, lying in the
+        plane of the branch's upper (lower) wall mid-surface. box.center_mm is the triangle's
+        centroid, box.size_mm [leg along the through tube, leg along the branch, thickness] (the
+        shell mesher's convention), mass = density x leg^2 / 2 x thickness, carried_by [node].
+        The through tube must run along x and the branch along y (a ladder's rail and cross member)."""
+        m = next((x for x in self.members if x["id"] == branch), None)
+        if m is None or node not in (m["node_a"], m["node_b"]):
+            raise FrameError(f"member {branch!r} does not end at node {node!r}")
+        other = m["node_b"] if m["node_a"] == node else m["node_a"]
+        p = np.asarray(self.nodes[node])
+        u_in = np.asarray(self.nodes[other]) - p
+        if abs(u_in[0]) > 1e-9 or abs(u_in[2]) > 1e-9:
+            raise FrameError(f"gussets need the branch {branch!r} to run along y from node {node!r}")
+        u_in /= np.linalg.norm(u_in)
+        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        if len(hosts) != 2:
+            raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
+        host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
+        y_wall = p[1] + u_in[1] * (host["b"] - host["t"]) / 2.0
+        mass = density_kg_m3 * 1e-9 * leg * leg / 2.0 * thickness
+        out = []
+        for sx, fb in ((1.0, "front"), (-1.0, "rear")):
+            for sz, ul in ((1.0, "upper"), (-1.0, "lower")):
+                ox = p[0] + sx * (br["b"] - br["t"]) / 2.0
+                oz = p[2] + sz * (br["h"] - br["t"]) / 2.0
+                c = [ox + sx * leg / 3.0, y_wall + u_in[1] * leg / 3.0, oz]
+                out.append({"id": f"gusset_{node}_{fb}_{ul}",
+                            "name": f"{node} のつなぎ目のガセット ({'前' if sx > 0 else '後'}・{'上' if sz > 0 else '下'})",
+                            "kind": "gusset",
+                            "box": {"center_mm": [float(v) for v in c], "size_mm": [float(leg), float(leg), float(thickness)]},
+                            "mass_kg": float(mass), "carried_by": [node]})
+        return out
+
+    def through_part(self, node: str, branch: str, density_kg_m3: float) -> Record:
+        """The part for member `branch` running on through the rect tube at `node` (a T joint), from the
+        hole in its near wall to its far wall: id through_<branch>_<node>, kind frame, carried_by [node].
+        The beam member still ends at the node, so this is the tube the beam model does not have: box
+        centred at the node, [branch width, through tube width - its wall, branch height] (the run from
+        the near wall's mid-surface to the far wall's); mass = density x (branch area x that run - the
+        near wall cut out for the hole, wall t x (branch b - t_b) x (branch h - t_b)), mid-surface
+        sizes as the shell mesh has them. The through tube must run along x and the branch along y."""
+        m = next((x for x in self.members if x["id"] == branch), None)
+        if m is None or node not in (m["node_a"], m["node_b"]):
+            raise FrameError(f"member {branch!r} does not end at node {node!r}")
+        other = m["node_b"] if m["node_a"] == node else m["node_a"]
+        p = np.asarray(self.nodes[node])
+        d = np.asarray(self.nodes[other]) - p
+        if abs(d[0]) > 1e-9 or abs(d[2]) > 1e-9:
+            raise FrameError(f"a through joint needs the branch {branch!r} to run along y from node {node!r}")
+        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        if len(hosts) != 2:
+            raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
+        host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
+        run = host["b"] - host["t"]
+        area = 2.0 * br["t"] * (br["b"] + br["h"] - 2.0 * br["t"])
+        hole = host["t"] * (br["b"] - br["t"]) * (br["h"] - br["t"])
+        mass = density_kg_m3 * 1e-9 * (area * run - hole)
+        return {"id": f"through_{branch}_{node}",
+                "name": f"{node} で {branch} がレールの中を通る分 (手前の壁の穴の分を引いた正味)",
+                "kind": "frame",
+                "box": {"center_mm": [float(x) for x in p], "size_mm": [float(br["b"]), float(run), float(br["h"])]},
+                "mass_kg": float(mass), "carried_by": [node]}
+
     # ---------------------------------------------------------------- out
     def part(self) -> Record:
         """The frame's share of a design record: nodes, members, sections."""

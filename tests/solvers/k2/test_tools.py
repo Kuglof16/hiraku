@@ -11,6 +11,7 @@ from hiraku.solvers.k2_vehicle.drive import on_board
 from hiraku.solvers.k2_vehicle.model import box_design, build_vehicle
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
+from tests.solvers.k2.slow import SLOW
 
 
 def q(v, u):
@@ -117,12 +118,11 @@ class Declarations(unittest.TestCase):
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
-        no_k0_yet = {"kc_bench"}  # K0 has no K&C formula (roll centre, compliance steer) yet
         for name, tool in TOOLS.items():
             desc = tool.describe()
             declared = {p["name"]: p for p in desc["params"]}
-            self.assertEqual(bool(desc["predicts"]), name not in no_k0_yet, name)
-            self.assertEqual(tool.spec()["formulas"], desc["formulas"])
+            self.assertTrue(desc["predicts"], name)
+            self.assertEqual(tool.formula_ids(), desc["formulas"])  # spec() also runs every check: the protocol tests
             for pair in desc["predicts"]:
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     f = formulas[pair["formula_id"]]
@@ -203,6 +203,7 @@ class KcChannels(unittest.TestCase):
         self.assertEqual(fl, fr)
 
 
+@SLOW
 class OwnChecks(unittest.TestCase):
     def test_every_tool_passes_its_known_answers(self):
         for name, tool in TOOLS.items():
@@ -211,6 +212,7 @@ class OwnChecks(unittest.TestCase):
                     self.assertTrue(c["pass"], f"{name}: {c['case']}: expected {c['expected']} got {c['got']}")
 
 
+@SLOW
 class Runs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

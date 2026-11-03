@@ -569,6 +569,20 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn(f"節 {len(mesh['nodes_mm'])}・要素 {len(mesh['elements'])}", got["lines"][0])
         page.close()
 
+    def test_joint_vectors_are_drawn(self):
+        """A force at a suspension mounting point (vector kind joint, at "<support>.<point>")
+        is drawn with its own colour and name, beside the reactions."""
+        events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+        ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
+        # shape example: one mounting point's force, not a result
+        ana["vectors"] = list(ana.get("vectors") or []) + [{"kind": "joint", "at": "FL.lca_front", "origin_mm": [-150.0, 300.0, 330.0], "vector_N": [0.0, -800.0, 1200.0]}]
+        page, errors = self.open("run=sample&pace=0&t=0")
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        tags = page.evaluate("[...document.querySelectorAll('.lbl-vec')].map((x) => x.textContent)")
+        self.assertEqual(errors, [])
+        self.assertTrue(any(t.startswith("取付点の力 FL.lca_front") for t in tags), tags)
+        page.close()
+
     def test_a_part_limit_holds_only_its_part(self):
         """Part temperatures against T1's criterion (the battery's limit, recorded at the battery):
         only the battery is held to it and the scale is the field's own range."""

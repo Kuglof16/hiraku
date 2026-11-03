@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from hiraku.contract.protocols import DEFAULT_LOADING, LOADINGS
 
-from ..checks import base_checks
+from ..checks import FROM_CACHE, base_checks, cached
 from ..drive import RHO_AIR, Aero, Motor, on_board
 from ..model import DesignError, Vehicle, build_vehicle
 from ..record import Recorder
@@ -120,7 +120,13 @@ class K2Tool(ABC):
 
     @lru_cache(maxsize=1)
     def _own_checks(self) -> tuple:
-        return tuple(self.own_checks())
+        return tuple(cached(self.name, self.own_checks))
+
+    @property
+    def checks_from_cache(self) -> bool:
+        """The checks came from the tests' disk cache (HIRAKU_CHECK_CACHE=1), not computed in this
+        process: the run says so in one line."""
+        return "base" in FROM_CACHE or self.name in FROM_CACHE
 
     def own_checks(self) -> list[dict]:
         return []

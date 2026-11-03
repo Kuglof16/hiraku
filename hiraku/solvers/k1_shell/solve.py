@@ -51,8 +51,11 @@ class ShellModel:
 
     @classmethod
     def from_mesh(cls, mesh, design: dict, drill_factor: float = element.DRILL_FACTOR) -> "ShellModel":
-        """Model of a k1_shell.mesh.ShellMesh with the materials of the design's members."""
+        """Model of a k1_shell.mesh.ShellMesh with the materials of the design's members (a gusset part
+        takes the material of the member named in mesh.part_material)."""
         mat_of = {m["id"]: design["materials"][m["material"]] for m in design["members"]}
+        for part, member in getattr(mesh, "part_material", {}).items():
+            mat_of[part] = mat_of[member]
         mats = [mat_of[m] for m in mesh.element_member]
         E = np.array([float(m["E_MPa"]) for m in mats])
         nu = np.array([float(m["nu"]) for m in mats])

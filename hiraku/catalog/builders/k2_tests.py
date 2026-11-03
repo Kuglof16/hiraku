@@ -139,7 +139,7 @@ def _k0(formula_id: str, output: str, inputs: Record) -> float:
 
 def _summary(design: Record, on: str) -> tuple[Record, Record]:
     """The design summary and the loading's part of it (mass, CG)."""
-    from hiraku.tools.summary import design_summary
+    from hiraku.catalog.summary import design_summary
     s = design_summary(design)
     return s, s["loadings"][on]
 
@@ -366,6 +366,13 @@ def tilt_inputs(design: Record, load_case: Record) -> Record:
             "n": q(len({round(float(c.pos[0]), 6) for c in veh.corners}), "1")}
 
 
+def tilt_inputs_as_built(design: Record, load_case: Record) -> Record:
+    """tilt_inputs with the cargo where the design has it (params cargo_cg_above_deck, the
+    requirement Q41, left out): the inputs of a prediction made again after Q41 was found wrong."""
+    params = {k: v for k, v in (load_case.get("params") or {}).items() if k != "cargo_cg_above_deck"}
+    return tilt_inputs(design, dict(load_case, params=params))
+
+
 def wind_inputs(design: Record, load_case: Record) -> Record:
     """C_y, A, h_cp and rho as the crosswind tool takes them (load case, else the design
     variables, else the side projection of the part boxes)."""
@@ -509,17 +516,19 @@ PLANS: dict[str, Record] = {
                "assumptions": ["斜面を横の加速度 tan β とみる", "凸凹の路面の上下の揺れは平均では消える"],
                "inputs": {"m": "load.mass", "a_y": "from.a_y", "h": "from.h", "t": "summary.track_front"},
                "inputs_from": slope_inputs}],
-           # Run on the demo vehicle (two_cargo, 15 deg): K0 2061.6 N, K2 1835.7 N (-11.0 %). Split by K2
-           # runs on the smooth slope: the exact rigid balance W (cos b (t/2 - e) - sin b h) / t gives
-           # 1970.7 N and K2 with rigid supports 1968.9 N; K2 on its springs 1823.4 N; the rough road
-           # moves the mean by +0.7 % only.
+           # Run on the demo vehicle (two_cargo, 15 deg, double wishbones on the builtin K&C table):
+           # K0 2061.6 N, K2 1849.5 N (-10.3 %). Split by K2 runs on the smooth slope: the exact rigid
+           # balance W (cos b (t/2 - e) - sin b h) / t gives 1970.7 N and K2 with rigid supports
+           # 1968.9 N; K2 on its suspension 1841.8 N; the rough road moves the mean by +0.4 % only.
            "expected_mismatch": {
                "quantity": "mean_uphill_load",
                "source": "the K2 department's split of the gap on the demo vehicle (rigid and sprung K2 runs on "
-                         "the smooth slope against the exact moment balance), 2026-11-03",
+                         "the smooth slope against the exact moment balance), 2026-11-03, again with the double "
+                         "wishbones of the builtin K&C table",
                "cause": "式は斜面を横の加速度 tan β とみて、重さ全部を法線の荷重にしている (15° で 3.5 % 大きい)。"
-                        "重心が下の側へ 4 mm ずれている分 (1 %) も入っていない。さらに、車体がばねの上で下の側へ"
-                        "ロールして重心が下の側へ動く分 (7.4 %) が入っていない。路面の凸凹は平均を 0.7 % しか変えない",
+                        "重心が下の側へ 4 mm ずれている分 (1 %) も入っていない。さらに、車体がサスペンションの上で"
+                        "下の側へロールして重心が下の側へ動く分 (6.5 %) が入っていない。路面の凸凹は平均を 0.4 % "
+                        "しか変えない",
                "fix": "cos β と重心の横のずれを入れた斜面の釣り合い tilt.side_slope_uphill_load で予測し直す "
                       "(ばねのロールの分は式に無いので、その分は残る)",
                "retry": {

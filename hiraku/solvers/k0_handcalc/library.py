@@ -55,6 +55,24 @@ def _step_climb() -> list[Formula]:
             requires=[below],
             symbols=s,
         ),
+        Formula(
+            formula_id="step_climb.climb_limit",
+            title="剛い輪が越えられる段の高さ (輪の半径まで)",
+            domain="powertrain",
+            expression="climbable = 1 if h < r else 0; step_margin = r - h; max_step = r",
+            inputs={k: inputs[k] for k in ("r", "h")},
+            outputs={
+                "climbable": ("1", "1 when a rigid wheel can be lifted onto the step, 0 when it cannot",
+                              sp.Piecewise((1, sp.StrictLessThan(h, r)), (0, True))),
+                "step_margin": ("mm", "how far the step stays below the wheel centre (negative: too high)", r - h),
+                "max_step": ("mm", "the highest step a rigid wheel can climb (its radius)", r),
+            },
+            assumptions=["rigid wheel and rigid step corner",
+                         "at h >= r the corner meets the wheel at or above its centre, so the corner's push on the wheel "
+                         "has no upward part and no push at the axle lifts it; a tyre that deflects is not counted"],
+            source=source,
+            symbols={k: s[k] for k in ("r", "h")},
+        ),
         _pushed_wheel_load(),
         Formula(
             formula_id="step_climb.self_climb",
@@ -583,8 +601,9 @@ def _rail_step_bending() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    from . import library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_nvh
+    from . import (library_crash, library_dynamics, library_energy, library_fatigue, library_geometry, library_joint,
+                   library_kc, library_nvh)
 
-    return (_step_climb() + _mass_props() + _frame_static() + library_dynamics.all_formulas()
+    return (_step_climb() + _mass_props() + _frame_static() + library_joint.all_formulas() + library_dynamics.all_formulas()
             + library_energy.all_formulas() + library_crash.all_formulas() + library_nvh.all_formulas()
-            + library_fatigue.all_formulas() + library_geometry.all_formulas())
+            + library_fatigue.all_formulas() + library_geometry.all_formulas() + library_kc.all_formulas())

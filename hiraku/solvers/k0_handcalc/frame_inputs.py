@@ -11,6 +11,11 @@ end_cross_member_inputs() looks at the rear overhang of a ladder frame (the
 rails behind the rear axle joints and the cross member at their ends) for
 frame_static.end_cross_member_stress, with the overhang's twist misfit from
 the ladder's warping torsion (ladder_twist_rate).
+
+joint_wall_inputs() shares the wheels' twisting moments among the cross
+members along a torsion chain of the ladder's symmetric half, with the
+joints' wall rotation from frame_static.joint_wall_bending, for that
+formula at the joint where the wall's bending is largest.
 """
 
 from __future__ import annotations
@@ -215,6 +220,163 @@ def ladder_twist_inputs(design: dict, loading: str | None = None) -> dict:
         "t_r": quantity(float(rear[0]["position_mm"][1] - rear[-1]["position_mm"][1]), "mm"),
         "d_f": quantity(x_front - x_I, "mm"), "d_r": quantity(float(rear[0]["position_mm"][0]) - x_I, "mm"),
     }}
+
+
+def _rail_torques(design: dict, summ: dict, ground: dict, rail_y: float, rail_z: float, g_factor: float) -> dict[str, float]:
+    """Moment about the rail's axis (the line y = rail_y, z = rail_z along x; N*mm, right-handed about +x) put
+    into each frame node on that rail: the ground forces at the supports whose frame node is on it, the
+    unsprung weights riding with them, and the moments of the offsets of parts carried by frame nodes
+    (as K1 shares them: the moment about the centroid of the carried_by nodes, equally per node)."""
+    G0 = STANDARD_GRAVITY
+    nodes = node_table(design)
+    on = {n for n, p in nodes.items() if abs(p[1] - rail_y) < 1e-6 and abs(p[2] - rail_z) < 1e-6}
+    sup_node = {s["id"]: s.get("frame_node") for s in design.get("supports", [])}
+    out: dict[str, float] = {}
+
+    def add(node, point, force):
+        r = np.asarray(point, float) - np.array([0.0, rail_y, rail_z])
+        out[node] = out.get(node, 0.0) + float(np.cross(r, np.asarray(force, float))[0])
+
+    for sid, g in ground.items():
+        n = sup_node.get(sid)
+        if n in on:
+            add(n, g["point_mm"], g["force_N"])
+    for it in summ["items"]:
+        f = np.array([0.0, 0.0, -it.mass_kg * G0 * g_factor])
+        if it.carrier == "support":
+            n = sup_node.get(it.carried_by[0])
+            if n in on:
+                add(n, it.cg_mm, f)
+        elif it.carrier == "nodes":
+            c = np.mean([nodes[n] for n in it.carried_by], axis=0)
+            mx = float(np.cross(it.cg_mm - c, f)[0]) / len(it.carried_by)
+            for n in it.carried_by:
+                if n in on:
+                    out[n] = out.get(n, 0.0) + mx
+    return out
+
+
+def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float | None = None,
+                      step_supports: list[str] | None = None, g_factor: float = 1.0) -> dict:
+    """Quantities for frame_static.joint_wall_bending at the joint where it is largest, and every joint's numbers.
+
+    The ladder's symmetric half: each rail twists in St Venant torsion (G J / length between stations); at
+    every station the cross member resists the twist in single curvature (2 E I / w) in series with the
+    rotation of the rail's side wall at its end (theta_per_kNm of joint_wall_bending: 0 for a through joint,
+    the gussets' spread where the design has gusset parts at the node). The moments about the rail's axis
+    from the wheels (ground forces at rest or on a step from K0 statics, support_loads, and the unsprung
+    weights at their offsets) are put in at the supports' frame nodes; the left and right rails' moments are
+    averaged as a mirror pair (the antisymmetric rest, the ladder's twist, is left out). Each cross member's
+    end moment is its spring times the rail's twist there; joint_wall_bending then gives each joint's stress.
+    The joints at the supports' frame nodes where the rail runs on (the wheel mounts) are in the chain but not
+    compared: frame_shell leaves the elements inside the mounts out of its peak (the bracket covers the wall).
+    """
+    from .library_joint import joint_wall
+    from .vehicle import support_loads
+
+    if loading is not None:
+        design = on_board(design, loading)
+    nodes = node_table(design)
+    props = member_props(design)
+    summ = mass_summary(design)
+    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
+             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and mp["a"][1] > 0]
+    if not rails:
+        raise DesignError("the joint wall calculation needs a ladder frame: rails along x")
+    y_r, z_r = float(rails[0]["a"][1]), float(rails[0]["a"][2])
+    left = sorted({n for n, p in nodes.items() if abs(p[1] - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6},
+                  key=lambda n: -nodes[n][0])
+    stations = []
+    for n in left:
+        p = nodes[n]
+        mirror = next((m for m, q in nodes.items() if abs(q[0] - p[0]) < 1e-6 and abs(q[1] + p[1]) < 1e-6
+                       and abs(q[2] - p[2]) < 1e-6), None)
+        cross = _member_between(props, n, mirror) if mirror else None
+        if cross is not None:
+            stations.append((n, mirror, cross))
+    if len(stations) < 2:
+        raise DesignError("the joint wall calculation needs cross members joining the two rails at two stations or more")
+    rail = rails[0]
+    b, h, t = _rect_dims(design["sections"][rail["member"]["section"]])
+    mat = rail["material"]
+    E, nu = float(mat["E_MPa"]), float(mat["nu"])
+    G = E / (2.0 * (1.0 + nu))
+    GJ = G * sections.properties(design["sections"][rail["member"]["section"]])["J"]
+    through_all = float(((design.get("variables") or {}).get("cross_members_through") or {}).get("value", 0.0)) == 1.0
+    ends = {left[0], left[-1]}
+    legs = {}
+    for p in design.get("parts", []):
+        if p.get("kind") == "gusset" and len(p.get("carried_by") or []) == 1:
+            legs[p["carried_by"][0]] = float(p["box"]["size_mm"][0])
+
+    rows = []
+    for n, m, cross in stations:
+        bc, hc, tc = _rect_dims(design["sections"][cross["member"]["section"]])
+        open_end = n in ends
+        through = through_all and not open_end and (hc - tc) < (h - t)
+        v = {"b": b, "h": h, "t": t, "b_c": bc, "h_c": hc, "t_c": tc, "E": E, "nu": nu,
+             "leg": 0.0 if through else legs.get(n, 0.0), "through": 1.0 if through else 0.0,
+             "open_end": 1.0 if open_end else 0.0}
+        theta = joint_wall(dict(v, M=1.0e6))["theta_per_kNm"] if not through else 0.0
+        EI = E * sections.properties(design["sections"][cross["member"]["section"]])["Iz"]
+        k = 1.0 / (cross["length"] / (2.0 * EI) + theta / 1.0e6)
+        rows.append({"node": n, "mirror": m, "cross_member": cross["member"]["id"], "x": float(nodes[n][0]), "k": k,
+                     "values": v, "theta_per_kNm": theta})
+
+    # ground forces and the twisting moments on each rail
+    if step_mm is not None:
+        st = support_loads(design, g_factor, step_mm, step_supports, summary=summ)
+    else:
+        st = support_loads(design, g_factor, summary=summ)
+    T_left = _rail_torques(design, summ, st["supports"], y_r, z_r, g_factor)
+    T_right = _rail_torques(design, summ, st["supports"], -y_r, z_r, g_factor)
+    by_x = {round(float(nodes[n][0]), 6): n for n in left}
+    T_sym = {n: 0.0 for n in left}
+    for n, v in T_left.items():
+        T_sym[n] += v / 2.0
+    for n, v in T_right.items():  # the mirror of a right-rail moment about +x is minus it on the left rail
+        T_sym[by_x[round(float(nodes[n][0]), 6)]] -= v / 2.0
+
+    # torsion chain along the left rail: nodes in x order, rail pieces between, springs at the stations
+    idx = {n: i for i, n in enumerate(left)}
+    K = np.zeros((len(left), len(left)))
+    for a_, b_ in zip(left, left[1:]):
+        k = GJ / abs(float(nodes[a_][0]) - float(nodes[b_][0]))
+        i, j = idx[a_], idx[b_]
+        K[i, i] += k
+        K[j, j] += k
+        K[i, j] -= k
+        K[j, i] -= k
+    for r in rows:
+        K[idx[r["node"]], idx[r["node"]]] += r["k"]
+    T = np.array([T_sym[n] for n in left])
+    phi = np.linalg.solve(K, T)
+    for r in rows:
+        r["M"] = abs(r["k"] * phi[idx[r["node"]]])
+        out = joint_wall(dict(r["values"], M=r["M"]))
+        r["sigma"], r["sigma_open_end"] = out["sigma"], out["sigma_open_end"]
+    mounts = {s.get("frame_node") for s in design.get("supports", [])} - ends
+    candidates = [r for r in rows if r["node"] not in mounts]
+    if not candidates:
+        raise DesignError("every cross member joint is at a wheel mount, where the wall is covered; nothing to compare")
+    worst = max(candidates, key=lambda r: r["sigma"])
+    v = worst["values"]
+    q = lambda x, u: quantity(float(x), u)  # noqa: E731
+    return {
+        "inputs": {"M": q(worst["M"], "N*mm"), "b": q(v["b"], "mm"), "h": q(v["h"], "mm"), "t": q(v["t"], "mm"),
+                   "b_c": q(v["b_c"], "mm"), "h_c": q(v["h_c"], "mm"), "t_c": q(v["t_c"], "mm"), "E": q(v["E"], "MPa"),
+                   "nu": q(v["nu"], "1"), "leg": q(v["leg"], "mm"), "through": q(v["through"], "1"),
+                   "open_end": q(v["open_end"], "1")},
+        "joint": worst["node"],
+        "cross_member": worst["cross_member"],
+        "joints": [{"node": r["node"], "cross_member": r["cross_member"], "M_Nmm": r["M"], "sigma_MPa": r["sigma"],
+                    "sigma_open_end_MPa": r["sigma_open_end"], "theta_per_kNm": r["theta_per_kNm"],
+                    "at_wheel_mount": r["node"] in mounts,
+                    "kind": ("through" if r["values"]["through"] else "gusset" if r["values"]["leg"] else "butt")
+                            + (" (rail end)" if r["values"]["open_end"] else "")} for r in rows],
+        "twisting_moments_Nmm": {n: float(T_sym[n]) for n in left},
+        "mode": st["mode"],
+    }
 
 
 def _member_between(props: dict, n1: str, n2: str):
