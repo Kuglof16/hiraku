@@ -10,9 +10,9 @@
 <header class="top">
   <h1>ナレーション録音 <span class="sub">HIRAKU</span></h1>
   <div class="tools">
-    <label class="btn">原稿を読む (TSV)<input type="file" id="scriptFile" accept=".tsv,.txt,text/tab-separated-values,text/plain" hidden></label>
-    <label class="btn ghost">合成の声のフォルダ<input type="file" id="synthDir" webkitdirectory multiple hidden></label>
-    <span class="sep"></span>
+    <label class="btn manual" id="scriptPick">原稿を読む (TSV)<input type="file" id="scriptFile" accept=".tsv,.txt,text/tab-separated-values,text/plain" hidden></label>
+    <label class="btn ghost manual" id="synthPick">合成の声のフォルダ<input type="file" id="synthDir" webkitdirectory multiple hidden></label>
+    <span class="sep manual"></span>
     <label class="field">入力 <select id="device"><option value="">既定のマイク</option></select></label>
     <button id="micBtn" class="btn">マイクを使う</button>
     <div class="meter" title="入力の大きさ (フィルターの前)">
@@ -22,6 +22,11 @@
     </div>
   </div>
 </header>
+<div id="statusLine" class="status-line" aria-live="polite">
+  <span class="st" id="stScript"><b>原稿</b> <span>—</span></span>
+  <span class="st" id="stSynth"><b>合成の声</b> <span>—</span></span>
+  <span class="st" id="stOut"><b>保存先</b> <span>—</span></span>
+</div>
 
 <main class="grid">
   <!-- sentence list -->
@@ -77,6 +82,7 @@
       <button id="exportOne" class="btn small">この文を書き出す</button>
       <button id="exportAll" class="btn small">選んだ録音を全部書き出す</button>
       <button id="exportDir" class="btn small ghost">フォルダを選んで保存</button>
+      <label class="check" id="autoSaveBox" hidden><input type="checkbox" id="autoSave" checked> 選んだ録音を自動で保存</label>
       <span id="exportInfo" class="muted"></span>
     </div>
 

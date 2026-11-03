@@ -1,23 +1,49 @@
-"""The narration recorder (promo/recorder/) in Chromium with a fake microphone.
+"""The narration recorder (promo/recorder/) in Chromium with a fake microphone,
+and its local server (promo/recorder/serve.py).
 
 Chromium's fake device plays a beep; the test records one sentence, exports
-it with and without the filter and reads the WAVs back.
+it with and without the filter and reads the WAVs back. The server tests
+need only the standard library; the served-page test needs playwright.
 """
 
 import base64
+import http.client
 import importlib.util
 import io
+import json
 import math
 import re
 import shutil
 import struct
 import subprocess
+import tempfile
+import threading
 import unittest
 import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RECORDER = ROOT / "promo" / "recorder" / "index.html"
+SERVE = ROOT / "promo" / "recorder" / "serve.py"
+
+
+def load_serve():
+    spec = importlib.util.spec_from_file_location("hiraku_recorder_serve", SERVE)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def tone_wav(seconds: float = 0.5, rate: int = 44100, freq: float = 440.0) -> bytes:
+    n = int(seconds * rate)
+    frames = struct.pack(f"<{n}h", *(int(8000 * math.sin(2 * math.pi * freq * i / rate)) for i in range(n)))
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(frames)
+    return out.getvalue()
 
 HAS_PLAYWRIGHT = importlib.util.find_spec("playwright") is not None
 
@@ -148,6 +174,222 @@ class RecorderInBrowser(unittest.TestCase):
         m = re.search(r"I:\s+(-?[0-9.]+) LUFS", text[text.rindex("Summary:"):])
         self.assertIsNotNone(m)
         self.assertAlmostEqual(float(m.group(1)), r["loudnessAfter"], delta=0.5)
+
+    def test_no_page_errors(self):
+        self.assertEqual(self.errors, [])
+
+    def test_file_mode_keeps_the_manual_buttons(self):
+        self.assertTrue(self.page.locator("#scriptPick").is_visible())
+        self.assertTrue(self.page.locator("#synthPick").is_visible())
+        self.assertFalse(self.page.locator("#autoSaveBox").is_visible())
+        self.assertIn("ダウンロード", self.page.locator("#stOut").inner_text())
+        self.assertEqual(self.page.locator("#exportOne").inner_text(), "この文を書き出す")
+
+
+def make_work(root: Path) -> Path:
+    """A work folder: the test script and synthesized voices for two of its sentences."""
+    (root / "script").mkdir(parents=True)
+    (root / "script" / "narration.tsv").write_bytes(SCRIPT.encode("utf-8"))
+    synth = root / "voice" / "aida_calm"
+    synth.mkdir(parents=True)
+    for name in ("N00_1.wav", "N01_1.wav"):
+        (synth / name).write_bytes(tone_wav(1.0))
+    (synth / "voice.json").write_text('{"lines": []}', encoding="utf-8")
+    return root
+
+
+class ServedWork:
+    """serve.py on a free port in a thread, over a temporary work folder."""
+
+    def __init__(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = make_work(Path(self.tmp.name) / "work")
+        self.serve = load_serve()
+        self.work = self.serve.Work(self.root)
+        self.srv = self.serve.make_server(self.work, port=0, quiet=True)
+        self.port = self.srv.server_address[1]
+        self.thread = threading.Thread(target=self.srv.serve_forever, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        self.tmp.cleanup()
+
+    def request(self, method: str, path: str, body: bytes | None = None, headers: dict | None = None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        try:
+            c.request(method, path, body=body, headers=headers or {})
+            r = c.getresponse()
+            return r.status, r.getheader("Content-Type") or "", r.read()
+        finally:
+            c.close()
+
+
+class ServeApi(unittest.TestCase):
+    def setUp(self):
+        self.s = ServedWork()
+        self.addCleanup(self.s.close)
+        self.out = self.s.root / "voice" / "recorded"
+
+    def json(self, method, path, body=None, headers=None):
+        code, _, data = self.s.request(method, path, body, headers)
+        return code, json.loads(data)
+
+    def test_status(self):
+        code, st = self.json("GET", "/api/status")
+        self.assertEqual(code, 200)
+        self.assertEqual(st["app"], "hiraku-recorder")
+        self.assertEqual(st["script"]["lines"], 3)
+        self.assertEqual(st["script"]["label"], "script/narration.tsv")
+        self.assertEqual(st["synth"]["files"], ["N00_1.wav", "N01_1.wav"])
+        self.assertEqual(st["out"], {"label": "voice/recorded", "have": [], "missing": 3})
+
+    def test_script_and_synth(self):
+        code, ctype, data = self.s.request("GET", "/api/script")
+        self.assertEqual((code, data.decode("utf-8")), (200, SCRIPT))
+        code, ctype, data = self.s.request("GET", "/api/synth/N00_1.wav")
+        self.assertEqual((code, ctype), (200, "audio/wav"))
+        self.assertEqual(data[:4], b"RIFF")
+        self.assertEqual(self.s.request("GET", "/api/synth/voice.json")[0], 200)
+        for bad in ("/api/synth/../script/narration.tsv", "/api/synth/..%2Fscript%2Fnarration.tsv",
+                    "/api/synth/N09_1.wav", "/api/synth/notes.txt"):
+            self.assertEqual(self.s.request("GET", bad)[0], 404, bad)
+
+    def test_static_files(self):
+        code, ctype, data = self.s.request("GET", "/")
+        self.assertEqual(code, 200)
+        self.assertTrue(ctype.startswith("text/html"))
+        self.assertIn(b"recorder.js", data)
+        code, ctype, _ = self.s.request("GET", "/recorder.js")
+        self.assertEqual((code, ctype.split(";")[0]), (200, "text/javascript"))
+        for bad in ("/serve.py", "/../voice.py", "/..%2Fvoice.py", "/README.md"):
+            self.assertEqual(self.s.request("GET", bad)[0], 404, bad)
+
+    def test_put_take_writes_wav_and_voice_json(self):
+        code, res = self.json("PUT", "/api/take/N00_1.wav", tone_wav(1.5), {"Content-Type": "audio/wav"})
+        self.assertEqual(code, 200, res)
+        self.assertEqual(res["saved"], "N00_1.wav")
+        self.assertEqual((res["have"], res["total"], res["missing"]), (["N00_1.wav"], 3, 2))
+        self.assertEqual(res["folder"], "voice/recorded")
+        self.assertTrue((self.out / "N00_1.wav").is_file())
+        meta = json.loads((self.out / "voice.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["source"], "recorded")
+        self.assertEqual([r["file"] for r in meta["lines"]], ["N00_1.wav"])
+        self.assertAlmostEqual(meta["lines"][0]["seconds"], 1.5, places=2)
+        self.assertEqual(meta["missing"], ["N01_1.wav", "N01_2.wav"])
+        self.assertEqual(list(self.out.glob("*.part")), [])
+        # saving again replaces the file
+        code, res = self.json("PUT", "/api/take/N00_1.wav", tone_wav(0.8))
+        self.assertEqual(code, 200)
+        meta = json.loads((self.out / "voice.json").read_text(encoding="utf-8"))
+        self.assertAlmostEqual(meta["lines"][0]["seconds"], 0.8, places=2)
+        _, st = self.json("GET", "/api/status")
+        self.assertEqual(st["out"]["have"], ["N00_1.wav"])
+
+    def test_put_outside_the_folder_is_refused(self):
+        wav = tone_wav(0.3)
+        for path in ("/api/take/../N00_1.wav", "/api/take/..%2FN00_1.wav", "/api/take/..%5CN00_1.wav",
+                     "/api/take/../../script/narration.tsv", "/api/take/%2E%2E%2Fevil_1.wav",
+                     "/api/take/sub/N00_1.wav", "/api/take/C:%5Cevil_1.wav"):
+            code, _, _ = self.s.request("PUT", path, wav)
+            self.assertIn(code, (400, 404), path)
+        self.assertFalse(self.out.exists())
+        self.assertFalse((self.s.root / "voice" / "N00_1.wav").exists())
+        self.assertEqual(SCRIPT.encode("utf-8"), (self.s.root / "script" / "narration.tsv").read_bytes())
+
+    def test_put_name_not_in_script_is_refused(self):
+        for name in ("N09_1.wav", "N00_2.wav", "N01_3.wav", "voice.json", "N00_1.WAV"):
+            code, res = self.json("PUT", f"/api/take/{name}", tone_wav(0.3))
+            self.assertEqual(code, 400, name)
+        self.assertFalse(self.out.exists())
+
+    def test_put_bad_body_is_refused(self):
+        code, res = self.json("PUT", "/api/take/N00_1.wav", b"not a wav at all")
+        self.assertEqual(code, 400)
+        self.assertIn("WAV", res["error"])
+        self.assertFalse(self.out.exists())
+
+    def test_other_hosts_and_origins_are_refused(self):
+        self.assertEqual(self.s.request("GET", "/api/status", headers={"Host": "evil.example:80"})[0], 403)
+        code, _, _ = self.s.request("PUT", "/api/take/N00_1.wav", tone_wav(0.3),
+                                    {"Origin": "http://evil.example"})
+        self.assertEqual(code, 403)
+        self.assertFalse(self.out.exists())
+        code, _, _ = self.s.request("PUT", "/api/take/N00_1.wav", tone_wav(0.3),
+                                    {"Origin": f"http://localhost:{self.s.port}"})
+        self.assertEqual(code, 200)
+
+    def test_next_port_when_taken(self):
+        srv2 = self.s.serve.make_server(self.s.work, port=self.s.port, quiet=True)
+        try:
+            self.assertNotEqual(srv2.server_address[1], self.s.port)
+            self.assertEqual(srv2.server_address[0], "127.0.0.1")
+        finally:
+            srv2.server_close()
+
+    def test_missing_script(self):
+        (self.s.root / "script" / "narration.tsv").rename(self.s.root / "script" / "gone.tsv")
+        _, st = self.json("GET", "/api/status")
+        self.assertEqual(st["script"]["error"], "not found")
+        self.assertEqual(self.s.request("GET", "/api/script")[0], 404)
+        self.assertEqual(self.s.request("PUT", "/api/take/N00_1.wav", tone_wav(0.3))[0], 409)
+
+
+@unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
+class ServedPageInBrowser(unittest.TestCase):
+    """The page opened from serve.py reads the work folder and saves takes by itself."""
+
+    @classmethod
+    def setUpClass(cls):
+        from playwright.sync_api import sync_playwright
+        cls.s = ServedWork()
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(args=ARGS)
+        cls.page = cls.browser.new_page()
+        cls.errors = []
+        cls.page.on("pageerror", lambda e: cls.errors.append(str(e)))
+        cls.page.goto(f"http://127.0.0.1:{cls.s.port}/")
+        cls.page.evaluate("async () => { localStorage.clear(); await window.hirakuRec.ready; }")
+        cls.page.reload()
+        cls.page.evaluate("async () => { await window.hirakuRec.ready; }")
+        cls.loaded = {k: cls.page.locator(f"#{k}").inner_text() for k in ("stScript", "stSynth", "stOut")}
+        cls.page.evaluate("() => window.hirakuRec.openMic()")
+        cls.page.evaluate("() => window.hirakuRec.startRecording({countdown: false})")
+        cls.page.wait_for_timeout(2000)
+        cls.page.evaluate("async () => { await window.hirakuRec.stopRecording(); await window.hirakuRec.idle(); }")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.s.close()
+
+    def test_script_and_synth_load_by_themselves(self):
+        self.assertIn("narration.tsv", self.loaded["stScript"])
+        self.assertIn("3 文", self.loaded["stScript"])
+        self.assertIn("2 本 / 3", self.loaded["stSynth"])
+        self.assertIn("voice/recorded", self.loaded["stOut"])
+        self.assertIn("0/3", self.loaded["stOut"])
+        self.assertEqual(self.page.locator("#list .row").count(), 3)
+        self.assertIn("合成", self.page.locator("#list .row").first.inner_text())
+
+    def test_manual_pickers_hidden(self):
+        self.assertFalse(self.page.locator("#scriptPick").is_visible())
+        self.assertFalse(self.page.locator("#synthPick").is_visible())
+        self.assertFalse(self.page.locator("#exportDir").is_visible())
+        self.assertTrue(self.page.locator("#autoSave").is_checked())
+        self.assertEqual(self.page.locator("#exportOne").inner_text(), "この文を保存")
+
+    def test_take_saved_by_itself(self):
+        out = self.s.root / "voice" / "recorded"
+        with wave.open(str(out / "N00_1.wav"), "rb") as w:
+            self.assertEqual((w.getframerate(), w.getnchannels(), w.getsampwidth()), (44100, 1, 2))
+        meta = json.loads((out / "voice.json").read_text(encoding="utf-8"))
+        self.assertEqual([r["file"] for r in meta["lines"]], ["N00_1.wav"])
+        self.assertIn("1/3", self.page.locator("#stOut").inner_text())
+        self.assertIn("保存 ✓", self.page.locator("#list .row").first.inner_text())
+        self.assertIn("voice/recorded に保存", self.page.locator("#exportInfo").inner_text())
 
     def test_no_page_errors(self):
         self.assertEqual(self.errors, [])

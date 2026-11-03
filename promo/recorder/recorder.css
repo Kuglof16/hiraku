@@ -67,6 +67,21 @@ body.recording .btn.rec { background: var(--ink); border-color: var(--ink); }
 .clip { font-size: 12px; font-weight: 700; color: #fff; background: var(--miss); border-radius: 3px; padding: 0 6px; visibility: hidden; }
 .clip.on { visibility: visible; }
 
+/* status line: what is loaded and where takes go */
+.status-line {
+  display: flex; flex-wrap: wrap; gap: 4px 0; align-items: baseline;
+  padding: 6px 20px; border-bottom: 1px solid var(--line); background: var(--paper-2); font-size: 13px;
+}
+.status-line .st { padding: 0 14px; border-left: 1px solid var(--line); }
+.status-line .st:first-child { padding-left: 0; border-left: none; }
+.status-line .st b { font-weight: 400; color: var(--ink-soft); margin-right: 6px; }
+.status-line .st span { font-weight: 700; }
+.status-line .st .bad { color: var(--miss); }
+.status-line .st .good { color: var(--pass); }
+.status-line .st .count { font-family: var(--font-mono); font-weight: 400; margin-left: 4px; }
+body.served .manual { display: none !important; }
+.row .s .saved { color: var(--pass); font-weight: 700; }
+
 /* --- layout --- */
 .grid {
   flex: 1; min-height: 0;

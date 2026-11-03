@@ -12,7 +12,8 @@ const D = window.HirakuDSP;
 const LEAD_S = 0.3, GAP_S = 0.35, TAIL_S = 0.2;
 
 const LS = { settings: "hiraku-rec-settings", script: "hiraku-rec-script", pos: "hiraku-rec-pos",
-  device: "hiraku-rec-device", chosen: "hiraku-rec-chosen", countdown: "hiraku-rec-countdown" };
+  device: "hiraku-rec-device", chosen: "hiraku-rec-chosen", countdown: "hiraku-rec-countdown",
+  autoSave: "hiraku-rec-autosave" };
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage off */ } };
 
@@ -29,6 +30,8 @@ const state = {
   bypass: false,
   recording: false,
   countingDown: false,
+  scriptName: "",
+  server: null,        // /api/status of promo/recorder/serve.py, or null when opened as a file
 };
 
 // --- script ------------------------------------------------------------------
@@ -84,29 +87,122 @@ function loadScriptText(text, name) {
   lsSet(LS.script, text);
   const saved = parseInt(lsGet(LS.pos) || "0", 10);
   state.pos = Math.min(isNaN(saved) ? 0 : saved, lines.length - 1);
-  $("scriptInfo").textContent = `${name || "前回の原稿"} — ${cutsOf(lines).length} カット・${lines.length} 文`;
+  state.scriptName = name || "前回の原稿";
+  $("scriptInfo").textContent = `${state.scriptName} — ${cutsOf(lines).length} カット・${lines.length} 文`;
   $("dropHint").classList.add("hidden");
   renderList();
   renderPrompter();
+  renderStatus();
 }
 
 // --- synthesized voices --------------------------------------------------------
 
+// files: File objects, or {name, arrayBuffer()} for voices fetched from the server.
+// Decoded in an offline context so nothing waits for the page's first click.
 async function loadSynthFiles(files) {
-  const ctx = await audio();
-  let n = 0;
-  for (const f of files) {
+  const dec = new OfflineAudioContext(1, 1, 44100);
+  const got = await Promise.all(files.map(async (f) => {
     const m = f.name.match(/^(.+_\d+)\.wav$/i);
-    if (!m) continue;
-    const ab = await f.arrayBuffer();
+    if (!m) return null;
+    let ab;
+    try { ab = await f.arrayBuffer(); } catch (e) { return null; }
     const seconds = D.wavSeconds(ab);
     let buffer = null;
-    try { buffer = await ctx.decodeAudioData(ab.slice(0)); } catch (e) { /* length only */ }
-    state.synth[m[1]] = { seconds: isNaN(seconds) && buffer ? buffer.duration : seconds, buffer };
-    n++;
-  }
-  renderList(); renderPrompter();
+    try { buffer = await dec.decodeAudioData(ab.slice(0)); } catch (e) { /* length only */ }
+    return [m[1], { seconds: isNaN(seconds) && buffer ? buffer.duration : seconds, buffer }];
+  }));
+  let n = 0;
+  for (const g of got) if (g) { state.synth[g[0]] = g[1]; n++; }
+  renderList(); renderPrompter(); renderStatus();
   return n;
+}
+
+// --- the local server (promo/recorder/serve.py) -----------------------------------
+
+// Opened from serve.py: read the script and the synthesized voices by themselves.
+async function connectServer() {
+  if (!/^https?:$/.test(location.protocol)) return false;
+  let st;
+  try {
+    const r = await fetch("/api/status", { cache: "no-store" });
+    if (!r.ok) return false;
+    st = await r.json();
+  } catch (e) { return false; }
+  if (!st || st.app !== "hiraku-recorder") return false;
+  state.server = st;
+  document.body.classList.add("served");
+  $("exportOne").textContent = "この文を保存";
+  $("exportAll").textContent = "選んだ録音を全部保存";
+  $("exportDir").hidden = true;
+  $("autoSaveBox").hidden = false;
+  $("dropHint").innerHTML = "原稿を読んでいます…";
+  if (st.script.error) {
+    $("scriptInfo").textContent = `作業フォルダに原稿がありません (${st.script.label})`;
+    $("dropHint").textContent = `作業フォルダの ${st.script.label} が読めません: ${st.script.error}`;
+  } else {
+    try {
+      const r = await fetch("/api/script", { cache: "no-store" });
+      loadScriptText(await r.text(), st.script.name);
+    } catch (e) { $("scriptInfo").textContent = `読めませんでした: ${e.message}`; $("dropHint").textContent = e.message; }
+  }
+  await loadSynthFiles(st.synth.files.map((name) => ({
+    name, arrayBuffer: () => fetch(`/api/synth/${encodeURIComponent(name)}`).then((r) => {
+      if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }),
+  })));
+  renderStatus();
+  return true;
+}
+
+const savedOnDisk = (file) => !!state.server && state.server.out.have.includes(file);
+
+// One save at a time, in the order asked; voice.json is rewritten after each.
+let saveChain = Promise.resolve();
+function saveKey(key) {
+  const p = saveChain.then(() => putTake(key));
+  saveChain = p.catch(() => {});
+  return p;
+}
+
+async function putTake(key) {
+  const ln = state.lines.find((l) => l.key === key);
+  if (!ln) throw new Error(`${key}: 原稿にない文`);
+  const res = await renderExport(key);
+  const r = await fetch(`/api/take/${encodeURIComponent(ln.file)}`, {
+    method: "PUT", headers: { "Content-Type": "audio/wav" }, body: res.wav });
+  let j = {};
+  try { j = await r.json(); } catch (e) { /* empty body */ }
+  if (!r.ok) throw new Error(`${ln.file} を保存できませんでした: ${j.error || "HTTP " + r.status}`);
+  state.server.out.have = j.have;
+  state.server.out.missing = j.missing;
+  const left = j.missing ? `・残り ${j.missing} 文` : "・全部の文がそろった";
+  $("exportInfo").textContent = `${ln.file} を ${j.folder} に保存 (${describe(res)}${left})`;
+  renderList(); renderStatus();
+  return j;
+}
+
+function maybeAutoSave(key) {
+  if (!state.server || !$("autoSave").checked || !chosenTake(key)) return;
+  saveKey(key).catch((e) => { $("exportInfo").textContent = e.message; });
+}
+
+// One line under the header: script, synthesized voices, where takes go.
+function renderStatus() {
+  const put = (id, html) => { $(id).querySelector("span").innerHTML = html; };
+  const s = state.server, n = state.lines.length;
+  if (n) put("stScript", `${escapeHtml(state.scriptName)}<span class="count">(${n} 文)</span>`);
+  else if (s && s.script.error) put("stScript", `<span class="bad">見つかりません (${escapeHtml(s.script.label)})</span>`);
+  else put("stScript", `<span class="bad">まだ読んでいません</span>`);
+  const syn = n ? state.lines.filter((l) => state.synth[l.key]).length : Object.keys(state.synth).length;
+  const synLabel = s ? `<span class="count">(${escapeHtml(s.synth.label)})</span>` : "";
+  put("stSynth", syn ? `${syn} 本${n && syn < n ? ` / ${n}` : ""}${synLabel}` : `<span class="bad">なし</span>${synLabel}`);
+  if (s) {
+    const have = state.lines.filter((l) => savedOnDisk(l.file)).length;
+    put("stOut", `${escapeHtml(s.out.label)}<span class="count ${n && have === n ? "good" : ""}">(${have}/${n} 文 保存済み)</span>`);
+  } else {
+    put("stOut", `ダウンロード<span class="count">(ファイルとして開いています。serve.py から開くと作業フォルダに自動で保存)</span>`);
+  }
 }
 
 // --- audio graph ---------------------------------------------------------------
@@ -260,6 +356,7 @@ async function stopRecording() {
   saveChosen();
   store.put(r.key, take);
   renderList(); renderPrompter();
+  if (state.chosen[r.key] === take.id) maybeAutoSave(r.key);
   return take;
 }
 
@@ -323,6 +420,7 @@ function deleteTake(key, id) {
     const last = state.takes[key][state.takes[key].length - 1];
     if (last) state.chosen[key] = last.id; else delete state.chosen[key];
     saveChosen();
+    if (last) maybeAutoSave(key); // with no take left, the saved file stays as it was
   }
   store.del(id);
   renderList(); renderPrompter();
@@ -387,6 +485,10 @@ const fmtLu = (v) => (isFinite(v) ? `${v.toFixed(1)} LUFS 相当` : "無音");
 async function exportOne() {
   const ln = current();
   if (!ln) return;
+  if (state.server) {
+    try { await saveKey(ln.key); } catch (e) { $("exportInfo").textContent = e.message; }
+    return;
+  }
   try {
     const res = await renderExport(ln.key);
     download(ln.file, res.wav);
@@ -397,6 +499,12 @@ async function exportOne() {
 async function exportAll(dirHandle) {
   const keys = state.lines.map((l) => l.key).filter((k) => chosenTake(k));
   if (!keys.length) { $("exportInfo").textContent = "書き出す録音がありません"; return; }
+  if (state.server && !dirHandle) {
+    try { for (const k of keys) await saveKey(k); } catch (e) { $("exportInfo").textContent = e.message; return; }
+    $("exportInfo").textContent = `${keys.length} 本を ${state.server.out.label} に保存した` +
+      (state.server.out.missing ? ` (録音のない文 ${state.server.out.missing})` : " (全部の文がそろった)");
+    return;
+  }
   let n = 0;
   for (const k of keys) {
     const ln = state.lines.find((l) => l.key === k);
@@ -547,7 +655,8 @@ function renderList() {
       const t = chosenTake(ln.key), n = (state.takes[ln.key] || []).length, budget = sentenceBudget(ln);
       const syn = state.synth[ln.key] ? `合成 ${state.synth[ln.key].seconds.toFixed(2)}` : "";
       const mine = t ? `<span class="${t.trimmed > budget ? "over" : "done"}">● ${t.trimmed.toFixed(2)}</span>${n > 1 ? ` ×${n}` : ""}` : "";
-      li.innerHTML = `<span class="t"><span class="k">${ln.key}</span>${escapeHtml(ln.ja)}</span><span class="s">目安 ${budget.toFixed(1)} 秒${syn ? " · " + syn : ""}${mine ? " · 録音 " + mine : ""}</span>`;
+      const disk = !state.server ? "" : savedOnDisk(ln.file) ? ' · <span class="saved">保存 ✓</span>' : t ? " · 未保存" : "";
+      li.innerHTML = `<span class="t"><span class="k">${ln.key}</span>${escapeHtml(ln.ja)}</span><span class="s">目安 ${budget.toFixed(1)} 秒${syn ? " · " + syn : ""}${mine ? " · 録音 " + mine : ""}${disk}</span>`;
       li.onclick = () => go(i);
       ol.appendChild(li);
     }
@@ -591,7 +700,11 @@ function renderTakes() {
       `<span class="len ${t.trimmed > budget ? "over" : ""}">${t.trimmed.toFixed(2)} s</span>` +
       `<span class="info">${i + 1} 本目 · 録った長さ ${t.seconds.toFixed(1)} s · ピーク ${dbfs(t.peak).toFixed(1)} dBFS ${warn.join(" ")}</span>` +
       `<span class="acts"><button class="btn small ghost" data-a="play">▶</button><button class="btn small ghost" data-a="stop">■</button><button class="btn small ghost" data-a="del" title="この録音を捨てる">✕</button></span>`;
-    li.querySelector(".star").onclick = () => { state.chosen[ln.key] = t.id; saveChosen(); renderList(); renderTakes(); };
+    li.querySelector(".star").onclick = () => {
+      const changed = state.chosen[ln.key] !== t.id;
+      state.chosen[ln.key] = t.id; saveChosen(); renderList(); renderTakes();
+      if (changed) maybeAutoSave(ln.key);
+    };
     li.querySelector('[data-a="play"]').onclick = () => playTake(t);
     li.querySelector('[data-a="stop"]').onclick = stopPlayer;
     li.querySelector('[data-a="del"]').onclick = () => deleteTake(ln.key, t.id);
@@ -670,6 +783,8 @@ function wire() {
   $("exportAll").onclick = () => exportAll(null);
   $("exportDir").onclick = exportToDir;
   $("exportDir").hidden = !window.showDirectoryPicker;
+  $("autoSave").checked = lsGet(LS.autoSave) !== "0";
+  $("autoSave").onchange = (e) => lsSet(LS.autoSave, e.target.checked ? "1" : "0");
   document.querySelectorAll(".preset").forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
   $("abBtn").onclick = () => setBypass(!state.bypass);
   $("playLoop").onclick = () => { const t = current() && chosenTake(current().key); if (t) playTake(t, { loop: true }); };
@@ -705,14 +820,19 @@ async function init() {
   syncKnobs();
   setBypass(false);
   await restoreTakes();
-  const saved = lsGet(LS.script);
-  if (saved) { try { loadScriptText(saved); } catch (e) { /* stale script */ } }
+  renderStatus();
+  // from serve.py the work folder's script is read; as a file, the last script read
+  if (!(await connectServer())) {
+    const saved = lsGet(LS.script);
+    if (saved) { try { loadScriptText(saved); } catch (e) { /* stale script */ } }
+  }
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) listDevices().catch(() => {});
 }
 
 // Hooks for the browser test (promo/tests/test_recorder.py).
 window.hirakuRec = {
-  state, loadScriptText, startRecording, stopRecording, go, applyPreset, setBypass, openMic,
+  state, loadScriptText, startRecording, stopRecording, go, applyPreset, setBypass, openMic, saveKey,
+  idle: () => saveChain,
   async exportBase64(key, opts) {
     const r = await renderExport(key, opts);
     const bytes = new Uint8Array(r.wav);
