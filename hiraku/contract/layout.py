@@ -23,7 +23,8 @@ runs/<run_id>/
                                       reads it, emits the event itself and removes the file
     plugin.hooks.json                 claude_code_plugin runs only: how the plugin's hooks are wired for this run
     plugin.outbox.jsonl               claude_code_plugin runs only: hook notes waiting for the MCP server to emit
-    plugin.lock                       claude_code_plugin runs only: present while the plugin's MCP server owns the run
+    plugin.lock                       claude_code_plugin runs only: a short lock around reading or writing the plugin state and outbox (not a sign that a session holds the run)
+    plugin.alive                      claude_code_plugin runs only: touched by the MCP server every poll while a Claude Code session serves the run
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Only the run process appends to events.jsonl (seq has no gaps and one writer);
@@ -59,7 +60,9 @@ HEARING_ANSWER_FILE = "hearing.answer.json"
 INBOX_DIR = "inbox"  # requests the screen puts for a running run (the run turns them into events)
 PLUGIN_HOOKS_FILE = "plugin.hooks.json"  # claude_code_plugin runs: hook wiring for this run
 PLUGIN_OUTBOX_FILE = "plugin.outbox.jsonl"  # claude_code_plugin runs: hook notes for the MCP server to emit
-PLUGIN_LOCK_FILE = "plugin.lock"  # claude_code_plugin runs: the MCP server owns the run
+PLUGIN_LOCK_FILE = "plugin.lock"  # claude_code_plugin runs: held only while the plugin state or the outbox is read or written
+PLUGIN_ALIVE_FILE = "plugin.alive"  # claude_code_plugin runs: the MCP server touches it every poll while it serves the run
+PLUGIN_ALIVE_S = 10.0  # a plugin run is held by a session while plugin.alive is younger than this (seconds)
 
 RECORD_DIRS = {
     "prediction": "predictions",
