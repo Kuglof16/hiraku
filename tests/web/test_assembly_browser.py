@@ -60,18 +60,35 @@ def assembly_events(focus_a7=False):
     return out
 
 
+N16_CHECK_TIMES = [0.5, 3.0, 5.0, 6.2]  # the promo department's check.times for n16
+
+
+def many_steps_events(n=19):
+    """assembly_events with n steps (the three parts taken in turn; for the list's layout only)."""
+    events = assembly_events()
+    ana = next(e for e in events if e["kind"] == "analysis.finished" and e["data"].get("assembly"))
+    ana["data"]["assembly"] = [{**copy.deepcopy(STEPS[i % len(STEPS)]), "order": i + 1} for i in range(n)]
+    return events
+
+
+def write_run(root, run_id, events):
+    (root / run_id).mkdir(parents=True)
+    (root / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+
+
 def n16_layout():
-    """Placeholder layout rules with the n16 keys the cut reads (the promo department's are to come)."""
+    """Layout rules with the n16 values the promo department set (colors as their n01)."""
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": 910, "h": 170},
         "min_text_px": 18,
         "n16": {
-            "duration_s": 9.0,
-            "view": {"x": 96, "y": 96, "w": 1180, "h": 790},
-            "seek": {"x": 96, "y": 822, "w": 1180, "h": 64},
-            "steps": {"x": 1310, "y": 96, "w": 514, "h": 790, "text_px": 22, "row_gap": 8},
-            "times": {"lead_s": 0.5, "step_s": 2.0},
+            "duration_s": 6.3,
+            "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
+            "seek": {"x": 120, "y": 814, "w": 1152, "h": 48},
+            "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
+            "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8},
+            "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
         },
     }
 
@@ -82,9 +99,9 @@ class AssemblyBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         cls.run_id = "20261102-203000-assembly"
-        (cls.tmp / "runs" / cls.run_id).mkdir(parents=True)
-        events = assembly_events()
-        (cls.tmp / "runs" / cls.run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        cls.run19 = "20261102-203000-assembly19"
+        write_run(cls.tmp / "runs", cls.run_id, assembly_events())
+        write_run(cls.tmp / "runs", cls.run19, many_steps_events(19))
         cls.layout_file = cls.tmp / "layout.json"
         cls.layout_file.write_text(json.dumps(n16_layout()), encoding="utf-8")
         cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False, layout_file=cls.layout_file)
@@ -115,7 +132,7 @@ class AssemblyBrowserTest(unittest.TestCase):
         return page, errors
 
     def test_events_follow_the_contract(self):
-        for ev in assembly_events(focus_a7=True):
+        for ev in assembly_events(focus_a7=True) + many_steps_events(19):
             self.assertEqual(contract.errors("event", ev), [], ev["kind"])
 
     # ---- A7 ----------------------------------------------------------------------------
@@ -231,9 +248,15 @@ class AssemblyBrowserTest(unittest.TestCase):
     # ---- N16 ---------------------------------------------------------------------------
     N16_STATE = """() => {
       const r = (el) => { const b = el.getBoundingClientRect(); return [b.left, b.top, b.width, b.height]; };
-      const rows = [...document.querySelectorAll('[data-box^="n16.step."]')].filter((li) => li.style.display !== 'none');
+      const shown = (el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden';
+      const rows = [...document.querySelectorAll('[data-box^="n16.step."]')].filter(shown);
       const texts = [...document.querySelectorAll('[data-box^="n16"] *, [data-box^="n16"]')]
-        .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+        .filter((el) => shown(el) && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+      // every box shown, and the data-box it sits in (none at the top)
+      const all = [...document.querySelectorAll('[data-box]')].filter(shown).map((el) => {
+        const up = el.parentElement?.closest('[data-box]');
+        return { key: el.dataset.box, box: r(el), parent: up ? up.dataset.box : null, parentBox: up ? r(up) : null };
+      });
       return {
         err: document.querySelector('.err')?.textContent ?? null,
         duration: window.hiraku.player.duration,
@@ -243,7 +266,8 @@ class AssemblyBrowserTest(unittest.TestCase):
         fill: parseFloat(document.querySelector('[data-box="n16.seek"] .as-fill').style.width),
         caption: document.querySelector('[data-box="n16.caption"]').textContent,
         boxes: Object.fromEntries(['n16.view', 'n16.seek', 'n16.steps'].map((k) => [k, r(document.querySelector(`[data-box="${k}"]`))])),
-        rows: rows.map((li) => [li.dataset.box, r(li)]),
+        all,
+        rows: rows.map((li) => li.dataset.box),
         checks: rows.map((li) => [...li.querySelectorAll('.ck')].map((c) => c.classList.contains('is-ok'))),
         sizes: texts.map((el) => parseFloat(getComputedStyle(el).fontSize)),
         outside: document.querySelectorAll('[data-outside]').length,
@@ -251,61 +275,117 @@ class AssemblyBrowserTest(unittest.TestCase):
       };
     }"""
 
+    def n16_page(self, run_id):
+        page, errors = self.open(f"cut.html?cut=n16&run={run_id}&t=0")
+        at = lambda t: (page.evaluate(f"window.hiraku.seek({t})"), page.evaluate(self.N16_STATE))[1]
+        return page, errors, at
+
+    def assert_boxes_fit(self, got, layout, t):
+        """Out of the subtitle band, inside the stage, each box inside the data-box it sits in,
+        the bar over the view's lower edge, no text below min_text_px."""
+        band = layout["subtitle_band"]["y"]
+        W, H = layout["stage"]["w"], layout["stage"]["h"]
+        eps = 0.5
+        self.assertTrue(got["all"])
+        for b in got["all"]:
+            x, y, w, h = b["box"]
+            self.assertLessEqual(y + h, band + eps, (t, b["key"]))
+            self.assertGreaterEqual(x, -eps, (t, b["key"]))
+            self.assertGreaterEqual(y, -eps, (t, b["key"]))
+            self.assertLessEqual(x + w, W + eps, (t, b["key"]))
+            self.assertLessEqual(y + h, H + eps, (t, b["key"]))
+            if b["parent"]:
+                px, py, pw, ph = b["parentBox"]
+                self.assertGreaterEqual(x, px - eps, (t, b["key"], b["parent"]))
+                self.assertGreaterEqual(y, py - eps, (t, b["key"], b["parent"]))
+                self.assertLessEqual(x + w, px + pw + eps, (t, b["key"], b["parent"]))
+                self.assertLessEqual(y + h, py + ph + eps, (t, b["key"], b["parent"]))
+        sx, sy, sw, sh = got["boxes"]["n16.seek"]
+        vx, vy, vw, vh = got["boxes"]["n16.view"]
+        self.assertTrue(vx <= sx and sx + sw <= vx + vw and vy <= sy and sy + sh <= vy + vh + eps, t)
+        self.assertTrue(got["sizes"])
+        self.assertGreaterEqual(min(got["sizes"]), layout["min_text_px"], t)
+        self.assertEqual(got["outside"], 0, t)
+
     def test_n16_steps_follow_the_time(self):
         layout = n16_layout()
         T = layout["n16"]["times"]
-        page, errors = self.open(f"cut.html?cut=n16&run={self.run_id}&t=0")
-        at = lambda t: (page.evaluate(f"window.hiraku.seek({t})"), page.evaluate(self.N16_STATE))[1]
+        n = len(STEPS)
+        page, errors, at = self.n16_page(self.run_id)
 
         got = at(0)
         self.assertIsNone(got["err"])
         self.assertEqual(got["duration"], layout["n16"]["duration_s"])
-        # before the lead ends: step 1 at the start of its path
+        # before steps_from: step 1 at the start of its path
         self.assertEqual(got["step"], 1)
         self.assertEqual(got["u"], 0)
         self.assertEqual(got["visible"], [True, False, False])
-
-        for k in (1, 2, 3):
-            got = at(T["lead_s"] + (k - 0.5) * T["step_s"])
-            self.assertEqual(got["step"], k)
-            self.assertEqual(got["cur"], [str(k)])
-            self.assertAlmostEqual(got["u"], k - 0.5)
-            self.assertAlmostEqual(got["fill"], (k - 0.5) / 3 * 100, places=3)
-            self.assertIn(STEPS[k - 1]["text"], got["caption"])
-            self.assertEqual(got["visible"], [i < k for i in range(3)])
-
-        got = at(layout["n16"]["duration_s"])
-        self.assertEqual(got["step"], 3)
-        self.assertEqual(got["u"], 3)
-        self.assertEqual(got["fill"], 100)
-        # the marks as recorded
-        self.assertEqual(got["checks"], [[s["no_interference"], s["tool_clearance"], s["hand_reach"]] for s in STEPS])
-
-        # in the layout's boxes, out of the subtitle band, no text below min_text_px
-        band = layout["subtitle_band"]["y"]
         for key in ("view", "seek", "steps"):
             b = layout["n16"][key]
             self.assertEqual([round(v) for v in got["boxes"][f"n16.{key}"]], [b["x"], b["y"], b["w"], b["h"]])
-        for box in [*got["boxes"].values(), *[r for _, r in got["rows"]]]:
-            self.assertLessEqual(box[1] + box[3], band + 0.5)
-        S = layout["n16"]["steps"]
-        self.assertEqual([k for k, _ in got["rows"]], ["n16.step.1", "n16.step.2", "n16.step.3"])
-        for _, r in got["rows"]:
-            self.assertLessEqual(r[1] + r[3], S["y"] + S["h"] + 0.5)
-        self.assertTrue(got["sizes"])
-        self.assertGreaterEqual(min(got["sizes"]), layout["min_text_px"])
-        self.assertEqual(got["outside"], 0)
+
+        # steps_from..steps_to: one step after another, as many as the record has
+        dt = (T["steps_to_s"] - T["steps_from_s"]) / n
+        for k in range(1, n + 1):
+            got = at(T["steps_from_s"] + (k - 0.5) * dt)
+            self.assertEqual(got["step"], k)
+            self.assertEqual(got["cur"], [str(k)])
+            self.assertAlmostEqual(got["u"], k - 0.5)
+            self.assertAlmostEqual(got["fill"], (k - 0.5) / n * 100, places=3)
+            self.assertIn(STEPS[k - 1]["text"], got["caption"])
+            self.assertEqual(got["visible"], [i < k for i in range(n)])
+        seen = []
+        for i in range(41):
+            seen.append(at(T["steps_from_s"] + (T["steps_to_s"] - T["steps_from_s"]) * i / 40 - 1e-3)["step"])
+        self.assertEqual(sorted(set(seen)), list(range(1, n + 1)))
+        self.assertTrue(all(0 <= b - a <= 1 for a, b in zip(seen, seen[1:])), seen)
+        got = at((T["steps_to_s"] + T["scrub_s"]) / 2)
+        self.assertEqual((got["step"], got["u"]), (n, n))
+
+        # scrub_s..scrub_to_s: the bar goes back once, then forward to the last step
+        us = [at(T["scrub_s"] + (T["scrub_to_s"] - T["scrub_s"]) * i / 28)["u"] for i in range(29)]
+        low = us.index(min(us))
+        self.assertEqual(us[0], n)
+        self.assertLess(min(us), n)
+        self.assertTrue(all(b <= a for a, b in zip(us[: low + 1], us[1 : low + 1])), us)
+        self.assertTrue(all(b >= a for a, b in zip(us[low:], us[low + 1 :])), us)
+        self.assertEqual(us[-1], n)
+        self.assertTrue(all(u == round(u) for u in us), us)  # the state lands on whole steps, as under a hand
+        got = at(T["scrub_s"] + (T["scrub_to_s"] - T["scrub_s"]) * low / 28)
+        self.assertEqual(got["visible"], [i < got["u"] for i in range(n)])
+
+        # held on the last step to the end
+        got = at(layout["n16"]["duration_s"])
+        self.assertEqual((got["step"], got["u"], got["fill"]), (n, n, 100))
+        self.assertEqual(got["checks"], [[s["no_interference"], s["tool_clearance"], s["hand_reach"]] for s in STEPS])
+        self.assertEqual(got["rows"], [f"n16.step.{s['order']}" for s in STEPS])
+
+        for t in N16_CHECK_TIMES:
+            self.assert_boxes_fit(at(t), layout, t)
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_n16_nineteen_steps_fit_at_the_check_times(self):
+        """As many steps as the video's record (19): the list still ends inside its box."""
+        layout = n16_layout()
+        page, errors, at = self.n16_page(self.run19)
+        for t in N16_CHECK_TIMES:
+            got = at(t)
+            self.assertIsNone(got["err"])
+            self.assertTrue(got["rows"])
+            self.assert_boxes_fit(got, layout, t)
         self.assertEqual(errors, [])
         page.close()
 
     def test_n16_names_missing_layout_keys(self):
         layout = n16_layout()
-        del layout["n16"]["times"]
-        del layout["n16"]["steps"]["row_gap"]
+        del layout["n16"]["times"]["scrub_s"]
+        del layout["n16"]["steps"]["title_px"]
+        del layout["n16"]["colors"]
         self.layout_file.write_text(json.dumps(layout), encoding="utf-8")
         page, errors = self.open(f"cut.html?cut=n16&run={self.run_id}&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n16 に無い: steps.row_gap, times.lead_s, times.step_s", err)
+        self.assertIn("layout.json の n16 に無い: steps.title_px, times.scrub_s, colors.bg, colors.panel, colors.rule", err)
         page.close()
 
 

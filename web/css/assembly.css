@@ -16,7 +16,7 @@
 .asm-steps .tx { margin-top: 2px; }
 .asm-steps .fz { margin-top: 2px; color: var(--muted, #6b665c); font-size: 0.9em; }
 .asm-steps .blk { margin-top: 2px; color: var(--red, #c8402a); font-weight: 600; }
-.asm-steps.compact li { white-space: nowrap; overflow: hidden; line-height: 1.25; padding: 2px 8px; }
+.asm-steps.compact li { white-space: nowrap; overflow: hidden; line-height: 1.3; padding: 0 8px; }
 .asm-steps.compact .nm { display: inline-block; max-width: 52%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 
 .asm-seek { display: flex; align-items: center; gap: 12px; box-sizing: border-box; }
@@ -59,4 +59,5 @@
 .n16-caption:empty { display: none; }
 .n16-seek { position: absolute; padding: 0 16px; background: rgba(251, 249, 244, 0.92); border-top: 1px solid #c9c3b6; }
 .n16-steps { position: absolute; box-sizing: border-box; overflow: hidden; }
+.n16-title { margin: 0 0 4px; line-height: 1.2; }
 .n16-head { color: #5c5a54; margin-bottom: 8px; }

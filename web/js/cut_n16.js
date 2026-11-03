@@ -1,8 +1,13 @@
 // N16: the assembly order. The parts go in one after another along their recorded
-// paths in the 3D view, the bar over the view's lower edge follows (the video moves
-// it, not a hand), and the list at the right marks the step going in with its checks
-// (interference, tool clearance, hand reach) as recorded. Positions, sizes and times
-// come from layout.json n16; a missing key is named on the page.
+// paths in the 3D view, the bar over the view's lower edge follows, and the list at
+// the right marks the step going in with its checks (interference, tool clearance,
+// hand reach) as recorded. Then the bar is moved back and forth as a hand would drag
+// it (the state follows, step by step) and stops on the last step. Positions, sizes,
+// colours and times come from layout.json n16; a missing key is named on the page.
+//
+// times: steps_from_s..steps_to_s the steps go in one by one (as many as the record
+// has); scrub_s..scrub_to_s the bar goes back by SCRUB_BACK of the steps and forward
+// again to the last one; lead_s is when the caption (the step's sentence) appears.
 
 import * as THREE from "three";
 import { AssemblySeek, AssemblyStage, assemblyRecord, partNames, shortName, stepAt, stepRowsHtml, summaryText } from "./assembly.js";
@@ -17,9 +22,28 @@ const N16_KEYS = [
   "duration_s",
   "view.x", "view.y", "view.w", "view.h",
   "seek.x", "seek.y", "seek.w", "seek.h",
-  "steps.x", "steps.y", "steps.w", "steps.h", "steps.text_px", "steps.row_gap",
-  "times.lead_s", "times.step_s",
+  "steps.x", "steps.y", "steps.w", "steps.h", "steps.title_px", "steps.text_px", "steps.row_gap",
+  "times.lead_s", "times.steps_from_s", "times.steps_to_s", "times.scrub_s", "times.scrub_to_s",
+  "colors.bg", "colors.panel", "colors.rule",
 ];
+
+// How far the scrub drags the bar back: this share of the steps (at least one step).
+const SCRUB_BACK = 0.4;
+export const scrubBack = (n) => Math.max(1, Math.min(n, Math.round(n * SCRUB_BACK)));
+
+const smooth = (p) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, p)));
+
+// Progress through the order (0..n) at cut time t for the times of layout.json n16.
+export function n16Progress(T, n, t) {
+  if (t < T.steps_from_s) return 0;
+  if (t < T.steps_to_s) return (n * (t - T.steps_from_s)) / Math.max(1e-9, T.steps_to_s - T.steps_from_s);
+  if (t < T.scrub_s || t >= T.scrub_to_s) return n;
+  // a hand on the bar: back, then forward again; the state lands on whole steps as in A7
+  const p = (t - T.scrub_s) / Math.max(1e-9, T.scrub_to_s - T.scrub_s);
+  const back = scrubBack(n);
+  const along = p < 0.5 ? n - back * smooth(p / 0.5) : n - back + back * smooth((p - 0.5) / 0.5);
+  return Math.round(along);
+}
 
 const get = (obj, path) => path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
@@ -40,7 +64,7 @@ export class CutN16 {
     this.rec = assemblyRecord(s);
     if (!this.rec?.design) throw new Error("組み立ての記録がまだ無い (analysis.finished の data.assembly)");
     this.stage = $("stage");
-    this.stage.style.background = layout.colors?.n16_bg ?? "#f4f1ea";
+    this.stage.style.background = this.spec.colors.bg;
     this.scale = 1;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
@@ -59,6 +83,7 @@ export class CutN16 {
     view.className = "n16-view";
     view.dataset.box = "n16.view";
     this.place(view, sp.view);
+    Object.assign(view.style, { background: sp.colors.panel, borderColor: sp.colors.rule });
     this.canvas = document.createElement("canvas");
     this.caption = document.createElement("div");
     this.caption.className = "n16-caption";
@@ -72,8 +97,8 @@ export class CutN16 {
     this.view.resize(sp.view.w, sp.view.h);
     // room under the vehicle for the bar laid over the view's lower edge
     const V = sp.view;
-    const overlap = Math.max(0, Math.min(V.y + V.h, sp.seek.y + sp.seek.h) - Math.max(V.y, sp.seek.y));
-    this.asm.fit(1.04, VIEWS.default, (overlap / V.h) * 2.5);
+    const covered = Math.max(0, Math.min(V.h, V.y + V.h - sp.seek.y)); // from the bar's top to the view's bottom
+    this.asm.fit(1.04, VIEWS.default, (covered / V.h) * 3.5);
     this.asm.lineResolution(sp.view.w, sp.view.h);
 
     // the bar over the view's lower edge (moved by the time, not by a hand)
@@ -81,6 +106,7 @@ export class CutN16 {
     seek.dataset.box = "n16.seek";
     seek.classList.add("n16-seek");
     this.place(seek, sp.seek);
+    seek.style.borderColor = sp.colors.rule;
     this.stage.append(seek);
     this.seek = new AssemblySeek(seek, { interactive: false, textPx: this.minPx });
     this.seek.setSteps(this.rec.steps);
@@ -91,6 +117,7 @@ export class CutN16 {
     list.dataset.box = "n16.steps";
     this.place(list, sp.steps);
     list.innerHTML =
+      `<h3 class="n16-title" data-box="n16.steps.title" style="font-size:${Math.max(this.minPx, sp.steps.title_px)}px">組み立ての手順</h3>` +
       `<div class="n16-head" style="font-size:${this.minPx}px">${esc(summaryText(this.rec))}</div>` +
       `<ol class="asm-steps compact"></ol>`;
     this.stage.append(list);
@@ -124,15 +151,13 @@ export class CutN16 {
     }
     this.rowPx = px;
     this.list.dataset.textPx = String(px);
-    // rows that fit when some must be left out
-    const n = this.rec.steps.length;
-    this.window = n;
-    if (bottom() > box.h) {
-      const per = (this.ol.children[0]?.offsetHeight ?? px) + box.row_gap;
-      const head = this.ol.offsetTop;
-      this.window = Math.max(1, Math.floor((box.h - head) / per));
-    }
+    // when some rows must still be left out: as many as end inside the box, around the current step
+    this.window = this.rec.steps.length;
     this.showWindow();
+    while (bottom() > box.h && this.window > 1) {
+      this.window -= 1;
+      this.showWindow();
+    }
   }
 
   showWindow() {
@@ -163,12 +188,8 @@ export class CutN16 {
     }
   }
 
-  // Progress through the order at stage time t: lead_s of the vehicle as it starts, then
-  // step_s per step, held at the end.
   progressAt(t) {
-    const T = this.spec.times;
-    const n = this.rec.steps.length;
-    return Math.max(0, Math.min(n, (t - T.lead_s) / T.step_s));
+    return n16Progress(this.spec.times, this.rec.steps.length, t);
   }
 
   resize(scale) {
@@ -183,6 +204,7 @@ export class CutN16 {
     const u = this.progressAt(t);
     const { current } = stepAt(u, this.rec.steps.length);
     if (current !== this.current) this.drawList(current);
+    this.caption.style.visibility = t >= this.spec.times.lead_s ? "visible" : "hidden";
     this.seek.set(u, false);
     this.asm.pose(u);
     this.asm.lineResolution(this.spec.view.w, this.spec.view.h);
