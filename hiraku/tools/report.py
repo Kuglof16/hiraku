@@ -135,9 +135,8 @@ def domain_parts(ctx: RunContext) -> list[Record]:
             if lc["domain"] != domain or "criterion" not in lc:
                 continue
             ver = next((x for x in reversed(verdicts) if x["load_case_id"] == lc["load_case_id"]), None)
-            cmp = s.get("comparison", ver["comparison_id"]) if ver else None
+            cmp, ana = verdict_sources(ctx, ver)
             pred = ctx.prediction(cmp["prediction_id"]) if cmp else None
-            ana = s.get("analysis", cmp["analysis_id"]) if cmp else None
             mismatches = [c for c in comparisons if c["status"] == "mismatch"
                           and (ctx.prediction(c["prediction_id"]) or {}).get("load_case_id") == lc["load_case_id"]]
             cases.append({
@@ -153,6 +152,17 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         out.append({"domain": domain, "state": tile.get("state", "pending"), "summary": tile.get("summary", ""),
                     "cases": cases})
     return out
+
+
+def verdict_sources(ctx: RunContext, ver: Record | None) -> tuple[Record | None, Record | None]:
+    """(comparison, analysis) a verdict came from: through its comparison_id, or, for a verdict with no
+    comparison (basis unsupported_load: analysis_id instead, contract 01ddb8a), (None, its analysis)."""
+    if not ver:
+        return None, None
+    if ver.get("comparison_id"):
+        cmp = ctx.store.get("comparison", ver["comparison_id"])
+        return cmp, (ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None)
+    return None, (ctx.store.get("analysis", ver["analysis_id"]) if ver.get("analysis_id") else None)
 
 
 def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
@@ -171,9 +181,8 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
         if crit is None:
             raise ToolError(f"{lc['load_case_id']} には合否の基準が無いので、感度を出す量がありません")
         ver = verdicts.get(lc["load_case_id"])
-        cmp = ctx.store.get("comparison", ver["comparison_id"]) if ver else None
-        ana = ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None
-        if ana is None or ana["tool"] not in ctx.tools:
+        cmp, ana = verdict_sources(ctx, ver)
+        if cmp is None or ana is None or ana["tool"] not in ctx.tools:  # a verdict with no comparison has no margin to move
             raise ToolError(f"{lc['load_case_id']} には版 {ctx.version} の合否がまだ無いので、感度は出せません "
                             f"(感度は合否の元になった解析のツールで出します)")
         upstream = {}
@@ -437,8 +446,9 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
     revisable = {v["name"] for v in found} if found is not None else None
     for domain in ctx.picked:
         for ver in governing_verdicts(ctx, domain):
-            cmp = s.get("comparison", ver["comparison_id"])
-            ana = s.get("analysis", cmp["analysis_id"])
+            cmp, ana = verdict_sources(ctx, ver)
+            if cmp is None or ana is None:  # unsupported_load: no comparison, no sensitivity of a margin
+                continue
             tool = ctx.tools.get(ana["tool"])
             heavy = ana["tool"] in K5_HEAVY_TOOLS or (ctx.specs.get(ana["tool"]) or {}).get("stage", 1) >= K5_MAX_STAGE
             head =(f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"
