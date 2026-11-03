@@ -9,6 +9,7 @@ from pathlib import Path
 
 from hiraku.webserve.launch import Launcher
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
+from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
 
 RUN_ID = "20261102-203000-offroad-4w"
@@ -227,6 +228,64 @@ class LayoutTest(unittest.TestCase):
                 s.shutdown()
                 s.server_close()
             shutil.rmtree(tmp)
+
+
+class ShelfTest(unittest.TestCase):
+    """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.release = threading.Event()
+        self.calls = 0
+
+        def load():
+            self.calls += 1
+            self.release.wait(10)
+            return {"tools": [{"name": "frame_static"}], "formulas": [{"formula_id": "frame_static.rail_bending"}]}
+
+        run = self.tmp / "runs" / RUN_ID
+        (run / "tools").mkdir(parents=True)
+        (run / "events.jsonl").write_text(_line(0, "run.started"), encoding="utf-8")
+        (run / "tools" / "rollbar_load-1.py").write_bytes(b"def run():\n    return 1\n")
+        (run / "tools" / "rollbar_load-1.check.json").write_text('[{"case": "a"}]', encoding="utf-8")
+        self.server = make_server("127.0.0.1", 0, self.tmp / "runs", quiet=True, saved_dir=None, launcher=False, shelf=Shelf(load))
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def tearDown(self):
+        self.release.set()
+        self.server.shutdown()
+        self.server.server_close()
+        shutil.rmtree(self.tmp)
+
+    def get(self, path):
+        try:
+            with urllib.request.urlopen(self.base + path, timeout=10) as r:
+                return r.status, r.headers.get("Content-Type"), r.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("Content-Type"), e.read().decode("utf-8")
+
+    def test_shelf_is_ready_after_its_one_load(self):
+        self.assertEqual(json.loads(self.get("/api/shelf")[2]), {"ready": False})
+        self.assertEqual(json.loads(self.get("/api/shelf")[2]), {"ready": False})  # still loading, not loaded twice
+        self.release.set()
+        for _ in range(100):
+            got = json.loads(self.get("/api/shelf")[2])
+            if got["ready"]:
+                break
+            threading.Event().wait(0.05)
+        self.assertEqual([t["name"] for t in got["tools"]], ["frame_static"])
+        self.assertEqual(got["formulas"][0]["formula_id"], "frame_static.rail_bending")
+        self.assertEqual(self.calls, 1)
+
+    def test_a_runs_tool_files(self):
+        status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.py")
+        self.assertEqual((status, ctype.split(";")[0], text), (200, "text/plain", "def run():\n    return 1\n"))
+        status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.check.json")
+        self.assertEqual((status, json.loads(text)), (200, [{"case": "a"}]))
+        for bad in ("rollbar_load-2.py", "rollbar_load-1.txt", "..%2Fevents.jsonl", "Rollbar-1.py"):
+            self.assertEqual(self.get(f"/api/runs/{RUN_ID}/tools/{bad}")[0], 404, bad)
+        self.assertEqual(self.get("/api/runs/sample/tools/rollbar_load-1.py")[0], 404)
 
 
 class LaunchTest(unittest.TestCase):
