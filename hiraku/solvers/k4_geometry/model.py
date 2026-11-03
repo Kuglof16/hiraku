@@ -32,8 +32,9 @@ SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod"
                  "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper")
 WELDED = {"frame", "gusset", "rollbar"}  # part kinds welded into the frame at their carried_by joints
 # Part kinds that stand for frame members (their box is a member's box): they overlap the members
-# at their carried_by nodes any amount (the roll bar part is its top beam, kit/safety.py).
-FRAME_PIECES = ("frame", "rollbar")
+# at their carried_by nodes any amount (the roll bar part is its top beam, kit/safety.py; a care bed's side
+# rail part is the box round its tubes, designgen/care_bed.py).
+FRAME_PIECES = ("frame", "rollbar", "side_rail")
 # Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
 # end (motion.sweep turns them about the inner end).
 LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
