@@ -304,5 +304,5 @@ requirements:
       arc counts too (assumption)
 tests: [P1, R1, N1, H1, H3, P3]
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 1
+round_limit: 2  # HK5: the layout first, then the motor (data/catalog/scripted.yaml)
 cost_limit_usd: 2.0
