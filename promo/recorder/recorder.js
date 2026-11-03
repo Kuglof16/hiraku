@@ -536,6 +536,8 @@ async function exportToDir() {
 const STAGES = [
   { id: "hp", name: "ハイパス", what: "highpass", text: "低い揺れ (机・空調・吹かれ) を切る。声の芯より下だけ。",
     knobs: [["freq", "周波数", 40, 160, 1, "Hz"]] },
+  { id: "hum", name: "低い音を切る", what: "highpass ×2 + notch", text: "「切る周波数」より下を急に切り (1 オクターブで 24 dB)、電源のブーン (50 Hz か 60 Hz と、その倍の音) を細く削る。",
+    knobs: [["cut", "切る周波数", 60, 200, 5, "Hz"], ["mains", "電源の周波数", 50, 60, 10, "Hz"], ["harmonics", "削る倍音の数", 0, 12, 1, "本"]] },
   { id: "mud", name: "こもりを削る", what: "peaking −", text: "200〜400 Hz の箱鳴りを下げて、声を軽くする。",
     knobs: [["freq", "周波数", 150, 500, 5, "Hz"], ["gain", "量", -9, 0, 0.5, "dB"], ["q", "幅 (Q)", 0.4, 3, 0.1, ""]] },
   { id: "presence", name: "明瞭さ", what: "peaking +", text: "2〜5 kHz の山。子音がはっきりして言葉が聞き取りやすくなる。",

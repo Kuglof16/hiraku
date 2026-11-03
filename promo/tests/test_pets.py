@@ -115,18 +115,23 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v7(self):
+    def test_version_mark_is_v8(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v7</div>', viewer)
-        self.assertIn("版は v7", (PETS / "README.md").read_text(encoding="utf-8"))
+        self.assertIn('<div id="ver">v8</div>', viewer)
+        self.assertIn("版は v8", (PETS / "README.md").read_text(encoding="utf-8"))
 
     def test_packager_style_switch(self):
-        # v7: the burr is the default; opts.packagerStyle = "rings" picks the
-        # rings; the viewer has a switch shown for the packager only, in the URL
+        # v8: the box is the default; opts.packagerStyle = "burr" / "rings"
+        # pick the v7 bodies; the viewer has a switch shown for the packager
+        # only, in the URL
         self.assertIn('ctx.opts.packagerStyle === "rings"', PET3D)
+        self.assertIn('ctx.opts.packagerStyle === "burr"', PET3D)
+        self.assertIn("return bodyPackagerBox(ctx);", PET3D)
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
         self.assertIn('<div class="seg" data-key="pkg">', viewer)
-        self.assertIn('<button data-v="burr">組木</button><button data-v="rings">輪</button>', viewer)
+        self.assertIn('<button data-v="box">箱</button><button data-v="burr">組木</button><button data-v="rings">輪</button>', viewer)
+        self.assertIn('pkg: "box" }', viewer)
+        self.assertIn('if (S.pkg !== "box") p.set("pkg", S.pkg);', viewer)
         self.assertIn('S.role === "packager"', viewer)
         self.assertIn('p.set("pkg", S.pkg)', viewer)
         self.assertIn("packagerStyle: S.pkg", viewer)
@@ -212,14 +217,21 @@ class Roles(unittest.TestCase):
         # packager: no contour, no flow lines, no node dots, no screws;
         # v7: a six-piece burr (bars with notches, rounded, surface nets),
         # not the v6 jigsaw pieces; the rings are the other style
-        pkg = fn("bodyPackager")
+        pkg = fn("bodyPackagerBurr")
         rings = fn("bodyPackagerRings")
-        for src in (pkg, rings):
+        box = fn("bodyPackagerBox")
+        for src in (pkg, rings, box):
             for word in ("addFe(", "contourMaterial(", "flowMaterial(", "addDots(", "screw", "tabPts(", "ExtrudeGeometry"):
                 self.assertNotIn(word, src)
         self.assertIn("surfaceNets(", pkg)
         self.assertIn("roundBoxSdf(", pkg)
         self.assertEqual(len(re.findall(r'\{ name: "[xyz]-\w+", label: "[^"]+", a: [012],', pkg)), 6)
+        # v8 box: shared rounded blocks, instanced edge rods, no surface nets
+        self.assertIn("InstancedMesh", box)
+        self.assertIn("roundedBlock(", box)
+        self.assertIn("geoms.has(key)", box)
+        self.assertNotIn("surfaceNets(", box)
+        self.assertEqual(len(re.findall(r'\{ name: "[\w-]+", label: "[^"]+", kind: "(?:cuboid|L|T|bar)",', box)), 7)
         self.assertIn("TubeGeometry", rings)
         self.assertIn("MeshPhysicalMaterial", rings)
         # aero: the pressure coefficient (Bernoulli), not the speed
@@ -345,7 +357,7 @@ class Viewer(unittest.TestCase):
                     # the burr / rings switch is there for the packager only
                     shown = page.evaluate("getComputedStyle(document.getElementById('pkg-grp')).display") != "none"
                     self.assertEqual(shown, role.startswith("packager"), role)
-                    self.assertEqual(page.evaluate("window.petViewer.state.pkg"), "rings" if "rings" in role else "burr", role)
+                    self.assertEqual(page.evaluate("window.petViewer.state.pkg"), "rings" if "rings" in role else "box", role)
                     if "rings" in role:
                         self.assertIn("pkg=rings", page.evaluate("location.search"))
             finally:
@@ -509,8 +521,8 @@ class Viewer(unittest.TestCase):
           const dc = de.contour(1.0, 'working');
           out.designer = { hk: contourMats(de), cad, quantity: dc.quantity, hasMax: 'max' in dc, info: dc.info.length };
           de.dispose();
-          // packager (v7): no contour; a six-piece burr, six bars on three axes
-          const pk = HP.create(THREE, { role: 'packager' });
+          // packager (v7, now packagerStyle = 'burr'): no contour; a six-piece burr, six bars on three axes
+          const pk = HP.create(THREE, { role: 'packager', packagerStyle: 'burr' });
           // in body coordinates (the body group, centre of the body at the origin)
           let bodyGroup = null;
           pk.group.traverse((o) => { if (o.userData.bar) bodyGroup = o.parent.parent; });
@@ -757,6 +769,164 @@ class Viewer(unittest.TestCase):
             # every point of an arrow is outside the body: the side wall lies between it and the middle
             self.assertGreaterEqual(r["hits"], 1, r)
             self.assertGreater(r["first"], 0.02, r)
+
+    def test_packager_box(self):
+        # v8: the default packager is a clear box packed full of blocks; the
+        # v7 burr and the rings are still there by packagerStyle; every pet
+        # stays light (triangles drawn, instances counted)
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          const tris = (p) => {
+            let n = 0;
+            p.group.traverse((o) => {
+              if (!o.isMesh || !o.geometry) return;
+              for (let q = o; q; q = q.parent) if (!q.visible) return;
+              const g = o.geometry;
+              n += (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1);
+            });
+            return n;
+          };
+          const count = {};
+          for (const r of HP.ROLES) {
+            for (const st of (r.id === 'packager' ? ['box', 'burr', 'rings'] : [null])) {
+              const p = HP.create(THREE, st ? { role: r.id, packagerStyle: st } : { role: r.id });
+              p.update(0, 'idle');
+              count[st ? r.id + ':' + st : r.id] = tris(p);
+              p.dispose();
+            }
+          }
+          const pk = HP.create(THREE, { role: 'packager' });
+          let body = null, glass = null;
+          const blockMeshes = [];
+          pk.group.traverse((o) => { if (o.userData.block) blockMeshes.push(o); if (o.userData.glass && o.userData.body) glass = o; });
+          body = glass.parent;
+          // boxes of the blocks and the glass walls in body coordinates
+          const boxes = () => {
+            pk.group.updateMatrixWorld(true);
+            const inv = new THREE.Matrix4().copy(body.matrixWorld).invert();
+            const per = {};
+            for (const o of blockMeshes) {
+              o.geometry.computeBoundingBox();
+              const b = o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+              (per[o.userData.block] = per[o.userData.block] || []).push([b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z]);
+            }
+            return per;
+          };
+          // the walls stop just inside the edge rods; the box is a cube whose
+          // half size is the farthest wall plane
+          glass.geometry.computeBoundingBox();
+          const gm = Math.max(...glass.geometry.boundingBox.max.toArray());
+          const gb = { min: new THREE.Vector3(-gm, -gm, -gm), max: new THREE.Vector3(gm, gm, gm) };
+          const lit = () => { const s = new Set(); pk.group.traverse((o) => { if (o.userData.block && o.material.emissiveIntensity > 0.3) s.add(o.userData.block); }); return [...s]; };
+          const red = () => { const s = new Set(); pk.group.traverse((o) => { if (o.userData.block && o.material.emissive.getHex() === 0xe0472a && o.material.emissiveIntensity > 0.3) s.add(o.userData.block); }); return [...s]; };
+          const at = {};
+          for (const [t, s] of [[0, 'idle'], [0.1, 'pass'], [1.2, 'pass'], [2.0, 'pass'], [2.9, 'pass'], [4.2, 'pass'], [0.75, 'working'], [2.25, 'working'], [3.75, 'working'], [1.2, 'mismatch'], [0.15, 'run']]) {
+            pk.update(t, s);
+            at[s + t] = { boxes: boxes(), lit: lit(), red: red() };
+          }
+          // the lid: closed at rest and after the pass, open while working
+          const lidOff = {};
+          for (const [t, s] of [[0, 'idle'], [0.2, 'pass'], [1.2, 'pass'], [0.75, 'working'], [1.2, 'mismatch']]) {
+            pk.update(t, s);
+            let lid = null;
+            pk.group.traverse((o) => { if (o.userData.lid) lid = o.parent; });
+            lidOff[s + t] = -lid.position.z;
+          }
+          let inst = 0, uniq = new Set();
+          pk.group.traverse((o) => { if (o.isInstancedMesh) inst += o.count; if (o.userData.block) uniq.add(o.geometry.uuid); });
+          const out = { count, style: pk.body.style, parts: pk.body.parts, quantity: pk.contour(1, 'idle').quantity, hasMax: 'max' in pk.contour(1, 'idle'),
+                        glass: [gb.min.x, gb.min.y, gb.min.z, gb.max.x, gb.max.y, gb.max.z], at, lidOff, inst, uniq: uniq.size, meshes: blockMeshes.length };
+          pk.dispose();
+          const styles = {};
+          for (const st of ['burr', 'rings']) {
+            const p = HP.create(THREE, { role: 'packager', packagerStyle: st });
+            let bars = 0, rings = 0, blocks = 0;
+            p.group.traverse((o) => { if (o.userData.bar) bars++; if (o.userData.ring) rings++; if (o.userData.block) blocks++; });
+            styles[st] = { style: p.body.style, bars, rings, blocks };
+            p.dispose();
+          }
+          out.styles = styles;
+          return out;
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                res = page.evaluate(js)
+            finally:
+                browser.close()
+        # light: the box is under 30 000 triangles, like the other roles
+        count = res["count"]
+        self.assertLessEqual(count["packager:box"], 30000, count)
+        for rid, n in count.items():
+            if rid not in ("packager:burr", "packager:rings"):
+                self.assertLessEqual(n, 30000, (rid, n))
+        self.assertLess(count["packager:box"] * 10, count["packager:burr"], count)
+        # the default is the box; no contour
+        self.assertEqual(res["style"], "box")
+        self.assertIsNone(res["quantity"])
+        self.assertFalse(res["hasMax"])
+        # 7 blocks fill the 27 cells of the 3 x 3 x 3 box, each cell once;
+        # four kinds, three colours
+        parts = res["parts"]
+        self.assertEqual(len(parts), 7)
+        cells = [c for p in parts for c in p["cells"]]
+        self.assertEqual(len(cells), 27)
+        self.assertEqual(len(set(cells)), 27)
+        self.assertEqual({p["kind"] for p in parts}, {"cuboid", "L", "T", "bar"})
+        self.assertEqual(len({p["color"] for p in parts}), 3)
+        # rounded boxes of the same size share a geometry; rods are instanced
+        self.assertLess(res["uniq"], res["meshes"])
+        self.assertGreaterEqual(res["inst"], 12 + 8 + 4)
+        g = res["glass"]
+        half = 1.5 * 0.54
+
+        def inside(boxes, eps=1e-6):
+            return all(b[q] >= g[q] - eps and b[q + 3] <= g[q + 3] + eps for bs in boxes.values() for b in bs for q in range(3))
+
+        # every cell centre lies in exactly one block (sub-boxes of one block may overlap)
+        rest = res["at"]["idle0"]["boxes"]
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    p = [-half + 0.54 * (n + 0.5) for n in (i, j, k)]
+                    owners = {name for name, bs in rest.items() for b in bs if all(b[q] < p[q] < b[q + 3] for q in range(3))}
+                    self.assertEqual(len(owners), 1, (i, j, k, owners))
+        # at rest and after the pass the blocks are inside the glass box
+        for k in ("idle0", "pass1.2", "pass2", "pass2.9", "pass4.2", "run0.15"):
+            self.assertTrue(inside(res["at"][k]["boxes"]), k)
+        # pass: the last block is still coming in at first, then it is all
+        # seated, the lid shut, and the blocks light up once
+        self.assertFalse(inside(res["at"]["pass0.1"]["boxes"]))
+        self.assertEqual(len(res["at"]["pass1.2"]["lit"]), 7)
+        self.assertEqual(res["at"]["pass2.9"]["lit"], [])
+        self.assertGreater(res["lidOff"]["pass0.2"], 1.0)
+        self.assertAlmostEqual(res["lidOff"]["pass1.2"], 0, places=6)
+        self.assertAlmostEqual(res["lidOff"]["idle0"], 0, places=6)
+        # working: the lid is open and one top block at a time is up out of the box
+        self.assertGreater(res["lidOff"]["working0.75"], 1.0)
+        ups = []
+        for k in ("working0.75", "working2.25", "working3.75"):
+            b = res["at"][k]["boxes"]
+            up = [n for n, bs in b.items() if any(x[4] > g[4] + 0.2 for x in bs)]
+            self.assertEqual(len(up), 1, (k, up))
+            ups.append(up[0])
+        self.assertEqual(len(set(ups)), 3, ups)
+        # mismatch: one block sticks out of the box and is red
+        mb = res["at"]["mismatch1.2"]
+        out = [n for n, bs in mb["boxes"].items() if any(x[4] > g[4] + 0.2 for x in bs)]
+        self.assertEqual(out, ["t-top"])
+        self.assertEqual(mb["red"], ["t-top"])
+        self.assertGreater(res["lidOff"]["mismatch1.2"], 0.5)
+        # the v7 bodies by packagerStyle
+        st = res["styles"]
+        self.assertEqual(st["burr"], {"style": "burr", "bars": 6, "rings": 0, "blocks": 0})
+        self.assertEqual(st["rings"], {"style": "rings", "bars": 0, "rings": 3, "blocks": 0})
 
     def test_run(self):
         # every pet runs: the feet swing in turn, the body bounces and leans

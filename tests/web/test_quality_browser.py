@@ -24,6 +24,8 @@ HAS_QUALITY = "quality" in MESH_PROPS
 HAS_SETUP = "setup" in ANA_PROPS
 
 OVER_HEX = "#6d1b3b"  # colormap.js OVER_COLOR
+# docs/contract.md (pre 処理の中身): the names of analysis.setup.checks
+CONTRACT_CHECKS = ("equilibrium_residual", "load_balance_residual", "model_mass", "mass_difference", "free_rigid_body_modes")
 
 # The colour drawn on each element of the shown shell (the first corner's), as linear
 # rgb strings, and the colour of a hex the same way the workbench sets it.
@@ -75,7 +77,10 @@ class QualityFixtureTest(unittest.TestCase):
         self.assertEqual(q["topology"]["free_edges"], len(fe))
         self.assertEqual(q["verdict"], "warn")
         st = self.ana["setup"]
-        self.assertEqual((len(st["constraints"]), len(st["loads"]), len(st["checks"])), (4, 2, 3))
+        self.assertEqual((len(st["constraints"]), len(st["loads"]), len(st["checks"])), (4, 2, 2))
+        # the checks are named as the contract names them
+        self.assertLessEqual(set(st["checks"]), set(CONTRACT_CHECKS))
+        self.assertEqual(st["checks"]["mass_difference"]["unit"], "%")
         self.assertAlmostEqual(sum(s["weight"] for s in st["loads"][0]["spread_to"]), 1.0, places=5)
 
 
@@ -288,17 +293,24 @@ class QualityBrowserTest(unittest.TestCase):
             """() => { const c = document.getElementById("meshcard");
               return { text: c.innerText, nodes: [...c.querySelectorAll("tr[data-node]")].map((r) => Number(r.dataset.node)),
                        loads: c.querySelectorAll("tr[data-load]").length,
-                       checks: Object.fromEntries([...c.querySelectorAll("tr[data-check]")].map((r) => [r.dataset.check, r.children[1].textContent])),
-                       rel: Number(c.querySelector(".massdiff")?.dataset.rel), ir: !!c.querySelector(".ir") }; }"""
+                       checks: Object.fromEntries([...c.querySelectorAll("tr[data-check]")].map((r) => [r.dataset.check, [r.children[0].textContent, r.children[1].textContent]])),
+                       ir: !!c.querySelector(".ir") }; }"""
         )
         self.assertEqual(card["nodes"], [c["node"] for c in st["constraints"]])
         self.assertIn(f"拘束 4 点 (並進 {trans}・回転 {rot})", card["text"])
         self.assertEqual(card["loads"], 2)
         self.assertEqual(sorted(card["checks"]), sorted(st["checks"]))
-        self.assertIn("kg", card["checks"]["model_mass"])
-        mm, dm = st["checks"]["model_mass"]["value"], st["checks"]["design_mass"]["value"]
-        self.assertAlmostEqual(card["rel"], (mm - dm) / dm, places=12)
-        self.assertIn(f"{'+' if mm > dm else ''}{(mm - dm) / dm * 100:.2f} %", card["text"])
+        # every check as recorded, under its Japanese name; the mass difference is the record's, with its sign
+        names, fmt = page.evaluate(
+            """async (q) => { const { CHECK_JA } = await import("/js/quality.js"); const { fmtVU } = await import("/js/labels.js");
+              return [CHECK_JA, Object.fromEntries(Object.entries(q).map(([k, v]) => [k, fmtVU(v.value, v.unit)]))]; }""",
+            st["checks"],
+        )
+        for k in CONTRACT_CHECKS:
+            self.assertIn(k, names)
+        md = st["checks"]["mass_difference"]["value"]
+        self.assertEqual(card["checks"]["model_mass"], [names["model_mass"], fmt["model_mass"]])
+        self.assertEqual(card["checks"]["mass_difference"], [names["mass_difference"], ("+" if md > 0 else "") + fmt["mass_difference"]])
         self.assertFalse(card["ir"])
         self.assertEqual(errors, [])
         page.close()

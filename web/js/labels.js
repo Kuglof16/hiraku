@@ -277,6 +277,14 @@ export function fmtVU(value, unit, sig) {
   return fmtQ({ value, unit }, sig);
 }
 
+// A verdict's margin: margin_pct (% of the limit), or, when the record gives none (the
+// limit is 0, so margin_pct is null), the margin in its own unit.
+export function fmtMargin(verdict, sig = 3) {
+  const p = verdict?.margin_pct;
+  if (typeof p === "number" && Number.isFinite(p)) return `${fmt(p, sig)} %`;
+  return verdict?.margin ? fmtQ(verdict.margin, sig) : "—";
+}
+
 export function fmtPct(rel, digits = 1) {
   if (rel === null || rel === undefined) return "—";
   return `${(rel * 100).toFixed(digits)} %`;

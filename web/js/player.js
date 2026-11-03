@@ -209,13 +209,16 @@ export class EventFeed {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     const body = await res.json();
+    const moved = body.next_offset !== this.offset || !!body.reset;
     this.offset = body.next_offset;
-    const more = body.next_offset < body.size;
+    // ask again at once only when this read got somewhere; a line still being written
+    // (next_offset did not move) waits for the next poll
+    const more = moved && body.next_offset < body.size;
     this.onEvents(body.events, body);
     return more;
   }
 
-  // Read everything that is there now (in as many requests as needed).
+  // Read everything that is there now (in as many requests as needed; stops at a half-written line).
   async readAll() {
     while (await this.readOnce()) {
       /* keep reading */

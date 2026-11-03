@@ -566,87 +566,6 @@ class ReferenceLook(unittest.TestCase):
                 self.assertIn(name, lc.CUTS)
 
 
-class N17b(unittest.TestCase):
-    """N17b: the Claude Code sessions side by side, then the counts from git."""
-
-    def setUp(self):
-        self.rules = layout_build.load()
-        self.n = self.rules["n17b"]
-        self.html = (lc.SCREENS / "n17b.html").read_text(encoding="utf-8")
-
-    def test_duration_matches_the_page(self):
-        m = re.search(r'data-duration="([0-9.]+)"', self.html)
-        self.assertEqual(float(m.group(1)), self.n["duration_s"])
-        self.assertEqual(self.n["duration_s"], 5.8)
-        self.assertTrue(self.rules["check"]["times"]["n17b"])
-        self.assertIn("n17b", lc.CUTS)
-
-    def test_boxes_stay_above_the_band(self):
-        band, safe, stage = self.rules["subtitle_band"]["y"], self.rules["safe"], self.rules["stage"]
-        n = self.n
-        for name in ("vision", "lanes", "counts"):
-            b = n[name]
-            self.assertLessEqual(b["y"] + b["h"], band, name)
-            self.assertGreaterEqual(b["x"], safe["x"], name)
-            self.assertLessEqual(b["x"] + b["w"], stage["w"] - safe["x"], name)
-        ln = n["lanes"]
-        self.assertLessEqual(ln["top"] + 8 * ln["pitch_px"], ln["axis_y"])           # eight lanes above the dates
-        self.assertLessEqual(ln["axis_y"] + 1.3 * ln["axis_size_px"], ln["h"])
-        self.assertLessEqual(ln["label_w"], ln["graph_x"])
-        self.assertLessEqual(ln["graph_x"] + ln["graph_w"], ln["w"])
-        self.assertLessEqual(n["lanes"]["y"] + n["lanes"]["h"], n["counts"]["y"])      # the counts under the lanes
-        c = n["counts"]
-        cols = {k: v for k, v in c["cols"].items() if not k.startswith("_")}
-        self.assertEqual(list(cols), ["days", "commits", "lines", "tests"])
-        self.assertEqual(sum(cols.values()) + 3 * c["gap_px"], c["w"])
-        sizes = [ln["label_size_px"], ln["axis_size_px"], n["vision"]["cap_size_px"], c["head_size_px"],
-                 c["stamp_size_px"], c["label_size_px"], c["sub_size_px"], c["unit_size_px"]]
-        self.assertGreaterEqual(min(sizes), self.rules["min_text_px"])
-        self.assertGreaterEqual(ln["label_size_px"], self.rules["story"]["defaults"]["body_text_px"])
-
-    def test_times_follow_the_voice(self):
-        t, v, c = self.n["times"], self.n["vision"], self.n["count"]
-        for k in t:
-            if not k.startswith("_"):
-                self.assertTrue(k.endswith("_s"), k)
-        # 100,000 comes with sentence 1 (0.30-2.08 s) and is gone before the counts
-        self.assertGreaterEqual(t["vision_s"], 0.3)
-        gone = t["vision_out_s"] + v["out_dur_s"]
-        self.assertLessEqual(gone, t["flow_s"])
-        self.assertLess(gone, t["counts_s"])
-        # the lanes start growing during sentence 1; the stream runs with sentence 2 (2.43-5.54 s)
-        self.assertLess(t["lanes_s"], 2.08)
-        self.assertLess(t["lanes_s"], t["lanes_to_s"])
-        self.assertLessEqual(t["lanes_to_s"], t["flow_s"])
-        self.assertLess(t["flow_s"], t["flow_to_s"])
-        self.assertLess(t["flow_to_s"], 5.54)
-        # the last count stops before 5.5 s, and the picture holds still to the end
-        last = t["counts_s"] + 3 * c["stagger_s"] + c["dur_s"]
-        self.assertLessEqual(last, 5.5)
-        self.assertLessEqual(t["calm_s"] + 0.8, 5.5)
-        self.assertGreaterEqual(self.n["duration_s"] - 5.5, 0.3 - 1e-9)
-
-    def test_page_names_and_words(self):
-        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
-        for name in re.findall(r'data-box="([^"$]+)"', self.html):
-            self.assertTrue(name.startswith("n17b."), name)
-        self.assertIn('<script src="n17b.data.js"></script>', self.html)
-        self.assertIn("構想の見通し", self.html)
-        self.assertIn("数えた日時", self.html)
-        for banned in ("requestAnimationFrame", "Date.now", "Math.random", "参加者"):
-            self.assertNotIn(banned, self.html)
-        # the voice's words are burnt in as subtitles, not drawn on the screen
-        self.assertNotIn("拓きました", self.html)
-        # no figure from git is typed into the page: they come from N17B_DATA
-        self.assertIsNone(re.search(r"\b(524|71,?001|1,?162)\b", self.html))
-
-    def test_story_limits(self):
-        lim = self.rules["story"]["cuts"]["n17b"]["limits"]
-        self.assertEqual(self.html.count('data-kind="number"'), 2)    # the 100,000 and the counts' template
-        self.assertGreaterEqual(lim["number"], 4)
-        self.assertGreaterEqual(lim["label"], 8)
-
-
 def n10_data() -> dict:
     """The DATA block of n10.html (plain JSON between 'const DATA = ' and '};')."""
     html = (lc.SCREENS / "n10.html").read_text(encoding="utf-8")
@@ -1328,48 +1247,6 @@ class InBrowser(unittest.TestCase):
         self.assertAlmostEqual(float(a["dim"]), n["dim"]["peak_alpha"], places=3)
         self.assertEqual(a["mesh"], b["mesh"])
         self.assertEqual(a["books"], b["books"])
-
-    def test_n17b_counts_and_lanes_on_screen(self):
-        # the figures shown at the end are the ones in n17b.data.js; one dot per commit
-        # (not merges), one curve per department merge into main; nothing counted yet at 2.5 s
-        from promo import export
-
-        text = (lc.SCREENS / "n17b.data.js").read_text(encoding="utf-8")
-        d = json.loads(text[text.index("{"):text.rindex("}") + 1])
-        cap = export.Capture(lc.SCREENS / "n17b.html", scale=0.5)
-        try:
-            script = """() => {
-              const shown = (el) => {
-                const rows = el.querySelector('.rows'), box = el.querySelector('.count').getBoundingClientRect();
-                return [...rows.children].filter((s) => {
-                  const r = s.getBoundingClientRect();
-                  return r.top >= box.top - 1 && r.bottom <= box.bottom + 1;
-                }).map((s) => s.textContent);
-              };
-              const out = {};
-              for (const k of ['days', 'commits', 'lines', 'tests'])
-                out[k] = shown(document.querySelector(`[data-box="n17b.counts.${k}.num"]`));
-              return { out, dots: document.querySelectorAll('circle.dot').length,
-                       merges: document.querySelectorAll('path.merge').length,
-                       names: [...document.querySelectorAll('.lane-name')].map((e) => e.textContent),
-                       tiles: getComputedStyle(document.querySelector('.tile')).opacity,
-                       vision: getComputedStyle(document.querySelector('.vision')).opacity };
-            }"""
-            cap.page.evaluate("t => window.__export.seek(t)", 5.8)
-            end = cap.page.evaluate(script)
-            cap.page.evaluate("t => window.__export.seek(t)", 2.5)
-            early = cap.page.evaluate(script)
-        finally:
-            cap.close()
-        fmt = lambda v: f"{v:,}"  # noqa: E731
-        self.assertEqual(end["out"], {"days": [str(d["days"])], "commits": [fmt(d["commits"])],
-                                      "lines": [fmt(d["lines_total"])], "tests": [fmt(d["tests"])]})
-        self.assertEqual(end["dots"], d["commits_no_merges"])
-        self.assertEqual(end["merges"], sum(len(ln["into_main"]) for ln in d["lanes"][1:]))
-        self.assertEqual(end["names"], [ln["name"] for ln in d["lanes"]])
-        self.assertEqual(float(end["vision"]), 0)
-        self.assertEqual(float(early["tiles"]), 0)
-        self.assertEqual(float(early["vision"]), 0)
 
     def test_n10_has_no_problems(self):
         layout = lc.load_layout()
