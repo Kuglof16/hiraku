@@ -276,6 +276,12 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "stop_after": {
+          "enum": [
+            "picks"
+          ],
+          "description": "A run that ends on purpose after an early step. picks: after domains.picked and the hearing (records for picking domains only; no design is made). The run ends done, with the reason saying so."
         }
       }
     },
@@ -2300,11 +2306,10 @@
       ]
     },
     "verdict": {
-      "description": "Pass or fail of one test. Made inside the tools only: from a matching comparison (compare), or from an explained safe-side mismatch (record_cause with safe_side true).",
+      "description": "Pass or fail of one test. Made inside the tools only: from a matching comparison (compare), from an explained safe-side mismatch (record_cause with safe_side true), or failing from an analysis whose results have unsupported_load > 0 (judge; the load has no path to the frame).",
       "type": "object",
       "required": [
         "verdict_id",
-        "comparison_id",
         "load_case_id",
         "test_id",
         "domain",
@@ -2324,6 +2329,11 @@
         "comparison_id": {
           "type": "string",
           "pattern": "^cmp-[0-9]{4,}$"
+        },
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^ana-[0-9]{4,}$",
+          "description": "The analysis whose unsupported_load made this verdict (basis unsupported_load)."
         },
         "load_case_id": {
           "type": "string"
@@ -2370,9 +2380,10 @@
         "basis": {
           "enum": [
             "match",
-            "explained_safe_side"
+            "explained_safe_side",
+            "unsupported_load"
           ],
-          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match."
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false)."
         },
         "value_from": {
           "enum": [
@@ -2388,7 +2399,36 @@
           "$ref": "#/$defs/quantity",
           "description": "How far the value is from the limit in its own unit, positive when passing."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "unsupported_load"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "analysis_id"
+            ],
+            "properties": {
+              "pass": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "comparison_id"
+            ]
+          }
+        }
+      ]
     },
     "judgement": {
       "description": "Verdicts of one domain for one design version (one tile of A6).",
@@ -3081,6 +3121,12 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "stop_after": {
+          "enum": [
+            "picks"
+          ],
+          "description": "Copied from the requirements file's stop_after when the run starts, so every process that opens the run reads it."
         }
       }
     },
