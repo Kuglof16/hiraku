@@ -918,11 +918,11 @@ export const DEMOS = {
       "rule_id": "SY-10",
       "doc_id": "KN-SY",
       "category": "system",
-      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
       "check": "system:mounting",
       "origin": "builtin",
       "trust": 3,
-      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -5897,14 +5897,14 @@ export const DEMOS = {
       "values": {
        "gap_mm": 651.1029946543966
       },
-      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
      },
      {
       "part_id": "steering_column",
       "values": {
        "gap_mm": 708.0182995285636
       },
-      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
      }
     ],
     "not_evaluable": [],
@@ -6671,11 +6671,11 @@ export const DEMOS = {
       "rule_id": "SY-10",
       "doc_id": "KN-SY",
       "category": "system",
-      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
       "check": "system:mounting",
       "origin": "builtin",
       "trust": 3,
-      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -7732,11 +7732,11 @@ export const DEMOS = {
       "rule_id": "SY-10",
       "doc_id": "KN-SY",
       "category": "system",
-      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
       "check": "system:mounting",
       "origin": "builtin",
       "trust": 3,
-      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -8566,11 +8566,11 @@ export const DEMOS = {
       "rule_id": "SY-10",
       "doc_id": "KN-SY",
       "category": "system",
-      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
       "check": "system:mounting",
       "origin": "builtin",
       "trust": 3,
-      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -9957,11 +9957,11 @@ export const DEMOS = {
       "rule_id": "SY-10",
       "doc_id": "KN-SY",
       "category": "system",
-      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱のそばにある)",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
       "check": "system:mounting",
       "origin": "builtin",
       "trust": 3,
-      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on"
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
      }
     ]
    }
@@ -14776,14 +14776,14 @@ export const DEMOS = {
       "values": {
        "gap_mm": 651.1029946543966
       },
-      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+      "message": "steering_wheel は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 651 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
      },
      {
       "part_id": "steering_column",
       "values": {
        "gap_mm": 708.0182995285636
       },
-      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm)。止め先の部材か節を、部品の箱のそばのものにしてください"
+      "message": "steering_column は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から 708 mm 離れています (上限 500 mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。止め先の部材か節を、部品の箱のそばのものにしてください"
      }
     ],
     "not_evaluable": [],

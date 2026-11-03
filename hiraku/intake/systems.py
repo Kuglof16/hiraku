@@ -284,7 +284,8 @@ def mounting(net: Net) -> Result:
         far = gaps.get(pid)
         if far is not None and far > MOUNT_GAP_MM:
             why = (f"{pid} は骨組みに止まっていると書いてありますが、箱は止め先の部材・節から {far:.0f} mm 離れています "
-                   f"(上限 {MOUNT_GAP_MM:.0f} mm)。止め先の部材か節を、部品の箱のそばのものにしてください")
+                   f"(上限 {MOUNT_GAP_MM:.0f} mm は仮の値で、荷重の通り道の計算ができたら置き換えます)。"
+                   "止め先の部材か節を、部品の箱のそばのものにしてください")
         else:
             why = (f"{pid} は、骨組みの部材か節 (または接地点) まで、構造のつながり (carries が load か無し) でつながっていません。"
                    "取り付ける部材・節・ブラケットを足し、connects_to に書いてください")
