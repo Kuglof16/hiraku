@@ -53,10 +53,11 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch,
+      林道規程 (林野庁) 第 20 条: 縦断勾配 12 % は第 1 項のただし書、14 % は第 4 項の 2 級林道の例外
+      (the steepest stretch),
       https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf
-      (not checked in this repository). The sustained 12 % is the forest loop's grade_high in
-      data/catalog/tests.yaml (P4, T1, T2)
+      (the article and its paragraphs read for this repository). The sustained 12 % is the forest
+      loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)
   - key: Q14
     name: 横の傾き
     value: 15
@@ -171,9 +172,9 @@ requirements:
     source: default
     trust: 1
     basis: >-
-      fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020);
-      the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only)
-      (not checked in this repository)
+      fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized in the CPSC staff
+      briefing of 2016-11-22 (PDF p.11), which also gives 33 deg for two people (both read on that page for
+      this repository); 35 deg empty: an assumption (no source found)
   - key: Q61
     name: 安全率 (降伏に対して)
     value: 1.5
