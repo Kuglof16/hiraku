@@ -1,9 +1,10 @@
 // The graph popup (N03): one group of series channels against time, with a
-// cursor at the animation time. Values printed next to the legend are the
-// recorded samples nearest to the cursor.
+// cursor at the animation time, or against another quantity (series with x, e.g.
+// a K&C bench's camber against wheel travel), named from x.quantity and x.unit.
+// Values printed next to the legend are the recorded samples nearest to the cursor.
 
-import { esc, fmt, unitLabel } from "./labels.js";
-import { chartGroups, nearestAt, wheelName } from "./series.js";
+import { esc, fmt, quantityName, unitLabel } from "./labels.js";
+import { abscissa, chartGroups, extent, nearestAt, wheelName } from "./series.js";
 
 const W = 380;
 const H = 150;
@@ -38,24 +39,28 @@ export class SeriesChart {
     this.cursorT = null;
   }
 
-  // Draw a group of the motion's channels; marks are times to flag (e.g. wheel lift).
-  set(motion, groupKey, marks = []) {
-    const groups = chartGroups(motion.channels);
+  // Draw a group of channels (a Map, channel -> series); marks are times to flag (e.g.
+  // wheel lift) on a chart against time.
+  set(channels, groupKey, marks = []) {
+    const groups = chartGroups(channels);
     const group = groups.find((g) => g.key === groupKey) ?? groups[0];
     const key = `${groups.map((g) => g.key).join(",")}|${group?.key}`;
-    if (this.motion === motion && this.key === key) return group?.key;
-    this.motion = motion;
+    if (this.channels === channels && this.key === key) return group?.key;
+    this.channels = channels;
     this.key = key;
     this.group = group;
     if (!group) {
       this.el.innerHTML = "";
       return null;
     }
-    const series = group.channels.map((n) => motion.channels.get(n));
-    const t0 = Math.min(...series.map((s) => s.t_s[0]));
-    const t1 = Math.max(...series.map((s) => s.t_s.at(-1)));
-    let lo = Math.min(...series.map((s) => Math.min(...s.values)));
-    let hi = Math.max(...series.map((s) => Math.max(...s.values)));
+    const series = group.channels.map((n) => channels.get(n));
+    const timed = !group.x;
+    const xs = series.map((s) => extent(abscissa(s)));
+    const t0 = Math.min(...xs.map((e) => e[0]));
+    const t1 = Math.max(...xs.map((e) => e[1]));
+    const ys = series.map((s) => extent(s.values));
+    let lo = Math.min(...ys.map((e) => e[0]));
+    let hi = Math.max(...ys.map((e) => e[1]));
     if (lo === hi) {
       lo -= 1;
       hi += 1;
@@ -76,27 +81,30 @@ export class SeriesChart {
       .join("");
     const lines = series
       .map((s, i) => {
-        const step = Math.max(1, Math.ceil(s.t_s.length / MAX_POINTS));
+        const a = abscissa(s);
+        const step = Math.max(1, Math.ceil(a.length / MAX_POINTS));
         const pts = [];
-        for (let k = 0; k < s.t_s.length; k += step) pts.push(`${x(s.t_s[k]).toFixed(1)},${y(s.values[k]).toFixed(1)}`);
-        const last = s.t_s.length - 1;
-        if (last % step) pts.push(`${x(s.t_s[last]).toFixed(1)},${y(s.values[last]).toFixed(1)}`);
+        for (let k = 0; k < a.length; k += step) pts.push(`${x(a[k]).toFixed(1)},${y(s.values[k]).toFixed(1)}`);
+        const last = a.length - 1;
+        if (last % step) pts.push(`${x(a[last]).toFixed(1)},${y(s.values[last]).toFixed(1)}`);
         return `<polyline points="${pts.join(" ")}" stroke="${COLORS[i % COLORS.length]}" class="ln"/>`;
       })
       .join("");
-    const markHtml = marks
+    const markHtml = (timed ? marks : [])
       .filter((m) => m.t >= t0 && m.t <= t1)
       .map((m) => `<line x1="${x(m.t)}" x2="${x(m.t)}" y1="${M.t}" y2="${H - M.b}" class="mk"/><text x="${x(m.t) + 4}" y="${M.t + 10}" class="mkl">${esc(m.label)}</text>`)
       .join("");
-    const chips = groups.map((g) => `<button data-group="${esc(g.key)}" class="${g.key === group.key ? "on" : ""}">${esc(g.ja)}</button>`).join("");
+    const chipName = (g) => (g.x ? quantityName(g.ja) : g.ja);
+    const chips = groups.map((g) => `<button data-group="${esc(g.key)}" class="${g.key === group.key ? "on" : ""}">${esc(chipName(g))}</button>`).join("");
     const legend = series
       .map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(shortName(s.channel))} <b data-ch="${esc(s.channel)}"></b></span>`)
       .join("");
+    const across = timed ? "時間 [s]" : `${esc(quantityName(group.x.quantity))} [${esc(unitLabel(group.x.unit) || "1")}]`;
     this.el.innerHTML =
-      `<div class="gr-head"><div class="gr-chips">${chips}</div><span class="gr-unit">[${esc(unitLabel(group.unit) || "1")}]・時間 [s]</span></div>` +
+      `<div class="gr-head"><div class="gr-chips">${chips}</div><span class="gr-unit">[${esc(unitLabel(group.unit) || "1")}]・${across}</span></div>` +
       `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${tgrid}${grid}` +
       `<line x1="${M.l}" x2="${M.l}" y1="${M.t}" y2="${H - M.b}" class="ax"/><line x1="${M.l}" x2="${W - M.r}" y1="${H - M.b}" y2="${H - M.b}" class="ax"/>` +
-      `${markHtml}${lines}<line class="cur" x1="0" x2="0" y1="${M.t}" y2="${H - M.b}"/></svg>` +
+      `${markHtml}${lines}${timed ? `<line class="cur" x1="0" x2="0" y1="${M.t}" y2="${H - M.b}"/>` : ""}</svg>` +
       `<div class="gr-legend">${legend}</div>`;
     this.el.querySelector(".gr-chips").addEventListener("click", (ev) => {
       const b = ev.target.closest("button[data-group]");
@@ -106,15 +114,16 @@ export class SeriesChart {
     return group.key;
   }
 
+  // The cursor at time t (a chart against another quantity has none).
   cursor(t) {
-    if (!this.group || t === this.cursorT) return;
+    if (!this.group || this.group.x || t === this.cursorT) return;
     this.cursorT = t;
     const cur = this.el.querySelector(".cur");
     const xx = this.x(Math.max(this.scale.t0, Math.min(this.scale.t1, t)));
     cur.setAttribute("x1", xx);
     cur.setAttribute("x2", xx);
     for (const b of this.el.querySelectorAll("b[data-ch]")) {
-      const s = this.motion.channels.get(b.dataset.ch);
+      const s = this.channels.get(b.dataset.ch);
       b.textContent = s ? fmt(nearestAt(s, t), 4) : "";
     }
   }
