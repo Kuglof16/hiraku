@@ -2945,6 +2945,14 @@
             "failed"
           ]
         },
+        "driver": {
+          "enum": [
+            "scripted",
+            "agent_sdk",
+            "claude_code_plugin"
+          ],
+          "description": "What drove the run: scripted (no Claude), agent_sdk (HIRAKU's own agent loop with the user's ANTHROPIC_API_KEY), claude_code_plugin (the user's own Claude Code session with the HIRAKU plugin, under the user's own sign-in; HIRAKU does not call Claude)."
+        },
         "stop_reason": {
           "type": "string"
         },
