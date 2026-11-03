@@ -33,7 +33,9 @@ class P:
     in that unit, None when the parameter is optional or its default comes from the
     design (text says which). var: design variables read, in order, when the load case
     does not give the parameter (before the default). assumed: the default stands in for
-    a property of the design, so using it is written down as an assumption.
+    a property of the design, so using it is written down as an assumption. run_option: the
+    parameter says how far the run goes, not what is tested, so the analyze call's params may
+    give it too (they win over the load case, and the record says so).
     """
 
     name: str
@@ -44,6 +46,7 @@ class P:
     choices: tuple = ()
     var: tuple = ()
     assumed: bool = False
+    run_option: bool = False
 
     def describe(self) -> dict:
         """The shape of hiraku.solvers.shelf.base.Param.describe(), plus kind "boolean" and
@@ -58,6 +61,8 @@ class P:
             out["choices"] = list(self.choices)
         if self.var:
             out["design_variables"] = list(self.var)
+        if self.run_option:
+            out["also_from_analyze_params"] = True
         return out
 
 
@@ -84,6 +89,16 @@ class Pair:
         if self.inputs:
             out["inputs_from_load_case"] = dict(self.inputs)
         return out
+
+
+RUN_OPTS = frozenset({"dt", "record_hz", "mesh"})  # the analyze-call params every K2 tool reads (mesh: contract)
+
+
+def _shown(v) -> str:
+    """A param value as text: a quantity as 'value unit'."""
+    if isinstance(v, dict) and "value" in v:
+        return f"{v['value']:g} {v.get('unit', '')}".strip()
+    return "none" if v is None else str(v)
 
 
 DRIVELINE_EFFICIENCY = 0.9  # assumed when neither the load case nor the design gives one
@@ -162,6 +177,14 @@ class K2Tool(ABC):
         self.opts = {k: v for k, v in (params or {}).items() if k != "upstream_analyses"}
         self._vars = design.get("variables") or {}
         self._assumed = []
+        # the run options the analyze call gives (e.g. until = top_speed) override the load case's
+        for p in self.params:
+            if p.run_option and p.name in self.opts:
+                was = lp.get(p.name, p.default)
+                lp[p.name] = self.opts[p.name]
+                self._note(f"{p.name} = {_shown(self.opts[p.name])} from the analyze call's params "
+                           f"(the load case gives {_shown(was)})")
+        unread_opts = sorted(set(self.opts) - RUN_OPTS - {p.name for p in self.params if p.run_option})
         try:
             design = on_board(design, self.text(lp, "loading"))
             out = self._run(design, lp)
@@ -178,8 +201,16 @@ class K2Tool(ABC):
         if assumptions:
             rec["assumptions"] = assumptions
         unread = sorted(set(lp) - {p.name for p in (LOADING,) + self.params})
+        effects = []
         if unread:
-            rec["effects"] = [{"name": "load-case params this tool does not read: " + ", ".join(unread)}]
+            effects.append({"name": "load-case params this tool does not read: " + ", ".join(unread)})
+        if unread_opts:
+            # a load-case param given in the analyze call is not used: the load case says what is tested
+            effects.append({"name": "analyze-call params this tool does not read: " + ", ".join(unread_opts)
+                            + " (the analyze call may give only " + ", ".join(
+                                sorted(RUN_OPTS - {"mesh"} | {p.name for p in self.params if p.run_option})) + ")"})
+        if effects:
+            rec["effects"] = effects
         if out.get("error"):
             rec["status"] = "failed"
             rec["error"] = out["error"]

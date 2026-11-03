@@ -313,10 +313,11 @@ class Runs(unittest.TestCase):
     def test_paired_results_carry_the_formula_unit(self):
         formulas = k0_formulas()
         only_past_the_limit = {"tip_slope_angle"}  # in test_a_vehicle_that_tips_stops_the_run
+        only_until_top = {"top_speed", "top_speed_power"}  # launch with until = top_speed: test_launch.py
         for name, rec in self.recs.items():
             units = {r["quantity"]: r["unit"] for r in rec["results"]}
             for pair in TOOLS[name].describe()["predicts"]:
-                if pair["quantity"] in only_past_the_limit:
+                if pair["quantity"] in only_past_the_limit or (name == "launch" and pair["quantity"] in only_until_top):
                     continue
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     self.assertIn(pair["quantity"], units)
@@ -405,7 +406,8 @@ class Runs(unittest.TestCase):
     def test_launch_reaches_40(self):
         r = self.res("launch")
         self.assertEqual(r["reached_target"], 1.0)
-        self.assertGreater(r["top_speed"], 40.0)
+        self.assertGreater(r["speed_at_stop"], 40.0)
+        self.assertNotIn("top_speed", r)  # until = target stops 1 s after 40 km/h: no top speed
 
     def test_crosswind_tips_above_the_gust(self):
         r = self.res("crosswind")
