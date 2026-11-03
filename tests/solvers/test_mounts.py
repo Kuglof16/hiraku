@@ -164,9 +164,11 @@ class FootwellAndDashTest(unittest.TestCase):
         self.assertEqual(interferences(on), [])
 
     def test_h3_numbers_stay_for_the_revision(self):
-        """The small driver's reach to the pedal is H3's check (the revision fixes it), not a layout error."""
+        """The small driver's leg to the pedal is H3's check (the revision fixes it), not a layout error: she
+        reaches it (pedal_reach), with the knee straighter than the comfortable range (knee_angle_room)."""
         f = fit(on_board(V1, "two_cargo"))
-        self.assertLess(f["pedal_reach.occupant_R"][0], 0.0)
+        self.assertGreater(f["pedal_reach.occupant_R"][0], 0.0)
+        self.assertLess(f["knee_angle_room.occupant_R"][0], 0.0)
         self.assertIn("wheel_reach.occupant_R", f)
 
 
