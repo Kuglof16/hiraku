@@ -96,6 +96,8 @@ class MITC4(ElementGroup):
     def _temperatures(self, values, nodal: bool) -> np.ndarray:
         """(E, 4) corner values: from a per-node array (nodal) or a per-element value."""
         v = np.asarray(values, float)
+        if v.ndim == 0:
+            return np.full(self.conn.shape, float(v))
         if nodal:
             return v[self.conn]
         return np.broadcast_to(v.reshape(-1, 1) if v.ndim else v, (len(self.conn), 4)).astype(float)

@@ -15,16 +15,19 @@
     model.add(fe.beam.Beam(conn, E, G, A, Iy, Iz, J, rho))  # beam.py: 3D two-node beams (6 DOFs)
     b = fe.eigen.buckling(model, F, n)                      # eigen.py: load factors of (K + lambda K_G) phi = 0
     m = fe.eigen.modes(model, n, lumped=False)              #           K phi = omega^2 M phi
+    fe.loads.prescribe(model, nodes, comps, value)          # loads.py: given displacements (sol.reactions())
+    F = fe.loads.shell_pressure(model, g, p) + fe.loads.solid_thermal(model, g2, alpha, T)  # pressure, temperature
+    fe.frame.frame_modes(design), fe.frame.frame_torsion(design)  # frame.py: a design's frame in shells
     fe.quality.record_quality(mesh_record)                  # contract mesh.quality of a shell mesh record
     fe.mesh.parts_mesh(design, size)                        # bricks from the design parts' boxes
 
 Units: N, mm, MPa, tonne (density t/mm^3).
 """
 
-from . import analysis, beam, checks, connect, eigen, mesh, precheck, quality, shell, solid
+from . import analysis, beam, checks, connect, eigen, frame, loads, mesh, precheck, quality, shell, solid
 from .model import Constraint, ElementGroup, Equation, FEModel, Layout, ModelError, Solution, StaticSolver, resultant, \
     solve_static
 
 __all__ = ["Constraint", "ElementGroup", "Equation", "FEModel", "Layout", "ModelError", "Solution", "StaticSolver",
-           "analysis", "beam", "checks", "connect", "eigen", "mesh", "precheck", "quality", "resultant", "shell",
+           "analysis", "beam", "checks", "connect", "eigen", "frame", "loads", "mesh", "precheck", "quality", "resultant", "shell",
            "solid", "solve_static"]
