@@ -2193,6 +2193,10 @@
             "string",
             "null"
           ]
+        },
+        "where": {
+          "type": "string",
+          "description": "Where the compared result is taken when a tool reports more than one place: a member or part id (e.g. rail_L_BE). Absent for a frame-wide or single result."
         }
       }
     },
