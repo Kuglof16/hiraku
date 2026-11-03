@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
-from tests.web.body_fixture import body_design, body_events, schema_has_part_material
+from tests.web.body_fixture import ADDED, BASE, added_ids, body_design, body_events, schema_has_part_material
 
 try:
     from playwright.sync_api import sync_playwright
@@ -27,7 +27,6 @@ except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
-ROOT = Path(__file__).resolve().parents[2]
 
 # kind and id -> the finish the table gives (web/js/look.js MATERIAL_OF; the order is in its comment)
 EXPECTED_FINISH = {
@@ -48,7 +47,8 @@ EXPECTED_FINISH = {
     "bracket_seat_R_F": "powder_coat",  # ss400, powder_coat
     "bracket_seat_L_B": "powder_coat",
     "bracket_column": "black_steel",  # ss400, painted: the bracket's black coat
-    "bracket_column_stay": "black_steel",
+    # (bracket_column_stay is gone: the fixture is now on v1, whose column bracket is held by
+    # the dash cross member, so the fixture no longer adds a stay part under it)
     "rollbar": "painted_steel",
 }
 
@@ -75,8 +75,15 @@ LOOK_OF = """async (events) => {
 }"""
 
 # The zu look's fingerprint: per part, its meshes' geometry (type, vertex count, bounding box) and material
-# (type, colour, opacity); per member, the same. Drawn with the code before this change
-# (commit 5d87d49) for the designs in ZU_PRINT, and again with this change: the same.
+# (type, colour, opacity); per member, the same. The test is that a change to the real look does
+# not change the zu picture, so it draws frozen copies of the designs (tests/web/zu_designs/),
+# not data/designs/, which the analysis department regenerates.
+# The first hashes were taken with the code before the real look (commit 5d87d49) on the designs
+# then in data/designs/. 92a97c6 (analysis: ladder frame, mounts, footwell, occupants as parts)
+# regenerated those designs, and the hashes changed with the data alone: with the code of fdc7948,
+# the designs of 92a97c6~1 and of 2acab8b still give the first hashes (v1 85a52266..., nodriveshaft
+# 73df093e..., tallcargo 1c5cd4ef...), those of 92a97c6 / fdc7948 give new ones. The hashes below
+# are retaken with the code of fdc7948 on the copies, which are data/designs/ of fdc7948.
 ZU_FINGERPRINT = """async (events) => {
   await window.hiraku.load(events, 1);
   const b = window.hiraku.bench;
@@ -88,17 +95,14 @@ ZU_FINGERPRINT = """async (events) => {
   for (const [id, info] of Object.entries(b.members)) out["member:" + id] = mesh(info.mesh);
   return out;
 }"""
-# Taken again with the merge of claude/screen-cut-real (shapes.js: shapes the design does not
-# list are not drawn — pedals and column inside the steering box, battery terminals, the
-# reducer box beside the motor, the nose's bumper bar; the suspension from its mounting
-# points; rods as cylinders in their boxes; a part's pieces of one material merged). Against
-# claude/dept-screen-812e37 at 2454b0c only those parts differ (aux, battery, cargo,
-# controller, driveshafts, front_body, motor, seats, steering parts, suspensions, tie rods);
-# no part is left out.
+ZU_DESIGNS = Path(__file__).resolve().parent / "zu_designs"
+# Taken again for two changes together: the zu is drawn from the frozen design copies in
+# ZU_DESIGNS (claude/screen-body-fix), and shapes the design does not list are no longer
+# drawn (shapes.js from claude/screen-cut-real, in claude/dept-screen-812e37 at 26cc6d9).
 ZU_PRINT = {
-    "offroad-4w-v1": "9657a802938e0093608e3deb3c30bb9835c9ee8eac69ec5755195e9c21c248c0",
-    "offroad-4w-nodriveshaft": "93866f9833ad978ca494f371b1b4b5bb72501ef53bfecfedd509afa479816b7e",
-    "offroad-4w-tallcargo": "88cb5d481bdb88b21b014587765257ae42053a2b9048267ddac09f7daf56a747",
+    "offroad-4w-v1": "9ed7fc656bee0247954a35c3ff226f6bc81b6baf0edb2755d1ef4568e075c3d8",
+    "offroad-4w-nodriveshaft": "c94992b46e1bc28d1f58bf184089af165f3a792580103f78654f7125b03f63b4",
+    "offroad-4w-tallcargo": "acf1eb37defd590e490e4cec88470c6056f666028204dd203b52dff6e49c0558",
 }
 
 
@@ -249,7 +253,7 @@ class BodyLookBrowserTest(unittest.TestCase):
     def test_zu_is_drawn_as_before(self):
         src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         for name, want in ZU_PRINT.items():
-            design = json.loads((ROOT / "data" / "designs" / f"{name}.json").read_text(encoding="utf-8"))
+            design = json.loads((ZU_DESIGNS / f"{name}.json").read_text(encoding="utf-8"))
             page, errors = self.open("zu")
             got = page.evaluate(ZU_FINGERPRINT, [src[0], {**src[1], "data": design}])
             page.close()
@@ -329,6 +333,17 @@ class BodyFixtureTest(unittest.TestCase):
         # the base design file is not changed
         self.assertIsNot(design, body_design())
         self.assertEqual(copy.deepcopy(design), body_design())
+
+    def test_fixture_adds_no_part_the_base_has_and_nothing_that_clashes(self):
+        """The added boxes are new ids and overlap none of the base design's parts or members
+        (hiraku.solvers.k4_geometry.model.interferences, read here, not changed)."""
+        from hiraku.solvers.k4_geometry.model import interferences
+
+        base = json.loads(BASE.read_text(encoding="utf-8"))
+        self.assertTrue(added_ids())
+        self.assertTrue({p["id"] for p in ADDED}.isdisjoint(p["id"] for p in base["parts"]))
+        before = {(a, b) for a, b, _ in interferences(base)}
+        self.assertEqual([t for t in interferences(body_design()) if (t[0], t[1]) not in before], [])
 
     def test_fixture_material_and_finish_are_in_the_contract_shape(self):
         """part.material is a key of design.materials; part.finish is one of the contract's six values."""
