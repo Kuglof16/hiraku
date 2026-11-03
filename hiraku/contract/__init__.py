@@ -86,6 +86,7 @@ RULE_CATEGORY_NAMES_JA = {
     "assembly": "組み立て",
     "suspension": "サス",
     "manufacturing": "製造",
+    "system": "系",
 }
 
 # Agent-facing MCP tools (served by create_sdk_mcp_server under the name "hiraku").

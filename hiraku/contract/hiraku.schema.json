@@ -51,6 +51,7 @@
         "Ah",
         "J/K",
         "rad/s",
+        "rad/s^2",
         "deg/s"
       ]
     },
@@ -356,6 +357,113 @@
         "verified": {
           "type": "boolean",
           "description": "false until the value is checked against the cited source."
+        },
+        "tensile_MPa": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Minimum tensile strength."
+        },
+        "elongation_pct": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum elongation after fracture."
+        },
+        "stress_strain": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Engineering stress-strain points [strain, stress MPa] from 0 to the tensile strength; at least yield and tensile."
+        },
+        "thermal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expansion_per_K": {
+              "type": "number"
+            },
+            "conductivity_W_per_mK": {
+              "type": "number"
+            },
+            "specific_heat_J_per_kgK": {
+              "type": "number"
+            }
+          }
+        },
+        "fatigue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parent": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "FAT_MPa",
+                "m"
+              ],
+              "properties": {
+                "FAT_MPa": {
+                  "type": "number"
+                },
+                "m": {
+                  "type": "number"
+                },
+                "iiw_detail": {
+                  "type": "string"
+                },
+                "meaning": {
+                  "type": "string"
+                }
+              }
+            },
+            "welds": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "FAT_MPa",
+                  "m"
+                ],
+                "properties": {
+                  "FAT_MPa": {
+                    "type": "number"
+                  },
+                  "m": {
+                    "type": "number"
+                  },
+                  "iiw_detail": {
+                    "type": "string"
+                  },
+                  "meaning": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "N_ref": {
+              "type": "number"
+            },
+            "N_knee": {
+              "type": "number"
+            },
+            "m2": {
+              "type": "number"
+            }
+          },
+          "description": "S-N data: the parent material and named weld details (IIW FAT classes)."
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Per field name: the source (title, table, URL) and whether it was checked."
         }
       }
     },
@@ -548,6 +656,36 @@
             "type": "string"
           },
           "description": "Frame nodes that carry this part's weight (split equally unless the solver says otherwise)."
+        },
+        "system": {
+          "type": "string",
+          "description": "The functional system the part belongs to, e.g. drive, steering, brake, suspension, seat, restraint, rops, lighting, battery, control, body, cargo. Written by the code that builds the design."
+        },
+        "connects_to": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "to",
+              "via"
+            ],
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "A part id, member id, support id or '<support>.<hardpoint>'."
+              },
+              "via": {
+                "type": "string",
+                "description": "How it is joined or what passes: bolt, weld, spline, ball_joint, pin, bushing, rest, wire, hose, ..."
+              },
+              "carries": {
+                "type": "string",
+                "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              }
+            }
+          },
+          "description": "What this part is joined to, so code can follow a chain end to end (motor to driven wheels, steering wheel to knuckles)."
         }
       }
     },
@@ -1112,8 +1250,10 @@
             "displacement",
             "temperature",
             "mode_shape",
-            "damage"
-          ]
+            "damage",
+            "error_estimate"
+          ],
+          "description": "error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
         },
         "label": {
           "type": "string"
@@ -1723,6 +1863,91 @@
               "description": "Pre-processing checks: e.g. equilibrium_residual, model_mass, design_mass."
             }
           }
+        },
+        "mesh_convergence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "quantity",
+            "unit",
+            "levels",
+            "verdict"
+          ],
+          "description": "The judged value solved again on finer meshes of the same design (h-refinement), made by code. The meshes beyond the analysis's mesh_id are not recorded; levels gives their size and count.",
+          "properties": {
+            "quantity": {
+              "type": "string",
+              "description": "Name of the result checked (as in results), e.g. hot-spot stress at a weld line."
+            },
+            "unit": {
+              "$ref": "#/$defs/unit"
+            },
+            "levels": {
+              "type": "array",
+              "minItems": 2,
+              "description": "Coarse to fine.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "element_size_mm",
+                  "value"
+                ],
+                "properties": {
+                  "element_size_mm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "elements": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "mesh_id": {
+                    "type": "string",
+                    "pattern": "^mesh-[0-9]{4,}$",
+                    "description": "When this level is the analysis's recorded mesh."
+                  }
+                }
+              }
+            },
+            "change_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "|v_fine - v_next| / |v_fine| x 100 between the two finest levels."
+            },
+            "limit_pct": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Largest change_pct accepted as converged."
+            },
+            "observed_order": {
+              "type": "number",
+              "description": "Order p from three levels (Richardson)."
+            },
+            "extrapolated": {
+              "type": "number",
+              "description": "Value at zero element size from three levels (Richardson extrapolation)."
+            },
+            "error_pct": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Estimated error of the finest value against extrapolated, in %."
+            },
+            "verdict": {
+              "enum": [
+                "converged",
+                "not_converged",
+                "singular"
+              ],
+              "description": "singular: the value keeps rising as the elements shrink (sharp corner, point load); it cannot be judged as it stands."
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -2216,7 +2441,7 @@
       }
     },
     "rule_category": {
-      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造.",
+      "description": "Knowledge rule category. Japanese names: sheet_metal 板金, fastener 締結, weld 溶接, tolerance 公差, human 人, battery 電池, assembly 組み立て, suspension サス, manufacturing 製造., system 系 (a product's needed systems are there and connected end to end)",
       "enum": [
         "sheet_metal",
         "fastener",
@@ -2226,7 +2451,8 @@
         "battery",
         "assembly",
         "suspension",
-        "manufacturing"
+        "manufacturing",
+        "system"
       ]
     },
     "rule_id": {
@@ -2964,6 +3190,7 @@
                       "done",
                       "not_judged",
                       "round_limit",
+                      "red_left",
                       "cost_limit",
                       "turn_limit",
                       "user_stop",
@@ -3021,6 +3248,7 @@
                           "enum": [
                             "not_judged",
                             "round_limit",
+                            "red_left",
                             "cost_limit",
                             "turn_limit",
                             "user_stop"

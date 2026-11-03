@@ -1,6 +1,6 @@
 """Packages of hiraku import only packages below them, so the departments'
 code stays layered: contract < solvers < designgen < store < catalog < intake
-< tools < agent < webserve and __main__ (docs/contract.md)."""
+< tools < agent < export < webserve and __main__ (docs/contract.md)."""
 
 import ast
 import unittest
@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "hiraku"
 
-LAYERS = ["contract", "solvers", "designgen", "store", "catalog", "intake", "tools", "agent", "webserve", "__main__"]
+LAYERS = ["contract", "solvers", "designgen", "store", "catalog", "intake", "tools", "agent", "export", "webserve", "__main__"]
 
 # Upward imports that exist today and are being removed (lead asked the owners).
 KNOWN_UPWARD = {("catalog", "tools")}
