@@ -231,6 +231,15 @@
         "flags": {
           "$ref": "#/$defs/flags"
         },
+        "default_loading": {
+          "enum": [
+            "empty",
+            "driver",
+            "two",
+            "two_cargo"
+          ],
+          "description": "Who and what is on board when a load case does not say (params.loading). Omitted: two_cargo, the vehicle default. A one-person product (a care bed) says driver: one occupant, no cargo."
+        },
         "speed_class": {
           "$ref": "#/$defs/speed_class"
         },
