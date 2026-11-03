@@ -277,6 +277,10 @@ export function fmtVU(value, unit, sig) {
   return fmtQ({ value, unit }, sig);
 }
 
+// project.driver: what drove the run (台本 = scripted, no Claude; API キー = HIRAKU's agent loop with
+// the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
+export const DRIVER_JA = { scripted: "台本", agent_sdk: "API キー", claude_code_plugin: "Claude Code" };
+
 // A verdict's margin: margin_pct (% of the limit), or, when the record gives none (the
 // limit is 0, so margin_pct is null), the margin in its own unit.
 export function fmtMargin(verdict, sig = 3) {
