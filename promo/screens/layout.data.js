@@ -169,6 +169,191 @@ window.PROMO_LAYOUT = {
       "rule": "#c9c3b6"
     }
   },
+  "n04": {
+    "duration_s": 4.0,
+    "_note": "drawn by the screens department (web cut.html?cut=n04). 4.0 s is N04's slot in narration draft 5 (0:22.5-0:26.5). The same grid of eight tiles as N15",
+    "header": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 48,
+      "size_px": 30,
+      "_note": "one line above the grid: version, rounds"
+    },
+    "grid": {
+      "x": 96,
+      "y": 160,
+      "cols": 4,
+      "rows": 2,
+      "tile_w": 414,
+      "tile_h": 351,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "seven domains and assembly; bottom 886, above the subtitle band"
+    },
+    "tests": [
+      "handling",
+      "powertrain",
+      "aero",
+      "crash",
+      "strength",
+      "nvh",
+      "thermal",
+      "assembly"
+    ],
+    "tile": {
+      "border_px": 2,
+      "radius_px": 12,
+      "label": {
+        "x": 16,
+        "y": 12,
+        "size_px": 26
+      },
+      "mark": {
+        "size_px": 44,
+        "right": 16,
+        "top": 10,
+        "_note": "the tick or cross of the tile"
+      },
+      "pet": {
+        "w": 96,
+        "h": 96,
+        "right": 12,
+        "bottom": 12,
+        "_note": "the corner of the tile where the role's pet stands"
+      },
+      "rate": {
+        "size_px": 18
+      }
+    },
+    "times": {
+      "lead_s": 0.3,
+      "crash_s": 0.5,
+      "nvh_s": 1.2,
+      "assembly_s": 2.0,
+      "_note": "lead: still before anything moves. crash / nvh / assembly: when the voice says 衝突 (0.56 s), 振動 (about 1.2 s) and 組み立て (2.06 s), measured from the voice's pauses (the voice starts 0.3 s into the cut). The crash and NVH tiles are red mid iteration; from assembly_s to the end the grid gives way to the assembly fast-forward in the n16.view box"
+    },
+    "overlay": {
+      "color": "#c8402a",
+      "opacity": 0.22,
+      "_note": "the condition past the limit, translucent red"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n15": {
+    "duration_s": 5.1,
+    "_note": "drawn by the screens department (web cut.html?cut=n15) from a run of its own that ends with all eight tiles green. 5.1 s is N15's slot in narration draft 5 (2:24.7-2:29.8). header, grid, tests and tile are the same as n04",
+    "header": {
+      "x": 96,
+      "y": 96,
+      "w": 1728,
+      "h": 48,
+      "size_px": 30,
+      "_note": "one line above the grid: version, rounds"
+    },
+    "grid": {
+      "x": 96,
+      "y": 160,
+      "cols": 4,
+      "rows": 2,
+      "tile_w": 414,
+      "tile_h": 351,
+      "gap_x": 24,
+      "gap_y": 24,
+      "_note": "seven domains and assembly; bottom 886, above the subtitle band"
+    },
+    "tests": [
+      "handling",
+      "powertrain",
+      "aero",
+      "crash",
+      "strength",
+      "nvh",
+      "thermal",
+      "assembly"
+    ],
+    "tile": {
+      "border_px": 2,
+      "radius_px": 12,
+      "label": {
+        "x": 16,
+        "y": 12,
+        "size_px": 26
+      },
+      "mark": {
+        "size_px": 44,
+        "right": 16,
+        "top": 10,
+        "_note": "the tick or cross of the tile"
+      },
+      "pet": {
+        "w": 96,
+        "h": 96,
+        "right": 12,
+        "bottom": 12,
+        "_note": "the corner of the tile where the role's pet stands"
+      },
+      "rate": {
+        "size_px": 18
+      }
+    },
+    "times": {
+      "lead_s": 0.3,
+      "rounds_from_s": 0.4,
+      "all_green_s": 4.0,
+      "_note": "rounds_from: the rounds of design changes start to play; all_green: every tile is green (tick) and the grid holds still to the end. The voice runs 0.54-4.32 s"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
+  "n16": {
+    "duration_s": 6.3,
+    "_note": "drawn by the screens department (web cut.html?cut=n16). 6.3 s is N16's slot in narration draft 5 (2:29.8-2:36.1)",
+    "view": {
+      "x": 96,
+      "y": 96,
+      "w": 1200,
+      "h": 790,
+      "_note": "the 3D assembly, the same box as n01.view; bottom 886"
+    },
+    "seek": {
+      "x": 120,
+      "y": 814,
+      "w": 1152,
+      "h": 48,
+      "_note": "the seek bar over the lower edge of the view, 24 px inside its sides and bottom"
+    },
+    "steps": {
+      "x": 1328,
+      "y": 96,
+      "w": 496,
+      "h": 790,
+      "title_px": 30,
+      "text_px": 22,
+      "row_gap": 12,
+      "_note": "the list of assembly steps on the right"
+    },
+    "times": {
+      "lead_s": 0.3,
+      "steps_from_s": 0.5,
+      "steps_to_s": 4.2,
+      "scrub_s": 4.4,
+      "scrub_to_s": 5.8,
+      "_note": "steps advance one at a time from steps_from to steps_to (how many comes from the record); from scrub to scrub_to the seek bar is dragged back and forward by hand, as the voice says 確認できます (from about 4.5 s); then still to the end. The voice runs 0.6-5.7 s; 組み立て手順を starts at 2.93 s"
+    },
+    "colors": {
+      "bg": "#f4f1ea",
+      "panel": "#fbf9f4",
+      "rule": "#c9c3b6"
+    }
+  },
   "n05": {
     "duration_s": 5.0,
     "grid": {
@@ -538,6 +723,22 @@ window.PROMO_LAYOUT = {
         1.8,
         3.5,
         6.5
+      ],
+      "n04": [
+        0.5,
+        1.5,
+        3.5
+      ],
+      "n15": [
+        0.5,
+        2.5,
+        4.8
+      ],
+      "n16": [
+        0.5,
+        3.0,
+        5.0,
+        6.2
       ],
       "n05": [
         0,

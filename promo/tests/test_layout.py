@@ -52,7 +52,8 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n05", "n08b", "n10", "n18", "check"})
+                                "n00", "n01", "n02", "n04", "n05", "n08b", "n10", "n15", "n16",
+                                "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -72,6 +73,36 @@ class SharedShape(unittest.TestCase):
             self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
         self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
         self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_n04_n15_n16_for_the_screens_department(self):
+        # drawn by the screens department from these values; N04 and N15 share one grid
+        r = self.rules
+        band, safe = r["subtitle_band"]["y"], r["safe"]
+        for cut in ("n04", "n15"):
+            n = r[cut]
+            g = n["grid"]
+            right = g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"]
+            bottom = g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"]
+            self.assertLessEqual(bottom, band, cut)
+            self.assertEqual(right, safe["x"] + safe["w"], cut)
+            self.assertLessEqual(n["header"]["y"] + n["header"]["h"], g["y"], cut)
+            self.assertEqual(len(n["tests"]), g["cols"] * g["rows"], cut)
+            self.assertGreaterEqual(min(n["tile"]["label"]["size_px"], n["header"]["size_px"]), r["min_text_px"])
+        for k in ("header", "grid", "tests", "tile"):
+            self.assertEqual(r["n04"][k], r["n15"][k], k)
+        self.assertEqual((r["n04"]["duration_s"], r["n15"]["duration_s"], r["n16"]["duration_s"]), (4.0, 5.1, 6.3))
+        n = r["n16"]
+        v, s, st = n["view"], n["seek"], n["steps"]
+        self.assertLessEqual(v["y"] + v["h"], band)
+        self.assertLessEqual(st["y"] + st["h"], band)
+        self.assertLessEqual(v["x"] + v["w"], st["x"])  # side by side
+        self.assertGreaterEqual(s["x"], v["x"])
+        self.assertLessEqual(s["x"] + s["w"], v["x"] + v["w"])
+        self.assertLessEqual(s["y"] + s["h"], v["y"] + v["h"])  # over the view's lower edge
+        self.assertGreaterEqual(min(st["title_px"], st["text_px"]), r["min_text_px"])
+        t = n["times"]
+        self.assertLess(t["steps_to_s"], t["scrub_s"])
+        self.assertLess(t["scrub_to_s"], n["duration_s"])
 
     def test_n02_boxes_stay_above_the_band(self):
         # N02 is drawn by the screens department from these values
