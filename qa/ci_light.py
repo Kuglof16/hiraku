@@ -1,11 +1,10 @@
-"""The light tests that GitHub Actions runs on every push to main (.github/workflows/light-tests.yml).
+"""The light tests: a quick run on this PC while working (about a minute, in one process).
 
-A sign that main's light tests pass, not a gate: the full suite before main (python -m qa.run_tests)
-stays as it is. Left out: the solvers and tools that run analyses, the browser tests, the scripted
+Not a replacement for the full suite before main (python -m qa.run_tests). Left out: the solvers and tools that run analyses, the browser tests, the scripted
 runs, the Rapier cross-check (Node) and the slow tests. About a minute and a half on the PC that
 measured it (one process, without the tools' check cache).
 
-    python -m qa.ci_light          # run them here, as the workflow does
+    python -m qa.ci_light          # run them
     python -m qa.ci_light --list   # the module names
 """
 

@@ -30,7 +30,7 @@ python -m qa.judge_scan --ref main                   # 公開する前に main �
 
 `check_run` は誤りがあると終了コード 1、`--strict` で注意も 1 にする。`judge_scan` は公開してはいけないものがあると 1。
 
-GitHub Actions (`.github/workflows/light-tests.yml`) は、main に push されたときだけ、Linux (ubuntu-latest、Python 3.12) で軽い試験を回す。回すのは `python -m qa.ci_light` で、中身は `qa/ci_light.py` の一覧 (契約・受付・store・ツールの棚と MCP・hooks・check_run など)。解析を回す試験、ブラウザ、台本の運転、Rapier、遅い試験は外している。この PC で、LF で取り出した新しい clone (道具の照合の覚え無し) に 1 プロセスで回すと、648 本で 57 秒だった。これは main で軽い試験が通っている印で、関門ではない。main に入れる前の全部の試験は今のまま。`ci-trial` の枝に push すれば、main の前に同じものを 1 回回せる。
+作業の途中で手早く確かめるときは `python -m qa.ci_light` (軽い試験だけ)。中身は `qa/ci_light.py` の一覧 (契約・受付・store・ツールの棚と MCP・hooks・check_run など) で、解析を回す試験、ブラウザ、台本の運転、Rapier、遅い試験は外している。LF で取り出した新しい clone (道具の照合の覚え無し) に 1 プロセスで回すと、648 本で 57 秒だった。main に入れる前の全部の試験の代わりにはならない。
 
 直す前と後で台本の運転の記録が変わらないことを見るとき (API キーは要らない):
 
