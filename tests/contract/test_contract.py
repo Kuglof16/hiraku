@@ -234,6 +234,16 @@ class IntakeTest(unittest.TestCase):
         bad = {**part, "finish": "shiny"}
         self.assertNotEqual(contract.errors("design", {**des, "parts": [bad, *des["parts"][1:]]}), [])
 
+    def test_unsupported_load_verdict(self):
+        ver = load("verdict.json")
+        base = {k: v for k, v in ver.items() if k not in ("comparison_id", "basis", "margin")}
+        ok = {**base, "analysis_id": "ana-0001", "basis": "unsupported_load", "quantity": "unsupported_load",
+              "value": {"value": 2, "unit": "1"}, "op": "<=", "limit": {"value": 0, "unit": "1"}, "pass": False, "margin_pct": None}
+        self.assertEqual(contract.errors("verdict", ok), [])
+        self.assertNotEqual(contract.errors("verdict", {k: v for k, v in ok.items() if k != "analysis_id"}), [])
+        self.assertNotEqual(contract.errors("verdict", {**ok, "pass": True}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: v for k, v in ver.items() if k != "comparison_id"}), [])
+
     def test_solid_and_mixed_meshes(self):
         m = load("mesh.json")
         no_t = {k: v for k, v in m.items() if k != "member_thickness_mm"}
