@@ -73,7 +73,11 @@
   .n02-res .over { font-weight: 700; margin-top: 2px; }
   .n02-res .ok { color: #2f7d4f; }
   .n02-res .miss { color: #c8402a; }
-  /* N04 / N15 (js/cut_grid.js): sizes from layout.json n04 / n15 (set inline) */
+  /* N04 / N15 (js/cut_grid.js): sizes and colours from layout.json n04 / n15 (set inline) */
+  .grid-header { position: absolute; box-sizing: border-box; overflow: hidden; white-space: nowrap; font-weight: 700; color: #1b1a17; }
+  .grid-tile .layer { position: absolute; inset: 0; }
+  .grid-tile .pet { position: absolute; box-sizing: border-box; pointer-events: none; }
+  .n04-assembly { position: absolute; box-sizing: border-box; overflow: hidden; }
   .grid-tile .mark { position: absolute; font-weight: 700; line-height: 1; background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
   .grid-tile .asm div { overflow: hidden; text-overflow: ellipsis; }
   .grid-tile .ok { color: #2f7d4f; }
