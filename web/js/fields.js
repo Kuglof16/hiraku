@@ -266,5 +266,7 @@ export function convergenceLine(mc) {
   if (mc.verdict === "singular") return `メッシュ ${sizes.join(" → ")} mm: 細かくするほど上がる (特異点): この値では判定しない`;
   const change = typeof mc.change_pct === "number" ? `${+mc.change_pct.toPrecision(2)} %` : "—";
   const limit = typeof mc.limit_pct === "number" ? ` (限度 ${+mc.limit_pct.toPrecision(2)} %)` : "";
-  return `メッシュ ${sizes.slice(-2).join(" → ")} mm で ${change}${limit}: ${mc.verdict === "converged" ? "収まった" : "まだ動く"}`;
+  // with three meshes the record may give the Richardson extrapolated value (the value at zero size)
+  const ext = typeof mc.extrapolated === "number" ? `・外挿 ${+mc.extrapolated.toPrecision(4)}${mc.unit ? ` ${mc.unit}` : ""}` : "";
+  return `メッシュ ${sizes.slice(-2).join(" → ")} mm で ${change}${limit}: ${mc.verdict === "converged" ? "収まった" : "まだ動く"}${ext}`;
 }

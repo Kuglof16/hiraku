@@ -174,11 +174,8 @@ const QUANTITY_JA = {
   steps_out_of_reach: "手が届かない手順の数",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
-  // the shell solver (frame_shell): the judged hot-spot stress and the half-size mesh check
+  // the shell solver (frame_shell): the judged hot-spot stress
   max_hot_spot_stress: "構造的ホットスポット応力 (溶接線)",
-  max_hot_spot_stress_half_size: "ホットスポット応力 (要素を半分に)",
-  hot_spot_change_half_size: "要素を半分にしたときの変化",
-  max_stress_half_size: "要素の最大 (要素を半分に)",
   // the K&C bench (kc_bench): abscissas (series x.quantity) and channels
   travel: "ストローク",
   lateral_force: "横力",

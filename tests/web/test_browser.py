@@ -607,6 +607,10 @@ class BrowserReplayTest(unittest.TestCase):
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
         line = page.text_content("#card-ana .conv")
         self.assertEqual(line, "メッシュ 10 → 5 mm で 2 % (限度 5 %): 収まった")
+        # with three meshes, the Richardson extrapolated value when the record gives it
+        ana["mesh_convergence"].update({"observed_order": 1.3, "extrapolated": 125.2, "error_pct": 1.4})
+        page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
+        self.assertEqual(page.text_content("#card-ana .conv"), "メッシュ 10 → 5 mm で 2 % (限度 5 %): 収まった・外挿 125.2 MPa")
         ana["mesh_convergence"]["verdict"] = "singular"
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
         self.assertIn("細かくするほど上がる (特異点): この値では判定しない", page.text_content("#card-ana .conv"))
