@@ -83,10 +83,47 @@ def swept(obb: OBB, direction, travel: float) -> OBB:
     return OBB((lo + hi) / 2.0, np.eye(3), (hi - lo) / 2.0, obb.name)
 
 
+_CORNER_SIGNS = np.array([[i, j, k] for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)], float)
+
+
+def _shape_bounds(b: Body | OBB) -> tuple[np.ndarray, np.ndarray]:
+    """World-aligned box (lo, hi) around what shape_overlap reads of b: its capsule and its box."""
+    obb = b.obb if isinstance(b, Body) else b
+    pts = obb.center + (_CORNER_SIGNS * obb.half) @ obb.axes
+    lo, hi = pts.min(axis=0), pts.max(axis=0)
+    cap = b.capsule if isinstance(b, Body) else None
+    if cap is not None:
+        lo = np.minimum(lo, np.minimum(cap.a, cap.b) - cap.r)
+        hi = np.maximum(hi, np.maximum(cap.a, cap.b) + cap.r)
+    return lo, hi
+
+
+def _near(part: Body, nudged: Body, box: OBB | None, others: list[Body], d: np.ndarray, travel: float) -> np.ndarray:
+    """Which of `others` may touch the part where it is, nudged or along its sweep: those whose world box
+    comes within SWEEP_SKIP_MM of the world box around all three. The others are apart by more than that
+    on a world axis, so every overlap test below gives less than zero for them (a separating axis
+    exists, or the capsule's distance is more than its radius) and they can be passed over."""
+    los, his = zip(*(_shape_bounds(x) for x in (part, nudged, box) if x is not None))
+    lo, hi = np.min(los, axis=0), np.max(his, axis=0)
+    if box is None:  # the capsule's sweep: its axis's ends slid by travel, and its radius
+        c = nudged.capsule
+        ends = np.vstack([c.a, c.b, c.a + d * travel, c.b + d * travel])
+        lo, hi = np.minimum(lo, ends.min(axis=0) - c.r), np.maximum(hi, ends.max(axis=0) + c.r)
+    olo, ohi = (np.array(x) for x in zip(*(_shape_bounds(o) for o in others))) if others else (np.zeros((0, 3)),) * 2
+    gap = np.maximum(olo - hi, lo - ohi).max(axis=1) if len(others) else np.zeros(0)
+    return gap <= SWEEP_SKIP_MM
+
+
+SWEEP_SKIP_MM = 1.0  # world-box gap past which a body cannot be hit (round-off room; any overlap test is < 0 there)
+
+
 def _blocker1(part: Body, others: list[Body], d: np.ndarray, travel: float) -> str | None:
     nudged = part.moved(d * NUDGE_MM)
     box = swept(nudged.obb, d, travel) if part.capsule is None else None
-    for o in others:
+    near = _near(part, nudged, box, others, d, travel)
+    for o, close in zip(others, near):
+        if not close:
+            continue
         start = shape_overlap(part, o)
         if start > TOUCH_MM:  # already overlapping (bolted): moving away must not make it worse
             if shape_overlap(nudged, o) > start + TOUCH_MM:
