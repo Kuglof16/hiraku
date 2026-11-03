@@ -52,8 +52,8 @@ class SharedShape(unittest.TestCase):
     def test_top_level(self):
         keys = {k for k in self.rules if not k.startswith("_")}
         self.assertEqual(keys, {"stage", "subtitle_band", "safe", "min_text_px", "colors",
-                                "n00", "n01", "n02", "n04", "n05", "n08b", "n10", "n15", "n16",
-                                "n18", "check"})
+                                "n00", "n01", "n02", "n03", "n04", "n05", "n06", "n07", "n08b", "n10", "n15",
+                                "n16", "n17", "n18", "check"})
         r = self.rules
         self.assertEqual(r["stage"], {"w": 1920, "h": 1080})
         self.assertEqual(r["subtitle_band"]["y"] + r["subtitle_band"]["h"], r["stage"]["h"])
@@ -73,6 +73,33 @@ class SharedShape(unittest.TestCase):
             self.assertGreaterEqual(b["x"], r["safe"]["x"], name)
         self.assertLessEqual(n["view"]["x"] + n["view"]["w"], n["pane"]["x"])  # side by side
         self.assertGreaterEqual(min(n["card"]["title_px"], n["card"]["text_px"]), r["min_text_px"])
+
+    def test_n03_n06_n07_n17_for_the_screens_department(self):
+        # drawn by the screens department from these values (narration draft 6)
+        r = self.rules
+        band, safe = r["subtitle_band"]["y"], r["safe"]
+        right_edge = safe["x"] + safe["w"]
+        boxes = [r["n03"]["view"], r["n03"]["popup"], r["n07"]["view"], r["n07"]["legend"], r["n17"]["page"]]
+        for b in boxes:
+            self.assertLessEqual(b["y"] + b["h"], band)
+            self.assertLessEqual(b["x"] + b["w"], right_edge)
+            self.assertGreaterEqual(b["x"], safe["x"])
+        self.assertLessEqual(r["n03"]["view"]["x"] + r["n03"]["view"]["w"], r["n03"]["popup"]["x"])
+        self.assertLessEqual(r["n07"]["view"]["x"] + r["n07"]["view"]["w"], r["n07"]["legend"]["x"])
+        g = r["n06"]["grid"]
+        self.assertEqual(g["x"] + g["cols"] * g["tile_w"] + (g["cols"] - 1) * g["gap_x"], right_edge)
+        self.assertLessEqual(g["y"] + g["rows"] * g["tile_h"] + (g["rows"] - 1) * g["gap_y"], band)
+        self.assertEqual(len(r["n06"]["tests"]), g["cols"] * g["rows"])
+        t = r["n06"]["times"]
+        self.assertLess(t["tiles_s"] + 5 * t["tile_stagger_s"] + t["tile_in_s"], 5.93)  # within sentences 1-2
+        t7 = r["n07"]["times"]
+        self.assertLess(t7["zoom_to_s"], t7["swap_s"])
+        self.assertLess(t7["swap_to_s"], r["n07"]["duration_s"])
+        self.assertEqual((r["n00"]["duration_s"], r["n03"]["duration_s"], r["n06"]["duration_s"],
+                          r["n07"]["duration_s"], r["n17"]["duration_s"]), (8.6, 5.0, 11.7, 15.3, 8.8))
+        sizes = [r["n03"]["popup"]["title_px"], r["n03"]["popup"]["text_px"], r["n07"]["legend"]["text_px"],
+                 r["n07"]["label"]["size_px"], r["n17"]["page"]["text_px"], r["n06"]["tile"]["label"]["size_px"]]
+        self.assertGreaterEqual(min(sizes), r["min_text_px"])
 
     def test_n04_n15_n16_for_the_screens_department(self):
         # drawn by the screens department from these values; N04 and N15 share one grid
