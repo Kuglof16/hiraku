@@ -55,6 +55,18 @@ MAX_SUBAGENT_STOP_BLOCKS = 2
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
 
+# run.finished's stop_code -> the stop_code of the roles (and the lead) it closes (contract a31e520): the stop
+# button and an error are said as such; a run cut by its cost or turn limit cuts the lead's work too
+_ROLE_STOP_OF_RUN = {"user_stop": "user_stop", "error": "error", "cost_limit": "run_ended", "turn_limit": "run_ended"}
+
+
+def stopped_data(agent: str, run_code: str | None = None, *, cut_off: bool = False) -> dict[str, Any]:
+    """agent.stopped's data: the agent id and why it stopped. run_code is the run's stop_code when the run's end
+    closes the agent; cut_off marks a role still working then (run_ended). Without either: it ended its own work."""
+    code = _ROLE_STOP_OF_RUN.get(run_code or "") or ("run_ended" if cut_off else "done")
+    return {"agent_id": agent, "stop_code": code}
+
+
 def role_domain(agent: str) -> str | None:
     """The domain whose load cases hold a role's stop (HK4): cae.<domain>'s, and the packager's assembly."""
     if agent.startswith("cae."):
@@ -317,7 +329,7 @@ class Hooks:
         was_running = bool(self.running)
         self.running.pop(input_data.get("agent_id", ""), None)
         self.emit("agent.stopped", agent=agent, domain=agent.split(".", 1)[1] if agent.startswith("cae.") else None,
-                  data={"agent_id": agent})
+                  data=stopped_data(agent))
         if was_running and not self.running and self.on_roles_done is not None:
             self.on_roles_done()
         return {}

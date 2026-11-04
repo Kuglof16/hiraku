@@ -36,7 +36,7 @@ from typing import Any, Iterator
 
 from hiraku import contract
 from hiraku.agent import inbox, prompts
-from hiraku.agent.hooks import Hooks
+from hiraku.agent.hooks import Hooks, stopped_data
 from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.store import RunStore
@@ -245,11 +245,11 @@ def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: 
     for n in take_notes(run_dir) + [n for n in notes if n.get("op") == "emit"]:
         if n.get("op") == "emit":
             store.emit(n["kind"], agent=n.get("agent"), domain=n.get("domain"), text=n.get("text"), data=n.get("data"))
+    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
     for agent in sorted(set((state.get("running") or {}).values())):
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
-    store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
+        store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
+    store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
     store.finish(status, stop_reason=reason, stop_code=code)
     (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
 
@@ -450,8 +450,8 @@ class PluginServer:
                 state = read_state(run_dir)
             for agent in sorted(set((state.get("running") or {}).values())):
                 domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-                ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
-            ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+                ctx.store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
+            ctx.store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
             ctx.store.finish(status, stop_reason=reason, stop_code=code)
 
     def end(self) -> None:

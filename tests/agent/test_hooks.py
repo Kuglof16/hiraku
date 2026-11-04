@@ -213,7 +213,20 @@ class HooksTest(RunCase, unittest.TestCase):
         kinds = [(e["kind"], e.get("agent")) for e in self.ctx.store.events()
                  if e["kind"] in ("agent.started", "agent.stopped")]
         self.assertEqual(kinds, [("agent.started", "cae.strength"), ("agent.stopped", "cae.strength")])
+        stopped = [e for e in self.ctx.store.events() if e["kind"] == "agent.stopped"][0]
+        self.assertEqual(stopped["data"], {"agent_id": "cae.strength", "stop_code": "done"})  # ended its own work
         self.assert_events_fit()
+
+    def test_stopped_data_says_why(self):
+        from hiraku.agent.hooks import stopped_data
+
+        for run_code, cut_off, want in ((None, False, "done"), ("not_judged", False, "done"),
+                                        ("not_judged", True, "run_ended"), ("cost_limit", False, "run_ended"),
+                                        ("turn_limit", True, "run_ended"), ("user_stop", True, "user_stop"),
+                                        ("user_stop", False, "user_stop"), ("error", True, "error")):
+            with self.subTest(run_code=run_code, cut_off=cut_off):
+                self.assertEqual(stopped_data("cae.nvh", run_code, cut_off=cut_off),
+                                 {"agent_id": "cae.nvh", "stop_code": want})
 
     def test_the_latest_version_is_judged_although_the_revisions_are_used_up(self):
         """Contract HOOK_RULES HK4: the round limit ends revisions only; the latest version's pending cases

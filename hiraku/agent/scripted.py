@@ -25,6 +25,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import inbox
 from hiraku.contract import layout
+from hiraku.agent.hooks import stopped_data
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import REPO_ROOT, is_beyond
 from hiraku.tools import RunContext, ToolError, rules
@@ -433,8 +434,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順にツールを呼びます")
     if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
         s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
-        s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
         status, reason, code = rules.judged_end(ctx)
+        s.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
         s.finish(status, stop_reason=reason, stop_code=code)
         return status
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
@@ -449,13 +450,14 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                                        "reason": first.get("reason") or "要件に合う型を、既定の変数で組んだ"}, "designer")
         except ToolError as e:
             s.emit("agent.said", agent="designer", text=f"最初の版を作れませんでした: {e}")
-            s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
-            s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+            s.emit("agent.stopped", agent="designer", data={**stopped_data("designer"), "stop_code": "error",
+                                                             "stop_reason": f"propose_design refused: {e}"})
+            s.emit("agent.stopped", agent="lead", data=stopped_data("lead", "not_judged"))
             s.finish("stopped", stop_reason=f"propose_design refused: {e}", stop_code="not_judged")
             return "stopped"
         s.emit("agent.said", agent="designer", text=f"版 1 ができました。試験: "
                                                     + "、".join(lc["load_case_id"] for lc in out["load_cases"]))
-        s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
+        s.emit("agent.stopped", agent="designer", data=stopped_data("designer"))
     plan = compose_plan(ctx, plan)
     revisions = list(plan.get("revise") or [])
     if plan["missing"]:
@@ -646,15 +648,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             summary = summary + " " + " ".join(plan["notes"])
         write_report(ctx, {"summary": summary, "next": nxt}, "lead",
                      computed=computed)
-    for agent in started:
-        s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
-    s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
     if status == "done":
         left = rules.unjudged_reason(ctx)
         if left:
             status, reason, code = "stopped", left, "not_judged"
         else:
             status, reason, code = rules.judged_end(ctx)
+    for agent in started:  # the script's roles did their parts; the stop button cuts them
+        s.emit("agent.stopped", agent=agent, data=stopped_data(agent, code))
+    s.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
     s.finish(status, stop_reason=reason, stop_code=code)
     if reason == STOPPED_BY_BUTTON:
         s.clear_stop_request()
