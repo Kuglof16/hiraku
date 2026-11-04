@@ -3,7 +3,7 @@
 An occupant given in body segments (the analysis department's designs from 9ee90a9 on:
 "occupant_<seat>" the torso and "occupant_<seat>.<segment>" the head, neck, arms, forearms,
 hands, thighs, shanks and feet, boxes with rpy_deg) is drawn one shape per segment, turned
-with its box: the head a ball, the segments with a round section a capsule along the box's
+with its box: the head a ball stretched to its box (touching the neck), the segments with a round section a capsule along the box's
 longest side, the others a box with rounded edges; none reaches outside its box, and the
 only ball is the head's. A person's segments board with the person: the seats are counted
 per person, as hiraku/contract/loading.py does. An occupant given as one box (the designs
@@ -154,8 +154,12 @@ class OccupantBrowserTest(unittest.TestCase):
                 kind = meshes[0]["type"]
                 size = sorted(p["box"]["size_mm"])
                 if p["id"].endswith(".head"):
+                    # a unit ball stretched to the box: in the box's frame it spans each side end to end
                     self.assertEqual(kind, "SphereGeometry", (look, p["id"]))
-                    self.assertAlmostEqual(meshes[0]["params"]["radius"], size[0] / 2, places=6)
+                    self.assertEqual(meshes[0]["params"]["radius"], 1, (look, p["id"]))
+                    local, half = in_box(p, meshes[0]["verts"])
+                    np.testing.assert_allclose(local.max(axis=0), half, atol=TOL_MM, err_msg=f"{look} {p['id']}")
+                    np.testing.assert_allclose(local.min(axis=0), -half, atol=TOL_MM, err_msg=f"{look} {p['id']}")
                 elif size[0] / size[1] >= ROUND_SECTION:
                     self.assertEqual(kind, "CapsuleGeometry", (look, p["id"]))
                 else:
@@ -178,6 +182,19 @@ class OccupantBrowserTest(unittest.TestCase):
                 local, half = in_box(p, m["verts"])
                 over = np.abs(local).max(axis=0) - half
                 self.assertTrue((over <= TOL_MM).all(), (look, p["id"], over.tolist()))
+
+    def test_head_meets_the_neck(self):
+        # the head's box sits on the neck's (data); drawn, the head's lowest point is at the neck's top
+        # (before, a ball of the box's smallest side left about 40 mm between them)
+        boxes = {p["id"]: p["box"] for p in occupant_parts(self.segmented)}
+        for look, drawn in self.drawn.items():
+            for person in ("occupant_R", "occupant_L"):
+                head, neck = boxes[f"{person}.head"], boxes[f"{person}.neck"]
+                self.assertAlmostEqual(head["center_mm"][2] - head["size_mm"][2] / 2, neck["center_mm"][2] + neck["size_mm"][2] / 2, places=6)
+                (h,) = drawn["parts"][f"{person}.head"]["meshes"]
+                (n,) = drawn["parts"][f"{person}.neck"]["meshes"]
+                gap = np.asarray(h["verts"])[:, 2].min() - np.asarray(n["verts"])[:, 2].max()
+                self.assertLess(abs(gap), 1.0, (look, person, gap))
 
     def test_capsule_axis_follows_rpy(self):
         # the capsule's axis (the vertices' principal direction) is the box's longest side turned

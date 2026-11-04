@@ -2,7 +2,7 @@
 
 Opens each page of SCREENS at each of WIDTHS and runs tests/web/layout_lint.js in it (what it
 looks at, and the data-lint marks that let a thing off, are written at the top of that file):
-pressable things whose boxes cross, one-line things that wrap, text running out of its box, and a
+pressable things whose boxes cross, the visible text of two elements crossing, one-line things that wrap, text running out of its box, and a
 line holding one letter only. Any problem fails the test with all of them listed: the rule, a short
 selector, the words, the page and the width. A new page is one more row in SCREENS.
 
@@ -174,6 +174,15 @@ PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
   <button id="b1" style="position: absolute; left: 0; top: 0; width: 120px">再生</button>
   <button id="b2" style="position: absolute; left: 60px; top: 10px; width: 120px">動画の配置で</button>
 </div>
+<div style="position: relative; height: 40px">
+  <div id="logo" style="position: absolute; left: 0; top: 0; font-size: 24px">HIRAKU</div>
+  <div id="note" style="position: absolute; left: 30px; top: 8px">赤い札の字</div>
+  <div id="outer" style="position: absolute; left: 300px; top: 0">外の字 <b id="inner">中の字</b></div>
+  <div id="deco" data-lint="overlap" style="position: absolute; left: 500px; top: 0">飾りの札</div>
+  <div style="position: absolute; left: 510px; top: 4px">下の字</div>
+  <div id="under" style="position: absolute; left: 700px; top: 0">隠れた字</div>
+  <div id="lid" style="position: absolute; left: 690px; top: -4px; width: 100px; height: 40px; background: #fff">蓋の字</div>
+</div>
 <button id="wrapped" style="width: 40px">終わった</button>
 <div id="narrow" style="width: 60px; white-space: nowrap">形の見本 (数値は計算結果ではない)</div>
 <div id="cut" style="width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">省略記号で切った長い文</div>
@@ -219,6 +228,15 @@ class LayoutLintBrowserTest(unittest.TestCase):
         # a label drawn over another text (the grid's version box over the HIRAKU name)
         self.assertIn(("cover", "#over"), found)
         self.assertNotIn("#clear", {p["sel"] for p in got if p["rule"] == "cover"})
+        # the text of two elements crossing (any text, not only labels): found once, either way round;
+        # not one inside the other, not the decoration marked data-lint="overlap", not text hidden under a lid
+        text = [p for p in got if p["rule"] == "overlap" and p.get("what") == "text"]
+        pairs = {frozenset((p["sel"], p["with"])) for p in text}
+        self.assertIn(frozenset(("#logo", "#note")), pairs)
+        self.assertEqual(sum(1 for p in text if {p["sel"], p["with"]} == {"#logo", "#note"}), 1)
+        self.assertIn(frozenset(("#name", "#over")), pairs)  # the version box over the HIRAKU name
+        for quiet in ("#outer", "#inner", "#deco", "#under", "#lid"):
+            self.assertNotIn(quiet, {s for pair in pairs for s in pair}, quiet)
         for quiet in ("#cut", "#allowed"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
         self.assertFalse([p for p in got if p["text"] == "まだ長い札"])

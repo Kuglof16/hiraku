@@ -435,6 +435,52 @@ export function fmtVU(value, unit, sig) {
 // with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
 export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
 
+// How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
+export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+
+// run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
+export const STOP_SHORT_JA = {
+  not_judged: "判定の無い分野を残した",
+  round_limit: "繰り返しの上限に達した",
+  red_left: "赤の分野を残した",
+  cost_limit: "上限の費用に達した",
+  turn_limit: "ターン数の上限に達した",
+  user_stop: "人が止めた",
+};
+const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
+
+// A stop_reason said short: the code's words, else (records older than stop_code) the reason's
+// known opening, else its first sentence up to 18 characters.
+export function stopShort(code, reason) {
+  if (STOP_SHORT_JA[code]) return STOP_SHORT_JA[code];
+  const s = (reason || "").trim();
+  if (/^まだ判定の無い分野/.test(s)) return STOP_SHORT_JA.not_judged;
+  if (!s) return "";
+  const first = s.split(/[。(（]/)[0].trim() || s;
+  return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
+}
+
+// How a run ended, one phrase for its row in the run list, from /api/runs' summary
+// (hiraku/webserve/server.py _run_summary): finished, end_status, stop_code, stop_reason,
+// stop_after, last_version, judged {green, red, pending}.
+export function endingJa(r) {
+  if (!r.finished) return "実行中";
+  const v = Number.isInteger(r.last_version) ? `・版 ${r.last_version}` : "";
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "分野を選ぶところまで";
+  const j = r.judged;
+  if (r.end_status === "stopped") {
+    const why = stopShort(r.stop_code, r.stop_reason);
+    return `途中で止まった${why ? ` (${why})` : ""}${v}`;
+  }
+  if (r.end_status === "failed") return `エラーで止まった${v}`;
+  if (j && j.green > 0 && !j.red && !j.pending) return `全部合格${v}`;
+  if (j) {
+    const parts = [j.green ? `合格 ${j.green}` : "", j.red ? `赤 ${j.red}` : "", j.pending ? `判定なし ${j.pending}` : ""].filter(Boolean);
+    return `完了${v}・${parts.join("・")}`;
+  }
+  return `完了${v}・判定なし`;
+}
+
 // The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,
 // saying what it lets you do. The yaml's title and shows are written for the developers; an id not here
 // shows its title.

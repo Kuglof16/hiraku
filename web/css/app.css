@@ -774,6 +774,9 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .keyless { margin: 6px 0 4px; padding: 6px 12px; }
 .runlist.plain .keyless a.readme { margin-left: 8px; padding: 0 10px; font-size: 14px; }
 .runlist.plain .dline { font-size: 16px; }
+.runlist.plain .rmeta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.runlist.plain .rmeta .end { color: var(--ink); }
+.runlist.plain .rmeta .end[data-end="stopped"] { color: var(--red); }
 .runlist.plain .lreq { padding: 7px 6px; }
 .runlist.plain .more { display: inline; margin-left: 10px; }
 .runlist.plain .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }

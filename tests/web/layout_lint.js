@@ -7,6 +7,10 @@
 //
 //   overlap   the boxes of two pressable things (button, a, input, select, textarea, summary) cross
 //             by more than SLACK px on both axes. One inside the other (label > input) is not counted.
+//             The same for the visible text of two elements (labels, headings, the logo's letters,
+//             badges, any text; what: "text"): the text's boxes (Range.getClientRects, cut to the
+//             box that clips them), each on top at one of a few points of it. One element inside
+//             the other is not counted. A decoration drawn over on purpose carries data-lint="overlap".
 //   wrap      a thing that is one line by its kind or class (ONE_LINE below) takes 2 or more lines.
 //             Lines are counted from the text's own boxes (Range.getClientRects, grouped by height),
 //             not from scrollHeight: with line-height: normal the line's height is the font's.
@@ -164,6 +168,29 @@
   };
   const all = [root, ...root.querySelectorAll("*")].filter((e) => !e.closest("svg") && e.tagName !== "CANVAS");
 
+  const shown = (el) => (el.checkVisibility ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : true);
+  // the box that clips an element (the nearest with overflow other than visible, itself too)
+  const clipOf = (el) => {
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") return e.getBoundingClientRect();
+    }
+    return null;
+  };
+  const cut = (r, c) => (c ? { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) } : r);
+  // an element is on top in the box r (a box of its text) at one of a few points of it
+  const onTop = (el, r) => {
+    if (!shown(el)) return false;
+    const x0 = Math.max(r.left, 0), x1 = Math.min(r.right, innerWidth), y0 = Math.max(r.top, 0), y1 = Math.min(r.bottom, innerHeight);
+    if (!(x1 > x0 && y1 > y0)) return false;
+    // along the line's middle (a text half covered from one end is still seen at the other)
+    for (const [fx, fy] of [[0.5, 0.5], [0.05, 0.5], [0.95, 0.5], [0.2, 0.5], [0.8, 0.5], [0.35, 0.5], [0.65, 0.5]]) {
+      const hit = document.elementFromPoint(x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy);
+      if (hit && (hit === el || el.contains(hit) || hit.contains(el))) return true;
+    }
+    return false;
+  };
+
   // One pass over what is visible now (pass() below; what scrolls is passed over at each position).
   const pass = () => {
   seen.clear();
@@ -185,6 +212,40 @@
       if (worst) add("overlap", a, { with: sel(b), withText: words(b), by: `${worst.w.toFixed(0)}x${worst.h.toFixed(0)}px` });
     }
   }
+  // (a) overlap, the text: the boxes of the visible text of two elements (a label, a heading, the
+  // logo's letters, a badge, any text) cross. Text boxes are Range.getClientRects of each text
+  // node, cut to the box that clips them; a box counts when its element is on top at one of a few
+  // points of it. One element inside the other is not counted (its own text sits in its box).
+  const textItems = [];
+  for (const n of textNodes(root)) {
+    const p = n.parentElement;
+    if (!p || exempt(p, "overlap")) continue;
+    const c = clipOf(p);
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      if (!inView(r)) continue;
+      const k = cut(r, c);
+      if (k.right - k.left > 0.5 && k.bottom - k.top > 0.5 && onTop(p, k)) textItems.push({ el: p, r: k });
+    }
+  }
+  const worstText = new Map(); // "i|j" of the two elements -> the largest crossing
+  const ids = new Map();
+  const idOf = (e) => (ids.has(e) ? ids.get(e) : (ids.set(e, ids.size), ids.size - 1));
+  for (let i = 0; i < textItems.length; i++) {
+    for (let j = i + 1; j < textItems.length; j++) {
+      const a = textItems[i], b = textItems[j];
+      if (a.el === b.el || a.el.contains(b.el) || b.el.contains(a.el)) continue;
+      const w = px(Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left));
+      const h = px(Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top));
+      if (!(w > SLACK && h > SLACK)) continue;
+      const [x, y] = idOf(a.el) < idOf(b.el) ? [a.el, b.el] : [b.el, a.el];
+      const key = `${idOf(x)}|${idOf(y)}`;
+      const was = worstText.get(key);
+      if (!was || w * h > was.w * was.h) worstText.set(key, { x, y, w, h });
+    }
+  }
+  for (const { x, y, w, h } of worstText.values())
+    add("overlap", x, { with: sel(y), withText: words(y), by: `${w.toFixed(0)}x${h.toFixed(0)}px`, what: "text" });
 
   // (b) wrap
   const looksPressed = (a) => {
@@ -243,15 +304,6 @@
   // (e) cover: a heading, a label or a pet / bubble crosses another element's text or a
   // pressable thing (not inside it, not holding it). Shown is enough here (not the hit test:
   // what is covered fails the hit test); a text's boxes are cut to the box that clips it (its own too).
-  const shown = (el) => (el.checkVisibility ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : true);
-  const clipOf = (el) => {
-    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
-      const cs = getComputedStyle(e);
-      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") return e.getBoundingClientRect();
-    }
-    return null;
-  };
-  const cut = (r, c) => (c ? { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) } : r);
   const labels = all.filter((e) => e.matches(LABEL) && !exempt(e, "cover") && shown(e));
   const texts = [];
   for (const n of textNodes(root)) {

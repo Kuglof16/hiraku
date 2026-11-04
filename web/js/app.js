@@ -14,7 +14,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVER_JA, PICK_DEMO_ID, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -1518,7 +1518,15 @@ async function showRunList(message = "", runs = null) {
     // for people: the want, done or going, and one verb; the run ids and the contract sample under ?dev=1
     const row = (r) => {
       const href = `?run=${encodeURIComponent(r.run_id)}`;
-      return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want || "(依頼の文なし)")}${drvOf(r)}</td><td class="state">${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
+      // when, how it ended, how it was driven: one line under the want (what is not in the record is left out)
+      const ending = endingJa(r);
+      const tone = ending === "実行中" ? "going" : /^(途中で止まった|エラー)/.test(ending) ? "stopped" : "done"; // red only when it stopped short
+      const meta = [
+        r.when ? `<span class="nw when">${esc(r.when)}</span>` : "",
+        `<span class="nw end" data-end="${tone}">${esc(ending)}</span>`,
+        DRIVEN_JA[r.driver] ? `<span class="nw how" data-driver="${esc(r.driver)}">${DRIVEN_JA[r.driver]}</span>` : "",
+      ].filter(Boolean);
+      return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want || "(依頼の文なし)")}<div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div></td><td class="state">${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
     };
     const table = (title, list) => (list.length ? `<h3>${title}</h3><table>${list.map(row).join("")}</table>` : "");
     box.innerHTML =

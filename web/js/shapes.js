@@ -264,7 +264,8 @@ export function segmentOf(part) {
 
 // One segment of an occupant as one rounded shape inside its box, in the part's local frame
 // (box centre at 0, the box's rpy_deg applied by the caller, as for every part):
-// - the head ("<person>.head"): a ball, its diameter the box's smallest side;
+// - the head ("<person>.head"): a ball stretched to the box (an ellipsoid, its three diameters
+//   the box's three sides), so it meets the neck at the box's face;
 // - a segment whose two short sides are about equal (within OCCUPANT_ROUND_SECTION: the
 //   arms, forearms, thighs, shanks): a capsule along the box's longest side, its diameter the
 //   smaller short side;
@@ -277,8 +278,10 @@ export const OCCUPANT_ROUND_SHARE = 0.45;
 export function occupantSegmentPieces(part) {
   const size = part.box.size_mm.map(Number);
   if (segmentOf(part) === "head") {
-    const g = new THREE.SphereGeometry(Math.min(...size) / 2, 20, 14);
+    // a unit ball stretched to the box's three sides: it touches all six faces (the neck's top too)
+    const g = new THREE.SphereGeometry(1, 20, 14).scale(size[0] / 2, size[1] / 2, size[2] / 2);
     g.userData.occupant = "ball";
+    g.userData.semi_axes_mm = size.map((s) => s / 2);
     return [{ geo: g, sub: null }];
   }
   const axis = size.indexOf(Math.max(...size)); // 0 x, 1 y, 2 z of the box
