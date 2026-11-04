@@ -16277,6 +16277,10 @@ export const DEMOS = {
      "lower_b": "下の脚の管の幅",
      "lower_cross": "下の横の部材 (あり・なし)",
      "lower_t": "下の脚の管の厚さ",
+     "mount_drive": "モーターと減速機の取付の金具",
+     "mount_electrics": "電池・制御器・配線箱の取付の金具",
+     "mount_floor": "床・荷台・前の囲いの取付の金具",
+     "mount_seats": "座席とベルトの取付の金具",
      "rail_b": "レールの管の幅",
      "rail_h": "レールの管の高さ",
      "rail_t": "レールの管の厚さ",
@@ -16295,7 +16299,6 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
-     "mount_seats": "座席とベルトの取付の金具",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -16332,8 +16335,6 @@ export const DEMOS = {
      "motor_max_speed": "モーターの最高回転数",
      "motor_peak_power": "モーターの最大出力",
      "motor_peak_torque": "モーターの最大トルク",
-     "mount_drive": "モーターと減速機の取付の金具",
-     "mount_electrics": "電池・制御器・配線箱の取付の金具",
      "bulkhead_t": "隔壁の板の厚さ",
      "bumper_stroke": "バンパーのつぶれる量",
      "crush_stiffness": "前のつぶれる所の硬さ",
@@ -16344,8 +16345,7 @@ export const DEMOS = {
      "fender_width": "フェンダーの幅",
      "fenders": "フェンダー (あり・なし)",
      "floor_t": "床の板の厚さ",
-     "lamps": "灯火 (あり・なし)",
-     "mount_floor": "床・荷台・前の囲いの取付の金具"
+     "lamps": "灯火 (あり・なし)"
     }
    }
   },
@@ -39211,6 +39211,10 @@ export const DEMOS = {
      "lower_b": "下の脚の管の幅",
      "lower_cross": "下の横の部材 (あり・なし)",
      "lower_t": "下の脚の管の厚さ",
+     "mount_drive": "モーターと減速機の取付の金具",
+     "mount_electrics": "電池・制御器・配線箱の取付の金具",
+     "mount_floor": "床・荷台・前の囲いの取付の金具",
+     "mount_seats": "座席とベルトの取付の金具",
      "rail_b": "レールの管の幅",
      "rail_h": "レールの管の高さ",
      "rail_t": "レールの管の厚さ",
@@ -39229,7 +39233,6 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
-     "mount_seats": "座席とベルトの取付の金具",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -39266,8 +39269,6 @@ export const DEMOS = {
      "motor_max_speed": "モーターの最高回転数",
      "motor_peak_power": "モーターの最大出力",
      "motor_peak_torque": "モーターの最大トルク",
-     "mount_drive": "モーターと減速機の取付の金具",
-     "mount_electrics": "電池・制御器・配線箱の取付の金具",
      "bulkhead_t": "隔壁の板の厚さ",
      "bumper_stroke": "バンパーのつぶれる量",
      "crush_stiffness": "前のつぶれる所の硬さ",
@@ -39278,8 +39279,7 @@ export const DEMOS = {
      "fender_width": "フェンダーの幅",
      "fenders": "フェンダー (あり・なし)",
      "floor_t": "床の板の厚さ",
-     "lamps": "灯火 (あり・なし)",
-     "mount_floor": "床・荷台・前の囲いの取付の金具"
+     "lamps": "灯火 (あり・なし)"
     }
    }
   },
