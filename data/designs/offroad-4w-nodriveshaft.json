@@ -1612,7 +1612,12 @@
         {
           "to": "knuckle_FL",
           "via": "ball_joint",
-          "carries": "steer"
+          "carries": "steer",
+          "at_mm": [
+            -120.0,
+            475.00000000000006,
+            285.0
+          ]
         }
       ],
       "module": "steering"
@@ -1644,7 +1649,12 @@
         {
           "to": "knuckle_FR",
           "via": "ball_joint",
-          "carries": "steer"
+          "carries": "steer",
+          "at_mm": [
+            -120.0,
+            -475.00000000000006,
+            285.0
+          ]
         }
       ],
       "module": "steering"
@@ -2908,7 +2918,17 @@
         {
           "to": "knuckle_FL",
           "via": "bolt",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
         },
         {
           "to": "FL",
@@ -2950,7 +2970,17 @@
         {
           "to": "knuckle_FR",
           "via": "bolt",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            -1.0,
+            0.0
+          ]
         },
         {
           "to": "FR",
@@ -2992,7 +3022,17 @@
         {
           "to": "knuckle_RL",
           "via": "bolt",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
         },
         {
           "to": "RL",
@@ -3029,7 +3069,17 @@
         {
           "to": "knuckle_RR",
           "via": "bolt",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            -1.0,
+            0.0
+          ]
         },
         {
           "to": "RR",
@@ -3096,7 +3146,17 @@
         {
           "to": "wheel_FL",
           "via": "bolt",
-          "carries": "steer"
+          "carries": "steer",
+          "at_mm": [
+            0.0,
+            510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            1.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3153,7 +3213,17 @@
         {
           "to": "wheel_FR",
           "via": "bolt",
-          "carries": "steer"
+          "carries": "steer",
+          "at_mm": [
+            0.0,
+            -510.00000000000006,
+            300.0
+          ],
+          "axis": [
+            0.0,
+            -1.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3237,7 +3307,12 @@
         {
           "to": "knuckle_RL",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2140.0,
+            475.00000000000006,
+            285.0
+          ]
         },
         {
           "to": "bracket_lca_RL2",
@@ -3326,7 +3401,12 @@
         {
           "to": "knuckle_RR",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2140.0,
+            -475.00000000000006,
+            285.0
+          ]
         },
         {
           "to": "bracket_lca_RR2",
