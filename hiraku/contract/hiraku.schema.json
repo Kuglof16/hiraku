@@ -704,6 +704,14 @@
               "carries": {
                 "type": "string",
                 "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "Where the two are joined: a point on both shapes (the generator computes it; H1-joints checks it lies on both within 2 mm)."
+              },
+              "axis": {
+                "$ref": "#/$defs/vec3",
+                "description": "For a pin, bushing, hinge or ball joint: the direction of its axis (unit vector), so the joint can be drawn and turned about it."
               }
             }
           },
@@ -879,6 +887,10 @@
             "$ref": "#/$defs/module_change"
           },
           "description": "The proposals this version was built from (empty or absent for version 1 and for designs without modules)."
+        },
+        "archetype": {
+          "type": "string",
+          "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
         }
       }
     },
