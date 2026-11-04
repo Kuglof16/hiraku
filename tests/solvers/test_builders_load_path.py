@@ -175,7 +175,9 @@ class DemoV1Test(unittest.TestCase):
                 # the plan names this mismatch as safe side: the prediction must be the unfavourable value
                 self.assertGreaterEqual(pred[q], got[q]["value"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
             elif q in pred and q in got:
-                rel = abs(got[q]["value"] - pred[q]) / abs(pred[q])
+                # as compare: a prediction of 0 divides by |analysed| (0 when both are 0; R8-free on the joined v1)
+                rel = (abs(got[q]["value"] - pred[q]) / abs(pred[q]) if pred[q] else
+                       (0.0 if not got[q]["value"] else 1.0))
                 self.assertLessEqual(rel, lc["tolerance_rel"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
 
     def test_column_held_two_ways_on_version_1(self):
