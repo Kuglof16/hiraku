@@ -134,7 +134,7 @@ class K2Tool(ABC):
     params: tuple[P, ...] = ()
     pairs: tuple[Pair, ...] = ()
 
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=None)  # one entry per tool: a method's cache is shared by every instance (keyed on self)
     def _own_checks(self) -> tuple:
         return tuple(cached(self.name, self.own_checks))
 
