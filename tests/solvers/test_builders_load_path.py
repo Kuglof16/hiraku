@@ -166,7 +166,10 @@ class DemoV1Test(unittest.TestCase):
             got = results(self.runs[k])
             self.assertEqual(pred["free_parts"], got["free_parts"]["value"], k)  # the same parts float
             q = lc["criterion"]["quantity"]
-            exp = plan.get("expected_mismatch") or {}
+            from hiraku.tools.plan import expected_entries
+
+            q_ = lc["criterion"]["quantity"]
+            exp = next((e for e in expected_entries(plan) if e.get("quantity") == q_), {})
             if q in pred and q in got and exp.get("quantity") == q and exp.get("end"):
                 # the plan records this mismatch's cause and ends the step without a verdict (R7's grip: the tool's
                 # grip moves with the plated frame, which the hand calculation takes as rigid): smaller here
