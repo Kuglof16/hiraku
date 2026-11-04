@@ -45,7 +45,7 @@ OCCUPANT_REST_KINDS = ("seat", "seat_belt", "body", "accelerator_pedal", "brake_
 FRAME_PIECES = ("frame", "rollbar", "side_rail")
 # Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
 # end (motion.sweep turns them about the inner end).
-LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
+LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link", "link")
 # Kinds that go through a hole in a panel (a part of kind body) on their way: the steering column
 # through the floor (assumption: the panel has the hole).
 THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft")

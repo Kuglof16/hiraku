@@ -51,8 +51,9 @@ class DemoGeometryTest(unittest.TestCase):
         sw = sweep(DESIGN)
         front = [h for h in sw["hits"] if h[0].endswith(("_FL", "_FR"))]  # the steered corners' parts
         self.assertTrue(front)
-        # the rails and the front suspension towers on them (steering past the free angle)
-        self.assertTrue(all("rail" in h[1] or "tower_" in h[1] for h in front))
+        # the rails and the front suspension towers on them, with the dampers' brackets at the tower arms' tips
+        # (steering past the free angle)
+        self.assertTrue(all("rail" in h[1] or "tower_" in h[1] or "bracket_damper_" in h[1] for h in front))
         self.assertTrue(all(h[3].startswith("steer") for h in front))
         # rails 80 mm inside the 600 x 200 wheel: free until w cos a + l sin a - w = 81 mm
         self.assertAlmostEqual(sw["free_steer"]["FL"], 16.48, delta=0.01)
@@ -68,7 +69,7 @@ class DemoGeometryTest(unittest.TestCase):
         order = [k for k, _ in asm["order"]]
         self.assertNotIn("part:occupant_R", order)
         self.assertNotIn("part:cargo", order)
-        self.assertLess(order.index("part:susp_FL"), order.index("part:wheel_FL"))  # arms before the wheel
+        self.assertLess(order.index("part:lca_FL_f"), order.index("part:wheel_FL"))  # arms before the wheel
 
     def test_hands_in_the_demo(self):
         from hiraku.solvers.k4_geometry.assembly import steps
@@ -77,9 +78,13 @@ class DemoGeometryTest(unittest.TestCase):
         # on the bench, a corner's boxes overlap one another (rough boxes of parts bolted together)
         no_room = [s for s in seq if not s["tool_clearance"]]
         bench = [s for s in no_room if "built off the vehicle" in s["note"]]
+        from hiraku.designgen.kit.arms import part_ids
+
         for s in bench:
-            corner = s["part"].rsplit("_", 1)[1]
-            self.assertTrue(all(b.endswith("_" + corner) for b in s["tool_blocked_by"]), s)
+            corner = next(sid for sid in ("FL", "FR", "RL", "RR")
+                          if s["part"].endswith("_" + sid) or s["part"] in part_ids(sid).values())
+            own = set(part_ids(corner).values())
+            self.assertTrue(all(b.endswith("_" + corner) or b in own for b in s["tool_blocked_by"]), s)
         # on the vehicle the axle stations' rail nodes are under the suspension towers and among the brackets:
         # what is bolted there (the rear corners, the motor and reducer, the rack, the deck) has no hands' way
         on_car = {s["part"] for s in no_room if s not in bench}
@@ -137,8 +142,11 @@ class AssemblyKitTest(unittest.TestCase):
         bat = part_fastenings(DESIGN, "battery", bs)
         self.assertEqual([f["to"] for f in bat], ["node LS1", "node RS1", "node LS2", "node RS2"])
         self.assertEqual({f["kind"] for f in bat}, {"bolt"})
-        self.assertEqual([f["to"] for f in part_fastenings(DESIGN, "wheel_FL", bs)], ["part susp_FL"])
-        self.assertEqual([f["to"] for f in part_fastenings(DESIGN, "susp_FL", bs)], ["node LA"])
+        # a corner of arms (kit/arms.py) is held as its links say: the wheel on the knuckle (after the caliper),
+        # the lower arm's front leg on its pin in the clevis bracket at the lower leg's end
+        self.assertEqual([f["to"] for f in part_fastenings(DESIGN, "wheel_FL", bs)], ["part knuckle_FL", "part caliper_FL"])
+        self.assertEqual([(f["to"], f["kind"]) for f in part_fastenings(DESIGN, "lca_FL_f", bs)],
+                         [("part bracket_lca_FL1", "pin")])
         self.assertEqual(part_fastenings(DESIGN, "cargo", bs), [])
         self.assertEqual(text_of(bat, {}), "LS1・RS1・LS2・RS2 の節点にボルトで留める")
         joints = {w["node"]: w["members"] for w in welds(DESIGN)}
@@ -174,15 +182,17 @@ class AssemblyToolTest(unittest.TestCase):
         self.assertGreater(r["motion_interference_count"]["value"], 0.0)
         self.assertLess(r["free_steer_angle"]["value"], r["max_steer_angle"]["value"])
         self.assertEqual(r["blocked_parts"]["value"], 0.0)
-        self.assertEqual(r["assembly_steps"]["value"], 44.0)  # H5: the parts, not the four corners going on
+        # H5: the parts, not the four corners going on; each corner's suspension box is 8 parts (kit/arms.py)
+        self.assertEqual(r["assembly_steps"]["value"], 44.0 + 4 * 7)
         seq = rec["assembly"]
         self.assertEqual([s["order"] for s in seq], list(range(1, len(seq) + 1)))
         self.assertTrue(all(s["no_interference"] for s in seq))
         self.assertFalse(any("assembly step" in e["name"] for e in rec.get("effects", [])))
         self.assertEqual({i["state"] for i in rec["interferences"]}, {"motion"})
-        self.assertTrue(all(i["b"].startswith(("member rail", "member tower_")) for i in rec["interferences"]))
+        self.assertTrue(all(i["b"].startswith(("member rail", "member tower_", "bracket_damper_"))
+                            for i in rec["interferences"]))
         wheel = next(s for s in seq if s["part"] == "wheel_FL")
-        self.assertIn("susp_FL", wheel["depends_on"])  # the wheel goes on the arms already in place
+        self.assertIn("knuckle_FL", wheel["depends_on"])  # the wheel goes on the knuckle already on the arms
 
 
 class NoInfinityTest(unittest.TestCase):

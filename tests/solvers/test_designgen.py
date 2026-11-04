@@ -237,7 +237,10 @@ class JointReinforcementTest(unittest.TestCase):
         d = self.gusset
         contract.validate("design", d)
         g = [p for p in d["parts"] if p["kind"] == "gusset"]
-        self.assertEqual(len(g), 4 * 2 * 4)  # four T stations (A, S1, S2, B), both sides, four plates each
+        # four T stations (A, S1, S2, B), both sides, four plates each; but none where another part is (kit/frame
+        # gussets(avoid=...)): the battery's side of S1 and S2 (8), named in the joint's other gussets
+        self.assertEqual(len(g), 4 * 2 * 4 - 8)
+        self.assertEqual(sum("battery があるので付けない" in p["name"] for p in g), 8)
         self.assertEqual(d["parts"][:len(V1["parts"])], V1["parts"])
         self.assertEqual({k: d["variables"][k]["value"] for k in ("gusset_leg", "gusset_thickness")},
                          {"gusset_leg": 60.0, "gusset_thickness": 2.3})

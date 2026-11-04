@@ -162,13 +162,20 @@ def pivot_brackets(design: Record, rho: float) -> list[str]:
             pad = np.array([mounts.BRACKET_HALF_X_MM, mounts.BRACKET_PAD_MM, mounts.BRACKET_PAD_MM])
             lo, hi = q - pad, q + pad
             leg = _member_away(design, at[0], nodes)
-            if key != "damper_upper" and leg is not None:
+            if key == "damper_upper":  # under the tower arm's tip, reaching inboard: nothing past the eye toward the wheel
+                sy = 1.0 if s["position_mm"][1] > 0 else -1.0
+                lo[1], hi[1] = sorted((float(q[1]) - sy * 2.0 * mounts.BRACKET_PAD_MM, float(q[1]) + sy * NODE_TOL_MM))
+                lo[2], hi[2] = q[2] - mounts.BRACKET_PAD_MM, q[2] + NODE_TOL_MM  # clear of the knuckle at full bump
+            elif leg is not None:
                 # on the leg's end, reaching away from the leg along x and z: the leg stops at its faces
                 for i in (0, 2):
                     reach = 2.0 * pad[i]
                     lo[i], hi[i] = ((q[i] - reach, q[i] + NODE_TOL_MM) if leg[i] > 0 else (q[i] - NODE_TOL_MM, q[i] + reach))
             b = mounts._bracket(pid, f"{corner}の{label} (クレビス、溶接)", lo, hi, at[:1], rho)
-            parts.append(b)
+            # before the joints' reinforcement (gussets, through pieces), which a design adds last
+            at_end = next((i for i, x in enumerate(parts) if x["kind"] == "gusset" or x["id"].startswith("through_")),
+                          len(parts))
+            parts.insert(at_end, b)
             brackets.append(b)
             out.append(pid)
     return out

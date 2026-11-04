@@ -23,7 +23,8 @@ NOT_FASTENED = ("occupant", "cargo")
 # A corner built of its arms (designgen kit/arms.py): its parts are held as their connects_to say (the legs in
 # the frame's brackets, the ball joints on the legs, the knuckle on the ball joints, the wheel on the knuckle)
 ARM_KINDS = ("link", "ball_joint")
-FASTENING_VIAS = ("bolt", "weld", "bushing", "pin", "ball_joint")
+# connects_to via -> fastening kind (the contract's bolt, weld, rest, pin): a bushing or ball joint turns on its pin
+FASTENING_VIAS = {"bolt": "bolt", "weld": "weld", "pin": "pin", "bushing": "pin", "ball_joint": "pin"}
 
 
 def _linked(design: Record, p: Record, bs: dict[str, Body], nodes: dict) -> list[Record]:
@@ -34,11 +35,12 @@ def _linked(design: Record, p: Record, bs: dict[str, Body], nodes: dict) -> list
         to = c.get("to")
         if c.get("via") not in FASTENING_VIAS:  # friction, spline, rest, wire: not what holds the part
             continue
+        kind = FASTENING_VIAS[c["via"]]
         if f"part:{to}" in bs:
             at = c.get("at_mm") or [float(v) for v in bs[f"part:{to}"].obb.center]
-            out.append({"to": f"part {to}", "kind": c.get("via", "bolt"), "at_mm": [float(v) for v in at]})
+            out.append({"to": f"part {to}", "kind": kind, "at_mm": [float(v) for v in at]})
         elif to in nodes:
-            out.append({"to": f"node {to}", "kind": c.get("via", "bolt"), "at_mm": c.get("at_mm") or nodes[to]})
+            out.append({"to": f"node {to}", "kind": kind, "at_mm": c.get("at_mm") or nodes[to]})
     if p["kind"] == "wheel":  # onto the hub after the brake on it: the wheel goes on last
         sid = bs[f"part:{p['id']}"].support
         for k, b in sorted(bs.items()):
