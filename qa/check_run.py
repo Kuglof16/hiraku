@@ -59,7 +59,8 @@ their basis. What it looks at:
   criterion has a verdict in the last version (a red tile alone does not end a
   domain), and no tile is left pending
 - HK6 (contract d9631a5, designs with modules only): each design.change_proposed comes from
-  designer.<its module> (data.agent_id the same), not for package, and names only that module's
+  designer.<its module> (data.agent_id the same, design_version when given the latest version), not
+  for package, and names only that module's
   variables and choices of the version it was made on; its module is named in the modules of a red
   load case of that version (and of each load case it says it answers); from version 2 a version is
   made by the packager, its module_changes are the round's proposals (since the previous version)
@@ -1541,6 +1542,8 @@ class RunChecker:
                 self.error(rule, w, f"{cid} proposed before any design version")
                 continue
             v, d = cur
+            if p.get("design_version") not in (None, v):
+                self.error(rule, w, f"{cid} says design_version {p['design_version']}, but v{v} is the latest version")
             mods = {x.get("module_id"): x for x in d.get("modules") or []}
             if m == "package":
                 self.error(rule, w, f"{cid}: the package is the packager's (build_version input), not a proposal")
@@ -1593,6 +1596,9 @@ class RunChecker:
             if len(pkg) > 1:
                 self.error(rule, w, f"v{v} lists {len(pkg)} package changes (one at most)")
             for x in pkg:
+                if x.get("design_version") not in (None, versions[k - 1]):
+                    self.error(rule, w, f"v{v} package change {x.get('change_id')} says design_version "
+                                        f"{x['design_version']}, not v{versions[k - 1]}")
                 if x.get("agent_id") != "packager":
                     self.error(rule, w, f"v{v} package change {x.get('change_id')} by {x.get('agent_id')}, not the packager")
                 out = sorted(set(x.get("changes") or {}) - pvars)

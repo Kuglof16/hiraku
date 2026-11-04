@@ -1308,12 +1308,15 @@ class Modules(unittest.TestCase):
         self.assertEqual(self.hk6(ev, "warn"), set())
         # the packager's own change of a package variable, listed once in module_changes
         pkg = {"change_id": "chg-0002", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "design_version": 1,
                "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
         ev = modular()
         d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
         d2["module_changes"].append(pkg)
         d2["variables"]["wheelbase"] = pkg["changes"]["wheelbase"]
         self.assertEqual(self.hk6(ev), set())
+        pkg["design_version"] = 2  # the package change is made on the version before
+        self.assertTrue(any("package change chg-0002 says design_version 2" in m for m in self.hk6(ev)))
 
     def test_a_proposal_stays_in_its_module(self):
         base = modular(proposals=None)
@@ -1321,10 +1324,12 @@ class Modules(unittest.TestCase):
         for why, change in (("another designer", {"agent_id": "designer.frame"}),
                             ("a package variable", {"changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}),
                             ("a choice not its own", {"choices": {"frame_type": "spaceframe"}}),
-                            ("the package itself", {"module_id": "package", "agent_id": "packager"})):
+                            ("the package itself", {"module_id": "package", "agent_id": "packager"}),
+                            ("made on another version", {"design_version": 2})):
             with self.subTest(why):
                 self.assertTrue(self.hk6(modular(proposals=[dict(good, **change)])), why)
         self.assertEqual(self.hk6(modular(proposals=[dict(good, choices={"tyre": "wide"})])), set())
+        self.assertEqual(self.hk6(modular(proposals=[dict(good, design_version=1)])), set())  # contract 18c2679
 
     def test_a_red_goes_to_the_modules_its_load_case_names(self):
         self.assertTrue(self.hk6(modular(case_modules=("frame",))))
