@@ -64,7 +64,7 @@ from typing import Any
 import numpy as np
 
 from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
-from hiraku.designgen.kit.frame import Frame, gusset_spans
+from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
 from hiraku.designgen.kit.sections import rect_tube, round_tube
@@ -1206,7 +1206,6 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
     arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
-    gusset_spans(design)  # the gussets welded over the rail nodes their legs reach
     _floors_clear_of_brackets(design)  # each floor can be lowered in from above
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
