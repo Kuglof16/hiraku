@@ -109,6 +109,16 @@ class SchemaTest(unittest.TestCase):
             self.assertNotEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
         self.assertEqual(contract.errors("event", {**ev, "data": {"status": "stopped"}}), [])  # stop_code optional
 
+    def test_agent_stopped_says_why(self):
+        ev = {"seq": 9, "ts": "2026-11-05T02:24:00+09:00", "t": 1.0, "run_id": "x", "kind": "agent.stopped",
+              "agent": "cae.strength"}
+        for code in ("done", "run_ended", "user_stop", "error"):
+            self.assertEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength", "stop_code": code,
+                                                                       "stop_reason": "words"}}), [])
+        self.assertNotEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength",
+                                                                      "stop_code": "red_left"}}), [])
+        self.assertEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength"}}), [])  # optional
+
     def test_series_against_time_or_another_quantity(self):
         base = {"channel": "toe.FL", "unit": "deg", "values": [0.0, 0.1]}
         self.assertEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0]}), [])
