@@ -91,6 +91,11 @@ def required_case(tool, test_id):
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
+    if tool.name == "entry_opening":
+        # the opening's and the hand hold's sizes the H7 builder takes from requirement items Q93-Q96, Q49, Q89 (not
+        # in the demo's requirements yet): test values here, so that every quantity the tool predicts is measured
+        params.update(width_upper=q(450, "mm"), width_lower=q(300, "mm"), height_seat=q(900, "mm"),
+                      height_floor=q(400, "mm"), grip_min=q(16, "mm"), grip_max=q(38, "mm"), grip_reach=q(600, "mm"))
     if tool.name in BED_TOOLS:
         params.update(loading="driver")  # a care bed has one occupant; the default loading names two
     return load_case(f"{test_id}-x", test_id, tool.domain, **params)
