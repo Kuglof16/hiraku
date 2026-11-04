@@ -11,6 +11,7 @@ import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fi
 import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
+import { heldBandHtml, heldCases } from "./held.js";
 
 const W = 300;
 const H = 150;
@@ -252,8 +253,11 @@ export class TileBoard {
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
       const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
+      // a load case without a criterion whose count is not 0: a 保留 band over the tile's colour (held.js)
+      const held = heldCases(s, d, v);
       return (
-        `<div class="tile ${j.state}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
+        `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
+        (held.length ? `<div class="heldband">${heldBandHtml(held)}</div>` : "") +
         `<div class="draw">${drawing}</div>${spark}` +
         `<div class="cap">${esc(caption)}</div>` +
         `<div class="tf" data-say-host><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}${tilePet(s, d, pets)}</div></div>`

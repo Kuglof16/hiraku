@@ -31,6 +31,7 @@ import { AssemblyPanel } from "./assembly.js";
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
+import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -489,8 +490,20 @@ function renderChips(s, lcId) {
   $("chips").innerHTML = DOMAINS.map((d) => {
     const j = judgementState(s, d);
     const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : "この実行では選んでいない");
-    return `<span class="chip ${j.state} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
+    const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
+    return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
+  // held: the workbench's 保留 band above the 3D (every domain's load cases without a criterion whose count is not 0)
+  let band = $("heldband");
+  if (!band) {
+    band = document.createElement("div");
+    band.id = "heldband";
+    band.className = "heldband bench";
+    $("viewport").before(band);
+  }
+  const html = heldBandHtml(heldAll(s, DOMAINS), { withDomain: true });
+  band.hidden = !html;
+  if (band.innerHTML !== html) band.innerHTML = html;
 }
 
 const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));

@@ -212,6 +212,13 @@ const QUANTITY_JA = {
   blocked_parts: "入らない部品の数",
   steps_without_tool_clearance: "工具が入らない手順の数",
   steps_out_of_reach: "手が届かない手順の数",
+  // held: the joints and the modules' spaces (hiraku/solvers/shelf/assembly.py at 7fc0ffc)
+  joint_gap_count: "つながりの不足の数",
+  joint_gaps: "離れたつながりの数",
+  unjoined_parts: "つながりの無い部品の数",
+  worst_joint_gap: "いちばん離れたつながり",
+  envelope_outside_count: "モジュールの空間からはみ出した部品の数",
+  worst_envelope_outside: "いちばん大きいはみ出し",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
   // the shell solver (frame_shell): the judged hot-spot stress

@@ -41,6 +41,7 @@ DOMAINS = "20261102-203000-domains"  # every domain (tests.web.domains_fixture)
 HEARING = "20261102-204000-hearing"  # the sample with the hearing asked (A2)
 REPORT_RUN = "20261102-205000-report"  # the sample with a report (test_cut_n17_browser.REPORT)
 ASSEMBLY = "20261102-206000-assembly"  # the sample with an assembly order (test_assembly_browser)
+HELD = "20261104-200000-held"  # held: a load case without a criterion counting 206 (tests.web.held_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
 
@@ -74,6 +75,9 @@ SCREENS = (
     Screen("ツールの棚", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6"),
     Screen("組み立て", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6"),
     Screen("見せる", f"?run={DOMAINS}&present=1&pace=0&t=1e6"),
+    # held: the 保留 bands
+    Screen("全分野 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
+    Screen("作業台 (保留)", f"?run={HELD}&tab=bench&pace=0&t=1e6"),
 )
 
 
@@ -113,6 +117,8 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     _write_run(runs, HEARING, events)
     _write_run(runs, REPORT_RUN, report_events(REPORT))
     _write_run(runs, ASSEMBLY, assembly_events())
+    from tests.web.held_fixture import held_events  # held:
+    _write_run(runs, HELD, held_events())
     return runs, saved
 
 
