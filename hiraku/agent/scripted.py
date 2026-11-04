@@ -511,15 +511,32 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             raise Stop(f"the plan changes {', '.join(stray)}, which no module of the design owns")
         reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
         routed = route_reds(ctx, ctx.version)
+        # only the parts of the plan's revision whose module the version's reds go to (HK6: a red goes to the
+        # designers of the modules its load case names); the rest of the entry answers no red of this version
+        skipped = [m for m in by if f"designer.{m}" not in routed] + (["package"] if package and "packager" not in routed else [])
+        by = {m: part for m, part in by.items() if f"designer.{m}" in routed}
+        package = package if "packager" in routed else {}
+        reds = sorted({lc for ids_ in routed.values() for lc in ids_})
+        if not by and not package:
+            names = "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped) or "なし"
+            s.emit("agent.said", agent="lead",
+                   text=f"台本の次の直し ({names}) は、版 {ctx.version} の赤 ({'、'.join(reds)}) を直すモジュールのものではないので、使いません")
+            raise Stop(f"版 {ctx.version} の赤 ({'、'.join(reds)}) を直す直しが台本にありません (次の直しは {names} のもの)。"
+                       f"その赤のまま終えます。それより重い段の荷重条件は、低い段の赤が残るので判定していない (HK5)")
+        if skipped:
+            s.emit("agent.said", agent="lead", text="台本の直しのうち、この版の赤に関わらないモジュールの分は使いません: "
+                   + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped))
+            merged_keep = {k: q for m in by for k, q in (by[m].get("changes") or {}).items()}
+            changes = {**merged_keep, **package}
+            choices = {k: c for m in by for k, c in (by[m].get("choices") or {}).items()}
         ids = []
         s.emit("agent.said", agent="lead", text="赤の荷重条件を、直せるモジュールの設計役に渡します: "
-               + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by) + "。版はパッケージ役がまとめます")
+               + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by)
+               + ("、パッケージ役" if package else "") + "。版はパッケージ役がまとめます")
         for m, part in by.items():
             agent = f"designer.{m}"
             start(agent)
-            args = {"module": m, **part, "reason": reasons.get(m) or reason}
-            if routed.get(agent):
-                args["load_case_ids"] = routed[agent]
+            args = {"module": m, **part, "reason": reasons.get(m) or reason, "load_case_ids": routed[agent]}
             try:
                 ids.append(revise_design(ctx, args, agent)["change_id"])
             except ToolError as e:
@@ -617,8 +634,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
                else "台本に設計の直しが残っていません")
         status, code = "stopped", "round_limit" if used_up else "not_judged"
-        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。軽い段の赤が残るので、"
-                  f"それより重い段の荷重条件は確かめていません (HK5)")
+        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。それより重い段の荷重条件は、"
+                  f"低い段の赤が残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
     if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []
