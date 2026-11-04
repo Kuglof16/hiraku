@@ -728,6 +728,87 @@ def stress_inputs(design: Record, load_case: Record) -> Record:
             "SF": q(sf, "1")}
 
 
+def post_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.frame_utilisation's post inputs (M_p, T_p, N_p and the post's section): of the roll bar's posts
+    (members of a rollbar part, more upright than not) that carry brackets with parts hung on them, the one and the
+    combination of the load case's accelerations (as the load_path tool takes them: down, down + forward, down + left,
+    down + right) with the largest von Mises stress at the foot (its lower node). The post carries all of the hung
+    parts (at their boxes' centres) and of the occupants resting on them (occupant_mass at the occupant's centre of
+    gravity, with the load case's occupant forces fore and aft and sideways, as the tool puts them). No such post:
+    zero loads on the first post's section (the rails' when there is no roll bar)."""
+    from hiraku.contract.loading import on_board
+    from hiraku.solvers.k0_handcalc.units import STANDARD_GRAVITY
+    from hiraku.solvers.k0_handcalc.vehicle import member_props
+    from hiraku.solvers.shelf.load_path import _rests_on, occupant_cg, occupant_trunks
+
+    params = load_case.get("params") or {}
+
+    def val(k, default):
+        v = params.get(k)
+        return default if v is None else float(v["value"] if isinstance(v, dict) else v)
+
+    av, al, alon = val("accel_vertical", 1.0), val("accel_lateral", 0.0), val("accel_longitudinal", 0.0)
+    m_occ = val("occupant_mass", 0.0)
+    f_lon, f_lat = val("occupant_force_longitudinal", 0.0), val("occupant_force_lateral", 0.0)
+    loading_id = params.get("loading")
+    d = on_board(design, loading_id) if loading_id else design
+    props = member_props(d)
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in d["nodes"]}
+    kind_of = {p["id"]: p["kind"] for p in d.get("parts", [])}
+    posts = []
+    for mid, p in props.items():
+        a, b = xyz[p["member"]["node_a"]], xyz[p["member"]["node_b"]]
+        axis = b - a
+        if kind_of.get(p["member"].get("part")) == "rollbar" and abs(axis[2]) > np.hypot(axis[0], axis[1]):
+            posts.append((mid, a, b))
+    g = STANDARD_GRAVITY
+    best = None
+    for mid, a, b in posts:
+        foot, top = (a, b) if a[2] <= b[2] else (b, a)
+        e = (top - foot) / np.linalg.norm(top - foot)
+        brackets = {p["id"] for p in d["parts"] if p["kind"] == "bracket"
+                    and any(c.get("to") == mid for c in p.get("connects_to", []))}
+        hung = [p for p in d["parts"] if p["id"] not in brackets
+                and any(c.get("to") in brackets for c in p.get("connects_to", []))]
+        if not hung:
+            continue
+        loads = [(np.asarray(p["box"]["center_mm"], float), float(p["mass_kg"]), None)
+                 for p in hung + [p for p in d["parts"] if p["id"] in brackets]]
+        hung_ids = {p["id"] for p in hung}
+        for t in occupant_trunks(d):
+            if _rests_on(d, t, ("seat",)) in hung_ids:
+                loads.append((np.asarray(occupant_cg(d, t), float), m_occ, (f_lon, f_lat)))
+        sec = props[mid]["section"]
+        I, A, J = float(min(sec["Iy"], sec["Iz"])), float(sec["A"]), float(sec["J"])
+        c = float(max(sec["cy"], sec["cz"]))
+        for lon, lat in ((0.0, 0.0), (alon, 0.0), (0.0, al), (0.0, -al)):
+            M, F = np.zeros(3), np.zeros(3)
+            for x, m, given in loads:
+                f = np.array([m * g * lon, m * g * lat, -m * g * av])
+                if given is not None:
+                    f[0], f[1] = given[0] * np.sign(lon), given[1] * np.sign(lat)
+                F += f
+                M += np.cross(x - foot, f)
+            T = float(M @ e)
+            Mb, N = float(np.linalg.norm(M - T * e)), float(abs(F @ e))
+            vm = float(np.hypot(Mb * c / I + N / A, np.sqrt(3.0) * abs(T) * c / J))
+            if best is None or vm > best[0]:
+                best = (vm, Mb, abs(T), N, A, I, J, c, float(props[mid]["material"]["yield_MPa"]))
+    if best is None:
+        pick = posts[0][0] if posts else next(m for m in props if m.startswith("rail_"))
+        sec = props[pick]["section"]
+        best = (0.0, 0.0, 0.0, 0.0, float(sec["A"]), float(min(sec["Iy"], sec["Iz"])), float(sec["J"]),
+                float(max(sec["cy"], sec["cz"])), float(props[pick]["material"]["yield_MPa"]))
+    _, Mb, T, N, A, I, J, c, fy = best
+    return {"M_p": q(Mb, "N*mm"), "T_p": q(T, "N*mm"), "N_p": q(N, "N"), "A_p": q(A, "mm^2"), "I_p": q(I, "mm^4"),
+            "J_p": q(J, "mm^4"), "c_p": q(c, "mm"), "f_yp": q(fy, "MPa")}
+
+
+def frame_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.frame_utilisation's inputs: the rail's (stress_inputs) and the roll bar post's (post_inputs)."""
+    return {**stress_inputs(design, load_case), **post_inputs(design, load_case)}
+
+
 def free_inputs(design: Record, load_case: Record) -> Record:
     """load_path.free_parts' inputs: the parts modelled and those a chain of contacts joins to a member."""
     from hiraku.solvers.shelf.load_path import contact_groups, find_contacts, modelled_parts
@@ -824,16 +905,19 @@ _RAIL = {k: f"from.{k}" for k in ("M_v", "M_h", "T", "N", "b", "h", "t", "A", "I
 R8_STRESS_PLAN = {
     "tool": "load_path",
     "say": ("部品と乗員の重さと加速度を、はしご形の枠の 2 本のレールに分けて、上下・横の曲げ、軸の力、ねじれを合わせた応力で、"
-            "許しに対する割合を先に出します"),
+            "許しに対する割合を先に出します。座席などを下げたロールバーの柱は、足からの片持ちとして同じ割合を出し、"
+            "大きい方を予測にします"),
     "predictions": [FREE_PREDICTION, {
-        "quantity": "max_utilisation", "formula_id": "load_path.rail_utilisation", "output": "u",
-        "assumptions": ["レールだけを見る (横の部材・柱・ロールバーの応力は手計算に入れない)",
+        "quantity": "max_utilisation", "formula_id": "load_path.frame_utilisation", "output": "u",
+        "assumptions": ["レールと、部品を下げたロールバーの柱を見る (横の部材の応力は手計算に入れない)",
                         "レールは車軸の 2 点で支えた梁と軸。上下は、てこの比で 2 本に分け、横の加速度は m a_y h / s で片側へ移す。"
                         "前後は、高さの分のモーメント m a_x h とレールの軸の力 (半分ずつ)",
                         "ねじれは、各荷重のレールへの分を、レールの中心からの横のずれに掛けたもの (横の部材が固く付く: 大きめ)",
                         "車輪とサスペンションの腕は車輪に乗る (レールに載せない)",
+                        "柱は足の節からの片持ちで、金具で下げた部品とそれに座る乗員を全部持つ (床の分も上の棒の分も引かない: 大きめ)",
                         "4 つの組 (下・下+前・下+左・下+右) のうち、いちばん大きい点"],
-        "inputs": _RAIL, "inputs_from": stress_inputs}],
+        "inputs": {**_RAIL, **{k: f"from.{k}" for k in ("M_p", "T_p", "N_p", "A_p", "I_p", "J_p", "c_p", "f_yp")}},
+        "inputs_from": frame_inputs}],
     # Measured (2026-11-04) on version 2 ({part_mounts: brackets, pedal_mount: post, side_guard: bars_net}, Q75
     # 0.7 g, Q76 0.9 g, Q61 1.5): K0 0.969 (rail R, down + forward) against the tool's 0.614 (cross_B, down + left;
     # the rails 0.597); v1 K0 0.919.
@@ -846,7 +930,9 @@ R8_STRESS_PLAN = {
         "safe_side": True,
         "safe_side_reason": ("レールについては、応力を角で重ね、ねじれを固い横の部材で受けるとみる分、大きめに出る (不利な側)。"
                              "横の部材の応力は手計算に入れていない (ツールでは cross_B がいちばん大きい) ので、横の部材が"
-                             "レールより使われる設計では、安全側とは言い切れない"),
+                             "レールより使われる設計では、安全側とは言い切れない。座席などを下げたロールバーの柱は、柱が"
+                             "全部を持つ足からの片持ちとみる分、大きめに出る (2026-11-05、版 6 の柱: 手計算 297 MPa、"
+                             "ツール 234 MPa)"),
     },
 }
 

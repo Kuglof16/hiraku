@@ -32,10 +32,13 @@ KIND_MODULE = {
     # body
     "body": "body", "fender": "body", "cargo": "body",
 }
-# by id, before the kind: the rear toe links (kind tie_rod) are the rear corners'; the pedals' stands are the pedals'
-ID_MODULE = (("toe_link_", "suspension"), ("stand_pedal", "steering"), ("bracket_column", "frame"))
+# by id, before the kind: the rear toe links (kind tie_rod) are the rear corners'; the pedals' stands are the pedals'.
+# A part is in the module of the variables that place it: the column's bracket and the bulkhead (and the dash members
+# below) move with steering_column_angle, steering_wheel_height and the column's place, so they are steering's
+ID_MODULE = (("toe_link_", "suspension"), ("stand_pedal", "steering"), ("bracket_column", "steering"),
+             ("bulkhead", "steering"))
 
-MEMBER_MODULE = (("rail_", "frame"), ("cross_", "frame"), ("lower_", "frame"), ("tower_", "frame"), ("dash_", "frame"),
+MEMBER_MODULE = (("rail_", "frame"), ("cross_", "frame"), ("lower_", "frame"), ("tower_", "frame"), ("dash_", "steering"),
                  ("pedal_beam", "steering"), ("rollbar_", "occupant"), ("rops_", "occupant"), ("side_", "occupant"),
                  ("grab_", "occupant"))
 
@@ -46,7 +49,8 @@ VARIABLE_MODULE = {
                      "lower_t", "lower_cross", "gusset_leg", "gusset_thickness", "cross_members_through"), "frame"),
     **dict.fromkeys(("wheel_radius", "wheel_width", "front_spring_rate", "rear_spring_rate", "suspension_travel"),
                     "suspension"),
-    **dict.fromkeys(("steering_column_angle", "steering_wheel_height", "max_steer_angle", "pedal_mount"), "steering"),
+    **dict.fromkeys(("steering_column_angle", "steering_wheel_height", "max_steer_angle", "pedal_mount",
+                     "bulkhead_t"), "steering"),
     **dict.fromkeys(("seat_height", "seat_slide", "seat_depth", "rollbar", "rollbar_height", "rollbar_width",
                      "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b", "rollbar_t",
                      "side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t",
@@ -57,7 +61,7 @@ VARIABLE_MODULE = {
     **dict.fromkeys(("motor_peak_power", "motor_peak_torque", "motor_max_speed", "gear_ratio", "battery_capacity",
                      "driveshafts", "battery_split"), "powertrain"),
     **dict.fromkeys(("bumper_stroke", "crush_stiffness", "lamps", "fenders", "fender_front_deg",
-                     "fender_rear_deg", "fender_width", "fender_gap", "floor_t", "deck_t", "bulkhead_t"), "body"),
+                     "fender_rear_deg", "fender_width", "fender_gap", "floor_t", "deck_t"), "body"),
     # the mounts (part_mounts) are welded to the frame: the frame's, whatever they carry (the program management's
     # decision); where they meet the carried module is an interface
     **dict.fromkeys(("mount_floor", "mount_electrics", "mount_seats", "mount_drive"), "frame"),
