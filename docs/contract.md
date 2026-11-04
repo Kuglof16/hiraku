@@ -124,6 +124,7 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 - 役: `designer.<module>` (枠・足まわり・操作系・乗員まわり・動力・車体の設計役) と `packager` (パッケージ役)。ペットは 1 役に 1 匹
 - 1 回の直し (round): (1) まとめ役が、赤の荷重条件の `modules` から、どのモジュールの設計役に渡すかを決める (レイアウトでしか直らない赤はパッケージ役)。(2) 設計役は並べて動き、`revise_design` に `module` を付けて提案する (`design.change_proposed`、data は `module_change`)。自分のモジュールの変数と選択だけを変えられる。(3) パッケージ役が `build_version` で、その回の提案を全部まとめて次の版を作る (`design.created` の `module_changes` に提案を並べる)。パッケージ役は、必要ならレイアウトの変数・空間・取付点も変える。(4) 次の版で、まず段 0 の確かめ (干渉: 止まっているときと動いたときの重なり、部品がモジュールの空間に収まるか、組み立てで入らない部品) をする。モジュールどうしのぶつかりは、パッケージ役に行く
 - 荷重条件に `modules` (その赤を直せるモジュール。builder が付ける)
+- 荷重条件は版ごとに作り直す (基準が版の設計を読むものがあるため。例: 組む部品の数)。2 版目からは `load_cases.created` (data は `version_load_cases`: `design_version` と `load_cases`) を出し、`v00N/load_cases.json` (`layout.VERSION_LOAD_CASES_FILE`) に書く。`project.load_cases` は版 1 のまま
 - 台本の運転: 計画の `revise` の 1 回分を、モジュールごとの提案の並び (`- module: body, choices: …, reason: …`) とパッケージ役の分にする。並べて出た提案を、パッケージ役が 1 つの版にまとめる
 - 画面: 部品をモジュールの色で分けて見せ、1 回の直しで、どのモジュールの設計役が何を変えたかを並べて見せる。ペットはモジュールの設計役ごと
 
