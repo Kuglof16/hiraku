@@ -509,6 +509,27 @@ class CutStoryTest(unittest.TestCase):
             self.assert_larger(got, 1)
             self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
 
+    def test_n02_legend_at_one_and_a_half_times_the_small_text(self):
+        """The legend's words (重心, the red of the case past the limit) and their marks are at
+        least 1.5 x the small text (max(min_text_px, pane.rate.size_px)) and stay in their pane."""
+        L = self.layout
+        small = max(L["min_text_px"], L["n02"]["pane"]["rate"]["size_px"])
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.goto(f"{self.base}/cut.html?cut=n02&run=sample&t=0")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        got = page.evaluate("""() => {
+          const ul = document.querySelector(".n02-legend");
+          const pane = ul.closest(".n02-pane").getBoundingClientRect();
+          return { px: parseFloat(getComputedStyle(ul).fontSize), words: [...ul.querySelectorAll("li span")].map((s) => s.textContent),
+                   marks: [...ul.querySelectorAll("li > svg, li > i")].map((m) => m.getBoundingClientRect().height),
+                   right: Math.max(...[...ul.querySelectorAll("li span")].map((s) => s.getBoundingClientRect().right)), paneRight: pane.right };
+        }""")
+        page.close()
+        self.assertEqual(got["words"], ["重心", "半透明の赤: 限界の外の条件の動き"])
+        self.assertGreaterEqual(got["px"], 1.5 * small)
+        self.assertGreaterEqual(min(got["marks"]), 1.5 * 16)  # the marks grow with the words (16 px the smallest before)
+        self.assertLessEqual(got["right"], got["paneRight"])
+
     def test_n07_fixed_only_when_the_verdict_passes(self):
         """補強の後 says "✓ OK" in green only when the record judges version 2 a pass."""
         swap_to = self.layout["n07"]["times"]["swap_to_s"]

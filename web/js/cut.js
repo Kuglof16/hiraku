@@ -509,6 +509,8 @@ const N02_TESTS = {
   brake: { test: "S4", name: "急ブレーキ" },
 };
 const BEYOND = /-beyond$/;
+// The legend's words and marks, this many times the small text (min_text_px or pane.rate).
+const N02_LEGEND_SCALE = 1.5;
 
 class CutN02 {
   constructor(layout, s) {
@@ -623,16 +625,21 @@ class CutN02 {
     return meetsCriterion(c.lc.criterion, c.ana);
   }
 
+  // The legend pane: the centre of gravity's mark and the red of the case past the limit, at
+  // N02_LEGEND_SCALE x the small text's size (the review of the cut: 18 px read too small).
   legendHtml() {
     const sp = this.spec;
     const st = sp.pane;
-    const cg = `<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fbf9f4" stroke="#1d1d1f" stroke-width="2"/><path d="M11 11 L11 2 A9 9 0 0 1 20 11 Z M11 11 L11 20 A9 9 0 0 1 2 11 Z" fill="#1d1d1f"/></svg>`;
-    const ghost = `<i style="display:inline-block;width:30px;height:16px;background:${sp.overlay.color};opacity:${Math.min(1, sp.overlay.opacity * 2.5)};border-radius:3px"></i>`;
+    const k = N02_LEGEND_SCALE;
+    const px = Math.round(k * Math.max(this.layout.min_text_px, st.rate.size_px));
+    const d = Math.round(22 * k);
+    const cg = `<svg width="${d}" height="${d}" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fbf9f4" stroke="#1d1d1f" stroke-width="2"/><path d="M11 11 L11 2 A9 9 0 0 1 20 11 Z M11 11 L11 20 A9 9 0 0 1 2 11 Z" fill="#1d1d1f"/></svg>`;
+    const ghost = `<i style="display:inline-block;flex:none;width:${Math.round(30 * k)}px;height:${Math.round(16 * k)}px;background:${sp.overlay.color};opacity:${Math.min(1, sp.overlay.opacity * 2.5)};border-radius:3px"></i>`;
     const rows = [
       [cg, "重心"],
       [ghost, "半透明の赤: 限界の外の条件の動き"],
     ];
-    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${Math.max(this.layout.min_text_px, st.rate.size_px)}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
+    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${px}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
   }
 
   resize(scale) {
