@@ -17,7 +17,10 @@ from hiraku.solvers.shelf.load_path import (TOUCH_MM, analyse_load_path, contact
                                             find_contacts, load_path_known_answers)
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 as generated before designgen joined every part in shape (kit/joints.py): its pedals, floors, battery
+# and seats float, the cases these tests are about (tests/solvers/data/offroad-4w-v1-unjoined.json)
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
+JOINED = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 PRED = [{"prediction_id": "pred-0001"}]
 VALUES = dict(hand_force=300.0, foot_force=500.0, accel_vertical=1.0, accel_longitudinal=0.9, accel_lateral=0.7,
               occupant_mass=76.6, occupant_force_lateral=526.0, occupant_force_longitudinal=676.0, push_force=725.0,
@@ -130,6 +133,18 @@ class DemoV1Test(unittest.TestCase):
         _, free = contact_groups(V1, find_contacts(V1, 10.0))
         self.assertGreater(len(self.free), len(free))
         self.assertNotIn("floor", free)
+
+
+class JoinedV1Test(unittest.TestCase):
+    """Version 1 as designgen makes it now (every joint touches): nothing floats, every load kind solves."""
+
+    def test_nothing_floats_and_every_kind_solves(self):
+        _, free = contact_groups(JOINED, find_contacts(JOINED))
+        self.assertEqual(sorted(free), [])
+        for kind in ("hand", "foot", "inertia", "push"):
+            out = analyse_load_path(JOINED, kind, VALUES)
+            self.assertEqual(out["free"], [], kind)
+        self.assertIsNotNone(quantity(analyse_load_path(JOINED, "foot", VALUES), "pedal_deflection"))
 
 
 class ToolRecordTest(unittest.TestCase):
