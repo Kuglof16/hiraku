@@ -35,7 +35,7 @@ import numpy as np
 
 from .capsule import swept_overlap
 from .fastening import part_fastenings
-from .model import TOUCH_MM, WELDED, Body, bodies, corners, shape_overlap
+from .model import TOUCH_MM, WELDED, Body, _inside, bodies, corners, shape_overlap
 from .obb import OBB
 
 DIRECTIONS = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
@@ -64,6 +64,9 @@ STAGES = (("motor", "gearbox", "reducer", "driveshaft", "propshaft", "halfshaft"
 TOOL_OPENING_MM = (200.0, 125.0)
 TOOL_DEPTH_MM = 300.0  # assumption: room for a hand and a short tool in front of what it fastens
 REACH_MM = 606.0  # source: AIST item C3 (above)
+# Fastenings not made by hand with a tool while the vehicle is assembled: a weld between two parts is made when
+# they are built (an arm's ball joint and cross tube welded on its legs), the frame's welds before assembly
+NOT_BY_HAND = ("weld",)
 SIDE_NAMES = {"+z": "above", "-z": "below", "+x": "the front", "-x": "the back", "+y": "the left", "-y": "the right"}
 
 
@@ -331,11 +334,25 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
     extent = np.vstack([b.obb.corners() for b in bs.values()])
     allowed = _step_fields()
     at_node: dict[str, set[str]] = {}
+    welded: dict[str, set[str]] = {}  # a part's id -> the parts welded to it (an arm's legs, cross tube, ball joint)
     for k, b in bs.items():
         if not _frame(b) and b.kind not in NOT_ASSEMBLED:
             for f in part_fastenings(design, k.split(":", 1)[1], bs):
                 if f["to"].startswith("node "):
                     at_node.setdefault(f["to"].split(" ", 1)[1], set()).add(k)
+                elif f["to"].startswith("part ") and f["kind"] == "weld":
+                    other = "part:" + f["to"].split(" ", 1)[1]
+                    welded.setdefault(k, {k}).add(other)
+                    welded.setdefault(other, {other}).add(k)
+    for k in list(welded):  # one welded piece: every part of it
+        group, todo = set(), [k]
+        while todo:
+            x = todo.pop()
+            if x not in group:
+                group.add(x)
+                todo += list(welded.get(x, ()))
+        welded[k] = group
+    at_node.update({f"part {k.split(':', 1)[1]}": v for k, v in welded.items()})
     placed: list[Body] = []
     out: list[dict] = []
 
@@ -480,7 +497,7 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
     sides = [first] + [n for n in PREFERRED if n != first]
     targets = []
     for f in fast:
-        if "at_mm" not in f:
+        if "at_mm" not in f or f.get("kind") in NOT_BY_HAND:
             continue
         skip = {f["owner"]}
         kind, name = f["to"].split(" ", 1)
@@ -489,7 +506,13 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
             skip |= (at_node or {}).get(name, set())
         else:
             skip.add(f"{kind}:{name}")
+            skip |= (at_node or {}).get(f["to"], set())  # the welded piece it is part of (an arm's legs)
+            # the other parts that meet at the same joint (an A-arm's two legs at its ball joint): their rough
+            # boxes and capsules reach the point, as the parts bolted at one node do
+            skip |= {o.id for o in around if o.kind != "member" and _inside(np.asarray(f["at_mm"], float), o)}
         targets.append((f["to"], np.asarray(f["at_mm"], float), skip, {f["owner"]}))
+    if not targets and any(f.get("kind") in NOT_BY_HAND for f in fast):
+        return {"ok": True, "depth": 0.0, "in_way": [], "note": "welded on when it was built (no fastening by hand here)"}
     if not targets:
         b = unit[0]
         reach_out = float(np.sum(b.obb.half * np.abs(b.obb.axes @ d_from)))
