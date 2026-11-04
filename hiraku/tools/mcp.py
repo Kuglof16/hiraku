@@ -87,7 +87,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
                                     "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
-                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。"
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。モジュールに分けた設計では modules (自分のモジュールの変数・近道・空間・取付点と、その回の提案)。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
@@ -130,7 +130,7 @@ DESCRIPTIONS = {
         "sections で要る部分を名前で頼み、大きな部分は絞る (load_cases と formula_inputs は domain か load_case_id、records は "
         "record_kinds と load_case_id、requirements は requirement_keys、archetypes は archetype)。設計を直した版では、最初に "
         "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
-        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
+        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。モジュールに分けた設計では modules (自分のモジュールの変数・近道・空間・取付点と、その回の提案)。要る部分だけを頼む。"
         "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
         "入力を、台本の運転と同じコードがこの版の設計から出した値・単位・出どころ (from) で返す。"
         "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "

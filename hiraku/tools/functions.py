@@ -37,11 +37,11 @@ def _check_input(name: str, args: dict[str, Any]) -> None:
 
 
 def _gate(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None = None) -> None:
-    """HK1-HK3 and HK5 again inside the tool. A call that gets here was not denied by a PreToolUse hook
+    """HK1-HK3, HK5 and HK6 again inside the tool. A call that gets here was not denied by a PreToolUse hook
     (that hook records its own denial and the call never runs), so a denial here is recorded
     once, as hook.denied, the same way: a direct call, a hook that did not run or answered
     allow on an older state (the plugin's hook command is a separate process)."""
-    denial = rules.check_call(ctx, name, args)
+    denial = rules.check_call(ctx, name, args, agent)
     if denial:
         ctx.store.emit("hook.denied", agent=agent or "lead", domain=denial.domain, text=denial.reason,
                        data={"hook": "PreToolUse", "tool": contract.mcp_name(name), "rule": denial.rule,
@@ -69,7 +69,7 @@ def _compact_analysis(a: Record) -> Record:
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "design_choices", "archetypes", "joint_wall_inputs", "formula_inputs")
+                    "design_variables", "design_choices", "archetypes", "joint_wall_inputs", "formula_inputs", "modules")
 DEFAULT_CONTEXT_SECTIONS = ()  # no sections asked: context_overview (counts and ids), every section by name
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
@@ -204,6 +204,7 @@ SECTION_HINTS = {
     "archetypes": "設計の型 (archetype で 1 つに絞れる)",
     "joint_wall_inputs": "つなぎ目の壁の曲げの式の入力 (load_case_id が要る)",
     "formula_inputs": "荷重条件ごとの式の入力 (load_case_id か domain で絞れる)",
+    "modules": "モジュールに分けた設計だけ: 自分のモジュールの変数・近道・空間・取付点と、その回の提案",
 }
 
 
@@ -330,10 +331,41 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "archetypes": kinds,
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, args.get("load_case_id")),
         "formula_inputs": formula_inputs,
+        "modules": lambda: modules_section(ctx, agent),
     }
     for name in wanted:
         out[name] = parts[name]()
     return out
+
+
+MODULES_HOW = ("モジュールの設計役は revise_design に module を付けて、自分のモジュールの variables と choices だけを変える提案を出す "
+               "(版は作らない)。空間 (envelope) と取付点 (interfaces) はパッケージ役が決め、build_version がその回の提案をまとめて次の版にする")
+
+
+def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
+    """For a design with modules: the caller's module (designer.<module>) or every module (others), each with
+    its variables (current values), choices (the values the generator offers), envelope and interfaces, and the
+    round's pending proposals. None for a design without modules."""
+    mods = rules.design_modules(ctx)
+    if mods is None:
+        return None
+    mine = agent.split(".", 1)[1] if agent and agent.startswith("designer.") else None
+    values = {x["name"]: x["value"] for x in design_variables(ctx) or []}
+    offered = (design_choices(ctx) or {}).get("choices") or {}
+
+    def one(m: Record) -> Record:
+        out: Record = {"module_id": m["module_id"], "owner": m["owner"],
+                       "variables": {k: values.get(k) for k in m.get("variables") or []}}
+        if m.get("choices"):
+            out["choices"] = {k: offered.get(k) for k in m["choices"]}
+        out["envelope"] = m.get("envelope") or []
+        if m.get("interfaces"):
+            out["interfaces"] = m["interfaces"]
+        return out
+
+    shown = [mods[mine]] if mine in mods else list(mods.values())
+    return {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m) for m in shown],
+            "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
 
 
 PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
