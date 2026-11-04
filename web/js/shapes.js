@@ -6,7 +6,10 @@
 // beside the motor) is not drawn again inside another part's box.
 // The suspension is drawn from the design's mounting points (support.suspension
 // .hardpoints_mm): its arms and its damper with the spring, where the design puts
-// them (they reach outside the part's box); without the points it is its box.
+// them (they reach outside the part's box); without the points it is its box. A design that
+// lists its arms and dampers as parts (kind link, damper) is drawn from those parts instead
+// (armsFromHardpoints): the arm a tube, the damper a cylinder with its coil, the ball joint a
+// ball, a clevis bracket two plates, each inside its own box.
 // Kinds without a shape here are drawn as their box. Thicknesses of rods and rings
 // (an arm's, a ring's tube) are drawing values, not from the design.
 
@@ -180,11 +183,23 @@ function supportOf(part, design) {
   return best?.s ?? null;
 }
 
+// arms: whether the suspension is drawn from the mounting points (the one place that decides).
+// A design that lists its arms and dampers as parts (kind link or damper; the K2 arms from v5
+// on) is drawn from those parts, and its suspension parts draw nothing of their own (no arm or
+// coil twice). A design without them (the records before) draws the arms and the coil from
+// support.suspension.hardpoints_mm, as before.
+export const REAL_ARM_KINDS = ["link", "damper"];
+export function armsFromHardpoints(design) {
+  return !(design?.parts ?? []).some((p) => REAL_ARM_KINDS.includes(p.kind));
+}
+
 // Suspension from the design's mounting points (ISO mm, the design's frame): each wishbone
 // from its two inner points to its outer one (lca_*, uca_*), and the damper from
 // damper_lower to damper_upper with its spring round it. A pair that is not in the points
-// is not drawn; with none of them the part is its box (null).
+// is not drawn; with none of them the part is its box (null). With the arms as parts
+// (armsFromHardpoints false): nothing ([]).
 function suspension(size, center, part, design) {
+  if (!armsFromHardpoints(design)) return [];
   const hp = supportOf(part, design)?.suspension?.hardpoints_mm;
   if (!hp) return null;
   const local = (name) => (Array.isArray(hp[name]) ? hp[name].map((v, i) => v - center[i]) : null);
@@ -214,7 +229,95 @@ function suspension(size, center, part, design) {
   return out.length ? out : null;
 }
 
+// ---- the suspension's own parts (kind link, damper, ball_joint, a clevis bracket) ----------
+// Each one shape in its box's local frame (centre at 0; the caller turns it by rpy_deg, ZYX),
+// never outside the box, its axis the box's longest side. geometry.userData.shape names the
+// shape and userData.axis the box side it runs along (0 x, 1 y, 2 z), for the tests.
+
+// Turn a geometry built along local y onto box side k.
+function alongSide(geo, k) {
+  if (k === 0) geo.rotateZ(-Math.PI / 2);
+  else if (k === 2) geo.rotateX(Math.PI / 2);
+  return geo;
+}
+
+const longSide = (size) => size.indexOf(Math.max(...size));
+
+// link: a round tube from end to end of the box's longest side, its diameter the smaller of the other two.
+function tube(size) {
+  const k = longSide(size);
+  const r = Math.min(...size.filter((_, i) => i !== k)) / 2;
+  const g = alongSide(new THREE.CylinderGeometry(r, r, size[k], 16), k);
+  Object.assign(g.userData, { shape: "tube", axis: k, r });
+  return [{ geo: g, sub: null }];
+}
+
+// damper: the cylinder (the body over 0.55 of the length, the piston rod the rest; one turned
+// profile) and the coil spring round it (a helix whose outside is the box's half width), both
+// along the longest side. The shares, the wire and the turns are drawing values.
+export const DAMPER = { body_share: 0.55, body_r: 0.5, rod_r: 0.18, wire: 0.13, coil_from: 0.12, coil_to: 0.92, pitch: 0.9 };
+function damper(size) {
+  const k = longSide(size);
+  const L = size[k];
+  const half = Math.min(...size.filter((_, i) => i !== k)) / 2;
+  const rb = half * DAMPER.body_r;
+  const rr = half * DAMPER.rod_r;
+  const y0 = -L / 2;
+  const y1 = y0 + DAMPER.body_share * L;
+  const prof = [[0, y0], [rb, y0], [rb, y1], [rr, y1], [rr, L / 2], [0, L / 2]].map(([x, y]) => new THREE.Vector2(x, y));
+  const body = alongSide(new THREE.LatheGeometry(prof, 24), k);
+  Object.assign(body.userData, { shape: "damper_body", axis: k });
+  const wire = Math.max(1, half * DAMPER.wire);
+  const rc = half - wire;
+  const a = y0 + DAMPER.coil_from * L;
+  const b = y0 + DAMPER.coil_to * L;
+  const turns = Math.max(4, Math.round((b - a) / (half * DAMPER.pitch)));
+  class Helix extends THREE.Curve {
+    getPoint(t, out = new THREE.Vector3()) {
+      const ang = 2 * Math.PI * turns * t;
+      return out.set(rc * Math.cos(ang), a + (b - a) * t, rc * Math.sin(ang));
+    }
+  }
+  const coil = alongSide(new THREE.TubeGeometry(new Helix(), turns * 24, wire, 6, false), k);
+  Object.assign(coil.userData, { shape: "coil", axis: k, turns });
+  return [{ geo: body, sub: "damper" }, { geo: coil, sub: "spring" }];
+}
+
+// ball_joint: a ball inscribed in the box.
+function ball(size) {
+  const g = new THREE.SphereGeometry(Math.min(...size) / 2, 20, 14);
+  Object.assign(g.userData, { shape: "ball" });
+  return [{ geo: g, sub: null }];
+}
+
+// A clevis among the brackets: the data has no field for it; its name (or id) says so
+// ("… (クレビス、溶接)" in the K2 arms' design). Drawn as two parallel plates at the two ends of
+// the box's longest side (the pin goes along that side, through both), the gap between them;
+// each plate CLEVIS_PLATE of the longest side thick (at least 2 mm), a drawing value.
+export const CLEVIS = /クレビス|clevis/i;
+export const CLEVIS_PLATE = 0.22;
+export const isClevis = (part) => part?.kind === "bracket" && (CLEVIS.test(part.name ?? "") || CLEVIS.test(part.id ?? ""));
+function clevis(size) {
+  const k = longSide(size);
+  const t = Math.max(2, CLEVIS_PLATE * size[k]);
+  const dims = [...size];
+  dims[k] = t;
+  const plates = [-1, 1].map((s) => {
+    const off = [0, 0, 0];
+    off[k] = s * (size[k] / 2 - t / 2);
+    return new THREE.BoxGeometry(...dims).translate(...off);
+  });
+  const g = mergeGeometries(plates, false);
+  for (const p of plates) p.dispose();
+  Object.assign(g.userData, { shape: "clevis", axis: k, plate_mm: t, gap_mm: size[k] - 2 * t });
+  return [{ geo: g, sub: null }];
+}
+
 const SHAPES = {
+  link: tube,
+  damper,
+  ball_joint: ball,
+  bracket: (size, center, part) => (isClevis(part) ? clevis(size) : null),
   seat,
   steering,
   battery,

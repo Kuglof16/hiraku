@@ -43,6 +43,7 @@ REPORT_RUN = "20261102-205000-report"  # the sample with a report (test_cut_n17_
 ASSEMBLY = "20261102-206000-assembly"  # the sample with an assembly order (test_assembly_browser)
 HELD = "20261104-200000-held"  # held: a load case without a criterion counting 206 (tests.web.held_fixture)
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
+JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
 
 READY = "window.hiraku && window.hiraku.ready"
 
@@ -75,6 +76,8 @@ SCREENS = (
     Screen("報告", f"cut.html?cut=n17&run={REPORT_RUN}&t=8.7"),
     Screen("ツールの棚", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6"),
     Screen("組み立て", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6"),
+    Screen("作業台 (接合)", f"?run={JOINTS}&tab=bench&pace=0&t=1e6&on=joints"),  # joints: the toggle 接合 on, its legend
+    Screen("組み立て (接合)", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6&on=joints"),  # joints: A7's own 接合 switch and legend
     Screen("見せる", f"?run={DOMAINS}&present=1&pace=0&t=1e6"),
     # held: the 保留 bands
     Screen("全分野 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
@@ -100,6 +103,7 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.domains_fixture import domain_events
     from tests.web.test_assembly_browser import assembly_events
     from tests.web.test_cut_n17_browser import REPORT, report_events
+    from tests.web.test_joints_browser import joints_events  # joints:
 
     sample = lambda: [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
     # the runs in runs/ with the longest want of the repository's requirements files, as a run started
@@ -126,6 +130,7 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     _write_run(runs, HELD, held_events())
     from tests.web.modules_fixture import module_events  # modules:
     _write_run(runs, MODULES, module_events())
+    _write_run(runs, JOINTS, joints_events())  # joints:
     return runs, saved
 
 
