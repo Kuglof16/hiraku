@@ -107,6 +107,16 @@ class ArmsTest(unittest.TestCase):
         finally:
             arms.BALL_JOINT_KG = orig
 
+    def test_the_damper_bracket_misses_the_tower_post_on_a_wide_track(self):
+        # track 1200 mm with 140 mm wheels: the tower arm to the damper top is short and the bracket's full
+        # inboard reach went 3.55 mm into the tower's post; it is cut back until K4 allows it
+        d = ladder_4w.build({"track": {"value": 1200.0, "unit": "mm"}, "wheel_width": {"value": 140.0, "unit": "mm"}})
+        hits = [h for h in interferences(d) if "bracket_damper" in h[0] + h[1]]
+        self.assertEqual(hits, [])
+        for sid in ("RL", "RR"):
+            b = next(p for p in d["parts"] if p["id"] == f"bracket_damper_{sid}")
+            self.assertGreater(b["box"]["size_mm"][1], arms.NODE_TOL_MM + 20.0)  # still a clevis round the eye
+
     def test_tube_mass(self):
         # a 1 m tube 25.4 x 2.0 of steel 7850 kg/m^3: pi (d - t) t L rho
         self.assertAlmostEqual(arms.tube_mass(1000.0, 25.4, 2.0, 7850.0), np.pi * 23.4 * 2.0 * 7850e-6, places=12)
