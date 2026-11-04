@@ -363,7 +363,8 @@ class WithTheOtherRulesTest(unittest.TestCase):
             rec = self.run_all(without(self.design, *gone))[rid]
             self.assertEqual(sorted(hit_ids(rec)), sorted(expected), rid)
             self.assertLessEqual(set(hit_ids(rec)), set(rec["targets"]), rid)
-        others = self.run_all(without(self.moved(self.design, near=True), "pedal_brake"))
+        # the pedal's pushrod (designgen kit/joints) goes with it: left alone it would hang on the master cylinder only
+        others = self.run_all(without(self.moved(self.design, near=True), "pedal_brake", "pushrod_brake"))
         self.assertTrue(all(r["pass"] for rid, r in others.items() if rid != "SY-03"))
 
     def test_the_demo_vehicle_without_links_cannot_be_followed(self):

@@ -738,19 +738,19 @@
       "system": "battery",
       "connects_to": [
         {
-          "to": "floor",
-          "via": "bolt",
-          "carries": "load",
-          "at_mm": [
-            -1045.0,
-            0.0,
-            430.0
-          ]
-        },
-        {
           "to": "main_switch",
           "via": "wire",
           "carries": "power"
+        },
+        {
+          "to": "fit_battery_cross_S1",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -795.0,
+            0.0,
+            380.0
+          ]
         }
       ],
       "module": "powertrain"
@@ -829,13 +829,13 @@
           ]
         },
         {
-          "to": "reducer",
-          "via": "spline",
+          "to": "fit_motor_cross_B",
+          "via": "bolt",
           "carries": "load",
           "at_mm": [
             -1940.0,
             0.0,
-            268.0
+            378.0
           ]
         }
       ],
@@ -987,13 +987,13 @@
       "system": "body",
       "connects_to": [
         {
-          "to": "floor",
+          "to": "fit_floor_front_rail_L_AS1",
           "via": "bolt",
           "carries": "load",
           "at_mm": [
-            -770.0,
-            0.0,
-            431.6
+            -527.5,
+            350.0,
+            430.0
           ]
         }
       ],
@@ -1089,18 +1089,13 @@
           ]
         },
         {
-          "to": "pushrod_brake",
-          "via": "pin",
+          "to": "fit_pedal_brake_tower_post_RA2",
+          "via": "bolt",
           "carries": "load",
           "at_mm": [
             -339.364,
-            -220.0,
+            -260.0,
             499.74
-          ],
-          "axis": [
-            0.0,
-            1.0,
-            0.0
           ]
         }
       ],
@@ -1448,16 +1443,6 @@
             0.0,
             1.0,
             0.0
-          ]
-        },
-        {
-          "to": "bracket_column",
-          "via": "bolt",
-          "carries": "steer",
-          "at_mm": [
-            -259.765,
-            -300.0,
-            841.436
           ]
         },
         {
@@ -5982,23 +5967,23 @@
       "system": "rops",
       "connects_to": [
         {
-          "to": "rollbar_post_L",
+          "to": "LH",
           "via": "weld",
           "carries": "load",
           "at_mm": [
             -1400.0,
-            600.0,
-            1771.85
+            350.0,
+            380.0
           ]
         },
         {
-          "to": "rollbar_post_R",
+          "to": "RH",
           "via": "weld",
           "carries": "load",
           "at_mm": [
             -1400.0,
-            -600.0,
-            1771.85
+            -350.0,
+            380.0
           ]
         }
       ],
@@ -6330,6 +6315,46 @@
       "module": "steering"
     },
     {
+      "id": "fit_battery_cross_S1",
+      "name": "電池 (LiFePO4 51.2 V 100 Ah) の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "LS1",
+        "RS1"
+      ],
+      "box": {
+        "center_mm": [
+          -792.5,
+          0.0,
+          380.0
+        ],
+        "size_mm": [
+          5.0,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.004439070419522378,
+      "connects_to": [
+        {
+          "to": "cross_S1",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -790.0,
+            0.0,
+            380.0
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
       "id": "fit_main_switch_rail_L_AS1",
       "name": "電池の主スイッチ (遮断) の金具",
       "kind": "bracket",
@@ -6364,6 +6389,46 @@
             -570.0,
             330.0,
             350.0
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_motor_cross_B",
+      "name": "モーター の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "LB",
+        "RB"
+      ],
+      "box": {
+        "center_mm": [
+          -1970.0,
+          0.0,
+          378.0
+        ],
+        "size_mm": [
+          60.0,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          180.0
+        ]
+      },
+      "mass_kg": 0.05326884503426854,
+      "connects_to": [
+        {
+          "to": "cross_B",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -2000.0,
+            -0.0,
+            380.0
           ]
         }
       ],
@@ -6490,6 +6555,46 @@
       "module": "frame"
     },
     {
+      "id": "fit_floor_front_rail_L_AS1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "LAp2",
+        "LS1"
+      ],
+      "box": {
+        "center_mm": [
+          -527.5,
+          350.0,
+          425.0
+        ],
+        "size_mm": [
+          10.0,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+        {
+          "to": "rail_L_AS1",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -527.5,
+            350.0,
+            420.0
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
       "id": "fit_pedal_accel_tower_post_RA2",
       "name": "アクセルのペダル の金具",
       "kind": "bracket",
@@ -6523,6 +6628,46 @@
           "at_mm": [
             -300.0,
             -350.0,
+            491.5
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_pedal_brake_tower_post_RA2",
+      "name": "ブレーキのペダル の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "RAp2",
+        "RAt2"
+      ],
+      "box": {
+        "center_mm": [
+          -319.68199399802495,
+          -297.5,
+          499.74017334403584
+        ],
+        "size_mm": [
+          84.70255929399747,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -62.30712243716878
+        ]
+      },
+      "mass_kg": 0.07520012508396488,
+      "connects_to": [
+        {
+          "to": "tower_post_RA2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -300.0,
+            -335.0,
             491.5
           ]
         }
@@ -7878,7 +8023,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "LH"
         },
         {
@@ -7905,7 +8050,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "RH"
         },
         {
@@ -8189,14 +8334,14 @@
         {
           "id": "if-061",
           "between": [
-            "body",
+            "frame",
             "powertrain"
           ],
           "via": "bolt",
           "point_mm": [
-            -1045.0,
+            -918.75,
             0.0,
-            380.8
+            355.0
           ]
         },
         {
@@ -8220,13 +8365,26 @@
           ],
           "via": "bolt",
           "point_mm": [
+            -1892.5,
+            0.0,
+            323.0
+          ]
+        },
+        {
+          "id": "if-064",
+          "between": [
+            "frame",
+            "powertrain"
+          ],
+          "via": "bolt",
+          "point_mm": [
             -2020.0,
             0.0,
             311.5
           ]
         },
         {
-          "id": "if-064",
+          "id": "if-065",
           "between": [
             "frame",
             "powertrain"
@@ -8239,7 +8397,7 @@
           ]
         },
         {
-          "id": "if-065",
+          "id": "if-066",
           "between": [
             "frame",
             "powertrain"
@@ -8252,7 +8410,20 @@
           ]
         },
         {
-          "id": "if-066",
+          "id": "if-067",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -534.1944124836293,
+            175.0,
+            428.3
+          ]
+        },
+        {
+          "id": "if-068",
           "between": [
             "powertrain",
             "steering"
@@ -8265,7 +8436,7 @@
           ]
         },
         {
-          "id": "if-067",
+          "id": "if-069",
           "between": [
             "frame",
             "steering"
@@ -8278,42 +8449,16 @@
           ]
         },
         {
-          "id": "if-068",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            135.0,
-            396.01804619280597
-          ]
-        },
-        {
-          "id": "if-069",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            -355.0,
-            396.01804619280597
-          ]
-        },
-        {
           "id": "if-070",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -1170.0,
-            135.0,
-            396.01804619280597
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
           ]
         },
         {
@@ -8324,13 +8469,52 @@
           ],
           "via": "hose",
           "point_mm": [
+            -160.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-072",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -160.0,
+            -355.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-073",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1170.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-074",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
             -1170.0,
             -355.0,
             396.01804619280597
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-075",
           "between": [
             "body",
             "steering"
@@ -8343,7 +8527,7 @@
           ]
         },
         {
-          "id": "if-073",
+          "id": "if-076",
           "between": [
             "body",
             "frame"
@@ -8356,7 +8540,7 @@
           ]
         },
         {
-          "id": "if-074",
+          "id": "if-077",
           "between": [
             "body",
             "frame"
@@ -8369,7 +8553,7 @@
           ]
         },
         {
-          "id": "if-075",
+          "id": "if-078",
           "between": [
             "frame",
             "steering"
@@ -8382,7 +8566,7 @@
           ]
         },
         {
-          "id": "if-076",
+          "id": "if-079",
           "between": [
             "frame",
             "steering"
@@ -8395,7 +8579,7 @@
           ]
         },
         {
-          "id": "if-077",
+          "id": "if-080",
           "between": [
             "frame",
             "steering"
@@ -8408,7 +8592,7 @@
           ]
         },
         {
-          "id": "if-078",
+          "id": "if-081",
           "between": [
             "steering",
             "suspension"
@@ -8421,7 +8605,7 @@
           ]
         },
         {
-          "id": "if-079",
+          "id": "if-082",
           "between": [
             "steering",
             "suspension"
@@ -8434,7 +8618,7 @@
           ]
         },
         {
-          "id": "if-080",
+          "id": "if-083",
           "between": [
             "body",
             "occupant"
@@ -8447,7 +8631,7 @@
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-084",
           "between": [
             "body",
             "occupant"
@@ -8460,7 +8644,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-085",
           "between": [
             "frame",
             "suspension"
@@ -8473,7 +8657,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -8486,7 +8670,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -8499,7 +8683,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -8512,7 +8696,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -8525,7 +8709,7 @@
           ]
         },
         {
-          "id": "if-087",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -8538,7 +8722,7 @@
           ]
         },
         {
-          "id": "if-088",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -8551,7 +8735,7 @@
           ]
         },
         {
-          "id": "if-089",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -8564,7 +8748,7 @@
           ]
         },
         {
-          "id": "if-090",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -8577,7 +8761,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -8590,7 +8774,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -8603,7 +8787,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -8616,7 +8800,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -8629,7 +8813,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -8642,7 +8826,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -8655,7 +8839,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -8668,7 +8852,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -8681,7 +8865,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -8694,7 +8878,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -8707,7 +8891,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -8720,7 +8904,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -8733,7 +8917,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -9657,6 +9841,18 @@
         },
         {
           "center_mm": [
+            -792.5,
+            0.0,
+            380.0
+          ],
+          "size_mm": [
+            55.0,
+            70.0,
+            70.0
+          ]
+        },
+        {
+          "center_mm": [
             -580.0,
             280.0,
             340.0
@@ -9664,6 +9860,18 @@
           "size_mm": [
             70.0,
             150.0,
+            70.0
+          ]
+        },
+        {
+          "center_mm": [
+            -1970.0,
+            0.0,
+            378.0
+          ],
+          "size_mm": [
+            110.0,
+            70.0,
             70.0
           ]
         },
@@ -9705,6 +9913,18 @@
         },
         {
           "center_mm": [
+            -527.5,
+            350.0,
+            425.0
+          ],
+          "size_mm": [
+            70.0,
+            70.0,
+            60.0
+          ]
+        },
+        {
+          "center_mm": [
             -319.68199399802495,
             -350.0,
             499.74017334403584
@@ -9712,6 +9932,18 @@
           "size_mm": [
             89.3639879960499,
             70.0,
+            70.0
+          ]
+        },
+        {
+          "center_mm": [
+            -319.68199399802495,
+            -297.5,
+            499.74017334403584
+          ],
+          "size_mm": [
+            107.07301606441774,
+            134.29463957739927,
             70.0
           ]
         },
@@ -10053,7 +10285,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "LH"
         },
         {
@@ -10080,7 +10312,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "RH"
         },
         {
@@ -10362,6 +10594,19 @@
           ]
         },
         {
+          "id": "if-061",
+          "between": [
+            "frame",
+            "powertrain"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -918.75,
+            0.0,
+            355.0
+          ]
+        },
+        {
           "id": "if-062",
           "between": [
             "frame",
@@ -10382,13 +10627,26 @@
           ],
           "via": "bolt",
           "point_mm": [
+            -1892.5,
+            0.0,
+            323.0
+          ]
+        },
+        {
+          "id": "if-064",
+          "between": [
+            "frame",
+            "powertrain"
+          ],
+          "via": "bolt",
+          "point_mm": [
             -2020.0,
             0.0,
             311.5
           ]
         },
         {
-          "id": "if-064",
+          "id": "if-065",
           "between": [
             "frame",
             "powertrain"
@@ -10401,7 +10659,7 @@
           ]
         },
         {
-          "id": "if-065",
+          "id": "if-066",
           "between": [
             "frame",
             "powertrain"
@@ -10416,6 +10674,19 @@
         {
           "id": "if-067",
           "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -534.1944124836293,
+            175.0,
+            428.3
+          ]
+        },
+        {
+          "id": "if-069",
+          "between": [
             "frame",
             "steering"
           ],
@@ -10427,7 +10698,20 @@
           ]
         },
         {
-          "id": "if-073",
+          "id": "if-070",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
+          ]
+        },
+        {
+          "id": "if-076",
           "between": [
             "body",
             "frame"
@@ -10440,7 +10724,7 @@
           ]
         },
         {
-          "id": "if-074",
+          "id": "if-077",
           "between": [
             "body",
             "frame"
@@ -10453,7 +10737,7 @@
           ]
         },
         {
-          "id": "if-075",
+          "id": "if-078",
           "between": [
             "frame",
             "steering"
@@ -10466,7 +10750,7 @@
           ]
         },
         {
-          "id": "if-076",
+          "id": "if-079",
           "between": [
             "frame",
             "steering"
@@ -10479,7 +10763,7 @@
           ]
         },
         {
-          "id": "if-077",
+          "id": "if-080",
           "between": [
             "frame",
             "steering"
@@ -10492,7 +10776,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-085",
           "between": [
             "frame",
             "suspension"
@@ -10505,7 +10789,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -10518,7 +10802,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -10531,7 +10815,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -10544,7 +10828,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -10557,7 +10841,7 @@
           ]
         },
         {
-          "id": "if-087",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -10570,7 +10854,7 @@
           ]
         },
         {
-          "id": "if-088",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -10583,7 +10867,7 @@
           ]
         },
         {
-          "id": "if-089",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -10596,7 +10880,7 @@
           ]
         },
         {
-          "id": "if-090",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -10609,7 +10893,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -10622,7 +10906,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -10635,7 +10919,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -10648,7 +10932,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -10661,7 +10945,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -10674,7 +10958,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -10687,7 +10971,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -10700,7 +10984,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -10713,7 +10997,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -10726,7 +11010,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -10739,7 +11023,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -10752,7 +11036,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -10765,7 +11049,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -11619,45 +11903,6 @@
           ]
         },
         {
-          "id": "if-068",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            135.0,
-            396.01804619280597
-          ]
-        },
-        {
-          "id": "if-069",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            -355.0,
-            396.01804619280597
-          ]
-        },
-        {
-          "id": "if-070",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -1170.0,
-            135.0,
-            396.01804619280597
-          ]
-        },
-        {
           "id": "if-071",
           "between": [
             "steering",
@@ -11665,13 +11910,52 @@
           ],
           "via": "hose",
           "point_mm": [
+            -160.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-072",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -160.0,
+            -355.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-073",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1170.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-074",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
             -1170.0,
             -355.0,
             396.01804619280597
           ]
         },
         {
-          "id": "if-078",
+          "id": "if-081",
           "between": [
             "steering",
             "suspension"
@@ -11684,7 +11968,7 @@
           ]
         },
         {
-          "id": "if-079",
+          "id": "if-082",
           "between": [
             "steering",
             "suspension"
@@ -11697,7 +11981,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-085",
           "between": [
             "frame",
             "suspension"
@@ -11710,7 +11994,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -11723,7 +12007,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -11736,7 +12020,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -11749,7 +12033,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -11762,7 +12046,7 @@
           ]
         },
         {
-          "id": "if-087",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -11775,7 +12059,7 @@
           ]
         },
         {
-          "id": "if-088",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -11788,7 +12072,7 @@
           ]
         },
         {
-          "id": "if-089",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -11801,7 +12085,7 @@
           ]
         },
         {
-          "id": "if-090",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -11814,7 +12098,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -11827,7 +12111,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -11840,7 +12124,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -11853,7 +12137,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -11866,7 +12150,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -11879,7 +12163,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -11892,7 +12176,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -11905,7 +12189,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -11918,7 +12202,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -11931,7 +12215,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -11944,7 +12228,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -11957,7 +12241,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -11970,7 +12254,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -12174,7 +12458,7 @@
           "node": "RAu2"
         },
         {
-          "id": "if-066",
+          "id": "if-068",
           "between": [
             "powertrain",
             "steering"
@@ -12187,7 +12471,7 @@
           ]
         },
         {
-          "id": "if-067",
+          "id": "if-069",
           "between": [
             "frame",
             "steering"
@@ -12200,42 +12484,16 @@
           ]
         },
         {
-          "id": "if-068",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            135.0,
-            396.01804619280597
-          ]
-        },
-        {
-          "id": "if-069",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -160.0,
-            -355.0,
-            396.01804619280597
-          ]
-        },
-        {
           "id": "if-070",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -1170.0,
-            135.0,
-            396.01804619280597
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
           ]
         },
         {
@@ -12246,13 +12504,52 @@
           ],
           "via": "hose",
           "point_mm": [
+            -160.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-072",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -160.0,
+            -355.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-073",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1170.0,
+            135.0,
+            396.01804619280597
+          ]
+        },
+        {
+          "id": "if-074",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
             -1170.0,
             -355.0,
             396.01804619280597
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-075",
           "between": [
             "body",
             "steering"
@@ -12265,7 +12562,7 @@
           ]
         },
         {
-          "id": "if-075",
+          "id": "if-078",
           "between": [
             "frame",
             "steering"
@@ -12278,7 +12575,7 @@
           ]
         },
         {
-          "id": "if-076",
+          "id": "if-079",
           "between": [
             "frame",
             "steering"
@@ -12291,7 +12588,7 @@
           ]
         },
         {
-          "id": "if-077",
+          "id": "if-080",
           "between": [
             "frame",
             "steering"
@@ -12304,7 +12601,7 @@
           ]
         },
         {
-          "id": "if-078",
+          "id": "if-081",
           "between": [
             "steering",
             "suspension"
@@ -12317,7 +12614,7 @@
           ]
         },
         {
-          "id": "if-079",
+          "id": "if-082",
           "between": [
             "steering",
             "suspension"
@@ -12869,7 +13166,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "LH"
         },
         {
@@ -12896,7 +13193,7 @@
             "frame",
             "occupant"
           ],
-          "via": "bolt",
+          "via": "weld",
           "node": "RH"
         },
         {
@@ -12918,7 +13215,7 @@
           "node": "RHT"
         },
         {
-          "id": "if-080",
+          "id": "if-083",
           "between": [
             "body",
             "occupant"
@@ -12931,7 +13228,7 @@
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-084",
           "between": [
             "body",
             "occupant"
@@ -13123,14 +13420,14 @@
         {
           "id": "if-061",
           "between": [
-            "body",
+            "frame",
             "powertrain"
           ],
           "via": "bolt",
           "point_mm": [
-            -1045.0,
+            -918.75,
             0.0,
-            380.8
+            355.0
           ]
         },
         {
@@ -13154,13 +13451,26 @@
           ],
           "via": "bolt",
           "point_mm": [
+            -1892.5,
+            0.0,
+            323.0
+          ]
+        },
+        {
+          "id": "if-064",
+          "between": [
+            "frame",
+            "powertrain"
+          ],
+          "via": "bolt",
+          "point_mm": [
             -2020.0,
             0.0,
             311.5
           ]
         },
         {
-          "id": "if-064",
+          "id": "if-065",
           "between": [
             "frame",
             "powertrain"
@@ -13173,7 +13483,7 @@
           ]
         },
         {
-          "id": "if-065",
+          "id": "if-066",
           "between": [
             "frame",
             "powertrain"
@@ -13186,7 +13496,7 @@
           ]
         },
         {
-          "id": "if-066",
+          "id": "if-068",
           "between": [
             "powertrain",
             "steering"
@@ -13454,20 +13764,20 @@
           "node": "RDT"
         },
         {
-          "id": "if-061",
+          "id": "if-067",
           "between": [
             "body",
-            "powertrain"
+            "frame"
           ],
           "via": "bolt",
           "point_mm": [
-            -1045.0,
-            0.0,
-            380.8
+            -534.1944124836293,
+            175.0,
+            428.3
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-075",
           "between": [
             "body",
             "steering"
@@ -13480,7 +13790,7 @@
           ]
         },
         {
-          "id": "if-073",
+          "id": "if-076",
           "between": [
             "body",
             "frame"
@@ -13493,7 +13803,7 @@
           ]
         },
         {
-          "id": "if-074",
+          "id": "if-077",
           "between": [
             "body",
             "frame"
@@ -13506,7 +13816,7 @@
           ]
         },
         {
-          "id": "if-080",
+          "id": "if-083",
           "between": [
             "body",
             "occupant"
@@ -13519,7 +13829,7 @@
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-084",
           "between": [
             "body",
             "occupant"

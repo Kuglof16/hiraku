@@ -61,8 +61,32 @@ def _gap(design: dict, bs, pid: str, to: str) -> float | None:
 FIXED_KINDS = ("body", "frame", "gusset", "rollbar", "bracket")
 
 
-def _touching_fixed_part(bs, pid: str, near) -> str | None:
-    """A fixed part (FIXED_KINDS: a sheet of the body, a piece of the frame) the part touches, nearest `near`."""
+def _anchored(design: dict) -> set[str]:
+    """Parts fastened to the frame by fixed joints (not moving ones), directly to a member or through parts that
+    are: they can hold others. A joint to a node does not count (it may still be one of the far ones)."""
+    frame = {m["id"] for m in design.get("members", [])}
+    fixed = {p["id"]: {c["to"] for c in p.get("connects_to") or [] if c.get("via") not in MOVING_VIA + NOT_TOUCHING_VIA}
+             for p in design["parts"]}
+    out = {pid for pid, to in fixed.items() if to & frame}
+    grew = True
+    while grew:
+        grew = False
+        for pid, to in fixed.items():
+            if pid not in out and to & out:
+                out.add(pid)
+                grew = True
+    return out
+
+
+def owns_members(design: dict) -> set[str]:
+    """Parts that are pieces of the frame made of members (the roll bar: members with part = its id): their joints
+    are the members' welds at the nodes, not their box's."""
+    return {m.get("part") for m in design.get("members", [])} & {p["id"] for p in design["parts"]}
+
+
+def _touching_fixed_part(bs, pid: str, near, anchored: set[str] | None = None) -> str | None:
+    """A fixed part (FIXED_KINDS: a sheet of the body, a piece of the frame, a bracket) the part touches, nearest
+    `near`, that is itself fastened to the frame (`anchored`): two sheets resting on each other hold nothing."""
     from hiraku.solvers.k4_geometry.model import shape_overlap
 
     me = bs[f"part:{pid}"]
@@ -70,6 +94,8 @@ def _touching_fixed_part(bs, pid: str, near) -> str | None:
     best = None
     for k, b in bs.items():
         if b.kind not in FIXED_KINDS or k == f"part:{pid}":
+            continue
+        if anchored is not None and k.split(":", 1)[1] not in anchored:
             continue
         if float(np.linalg.norm(b.obb.center - me.obb.center)) > r_me + float(np.linalg.norm(b.obb.half)) + JOINT_GAP_MM:
             continue
@@ -139,6 +165,8 @@ HOLDER_ID = {"steering_column": "bracket_column", "pedal_brake": "stand_pedal_br
              "steering_rack": ("bracket_tie_FL", "bracket_tie_FR")}
 # links that move (a pin or a spline between two parts) are not bridged by a fixed strut: a gap there is the layout's
 MOVING_VIA = ("pin", "spline", "ball_joint")
+# parts carried at their two ends by moving joints (SY-10's shaft rule): the rest need a fixed joint to the frame
+ENDS_HELD_KINDS = ("steering", "steering_shaft", "driveshaft", "pushrod", "tie_rod", "link")
 
 
 def closest(body, x: np.ndarray) -> np.ndarray:
@@ -233,15 +261,18 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
                 continue
             near = nodes.get(c["to"], me.obb.center)
             # the frame member it touches, else a fixed part it rests on (a seat on the floor sheet)
-            mem = _touching_member(bs, p["id"], near) or _touching_fixed_part(bs, p["id"], near)
+            mem = _touching_member(bs, p["id"], near) or _touching_fixed_part(bs, p["id"], near, _anchored(design))
             if mem is not None:
                 if all(x["to"] != mem for x in kept):
                     kept.append(dict(c, to=mem))
                 n_re += 1
                 continue
             far.append((g, c))
-        # held: a fixed joint, or a shaft's pin or spline at its ends; a ball joint to a moving link does not hold
-        touching = any(x.get("via") not in NOT_TOUCHING_VIA + ("ball_joint",) for x in kept)
+        # held: a fixed joint; a pin or a spline holds only a part carried at its ends (a shaft, a rod, the steering
+        # wheel on its column); a ball joint to a moving link holds nothing
+        ends_held = p["kind"] in ENDS_HELD_KINDS
+        touching = any(x.get("via") not in NOT_TOUCHING_VIA + ("ball_joint",)
+                       and (ends_held or x.get("via") not in MOVING_VIA) for x in kept)
         held = bool(holders) and any(x["to"] in holders for x in kept)
         dropped_here = False
         for g, c in far:
@@ -372,6 +403,7 @@ def annotate(design: dict) -> int:
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     sups = {s["id"]: np.asarray(s["position_mm"], float) for s in design.get("supports", [])}
     n = 0
+    own = owns_members(design)
     for p in design["parts"]:
         me = bs.get(f"part:{p['id']}")
         for c in p.get("connects_to") or []:
@@ -380,7 +412,9 @@ def annotate(design: dict) -> int:
             if "at_mm" not in c:
                 to = c["to"]
                 pt = nodes.get(to, sups.get(to))
-                if pt is not None:
+                if pt is not None and p["id"] in own:
+                    at = pt  # a frame piece of members (the roll bar): its tubes are welded at the node
+                elif pt is not None:
                     a = closest(me, pt)
                     at = (a + pt) / 2.0
                 else:
@@ -436,6 +470,8 @@ def join(design: dict) -> dict:
     mnt = mounts(design)
     brg = bearing(design)
     fen = fenders(design)
-    done = retarget_and_bridge(design, {p["id"] for p in design["parts"] if p["kind"] not in ("occupant",)})
+    own = owns_members(design)
+    done = retarget_and_bridge(design, {p["id"] for p in design["parts"] if p["kind"] not in ("occupant",)
+                                        and p["id"] not in own})
     done["at_mm"] = annotate(design)
     return {"added": [x for x in (brg, rod) if x], "fenders": fen, "occupants": occ, "mounts": mnt, **done}

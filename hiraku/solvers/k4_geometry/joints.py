@@ -38,6 +38,11 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     supports = {s["id"]: np.asarray(s["position_mm"], float) for s in design.get("supports", [])}
     gaps, unjoined, n, missing_at = [], [], 0, []
+    # a part made of members (the roll bar: members whose part is its id) is its tubes, not its box
+    tubes: dict[str, list[Body]] = {}
+    for m in design.get("members", []):
+        if m.get("part") and f"member:{m['id']}" in bs:
+            tubes.setdefault(m["part"], []).append(bs[f"member:{m['id']}"])
     for p in design.get("parts", []):
         me = bs.get(f"part:{p['id']}")
         links = [c for c in p.get("connects_to") or [] if c.get("via") not in NOT_TOUCHING_VIA]
@@ -46,16 +51,17 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
             continue
         if me is None:
             continue
+        shapes = tubes.get(p["id"]) or [me]
         for c in links:
             to = c["to"]
             other = None
             if to in nodes:
-                g = point_gap(nodes[to], me)
+                g = min(point_gap(nodes[to], s) for s in shapes)
             elif f"part:{to}" in bs or f"member:{to}" in bs:
                 other = bs.get(f"part:{to}") or bs[f"member:{to}"]
-                g = max(0.0, -shape_overlap(me, other))
+                g = min(max(0.0, -shape_overlap(s, other)) for s in shapes)
             elif to in supports:
-                g = point_gap(supports[to], me)
+                g = min(point_gap(supports[to], s) for s in shapes)
             else:
                 continue
             n += 1
@@ -63,7 +69,8 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
             if "at_mm" in c:
                 at = np.asarray(c["at_mm"], float)
                 pt = nodes.get(to, supports.get(to))
-                off = max(point_gap(at, me), point_gap(at, other) if other is not None else float(np.linalg.norm(at - pt)))
+                off = max(min(point_gap(at, s) for s in shapes),
+                          point_gap(at, other) if other is not None else float(np.linalg.norm(at - pt)))
                 g = max(g, off)
             else:
                 missing_at.append((p["id"], to))
