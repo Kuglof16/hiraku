@@ -738,19 +738,19 @@
       "system": "battery",
       "connects_to": [
         {
-          "to": "main_switch",
-          "via": "wire",
-          "carries": "power"
-        },
-        {
-          "to": "fit_battery_cross_S1",
+          "to": "floor",
           "via": "bolt",
           "carries": "load",
           "at_mm": [
-            -795.0,
+            -1045.0,
             0.0,
-            380.0
+            430.0
           ]
+        },
+        {
+          "to": "main_switch",
+          "via": "wire",
+          "carries": "power"
         }
       ],
       "module": "powertrain"
@@ -1443,6 +1443,16 @@
             0.0,
             1.0,
             0.0
+          ]
+        },
+        {
+          "to": "bracket_column",
+          "via": "bolt",
+          "carries": "steer",
+          "at_mm": [
+            -259.765,
+            -300.0,
+            841.436
           ]
         },
         {
@@ -6315,40 +6325,120 @@
       "module": "steering"
     },
     {
-      "id": "fit_battery_cross_S1",
-      "name": "電池 (LiFePO4 51.2 V 100 Ah) の金具",
+      "id": "fit_floor_front_rail_L_AS1",
+      "name": "足元の床 の金具",
       "kind": "bracket",
       "carried_by": [
-        "LS1",
-        "RS1"
+        "LAp2",
+        "LS1"
       ],
       "box": {
         "center_mm": [
-          -792.5,
-          0.0,
-          380.0
+          -527.5,
+          350.0,
+          425.0
         ],
         "size_mm": [
-          5.0,
+          10.0,
           20.0,
           20.0
         ],
         "rpy_deg": [
           0.0,
-          -0.0,
+          90.0,
           0.0
         ]
       },
-      "mass_kg": 0.004439070419522378,
+      "mass_kg": 0.008878140839044755,
       "connects_to": [
         {
-          "to": "cross_S1",
+          "to": "rail_L_AS1",
           "via": "weld",
           "carries": "load",
           "at_mm": [
-            -790.0,
+            -527.5,
+            350.0,
+            420.0
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_deck_cross_S2",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ],
+      "box": {
+        "center_mm": [
+          -1405.0,
+          0.0,
+          415.0
+        ],
+        "size_mm": [
+          133.41664064126334,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          12.994616791916505,
+          0.0
+        ]
+      },
+      "mass_kg": 0.11844917258853584,
+      "connects_to": [
+        {
+          "to": "cross_S2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1340.141,
             0.0,
-            380.0
+            398.745
+          ]
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_front_body_cross_F",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+        "LF",
+        "RF"
+      ],
+      "box": {
+        "center_mm": [
+          400.0,
+          0.0,
+          415.0
+        ],
+        "size_mm": [
+          30.0,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+        {
+          "to": "cross_F",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            400.0,
+            0.0,
+            400.0
           ]
         }
       ],
@@ -6555,46 +6645,6 @@
       "module": "frame"
     },
     {
-      "id": "fit_floor_front_rail_L_AS1",
-      "name": "足元の床 の金具",
-      "kind": "bracket",
-      "carried_by": [
-        "LAp2",
-        "LS1"
-      ],
-      "box": {
-        "center_mm": [
-          -527.5,
-          350.0,
-          425.0
-        ],
-        "size_mm": [
-          10.0,
-          20.0,
-          20.0
-        ],
-        "rpy_deg": [
-          0.0,
-          90.0,
-          0.0
-        ]
-      },
-      "mass_kg": 0.008878140839044755,
-      "connects_to": [
-        {
-          "to": "rail_L_AS1",
-          "via": "weld",
-          "carries": "load",
-          "at_mm": [
-            -527.5,
-            350.0,
-            420.0
-          ]
-        }
-      ],
-      "module": "frame"
-    },
-    {
       "id": "fit_pedal_accel_tower_post_RA2",
       "name": "アクセルのペダル の金具",
       "kind": "bracket",
@@ -6669,86 +6719,6 @@
             -300.0,
             -335.0,
             491.5
-          ]
-        }
-      ],
-      "module": "frame"
-    },
-    {
-      "id": "fit_deck_cross_S2",
-      "name": "荷台の床 の金具",
-      "kind": "bracket",
-      "carried_by": [
-        "LS2",
-        "RS2"
-      ],
-      "box": {
-        "center_mm": [
-          -1405.0,
-          0.0,
-          415.0
-        ],
-        "size_mm": [
-          133.41664064126334,
-          20.0,
-          20.0
-        ],
-        "rpy_deg": [
-          0.0,
-          12.994616791916505,
-          0.0
-        ]
-      },
-      "mass_kg": 0.11844917258853584,
-      "connects_to": [
-        {
-          "to": "cross_S2",
-          "via": "weld",
-          "carries": "load",
-          "at_mm": [
-            -1340.141,
-            0.0,
-            398.745
-          ]
-        }
-      ],
-      "module": "frame"
-    },
-    {
-      "id": "fit_front_body_cross_F",
-      "name": "前の外板とバンパー の金具",
-      "kind": "bracket",
-      "carried_by": [
-        "LF",
-        "RF"
-      ],
-      "box": {
-        "center_mm": [
-          400.0,
-          0.0,
-          415.0
-        ],
-        "size_mm": [
-          30.0,
-          20.0,
-          20.0
-        ],
-        "rpy_deg": [
-          0.0,
-          90.0,
-          0.0
-        ]
-      },
-      "mass_kg": 0.02663442251713427,
-      "connects_to": [
-        {
-          "to": "cross_F",
-          "via": "weld",
-          "carries": "load",
-          "at_mm": [
-            400.0,
-            0.0,
-            400.0
           ]
         }
       ],
@@ -8334,14 +8304,14 @@
         {
           "id": "if-061",
           "between": [
-            "frame",
+            "body",
             "powertrain"
           ],
           "via": "bolt",
           "point_mm": [
-            -918.75,
+            -1045.0,
             0.0,
-            355.0
+            380.8
           ]
         },
         {
@@ -9841,14 +9811,38 @@
         },
         {
           "center_mm": [
-            -792.5,
-            0.0,
-            380.0
+            -527.5,
+            350.0,
+            425.0
           ],
           "size_mm": [
-            55.0,
             70.0,
-            70.0
+            70.0,
+            60.0
+          ]
+        },
+        {
+          "center_mm": [
+            -1405.0,
+            0.0,
+            415.0
+          ],
+          "size_mm": [
+            184.49719013397498,
+            70.0,
+            99.48782391389238
+          ]
+        },
+        {
+          "center_mm": [
+            400.0,
+            0.0,
+            415.0
+          ],
+          "size_mm": [
+            70.0,
+            70.0,
+            80.0
           ]
         },
         {
@@ -9913,18 +9907,6 @@
         },
         {
           "center_mm": [
-            -527.5,
-            350.0,
-            425.0
-          ],
-          "size_mm": [
-            70.0,
-            70.0,
-            60.0
-          ]
-        },
-        {
-          "center_mm": [
             -319.68199399802495,
             -350.0,
             499.74017334403584
@@ -9945,30 +9927,6 @@
             107.07301606441774,
             134.29463957739927,
             70.0
-          ]
-        },
-        {
-          "center_mm": [
-            -1405.0,
-            0.0,
-            415.0
-          ],
-          "size_mm": [
-            184.49719013397498,
-            70.0,
-            99.48782391389238
-          ]
-        },
-        {
-          "center_mm": [
-            400.0,
-            0.0,
-            415.0
-          ],
-          "size_mm": [
-            70.0,
-            70.0,
-            80.0
           ]
         }
       ],
@@ -10591,19 +10549,6 @@
             -2020.0,
             -428.8,
             603.0
-          ]
-        },
-        {
-          "id": "if-061",
-          "between": [
-            "frame",
-            "powertrain"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -918.75,
-            0.0,
-            355.0
           ]
         },
         {
@@ -13420,14 +13365,14 @@
         {
           "id": "if-061",
           "between": [
-            "frame",
+            "body",
             "powertrain"
           ],
           "via": "bolt",
           "point_mm": [
-            -918.75,
+            -1045.0,
             0.0,
-            355.0
+            380.8
           ]
         },
         {
@@ -13762,6 +13707,19 @@
           ],
           "via": "bolt",
           "node": "RDT"
+        },
+        {
+          "id": "if-061",
+          "between": [
+            "body",
+            "powertrain"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1045.0,
+            0.0,
+            380.8
+          ]
         },
         {
           "id": "if-067",

@@ -238,7 +238,8 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
     parts = {p["id"]: p for p in design["parts"]}
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     n_re = n_br = n_drop = 0
-    for p in list(design["parts"]):
+    # the fixed parts first (brackets, sheets, frame pieces), so that the parts resting on them find them anchored
+    for p in sorted(list(design["parts"]), key=lambda x: x["kind"] not in FIXED_KINDS):
         if only is not None and p["id"] not in only:
             continue
         me = bs.get(f"part:{p['id']}")
