@@ -130,6 +130,19 @@ export function tileContour(ana, field, criterion) {
   return { ...ct, values: {}, nodes: {}, parts: {}, key: `${ct.key}|shape`, judgedScale: false };
 }
 
+// What a mode shape tile's calculation covers, in words on the tile (the review of the cut:
+// the picture moves the frame only, so it says so; nothing is added to the picture). From
+// the record: the mode field's label ("mode k (frame)", "(body on springs)", "(roll bar)", as
+// the modal tool writes it) and, for the modal tool, how it takes the parts: the frame's
+// members as 3D beams on the suspension's springs, the parts as point masses at the nodes
+// that carry them (hiraku/solvers/k1_frame/modal.py add_masses), so they do not swing.
+export function modeScope(ana, field) {
+  const kind = /\(([^)]+)\)\s*$/.exec(field?.label ?? "")?.[1] ?? null;
+  const what = { frame: "フレームの梁だけの固有振動", "body on springs": "ばねの上の車体の揺れ", "roll bar": "ロールバーの梁だけの固有振動" }[kind];
+  if (!what) return null;
+  return [what, ...(ana?.tool === "modal" ? ["(部品は重さとしてだけ入る)"] : [])];
+}
+
 // Does an analysis have anything the tile draws?
 function draws(def, ana) {
   if (def.field && fieldFor(ana, def.field)) return true;
@@ -554,6 +567,11 @@ export class CutGrid {
     const field = def.field ? fieldFor(ana, def.field) : null;
     const ct = field ? tileContour(ana, field, lc.criterion) : null;
     layer.el.dataset.scale = ct ? (ct.judgedScale ? "allowable" : "shape") : "none";
+    const scope = field?.kind === "mode_shape" ? modeScope(ana, field) : null;
+    if (scope) {
+      const st = this.spec.tile;
+      layer.el.insertAdjacentHTML("beforeend", `<span class="scope" data-box="${tile.el.dataset.box}.scope" data-kind="note" style="left:${st.label.x}px;bottom:${st.pet.bottom}px;font-size:${this.textPx}px">${scope.map(esc).join("<br>")}</span>`);
+    }
     v.setContour(ct);
     v.setVectors(null);
     v.setToggles({ parts: true, contour: true, arrows: false, cg: true, names: false, limit: false });

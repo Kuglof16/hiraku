@@ -202,7 +202,8 @@ READ = """async (t) => {
                  const ct = l?.view?.keys?.contour; return ct ? { max: ct.max, limitKnown: ct.limitKnown, parts: ct.parts, values: Object.keys(ct.values ?? {}).length } : null; })(),
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el),
-               text: layer ? [...layer.childNodes].filter((n) => !(n.classList && n.classList.contains("beyond"))).map((n) => n.textContent).join("") : "",
+               text: layer ? [...layer.childNodes].filter((n) => !(n.classList && (n.classList.contains("beyond") || n.classList.contains("scope")))).map((n) => n.textContent).join("") : "",
+               scope: layer?.querySelector(".scope") ? { text: layer.querySelector(".scope").innerText, kind: layer.querySelector(".scope").dataset.kind, rect: rect(layer.querySelector(".scope")) } : null,
                beyond: layer ? [...layer.querySelectorAll(".beyond span")].map((s) => [s.textContent, getComputedStyle(s).color]) : [],
                beyondRect: layer?.querySelector(".beyond") ? rect(layer.querySelector(".beyond")) : null,
                beyondKind: layer?.querySelector(".beyond")?.dataset.kind ?? null,
@@ -510,6 +511,37 @@ class GridCutTest(unittest.TestCase):
             # the colours apart from the red of a fail and the green of a pass
             self.assertNotIn(BEYOND_NG_RGB, (RED_RGB, GREEN_RGB))
             page.close()
+
+    def test_nvh_tile_says_what_the_modal_calculation_covers(self):
+        """The NVH record as the modal tool writes it (tool modal, a frame mode labelled
+        "mode k (frame)"; shape example): the tile says the calculation is the frame's beams
+        only, the parts as masses, as a note at its bottom left clear of the pet; the shape
+        example's own record (another tool, no kind in the label) gets no words."""
+        layout = grid_layout()
+        events = crash_drawn(domain_events())
+        for e in events:
+            if e["kind"] == "analysis.finished" and e["data"].get("tool") == "nvh_shape_example":
+                e["data"]["tool"] = "modal"
+                e["data"]["fields"][0]["label"] = "mode 3 (frame)"
+        base = self.serve(layout, events={"20261102-120000-grid-modal": events, "20261102-120000-grid-raw": domain_events()})
+        for name in ("n04", "n15"):
+            page, errors = self.open(f"{base}/cut.html?cut={name}&run=20261102-120000-grid-modal&t=0&version=1")
+            got = page.evaluate(READ, 1.5)
+            self.assertEqual(errors, [])
+            self.check_grid(got, layout, name)
+            self.check_boxes(got, name)
+            tiles = {x["key"].split(".")[-1]: x for x in got["tiles"]}
+            sc = tiles["nvh"]["scope"]
+            self.assertEqual(sc["text"], "フレームの梁だけの固有振動\n(部品は重さとしてだけ入る)")
+            self.assertEqual(sc["kind"], "note")
+            pet = next(x["rect"] for x in got["boxes"] if x["box"] == f"{name}.tile.nvh.pet")
+            self.assertLessEqual(sc["rect"][2], pet[0])
+            self.assertTrue(all(tiles[d]["scope"] is None for d in TESTS if d != "nvh"))
+            page.close()
+        page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-raw&t=0&version=1")
+        got = page.evaluate(READ, 1.5)
+        self.assertIsNone(next(x for x in got["tiles"] if x["key"].endswith(".nvh"))["scope"])
+        page.close()
 
     def test_missing_layout_keys_are_named(self):
         layout = grid_layout()
